@@ -1,0 +1,32 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CST", "CST\CST.csproj", "{A4930AA3-E712-4C84-A016-CBC9EC0EC346}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cst4", "Cst4\Cst4.csproj", "{350154F9-2C89-4031-A92A-752C5DE5F51F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lucene.Net-2.0.0", "..\..\Data\Search\Incubating-Apache-Lucene.Net-2.0-004-11Mar07.src\src\Lucene.Net\Lucene.Net-2.0.0.csproj", "{F04CA2F4-E182-46A8-B914-F46AF5319E83}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A4930AA3-E712-4C84-A016-CBC9EC0EC346}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4930AA3-E712-4C84-A016-CBC9EC0EC346}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4930AA3-E712-4C84-A016-CBC9EC0EC346}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4930AA3-E712-4C84-A016-CBC9EC0EC346}.Release|Any CPU.Build.0 = Release|Any CPU
+		{350154F9-2C89-4031-A92A-752C5DE5F51F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{350154F9-2C89-4031-A92A-752C5DE5F51F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{350154F9-2C89-4031-A92A-752C5DE5F51F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{350154F9-2C89-4031-A92A-752C5DE5F51F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F04CA2F4-E182-46A8-B914-F46AF5319E83}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F04CA2F4-E182-46A8-B914-F46AF5319E83}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F04CA2F4-E182-46A8-B914-F46AF5319E83}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F04CA2F4-E182-46A8-B914-F46AF5319E83}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
