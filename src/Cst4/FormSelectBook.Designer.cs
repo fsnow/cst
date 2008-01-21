@@ -34,7 +34,11 @@ namespace CST
 			// 
 			// treeView1
 			// 
+			this.treeView1.AccessibleDescription = null;
+			this.treeView1.AccessibleName = null;
 			resources.ApplyResources(this.treeView1, "treeView1");
+			this.treeView1.BackgroundImage = null;
+			this.treeView1.Font = null;
 			this.treeView1.Name = "treeView1";
 			this.treeView1.Tag = "Pali";
 			this.treeView1.NodeMouseDoubleClick += new System.Windows.Forms.TreeNodeMouseClickEventHandler(this.treeView1_NodeMouseDoubleClick);
@@ -45,9 +49,14 @@ namespace CST
 			// 
 			// FormSelectBook
 			// 
+			this.AccessibleDescription = null;
+			this.AccessibleName = null;
 			resources.ApplyResources(this, "$this");
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+			this.BackgroundImage = null;
 			this.Controls.Add(this.treeView1);
+			this.Font = null;
+			this.Icon = null;
 			this.MaximizeBox = false;
 			this.Name = "FormSelectBook";
 			this.ShowIcon = false;

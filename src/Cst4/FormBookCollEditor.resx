@@ -144,17 +144,11 @@
   <data name="listBoxNotInCollection.TabIndex" type="System.Int32, mscorlib">
     <value>1</value>
   </data>
-  <data name="&gt;&gt;btnMove.Parent" xml:space="preserve">
-    <value>$this</value>
-  </data>
   <data name="listBoxInCollection.Size" type="System.Drawing.Size, System.Drawing">
     <value>284, 186</value>
   </data>
   <data name="&gt;&gt;listBoxInCollection.Type" xml:space="preserve">
     <value>System.Windows.Forms.ListBox, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="btnMove.Font" type="System.Drawing.Font, System.Drawing">
-    <value>Microsoft Sans Serif, 8.25pt, style=Bold</value>
   </data>
   <data name="&gt;&gt;btnClose.Name" xml:space="preserve">
     <value>btnClose</value>
@@ -183,7 +177,7 @@
   <data name="&gt;&gt;listBoxNotInCollection.Parent" xml:space="preserve">
     <value>$this</value>
   </data>
-  <data name="&gt;&gt;textBoxCollName.Parent" xml:space="preserve">
+  <data name="&gt;&gt;btnMove.Parent" xml:space="preserve">
     <value>$this</value>
   </data>
   <data name="listBoxInCollection.Location" type="System.Drawing.Point, System.Drawing">
@@ -191,6 +185,9 @@
   </data>
   <data name="lblCollectionName.Size" type="System.Drawing.Size, System.Drawing">
     <value>87, 13</value>
+  </data>
+  <data name="lblBooksInCollection.Size" type="System.Drawing.Size, System.Drawing">
+    <value>101, 13</value>
   </data>
   <data name="$this.Text" xml:space="preserve">
     <value>Book Collection Editor</value>
@@ -282,6 +279,9 @@
   <data name="&gt;&gt;btnSave.ZOrder" xml:space="preserve">
     <value>8</value>
   </data>
+  <data name="&gt;&gt;textBoxCollName.Parent" xml:space="preserve">
+    <value>$this</value>
+  </data>
   <data name="&gt;&gt;listBoxInCollection.ZOrder" xml:space="preserve">
     <value>6</value>
   </data>
@@ -292,7 +292,7 @@
     <value>System.Windows.Forms.Form, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="lblCollectionName.Location" type="System.Drawing.Point, System.Drawing">
-    <value>126, 244</value>
+    <value>126, 246</value>
   </data>
   <data name="lblBooksNotInCollection.AutoSize" type="System.Boolean, mscorlib">
     <value>True</value>
@@ -330,8 +330,8 @@
   <data name="&gt;&gt;textBoxCollName.ZOrder" xml:space="preserve">
     <value>0</value>
   </data>
-  <data name="lblBooksInCollection.Size" type="System.Drawing.Size, System.Drawing">
-    <value>101, 13</value>
+  <data name="btnMove.Font" type="System.Drawing.Font, System.Drawing">
+    <value>Microsoft Sans Serif, 8.25pt, style=Bold</value>
   </data>
   <data name="textBoxCollName.Size" type="System.Drawing.Size, System.Drawing">
     <value>180, 20</value>

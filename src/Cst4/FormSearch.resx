@@ -221,11 +221,14 @@
   <data name="&gt;&gt;listBoxWords.ZOrder" xml:space="preserve">
     <value>9</value>
   </data>
+  <data name="lblWords.AutoSize" type="System.Boolean, mscorlib">
+    <value>True</value>
+  </data>
   <data name="lblWords.Location" type="System.Drawing.Point, System.Drawing">
     <value>13, 193</value>
   </data>
   <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>100, 23</value>
+    <value>38, 13</value>
   </data>
   <data name="lblWords.TabIndex" type="System.Int32, mscorlib">
     <value>44</value>
@@ -272,11 +275,14 @@
   <data name="&gt;&gt;listBoxOccurBooks.ZOrder" xml:space="preserve">
     <value>8</value>
   </data>
+  <data name="lblOccurrencesBooks.AutoSize" type="System.Boolean, mscorlib">
+    <value>True</value>
+  </data>
   <data name="lblOccurrencesBooks.Location" type="System.Drawing.Point, System.Drawing">
     <value>383, 193</value>
   </data>
   <data name="lblOccurrencesBooks.Size" type="System.Drawing.Size, System.Drawing">
-    <value>154, 23</value>
+    <value>107, 13</value>
   </data>
   <data name="lblOccurrencesBooks.TabIndex" type="System.Int32, mscorlib">
     <value>46</value>
@@ -399,7 +405,7 @@
     <value>$this</value>
   </data>
   <data name="&gt;&gt;lblUse.ZOrder" xml:space="preserve">
-    <value>4</value>
+    <value>0</value>
   </data>
   <data name="comboWildRegex.Items" xml:space="preserve">
     <value>Regular expressions</value>
@@ -426,7 +432,7 @@
     <value>$this</value>
   </data>
   <data name="&gt;&gt;comboWildRegex.ZOrder" xml:space="preserve">
-    <value>3</value>
+    <value>4</value>
   </data>
   <data name="cbVinaya.AutoSize" type="System.Boolean, mscorlib">
     <value>True</value>
@@ -725,11 +731,14 @@
   <data name="&gt;&gt;linkLabelEdit.ZOrder" xml:space="preserve">
     <value>2</value>
   </data>
+  <data name="lblSelectBookColl.AutoSize" type="System.Boolean, mscorlib">
+    <value>True</value>
+  </data>
   <data name="lblSelectBookColl.Location" type="System.Drawing.Point, System.Drawing">
     <value>493, 18</value>
   </data>
   <data name="lblSelectBookColl.Size" type="System.Drawing.Size, System.Drawing">
-    <value>168, 23</value>
+    <value>131, 13</value>
   </data>
   <data name="lblSelectBookColl.TabIndex" type="System.Int32, mscorlib">
     <value>50</value>
@@ -771,7 +780,14 @@
     <value>$this</value>
   </data>
   <data name="&gt;&gt;gbLimitSearch.ZOrder" xml:space="preserve">
-    <value>2</value>
+    <value>3</value>
+  </data>
+  <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
+  <data name="btnReport.Anchor" type="System.Windows.Forms.AnchorStyles, System.Windows.Forms">
+    <value>Top, Right</value>
+  </data>
+  <data name="btnReport.AutoSize" type="System.Boolean, mscorlib">
+    <value>True</value>
   </data>
   <data name="btnReport.Enabled" type="System.Boolean, mscorlib">
     <value>False</value>
@@ -798,9 +814,11 @@
     <value>$this</value>
   </data>
   <data name="&gt;&gt;btnReport.ZOrder" xml:space="preserve">
-    <value>1</value>
+    <value>2</value>
   </data>
-  <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
+  <data name="lblContextDistance.AutoSize" type="System.Boolean, mscorlib">
+    <value>True</value>
+  </data>
   <data name="lblContextDistance.ImeMode" type="System.Windows.Forms.ImeMode, System.Windows.Forms">
     <value>NoControl</value>
   </data>
@@ -847,7 +865,7 @@
     <value>$this</value>
   </data>
   <data name="&gt;&gt;numContextDistance.ZOrder" xml:space="preserve">
-    <value>0</value>
+    <value>1</value>
   </data>
   <metadata name="$this.Localizable" type="System.Boolean, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
     <value>True</value>

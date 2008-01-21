@@ -303,11 +303,11 @@ namespace CST
 			// 
 			resources.ApplyResources(this, "$this");
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+			this.Controls.Add(this.lblUse);
 			this.Controls.Add(this.numContextDistance);
 			this.Controls.Add(this.btnReport);
 			this.Controls.Add(this.gbLimitSearch);
 			this.Controls.Add(this.comboWildRegex);
-			this.Controls.Add(this.lblUse);
 			this.Controls.Add(this.lblBookStats);
 			this.Controls.Add(this.lblWordStats);
 			this.Controls.Add(this.btnClose);

@@ -55,11 +55,6 @@ namespace CST
 			// 
 			// toolStrip1
 			// 
-			this.toolStrip1.AccessibleDescription = null;
-			this.toolStrip1.AccessibleName = null;
-			resources.ApplyResources(this.toolStrip1, "toolStrip1");
-			this.toolStrip1.BackgroundImage = null;
-			this.toolStrip1.Font = null;
 			this.toolStrip1.GripStyle = System.Windows.Forms.ToolStripGripStyle.Hidden;
 			this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tscbChapterList,
@@ -73,31 +68,24 @@ namespace CST
             this.tsbAtthakatha,
             this.tsbTika,
             this.tsdbbView});
+			resources.ApplyResources(this.toolStrip1, "toolStrip1");
 			this.toolStrip1.Name = "toolStrip1";
 			// 
 			// tscbChapterList
 			// 
-			this.tscbChapterList.AccessibleDescription = null;
-			this.tscbChapterList.AccessibleName = null;
-			resources.ApplyResources(this.tscbChapterList, "tscbChapterList");
 			this.tscbChapterList.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+			resources.ApplyResources(this.tscbChapterList, "tscbChapterList");
 			this.tscbChapterList.Name = "tscbChapterList";
 			this.tscbChapterList.SelectedIndexChanged += new System.EventHandler(this.tscbChapterList_SelectedIndexChanged);
 			// 
 			// tslPaliScript
 			// 
-			this.tslPaliScript.AccessibleDescription = null;
-			this.tslPaliScript.AccessibleName = null;
-			resources.ApplyResources(this.tslPaliScript, "tslPaliScript");
-			this.tslPaliScript.BackgroundImage = null;
 			this.tslPaliScript.Margin = new System.Windows.Forms.Padding(10, 1, 0, 2);
 			this.tslPaliScript.Name = "tslPaliScript";
+			resources.ApplyResources(this.tslPaliScript, "tslPaliScript");
 			// 
 			// tscbPaliScript
 			// 
-			this.tscbPaliScript.AccessibleDescription = null;
-			this.tscbPaliScript.AccessibleName = null;
-			resources.ApplyResources(this.tscbPaliScript, "tscbPaliScript");
 			this.tscbPaliScript.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
 			this.tscbPaliScript.Items.AddRange(new object[] {
             resources.GetString("tscbPaliScript.Items"),
@@ -115,150 +103,107 @@ namespace CST
             resources.GetString("tscbPaliScript.Items12"),
             resources.GetString("tscbPaliScript.Items13")});
 			this.tscbPaliScript.Name = "tscbPaliScript";
+			resources.ApplyResources(this.tscbPaliScript, "tscbPaliScript");
 			this.tscbPaliScript.SelectedIndexChanged += new System.EventHandler(this.tscbPaliScript_SelectedIndexChanged);
 			// 
 			// tsbFirstResult
 			// 
-			this.tsbFirstResult.AccessibleDescription = null;
-			this.tsbFirstResult.AccessibleName = null;
-			resources.ApplyResources(this.tsbFirstResult, "tsbFirstResult");
-			this.tsbFirstResult.BackgroundImage = null;
 			this.tsbFirstResult.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			resources.ApplyResources(this.tsbFirstResult, "tsbFirstResult");
 			this.tsbFirstResult.Margin = new System.Windows.Forms.Padding(20, 1, 0, 2);
 			this.tsbFirstResult.Name = "tsbFirstResult";
 			this.tsbFirstResult.Click += new System.EventHandler(this.tsbFirstResult_Click);
 			// 
 			// tsbPreviousResult
 			// 
-			this.tsbPreviousResult.AccessibleDescription = null;
-			this.tsbPreviousResult.AccessibleName = null;
-			resources.ApplyResources(this.tsbPreviousResult, "tsbPreviousResult");
-			this.tsbPreviousResult.BackgroundImage = null;
 			this.tsbPreviousResult.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			resources.ApplyResources(this.tsbPreviousResult, "tsbPreviousResult");
 			this.tsbPreviousResult.Name = "tsbPreviousResult";
 			this.tsbPreviousResult.Click += new System.EventHandler(this.tsbPreviousResult_Click);
 			// 
 			// tsbNextResult
 			// 
-			this.tsbNextResult.AccessibleDescription = null;
-			this.tsbNextResult.AccessibleName = null;
-			resources.ApplyResources(this.tsbNextResult, "tsbNextResult");
-			this.tsbNextResult.BackgroundImage = null;
 			this.tsbNextResult.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			resources.ApplyResources(this.tsbNextResult, "tsbNextResult");
 			this.tsbNextResult.Name = "tsbNextResult";
 			this.tsbNextResult.Click += new System.EventHandler(this.tsbNextResult_Click);
 			// 
 			// tsbLastResult
 			// 
-			this.tsbLastResult.AccessibleDescription = null;
-			this.tsbLastResult.AccessibleName = null;
-			resources.ApplyResources(this.tsbLastResult, "tsbLastResult");
-			this.tsbLastResult.BackgroundImage = null;
 			this.tsbLastResult.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+			resources.ApplyResources(this.tsbLastResult, "tsbLastResult");
 			this.tsbLastResult.Name = "tsbLastResult";
 			this.tsbLastResult.Click += new System.EventHandler(this.tsbLastResult_Click);
 			// 
 			// tsbMula
 			// 
-			this.tsbMula.AccessibleDescription = null;
-			this.tsbMula.AccessibleName = null;
-			resources.ApplyResources(this.tsbMula, "tsbMula");
-			this.tsbMula.BackgroundImage = null;
 			this.tsbMula.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+			resources.ApplyResources(this.tsbMula, "tsbMula");
 			this.tsbMula.Margin = new System.Windows.Forms.Padding(20, 1, 0, 2);
 			this.tsbMula.Name = "tsbMula";
 			this.tsbMula.Click += new System.EventHandler(this.tsbMula_Click);
 			// 
 			// tsbAtthakatha
 			// 
-			this.tsbAtthakatha.AccessibleDescription = null;
-			this.tsbAtthakatha.AccessibleName = null;
-			resources.ApplyResources(this.tsbAtthakatha, "tsbAtthakatha");
-			this.tsbAtthakatha.BackgroundImage = null;
 			this.tsbAtthakatha.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+			resources.ApplyResources(this.tsbAtthakatha, "tsbAtthakatha");
 			this.tsbAtthakatha.Name = "tsbAtthakatha";
 			this.tsbAtthakatha.Click += new System.EventHandler(this.tsbAtthakatha_Click);
 			// 
 			// tsbTika
 			// 
-			this.tsbTika.AccessibleDescription = null;
-			this.tsbTika.AccessibleName = null;
-			resources.ApplyResources(this.tsbTika, "tsbTika");
-			this.tsbTika.BackgroundImage = null;
 			this.tsbTika.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+			resources.ApplyResources(this.tsbTika, "tsbTika");
 			this.tsbTika.Name = "tsbTika";
 			this.tsbTika.Click += new System.EventHandler(this.tsbTika_Click);
 			// 
 			// tsdbbView
 			// 
-			this.tsdbbView.AccessibleDescription = null;
-			this.tsdbbView.AccessibleName = null;
-			resources.ApplyResources(this.tsdbbView, "tsdbbView");
-			this.tsdbbView.BackgroundImage = null;
 			this.tsdbbView.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
 			this.tsdbbView.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsmiShowSearchTerms,
             this.tsmiShowFootnotes});
+			resources.ApplyResources(this.tsdbbView, "tsdbbView");
 			this.tsdbbView.Margin = new System.Windows.Forms.Padding(20, 1, 0, 2);
 			this.tsdbbView.Name = "tsdbbView";
 			// 
 			// tsmiShowSearchTerms
 			// 
-			this.tsmiShowSearchTerms.AccessibleDescription = null;
-			this.tsmiShowSearchTerms.AccessibleName = null;
-			resources.ApplyResources(this.tsmiShowSearchTerms, "tsmiShowSearchTerms");
-			this.tsmiShowSearchTerms.BackgroundImage = null;
 			this.tsmiShowSearchTerms.Checked = true;
 			this.tsmiShowSearchTerms.CheckState = System.Windows.Forms.CheckState.Checked;
 			this.tsmiShowSearchTerms.Name = "tsmiShowSearchTerms";
-			this.tsmiShowSearchTerms.ShortcutKeyDisplayString = null;
+			resources.ApplyResources(this.tsmiShowSearchTerms, "tsmiShowSearchTerms");
 			this.tsmiShowSearchTerms.Click += new System.EventHandler(this.tsmiShowSearchTerms_Click);
 			// 
 			// tsmiShowFootnotes
 			// 
-			this.tsmiShowFootnotes.AccessibleDescription = null;
-			this.tsmiShowFootnotes.AccessibleName = null;
-			resources.ApplyResources(this.tsmiShowFootnotes, "tsmiShowFootnotes");
-			this.tsmiShowFootnotes.BackgroundImage = null;
 			this.tsmiShowFootnotes.Checked = true;
 			this.tsmiShowFootnotes.CheckState = System.Windows.Forms.CheckState.Checked;
 			this.tsmiShowFootnotes.Name = "tsmiShowFootnotes";
-			this.tsmiShowFootnotes.ShortcutKeyDisplayString = null;
+			resources.ApplyResources(this.tsmiShowFootnotes, "tsmiShowFootnotes");
 			this.tsmiShowFootnotes.Click += new System.EventHandler(this.tsmiShowFootnotes_Click);
 			// 
 			// statusStrip1
 			// 
-			this.statusStrip1.AccessibleDescription = null;
-			this.statusStrip1.AccessibleName = null;
-			resources.ApplyResources(this.statusStrip1, "statusStrip1");
-			this.statusStrip1.BackgroundImage = null;
-			this.statusStrip1.Font = null;
 			this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsslPages,
             this.tsslDebug});
+			resources.ApplyResources(this.statusStrip1, "statusStrip1");
 			this.statusStrip1.Name = "statusStrip1";
 			// 
 			// tsslPages
 			// 
-			this.tsslPages.AccessibleDescription = null;
-			this.tsslPages.AccessibleName = null;
-			resources.ApplyResources(this.tsslPages, "tsslPages");
-			this.tsslPages.BackgroundImage = null;
 			this.tsslPages.Name = "tsslPages";
+			resources.ApplyResources(this.tsslPages, "tsslPages");
 			// 
 			// tsslDebug
 			// 
-			this.tsslDebug.AccessibleDescription = null;
-			this.tsslDebug.AccessibleName = null;
-			resources.ApplyResources(this.tsslDebug, "tsslDebug");
-			this.tsslDebug.BackgroundImage = null;
 			this.tsslDebug.Margin = new System.Windows.Forms.Padding(50, 3, 0, 2);
 			this.tsslDebug.Name = "tsslDebug";
+			resources.ApplyResources(this.tsslDebug, "tsslDebug");
 			// 
 			// webBrowser
 			// 
-			this.webBrowser.AccessibleDescription = null;
-			this.webBrowser.AccessibleName = null;
 			resources.ApplyResources(this.webBrowser, "webBrowser");
 			this.webBrowser.MinimumSize = new System.Drawing.Size(20, 20);
 			this.webBrowser.Name = "webBrowser";
@@ -271,15 +216,11 @@ namespace CST
 			// 
 			// FormBookDisplay
 			// 
-			this.AccessibleDescription = null;
-			this.AccessibleName = null;
 			resources.ApplyResources(this, "$this");
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.BackgroundImage = null;
 			this.Controls.Add(this.webBrowser);
 			this.Controls.Add(this.statusStrip1);
 			this.Controls.Add(this.toolStrip1);
-			this.Font = null;
 			this.KeyPreview = true;
 			this.Name = "FormBookDisplay";
 			this.ShowInTaskbar = false;

@@ -101,15 +101,26 @@
 
 Section "Dummy Section" SecDummy
 
-  ; ***** Specific to beta 13 ******
-  ; Delete the old DAT files
-  ;Delete "$INSTDIR\*.dat"
+  ; ***************************** Specific to beta 13 ****************************
+  
+  ;Delete the old DAT files
+  Delete "$INSTDIR\*.dat"
   
   ; Force a re-index
-  ;Delete "$INSTDIR\Index\*.*"
-  ;RMDir "$INSTDIR\Index"
+  Delete "$INSTDIR\Index\*.*"
+  RMDir "$INSTDIR\Index"
   
-  ; ***** End beta 13 ******
+  ; ***************************** End beta 13 ************************************
+  
+  
+  ; Remove bogus German translation
+  Delete "$INSTDIR\de\*.*"
+  RMDir "$INSTDIR\de"
+  
+  ; Remove dictionary from old location
+  Delete "$INSTDIR\Reference\pali-english-dictionary.txt"
+  
+  
   
   
   SetOutPath "$INSTDIR"
@@ -125,8 +136,29 @@ Section "Dummy Section" SecDummy
   SetOutPath "$INSTDIR\en"
   File bin\Debug\en\*.*
   
+  SetOutPath "$INSTDIR\gu"
+  File bin\Debug\gu\*.*
+  
   SetOutPath "$INSTDIR\hi"
   File bin\Debug\hi\*.*
+  
+  SetOutPath "$INSTDIR\id"
+  File bin\Debug\id\*.*
+  
+  SetOutPath "$INSTDIR\it"
+  File bin\Debug\it\*.*
+  
+  SetOutPath "$INSTDIR\sv"
+  File bin\Debug\sv\*.*
+  
+  SetOutPath "$INSTDIR\ta"
+  File bin\Debug\ta\*.*
+  
+  SetOutPath "$INSTDIR\zh-CHS"
+  File bin\Debug\zh-CHS\*.*
+  
+  SetOutPath "$INSTDIR\zh-CHT"
+  File bin\Debug\zh-CHT\*.*
   
   SetOutPath "$INSTDIR\Fonts"
   File bin\Debug\Fonts\*.*
@@ -135,7 +167,7 @@ Section "Dummy Section" SecDummy
   ;File bin\Debug\Images\*.*
   
   SetOutPath "$INSTDIR\Reference"
-  File bin\Debug\Reference\pali-english-dictionary.txt
+  File bin\Debug\Reference\en\pali-english-dictionary.txt
   File bin\Debug\Reference\pali-hindi-dictionary.txt
   
   SetOutPath "$INSTDIR\Xml"
@@ -192,7 +224,7 @@ Section "Uninstall"
   Delete "$INSTDIR\Fonts\*.*"
   RMDir "$INSTDIR\Fonts"
   
-  Delete "$INSTDIR\Reference\pali-english-dictionary.txt"
+  Delete "$INSTDIR\Reference\en\pali-english-dictionary.txt"
   Delete "$INSTDIR\Reference\pali-hindi-dictionary.txt"
   RMDir "$INSTDIR\Reference"
   

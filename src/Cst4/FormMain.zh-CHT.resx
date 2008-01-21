@@ -1,0 +1,255 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="tsmiOpenBook.Text" xml:space="preserve">
+    <value>開啟</value><comment>&amp;Open</comment>
+  </data>
+  <data name="tsmiMru.Text" xml:space="preserve">
+    <value>最近之檢視</value><comment>Recently Viewed</comment>
+  </data>
+  <data name="tsmiPrint.Text" xml:space="preserve">
+    <value>列印...</value><comment>&amp;Print...</comment>
+  </data>
+  <data name="tsmiPrintPreview.Text" xml:space="preserve">
+    <value>列印預視...</value><comment>Print Preview...</comment>
+  </data>
+  <data name="tsmiPageSetup.Text" xml:space="preserve">
+    <value>頁面設定...</value><comment>Page Setup...</comment>
+  </data>
+  <data name="tsmiSave.Text" xml:space="preserve">
+    <value>存檔</value><comment>&amp;Save</comment>
+  </data>
+  <data name="tsmiExit.Text" xml:space="preserve">
+    <value>退出</value><comment>E&amp;xit</comment>
+  </data>
+  <data name="fooToolStripMenuItem.Text" xml:space="preserve">
+    <value>書本</value><comment>&amp;Book</comment>
+  </data>
+  <data name="tsmiSearchWord.Text" xml:space="preserve">
+    <value>詞組</value><comment>Wo&amp;rd</comment>
+  </data>
+  <data name="tsmiDictionary.Text" xml:space="preserve">
+    <value>詞典</value><comment>&amp;Dictionary</comment>
+  </data>
+  <data name="advancedToolStripMenuItem.Text" xml:space="preserve">
+    <value>進階</value><comment>Advanced</comment>
+  </data>
+  <data name="searchToolStripMenuItem.Text" xml:space="preserve">
+    <value>搜尋</value><comment>&amp;Search</comment>
+  </data>
+  <data name="tsmiCascade.Text" xml:space="preserve">
+    <value>串接</value><comment>Cascade</comment>
+  </data>
+  <data name="tsmiTileHorizontal.Text" xml:space="preserve">
+    <value>水平並排 </value><comment>Tile Horizontal</comment>
+  </data>
+  <data name="tsmiTileVertical.Text" xml:space="preserve">
+    <value>垂直並排</value><comment>Tile Vertical</comment>
+  </data>
+  <data name="windowToolStripMenuItem.Text" xml:space="preserve">
+    <value>視窗</value><comment>&amp;Window</comment>
+  </data>
+  <data name="tsmiContents.Text" xml:space="preserve">
+    <value>內容</value><comment>Contents</comment>
+  </data>
+  <data name="tsmiCheckForUpdates.Text" xml:space="preserve">
+    <value>檢查更新</value><comment>Check for Updates</comment>
+  </data>
+  <data name="tsmiAbout.Text" xml:space="preserve">
+    <value>關於</value><comment>&amp;About</comment>
+  </data>
+  <data name="helpToolStripMenuItem.Text" xml:space="preserve">
+    <value>說明</value><comment>&amp;Help</comment>
+  </data>
+  <data name="tsbOpenBook.Text" xml:space="preserve">
+    <value>開啟書本</value><comment>Open Book</comment>
+  </data>
+  <data name="tsbSave.Text" xml:space="preserve">
+    <value>存檔</value><comment>Save</comment>
+  </data>
+  <data name="tsbPrint.Text" xml:space="preserve">
+    <value>列印</value><comment>Print</comment>
+  </data>
+  <data name="tsbPrintPreview.Text" xml:space="preserve">
+    <value>列印預視</value><comment>Print Preview</comment>
+  </data>
+  <data name="tsbPageSetup.Text" xml:space="preserve">
+    <value>頁面設定</value><comment>Page Setup</comment>
+  </data>
+  <data name="tsbSearchWord.Text" xml:space="preserve">
+    <value>詞組搜尋</value><comment>Word Search</comment>
+  </data>
+  <data name="tsbDictionary.Text" xml:space="preserve">
+    <value>詞典</value><comment>Dictionary</comment>
+  </data>
+  <data name="tsbGoto.Text" xml:space="preserve">
+    <value>跳至某一頁或段落</value><comment>Go to a paragraph or page</comment>
+  </data>
+  <data name="tslInterfaceLanguage.Text" xml:space="preserve">
+    <value>介面語言:</value><comment>Interface Language:</comment>
+  </data>
+  <data name="tslPaliScript.Text" xml:space="preserve">
+    <value>巴利文:</value><comment>Pali Script:</comment>
+  </data>
+  <data name="tscbPaliScript.Items" xml:space="preserve">
+    <value>孟加拉文</value><comment>Bengali</comment>
+  </data>
+  <data name="tscbPaliScript.Items1" xml:space="preserve">
+    <value>斯拉夫文</value><comment>Cyrillic</comment>
+  </data>
+  <data name="tscbPaliScript.Items2" xml:space="preserve">
+    <value>天城體</value><comment>Devanagari</comment>
+  </data>
+  <data name="tscbPaliScript.Items3" xml:space="preserve">
+    <value>吉吉拉特語</value><comment>Gujarati</comment>
+  </data>
+  <data name="tscbPaliScript.Items4" xml:space="preserve">
+    <value>吉爾穆希</value><comment>Gurmukhi</comment>
+  </data>
+  <data name="tscbPaliScript.Items5" xml:space="preserve">
+    <value>坎那達文</value><comment>Kannada</comment>
+  </data>
+  <data name="tscbPaliScript.Items6" xml:space="preserve">
+    <value>柬埔寨文</value><comment>Khmer</comment>
+  </data>
+  <data name="tscbPaliScript.Items7" xml:space="preserve">
+    <value>馬拉雅姆文</value><comment>Malayalam</comment>
+  </data>
+  <data name="tscbPaliScript.Items8" xml:space="preserve">
+    <value>緬甸文</value><comment>Myanmar</comment>
+  </data>
+  <data name="tscbPaliScript.Items9" xml:space="preserve">
+    <value>羅馬字</value><comment>Roman</comment>
+  </data>
+  <data name="tscbPaliScript.Items10" xml:space="preserve">
+    <value>僧伽羅文</value><comment>Sinhala</comment>
+  </data>
+  <data name="tscbPaliScript.Items11" xml:space="preserve">
+    <value>泰盧固文</value><comment>Telugu</comment>
+  </data>
+  <data name="tscbPaliScript.Items12" xml:space="preserve">
+    <value>泰文</value><comment>Thai</comment>
+  </data>
+  <data name="tscbPaliScript.Items13" xml:space="preserve">
+    <value>藏文 </value><comment>Tibetan</comment>
+  </data>
+  <data name="$this.Text" xml:space="preserve">
+    <value>第六次集結巴利三藏 4.0</value><comment>Chattha Sangayana Tipitaka 4.0</comment>
+  </data>
+</root>

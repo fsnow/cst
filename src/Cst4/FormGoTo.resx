@@ -140,6 +140,9 @@
   <data name="&gt;&gt;panel1.Name" xml:space="preserve">
     <value>panel1</value>
   </data>
+  <data name="&gt;&gt;$this.Type" xml:space="preserve">
+    <value>System.Windows.Forms.Form, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
   <data name="&gt;&gt;radioButtonMyanmarPage.Parent" xml:space="preserve">
     <value>panel1</value>
   </data>
@@ -201,17 +204,11 @@
   <data name="radioButtonParagraph.Size" type="System.Drawing.Size, System.Drawing">
     <value>74, 17</value>
   </data>
-  <data name="&gt;&gt;radioButtonMyanmarPage.Name" xml:space="preserve">
-    <value>radioButtonMyanmarPage</value>
-  </data>
   <data name="&gt;&gt;radioButtonThaiPage.Type" xml:space="preserve">
     <value>System.Windows.Forms.RadioButton, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="radioButtonPtsPage.TabIndex" type="System.Int32, mscorlib">
     <value>3</value>
-  </data>
-  <data name="&gt;&gt;buttonCancel.Parent" xml:space="preserve">
-    <value>$this</value>
   </data>
   <data name="buttonOK.TabIndex" type="System.Int32, mscorlib">
     <value>3</value>
@@ -258,14 +255,17 @@
   <data name="panel1.TabIndex" type="System.Int32, mscorlib">
     <value>2</value>
   </data>
+  <data name="buttonCancel.TabIndex" type="System.Int32, mscorlib">
+    <value>4</value>
+  </data>
   <data name="&gt;&gt;lblGoToWhat.Name" xml:space="preserve">
     <value>lblGoToWhat</value>
   </data>
   <data name="lblGoToWhat.Size" type="System.Drawing.Size, System.Drawing">
     <value>69, 13</value>
   </data>
-  <data name="buttonCancel.TabIndex" type="System.Int32, mscorlib">
-    <value>4</value>
+  <data name="radioButtonThaiPage.Text" xml:space="preserve">
+    <value>Thai Page</value>
   </data>
   <data name="&gt;&gt;textBoxNumber.Type" xml:space="preserve">
     <value>System.Windows.Forms.TextBox, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
@@ -345,8 +345,8 @@
   <data name="&gt;&gt;panel1.Type" xml:space="preserve">
     <value>System.Windows.Forms.Panel, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
-  <data name="&gt;&gt;$this.Type" xml:space="preserve">
-    <value>System.Windows.Forms.Form, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  <data name="&gt;&gt;radioButtonMyanmarPage.Name" xml:space="preserve">
+    <value>radioButtonMyanmarPage</value>
   </data>
   <data name="radioButtonPtsPage.Location" type="System.Drawing.Point, System.Drawing">
     <value>3, 72</value>
@@ -369,8 +369,8 @@
   <data name="$this.MinimumSize" type="System.Drawing.Size, System.Drawing">
     <value>513, 245</value>
   </data>
-  <data name="radioButtonThaiPage.Text" xml:space="preserve">
-    <value>Thai Page</value>
+  <data name="textBoxNumber.Size" type="System.Drawing.Size, System.Drawing">
+    <value>88, 20</value>
   </data>
   <data name="radioButtonMyanmarPage.Size" type="System.Drawing.Size, System.Drawing">
     <value>96, 17</value>
@@ -399,8 +399,8 @@
   <data name="lblGoToWhat.TabIndex" type="System.Int32, mscorlib">
     <value>0</value>
   </data>
-  <data name="textBoxNumber.Size" type="System.Drawing.Size, System.Drawing">
-    <value>88, 20</value>
+  <data name="&gt;&gt;buttonCancel.Parent" xml:space="preserve">
+    <value>$this</value>
   </data>
   <data name="&gt;&gt;radioButtonOtherPage.ZOrder" xml:space="preserve">
     <value>0</value>
