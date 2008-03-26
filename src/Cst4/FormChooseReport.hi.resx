@@ -118,37 +118,31 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="btnOK.Text" xml:space="preserve">
-    <value>ओके</value>
+    <value>ठीक है</value>
+    <comment>OK</comment>
   </data>
   <data name="btnCancel.Text" xml:space="preserve">
-    <value>खारीज</value>
-  </data>
-  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="radioButtonSelectedWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>115, 17</value>
+    <value>रद्द करें</value>
+    <comment>Cancel</comment>
   </data>
   <data name="radioButtonSelectedWords.Text" xml:space="preserve">
-    <value>चुने हुए शब्द</value>
-  </data>
-  <data name="radioButtonOccAllWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>163, 17</value>
+    <value>निर्वाचित शब्द</value>
+    <comment>Selected Words</comment>
   </data>
   <data name="radioButtonOccAllWords.Text" xml:space="preserve">
-    <value>सभी शब्द कहा आये हैं</value>
-  </data>
-  <data name="radioButtonOccSelWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>191, 17</value>
+    
+    <value>सभी शब्दों की प्रयुक्ति</value><comment>Occurences For All Words</comment>
   </data>
   <data name="radioButtonOccSelWords.Text" xml:space="preserve">
-    <value>चुने हुए शब्द कहा आये हैं</value>
-  </data>
-  <data name="radioButtonAllWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>84, 17</value>
+    
+    <value>निर्वाचित शब्दों की प्रयुक्ति</value><comment>Occurences for Selected Words</comment>
   </data>
   <data name="radioButtonAllWords.Text" xml:space="preserve">
-    <value>सभी शब्द</value>
+    
+    <value>सभी शब्द</value><comment>All Words</comment>
   </data>
   <data name="$this.Text" xml:space="preserve">
-    <value>रपट चुने</value>
+    <value>रिपोर्ट चुनें</value>
+    <comment>Choose Report</comment>
   </data>
 </root>

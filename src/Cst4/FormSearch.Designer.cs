@@ -63,12 +63,18 @@ namespace CST
 			// 
 			// lblSearchFor
 			// 
+			this.lblSearchFor.AccessibleDescription = null;
+			this.lblSearchFor.AccessibleName = null;
 			resources.ApplyResources(this.lblSearchFor, "lblSearchFor");
+			this.lblSearchFor.Font = null;
 			this.lblSearchFor.Name = "lblSearchFor";
 			// 
 			// txtSearchTerms
 			// 
+			this.txtSearchTerms.AccessibleDescription = null;
+			this.txtSearchTerms.AccessibleName = null;
 			resources.ApplyResources(this.txtSearchTerms, "txtSearchTerms");
+			this.txtSearchTerms.BackgroundImage = null;
 			this.txtSearchTerms.Name = "txtSearchTerms";
 			this.txtSearchTerms.TextChanged += new System.EventHandler(this.txtSearchTerms_TextChanged);
 			this.txtSearchTerms.Click += new System.EventHandler(this.txtSearchTerms_Click);
@@ -77,14 +83,21 @@ namespace CST
 			// 
 			// btnSearch
 			// 
+			this.btnSearch.AccessibleDescription = null;
+			this.btnSearch.AccessibleName = null;
 			resources.ApplyResources(this.btnSearch, "btnSearch");
+			this.btnSearch.BackgroundImage = null;
+			this.btnSearch.Font = null;
 			this.btnSearch.Name = "btnSearch";
 			this.btnSearch.UseVisualStyleBackColor = true;
 			this.btnSearch.Click += new System.EventHandler(this.btnSearch_Click);
 			// 
 			// listBoxWords
 			// 
+			this.listBoxWords.AccessibleDescription = null;
+			this.listBoxWords.AccessibleName = null;
 			resources.ApplyResources(this.listBoxWords, "listBoxWords");
+			this.listBoxWords.BackgroundImage = null;
 			this.listBoxWords.FormattingEnabled = true;
 			this.listBoxWords.Name = "listBoxWords";
 			this.listBoxWords.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
@@ -97,12 +110,18 @@ namespace CST
 			// 
 			// lblWords
 			// 
+			this.lblWords.AccessibleDescription = null;
+			this.lblWords.AccessibleName = null;
 			resources.ApplyResources(this.lblWords, "lblWords");
+			this.lblWords.Font = null;
 			this.lblWords.Name = "lblWords";
 			// 
 			// listBoxOccurBooks
 			// 
+			this.listBoxOccurBooks.AccessibleDescription = null;
+			this.listBoxOccurBooks.AccessibleName = null;
 			resources.ApplyResources(this.listBoxOccurBooks, "listBoxOccurBooks");
+			this.listBoxOccurBooks.BackgroundImage = null;
 			this.listBoxOccurBooks.FormattingEnabled = true;
 			this.listBoxOccurBooks.Name = "listBoxOccurBooks";
 			this.listBoxOccurBooks.Tag = "Pali";
@@ -111,116 +130,170 @@ namespace CST
 			// 
 			// lblOccurrencesBooks
 			// 
+			this.lblOccurrencesBooks.AccessibleDescription = null;
+			this.lblOccurrencesBooks.AccessibleName = null;
 			resources.ApplyResources(this.lblOccurrencesBooks, "lblOccurrencesBooks");
+			this.lblOccurrencesBooks.Font = null;
 			this.lblOccurrencesBooks.Name = "lblOccurrencesBooks";
 			// 
 			// btnClose
 			// 
+			this.btnClose.AccessibleDescription = null;
+			this.btnClose.AccessibleName = null;
 			resources.ApplyResources(this.btnClose, "btnClose");
+			this.btnClose.BackgroundImage = null;
+			this.btnClose.Font = null;
 			this.btnClose.Name = "btnClose";
 			this.btnClose.UseVisualStyleBackColor = true;
 			this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
 			// 
 			// lblWordStats
 			// 
+			this.lblWordStats.AccessibleDescription = null;
+			this.lblWordStats.AccessibleName = null;
 			resources.ApplyResources(this.lblWordStats, "lblWordStats");
 			this.lblWordStats.Name = "lblWordStats";
 			// 
 			// lblBookStats
 			// 
+			this.lblBookStats.AccessibleDescription = null;
+			this.lblBookStats.AccessibleName = null;
 			resources.ApplyResources(this.lblBookStats, "lblBookStats");
 			this.lblBookStats.Name = "lblBookStats";
 			// 
 			// lblUse
 			// 
+			this.lblUse.AccessibleDescription = null;
+			this.lblUse.AccessibleName = null;
 			resources.ApplyResources(this.lblUse, "lblUse");
+			this.lblUse.Font = null;
 			this.lblUse.Name = "lblUse";
 			// 
 			// comboWildRegex
 			// 
+			this.comboWildRegex.AccessibleDescription = null;
+			this.comboWildRegex.AccessibleName = null;
+			resources.ApplyResources(this.comboWildRegex, "comboWildRegex");
+			this.comboWildRegex.BackgroundImage = null;
 			this.comboWildRegex.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+			this.comboWildRegex.Font = null;
 			this.comboWildRegex.FormattingEnabled = true;
 			this.comboWildRegex.Items.AddRange(new object[] {
             resources.GetString("comboWildRegex.Items"),
             resources.GetString("comboWildRegex.Items1")});
-			resources.ApplyResources(this.comboWildRegex, "comboWildRegex");
 			this.comboWildRegex.Name = "comboWildRegex";
 			this.comboWildRegex.SelectedIndexChanged += new System.EventHandler(this.comboWildRegex_SelectedIndexChanged);
 			// 
 			// cbVinaya
 			// 
+			this.cbVinaya.AccessibleDescription = null;
+			this.cbVinaya.AccessibleName = null;
 			resources.ApplyResources(this.cbVinaya, "cbVinaya");
+			this.cbVinaya.BackgroundImage = null;
 			this.cbVinaya.Checked = true;
 			this.cbVinaya.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbVinaya.Font = null;
 			this.cbVinaya.Name = "cbVinaya";
 			this.cbVinaya.UseVisualStyleBackColor = true;
 			this.cbVinaya.CheckedChanged += new System.EventHandler(this.cbVinaya_CheckedChanged);
 			// 
 			// cbSutta
 			// 
+			this.cbSutta.AccessibleDescription = null;
+			this.cbSutta.AccessibleName = null;
 			resources.ApplyResources(this.cbSutta, "cbSutta");
+			this.cbSutta.BackgroundImage = null;
 			this.cbSutta.Checked = true;
 			this.cbSutta.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbSutta.Font = null;
 			this.cbSutta.Name = "cbSutta";
 			this.cbSutta.UseVisualStyleBackColor = true;
 			this.cbSutta.CheckedChanged += new System.EventHandler(this.cbSutta_CheckedChanged);
 			// 
 			// cbAbhi
 			// 
+			this.cbAbhi.AccessibleDescription = null;
+			this.cbAbhi.AccessibleName = null;
 			resources.ApplyResources(this.cbAbhi, "cbAbhi");
+			this.cbAbhi.BackgroundImage = null;
 			this.cbAbhi.Checked = true;
 			this.cbAbhi.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbAbhi.Font = null;
 			this.cbAbhi.Name = "cbAbhi";
 			this.cbAbhi.UseVisualStyleBackColor = true;
 			this.cbAbhi.CheckedChanged += new System.EventHandler(this.cbAbhi_CheckedChanged);
 			// 
 			// cbMula
 			// 
+			this.cbMula.AccessibleDescription = null;
+			this.cbMula.AccessibleName = null;
 			resources.ApplyResources(this.cbMula, "cbMula");
+			this.cbMula.BackgroundImage = null;
 			this.cbMula.Checked = true;
 			this.cbMula.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbMula.Font = null;
 			this.cbMula.Name = "cbMula";
 			this.cbMula.UseVisualStyleBackColor = true;
 			this.cbMula.CheckedChanged += new System.EventHandler(this.cbMula_CheckedChanged);
 			// 
 			// cbAttha
 			// 
+			this.cbAttha.AccessibleDescription = null;
+			this.cbAttha.AccessibleName = null;
 			resources.ApplyResources(this.cbAttha, "cbAttha");
+			this.cbAttha.BackgroundImage = null;
 			this.cbAttha.Checked = true;
 			this.cbAttha.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbAttha.Font = null;
 			this.cbAttha.Name = "cbAttha";
 			this.cbAttha.UseVisualStyleBackColor = true;
 			this.cbAttha.CheckedChanged += new System.EventHandler(this.cbAttha_CheckedChanged);
 			// 
 			// cbTika
 			// 
+			this.cbTika.AccessibleDescription = null;
+			this.cbTika.AccessibleName = null;
 			resources.ApplyResources(this.cbTika, "cbTika");
+			this.cbTika.BackgroundImage = null;
 			this.cbTika.Checked = true;
 			this.cbTika.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbTika.Font = null;
 			this.cbTika.Name = "cbTika";
 			this.cbTika.UseVisualStyleBackColor = true;
 			this.cbTika.CheckedChanged += new System.EventHandler(this.cbTika_CheckedChanged);
 			// 
 			// cbOtherTexts
 			// 
+			this.cbOtherTexts.AccessibleDescription = null;
+			this.cbOtherTexts.AccessibleName = null;
 			resources.ApplyResources(this.cbOtherTexts, "cbOtherTexts");
+			this.cbOtherTexts.BackgroundImage = null;
 			this.cbOtherTexts.Checked = true;
 			this.cbOtherTexts.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbOtherTexts.Font = null;
 			this.cbOtherTexts.Name = "cbOtherTexts";
 			this.cbOtherTexts.UseVisualStyleBackColor = true;
 			this.cbOtherTexts.CheckedChanged += new System.EventHandler(this.cbOtherTexts_CheckedChanged);
 			// 
 			// cbAll
 			// 
+			this.cbAll.AccessibleDescription = null;
+			this.cbAll.AccessibleName = null;
 			resources.ApplyResources(this.cbAll, "cbAll");
+			this.cbAll.BackgroundImage = null;
 			this.cbAll.Checked = true;
 			this.cbAll.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.cbAll.Font = null;
 			this.cbAll.Name = "cbAll";
 			this.cbAll.UseVisualStyleBackColor = true;
 			this.cbAll.CheckedChanged += new System.EventHandler(this.cbAll_CheckedChanged);
 			// 
 			// gbLimitSearch
 			// 
+			this.gbLimitSearch.AccessibleDescription = null;
+			this.gbLimitSearch.AccessibleName = null;
+			resources.ApplyResources(this.gbLimitSearch, "gbLimitSearch");
+			this.gbLimitSearch.BackgroundImage = null;
 			this.gbLimitSearch.Controls.Add(this.comboBookSet);
 			this.gbLimitSearch.Controls.Add(this.linkLabelDelete);
 			this.gbLimitSearch.Controls.Add(this.linkLabelEdit);
@@ -233,55 +306,78 @@ namespace CST
 			this.gbLimitSearch.Controls.Add(this.cbSutta);
 			this.gbLimitSearch.Controls.Add(this.cbVinaya);
 			this.gbLimitSearch.Controls.Add(this.lblSelectBookColl);
-			resources.ApplyResources(this.gbLimitSearch, "gbLimitSearch");
+			this.gbLimitSearch.Font = null;
 			this.gbLimitSearch.Name = "gbLimitSearch";
 			this.gbLimitSearch.TabStop = false;
 			// 
 			// comboBookSet
 			// 
+			this.comboBookSet.AccessibleDescription = null;
+			this.comboBookSet.AccessibleName = null;
+			resources.ApplyResources(this.comboBookSet, "comboBookSet");
+			this.comboBookSet.BackgroundImage = null;
 			this.comboBookSet.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+			this.comboBookSet.Font = null;
 			this.comboBookSet.FormattingEnabled = true;
 			this.comboBookSet.Items.AddRange(new object[] {
             resources.GetString("comboBookSet.Items"),
             resources.GetString("comboBookSet.Items1")});
-			resources.ApplyResources(this.comboBookSet, "comboBookSet");
 			this.comboBookSet.Name = "comboBookSet";
 			this.comboBookSet.SelectedIndexChanged += new System.EventHandler(this.comboBookSet_SelectedIndexChanged);
 			// 
 			// linkLabelDelete
 			// 
+			this.linkLabelDelete.AccessibleDescription = null;
+			this.linkLabelDelete.AccessibleName = null;
 			resources.ApplyResources(this.linkLabelDelete, "linkLabelDelete");
+			this.linkLabelDelete.Font = null;
 			this.linkLabelDelete.Name = "linkLabelDelete";
 			this.linkLabelDelete.TabStop = true;
 			this.linkLabelDelete.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabelDelete_LinkClicked);
 			// 
 			// linkLabelEdit
 			// 
+			this.linkLabelEdit.AccessibleDescription = null;
+			this.linkLabelEdit.AccessibleName = null;
 			resources.ApplyResources(this.linkLabelEdit, "linkLabelEdit");
+			this.linkLabelEdit.Font = null;
 			this.linkLabelEdit.Name = "linkLabelEdit";
 			this.linkLabelEdit.TabStop = true;
 			this.linkLabelEdit.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabelEdit_LinkClicked);
 			// 
 			// lblSelectBookColl
 			// 
+			this.lblSelectBookColl.AccessibleDescription = null;
+			this.lblSelectBookColl.AccessibleName = null;
 			resources.ApplyResources(this.lblSelectBookColl, "lblSelectBookColl");
+			this.lblSelectBookColl.Font = null;
 			this.lblSelectBookColl.Name = "lblSelectBookColl";
 			// 
 			// btnReport
 			// 
+			this.btnReport.AccessibleDescription = null;
+			this.btnReport.AccessibleName = null;
 			resources.ApplyResources(this.btnReport, "btnReport");
+			this.btnReport.BackgroundImage = null;
+			this.btnReport.Font = null;
 			this.btnReport.Name = "btnReport";
 			this.btnReport.UseVisualStyleBackColor = true;
 			this.btnReport.Click += new System.EventHandler(this.btnReport_Click);
 			// 
 			// lblContextDistance
 			// 
+			this.lblContextDistance.AccessibleDescription = null;
+			this.lblContextDistance.AccessibleName = null;
 			resources.ApplyResources(this.lblContextDistance, "lblContextDistance");
+			this.lblContextDistance.Font = null;
 			this.lblContextDistance.Name = "lblContextDistance";
 			// 
 			// numContextDistance
 			// 
+			this.numContextDistance.AccessibleDescription = null;
+			this.numContextDistance.AccessibleName = null;
 			resources.ApplyResources(this.numContextDistance, "numContextDistance");
+			this.numContextDistance.Font = null;
 			this.numContextDistance.Maximum = new decimal(new int[] {
             99,
             0,
@@ -301,8 +397,11 @@ namespace CST
 			// 
 			// FormSearch
 			// 
+			this.AccessibleDescription = null;
+			this.AccessibleName = null;
 			resources.ApplyResources(this, "$this");
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+			this.BackgroundImage = null;
 			this.Controls.Add(this.lblUse);
 			this.Controls.Add(this.numContextDistance);
 			this.Controls.Add(this.btnReport);
@@ -319,7 +418,9 @@ namespace CST
 			this.Controls.Add(this.lblContextDistance);
 			this.Controls.Add(this.lblWords);
 			this.Controls.Add(this.lblOccurrencesBooks);
+			this.Font = null;
 			this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
+			this.Icon = null;
 			this.MaximizeBox = false;
 			this.Name = "FormSearch";
 			this.ShowIcon = false;

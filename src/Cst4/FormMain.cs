@@ -73,7 +73,7 @@ namespace CST
 
 			SplashScreen.SetStatus("Loading multi-lingual string resources");
 
-			LanguageCollector lc = new LanguageCollector();
+			LanguageCollector lc = new LanguageCollector(new CultureInfo("en"));
 			int currentLanguage;
 			CultureInfoDisplayItem[] lis = lc.GetLanguages(LanguageCollector.LanguageNameDisplay.NativeName, out currentLanguage);
 			tscbInterfaceLanguage.Items.AddRange(lis);
@@ -875,7 +875,9 @@ namespace CST
 
 		private void tsmiAbout_Click(object sender, EventArgs e)
 		{
-			SplashScreen.ShowAboutScreen(3000);
+			//SplashScreen.ShowAboutScreen(3000);
+			AboutBox about = new AboutBox();
+			about.ShowDialog();
 		}
 
 		private void tscbPaliScript_SelectedIndexChanged(object sender, EventArgs e)

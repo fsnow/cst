@@ -118,24 +118,24 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="BookStatsFormat" xml:space="preserve">
-    <value>कहा मिले: {0}, ग्रंथ: {1}</value>
+    <value>प्रयुक्ति {0}, ग्रंथ {1}</value><comment>Occurrences: {0}, Books: {1}</comment>
   </data>
   <data name="DeleteBookCollectionWarning" xml:space="preserve">
-    <value>क्या आप सचमुच यह ग्रंथ-संग्रह काटना चाहते है</value>
+    <value>क्या आप इस ग्रंथसंग्रह को नष्ट करना चाहते है?</value><comment>Are you sure you want to delete the Book Collection?</comment>
   </data>
   <data name="MultiWordStatsFormat" xml:space="preserve">
-    <value>शब्दों का मिश्रण: {0}, चुने हुए: {1}</value>
+    <value>शब्दों का सम्मिलन {0},  निर्वाचित {1}</value><comment>Word Combinations: {0}, Selected: {1}</comment>
   </data>
   <data name="PageNumbersStatusFormat" xml:space="preserve">
-    <value>वि.वि.वि.: {0}   बरमी: {1}   पीटीएस: {2}   थाई: {3}   Other: {4}</value>
+    <value>वि.वि.वि. {0}   बर्मी {1}   पी.टी.एस. {2}  थाई {3}   अन्य {4}</value><comment>VRI: {0}   Myanmar: {1}   PTS: {2}   Thai: {3}   Other: {4}</comment>
   </data>
   <data name="Test" xml:space="preserve">
-    <value>जांच</value>
+    <value>परीक्षा करें</value><comment>Test</comment>
   </data>
   <data name="WordStatsFormat" xml:space="preserve">
-    <value>शब्द: {0}, चुने हुए: {1}</value>
+    <value>शब्द {0}, निर्वाचित {1}</value><comment>Words: {0}, Selected: {1}</comment>
   </data>
   <data name="WordStatsZero" xml:space="preserve">
-    <value>शब्द: 0</value>
+    <value>शब्द 0</value><comment>Words: 0</comment>
   </data>
 </root>

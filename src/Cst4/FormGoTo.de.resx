@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -117,193 +117,48 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <assembly alias="mscorlib" name="mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="lblGoToWhat.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="lblGoToWhat.Location" type="System.Drawing.Point, System.Drawing">
-    <value>26, 24</value>
-  </data>
-  <data name="lblGoToWhat.Size" type="System.Drawing.Size, System.Drawing">
-    <value>69, 13</value>
-  </data>
-  <data name="lblGoToWhat.TabIndex" type="System.Int32, mscorlib">
-    <value>0</value>
-  </data>
   <data name="lblGoToWhat.Text" xml:space="preserve">
-    <value>Go To What(de):</value>
-  </data>
-  <data name="panel1.Location" type="System.Drawing.Point, System.Drawing">
-    <value>29, 52</value>
-  </data>
-  <data name="panel1.Size" type="System.Drawing.Size, System.Drawing">
-    <value>143, 157</value>
-  </data>
-  <data name="panel1.TabIndex" type="System.Int32, mscorlib">
-    <value>2</value>
-  </data>
-  <data name="radioButtonOtherPage.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="radioButtonOtherPage.Enabled" type="System.Boolean, mscorlib">
-    <value>False</value>
-  </data>
-  <data name="radioButtonOtherPage.Location" type="System.Drawing.Point, System.Drawing">
-    <value>3, 118</value>
-  </data>
-  <data name="radioButtonOtherPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>79, 17</value>
-  </data>
-  <data name="radioButtonOtherPage.TabIndex" type="System.Int32, mscorlib">
-    <value>5</value>
+    <value>Gehe zu:</value>
+    <comment>Go To What:</comment>
   </data>
   <data name="radioButtonOtherPage.Text" xml:space="preserve">
-    <value>Other Page(de)</value>
-  </data>
-  <data name="radioButtonThaiPage.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="radioButtonThaiPage.Location" type="System.Drawing.Point, System.Drawing">
-    <value>3, 95</value>
-  </data>
-  <data name="radioButtonThaiPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>74, 17</value>
-  </data>
-  <data name="radioButtonThaiPage.TabIndex" type="System.Int32, mscorlib">
-    <value>4</value>
+    <value>Andere Seiten-Nr.</value>
+    <comment>Other Page</comment>
   </data>
   <data name="radioButtonThaiPage.Text" xml:space="preserve">
-    <value>Thai Page(de)</value>
-  </data>
-  <data name="radioButtonPtsPage.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="radioButtonPtsPage.Location" type="System.Drawing.Point, System.Drawing">
-    <value>3, 72</value>
-  </data>
-  <data name="radioButtonPtsPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>74, 17</value>
-  </data>
-  <data name="radioButtonPtsPage.TabIndex" type="System.Int32, mscorlib">
-    <value>3</value>
+    <value>Thailändische Seiten-Nr.</value>
+    <comment>Thai Page</comment>
   </data>
   <data name="radioButtonPtsPage.Text" xml:space="preserve">
-    <value>PTS Page(de)</value>
-  </data>
-  <data name="radioButtonMyanmarPage.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="radioButtonMyanmarPage.Location" type="System.Drawing.Point, System.Drawing">
-    <value>3, 49</value>
-  </data>
-  <data name="radioButtonMyanmarPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>96, 17</value>
-  </data>
-  <data name="radioButtonMyanmarPage.TabIndex" type="System.Int32, mscorlib">
-    <value>2</value>
+    <value>PTS Seiten-Nr.</value>
+    <comment>PTS Page</comment>
   </data>
   <data name="radioButtonMyanmarPage.Text" xml:space="preserve">
-    <value>Myanmar Page(de)</value>
-  </data>
-  <data name="radioButtonVriPage.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="radioButtonVriPage.Location" type="System.Drawing.Point, System.Drawing">
-    <value>3, 26</value>
-  </data>
-  <data name="radioButtonVriPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>71, 17</value>
-  </data>
-  <data name="radioButtonVriPage.TabIndex" type="System.Int32, mscorlib">
-    <value>1</value>
+    <value>Myanmar Seiten-Nr.</value>
+    <comment>Myanmar Page</comment>
   </data>
   <data name="radioButtonVriPage.Text" xml:space="preserve">
-    <value>VRI Page(de)</value>
-  </data>
-  <data name="radioButtonParagraph.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="radioButtonParagraph.Location" type="System.Drawing.Point, System.Drawing">
-    <value>3, 3</value>
-  </data>
-  <data name="radioButtonParagraph.Size" type="System.Drawing.Size, System.Drawing">
-    <value>74, 17</value>
-  </data>
-  <data name="radioButtonParagraph.TabIndex" type="System.Int32, mscorlib">
-    <value>0</value>
+    <value>VRI Seiten-Nr.</value>
+    <comment>VRI Page</comment>
   </data>
   <data name="radioButtonParagraph.Text" xml:space="preserve">
-    <value>Paragraph(de)</value>
-  </data>
-  <data name="lblNumber.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="lblNumber.Location" type="System.Drawing.Point, System.Drawing">
-    <value>242, 24</value>
-  </data>
-  <data name="lblNumber.Size" type="System.Drawing.Size, System.Drawing">
-    <value>44, 13</value>
-  </data>
-  <data name="lblNumber.TabIndex" type="System.Int32, mscorlib">
-    <value>2</value>
+    <value>Absatz</value>
+    <comment>Paragraph</comment>
   </data>
   <data name="lblNumber.Text" xml:space="preserve">
-    <value>Number(de)</value>
-  </data>
-  <data name="textBoxNumber.Location" type="System.Drawing.Point, System.Drawing">
-    <value>245, 52</value>
-  </data>
-  <data name="textBoxNumber.Size" type="System.Drawing.Size, System.Drawing">
-    <value>88, 20</value>
-  </data>
-  <data name="textBoxNumber.TabIndex" type="System.Int32, mscorlib">
-    <value>1</value>
-  </data>
-  <data name="buttonOK.Location" type="System.Drawing.Point, System.Drawing">
-    <value>399, 49</value>
-  </data>
-  <data name="buttonOK.Size" type="System.Drawing.Size, System.Drawing">
-    <value>75, 23</value>
-  </data>
-  <data name="buttonOK.TabIndex" type="System.Int32, mscorlib">
-    <value>3</value>
+    <value>Nummer</value>
+    <comment>Number</comment>
   </data>
   <data name="buttonOK.Text" xml:space="preserve">
-    <value>OK(de)</value>
-  </data>
-  <data name="buttonCancel.Location" type="System.Drawing.Point, System.Drawing">
-    <value>399, 95</value>
-  </data>
-  <data name="buttonCancel.Size" type="System.Drawing.Size, System.Drawing">
-    <value>75, 23</value>
-  </data>
-  <data name="buttonCancel.TabIndex" type="System.Int32, mscorlib">
-    <value>4</value>
+    <value>OK</value>
+    <comment>OK</comment>
   </data>
   <data name="buttonCancel.Text" xml:space="preserve">
-    <value>Cancel(de)</value>
-  </data>
-  <data name="$this.Localizable" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="$this.AutoScaleDimensions" type="System.Drawing.SizeF, System.Drawing">
-    <value>6, 13</value>
-  </data>
-  <data name="$this.ClientSize" type="System.Drawing.Size, System.Drawing">
-    <value>505, 211</value>
-  </data>
-  <data name="$this.MaximumSize" type="System.Drawing.Size, System.Drawing">
-    <value>513, 245</value>
-  </data>
-  <data name="$this.MinimumSize" type="System.Drawing.Size, System.Drawing">
-    <value>513, 245</value>
-  </data>
-  <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="$this.StartPosition" type="System.Windows.Forms.FormStartPosition, System.Windows.Forms">
-    <value>CenterParent</value>
+    <value>Abbrechen</value>
+    <comment>Cancel</comment>
   </data>
   <data name="$this.Text" xml:space="preserve">
-    <value>Go to(de)...</value>
+    <value>Gehe zu…</value>
+    <comment>Go to...</comment>
   </data>
 </root>

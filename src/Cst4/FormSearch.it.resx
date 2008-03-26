@@ -127,8 +127,14 @@
   <data name="btnSearch.Text" xml:space="preserve">
     <value>Ricerca</value>
   </data>
+  <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
+    <value>37, 13</value>
+  </data>
   <data name="lblWords.Text" xml:space="preserve">
     <value>Parole</value>
+  </data>
+  <data name="lblOccurrencesBooks.Size" type="System.Drawing.Size, System.Drawing">
+    <value>90, 13</value>
   </data>
   <data name="lblOccurrencesBooks.Text" xml:space="preserve">
     <value>Occorrenze - Libri</value>
@@ -175,14 +181,26 @@
   <data name="linkLabelEdit.Text" xml:space="preserve">
     <value>Modifica</value>
   </data>
+  <data name="lblSelectBookColl.Size" type="System.Drawing.Size, System.Drawing">
+    <value>151, 13</value>
+  </data>
   <data name="lblSelectBookColl.Text" xml:space="preserve">
     <value>O Seleziona Collezione di Libri:</value>
+  </data>
+  <data name="gbLimitSearch.Text" xml:space="preserve">
+    <value>Limiti Ricerca</value>
   </data>
   <data name="btnReport.Text" xml:space="preserve">
     <value>Rapporto...</value>
   </data>
+  <data name="lblContextDistance.Size" type="System.Drawing.Size, System.Drawing">
+    <value>109, 13</value>
+  </data>
   <data name="lblContextDistance.Text" xml:space="preserve">
     <value>Distanza tra le parole:</value>
+  </data>
+  <data name="numContextDistance.Location" type="System.Drawing.Point, System.Drawing">
+    <value>125, 62</value>
   </data>
   <data name="$this.Text" xml:space="preserve">
     <value>Cerca</value>

@@ -133,10 +133,10 @@ namespace CST
 
                 
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 enWords = null;
-                MessageBox.Show("Error", "Error reading Pali-English dictionary", 
+                MessageBox.Show("Error", "Error reading Pali-English dictionary: " + ex.ToString(), 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -233,14 +233,20 @@ namespace CST
                 DictionaryWord wordBehind = null;
                 DictionaryWord wordAhead = null;
 
-                if (index - 1 >= 0 && index - 1 < words.Count)
-                    wordBehind = words[index - 1];
+				int commonBehind = 0;
+				int commonAhead = 0;
 
-                if (index >= 0 && index < words.Count)
-                    wordAhead = words[index];
+				if (index - 1 >= 0 && index - 1 < words.Count)
+				{
+					wordBehind = words[index - 1];
+					commonBehind = CountCommonStartLetters(word, wordBehind.Word);
+				}
 
-                int commonBehind = CountCommonStartLetters(word, wordBehind.Word);
-                int commonAhead = CountCommonStartLetters(word, wordAhead.Word);
+				if (index >= 0 && index < words.Count)
+				{
+					wordAhead = words[index];
+					commonAhead = CountCommonStartLetters(word, wordAhead.Word);
+				}
 
                 // look behind this word for candidate words
                 if (commonBehind >= commonAhead && commonBehind > 0)

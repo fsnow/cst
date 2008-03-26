@@ -125,16 +125,32 @@ Section "Dummy Section" SecDummy
   
   SetOutPath "$INSTDIR"
   File bin\Debug\Cst4.exe
+  File bin\Debug\Cst4.exe.config
   File bin\Debug\CST.dll
   File bin\Debug\Lucene.Net.dll
   File bin\Debug\Microsoft.mshtml.dll
   File bin\Debug\usp10.dll
   
+  SetOutPath "$INSTDIR\bn-IN"
+  File bin\Debug\de\*.*
+  
+  SetOutPath "$INSTDIR\cs"
+  File bin\Debug\cs\*.*
+  
   SetOutPath "$INSTDIR\de"
   File bin\Debug\de\*.*
-
-  SetOutPath "$INSTDIR\en"
-  File bin\Debug\en\*.*
+  
+  SetOutPath "$INSTDIR\es"
+  File bin\Debug\es\*.*
+  
+  SetOutPath "$INSTDIR\fa"
+  File bin\Debug\fa\*.*
+  
+  SetOutPath "$INSTDIR\fi"
+  File bin\Debug\fi\*.*
+  
+  SetOutPath "$INSTDIR\fr"
+  File bin\Debug\fr\*.*
   
   SetOutPath "$INSTDIR\gu"
   File bin\Debug\gu\*.*
@@ -148,11 +164,23 @@ Section "Dummy Section" SecDummy
   SetOutPath "$INSTDIR\it"
   File bin\Debug\it\*.*
   
+  SetOutPath "$INSTDIR\no"
+  File bin\Debug\no\*.*
+  
+  SetOutPath "$INSTDIR\ru"
+  File bin\Debug\ru\*.*
+  
   SetOutPath "$INSTDIR\sv"
   File bin\Debug\sv\*.*
   
   SetOutPath "$INSTDIR\ta"
   File bin\Debug\ta\*.*
+  
+  SetOutPath "$INSTDIR\te"
+  File bin\Debug\te\*.*
+  
+  SetOutPath "$INSTDIR\th"
+  File bin\Debug\th\*.*
   
   SetOutPath "$INSTDIR\zh-CHS"
   File bin\Debug\zh-CHS\*.*
@@ -167,8 +195,10 @@ Section "Dummy Section" SecDummy
   ;File bin\Debug\Images\*.*
   
   SetOutPath "$INSTDIR\Reference"
-  File bin\Debug\Reference\en\pali-english-dictionary.txt
   File bin\Debug\Reference\pali-hindi-dictionary.txt
+  
+  SetOutPath "$INSTDIR\Reference\en"
+  File bin\Debug\Reference\en\pali-english-dictionary.txt
   
   SetOutPath "$INSTDIR\Xml"
   File bin\Debug\Xml\*.mul.xml 
@@ -212,15 +242,66 @@ Section "Uninstall"
 
   ;ADD YOUR OWN FILES HERE...
 
+  Delete "$INSTDIR\bn-IN\*.*"
+  RMDir "$INSTDIR\bn-IN"
+  
+  Delete "$INSTDIR\cs\*.*"
+  RMDir "$INSTDIR\cs"
+  
   Delete "$INSTDIR\de\*.*"
   RMDir "$INSTDIR\de"
   
   Delete "$INSTDIR\en\*.*"
   RMDir "$INSTDIR\en"
   
+  Delete "$INSTDIR\es\*.*"
+  RMDir "$INSTDIR\es"
+  
+  Delete "$INSTDIR\fa\*.*"
+  RMDir "$INSTDIR\fa"
+  
+  Delete "$INSTDIR\fi\*.*"
+  RMDir "$INSTDIR\fi"
+  
+  Delete "$INSTDIR\fr\*.*"
+  RMDir "$INSTDIR\fr"
+  
+  Delete "$INSTDIR\gu\*.*"
+  RMDir "$INSTDIR\gu"
+  
   Delete "$INSTDIR\hi\*.*"
   RMDir "$INSTDIR\hi"
   
+  Delete "$INSTDIR\id\*.*"
+  RMDir "$INSTDIR\id"
+  
+  Delete "$INSTDIR\it\*.*"
+  RMDir "$INSTDIR\it"
+  
+  Delete "$INSTDIR\no\*.*"
+  RMDir "$INSTDIR\no"
+  
+  Delete "$INSTDIR\ru\*.*"
+  RMDir "$INSTDIR\ru"
+  
+  Delete "$INSTDIR\sv\*.*"
+  RMDir "$INSTDIR\sv"
+
+  Delete "$INSTDIR\ta\*.*"
+  RMDir "$INSTDIR\ta"
+  
+  Delete "$INSTDIR\te\*.*"
+  RMDir "$INSTDIR\te"
+  
+  Delete "$INSTDIR\th\*.*"
+  RMDir "$INSTDIR\th"
+  
+  Delete "$INSTDIR\zh-CHS\*.*"
+  RMDir "$INSTDIR\zh-CHS"
+  
+  Delete "$INSTDIR\zh-CHT\*.*"
+  RMDir "$INSTDIR\zh-CHT"
+    
   Delete "$INSTDIR\Fonts\*.*"
   RMDir "$INSTDIR\Fonts"
   
@@ -239,11 +320,15 @@ Section "Uninstall"
   RMDir "$INSTDIR\Index"
   
   Delete "$INSTDIR\Cst4.exe"
+  Delete "$INSTDIR\Cst4.exe.config"
   Delete "$INSTDIR\CST.dll"
   Delete "$INSTDIR\Lucene.Net.dll"
   Delete "$INSTDIR\Microsoft.mshtml.dll"
   Delete "$INSTDIR\usp10.dll"
   Delete "$INSTDIR\*.dat"
+  Delete "$INSTDIR\*.log"
+  Delete "$INSTDIR\*.1"
+  Delete "$INSTDIR\*.2"
   
   Delete "$INSTDIR\Uninstall.exe"
 

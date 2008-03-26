@@ -20,6 +20,9 @@ namespace CST
 
             ResizeBrowserControl();
 
+			if (xslStem == null || xslStem.Length == 0)
+				return;
+
             // load XSL file
             XslCompiledTransform xslt = new XslCompiledTransform();
             xslt.Load(Config.Inst.XslDirectory + Path.DirectorySeparatorChar + xslStem + "-" +

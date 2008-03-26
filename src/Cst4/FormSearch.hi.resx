@@ -119,35 +119,40 @@
   </resheader>
   <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
   <data name="lblSearchFor.Size" type="System.Drawing.Size, System.Drawing">
-    <value>31, 13</value>
+    <value>58, 13</value>
   </data>
   <data name="lblSearchFor.Text" xml:space="preserve">
-    <value>खोजे-</value>
+    <value>खोज विषय</value>
   </data>
   <data name="btnSearch.Text" xml:space="preserve">
-    <value>खोज</value>
+    <value>खोजें</value>
   </data>
-  <data name="label1.Size" type="System.Drawing.Size, System.Drawing">
+  <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
     <value>26, 13</value>
   </data>
   <data name="lblWords.Text" xml:space="preserve">
     <value>शब्द</value>
   </data>
-  <data name="label2.Size" type="System.Drawing.Size, System.Drawing">
-    <value>79, 13</value>
-  </data>
-  <data name="lblOccurrencesBooks.Text" xml:space="preserve">
-    <value>कौन से ग्रंथों में</value>
-  </data>
-  <data name="btnClose.Text" xml:space="preserve">
-    <value>बंद</value>
-    <comment>Close</comment>
-  </data>
-  <data name="lblUse.Size" type="System.Drawing.Size, System.Drawing">
+  <data name="lblOccurrencesBooks.Size" type="System.Drawing.Size, System.Drawing">
     <value>61, 13</value>
   </data>
+  <data name="lblOccurrencesBooks.Text" xml:space="preserve">
+    <value>प्रयुक्ति - ग्रंथ</value>
+  </data>
+  <data name="btnClose.Text" xml:space="preserve">
+    <value>बंद करें</value>
+  </data>
+  <data name="lblUse.Size" type="System.Drawing.Size, System.Drawing">
+    <value>58, 13</value>
+  </data>
   <data name="lblUse.Text" xml:space="preserve">
-    <value>उपयोग करे-</value>
+    <value>उपयोग करें</value>
+  </data>
+  <data name="comboWildRegex.Items" xml:space="preserve">
+    <value>रेगुलर ऐक्सप्रेसन्स</value>
+  </data>
+  <data name="comboWildRegex.Items1" xml:space="preserve">
+    <value>वाइल्डकार्डस्</value>
   </data>
   <data name="cbVinaya.Size" type="System.Drawing.Size, System.Drawing">
     <value>75, 17</value>
@@ -192,49 +197,45 @@
     <value>अन्य ग्रंथ</value>
   </data>
   <data name="cbAll.Size" type="System.Drawing.Size, System.Drawing">
-    <value>45, 17</value>
+    <value>55, 17</value>
   </data>
   <data name="cbAll.Text" xml:space="preserve">
-    <value>सभी</value>
-  </data>
-  <data name="linkLabelDelete.Size" type="System.Drawing.Size, System.Drawing">
-    <value>37, 13</value>
-  </data>
-  <data name="linkLabelDelete.Text" xml:space="preserve">
-    <value>काट दे</value>
-  </data>
-  <data name="linkLabelEdit.Size" type="System.Drawing.Size, System.Drawing">
-    <value>38, 13</value>
-  </data>
-  <data name="linkLabelEdit.Text" xml:space="preserve">
-    <value>संपादन</value>
+    <value>समस्त</value>
   </data>
   <data name="comboBookSet.Items" xml:space="preserve">
-    <value>कुछ नहीं</value>
+    <value>कोई नहीं</value>
   </data>
   <data name="comboBookSet.Items1" xml:space="preserve">
-    <value>नया बनाए...</value>
+    <value>नया बनायें...</value>
   </data>
-  <data name="label3.Size" type="System.Drawing.Size, System.Drawing">
-    <value>85, 13</value>
+  <data name="linkLabelDelete.Size" type="System.Drawing.Size, System.Drawing">
+    <value>41, 13</value>
+  </data>
+  <data name="linkLabelDelete.Text" xml:space="preserve">
+    <value>नष्ट करें</value>
+  </data>
+  <data name="linkLabelEdit.Size" type="System.Drawing.Size, System.Drawing">
+    <value>58, 13</value>
+  </data>
+  <data name="linkLabelEdit.Text" xml:space="preserve">
+    <value>संपादन करें</value>
+  </data>
+  <data name="lblSelectBookColl.Size" type="System.Drawing.Size, System.Drawing">
+    <value>82, 13</value>
   </data>
   <data name="lblSelectBookColl.Text" xml:space="preserve">
-    <value>या ग्रंथ-संग्रह देखे</value>
+    <value>या ग्रंथसंग्रह चुनें</value>
   </data>
   <data name="gbLimitSearch.Text" xml:space="preserve">
-    <value>परिमित खोज</value>
+    <value>खोज की सीमा</value>
   </data>
   <data name="btnReport.Text" xml:space="preserve">
-    <value>रपट...</value>
+    <value>रिपोर्ट...</value>
+  </data>
+  <data name="lblContextDistance.Size" type="System.Drawing.Size, System.Drawing">
+    <value>63, 13</value>
   </data>
   <data name="lblContextDistance.Text" xml:space="preserve">
-    <value>शब्दों में अंतर:</value>
-  </data>
-  <data name="numContextDistance.Location" type="System.Drawing.Point, System.Drawing">
-    <value>90, 62</value>
-  </data>
-  <data name="$this.Text" xml:space="preserve">
-    <value>खोज</value>
-    <comment>Search</comment>
+    <value>शब्दों में दूरी</value>
   </data>
 </root>

@@ -119,46 +119,46 @@
   </resheader>
   <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
   <data name="tsmiOpenBook.Size" type="System.Drawing.Size, System.Drawing">
-    <value>175, 22</value>
+    <value>170, 22</value>
   </data>
   <data name="tsmiOpenBook.Text" xml:space="preserve">
-    <value>खोले</value>
+    <value>खोलें</value>
   </data>
   <data name="tsmiMru.Size" type="System.Drawing.Size, System.Drawing">
-    <value>175, 22</value>
+    <value>170, 22</value>
   </data>
   <data name="tsmiMru.Text" xml:space="preserve">
-    <value>पिछले देखे हुए</value>
+    <value>सद्यः देखे हुए</value>
   </data>
   <data name="tsmiPrint.Size" type="System.Drawing.Size, System.Drawing">
-    <value>175, 22</value>
+    <value>170, 22</value>
   </data>
   <data name="tsmiPrint.Text" xml:space="preserve">
-    <value>छापे...</value>
+    <value>छाप दें...</value>
   </data>
   <data name="tsmiPrintPreview.Size" type="System.Drawing.Size, System.Drawing">
-    <value>175, 22</value>
+    <value>170, 22</value>
   </data>
   <data name="tsmiPrintPreview.Text" xml:space="preserve">
-    <value>छापने के पहले देखे...</value>
+    <value>छपाई का पूर्वदर्शन...</value>
   </data>
   <data name="tsmiPageSetup.Size" type="System.Drawing.Size, System.Drawing">
-    <value>175, 22</value>
+    <value>170, 22</value>
   </data>
   <data name="tsmiPageSetup.Text" xml:space="preserve">
-    <value>पृष्ठ रचना</value>
+    <value>पृष्ठ गठन...</value>
   </data>
   <data name="tsmiSave.Size" type="System.Drawing.Size, System.Drawing">
-    <value>175, 22</value>
+    <value>170, 22</value>
   </data>
   <data name="tsmiSave.Text" xml:space="preserve">
-    <value>बचाए (सेव)</value>
+    <value>सुरक्षित रखें</value>
   </data>
   <data name="tsmiExit.Size" type="System.Drawing.Size, System.Drawing">
-    <value>175, 22</value>
+    <value>170, 22</value>
   </data>
   <data name="tsmiExit.Text" xml:space="preserve">
-    <value>निकल जाए</value>
+    <value>निर्गम</value>
   </data>
   <data name="fooToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
     <value>35, 20</value>
@@ -182,7 +182,7 @@
     <value>112, 22</value>
   </data>
   <data name="advancedToolStripMenuItem.Text" xml:space="preserve">
-    <value>प्रगत</value>
+    <value>उन्नत</value>
   </data>
   <data name="searchToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
     <value>40, 20</value>
@@ -191,46 +191,46 @@
     <value>खोज</value>
   </data>
   <data name="tsmiCascade.Size" type="System.Drawing.Size, System.Drawing">
-    <value>166, 22</value>
+    <value>127, 22</value>
   </data>
   <data name="tsmiCascade.Text" xml:space="preserve">
-    <value>एक के आगे एक</value>
+    <value>आगे - आगे</value>
   </data>
   <data name="tsmiTileHorizontal.Size" type="System.Drawing.Size, System.Drawing">
-    <value>166, 22</value>
+    <value>127, 22</value>
   </data>
   <data name="tsmiTileHorizontal.Text" xml:space="preserve">
-    <value>एक के बाजू में एक</value>
+    <value>उपर - नीचे</value>
   </data>
   <data name="tsmiTileVertical.Size" type="System.Drawing.Size, System.Drawing">
-    <value>166, 22</value>
+    <value>127, 22</value>
   </data>
   <data name="tsmiTileVertical.Text" xml:space="preserve">
-    <value>एक के उपर एक</value>
+    <value>पास - पास</value>
   </data>
   <data name="windowToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
     <value>49, 20</value>
   </data>
   <data name="windowToolStripMenuItem.Text" xml:space="preserve">
-    <value>खिडकी</value>
+    <value>खिड़की</value>
   </data>
   <data name="tsmiContents.Size" type="System.Drawing.Size, System.Drawing">
-    <value>123, 22</value>
+    <value>122, 22</value>
   </data>
   <data name="tsmiContents.Text" xml:space="preserve">
-    <value>समावेश</value>
+    <value>विषय-सूची</value>
   </data>
   <data name="tsmiCheckForUpdates.Size" type="System.Drawing.Size, System.Drawing">
-    <value>123, 22</value>
+    <value>122, 22</value>
   </data>
   <data name="tsmiCheckForUpdates.Text" xml:space="preserve">
-    <value>अपडेट देखे</value>
+    <value>अपडेट करें</value>
   </data>
   <data name="tsmiAbout.Size" type="System.Drawing.Size, System.Drawing">
-    <value>123, 22</value>
+    <value>122, 22</value>
   </data>
   <data name="tsmiAbout.Text" xml:space="preserve">
-    <value>बारे में</value>
+    <value>परिचय</value>
   </data>
   <data name="helpToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
     <value>39, 20</value>
@@ -255,7 +255,7 @@
 </value>
   </data>
   <data name="tsbOpenBook.Text" xml:space="preserve">
-    <value>ग्रंथ खोले</value>
+    <value>ग्रंथ खोलें</value>
   </data>
   <data name="tsbSave.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -274,7 +274,7 @@
 </value>
   </data>
   <data name="tsbSave.Text" xml:space="preserve">
-    <value>बचाए</value>
+    <value>सुरक्षित रखें</value>
   </data>
   <data name="tsbPrint.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -293,7 +293,7 @@
 </value>
   </data>
   <data name="tsbPrint.Text" xml:space="preserve">
-    <value>छापे</value>
+    <value>छाप दें</value>
   </data>
   <data name="tsbPrintPreview.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -311,7 +311,7 @@
 </value>
   </data>
   <data name="tsbPrintPreview.Text" xml:space="preserve">
-    <value>छापने के पहले देखे...</value>
+    <value>छपाई का पूर्वदर्शन</value>
   </data>
   <data name="tsbPageSetup.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -327,7 +327,7 @@
 </value>
   </data>
   <data name="tsbPageSetup.Text" xml:space="preserve">
-    <value>पृष्ठ रचना</value>
+    <value>पृष्ठ गठन</value>
   </data>
   <data name="tsbSearchWord.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -381,22 +381,22 @@
 </value>
   </data>
   <data name="tsbGoto.Text" xml:space="preserve">
-    <value>परिच्छेद या पृष्ठ को जाये</value>
+    <value>परिच्छेद या पृष्ठ को जायें</value>
   </data>
   <data name="tslInterfaceLanguage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>74, 22</value>
+    <value>86, 22</value>
   </data>
   <data name="tslInterfaceLanguage.Text" xml:space="preserve">
-    <value>देखने की भाषा</value>
+    <value>इंटरफेस की भाषा</value>
   </data>
   <data name="tslPaliScript.Size" type="System.Drawing.Size, System.Drawing">
     <value>55, 22</value>
   </data>
   <data name="tslPaliScript.Text" xml:space="preserve">
-    <value>पालि लिपी</value>
+    <value>पालि लिपि</value>
   </data>
   <data name="tscbPaliScript.Items" xml:space="preserve">
-    <value>बंगाली</value>
+    <value>बंगला</value>
   </data>
   <data name="tscbPaliScript.Items1" xml:space="preserve">
     <value>सिरिलिक</value>
@@ -411,16 +411,16 @@
     <value>गुरमुखी</value>
   </data>
   <data name="tscbPaliScript.Items5" xml:space="preserve">
-    <value>कन्नड</value>
+    <value>कन्नड़</value>
   </data>
   <data name="tscbPaliScript.Items6" xml:space="preserve">
     <value>कंबोज</value>
   </data>
   <data name="tscbPaliScript.Items7" xml:space="preserve">
-    <value>मल्यालम</value>
+    <value>मलयालम</value>
   </data>
   <data name="tscbPaliScript.Items8" xml:space="preserve">
-    <value>बरमी</value>
+    <value>बर्मी</value>
   </data>
   <data name="tscbPaliScript.Items9" xml:space="preserve">
     <value>रोमन</value>
@@ -429,13 +429,13 @@
     <value>सिंहल</value>
   </data>
   <data name="tscbPaliScript.Items11" xml:space="preserve">
-    <value>तलुगु</value>
+    <value>तेलुगु</value>
   </data>
   <data name="tscbPaliScript.Items12" xml:space="preserve">
     <value>थाई</value>
   </data>
   <data name="tscbPaliScript.Items13" xml:space="preserve">
-    <value>तिबेटन</value>
+    <value>तिब्बती</value>
   </data>
   <data name="$this.Icon" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -503,6 +503,6 @@
 </value>
   </data>
   <data name="$this.Text" xml:space="preserve">
-    <value>छट्ठ संगायन तिपिटक 4</value>
+    <value>छट्ठ सङ्गायन तिपिटक ४.०</value>
   </data>
 </root>

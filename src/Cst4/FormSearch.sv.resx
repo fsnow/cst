@@ -127,8 +127,14 @@
   <data name="btnSearch.Text" xml:space="preserve">
     <value>Sök</value>
   </data>
+  <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
+    <value>24, 13</value>
+  </data>
   <data name="lblWords.Text" xml:space="preserve">
     <value>Ord</value>
+  </data>
+  <data name="lblOccurrencesBooks.Size" type="System.Drawing.Size, System.Drawing">
+    <value>103, 13</value>
   </data>
   <data name="lblOccurrencesBooks.Text" xml:space="preserve">
     <value>Antal träffar - böcker</value>
@@ -160,6 +166,9 @@
   <data name="cbAll.Text" xml:space="preserve">
     <value>Alla</value>
   </data>
+  <data name="gbLimitSearch.Text" xml:space="preserve">
+    <value>Begränsa sökningen</value>
+  </data>
   <data name="comboBookSet.Items" xml:space="preserve">
     <value>Inga</value>
   </data>
@@ -178,14 +187,23 @@
   <data name="linkLabelEdit.Text" xml:space="preserve">
     <value>Redigera</value>
   </data>
+  <data name="lblSelectBookColl.Size" type="System.Drawing.Size, System.Drawing">
+    <value>86, 13</value>
+  </data>
   <data name="lblSelectBookColl.Text" xml:space="preserve">
     <value>eller välj samling:</value>
   </data>
   <data name="btnReport.Text" xml:space="preserve">
     <value>Rapport...</value>
   </data>
+  <data name="lblContextDistance.Size" type="System.Drawing.Size, System.Drawing">
+    <value>100, 13</value>
+  </data>
   <data name="lblContextDistance.Text" xml:space="preserve">
     <value>Avstånd mellan ord:</value>
+  </data>
+  <data name="numContextDistance.Location" type="System.Drawing.Point, System.Drawing">
+    <value>116, 62</value>
   </data>
   <data name="$this.Text" xml:space="preserve">
     <value>Sök</value>

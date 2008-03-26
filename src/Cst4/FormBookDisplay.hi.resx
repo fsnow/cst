@@ -117,274 +117,104 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="tslPaliScript.Size" type="System.Drawing.Size, System.Drawing">
-    <value>73, 22</value>
-  </data>
   <data name="tslPaliScript.Text" xml:space="preserve">
-    <value>पालि लिपी-</value>
+    <value>पालि लिपि</value>
+    <comment>Pali Script:</comment>
   </data>
   <data name="tscbPaliScript.Items" xml:space="preserve">
-    <value>बंगाली</value>
+    <value>बंगला</value>
+    <comment>Bengali</comment>
   </data>
   <data name="tscbPaliScript.Items1" xml:space="preserve">
     <value>सिरिलिक</value>
+    <comment>Cyrillic</comment>
   </data>
   <data name="tscbPaliScript.Items2" xml:space="preserve">
     <value>देवनागरी</value>
+    <comment>Devanagari</comment>
   </data>
   <data name="tscbPaliScript.Items3" xml:space="preserve">
     <value>गुजराती</value>
+    <comment>Gujarati</comment>
   </data>
   <data name="tscbPaliScript.Items4" xml:space="preserve">
     <value>गुरमुखी</value>
+    <comment>Gurmukhi</comment>
   </data>
   <data name="tscbPaliScript.Items5" xml:space="preserve">
-    <value>कन्नड</value>
+    <value>कन्नड़</value>
+    <comment>Kannada</comment>
   </data>
   <data name="tscbPaliScript.Items6" xml:space="preserve">
     <value>कंबोज</value>
+    <comment>Khmer</comment>
   </data>
   <data name="tscbPaliScript.Items7" xml:space="preserve">
-    <value>मल्यालम</value>
+    <value>मलयालम</value>
+    <comment>Malayalam</comment>
   </data>
   <data name="tscbPaliScript.Items8" xml:space="preserve">
-    <value>बरमी</value>
+    <value>बर्मी</value>
+    <comment>Myanmar</comment>
   </data>
   <data name="tscbPaliScript.Items9" xml:space="preserve">
     <value>रोमन</value>
+    <comment>Roman</comment>
   </data>
   <data name="tscbPaliScript.Items10" xml:space="preserve">
     <value>सिंहल</value>
+    <comment>Sinhala</comment>
   </data>
   <data name="tscbPaliScript.Items11" xml:space="preserve">
     <value>तेलुगु</value>
+    <comment>Telugu</comment>
   </data>
   <data name="tscbPaliScript.Items12" xml:space="preserve">
     <value>थाई</value>
+    <comment>Thai</comment>
   </data>
   <data name="tscbPaliScript.Items13" xml:space="preserve">
-    <value>तिबेटन</value>
-  </data>
-  <data name="tsbFirstResult.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAIVJREFUOE9jYBgS
-        IGFGwn+iHKqQIYCh0KHC4D/ZBoA0b7ixAGhAAOkugGkuOFDwP2ACiQaAnb0g4D9IM9iADgfiXQAKB4MC
-        hf8ODVBDNiQA2SQYAAptgQQGFEMMgIaRHAvIhhhUKJBuALJLFIBeItkFMA0gl2BLH0QZiDAEM4GRZMDg
-        VgwAcuxXRAK4c7IAAAAASUVORK5CYII=
-</value>
+    <value>तिब्बती</value>
+    <comment>Tibetan</comment>
   </data>
   <data name="tsbFirstResult.Text" xml:space="preserve">
-    <value>पहला नतीजा</value>
-  </data>
-  <data name="tsbPreviousResult.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAIFJREFUOE9jYBgS
-        IGFGwn+yHepQYfCfbANAmjfcWAA0IIB0F8A0Fxwo+B8wgUQDwM5eEPAfpBlsQIcD8S5QyBD4b1Cg8N+h
-        AWrIhgQgmwQDQKEtkMCAYogB0DCSYwHZEIMKBdINQHaJAtBLJLsApgHkElC4kG0AxCUUGkCR7TTXDACY
-        NUj1+uHi3gAAAABJRU5ErkJggg==
-</value>
+    
+    <value>प्रथम परिणाम</value><comment>First Result</comment>
   </data>
   <data name="tsbPreviousResult.Text" xml:space="preserve">
-    <value>पिछला नतीजा</value>
-  </data>
-  <data name="tsbNextResult.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAIJJREFUOE9jYBi0
-        IGFGwn+KHAcywKHCgHxDEmYE/N9wYwH5hgRMCPhfcKCAfEMCOhzABoBwwoIA0l3i0AA0YEMCRHODwX+D
-        AoX/ChkCxIeJAVATsmaBBAbiNYOiz6BCAW4zyZpBBigAnQxyNlmawQYA/Uu2ZpABAgkkBBhFSXbANQMA
-        rl1I9VlaLwEAAAAASUVORK5CYII=
-</value>
+    <value>पूर्व परिणाम</value>
+    <comment>Previous Result</comment>
   </data>
   <data name="tsbNextResult.Text" xml:space="preserve">
-    <value>अगला नतीजा</value>
-  </data>
-  <data name="tsbLastResult.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAItJREFUOE9jYBi0
-        IGFGwn+KHAcywKHCAMMQhQwB4gxOmBHwf8ONBRiGEG1AwISA/wUHCjAMId6ADgewASCcsCAA7hKiDXBo
-        ABqwIQGiucHgv0GBwn+QZqINMABqQtYskMAADjziDahQgNsM00ySAQpAJ4OcjayZNAOA/kXXTJIBAglE
-        JhiKkuug0AwAhdpXRKOdfQcAAAAASUVORK5CYII=
-</value>
+    <value>आगामी परिणाम</value>
+    <comment>Next Result</comment>
   </data>
   <data name="tsbLastResult.Text" xml:space="preserve">
-    <value>आखरी नतीजा</value>
-  </data>
-  <data name="tsbMula.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAgxJREFUOE+lkvtL
-        U2EYx+0PEbtpFwnBKPGKiJImGP0gYhIYs1E5GF5gIxkpA00JRSmMEF0ohMh+GaRWYlqabMVcNdS2QpaI
-        VqiDIYhk397vA6fXhCjyhYdzeM/5fp7vczkAdeL2cwho7v/wWzT1zcN+Pwhr51uY2/y41PQaF+wzKKiZ
-        QvaN58g0jyLd5KEUcQbg+84P/Cm2tncQjW3j68YWIqubCC3FcOJc478BAuGoZM6zvoRnakXEruEIjhc4
-        /g5gZop9c+voGAyLbQIfeBZxLL9BA1jzXvuGbWamuKh+GmmVbswE19A59FEBbmoAG7YbsLtm2mZmiml9
-        cvabNDwpz6YB7LYBoMXCumkJr7LOmnnHzBQ/9X2Bo2cOibm1GsBREbAQiYmw/8lnuCeWkVzcgnZlnw1j
-        3HV/wuNXK6i/9x5Hc6wawDlTXHbLJ+LZUBQPRyKwdQdxutwl1h+NLXHh5Ht1ewBHsiwawCW57HyDAfWR
-        dvl0uhZQ1eqX8aVc7EKLqrum651ATLf9OJx5XQM4KmY0xPzZ0hFAiQJnXB0WwME0E3IsL5B17ZlADqWb
-        NYDrOepdlcysmTWWOrxqbceRWtaLk0VO1XW72D5Vckd2gMBfq8zdpmUG62NJvKM4+XyziDk24xmfWoGE
-        s1c0gHPmbrPTpHNJKOCo2G1mZs20zcwUJ5yp1AB5+8/zEwgF5GMVDxh4AAAAAElFTkSuQmCC
-</value>
-  </data>
-  <data name="tsbMula.Size" type="System.Drawing.Size, System.Drawing">
-    <value>49, 22</value>
+    
+    <value>अन्तिम परिणाम</value><comment>Last Result</comment>
   </data>
   <data name="tsbMula.Text" xml:space="preserve">
     <value>मूल</value>
-  </data>
-  <data name="tsbAtthakatha.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAgxJREFUOE+lkvtL
-        U2EYx+0PEbtpFwnBKPGKiJImGP0gYhIYs1E5GF5gIxkpA00JRSmMEF0ohMh+GaRWYlqabMVcNdS2QpaI
-        VqiDIYhk397vA6fXhCjyhYdzeM/5fp7vczkAdeL2cwho7v/wWzT1zcN+Pwhr51uY2/y41PQaF+wzKKiZ
-        QvaN58g0jyLd5KEUcQbg+84P/Cm2tncQjW3j68YWIqubCC3FcOJc478BAuGoZM6zvoRnakXEruEIjhc4
-        /g5gZop9c+voGAyLbQIfeBZxLL9BA1jzXvuGbWamuKh+GmmVbswE19A59FEBbmoAG7YbsLtm2mZmiml9
-        cvabNDwpz6YB7LYBoMXCumkJr7LOmnnHzBQ/9X2Bo2cOibm1GsBREbAQiYmw/8lnuCeWkVzcgnZlnw1j
-        3HV/wuNXK6i/9x5Hc6wawDlTXHbLJ+LZUBQPRyKwdQdxutwl1h+NLXHh5Ht1ewBHsiwawCW57HyDAfWR
-        dvl0uhZQ1eqX8aVc7EKLqrum651ATLf9OJx5XQM4KmY0xPzZ0hFAiQJnXB0WwME0E3IsL5B17ZlADqWb
-        NYDrOepdlcysmTWWOrxqbceRWtaLk0VO1XW72D5Vckd2gMBfq8zdpmUG62NJvKM4+XyziDk24xmfWoGE
-        s1c0gHPmbrPTpHNJKOCo2G1mZs20zcwUJ5yp1AB5+8/zEwgF5GMVDxh4AAAAAElFTkSuQmCC
-</value>
-  </data>
-  <data name="tsbAtthakatha.Size" type="System.Drawing.Size, System.Drawing">
-    <value>81, 22</value>
+    <comment>Mūla</comment>
   </data>
   <data name="tsbAtthakatha.Text" xml:space="preserve">
     <value>अट्ठकथा</value>
-  </data>
-  <data name="tsbTika.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAgxJREFUOE+lkvtL
-        U2EYx+0PEbtpFwnBKPGKiJImGP0gYhIYs1E5GF5gIxkpA00JRSmMEF0ohMh+GaRWYlqabMVcNdS2QpaI
-        VqiDIYhk397vA6fXhCjyhYdzeM/5fp7vczkAdeL2cwho7v/wWzT1zcN+Pwhr51uY2/y41PQaF+wzKKiZ
-        QvaN58g0jyLd5KEUcQbg+84P/Cm2tncQjW3j68YWIqubCC3FcOJc478BAuGoZM6zvoRnakXEruEIjhc4
-        /g5gZop9c+voGAyLbQIfeBZxLL9BA1jzXvuGbWamuKh+GmmVbswE19A59FEBbmoAG7YbsLtm2mZmiml9
-        cvabNDwpz6YB7LYBoMXCumkJr7LOmnnHzBQ/9X2Bo2cOibm1GsBREbAQiYmw/8lnuCeWkVzcgnZlnw1j
-        3HV/wuNXK6i/9x5Hc6wawDlTXHbLJ+LZUBQPRyKwdQdxutwl1h+NLXHh5Ht1ewBHsiwawCW57HyDAfWR
-        dvl0uhZQ1eqX8aVc7EKLqrum651ATLf9OJx5XQM4KmY0xPzZ0hFAiQJnXB0WwME0E3IsL5B17ZlADqWb
-        NYDrOepdlcysmTWWOrxqbceRWtaLk0VO1XW72D5Vckd2gMBfq8zdpmUG62NJvKM4+XyziDk24xmfWoGE
-        s1c0gHPmbrPTpHNJKOCo2G1mZs20zcwUJ5yp1AB5+8/zEwgF5GMVDxh4AAAAAElFTkSuQmCC
-</value>
-  </data>
-  <data name="tsbTika.Size" type="System.Drawing.Size, System.Drawing">
-    <value>46, 22</value>
+    <comment>Aṭṭhakathā</comment>
   </data>
   <data name="tsbTika.Text" xml:space="preserve">
     <value>टीका</value>
-  </data>
-  <data name="tsmiShowSearchTerms.Size" type="System.Drawing.Size, System.Drawing">
-    <value>184, 22</value>
+    <comment>Ṭīkā</comment>
   </data>
   <data name="tsmiShowSearchTerms.Text" xml:space="preserve">
-    <value>खोज शब्दावली दिखाये</value>
-  </data>
-  <data name="tsmiShowFootnotes.Size" type="System.Drawing.Size, System.Drawing">
-    <value>184, 22</value>
+    
+    <value>खोजे शब्दों को हाईलाइट करें</value><comment>Show Search Terms</comment>
   </data>
   <data name="tsmiShowFootnotes.Text" xml:space="preserve">
-    <value>पादपंक्ति दिखाये</value>
-  </data>
-  <data name="tsdbbView.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
-        YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAgxJREFUOE+lkvtL
-        U2EYx+0PEbtpFwnBKPGKiJImGP0gYhIYs1E5GF5gIxkpA00JRSmMEF0ohMh+GaRWYlqabMVcNdS2QpaI
-        VqiDIYhk397vA6fXhCjyhYdzeM/5fp7vczkAdeL2cwho7v/wWzT1zcN+Pwhr51uY2/y41PQaF+wzKKiZ
-        QvaN58g0jyLd5KEUcQbg+84P/Cm2tncQjW3j68YWIqubCC3FcOJc478BAuGoZM6zvoRnakXEruEIjhc4
-        /g5gZop9c+voGAyLbQIfeBZxLL9BA1jzXvuGbWamuKh+GmmVbswE19A59FEBbmoAG7YbsLtm2mZmiml9
-        cvabNDwpz6YB7LYBoMXCumkJr7LOmnnHzBQ/9X2Bo2cOibm1GsBREbAQiYmw/8lnuCeWkVzcgnZlnw1j
-        3HV/wuNXK6i/9x5Hc6wawDlTXHbLJ+LZUBQPRyKwdQdxutwl1h+NLXHh5Ht1ewBHsiwawCW57HyDAfWR
-        dvl0uhZQ1eqX8aVc7EKLqrum651ATLf9OJx5XQM4KmY0xPzZ0hFAiQJnXB0WwME0E3IsL5B17ZlADqWb
-        NYDrOepdlcysmTWWOrxqbceRWtaLk0VO1XW72D5Vckd2gMBfq8zdpmUG62NJvKM4+XyziDk24xmfWoGE
-        s1c0gHPmbrPTpHNJKOCo2G1mZs20zcwUJ5yp1AB5+8/zEwgF5GMVDxh4AAAAAElFTkSuQmCC
-</value>
-  </data>
-  <data name="tsdbbView.Size" type="System.Drawing.Size, System.Drawing">
-    <value>58, 22</value>
+    <value>पाद टिप्पणी दिखायें</value>
+    <comment>Show Footnotes</comment>
   </data>
   <data name="tsdbbView.Text" xml:space="preserve">
-    <value>देखे</value>
-  </data>
-  <data name="tsslPages.Size" type="System.Drawing.Size, System.Drawing">
-    <value>201, 17</value>
-  </data>
-  <data name="tsslPages.Text" xml:space="preserve">
-    <value>वि.वि.वि.: 0   बरमी: 0   पीटीएस: 0   थाई: 0</value>
-  </data>
-  <data name="tsslDebug.Size" type="System.Drawing.Size, System.Drawing">
-    <value>0, 17</value>
-  </data>
-  <data name="tsslDebug.Text" xml:space="preserve">
-    <value />
-  </data>
-  <data name="$this.Icon" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
-    <value>
-        AAABAAIAEBAAAAAAAABoBQAAJgAAACAgAAAAAAAAqAgAAI4FAAAoAAAAEAAAACAAAAABAAgAAAAAAEAB
-        AAAAAAAAAAAAAAAAAAAAAAAA////AP/+9AD/9PAA9v//APLs7QDu7e4A4u3pAODi7gDf9/YA2uj0AM7x
-        /wDG4NQAweHAANXdyADU0ckAxdzSAM/TzQDEycQAxuC6AMLSvgC/5+EAtd//AL7b4QC7xvYAoNLzALjd
-        zwCp1NAAosPfAJrS7wCawu8Agd//AILU/wCCwfoAicTlAL7SvQCPveYAubOwALS+rwCzuKUAr7mmAISs
-        uwCMkbAAk5qRAJaWlACNn44AiJCHAImKhgCHjIcAa8b7AGfC/wBdyf0AW8D/AFPE/wB6vf8AZ7L5AHOq
-        yABpnsUAULHkAFCi/wBdo+cAT6XkAFih2wBTrNEAU6vPAFqR4wBbj+EAW5jaAF2YyABbksUAR4vVAEiD
-        ywBmoqIAYZypAFeMvgBdfsoAR37SAEd0xQBnf7UAZ1yZAFp9vgBddb4AR3S5AFpyngAzabcAMmydAHx6
-        egB6d3QAcX95AHZtcAB1bWgAbWxsAG5mbQBqZ2AAaWZfAFVVUgBWSlIAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAFYAAwIBU0xLRVFUAQIDAFYsEyUrW01CO0NBTlorJSIsEVpcV0gwQDtKPTBIV11VEAFb
-        Rz4zAEZQRFIAMj9HWwEANzkyAC8pSU84LgAyPCgAAAg0Cg1ZHDo6GVgTCjQGAAAAFgBaJhgjNhcnWgEU
-        AAAAAAQqVQwgMSEdElUtBAAAAAAABV4PNR4fNQtfBwAAAAAAAAAADhUJGhskAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKAAAACAAAABAAAAAAQAIAAAA
-        AACABAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAIAAAIAAAACAgACAAAAAgACAAICAAACAgIAAwNzAAPDK
-        pgCqPyoA/z8qAABfKgBVXyoAql8qAP9fKgAAfyoAVX8qAKp/KgD/fyoAAJ8qAFWfKgCqnyoA/58qAAC/
-        KgBVvyoAqr8qAP+/KgAA3yoAVd8qAKrfKgD/3yoAAP8qAFX/KgCq/yoA//8qAAAAVQBVAFUAqgBVAP8A
-        VQAAH1UAVR9VAKofVQD/H1UAAD9VAFU/VQCqP1UA/z9VAABfVQBVX1UAql9VAP9fVQAAf1UAVX9VAKp/
-        VQD/f1UAAJ9VAFWfVQCqn1UA/59VAAC/VQBVv1UAqr9VAP+/VQAA31UAVd9VAKrfVQD/31UAAP9VAFX/
-        VQCq/1UA//9VAAAAfwBVAH8AqgB/AP8AfwAAH38AVR9/AKoffwD/H38AAD9/AFU/fwCqP38A/z9/AABf
-        fwBVX38Aql9/AP9ffwAAf38AVX9/AKp/fwD/f38AAJ9/AFWffwCqn38A/59/AAC/fwBVv38Aqr9/AP+/
-        fwAA338AVd9/AKrffwD/338AAP9/AFX/fwCq/38A//9/AAAAqgBVAKoAqgCqAP8AqgAAH6oAVR+qAKof
-        qgD/H6oAAD+qAFU/qgCqP6oA/z+qAABfqgBVX6oAql+qAP9fqgAAf6oAVX+qAKp/qgD/f6oAAJ+qAFWf
-        qgCqn6oA/5+qAAC/qgBVv6oAqr+qAP+/qgAA36oAVd+qAKrfqgD/36oAAP+qAFX/qgCq/6oA//+qAAAA
-        1ABVANQAqgDUAP8A1AAAH9QAVR/UAKof1AD/H9QAAD/UAFU/1ACqP9QA/z/UAABf1ABVX9QAql/UAP9f
-        1AAAf9QAVX/UAKp/1AD/f9QAAJ/UAFWf1ACqn9QA/5/UAAC/1ABVv9QAqr/UAP+/1AAA39QAVd/UAKrf
-        1AD/39QAAP/UAFX/1ACq/9QA///UAFUA/wCqAP8AAB//AFUf/wCqH/8A/x//AAA//wBVP/8Aqj//AP8/
-        /wAAX/8AVV//AKpf/wD/X/8AAH//AFV//wCqf/8A/3//AACf/wBVn/8Aqp//AP+f/wAAv/8AVb//AKq/
-        /wD/v/8AAN//AFXf/wCq3/8A/9//AFX//wCq//8A/8zMAP/M/wD//zMA//9mAP//mQD//8wAAH8AAFV/
-        AACqfwAA/38AAACfAABVnwAAqp8AAP+fAAAAvwAAVb8AAKq/AAD/vwAAAN8AAFXfAACq3wAA/98AAFX/
-        AACq/wAAAAAqAFUAKgCqACoA/wAqAAAfKgBVHyoAqh8qAP8fKgAAPyoAVT8qAPD7/wCkoKAAgICAAAAA
-        /wAA/wAAAP//AP8AAAD/AP8A//8AAP///wD/////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////8A9vb29vb29vb2fX19oaGhoaF9fX19
-        9v/29vb29vb2APX29vb29q+vrwihoaGhoaWlpaGhfX0Ir6+v9vb2//b1MQgICAiGhoL3B6F9pcfHy8el
-        paF5eQf3goaGCAgICDEHhoaC9/cHBzFVB6GhfX2hfX2hoXkHVTEHB/f3goaGBwj3BwcHMTEHB4GlpcfH
-        x8ehocelpaWBBwcxMQcH9/cI/wcHMTEHB4GBpcvQfaF9paV5oYHQy6WBgQcHMTEH9///CFUHB4GBpaXL
-        0P99oXmlfX2hB//Qy6mlgYEHB1UI//+vBweBgaWpy9D2hn3HoXmhpaVVCPbQy6mlgYEHB6////99gaWp
-        qcvQ9ggH93l9oaFVofcHCPbQy8ulpYEH//////+lpcvL0Pb291WGoX2lx32ghlX39vbQy8ulpf//////
-        /6nLy9DQ/4YxBwjHx8elx6UIBzGG9tDQy8up////////9svQ0PYI9wf3CMfHpcfHqgiCBwcI9tDQy6//
-        ////////qtD2r/cxB4aqzNChocvMqoYHMfev9tCu//////////8I9v8IBwf3CK7L0KXH0MyqCPcHB4b/
-        9gj////////////3CPcxB4YIqsvPx6XQzKoIhgcx9wj3///////////////3Bwf3hq7My9DHpdDLqgiG
-        9wcHB/////////////////8HB4IIqszLz9DQy8vMqgiCB1X///////////////////8xMQiqzMvL0NDL
-        y8yqCC0x////////////////////////gobMy8v29svLqgcH//////////////////////////////b2
-        9q8IhoL2////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////////////////////////////////////////////
-        ////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-</value>
+    <value>देखें</value>
+    <comment>View</comment>
   </data>
 </root>

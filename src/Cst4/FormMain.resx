@@ -143,11 +143,14 @@
   <data name="tsmiPrint.Size" type="System.Drawing.Size, System.Drawing">
     <value>153, 22</value>
   </data>
+  <data name="tscbPaliScript.Items8" xml:space="preserve">
+    <value>Myanmar</value>
+  </data>
   <data name="&gt;&gt;windowToolStripMenuItem.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
-  <data name="tscbPaliScript.Items8" xml:space="preserve">
-    <value>Myanmar</value>
+  <data name="tsbPrint.Text" xml:space="preserve">
+    <value>Print</value>
   </data>
   <data name="tscbPaliScript.Items9" xml:space="preserve">
     <value>Roman</value>
@@ -158,6 +161,9 @@
   <data name="toolStrip1.Text" xml:space="preserve">
     <value>toolStrip1</value>
   </data>
+  <data name="tscbPaliScript.Items4" xml:space="preserve">
+    <value>Gurmukhi</value>
+  </data>
   <data name="tscbPaliScript.Items1" xml:space="preserve">
     <value>Cyrillic</value>
   </data>
@@ -167,8 +173,8 @@
   <data name="tscbPaliScript.Items3" xml:space="preserve">
     <value>Gujarati</value>
   </data>
-  <data name="tscbPaliScript.Items4" xml:space="preserve">
-    <value>Gurmukhi</value>
+  <data name="menuStrip1.Size" type="System.Drawing.Size, System.Drawing">
+    <value>954, 24</value>
   </data>
   <data name="tscbPaliScript.Items5" xml:space="preserve">
     <value>Kannada</value>
@@ -178,9 +184,6 @@
   </data>
   <data name="tscbPaliScript.Items7" xml:space="preserve">
     <value>Malayalam</value>
-  </data>
-  <data name="&gt;&gt;tsmiSave.Name" xml:space="preserve">
-    <value>tsmiSave</value>
   </data>
   <data name="tsmiPrint.Enabled" type="System.Boolean, mscorlib">
     <value>False</value>
@@ -199,6 +202,9 @@
   </data>
   <data name="tsmiContents.Text" xml:space="preserve">
     <value>Contents</value>
+  </data>
+  <data name="&gt;&gt;toolStrip1.Type" xml:space="preserve">
+    <value>System.Windows.Forms.ToolStrip, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="tsbSave.Size" type="System.Drawing.Size, System.Drawing">
     <value>23, 22</value>
@@ -233,6 +239,9 @@
   <data name="&gt;&gt;tsmiTileVertical.Name" xml:space="preserve">
     <value>tsmiTileVertical</value>
   </data>
+  <data name="&gt;&gt;advancedToolStripMenuItem.Type" xml:space="preserve">
+    <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
   <data name="&gt;&gt;tsbGoto.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripButton, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
@@ -254,9 +263,6 @@
   <data name="&gt;&gt;searchToolStripMenuItem.Name" xml:space="preserve">
     <value>searchToolStripMenuItem</value>
   </data>
-  <data name="menuStrip1.Size" type="System.Drawing.Size, System.Drawing">
-    <value>954, 24</value>
-  </data>
   <data name="menuStrip1.Location" type="System.Drawing.Point, System.Drawing">
     <value>0, 0</value>
   </data>
@@ -275,9 +281,6 @@
   <data name="tsmiOpenBook.Size" type="System.Drawing.Size, System.Drawing">
     <value>153, 22</value>
   </data>
-  <data name="&gt;&gt;tslPaliScript.Name" xml:space="preserve">
-    <value>tslPaliScript</value>
-  </data>
   <data name="tsmiExit.Size" type="System.Drawing.Size, System.Drawing">
     <value>153, 22</value>
   </data>
@@ -293,8 +296,8 @@
   <data name="&gt;&gt;advancedToolStripMenuItem.Name" xml:space="preserve">
     <value>advancedToolStripMenuItem</value>
   </data>
-  <data name="&gt;&gt;advancedToolStripMenuItem.Type" xml:space="preserve">
-    <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  <data name="&gt;&gt;tsmiSave.Name" xml:space="preserve">
+    <value>tsmiSave</value>
   </data>
   <data name="&gt;&gt;tslPaliScript.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripLabel, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
@@ -524,6 +527,9 @@
         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 </value>
   </data>
+  <data name="&gt;&gt;tsmiSearchWord.Name" xml:space="preserve">
+    <value>tsmiSearchWord</value>
+  </data>
   <data name="tsbPageSetup.Size" type="System.Drawing.Size, System.Drawing">
     <value>23, 22</value>
   </data>
@@ -532,9 +538,6 @@
   </data>
   <data name="&gt;&gt;tsmiTileHorizontal.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="tsbOpenBook.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Black</value>
   </data>
   <data name="tscbPaliScript.Items12" xml:space="preserve">
     <value>Thai</value>
@@ -562,6 +565,9 @@
   </data>
   <data name="&gt;&gt;windowToolStripMenuItem.Name" xml:space="preserve">
     <value>windowToolStripMenuItem</value>
+  </data>
+  <data name="$this.Text" xml:space="preserve">
+    <value>Chattha Sangayana Tipitaka 4.0</value>
   </data>
   <data name="tsbDictionary.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -630,8 +636,14 @@
   <data name="&gt;&gt;tsmiAbout.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
+  <data name="toolStripSeparator2.Size" type="System.Drawing.Size, System.Drawing">
+    <value>6, 25</value>
+  </data>
   <data name="&gt;&gt;searchToolStripMenuItem.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="tsbSearchWord.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
+    <value>Black</value>
   </data>
   <data name="&gt;&gt;tsmiPrint.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
@@ -639,8 +651,8 @@
   <data name="&gt;&gt;tsmiPageSetup.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
-  <data name="tsbPrint.Size" type="System.Drawing.Size, System.Drawing">
-    <value>23, 22</value>
+  <data name="&gt;&gt;tsmiCascade.Type" xml:space="preserve">
+    <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="tsmiMru.Text" xml:space="preserve">
     <value>Recently Viewed</value>
@@ -650,9 +662,6 @@
   </data>
   <data name="&gt;&gt;tsmiSearchWord.Type" xml:space="preserve">
     <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="tsbPrint.Text" xml:space="preserve">
-    <value>Print</value>
   </data>
   <data name="tsbSearchWord.Text" xml:space="preserve">
     <value>Word Search</value>
@@ -764,7 +773,7 @@
   <data name="tsmiCascade.Enabled" type="System.Boolean, mscorlib">
     <value>False</value>
   </data>
-  <data name="tsbSearchWord.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
+  <data name="tsbOpenBook.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
     <value>Black</value>
   </data>
   <data name="fooToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
@@ -773,14 +782,11 @@
   <data name="tsmiPrintPreview.Enabled" type="System.Boolean, mscorlib">
     <value>False</value>
   </data>
-  <data name="&gt;&gt;menuStrip1.Name" xml:space="preserve">
-    <value>menuStrip1</value>
-  </data>
   <data name="tsbGoto.Enabled" type="System.Boolean, mscorlib">
     <value>False</value>
   </data>
-  <data name="&gt;&gt;tsmiSearchWord.Name" xml:space="preserve">
-    <value>tsmiSearchWord</value>
+  <data name="&gt;&gt;menuStrip1.Name" xml:space="preserve">
+    <value>menuStrip1</value>
   </data>
   <data name="tsbPrintPreview.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -818,17 +824,11 @@
   <data name="$this.ClientSize" type="System.Drawing.Size, System.Drawing">
     <value>954, 558</value>
   </data>
-  <data name="$this.Text" xml:space="preserve">
-    <value>Chattha Sangayana Tipitaka 4.0</value>
-  </data>
-  <data name="&gt;&gt;tsbPrintPreview.Type" xml:space="preserve">
-    <value>System.Windows.Forms.ToolStripButton, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  <data name="tsmiCheckForUpdates.Text" xml:space="preserve">
+    <value>Check for Updates</value>
   </data>
   <data name="tsmiPrintPreview.Size" type="System.Drawing.Size, System.Drawing">
     <value>153, 22</value>
-  </data>
-  <data name="tsmiCheckForUpdates.Text" xml:space="preserve">
-    <value>Check for Updates</value>
   </data>
   <data name="&gt;&gt;tscbInterfaceLanguage.Name" xml:space="preserve">
     <value>tscbInterfaceLanguage</value>
@@ -836,11 +836,11 @@
   <data name="tscbPaliScript.Items10" xml:space="preserve">
     <value>Sinhala</value>
   </data>
-  <data name="&gt;&gt;toolStrip1.Type" xml:space="preserve">
-    <value>System.Windows.Forms.ToolStrip, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  <data name="tsbPrint.Size" type="System.Drawing.Size, System.Drawing">
+    <value>23, 22</value>
   </data>
-  <data name="toolStripSeparator2.Size" type="System.Drawing.Size, System.Drawing">
-    <value>6, 25</value>
+  <data name="&gt;&gt;tsbPrintPreview.Type" xml:space="preserve">
+    <value>System.Windows.Forms.ToolStripButton, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
   <data name="&gt;&gt;tsbPageSetup.Name" xml:space="preserve">
     <value>tsbPageSetup</value>
@@ -848,8 +848,8 @@
   <data name="tsmiPrint.Text" xml:space="preserve">
     <value>&amp;Print...</value>
   </data>
-  <data name="&gt;&gt;tsmiCascade.Type" xml:space="preserve">
-    <value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  <data name="&gt;&gt;tslPaliScript.Name" xml:space="preserve">
+    <value>tslPaliScript</value>
   </data>
   <data name="tsmiDictionary.Size" type="System.Drawing.Size, System.Drawing">
     <value>122, 22</value>
@@ -877,5 +877,8 @@
   </metadata>
   <metadata name="menuStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>0, 0</value>
+  </metadata>
+  <metadata name="$this.Language" type="System.Globalization.CultureInfo, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <value>Indonesian</value>
   </metadata>
 </root>

@@ -117,76 +117,128 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+  <data name="lblSearchFor.Size" type="System.Drawing.Size, System.Drawing">
+    <value>58, 13</value>
+  </data>
   <data name="lblSearchFor.Text" xml:space="preserve">
-    <value>શોધ કરીએ:</value><comment>Search For:</comment>
+    <value>શોધ કરીએ:</value>
   </data>
   <data name="btnSearch.Text" xml:space="preserve">
-    <value>શોધ</value><comment>Search</comment>
+    <value>શોધ</value>
+  </data>
+  <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
+    <value>31, 13</value>
   </data>
   <data name="lblWords.Text" xml:space="preserve">
-    <value>શબ્દો</value><comment>Words</comment>
+    <value>શબ્દો</value>
+  </data>
+  <data name="lblOccurrencesBooks.Size" type="System.Drawing.Size, System.Drawing">
+    <value>69, 13</value>
   </data>
   <data name="lblOccurrencesBooks.Text" xml:space="preserve">
-    <value>કયા પુસ્તકોમાં</value><comment>Occurrences - Books</comment>
+    <value>કયા પુસ્તકોમાં</value>
   </data>
   <data name="btnClose.Text" xml:space="preserve">
-    <value>બંધ કરીએ</value><comment>Close</comment>
+    <value>બંધ કરીએ</value>
+  </data>
+  <data name="lblUse.Size" type="System.Drawing.Size, System.Drawing">
+    <value>74, 13</value>
   </data>
   <data name="lblUse.Text" xml:space="preserve">
-    <value>ઉપયોગ કરીએ:</value><comment>Use:</comment>
+    <value>ઉપયોગ કરીએ:</value>
   </data>
   <data name="comboWildRegex.Items" xml:space="preserve">
-    <value>વિધિસર શબ્દપ્રયોગો</value><comment>Regular expressions</comment>
+    <value>વિધિસર શબ્દપ્રયોગો</value>
   </data>
   <data name="comboWildRegex.Items1" xml:space="preserve">
-    <value>જંગલી પત્તા</value><comment>Wildcards</comment>
+    <value>જંગલી પત્તા</value>
+  </data>
+  <data name="cbVinaya.Size" type="System.Drawing.Size, System.Drawing">
+    <value>74, 17</value>
   </data>
   <data name="cbVinaya.Text" xml:space="preserve">
-    <value>વિનયપિટક</value><comment>Vinayapiṭaka</comment>
+    <value>વિનયપિટક</value>
+  </data>
+  <data name="cbSutta.Size" type="System.Drawing.Size, System.Drawing">
+    <value>65, 17</value>
   </data>
   <data name="cbSutta.Text" xml:space="preserve">
-    <value>સુત્તપિટક</value><comment>Suttapiṭaka</comment>
+    <value>સુત્તપિટક</value>
+  </data>
+  <data name="cbAbhi.Size" type="System.Drawing.Size, System.Drawing">
+    <value>90, 17</value>
   </data>
   <data name="cbAbhi.Text" xml:space="preserve">
-    <value>અભિધમ્મપિટક</value><comment>Abhidhammpiṭaka</comment>
+    <value>અભિધમ્મપિટક</value>
+  </data>
+  <data name="cbMula.Size" type="System.Drawing.Size, System.Drawing">
+    <value>43, 17</value>
   </data>
   <data name="cbMula.Text" xml:space="preserve">
-    <value>મૂલ</value><comment>Mūla</comment>
+    <value>મૂલ</value>
+  </data>
+  <data name="cbAttha.Size" type="System.Drawing.Size, System.Drawing">
+    <value>58, 17</value>
   </data>
   <data name="cbAttha.Text" xml:space="preserve">
-    <value>અટ્ઠકથા</value><comment>Aṭṭhakathā</comment>
+    <value>અટ્ઠકથા</value>
+  </data>
+  <data name="cbTika.Size" type="System.Drawing.Size, System.Drawing">
+    <value>44, 17</value>
   </data>
   <data name="cbTika.Text" xml:space="preserve">
-    <value>ટીકા</value><comment>Ṭīkā</comment>
+    <value>ટીકા</value>
+  </data>
+  <data name="cbOtherTexts.Size" type="System.Drawing.Size, System.Drawing">
+    <value>73, 17</value>
   </data>
   <data name="cbOtherTexts.Text" xml:space="preserve">
-    <value>અન્ય પાઠો</value><comment>Other texts</comment>
+    <value>અન્ય પાઠો</value>
+  </data>
+  <data name="cbAll.Size" type="System.Drawing.Size, System.Drawing">
+    <value>51, 17</value>
   </data>
   <data name="cbAll.Text" xml:space="preserve">
-    <value>સમગ્ર</value><comment>All</comment>
-  </data>
-  <data name="linkLabelDelete.Text" xml:space="preserve">
-    <value>કાઢી નાખીએ</value><comment>Delete</comment>
-  </data>
-  <data name="linkLabelEdit.Text" xml:space="preserve">
-    <value>સંપાદન કરીએ</value><comment>Edit</comment>
+    <value>સમગ્ર</value>
   </data>
   <data name="comboBookSet.Items" xml:space="preserve">
-    <value>કાંઈ નહિ</value><comment>None</comment>
+    <value>કાંઈ નહિ</value>
   </data>
   <data name="comboBookSet.Items1" xml:space="preserve">
-    <value>નવું બનાવીએ...</value><comment>Create new...</comment>
+    <value>નવું બનાવીએ...</value>
+  </data>
+  <data name="linkLabelDelete.Size" type="System.Drawing.Size, System.Drawing">
+    <value>63, 13</value>
+  </data>
+  <data name="linkLabelDelete.Text" xml:space="preserve">
+    <value>કાઢી નાખીએ</value>
+  </data>
+  <data name="linkLabelEdit.Size" type="System.Drawing.Size, System.Drawing">
+    <value>70, 13</value>
+  </data>
+  <data name="linkLabelEdit.Text" xml:space="preserve">
+    <value>સંપાદન કરીએ</value>
+  </data>
+  <data name="lblSelectBookColl.Size" type="System.Drawing.Size, System.Drawing">
+    <value>153, 13</value>
   </data>
   <data name="lblSelectBookColl.Text" xml:space="preserve">
-    <value>અથવા પુસ્તક સંગ્રહ પસંદ કરીએ:</value><comment>Or Select Book Collection:</comment>
+    <value>અથવા પુસ્તક સંગ્રહ પસંદ કરીએ:</value>
   </data>
   <data name="btnReport.Text" xml:space="preserve">
-    <value>હેવાલ...</value><comment>Report...</comment>
+    <value>હેવાલ...</value>
+  </data>
+  <data name="lblContextDistance.Size" type="System.Drawing.Size, System.Drawing">
+    <value>70, 13</value>
   </data>
   <data name="lblContextDistance.Text" xml:space="preserve">
-    <value>શાબ્દિક અંતર:</value><comment>Word distance:</comment>
+    <value>શાબ્દિક અંતર:</value>
+  </data>
+  <data name="numContextDistance.Location" type="System.Drawing.Point, System.Drawing">
+    <value>87, 62</value>
   </data>
   <data name="$this.Text" xml:space="preserve">
-    <value>શોધ</value><comment>Search</comment>
+    <value>શોધ</value>
   </data>
 </root>

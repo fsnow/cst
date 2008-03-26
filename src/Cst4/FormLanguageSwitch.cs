@@ -346,7 +346,11 @@ namespace CST
             form.SuspendLayout();
             Cursor.Current = Cursors.WaitCursor;
             System.Resources.ResourceManager resources = new System.Resources.ResourceManager(form.GetType());
-            // change main form resources
+
+			// resize dialogs but not the main window
+			if (form.IsMdiChild)
+				form.ClientSize = (Size)(GetSafeValue(resources, "$this.ClientSize", form.ClientSize));
+
             form.Text = (string)(GetSafeValue(resources, "$this.Text", form.Text));
             ReloadControlCommonProperties(form, resources);
             ToolTip toolTip = GetToolTip(form);
@@ -394,8 +398,12 @@ namespace CST
         {
             foreach (Control control in parent.Controls)
             {
-                if (control.Tag != null && control.Tag.ToString() == "Pali")
-                    continue;
+				if (control.Tag != null && control.Tag.ToString() == "Pali")
+				{
+					if (control is System.Windows.Forms.ListBox)
+						SetProperty(control, "Size", resources);
+					continue;
+				}
 
                 control.SuspendLayout();
                 ReloadControlCommonProperties(control, resources);

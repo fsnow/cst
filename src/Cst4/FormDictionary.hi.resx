@@ -117,45 +117,36 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="lblWord.Size" type="System.Drawing.Size, System.Drawing">
-    <value>170, 13</value>
-  </data>
   <data name="lblWord.Text" xml:space="preserve">
-    <value>अनुवाद चाहते हैं वो शब्द डाले</value>
+    <value>अनुसन्धान हेतु शब्द दें</value>
+    <comment>Enter the word to be looked up:</comment>
   </data>
   <data name="btnClose.Text" xml:space="preserve">
-    <value>बंद</value>
-  </data>
-  <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>55, 13</value>
+    <value>बंद करें</value>
+    <comment>Close</comment>
   </data>
   <data name="lblWords.Text" xml:space="preserve">
-    <value>शब्द-</value>
-  </data>
-  <data name="lblMeaning.Size" type="System.Drawing.Size, System.Drawing">
-    <value>65, 13</value>
+    <value>शब्द</value>
+    <comment>Words:</comment>
   </data>
   <data name="lblMeaning.Text" xml:space="preserve">
     <value>अर्थ</value>
-  </data>
-  <assembly alias="mscorlib" name="mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="lblDefinitionLanguage.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="lblDefinitionLanguage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>119, 13</value>
+    <comment>Meaning:</comment>
   </data>
   <data name="lblDefinitionLanguage.Text" xml:space="preserve">
-    <value>व्याख्या की भाषा-</value>
+    <value>अर्थ की भाषा</value>
+    <comment>Definition Language:</comment>
   </data>
   <data name="cbDefinitionLanguage.Items" xml:space="preserve">
     <value>अंग्रेजी</value>
+    <comment>English</comment>
   </data>
   <data name="cbDefinitionLanguage.Items1" xml:space="preserve">
     <value>हिन्दी</value>
+    <comment>Hindi</comment>
   </data>
   <data name="$this.Text" xml:space="preserve">
-    <value>शब्दकोष</value>
+    
+    <value>शब्दकोष</value><comment>Dictionary</comment>
   </data>
 </root>

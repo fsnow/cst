@@ -118,31 +118,27 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="btnSave.Text" xml:space="preserve">
-    <value>खोले</value>
-  </data>
-  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="lblBooksNotInCollection.Size" type="System.Drawing.Size, System.Drawing">
-    <value>135, 13</value>
+    <value>सुरक्षित रखें</value>
+    <comment>Save</comment>
   </data>
   <data name="lblBooksNotInCollection.Text" xml:space="preserve">
-    <value>ग्रंथ इस संग्रह में नहीं</value>
-  </data>
-  <data name="lblBooksInCollection.Size" type="System.Drawing.Size, System.Drawing">
-    <value>115, 13</value>
+    <value>संग्रह में अविद्यमान ग्रंथ</value>
+    <comment>Books Not In Collection:</comment>
   </data>
   <data name="lblBooksInCollection.Text" xml:space="preserve">
-    <value>ग्रंथ इस संग्रह में </value>
+    <value>संग्रह में विद्यमान ग्रंथ</value>
+    <comment>Books In Collection:</comment>
   </data>
   <data name="btnClose.Text" xml:space="preserve">
-    <value>बंद</value>
-  </data>
-  <data name="lblCollectionName.Size" type="System.Drawing.Size, System.Drawing">
-    <value>101, 13</value>
+    <value>बंद करें</value>
+    <comment>Close</comment>
   </data>
   <data name="lblCollectionName.Text" xml:space="preserve">
     <value>संग्रह का नाम</value>
+    <comment>Collection Name:</comment>
   </data>
   <data name="$this.Text" xml:space="preserve">
-    <value>संग्रह का संपादक</value>
+    
+    <value>ग्रंथसंग्रह संपादक</value><comment>Book Collection Editor</comment>
   </data>
 </root>

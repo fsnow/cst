@@ -29,6 +29,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="log4net, Version=1.2.10.0, Culture=neutral, PublicKeyToken=1b44e1d426115821, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\log4net.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
@@ -37,11 +41,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BackStackItem.cs" />
-    <Compile Include="BookCollection.cs" />
-    <Compile Include="ChangeLang.cs">
+    <Compile Include="AboutBox.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="AboutBox.Designer.cs">
+      <DependentUpon>AboutBox.cs</DependentUpon>
+    </Compile>
+    <Compile Include="BackStackItem.cs" />
+    <Compile Include="BookCollection.cs" />
     <Compile Include="ChapterLists.cs" />
     <Compile Include="CLBBComparer.cs" />
     <Compile Include="CollectionListBoxBook.cs" />
@@ -131,21 +138,41 @@
     <Compile Include="PaliListBoxItem.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <EmbeddedResource Include="ChangeLang.resx">
-      <DependentUpon>ChangeLang.cs</DependentUpon>
+    <EmbeddedResource Include="AboutBox.resx">
       <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="ChangeLang.de.resx">
-      <DependentUpon>ChangeLang.cs</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="ChangeLang.en.resx">
-      <DependentUpon>ChangeLang.cs</DependentUpon>
-      <SubType>Designer</SubType>
+      <DependentUpon>AboutBox.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormAdvancedSearch.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormAdvancedSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.bn-IN.resx">
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.cs.resx">
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.de.resx">
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.es.resx">
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormBookCollEditor.gu.resx">
       <SubType>Designer</SubType>
@@ -171,15 +198,27 @@
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormBookCollEditor.de.resx">
-      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+    <EmbeddedResource Include="FormBookCollEditor.no.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.ru.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormBookCollEditor.sv.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormBookCollEditor.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookCollEditor.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
     </EmbeddedResource>
@@ -190,6 +229,34 @@
     <EmbeddedResource Include="FormBookCollEditor.zh-CHT.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.bn-IN.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.cs.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.de.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.es.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormBookDisplay.gu.resx">
       <SubType>Designer</SubType>
@@ -215,7 +282,11 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormBookDisplay.de.resx">
+    <EmbeddedResource Include="FormBookDisplay.no.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.ru.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
@@ -224,6 +295,14 @@
       <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormBookDisplay.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormBookDisplay.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormBookDisplay.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
@@ -238,6 +317,34 @@
     <EmbeddedResource Include="FormBrowser.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBrowser.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.bn-IN.resx">
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.cs.resx">
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.de.resx">
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.es.resx">
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormChooseReport.gu.resx">
       <SubType>Designer</SubType>
@@ -263,15 +370,27 @@
       <DependentUpon>FormChooseReport.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormChooseReport.de.resx">
-      <DependentUpon>FormChooseReport.cs</DependentUpon>
+    <EmbeddedResource Include="FormChooseReport.no.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.ru.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormChooseReport.sv.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormChooseReport.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormChooseReport.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormChooseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormChooseReport.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormChooseReport.cs</DependentUpon>
     </EmbeddedResource>
@@ -282,6 +401,34 @@
     <EmbeddedResource Include="FormChooseReport.zh-CHT.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormChooseReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.bn-IN.resx">
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.cs.resx">
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.de.resx">
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.es.resx">
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormDictionary.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormDictionary.gu.resx">
       <SubType>Designer</SubType>
@@ -307,15 +454,27 @@
       <DependentUpon>FormDictionary.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormDictionary.de.resx">
-      <DependentUpon>FormDictionary.cs</DependentUpon>
+    <EmbeddedResource Include="FormDictionary.no.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.ru.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormDictionary.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormDictionary.sv.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormDictionary.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormDictionary.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormDictionary.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormDictionary.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormDictionary.cs</DependentUpon>
     </EmbeddedResource>
@@ -326,6 +485,34 @@
     <EmbeddedResource Include="FormDictionary.zh-CHT.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormDictionary.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.bn-IN.resx">
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.cs.resx">
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.de.resx">
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.es.resx">
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormGoTo.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormGoTo.gu.resx">
       <SubType>Designer</SubType>
@@ -351,15 +538,27 @@
       <DependentUpon>FormGoTo.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormGoTo.de.resx">
-      <DependentUpon>FormGoTo.cs</DependentUpon>
+    <EmbeddedResource Include="FormGoTo.no.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.ru.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormGoTo.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormGoTo.sv.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormGoTo.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormGoTo.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormGoTo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormGoTo.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormGoTo.cs</DependentUpon>
     </EmbeddedResource>
@@ -370,6 +569,34 @@
     <EmbeddedResource Include="FormGoTo.zh-CHT.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormGoTo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.bn-IN.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.cs.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.de.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.es.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormMain.gu.resx">
       <SubType>Designer</SubType>
@@ -395,7 +622,11 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormMain.de.resx">
+    <EmbeddedResource Include="FormMain.no.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.ru.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
@@ -407,6 +638,14 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormMain.th.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="FormMain.zh-CHS.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
@@ -414,6 +653,34 @@
     <EmbeddedResource Include="FormMain.zh-CHT.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.bn-IN.resx">
+      <DependentUpon>FormReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.cs.resx">
+      <DependentUpon>FormReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.de.resx">
+      <DependentUpon>FormReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.es.resx">
+      <DependentUpon>FormReport.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormReport.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormReport.gu.resx">
       <SubType>Designer</SubType>
@@ -439,15 +706,27 @@
       <DependentUpon>FormReport.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormReport.de.resx">
-      <DependentUpon>FormReport.cs</DependentUpon>
+    <EmbeddedResource Include="FormReport.no.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>FormReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.ru.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormReport.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormReport.sv.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormReport.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormReport.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormReport.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormReport.cs</DependentUpon>
     </EmbeddedResource>
@@ -458,6 +737,34 @@
     <EmbeddedResource Include="FormReport.zh-CHT.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormReport.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.bn-IN.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.cs.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.de.resx">
+      <DependentUpon>FormSearch.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.es.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.fa.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.fi.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.fr.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormSearch.gu.resx">
       <SubType>Designer</SubType>
@@ -483,15 +790,27 @@
       <DependentUpon>FormSearch.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormSearch.de.resx">
-      <DependentUpon>FormSearch.cs</DependentUpon>
+    <EmbeddedResource Include="FormSearch.no.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.ru.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormSearch.sv.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormSearch.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSearch.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
@@ -502,6 +821,34 @@
     <EmbeddedResource Include="FormSearch.zh-CHT.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSearch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.bn-IN.resx">
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.cs.resx">
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.de.resx">
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.es.resx">
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.fa.resx">
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.fi.resx">
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.fr.resx">
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="FormSelectBook.gu.resx">
       <SubType>Designer</SubType>
@@ -527,15 +874,27 @@
       <DependentUpon>FormSelectBook.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormSelectBook.de.resx">
-      <DependentUpon>FormSelectBook.cs</DependentUpon>
+    <EmbeddedResource Include="FormSelectBook.no.resx">
       <SubType>Designer</SubType>
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.ru.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormSelectBook.sv.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSelectBook.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="FormSelectBook.ta.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.te.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>FormSelectBook.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormSelectBook.th.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSelectBook.cs</DependentUpon>
     </EmbeddedResource>
@@ -552,7 +911,31 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.bn-IN.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.cs.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.de.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.es.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.fa.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.fi.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.fr.resx">
       <DependentUpon>Resources.resx</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -576,11 +959,27 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.no.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.ru.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.sv.resx">
       <DependentUpon>Resources.resx</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.ta.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.te.resx">
+      <DependentUpon>Resources.resx</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.th.resx">
       <DependentUpon>Resources.resx</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -620,6 +1019,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Cscd.ico" />
+    <None Include="App.config" />
     <None Include="Resources\book_hardcvr.bmp" />
     <None Include="Resources\folder-open.png" />
     <None Include="Resources\folder-closed.png" />

@@ -118,6 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="$this.Text" xml:space="preserve">
-    <value>रपट खोजे</value>
+    <value>खोज की रिपोर्ट</value>
+    <comment>Search Report</comment>
   </data>
 </root>

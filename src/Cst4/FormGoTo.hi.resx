@@ -117,62 +117,48 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="lblGoToWhat.Size" type="System.Drawing.Size, System.Drawing">
-    <value>83, 13</value>
-  </data>
   <data name="lblGoToWhat.Text" xml:space="preserve">
-    <value>कहा जाये-</value>
-  </data>
-  <data name="radioButtonOtherPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>93, 17</value>
+    <value>कहां जायें</value>
+    <comment>Go To What:</comment>
   </data>
   <data name="radioButtonOtherPage.Text" xml:space="preserve">
-    <value>और पृष्ठ</value>
-  </data>
-  <data name="radioButtonThaiPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>88, 17</value>
+    <value>अन्य पृष्ठ</value>
+    <comment>Other Page</comment>
   </data>
   <data name="radioButtonThaiPage.Text" xml:space="preserve">
     <value>थाई पृष्ठ</value>
-  </data>
-  <data name="radioButtonPtsPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>88, 17</value>
+    <comment>Thai Page</comment>
   </data>
   <data name="radioButtonPtsPage.Text" xml:space="preserve">
     <value>पी.टी.एस. पृष्ठ</value>
-  </data>
-  <data name="radioButtonMyanmarPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>110, 17</value>
+    <comment>PTS Page</comment>
   </data>
   <data name="radioButtonMyanmarPage.Text" xml:space="preserve">
-    <value>बरमी पृष्ठ</value>
-  </data>
-  <data name="radioButtonVriPage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>85, 17</value>
+    <value>बर्मी पृष्ठ</value>
+    <comment>Myanmar Page</comment>
   </data>
   <data name="radioButtonVriPage.Text" xml:space="preserve">
-    <value>वि.वि.वि. पृष्ठ</value>
-  </data>
-  <data name="radioButtonParagraph.Size" type="System.Drawing.Size, System.Drawing">
-    <value>88, 17</value>
+    
+    <value>वि.वि.वि. पृष्ठ </value><comment>VRI Page</comment>
   </data>
   <data name="radioButtonParagraph.Text" xml:space="preserve">
     <value>परिच्छेद</value>
-  </data>
-  <data name="lblNumber.Size" type="System.Drawing.Size, System.Drawing">
-    <value>58, 13</value>
+    <comment>Paragraph</comment>
   </data>
   <data name="lblNumber.Text" xml:space="preserve">
     <value>संख्या</value>
+    <comment>Number</comment>
   </data>
   <data name="buttonOK.Text" xml:space="preserve">
-    <value>ओके</value>
+    <value>ठीक है</value>
+    <comment>OK</comment>
   </data>
   <data name="buttonCancel.Text" xml:space="preserve">
-    <value>खारिज</value>
+    <value>रद्द करें</value>
+    <comment>Cancel</comment>
   </data>
   <data name="$this.Text" xml:space="preserve">
-    <value>वहा जाये-</value>
+    
+    <value>यहां जायें...</value><comment>Go to...</comment>
   </data>
 </root>

@@ -27,7 +27,8 @@ namespace CST
     /// <summary>
 	///   Class responsible to collect available localized resources.
 	/// </summary>
-	public class LanguageCollector {
+	public class LanguageCollector 
+	{
 
         public enum LanguageNameDisplay {
             DisplayName,
@@ -39,7 +40,8 @@ namespace CST
         ///   Initializes <c>LanguageCollector</c> object with a list of 
         ///   available localized resources based on subfolders names.
         /// </summary>
-        public LanguageCollector() {
+        public LanguageCollector()
+		{
             m_availableCultureInfos = GetApplicationAvailableCultures();
             Debug.Assert(m_availableCultureInfos != null, "m_availableCultureInfos is null in LanguageCollector()");
         }
@@ -52,7 +54,8 @@ namespace CST
         /// <param name="defaultCultureInfo">
         ///   Default culure for which application did not create subfolder.
         /// </param>
-        public LanguageCollector(CultureInfo defaultCultureInfo) : this() {
+        public LanguageCollector(CultureInfo defaultCultureInfo) : this() 
+		{
             if (!m_availableCultureInfos.Contains(defaultCultureInfo)) {
                 m_availableCultureInfos.Add(defaultCultureInfo);
                 m_availableCultureInfos.Sort(new CultureInfoComparer());
@@ -66,8 +69,9 @@ namespace CST
                 return Compare((CultureInfo)x, (CultureInfo)y);
             }
 
+			// FES 2008-02-21: changed the comparison field from Name to NativeName
             public int Compare(CultureInfo cix, CultureInfo ciy) {
-                return string.Compare(cix.Name, ciy.Name);
+                return string.Compare(cix.NativeName, ciy.NativeName);
             }
 
         }
@@ -86,7 +90,9 @@ namespace CST
         ///   An array of <c>CultureInfoDisplayItem</c> objects, sorted by their 
         ///   names (not <c>DisplayName</c>s).
         /// </returns>
-        public CultureInfoDisplayItem[] GetLanguages(LanguageNameDisplay languageNameToDisplay, out int currentLanguage) {
+        public CultureInfoDisplayItem[] GetLanguages(LanguageNameDisplay languageNameToDisplay, 
+			out int currentLanguage) 
+		{
             CultureInfoDisplayItem[] cidi = new CultureInfoDisplayItem[m_availableCultureInfos.Count];
             currentLanguage = -1;
             string currentCulture = System.Threading.Thread.CurrentThread.CurrentUICulture.Name;

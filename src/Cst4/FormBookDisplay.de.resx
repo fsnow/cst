@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -117,208 +117,104 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="toolStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing">
-    <value>0, 0</value>
-  </data>
-  <assembly alias="mscorlib" name="mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="tscbChapterList.MaxDropDownItems" type="System.Int32, mscorlib">
-    <value>14</value>
-  </data>
-  <data name="tscbChapterList.Size" type="System.Drawing.Size, System.Drawing">
-    <value>250, 25</value>
-  </data>
-  <data name="tslPaliScript.Size" type="System.Drawing.Size, System.Drawing">
-    <value>57, 22</value>
-  </data>
   <data name="tslPaliScript.Text" xml:space="preserve">
-    <value>Pali Alphabet:</value>
+    <value>Pali in folgender Schrift anzeigen:</value>
+    <comment>Pali Script:</comment>
   </data>
   <data name="tscbPaliScript.Items" xml:space="preserve">
-    <value>Bengali</value>
+    <value>Bengalisch</value>
+    <comment>Bengali</comment>
   </data>
   <data name="tscbPaliScript.Items1" xml:space="preserve">
-    <value>Cyrillic(de)</value>
+    <value>Kyrillisch</value>
+    <comment>Cyrillic</comment>
   </data>
   <data name="tscbPaliScript.Items2" xml:space="preserve">
     <value>Devanagari</value>
+    <comment>Devanagari</comment>
   </data>
   <data name="tscbPaliScript.Items3" xml:space="preserve">
     <value>Gujarati</value>
+    <comment>Gujarati</comment>
   </data>
   <data name="tscbPaliScript.Items4" xml:space="preserve">
     <value>Gurmukhi</value>
+    <comment>Gurmukhi</comment>
   </data>
   <data name="tscbPaliScript.Items5" xml:space="preserve">
     <value>Kannada</value>
+    <comment>Kannada</comment>
   </data>
   <data name="tscbPaliScript.Items6" xml:space="preserve">
     <value>Khmer</value>
+    <comment>Khmer</comment>
   </data>
   <data name="tscbPaliScript.Items7" xml:space="preserve">
     <value>Malayalam</value>
+    <comment>Malayalam</comment>
   </data>
   <data name="tscbPaliScript.Items8" xml:space="preserve">
-    <value>Myanmar</value>
+    <value>Burmesisch</value>
+    <comment>Myanmar</comment>
   </data>
   <data name="tscbPaliScript.Items9" xml:space="preserve">
-    <value>Römisch</value>
+    <value>Lateinisch</value>
+    <comment>Roman</comment>
   </data>
   <data name="tscbPaliScript.Items10" xml:space="preserve">
-    <value>Sinhala</value>
+    <value>Singalesisch</value>
+    <comment>Sinhala</comment>
   </data>
   <data name="tscbPaliScript.Items11" xml:space="preserve">
     <value>Telugu</value>
+    <comment>Telugu</comment>
   </data>
   <data name="tscbPaliScript.Items12" xml:space="preserve">
-    <value>Thai</value>
+    <value>Thailändisch</value>
+    <comment>Thai</comment>
   </data>
   <data name="tscbPaliScript.Items13" xml:space="preserve">
-    <value>Tibetan(de)</value>
-  </data>
-  <data name="tscbPaliScript.Size" type="System.Drawing.Size, System.Drawing">
-    <value>121, 25</value>
-  </data>
-  <data name="tsbFirstResult.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Black</value>
-  </data>
-  <data name="tsbFirstResult.Size" type="System.Drawing.Size, System.Drawing">
-    <value>23, 22</value>
+    <value>Tibetisch</value>
+    <comment>Tibetan</comment>
   </data>
   <data name="tsbFirstResult.Text" xml:space="preserve">
-    <value>Erstes Resultat</value>
-  </data>
-  <data name="tsbPreviousResult.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Black</value>
-  </data>
-  <data name="tsbPreviousResult.Size" type="System.Drawing.Size, System.Drawing">
-    <value>23, 22</value>
+    <value>Erstes Surchergebnis</value>
+    <comment>First Result</comment>
   </data>
   <data name="tsbPreviousResult.Text" xml:space="preserve">
-    <value>Vorhergehendes Resultat</value>
-  </data>
-  <data name="tsbNextResult.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Black</value>
-  </data>
-  <data name="tsbNextResult.Size" type="System.Drawing.Size, System.Drawing">
-    <value>23, 22</value>
+    <value>Vorheriges Suchergebnis</value>
+    <comment>Previous Result</comment>
   </data>
   <data name="tsbNextResult.Text" xml:space="preserve">
-    <value>Folgendes Resultat</value>
-  </data>
-  <data name="tsbLastResult.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Black</value>
-  </data>
-  <data name="tsbLastResult.Size" type="System.Drawing.Size, System.Drawing">
-    <value>23, 22</value>
+    <value>Nächstes Suchergebnis</value>
+    <comment>Next Result</comment>
   </data>
   <data name="tsbLastResult.Text" xml:space="preserve">
-    <value>Letztes Resultat</value>
-  </data>
-  <data name="tsbMula.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Magenta</value>
-  </data>
-  <data name="tsbMula.Size" type="System.Drawing.Size, System.Drawing">
-    <value>33, 22</value>
+    <value>Letztes Suchergebnis</value>
+    <comment>Last Result</comment>
   </data>
   <data name="tsbMula.Text" xml:space="preserve">
     <value>Mūla</value>
-  </data>
-  <data name="tsbAtthakatha.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Magenta</value>
-  </data>
-  <data name="tsbAtthakatha.Size" type="System.Drawing.Size, System.Drawing">
-    <value>65, 22</value>
+    <comment>Mūla</comment>
   </data>
   <data name="tsbAtthakatha.Text" xml:space="preserve">
     <value>Aṭṭhakathā</value>
-  </data>
-  <data name="tsbTika.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Magenta</value>
-  </data>
-  <data name="tsbTika.Size" type="System.Drawing.Size, System.Drawing">
-    <value>30, 22</value>
+    <comment>Aṭṭhakathā</comment>
   </data>
   <data name="tsbTika.Text" xml:space="preserve">
     <value>Ṭīkā</value>
-  </data>
-  <data name="tsmiShowSearchTerms.Size" type="System.Drawing.Size, System.Drawing">
-    <value>168, 22</value>
+    <comment>Ṭīkā</comment>
   </data>
   <data name="tsmiShowSearchTerms.Text" xml:space="preserve">
-    <value>Suchbezeichnungen zeigen</value>
-  </data>
-  <data name="tsmiShowFootnotes.Size" type="System.Drawing.Size, System.Drawing">
-    <value>168, 22</value>
+    <value>Suchbegriff anzeigen</value>
+    <comment>Show Search Terms</comment>
   </data>
   <data name="tsmiShowFootnotes.Text" xml:space="preserve">
-    <value>Fußnoten zeigen</value>
-  </data>
-  <data name="tsdbbView.ImageTransparentColor" type="System.Drawing.Color, System.Drawing">
-    <value>Magenta</value>
-  </data>
-  <data name="tsdbbView.Size" type="System.Drawing.Size, System.Drawing">
-    <value>42, 22</value>
+    <value>Fussnote anzeigen</value>
+    <comment>Show Footnotes</comment>
   </data>
   <data name="tsdbbView.Text" xml:space="preserve">
     <value>Ansicht</value>
-  </data>
-  <data name="toolStrip1.Location" type="System.Drawing.Point, System.Drawing">
-    <value>0, 0</value>
-  </data>
-  <data name="toolStrip1.Size" type="System.Drawing.Size, System.Drawing">
-    <value>854, 25</value>
-  </data>
-  <data name="toolStrip1.TabIndex" type="System.Int32, mscorlib">
-    <value>0</value>
-  </data>
-  <data name="statusStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing">
-    <value>0, 469</value>
-  </data>
-  <data name="statusStrip1.Location" type="System.Drawing.Point, System.Drawing">
-    <value>0, 469</value>
-  </data>
-  <data name="statusStrip1.Size" type="System.Drawing.Size, System.Drawing">
-    <value>854, 22</value>
-  </data>
-  <data name="statusStrip1.TabIndex" type="System.Int32, mscorlib">
-    <value>1</value>
-  </data>
-  <data name="tsslPages.Size" type="System.Drawing.Size, System.Drawing">
-    <value>185, 17</value>
-  </data>
-  <data name="tsslPages.Text" xml:space="preserve">
-    <value>VRI: 0   Myanmar: 0   PTS: 0   Thai: 0</value>
-  </data>
-  <data name="tsslDebug.Size" type="System.Drawing.Size, System.Drawing">
-    <value>40, 17</value>
-  </data>
-  <data name="tsslDebug.Text" xml:space="preserve">
-    <value />
-  </data>
-  <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="webBrowser.Dock" type="System.Windows.Forms.DockStyle, System.Windows.Forms">
-    <value>Fill</value>
-  </data>
-  <data name="webBrowser.Location" type="System.Drawing.Point, System.Drawing">
-    <value>0, 25</value>
-  </data>
-  <data name="webBrowser.Size" type="System.Drawing.Size, System.Drawing">
-    <value>854, 444</value>
-  </data>
-  <data name="webBrowser.TabIndex" type="System.Int32, mscorlib">
-    <value>2</value>
-  </data>
-  <data name="timer1.TrayLocation" type="System.Drawing.Point, System.Drawing">
-    <value>110, 469</value>
-  </data>
-  <data name="$this.Localizable" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="$this.AutoScaleDimensions" type="System.Drawing.SizeF, System.Drawing">
-    <value>6, 13</value>
-  </data>
-  <data name="$this.ClientSize" type="System.Drawing.Size, System.Drawing">
-    <value>854, 491</value>
+    <comment>View</comment>
   </data>
 </root>
