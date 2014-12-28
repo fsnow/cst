@@ -1,0 +1,1344 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+  <Product Name='Chattha Sangayana Tipitaka 4.0' Id='A0C75468-DE8B-4F9C-8144-0E1E66F4030E' UpgradeCode='09A7EE86-E07B-4056-933D-8FF70BCA19EF'
+    Language='1033' Codepage='1252' Version='4.0.0.16' Manufacturer='Frank Snow / Tipitaka.org'>
+
+    <Package Id='*' Keywords='Installer' Description="Chattha Sangayana Tipitaka 4.0 Installer"
+      Comments='Installer for CST4' Manufacturer='Frank Snow / Tipitaka.org'
+      InstallerVersion='100' Languages='1033' Compressed='yes' SummaryCodepage='1252' />
+
+    <Media Id='1' Cabinet='Sample.cab' EmbedCab='yes' DiskPrompt="CD-ROM #1" />
+    <Property Id='DiskPrompt' Value="Chattha Sangayana Tipitaka 4.0 Installation [1]" />
+
+    <Directory Id='TARGETDIR' Name='SourceDir'>
+      
+      <Directory Id="FontsFolder" />
+      
+      <Directory Id='INSTALLDIR' Name='Cst4'>
+
+        <Component Id='MainExecutable' Guid='7479EACF-DCEF-481E-AAEE-3D6248AAA8A9'>
+          <File Id='Cst4EXE' Name='Cst4.exe' DiskId='1' Source='Cst4.exe' KeyPath='yes'>
+            <Shortcut Id="startmenuCst4" Directory="ProgramMenuDir" Name="Chattha Sangayana Tipitaka 4.0" WorkingDirectory='INSTALLDIR' Icon="Cst4.exe" IconIndex="0" Advertise="yes" />
+            <Shortcut Id="desktopCst4" Directory="DesktopFolder" Name="Chattha Sangayana Tipitaka 4.0" WorkingDirectory='INSTALLDIR' Icon="Cst4.exe" IconIndex="0" Advertise="yes" />
+          </File>
+        </Component>
+
+        <Component Id='Cst4LoggingConfig' Guid='F5562F29-4303-4669-8194-FDB3A37AA5F5'>
+          <File Id='Cst4ExeConfig' Name='Cst4.exe.config' DiskId='1' Source='Cst4.exe.config' KeyPath='yes' />
+        </Component>
+        
+        <Component Id='CstLibrary' Guid='0B93AF44-8BF2-4B04-9ED9-3D68A244099C'>
+          <File Id='CSTDLL' Name='CST.dll' DiskId='1' Source='CST.dll' KeyPath='yes' />
+        </Component>
+
+        <Component Id='Log4netLibrary' Guid='7B0BC690-F241-4552-BD2E-492F77C0D409'>
+          <File Id='Log4netDLL' Name='log4net.dll' DiskId='1' Source='log4net.dll' KeyPath='yes' />
+        </Component>
+
+        <Component Id='LuceneLibrary' Guid='2677F751-BB01-41E0-B769-0C3493212713'>
+          <File Id='LuceneDLL' Name='Lucene.Net.dll' DiskId='1' Source='Lucene.Net.dll' KeyPath='yes' />
+        </Component>
+
+        <Component Id='MshtmlLibrary' Guid='EE785B62-F31A-4AFC-9A4E-ECA64BC68727'>
+          <File Id='MshtmlDLL' Name='Microsoft.mshtml.dll' DiskId='1' Source='Microsoft.mshtml.dll' KeyPath='yes' />
+        </Component>
+
+        <Component Id='UniscribeLibrary' Guid='AAAE468D-E3CF-408E-ACD2-F94976CAE3F2'>
+          <File Id='Usp10DLL' Name='usp10.dll' DiskId='1' Source='usp10.dll' KeyPath='yes' />
+        </Component>
+        
+<!--
+        <Directory Id="IndexFolder" Name="Index">
+          <Component Id='RemoveIndexFiles' Guid='CDF5E0D6-5373-4869-8400-677D61D2255D'>
+            <RemoveFile Id="Index_deletable" Name="deletable" On="uninstall"/>
+            <RemoveFile Id="Index_segments" Name="segments" On="uninstall"/>
+            <RemoveFile Id="Index_6p_cfs" Name="_6p.cfs" On="uninstall"/>
+          </Component>
+        </Directory>
+          
+        <Component Id='RemoveIndexFolder' Guid='EC993A97-96A1-4EC5-8AF5-277A5D9C4EB2'>
+          <RemoveFolder Id="Index" On="uninstall"/>
+        </Component>
+-->
+
+        
+        <!-- ****************   Multilingual Resources  ******************   -->    
+        
+        <Directory Id='bnIN' Name='bn-IN'>
+          <Component Id='bnIN_Resources' Guid='5C9FEC93-5581-45F0-95F3-FCEE85CC1190'>
+            <File Id='bnIN_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='bn-IN\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='cs' Name='cs'>
+          <Component Id='cs_Resources' Guid='08CE9834-130A-400C-BF81-AB9E523AAE38'>
+            <File Id='cs_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='cs\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='de' Name='de'>
+          <Component Id='de_Resources' Guid='1FD4134C-9EB8-4B93-8856-1EB0F9E0D236'>
+            <File Id='de_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='de\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='es' Name='es'>
+          <Component Id='es_Resources' Guid='9B205FAF-FB09-4DDE-B462-553172C1314C'>
+            <File Id='es_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='es\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='fa' Name='fa'>
+          <Component Id='fa_Resources' Guid='3941BB8C-8AB5-4F4A-BC79-41E1B2125429'>
+            <File Id='fa_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='fa\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='fi' Name='fi'>
+          <Component Id='fi_Resources' Guid='0CFD788C-EF56-42C1-B942-A951B92585C6'>
+            <File Id='fi_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='fi\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='fr' Name='fr'>
+          <Component Id='fr_Resources' Guid='CE41D1CC-0B7D-46F0-B499-135C7D0D0ECD'>
+            <File Id='fr_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='fr\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='gu' Name='gu'>
+          <Component Id='gu_Resources' Guid='CE5C8BBA-793D-461E-B008-DB1C398C07B0'>
+            <File Id='gu_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='gu\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+
+        <Directory Id='hi' Name='hi'>
+          <Component Id='hi_Resources' Guid='8C9A8924-4E22-46D0-9B02-2FD3EDE3088B'>
+            <File Id='hi_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='hi\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='id' Name='id'>
+          <Component Id='id_Resources' Guid='2588310B-6627-4E97-9575-ADDD58DE5D35'>
+            <File Id='id_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='id\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='it' Name='it'>
+          <Component Id='it_Resources' Guid='04872A8A-C80C-4732-90F1-62E34BA90BCB'>
+            <File Id='it_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='it\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='mlIN' Name='ml-IN'>
+          <Component Id='mlIN_Resources' Guid='3A86D68B-2A3A-4BF1-AE43-BC872EE82176'>
+            <File Id='mlIN_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ml-IN\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='no' Name='no'>
+          <Component Id='no_Resources' Guid='7CFE2FA0-D18B-4776-BFC6-DE5655E13FB6'>
+            <File Id='no_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='no\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='pa' Name='pa'>
+          <Component Id='pa_Resources' Guid='E3D77CDA-A06C-4F6E-98A3-EE47A53C292D'>
+            <File Id='pa_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='pa\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='pt' Name='pt'>
+          <Component Id='pt_Resources' Guid='71F36D84-BA85-44A3-8CE5-52579A4C7AF5'>
+            <File Id='pt_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='pt\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='ru' Name='ru'>
+          <Component Id='ru_Resources' Guid='8F732414-E5DF-4CFE-BB7D-58279829C8A4'>
+            <File Id='ru_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ru\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='sv' Name='sv'>
+          <Component Id='sv_Resources' Guid='261C9985-A936-47F1-9B76-C8A37821E9D5'>
+            <File Id='sv_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='sv\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='ta' Name='ta'>
+          <Component Id='ta_Resources' Guid='A1446CE8-896F-4D0D-9B7C-2F65EAB82DA9'>
+            <File Id='ta_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ta\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='te' Name='te'>
+          <Component Id='te_Resources' Guid='6E643F78-946B-40F3-9ADF-F962F96D45CF'>
+            <File Id='te_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='te\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='th' Name='th'>
+          <Component Id='th_Resources' Guid='6C14FA65-86E9-473A-927E-51B3D5729E9E'>
+            <File Id='th_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='th\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='zhCHS' Name='zh-CHS'>
+          <Component Id='zhCHS_Resources' Guid='7C3A1C0C-988F-44DC-AB37-81BF5990DEAA'>
+            <File Id='zhCHS_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='zh-CHS\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <Directory Id='zhCHT' Name='zh-CHT'>
+          <Component Id='zhCHT_Resources' Guid='0513FB54-9707-4137-B0B8-6C993D27EB14'>
+            <File Id='zhCHT_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='zh-CHT\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        <!-- ****************   Fonts Directory  ******************   -->  
+
+        <Directory Id='Fonts' Name='Fonts'>
+          <Component Id='Font_BNBDOT0N' Guid='198FE675-2370-49E2-9EC0-E1FA078EF138'>
+            <File Id='BNBDOT0N_ttf' Name='BNBDOT0N.ttf' DiskId='1' Source='Fonts\BNBDOT0N.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_CDACSRBT' Guid='65DF83BA-4B94-43F8-B122-7F29059634C6'>
+            <File Id='CDACSRBT_TTF' Name='CDACSRBT.TTF' DiskId='1' Source='Fonts\CDACSRBT.TTF' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_CDACSRNT' Guid='C8ACE779-DCAA-4C75-B267-FDA9A4F925B3'>
+            <File Id='CDACSRNT_TTF' Name='CDACSRNT.TTF' DiskId='1' Source='Fonts\CDACSRNT.TTF' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_DoulosSILR' Guid='3BC5C016-8452-4B27-B833-0138AE5B2C29'>
+            <File Id='DoulosSILR_ttf' Name='DoulosSILR.ttf' DiskId='1' Source='Fonts\DoulosSILR.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_kaputaunicode' Guid='E161FF8F-C289-4F83-B9FC-9C62ACF0165A'>
+            <File Id='kaputaunicode_ttf' Name='kaputaunicode.ttf' DiskId='1' Source='Fonts\kaputaunicode.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_KMon4UOh' Guid='7E6609E7-86C5-48AB-924C-6A97BDED0188'>
+            <File Id='KMon4UOh_ttf' Name='KMon4UOh.ttf' DiskId='1' Source='Fonts\KMon4UOh.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_myanmar1' Guid='EE0E5609-AFD3-41C0-84B9-B3CEB358CCC8'>
+            <File Id='myanmar1_ttf' Name='myanmar1.ttf' DiskId='1' Source='Fonts\myanmar1.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_TibetanMachineUniAlpha' Guid='3B81084D-3316-4BA1-A5BC-ADD1C6429E2F'>
+            <File Id='TibetanMachineUniAlpha_ttf' Name='TibetanMachineUniAlpha.ttf' DiskId='1' Source='Fonts\TibetanMachineUniAlpha.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_timesx' Guid='1739371A-B1B7-4FCF-8FB7-67E820D02CC1'>
+            <File Id='timesx_ttf' Name='timesx.ttf' DiskId='1' Source='Fonts\timesx.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_timesxbd' Guid='A8113988-CFC2-49DA-839B-A6958FDC4A1F'>
+            <File Id='timesxbd_ttf' Name='timesxbd.ttf' DiskId='1' Source='Fonts\timesxbd.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_timesxbi' Guid='ECC97D4D-D42F-4F07-904A-590EE96B2A48'>
+            <File Id='timesxbi_ttf' Name='timesxbi.ttf' DiskId='1' Source='Fonts\timesxbi.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_timesxi' Guid='10F4A3CF-B897-495A-A0AD-0C142496E035'>
+            <File Id='timesxi_ttf' Name='timesxi.ttf' DiskId='1' Source='Fonts\timesxi.ttf' KeyPath='yes' />
+          </Component>
+        </Directory>
+        
+        
+        <!-- ****************   Reference Directory (Dictionaries)  ******************   -->   
+        
+        <Directory Id='Reference' Name='Reference'>
+          <Component Id='PaliHindiDictionary' Guid='B769DE49-D2B1-477C-A3FC-59964833C886'>
+            <File Id='PaliHindiDictionaryTxt' Name='pali-hindi-dictionary.txt' DiskId='1' Source='Reference\pali-hindi-dictionary.txt' KeyPath='yes' />
+          </Component>
+          
+          <Directory Id='Reference_en' Name='en'>
+            <Component Id='PaliEnglishDictionary' Guid='AF963048-17B7-474B-A54E-FDE7ED589423'>
+              <File Id='PaliEnglishDictionaryTxt' Name='pali-english-dictionary.txt' DiskId='1' Source='Reference\en\pali-english-dictionary.txt' KeyPath='yes' />
+            </Component>
+          </Directory>
+        </Directory>
+        
+    
+        <!-- ****************   Xml Directory  ******************   -->  
+        
+        <Directory Id='Xml' Name='Xml'>
+        
+          <Component Id="Xml_abh01a_att_xml" Guid="C466E9E7-1A0F-524C-B5C3-A314E3746CC9">
+            <File Id="abh01a_att_xml" Name="abh01a.att.xml" DiskId="1" Source="Xml\abh01a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh01m_mul_xml" Guid="E08EF7DB-3472-CC70-6AAF-BFBF499B011A">
+            <File Id="abh01m_mul_xml" Name="abh01m.mul.xml" DiskId="1" Source="Xml\abh01m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh01t_tik_xml" Guid="3E23226A-1E92-8E1C-9027-5AA0DE95C5FC">
+            <File Id="abh01t_tik_xml" Name="abh01t.tik.xml" DiskId="1" Source="Xml\abh01t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh02a_att_xml" Guid="628AC376-0FA7-FD0D-0793-39BC11060660">
+            <File Id="abh02a_att_xml" Name="abh02a.att.xml" DiskId="1" Source="Xml\abh02a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh02m_mul_xml" Guid="DE699FFA-3282-66F2-F607-55FB86207988">
+            <File Id="abh02m_mul_xml" Name="abh02m.mul.xml" DiskId="1" Source="Xml\abh02m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh02t_tik_xml" Guid="EFEC5E40-D8C3-2BDE-D5D7-650EAC38CADF">
+            <File Id="abh02t_tik_xml" Name="abh02t.tik.xml" DiskId="1" Source="Xml\abh02t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03a_att_xml" Guid="56B2958E-24CD-D00F-827D-61A70F487925">
+            <File Id="abh03a_att_xml" Name="abh03a.att.xml" DiskId="1" Source="Xml\abh03a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m1_mul_xml" Guid="C36F2362-EBDD-E46A-4EAD-B162F240C241">
+            <File Id="abh03m1_mul_xml" Name="abh03m1.mul.xml" DiskId="1" Source="Xml\abh03m1.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m10_mul_xml" Guid="847C4B4E-DEDE-24E7-B508-A0177E044704">
+            <File Id="abh03m10_mul_xml" Name="abh03m10.mul.xml" DiskId="1" Source="Xml\abh03m10.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m11_mul_xml" Guid="915E0688-00D7-0567-61D9-4B95E2D1EEA5">
+            <File Id="abh03m11_mul_xml" Name="abh03m11.mul.xml" DiskId="1" Source="Xml\abh03m11.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m2_mul_xml" Guid="456A1A1D-22C0-22BE-C237-968942F1B821">
+            <File Id="abh03m2_mul_xml" Name="abh03m2.mul.xml" DiskId="1" Source="Xml\abh03m2.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m3_mul_xml" Guid="3D383BAE-DC61-F108-5202-B400700E7C51">
+            <File Id="abh03m3_mul_xml" Name="abh03m3.mul.xml" DiskId="1" Source="Xml\abh03m3.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m4_mul_xml" Guid="D8ADE4C9-BCAE-3142-4417-D95E7706EE9E">
+            <File Id="abh03m4_mul_xml" Name="abh03m4.mul.xml" DiskId="1" Source="Xml\abh03m4.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m5_mul_xml" Guid="96641874-9667-9361-13A1-F7E7EE06CF49">
+            <File Id="abh03m5_mul_xml" Name="abh03m5.mul.xml" DiskId="1" Source="Xml\abh03m5.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m6_mul_xml" Guid="B659C81F-6EE2-F406-C1C9-C6848228B058">
+            <File Id="abh03m6_mul_xml" Name="abh03m6.mul.xml" DiskId="1" Source="Xml\abh03m6.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m7_mul_xml" Guid="5A14C39E-60E8-49DB-F5D1-E1EB98D96239">
+            <File Id="abh03m7_mul_xml" Name="abh03m7.mul.xml" DiskId="1" Source="Xml\abh03m7.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m8_mul_xml" Guid="C424667F-FD82-807E-89B4-956F35170B0D">
+            <File Id="abh03m8_mul_xml" Name="abh03m8.mul.xml" DiskId="1" Source="Xml\abh03m8.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03m9_mul_xml" Guid="7331948E-2D31-E4F2-51C0-9C3699D51830">
+            <File Id="abh03m9_mul_xml" Name="abh03m9.mul.xml" DiskId="1" Source="Xml\abh03m9.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh03t_tik_xml" Guid="68C0331E-18E6-A3C9-C693-957C00C2CAE8">
+            <File Id="abh03t_tik_xml" Name="abh03t.tik.xml" DiskId="1" Source="Xml\abh03t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh04t_nrf_xml" Guid="E1A3698B-B461-CC69-2C84-4403AE647DCC">
+            <File Id="abh04t_nrf_xml" Name="abh04t.nrf.xml" DiskId="1" Source="Xml\abh04t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh05t_nrf_xml" Guid="390B7BE4-C61F-A6AB-F6E1-D9CE7201BE7B">
+            <File Id="abh05t_nrf_xml" Name="abh05t.nrf.xml" DiskId="1" Source="Xml\abh05t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh06t_nrf_xml" Guid="5D06DD12-8A5A-CF4C-70ED-41A998D44299">
+            <File Id="abh06t_nrf_xml" Name="abh06t.nrf.xml" DiskId="1" Source="Xml\abh06t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh07t_nrf_xml" Guid="270DFE60-64C2-C8F6-0B03-740CD124DE65">
+            <File Id="abh07t_nrf_xml" Name="abh07t.nrf.xml" DiskId="1" Source="Xml\abh07t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh08t_nrf_xml" Guid="1E3ACDFA-5DDB-78B3-A157-F5439DC21D97">
+            <File Id="abh08t_nrf_xml" Name="abh08t.nrf.xml" DiskId="1" Source="Xml\abh08t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_abh09t_nrf_xml" Guid="C06C45B1-B8BC-27EA-3800-786E6556D3AF">
+            <File Id="abh09t_nrf_xml" Name="abh09t.nrf.xml" DiskId="1" Source="Xml\abh09t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0101n_mul_xml" Guid="BEB000C2-98B4-8D57-533F-1A268CC1CE78">
+            <File Id="e0101n_mul_xml" Name="e0101n.mul.xml" DiskId="1" Source="Xml\e0101n.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0102n_mul_xml" Guid="C3D797BB-12A3-AD61-2806-4E940C286EE1">
+            <File Id="e0102n_mul_xml" Name="e0102n.mul.xml" DiskId="1" Source="Xml\e0102n.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0103n_att_xml" Guid="8070C8EA-0637-BC4B-6327-B2C9E255E101">
+            <File Id="e0103n_att_xml" Name="e0103n.att.xml" DiskId="1" Source="Xml\e0103n.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0104n_att_xml" Guid="C6D97469-CFD0-939F-1900-0CB63D27F945">
+            <File Id="e0104n_att_xml" Name="e0104n.att.xml" DiskId="1" Source="Xml\e0104n.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0105n_nrf_xml" Guid="2D1C9E63-B8C7-81E5-3B6C-D66EE6E67CA6">
+            <File Id="e0105n_nrf_xml" Name="e0105n.nrf.xml" DiskId="1" Source="Xml\e0105n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0201n_nrf_xml" Guid="9107063C-6757-504F-CD62-EEEDF9B955A5">
+            <File Id="e0201n_nrf_xml" Name="e0201n.nrf.xml" DiskId="1" Source="Xml\e0201n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0301n_nrf_xml" Guid="03F3E1D2-7689-98A9-B1FD-CEB7F5297BBA">
+            <File Id="e0301n_nrf_xml" Name="e0301n.nrf.xml" DiskId="1" Source="Xml\e0301n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0401n_nrf_xml" Guid="497CFED2-1D7C-7B58-2DA9-F0CFFEC5950F">
+            <File Id="e0401n_nrf_xml" Name="e0401n.nrf.xml" DiskId="1" Source="Xml\e0401n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0501n_nrf_xml" Guid="4F5E9162-8FB2-AD10-81F1-786A3C141C87">
+            <File Id="e0501n_nrf_xml" Name="e0501n.nrf.xml" DiskId="1" Source="Xml\e0501n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0601n_nrf_xml" Guid="8446C245-452B-8C2F-F137-96F6DEFD238D">
+            <File Id="e0601n_nrf_xml" Name="e0601n.nrf.xml" DiskId="1" Source="Xml\e0601n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0602n_nrf_xml" Guid="4CE87E17-3965-0E1B-7214-A7895A39E2B9">
+            <File Id="e0602n_nrf_xml" Name="e0602n.nrf.xml" DiskId="1" Source="Xml\e0602n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0603n_nrf_xml" Guid="D1EEBD8A-026A-60F9-9AEA-D8AF60F94DF0">
+            <File Id="e0603n_nrf_xml" Name="e0603n.nrf.xml" DiskId="1" Source="Xml\e0603n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0604n_nrf_xml" Guid="7C97DA65-E5F3-BEAB-A69A-0C331072C2C2">
+            <File Id="e0604n_nrf_xml" Name="e0604n.nrf.xml" DiskId="1" Source="Xml\e0604n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0605n_nrf_xml" Guid="938B0915-E9A2-E681-83F3-79F19E00D008">
+            <File Id="e0605n_nrf_xml" Name="e0605n.nrf.xml" DiskId="1" Source="Xml\e0605n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0606n_nrf_xml" Guid="3D71A638-6FF1-9747-1B32-F5F9642EFB39">
+            <File Id="e0606n_nrf_xml" Name="e0606n.nrf.xml" DiskId="1" Source="Xml\e0606n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0607n_nrf_xml" Guid="4D118340-D0CD-7508-81BB-12A054A6B514">
+            <File Id="e0607n_nrf_xml" Name="e0607n.nrf.xml" DiskId="1" Source="Xml\e0607n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0608n_nrf_xml" Guid="EB9E9F8D-DF1F-1DF3-4695-ED2B8828C65B">
+            <File Id="e0608n_nrf_xml" Name="e0608n.nrf.xml" DiskId="1" Source="Xml\e0608n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0701n_nrf_xml" Guid="2477644B-FB33-7786-15F7-68A2E29120E1">
+            <File Id="e0701n_nrf_xml" Name="e0701n.nrf.xml" DiskId="1" Source="Xml\e0701n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0702n_nrf_xml" Guid="C5B96B1A-E1D4-209A-5D09-D3276329AFAC">
+            <File Id="e0702n_nrf_xml" Name="e0702n.nrf.xml" DiskId="1" Source="Xml\e0702n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0703n_nrf_xml" Guid="AD3468B0-C243-C54A-5880-E70C8550D571">
+            <File Id="e0703n_nrf_xml" Name="e0703n.nrf.xml" DiskId="1" Source="Xml\e0703n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0801n_nrf_xml" Guid="C75C4A4B-1909-6FDD-2132-ED647D948821">
+            <File Id="e0801n_nrf_xml" Name="e0801n.nrf.xml" DiskId="1" Source="Xml\e0801n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0802n_nrf_xml" Guid="B34CE2B1-0DA1-51F9-748C-05F0EAD4B827">
+            <File Id="e0802n_nrf_xml" Name="e0802n.nrf.xml" DiskId="1" Source="Xml\e0802n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0803n_nrf_xml" Guid="5DBBCB99-FF23-7B91-167D-44275C270749">
+            <File Id="e0803n_nrf_xml" Name="e0803n.nrf.xml" DiskId="1" Source="Xml\e0803n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0804n_nrf_xml" Guid="31DE10B7-47D1-135E-D88B-0DEBC90B32B2">
+            <File Id="e0804n_nrf_xml" Name="e0804n.nrf.xml" DiskId="1" Source="Xml\e0804n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0805n_nrf_xml" Guid="9212BE9A-FA30-7D71-C6C2-9221D0794C29">
+            <File Id="e0805n_nrf_xml" Name="e0805n.nrf.xml" DiskId="1" Source="Xml\e0805n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0806n_nrf_xml" Guid="38D83148-3B89-0EEF-7B84-5B4BA036B943">
+            <File Id="e0806n_nrf_xml" Name="e0806n.nrf.xml" DiskId="1" Source="Xml\e0806n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0807n_nrf_xml" Guid="DB029F71-5644-1562-66B8-6BE5EBE74B72">
+            <File Id="e0807n_nrf_xml" Name="e0807n.nrf.xml" DiskId="1" Source="Xml\e0807n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0808n_nrf_xml" Guid="60591A5E-F849-8C26-DD4D-14010436074B">
+            <File Id="e0808n_nrf_xml" Name="e0808n.nrf.xml" DiskId="1" Source="Xml\e0808n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0809n_nrf_xml" Guid="35E371F2-50F6-D695-6629-EF3C46F33810">
+            <File Id="e0809n_nrf_xml" Name="e0809n.nrf.xml" DiskId="1" Source="Xml\e0809n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0810n_nrf_xml" Guid="DAB7CD72-EC03-57AC-8AB4-E8DC31BD47BD">
+            <File Id="e0810n_nrf_xml" Name="e0810n.nrf.xml" DiskId="1" Source="Xml\e0810n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0811n_nrf_xml" Guid="046E279A-572D-1343-DA41-A6D53731EBD5">
+            <File Id="e0811n_nrf_xml" Name="e0811n.nrf.xml" DiskId="1" Source="Xml\e0811n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0812n_nrf_xml" Guid="272ADB62-A176-D911-26B9-055B18770CAF">
+            <File Id="e0812n_nrf_xml" Name="e0812n.nrf.xml" DiskId="1" Source="Xml\e0812n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0813n_nrf_xml" Guid="00313BF6-AE81-C96E-874A-5A9DB19E21C4">
+            <File Id="e0813n_nrf_xml" Name="e0813n.nrf.xml" DiskId="1" Source="Xml\e0813n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0901n_nrf_xml" Guid="E9F073B5-DCFA-5C04-C458-FE7B9BD67696">
+            <File Id="e0901n_nrf_xml" Name="e0901n.nrf.xml" DiskId="1" Source="Xml\e0901n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0902n_nrf_xml" Guid="82A87213-FF24-6510-AD03-A16B4182375B">
+            <File Id="e0902n_nrf_xml" Name="e0902n.nrf.xml" DiskId="1" Source="Xml\e0902n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0903n_nrf_xml" Guid="F3BB601B-E674-CF82-CE27-9EF1A63319CB">
+            <File Id="e0903n_nrf_xml" Name="e0903n.nrf.xml" DiskId="1" Source="Xml\e0903n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0904n_nrf_xml" Guid="6C3C9416-3BF9-1E0B-EA05-53E3799B1252">
+            <File Id="e0904n_nrf_xml" Name="e0904n.nrf.xml" DiskId="1" Source="Xml\e0904n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0905n_nrf_xml" Guid="2F98BD1F-B70E-6B21-FEAB-17DDDB476800">
+            <File Id="e0905n_nrf_xml" Name="e0905n.nrf.xml" DiskId="1" Source="Xml\e0905n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0906n_nrf_xml" Guid="ED92BFB4-473D-D035-582A-BD6D93EB6884">
+            <File Id="e0906n_nrf_xml" Name="e0906n.nrf.xml" DiskId="1" Source="Xml\e0906n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e0907n_nrf_xml" Guid="A4C1342F-1B9C-AB34-CD7B-0981B8020C03">
+            <File Id="e0907n_nrf_xml" Name="e0907n.nrf.xml" DiskId="1" Source="Xml\e0907n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1001n_nrf_xml" Guid="97F87294-346C-A144-099D-F2326A190339">
+            <File Id="e1001n_nrf_xml" Name="e1001n.nrf.xml" DiskId="1" Source="Xml\e1001n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1002n_nrf_xml" Guid="D45BE5DC-3DCB-F8E3-63DA-74321A4F2992">
+            <File Id="e1002n_nrf_xml" Name="e1002n.nrf.xml" DiskId="1" Source="Xml\e1002n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1003n_nrf_xml" Guid="826E84F6-59A1-ADFC-FF2A-B4EED8F61306">
+            <File Id="e1003n_nrf_xml" Name="e1003n.nrf.xml" DiskId="1" Source="Xml\e1003n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1004n_nrf_xml" Guid="DD4B7C9F-B18B-5069-9D8D-40444F6D5017">
+            <File Id="e1004n_nrf_xml" Name="e1004n.nrf.xml" DiskId="1" Source="Xml\e1004n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1005n_nrf_xml" Guid="00D5B96B-A577-262E-EC27-7CFAB937354D">
+            <File Id="e1005n_nrf_xml" Name="e1005n.nrf.xml" DiskId="1" Source="Xml\e1005n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1006n_nrf_xml" Guid="81CB5CDD-D608-0CCE-1A05-B4EB65A0466C">
+            <File Id="e1006n_nrf_xml" Name="e1006n.nrf.xml" DiskId="1" Source="Xml\e1006n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1007n_nrf_xml" Guid="3F73CD55-48FE-65BC-3CFA-5A59A0F8A9A6">
+            <File Id="e1007n_nrf_xml" Name="e1007n.nrf.xml" DiskId="1" Source="Xml\e1007n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1008n_nrf_xml" Guid="AF2BBE30-2F1E-15B3-8FCC-BE5CA2C7A4B2">
+            <File Id="e1008n_nrf_xml" Name="e1008n.nrf.xml" DiskId="1" Source="Xml\e1008n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1009n_nrf_xml" Guid="F4370BE3-15E1-C6C2-6B23-FC7E685DC7C4">
+            <File Id="e1009n_nrf_xml" Name="e1009n.nrf.xml" DiskId="1" Source="Xml\e1009n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1010n_nrf_xml" Guid="0B7B5CCA-457F-D582-C888-A7AEB6CD71C4">
+            <File Id="e1010n_nrf_xml" Name="e1010n.nrf.xml" DiskId="1" Source="Xml\e1010n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1101n_nrf_xml" Guid="933EB508-8E28-2AE8-2261-34572239A7CB">
+            <File Id="e1101n_nrf_xml" Name="e1101n.nrf.xml" DiskId="1" Source="Xml\e1101n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1102n_nrf_xml" Guid="F122196A-43CD-2C38-CE0B-77B3AF9ADE02">
+            <File Id="e1102n_nrf_xml" Name="e1102n.nrf.xml" DiskId="1" Source="Xml\e1102n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1103n_nrf_xml" Guid="474F7FB9-BD0A-D14C-C0C8-78F5C58B66E0">
+            <File Id="e1103n_nrf_xml" Name="e1103n.nrf.xml" DiskId="1" Source="Xml\e1103n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1201n_nrf_xml" Guid="F40025B6-4DD8-5A4A-B99C-94FF0D437CB2">
+            <File Id="e1201n_nrf_xml" Name="e1201n.nrf.xml" DiskId="1" Source="Xml\e1201n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1202n_nrf_xml" Guid="FFD20E4A-315A-79E9-4102-1D5464CB1FBE">
+            <File Id="e1202n_nrf_xml" Name="e1202n.nrf.xml" DiskId="1" Source="Xml\e1202n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1203n_nrf_xml" Guid="6EBAB72F-1ED9-D57B-8011-5DCF74E73921">
+            <File Id="e1203n_nrf_xml" Name="e1203n.nrf.xml" DiskId="1" Source="Xml\e1203n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1204n_nrf_xml" Guid="B5E5156F-5655-E385-7F7B-9B2156A9AA6B">
+            <File Id="e1204n_nrf_xml" Name="e1204n.nrf.xml" DiskId="1" Source="Xml\e1204n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1205n_nrf_xml" Guid="09C2E150-B57A-7B50-615F-F27A09833237">
+            <File Id="e1205n_nrf_xml" Name="e1205n.nrf.xml" DiskId="1" Source="Xml\e1205n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1206n_nrf_xml" Guid="A28073A1-E527-F86F-9E9B-5F0AE868C1CA">
+            <File Id="e1206n_nrf_xml" Name="e1206n.nrf.xml" DiskId="1" Source="Xml\e1206n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1207n_nrf_xml" Guid="9EB98782-FB49-21FD-564B-D10CB273FD6F">
+            <File Id="e1207n_nrf_xml" Name="e1207n.nrf.xml" DiskId="1" Source="Xml\e1207n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1208n_nrf_xml" Guid="FE872925-C342-BADB-C6CE-F9DE051B5D1F">
+            <File Id="e1208n_nrf_xml" Name="e1208n.nrf.xml" DiskId="1" Source="Xml\e1208n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1209n_nrf_xml" Guid="2EE91B7F-4FA2-AE16-5EE5-577113167C6D">
+            <File Id="e1209n_nrf_xml" Name="e1209n.nrf.xml" DiskId="1" Source="Xml\e1209n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1210n_nrf_xml" Guid="AFD843A6-E517-0784-7EA6-DE665002563A">
+            <File Id="e1210n_nrf_xml" Name="e1210n.nrf.xml" DiskId="1" Source="Xml\e1210n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1211n_nrf_xml" Guid="A969DB3B-6BD5-A237-05DB-D47BF970EC58">
+            <File Id="e1211n_nrf_xml" Name="e1211n.nrf.xml" DiskId="1" Source="Xml\e1211n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1212n_nrf_xml" Guid="E807FE28-7A64-2E25-EF60-92122E5CA358">
+            <File Id="e1212n_nrf_xml" Name="e1212n.nrf.xml" DiskId="1" Source="Xml\e1212n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1213n_nrf_xml" Guid="2160A79F-086B-7D9A-4D5E-1B334A7139FF">
+            <File Id="e1213n_nrf_xml" Name="e1213n.nrf.xml" DiskId="1" Source="Xml\e1213n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1214n_nrf_xml" Guid="24EED134-7BC0-45BF-962A-5983A7C610DE">
+            <File Id="e1214n_nrf_xml" Name="e1214n.nrf.xml" DiskId="1" Source="Xml\e1214n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_e1215n_nrf_xml" Guid="DE1C402B-E703-0D0B-9D4C-7C262E1DDE1D">
+            <File Id="e1215n_nrf_xml" Name="e1215n.nrf.xml" DiskId="1" Source="Xml\e1215n.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0101a_att_xml" Guid="EE126F20-A21F-3728-C5F0-8DC9E0C1FBC3">
+            <File Id="s0101a_att_xml" Name="s0101a.att.xml" DiskId="1" Source="Xml\s0101a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0101m_mul_xml" Guid="D7989855-0664-EF31-B902-26195B63039C">
+            <File Id="s0101m_mul_xml" Name="s0101m.mul.xml" DiskId="1" Source="Xml\s0101m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0101t_tik_xml" Guid="0CFA454C-6DD3-85F1-ED73-12801CEA56BD">
+            <File Id="s0101t_tik_xml" Name="s0101t.tik.xml" DiskId="1" Source="Xml\s0101t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0102a_att_xml" Guid="F994A527-1B81-04EB-FC6F-47D6F5196238">
+            <File Id="s0102a_att_xml" Name="s0102a.att.xml" DiskId="1" Source="Xml\s0102a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0102m_mul_xml" Guid="A291F703-3058-87FA-EA01-89393102E438">
+            <File Id="s0102m_mul_xml" Name="s0102m.mul.xml" DiskId="1" Source="Xml\s0102m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0102t_tik_xml" Guid="0AAAEF96-BD56-B953-2571-4329548B9F8B">
+            <File Id="s0102t_tik_xml" Name="s0102t.tik.xml" DiskId="1" Source="Xml\s0102t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0103a_att_xml" Guid="39E65837-6DBC-436E-31AD-9B97CD084BEE">
+            <File Id="s0103a_att_xml" Name="s0103a.att.xml" DiskId="1" Source="Xml\s0103a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0103m_mul_xml" Guid="DA245854-43E7-04DE-83C4-027B9A28D253">
+            <File Id="s0103m_mul_xml" Name="s0103m.mul.xml" DiskId="1" Source="Xml\s0103m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0103t_tik_xml" Guid="0233AD65-972E-F539-A96C-6F7C77FA604A">
+            <File Id="s0103t_tik_xml" Name="s0103t.tik.xml" DiskId="1" Source="Xml\s0103t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0104t_nrf_xml" Guid="A2DB0BF7-D21D-4E8B-E717-4DBA67766903">
+            <File Id="s0104t_nrf_xml" Name="s0104t.nrf.xml" DiskId="1" Source="Xml\s0104t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0105t_nrf_xml" Guid="DC730B37-27E1-A1EE-4300-0E15B319B393">
+            <File Id="s0105t_nrf_xml" Name="s0105t.nrf.xml" DiskId="1" Source="Xml\s0105t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0201a_att_xml" Guid="D9FC886E-84B5-1102-CD6A-C115C11EE7B1">
+            <File Id="s0201a_att_xml" Name="s0201a.att.xml" DiskId="1" Source="Xml\s0201a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0201m_mul_xml" Guid="A71097AD-089C-2989-E86E-1B76FAA73C6C">
+            <File Id="s0201m_mul_xml" Name="s0201m.mul.xml" DiskId="1" Source="Xml\s0201m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0201t_tik_xml" Guid="D2C6EE71-95D3-9A1C-1BDE-F48AA9AF4256">
+            <File Id="s0201t_tik_xml" Name="s0201t.tik.xml" DiskId="1" Source="Xml\s0201t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0202a_att_xml" Guid="24447043-2AAC-2B27-DA0F-5B50E9A68F5A">
+            <File Id="s0202a_att_xml" Name="s0202a.att.xml" DiskId="1" Source="Xml\s0202a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0202m_mul_xml" Guid="2C0BF8A2-705C-45F1-DB75-477030EB6C02">
+            <File Id="s0202m_mul_xml" Name="s0202m.mul.xml" DiskId="1" Source="Xml\s0202m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0202t_tik_xml" Guid="5AB4D10B-DD22-F8C7-C4F5-D6588F387E42">
+            <File Id="s0202t_tik_xml" Name="s0202t.tik.xml" DiskId="1" Source="Xml\s0202t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0203a_att_xml" Guid="F9EDE359-915D-148D-5A43-434E84DF816F">
+            <File Id="s0203a_att_xml" Name="s0203a.att.xml" DiskId="1" Source="Xml\s0203a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0203m_mul_xml" Guid="3365B97A-E2E3-E8B4-F6CB-6DA94C34570B">
+            <File Id="s0203m_mul_xml" Name="s0203m.mul.xml" DiskId="1" Source="Xml\s0203m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0203t_tik_xml" Guid="616110C2-C316-DC65-BCA1-B25BA8A229AE">
+            <File Id="s0203t_tik_xml" Name="s0203t.tik.xml" DiskId="1" Source="Xml\s0203t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0301a_att_xml" Guid="F145D3BA-5CBA-F63D-AB2C-A57EE0B2308E">
+            <File Id="s0301a_att_xml" Name="s0301a.att.xml" DiskId="1" Source="Xml\s0301a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0301m_mul_xml" Guid="086062D5-81CD-8D86-46D2-B84F26E769E1">
+            <File Id="s0301m_mul_xml" Name="s0301m.mul.xml" DiskId="1" Source="Xml\s0301m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0301t_tik_xml" Guid="D710564B-4C66-4BCD-A903-397CB874A442">
+            <File Id="s0301t_tik_xml" Name="s0301t.tik.xml" DiskId="1" Source="Xml\s0301t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0302a_att_xml" Guid="6FB69927-C1AC-AFD0-89CE-B1C6A08145B6">
+            <File Id="s0302a_att_xml" Name="s0302a.att.xml" DiskId="1" Source="Xml\s0302a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0302m_mul_xml" Guid="0D02B2DA-EABD-A59E-3D02-DD8A54EFB443">
+            <File Id="s0302m_mul_xml" Name="s0302m.mul.xml" DiskId="1" Source="Xml\s0302m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0302t_tik_xml" Guid="13D54BBE-B250-86B6-51FF-10A98CC47307">
+            <File Id="s0302t_tik_xml" Name="s0302t.tik.xml" DiskId="1" Source="Xml\s0302t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0303a_att_xml" Guid="C4315CB3-4578-F072-E206-A714061FB3DB">
+            <File Id="s0303a_att_xml" Name="s0303a.att.xml" DiskId="1" Source="Xml\s0303a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0303m_mul_xml" Guid="ABB45A48-E5E0-300E-6BF6-142AE54FAC91">
+            <File Id="s0303m_mul_xml" Name="s0303m.mul.xml" DiskId="1" Source="Xml\s0303m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0303t_tik_xml" Guid="A898F50B-989B-4CA3-A9F6-0686E1D051DA">
+            <File Id="s0303t_tik_xml" Name="s0303t.tik.xml" DiskId="1" Source="Xml\s0303t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0304a_att_xml" Guid="066F9E6A-C43A-F122-0649-94D79CA751E7">
+            <File Id="s0304a_att_xml" Name="s0304a.att.xml" DiskId="1" Source="Xml\s0304a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0304m_mul_xml" Guid="BE8E01A0-31C4-721D-121A-07591451177B">
+            <File Id="s0304m_mul_xml" Name="s0304m.mul.xml" DiskId="1" Source="Xml\s0304m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0304t_tik_xml" Guid="D70C8015-4CA5-AB21-0889-4FBF442AABFF">
+            <File Id="s0304t_tik_xml" Name="s0304t.tik.xml" DiskId="1" Source="Xml\s0304t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0305a_att_xml" Guid="2C89A77C-A278-769E-9382-E56337EAFC05">
+            <File Id="s0305a_att_xml" Name="s0305a.att.xml" DiskId="1" Source="Xml\s0305a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0305m_mul_xml" Guid="895FB116-1D78-3511-F2CA-0172A40C3400">
+            <File Id="s0305m_mul_xml" Name="s0305m.mul.xml" DiskId="1" Source="Xml\s0305m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0305t_tik_xml" Guid="90CB7E32-0FD5-A338-FEDC-96657CAE30E4">
+            <File Id="s0305t_tik_xml" Name="s0305t.tik.xml" DiskId="1" Source="Xml\s0305t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0401a_att_xml" Guid="D2C0ACE1-A851-1BEB-7036-4B2EA8EEDCBA">
+            <File Id="s0401a_att_xml" Name="s0401a.att.xml" DiskId="1" Source="Xml\s0401a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0401m_mul_xml" Guid="ECDD3FF6-6B9C-32EB-2A90-C0C8760D8098">
+            <File Id="s0401m_mul_xml" Name="s0401m.mul.xml" DiskId="1" Source="Xml\s0401m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0401t_tik_xml" Guid="DEA4ACBB-CCE4-D4FE-6F8F-5F47F0991287">
+            <File Id="s0401t_tik_xml" Name="s0401t.tik.xml" DiskId="1" Source="Xml\s0401t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0402a_att_xml" Guid="F6E01571-4B53-301F-FF82-97BAF306F789">
+            <File Id="s0402a_att_xml" Name="s0402a.att.xml" DiskId="1" Source="Xml\s0402a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0402m1_mul_xml" Guid="3F2E3CC7-2937-5FC1-A4A7-5F6E6E352C2F">
+            <File Id="s0402m1_mul_xml" Name="s0402m1.mul.xml" DiskId="1" Source="Xml\s0402m1.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0402m2_mul_xml" Guid="E8306907-8781-9A3A-9395-DE5DBC195CED">
+            <File Id="s0402m2_mul_xml" Name="s0402m2.mul.xml" DiskId="1" Source="Xml\s0402m2.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0402m3_mul_xml" Guid="E8930262-4310-C4BE-66BD-9526B5A8BA3A">
+            <File Id="s0402m3_mul_xml" Name="s0402m3.mul.xml" DiskId="1" Source="Xml\s0402m3.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0402t_tik_xml" Guid="589724BD-DDEA-1E94-5462-784C135E8C6D">
+            <File Id="s0402t_tik_xml" Name="s0402t.tik.xml" DiskId="1" Source="Xml\s0402t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0403a_att_xml" Guid="54D414F2-B673-37F3-5200-3395B2922033">
+            <File Id="s0403a_att_xml" Name="s0403a.att.xml" DiskId="1" Source="Xml\s0403a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0403m1_mul_xml" Guid="5C45A0E8-5029-45FB-A490-5E0CA1F0659E">
+            <File Id="s0403m1_mul_xml" Name="s0403m1.mul.xml" DiskId="1" Source="Xml\s0403m1.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0403m2_mul_xml" Guid="9D59440D-53C3-5896-B960-C68798F5EABF">
+            <File Id="s0403m2_mul_xml" Name="s0403m2.mul.xml" DiskId="1" Source="Xml\s0403m2.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0403m3_mul_xml" Guid="A1F0CCF4-D4E9-4A5C-19A5-2EC9BCF85730">
+            <File Id="s0403m3_mul_xml" Name="s0403m3.mul.xml" DiskId="1" Source="Xml\s0403m3.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0403t_tik_xml" Guid="A4DD3534-7236-FF7B-9819-DC140B2BB538">
+            <File Id="s0403t_tik_xml" Name="s0403t.tik.xml" DiskId="1" Source="Xml\s0403t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0404a_att_xml" Guid="A822003D-A9D4-BC88-CFF6-EDF959AD6DD3">
+            <File Id="s0404a_att_xml" Name="s0404a.att.xml" DiskId="1" Source="Xml\s0404a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0404m1_mul_xml" Guid="8A32DB1A-C537-DC0E-6F08-D5A472664EFB">
+            <File Id="s0404m1_mul_xml" Name="s0404m1.mul.xml" DiskId="1" Source="Xml\s0404m1.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0404m2_mul_xml" Guid="0756F0FB-7D6C-1687-8C1B-985CF54D9BAE">
+            <File Id="s0404m2_mul_xml" Name="s0404m2.mul.xml" DiskId="1" Source="Xml\s0404m2.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0404m3_mul_xml" Guid="9D4674B5-3A6E-683E-323A-2CB39DA85FF2">
+            <File Id="s0404m3_mul_xml" Name="s0404m3.mul.xml" DiskId="1" Source="Xml\s0404m3.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0404m4_mul_xml" Guid="543B90DD-048C-0C1A-1EC6-471883BC5D44">
+            <File Id="s0404m4_mul_xml" Name="s0404m4.mul.xml" DiskId="1" Source="Xml\s0404m4.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0404t_tik_xml" Guid="8856E89A-419D-FE90-908E-EF6F69F5DE20">
+            <File Id="s0404t_tik_xml" Name="s0404t.tik.xml" DiskId="1" Source="Xml\s0404t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0501a_att_xml" Guid="34B0CE5B-64B2-89A9-72C4-DC14F416F768">
+            <File Id="s0501a_att_xml" Name="s0501a.att.xml" DiskId="1" Source="Xml\s0501a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0501m_mul_xml" Guid="393E86EC-9942-8117-1D1E-573CC21BB96C">
+            <File Id="s0501m_mul_xml" Name="s0501m.mul.xml" DiskId="1" Source="Xml\s0501m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0501t_nrf_xml" Guid="81DF401D-4128-BABB-7AB8-90F9615FD2F4">
+            <File Id="s0501t_nrf_xml" Name="s0501t.nrf.xml" DiskId="1" Source="Xml\s0501t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0502a_att_xml" Guid="F434A5CF-A6FB-C353-BF8D-72C94961203E">
+            <File Id="s0502a_att_xml" Name="s0502a.att.xml" DiskId="1" Source="Xml\s0502a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0502m_mul_xml" Guid="3AC51D35-2206-EBDA-9EB9-A9A546B943A9">
+            <File Id="s0502m_mul_xml" Name="s0502m.mul.xml" DiskId="1" Source="Xml\s0502m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0503a_att_xml" Guid="919429EA-ADB0-6A1E-2075-EDE91EF29BBF">
+            <File Id="s0503a_att_xml" Name="s0503a.att.xml" DiskId="1" Source="Xml\s0503a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0503m_mul_xml" Guid="8C6206EB-4D1E-CDCC-B851-A953D362D3F8">
+            <File Id="s0503m_mul_xml" Name="s0503m.mul.xml" DiskId="1" Source="Xml\s0503m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0504a_att_xml" Guid="3DB3697A-EE13-35AC-7571-D7001BD5825F">
+            <File Id="s0504a_att_xml" Name="s0504a.att.xml" DiskId="1" Source="Xml\s0504a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0504m_mul_xml" Guid="AEC29FFD-8F2F-BF24-1A84-BFEF44900C0B">
+            <File Id="s0504m_mul_xml" Name="s0504m.mul.xml" DiskId="1" Source="Xml\s0504m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0505a_att_xml" Guid="A3FB7ED0-E2F6-41EE-DF82-30D110BEE794">
+            <File Id="s0505a_att_xml" Name="s0505a.att.xml" DiskId="1" Source="Xml\s0505a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0505m_mul_xml" Guid="848D54FE-B82B-F0E1-1EFD-72EEA770A81E">
+            <File Id="s0505m_mul_xml" Name="s0505m.mul.xml" DiskId="1" Source="Xml\s0505m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0506a_att_xml" Guid="86CE2818-AE52-D3CB-733A-CE1599406493">
+            <File Id="s0506a_att_xml" Name="s0506a.att.xml" DiskId="1" Source="Xml\s0506a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0506m_mul_xml" Guid="2141A195-206A-B013-C0A0-C4AB46EB1704">
+            <File Id="s0506m_mul_xml" Name="s0506m.mul.xml" DiskId="1" Source="Xml\s0506m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0507a_att_xml" Guid="92D8306A-30E2-E6C5-24A3-2CEC47E34984">
+            <File Id="s0507a_att_xml" Name="s0507a.att.xml" DiskId="1" Source="Xml\s0507a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0507m_mul_xml" Guid="35D91F16-6160-9259-8DE4-9404DED9EA86">
+            <File Id="s0507m_mul_xml" Name="s0507m.mul.xml" DiskId="1" Source="Xml\s0507m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0508a1_att_xml" Guid="D8CE5026-6040-0840-774D-40C625C7CD80">
+            <File Id="s0508a1_att_xml" Name="s0508a1.att.xml" DiskId="1" Source="Xml\s0508a1.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0508a2_att_xml" Guid="CB976580-4599-CA0C-5564-C2AAF4721E32">
+            <File Id="s0508a2_att_xml" Name="s0508a2.att.xml" DiskId="1" Source="Xml\s0508a2.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0508m_mul_xml" Guid="2E9CA5E3-33B9-3B14-ED61-A040DED6E03D">
+            <File Id="s0508m_mul_xml" Name="s0508m.mul.xml" DiskId="1" Source="Xml\s0508m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0509a_att_xml" Guid="E2666812-CDC4-4ACA-2052-D1073597B3DB">
+            <File Id="s0509a_att_xml" Name="s0509a.att.xml" DiskId="1" Source="Xml\s0509a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0509m_mul_xml" Guid="A21207A0-517D-BA6B-B397-5F8A1CCB6C64">
+            <File Id="s0509m_mul_xml" Name="s0509m.mul.xml" DiskId="1" Source="Xml\s0509m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0510a_att_xml" Guid="451734E1-9E59-CD44-B39C-86D4ECC107E4">
+            <File Id="s0510a_att_xml" Name="s0510a.att.xml" DiskId="1" Source="Xml\s0510a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0510m1_mul_xml" Guid="F61830C5-00A5-EFB8-377C-AEB58474A5CE">
+            <File Id="s0510m1_mul_xml" Name="s0510m1.mul.xml" DiskId="1" Source="Xml\s0510m1.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0510m2_mul_xml" Guid="15738585-B0FB-9879-17CA-CC597DE1020F">
+            <File Id="s0510m2_mul_xml" Name="s0510m2.mul.xml" DiskId="1" Source="Xml\s0510m2.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0511a_att_xml" Guid="E597BB29-5D68-0B6B-6F80-BBC11C05C981">
+            <File Id="s0511a_att_xml" Name="s0511a.att.xml" DiskId="1" Source="Xml\s0511a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0511m_mul_xml" Guid="F72EF345-CCA7-324E-C60F-6F69360AE35F">
+            <File Id="s0511m_mul_xml" Name="s0511m.mul.xml" DiskId="1" Source="Xml\s0511m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0512a_att_xml" Guid="69A5F924-8AA7-7FCC-7EAF-02D94F00C5A5">
+            <File Id="s0512a_att_xml" Name="s0512a.att.xml" DiskId="1" Source="Xml\s0512a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0512m_mul_xml" Guid="EFCC57FE-1343-DA56-8135-1B24041D5DE9">
+            <File Id="s0512m_mul_xml" Name="s0512m.mul.xml" DiskId="1" Source="Xml\s0512m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0513a1_att_xml" Guid="A7D35D23-16A4-AD73-D426-28E8A21C8C7E">
+            <File Id="s0513a1_att_xml" Name="s0513a1.att.xml" DiskId="1" Source="Xml\s0513a1.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0513a2_att_xml" Guid="97698BDC-D0C0-1B30-4861-377E143E19AA">
+            <File Id="s0513a2_att_xml" Name="s0513a2.att.xml" DiskId="1" Source="Xml\s0513a2.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0513a3_att_xml" Guid="AFD01ABA-EF9A-9EE7-EF36-F105FD9A345B">
+            <File Id="s0513a3_att_xml" Name="s0513a3.att.xml" DiskId="1" Source="Xml\s0513a3.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0513a4_att_xml" Guid="03191C93-9281-EA09-ACFA-88B0F2A5B433">
+            <File Id="s0513a4_att_xml" Name="s0513a4.att.xml" DiskId="1" Source="Xml\s0513a4.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0513m_mul_xml" Guid="5F4E0FD2-0F76-DD74-6676-194955F06B82">
+            <File Id="s0513m_mul_xml" Name="s0513m.mul.xml" DiskId="1" Source="Xml\s0513m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0514a1_att_xml" Guid="8E3422CA-FED7-3706-38C3-A3627FD83F0C">
+            <File Id="s0514a1_att_xml" Name="s0514a1.att.xml" DiskId="1" Source="Xml\s0514a1.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0514a2_att_xml" Guid="B6FCFC9E-C4B0-9B29-8020-423799A67102">
+            <File Id="s0514a2_att_xml" Name="s0514a2.att.xml" DiskId="1" Source="Xml\s0514a2.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0514a3_att_xml" Guid="E2D1F3E4-8586-241D-C2C8-385B4867545F">
+            <File Id="s0514a3_att_xml" Name="s0514a3.att.xml" DiskId="1" Source="Xml\s0514a3.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0514m_mul_xml" Guid="8A1D97BD-7060-51C5-03CC-7E80CD7E6047">
+            <File Id="s0514m_mul_xml" Name="s0514m.mul.xml" DiskId="1" Source="Xml\s0514m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0515a_att_xml" Guid="439C161D-8D84-DEEC-05B5-9F5637249675">
+            <File Id="s0515a_att_xml" Name="s0515a.att.xml" DiskId="1" Source="Xml\s0515a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0515m_mul_xml" Guid="15C644C8-327A-BFEC-FCAC-19D2A8175E46">
+            <File Id="s0515m_mul_xml" Name="s0515m.mul.xml" DiskId="1" Source="Xml\s0515m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0516a_att_xml" Guid="8E57AD4B-C37E-CF74-3E5B-CE31FE210686">
+            <File Id="s0516a_att_xml" Name="s0516a.att.xml" DiskId="1" Source="Xml\s0516a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0516m_mul_xml" Guid="AFD2A94B-879A-428E-8CAA-DDB88E89EAC7">
+            <File Id="s0516m_mul_xml" Name="s0516m.mul.xml" DiskId="1" Source="Xml\s0516m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0517a_att_xml" Guid="AE599059-F0CA-C9B1-2FF7-E5B56FFEFF3A">
+            <File Id="s0517a_att_xml" Name="s0517a.att.xml" DiskId="1" Source="Xml\s0517a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0517m_mul_xml" Guid="80072C4B-77E2-450C-B003-B0424CDF03C5">
+            <File Id="s0517m_mul_xml" Name="s0517m.mul.xml" DiskId="1" Source="Xml\s0517m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0518m_nrf_xml" Guid="15514169-F901-052E-2EC4-A910A2757865">
+            <File Id="s0518m_nrf_xml" Name="s0518m.nrf.xml" DiskId="1" Source="Xml\s0518m.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0519a_att_xml" Guid="B4A49806-B979-4190-CD4D-45597DAC7FA5">
+            <File Id="s0519a_att_xml" Name="s0519a.att.xml" DiskId="1" Source="Xml\s0519a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0519m_mul_xml" Guid="BF63F6D3-73C4-BABD-F228-53977D009340">
+            <File Id="s0519m_mul_xml" Name="s0519m.mul.xml" DiskId="1" Source="Xml\s0519m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0519t_tik_xml" Guid="335BA502-CB69-FD3B-1D69-577FDCA6799F">
+            <File Id="s0519t_tik_xml" Name="s0519t.tik.xml" DiskId="1" Source="Xml\s0519t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_s0520m_nrf_xml" Guid="6E8F0790-7DF7-EC0E-5890-C6A32B15983C">
+            <File Id="s0520m_nrf_xml" Name="s0520m.nrf.xml" DiskId="1" Source="Xml\s0520m.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_tipitaka_deva_xsl" Guid="751AD989-4BC7-E6B3-45EB-1C2C1554A7C8">
+            <File Id="tipitaka_deva_xsl__under_Xml" Name="tipitaka-deva.xsl" DiskId="1" Source="Xml\tipitaka-deva.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin01a_att_xml" Guid="58038A56-C1E7-169D-B643-C5723686BDA0">
+            <File Id="vin01a_att_xml" Name="vin01a.att.xml" DiskId="1" Source="Xml\vin01a.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin01m_mul_xml" Guid="72B6F3E8-68CB-EACD-162C-7CD6038E838B">
+            <File Id="vin01m_mul_xml" Name="vin01m.mul.xml" DiskId="1" Source="Xml\vin01m.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin01t1_tik_xml" Guid="F698EEFB-A533-542B-DD6E-B35A1182620B">
+            <File Id="vin01t1_tik_xml" Name="vin01t1.tik.xml" DiskId="1" Source="Xml\vin01t1.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin01t2_tik_xml" Guid="7D9FCBDA-C1B5-F94D-61E1-BC86BE43F780">
+            <File Id="vin01t2_tik_xml" Name="vin01t2.tik.xml" DiskId="1" Source="Xml\vin01t2.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02a1_att_xml" Guid="A212CF1B-5AD0-6415-A5FF-256489E91A46">
+            <File Id="vin02a1_att_xml" Name="vin02a1.att.xml" DiskId="1" Source="Xml\vin02a1.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02a2_att_xml" Guid="8149412B-4718-4FB1-3505-EDB3D03DC51F">
+            <File Id="vin02a2_att_xml" Name="vin02a2.att.xml" DiskId="1" Source="Xml\vin02a2.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02a3_att_xml" Guid="AB8294EF-C580-F787-43A1-42DFCA34870D">
+            <File Id="vin02a3_att_xml" Name="vin02a3.att.xml" DiskId="1" Source="Xml\vin02a3.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02a4_att_xml" Guid="9794F69E-96F5-5314-0191-3E9A5E4C4652">
+            <File Id="vin02a4_att_xml" Name="vin02a4.att.xml" DiskId="1" Source="Xml\vin02a4.att.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02m1_mul_xml" Guid="8947AD41-5DF8-5D8A-4EF0-76642AFBBD7C">
+            <File Id="vin02m1_mul_xml" Name="vin02m1.mul.xml" DiskId="1" Source="Xml\vin02m1.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02m2_mul_xml" Guid="3D75787A-ECBC-C701-DB62-2AAB5605A0F1">
+            <File Id="vin02m2_mul_xml" Name="vin02m2.mul.xml" DiskId="1" Source="Xml\vin02m2.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02m3_mul_xml" Guid="85F307F5-B8A6-4830-A988-5070CF960415">
+            <File Id="vin02m3_mul_xml" Name="vin02m3.mul.xml" DiskId="1" Source="Xml\vin02m3.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02m4_mul_xml" Guid="A9F35D24-21D1-CBD2-8721-E7C4B79CE9DE">
+            <File Id="vin02m4_mul_xml" Name="vin02m4.mul.xml" DiskId="1" Source="Xml\vin02m4.mul.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin02t_tik_xml" Guid="5D53347F-837B-B491-6A10-6AD6569E535B">
+            <File Id="vin02t_tik_xml" Name="vin02t.tik.xml" DiskId="1" Source="Xml\vin02t.tik.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin04t_nrf_xml" Guid="90F5538E-FA84-06AD-67A9-E716E9998955">
+            <File Id="vin04t_nrf_xml" Name="vin04t.nrf.xml" DiskId="1" Source="Xml\vin04t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin05t_nrf_xml" Guid="9F2CB158-C486-E68A-C052-164F14672260">
+            <File Id="vin05t_nrf_xml" Name="vin05t.nrf.xml" DiskId="1" Source="Xml\vin05t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin06t_nrf_xml" Guid="55C32AD8-CB60-A751-8968-7F0FE4599651">
+            <File Id="vin06t_nrf_xml" Name="vin06t.nrf.xml" DiskId="1" Source="Xml\vin06t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin07t_nrf_xml" Guid="8EE7AF83-F1CE-9166-3827-867321779A05">
+            <File Id="vin07t_nrf_xml" Name="vin07t.nrf.xml" DiskId="1" Source="Xml\vin07t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin08t_nrf_xml" Guid="B5F3210B-B734-6C78-68C7-04022EFBC797">
+            <File Id="vin08t_nrf_xml" Name="vin08t.nrf.xml" DiskId="1" Source="Xml\vin08t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin09t_nrf_xml" Guid="50A595AC-66FE-3BBF-6F57-B470092020E6">
+            <File Id="vin09t_nrf_xml" Name="vin09t.nrf.xml" DiskId="1" Source="Xml\vin09t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin10t_nrf_xml" Guid="88EF555D-027C-A4BB-83F3-8594066D5A27">
+            <File Id="vin10t_nrf_xml" Name="vin10t.nrf.xml" DiskId="1" Source="Xml\vin10t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin11t_nrf_xml" Guid="EFC545A8-813F-E4D8-0DE4-28EBC9301F6B">
+            <File Id="vin11t_nrf_xml" Name="vin11t.nrf.xml" DiskId="1" Source="Xml\vin11t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin12t_nrf_xml" Guid="3AA7166D-98D5-7341-7E05-642220DC8171">
+            <File Id="vin12t_nrf_xml" Name="vin12t.nrf.xml" DiskId="1" Source="Xml\vin12t.nrf.xml" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xml_vin13t_nrf_xml" Guid="590866EF-4435-912A-F969-31ECC0B5FFE4">
+            <File Id="vin13t_nrf_xml" Name="vin13t.nrf.xml" DiskId="1" Source="Xml\vin13t.nrf.xml" KeyPath="yes"/>
+          </Component>
+
+        </Directory>
+        
+        
+        <!-- ****************   Xsl Directory  ******************   -->   
+        
+        <Directory Id='Xsl' Name='Xsl'>
+        
+          <Component Id="Xsl_report_all_words_latn_xsl" Guid="93D522BE-B369-0985-5DF9-6545E6EC98A3">
+            <File Id="report_all_words_latn_xsl" Name="report-all-words-latn.xsl" DiskId="1" Source="Xsl\report-all-words-latn.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_beng_xsl" Guid="74AF0D77-CC68-5BF5-1C04-2180A2FE69D3">
+            <File Id="tipitaka_beng_xsl" Name="tipitaka-beng.xsl" DiskId="1" Source="Xsl\tipitaka-beng.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_cyrl_xsl" Guid="76A38F4B-074C-18C5-279F-4311AABD2D5A">
+            <File Id="tipitaka_cyrl_xsl" Name="tipitaka-cyrl.xsl" DiskId="1" Source="Xsl\tipitaka-cyrl.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_deva_xsl" Guid="F054C9BB-0C1F-8DA2-A884-6E7495F03C09">
+            <File Id="tipitaka_deva_xsl__under_Xsl" Name="tipitaka-deva.xsl" DiskId="1" Source="Xsl\tipitaka-deva.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_gujr_xsl" Guid="AB64CC4B-E305-4537-0324-B2C9280D65FA">
+            <File Id="tipitaka_gujr_xsl" Name="tipitaka-gujr.xsl" DiskId="1" Source="Xsl\tipitaka-gujr.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_guru_xsl" Guid="68A49395-C97D-F12F-51AE-7A49C21F59C4">
+            <File Id="tipitaka_guru_xsl" Name="tipitaka-guru.xsl" DiskId="1" Source="Xsl\tipitaka-guru.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_khmr_xsl" Guid="238E4528-03AA-0D8A-AF12-0E6596D3D415">
+            <File Id="tipitaka_khmr_xsl" Name="tipitaka-khmr.xsl" DiskId="1" Source="Xsl\tipitaka-khmr.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_knda_xsl" Guid="94B1C7D1-DE24-3ABA-1405-54846795BBA6">
+            <File Id="tipitaka_knda_xsl" Name="tipitaka-knda.xsl" DiskId="1" Source="Xsl\tipitaka-knda.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_latn_xsl" Guid="8FB9F17E-B20D-9D7E-37CE-9E2F8D14FF10">
+            <File Id="tipitaka_latn_xsl" Name="tipitaka-latn.xsl" DiskId="1" Source="Xsl\tipitaka-latn.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_mlym_xsl" Guid="E472ED0E-6B13-6CD8-EE3B-37660B8F7D91">
+            <File Id="tipitaka_mlym_xsl" Name="tipitaka-mlym.xsl" DiskId="1" Source="Xsl\tipitaka-mlym.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_mymr_xsl" Guid="934AC657-BACB-2C40-9BF1-FE69F2AFCADD">
+            <File Id="tipitaka_mymr_xsl" Name="tipitaka-mymr.xsl" DiskId="1" Source="Xsl\tipitaka-mymr.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_sinh_xsl" Guid="56935396-8FD9-B279-C2FA-6E010FFFEC22">
+            <File Id="tipitaka_sinh_xsl" Name="tipitaka-sinh.xsl" DiskId="1" Source="Xsl\tipitaka-sinh.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_telu_xsl" Guid="D718579D-9FFD-D36A-1DF5-07C1FB4CE285">
+            <File Id="tipitaka_telu_xsl" Name="tipitaka-telu.xsl" DiskId="1" Source="Xsl\tipitaka-telu.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_thai_xsl" Guid="EFA36A4C-C6E8-BAE6-7CE8-1CE209C59436">
+            <File Id="tipitaka_thai_xsl" Name="tipitaka-thai.xsl" DiskId="1" Source="Xsl\tipitaka-thai.xsl" KeyPath="yes"/>
+          </Component>
+          <Component Id="Xsl_tipitaka_tibt_xsl" Guid="CB1356AA-EEF4-09A9-9AE5-4EC1DC470942">
+            <File Id="tipitaka_tibt_xsl" Name="tipitaka-tibt.xsl" DiskId="1" Source="Xsl\tipitaka-tibt.xsl" KeyPath="yes"/>
+          </Component>
+          
+        </Directory>
+
+      </Directory>
+
+      <Directory Id="ProgramMenuFolder" Name="Programs">
+        <Directory Id="ProgramMenuDir" Name="Chattha Sangayana Tipitaka 4.0">
+          <Component Id="ProgramMenuDir" Guid="53448BCD-BD5B-4E8E-8BEB-8958F9A5EE9D">
+            <RemoveFolder Id='ProgramMenuDir' On='uninstall' />
+            <RegistryValue Root='HKCU' Key='Software\Tipitaka.org\Chattha Sangayana Tipitaka 4.0' Type='string' Value='' KeyPath='yes' />
+          </Component>
+        </Directory>
+      </Directory>
+
+      <Directory Id="DesktopFolder" Name="Desktop" />
+    </Directory>
+    
+    <DirectoryRef Id="FontsFolder"> 
+      <Component Id="Install_Font_BNBDOT0N" Guid="A48D052C-A0E3-4BCF-229F-E33DC14E40FA">
+        <File Id="Install_BNBDOT0N_ttf" Source="Fonts\BNBDOT0N.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_CDACSRBT" Guid="9E959546-1CE7-99BB-978C-8400A6A2A1C2">
+        <File Id="Install_CDACSRBT_TTF" Source="Fonts\CDACSRBT.TTF" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_CDACSRNT" Guid="668D6F84-D68B-7A0F-14F7-F85EECDE944E">
+        <File Id="Install_CDACSRNT_TTF" Source="Fonts\CDACSRNT.TTF" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_DoulosSILR" Guid="E64D5FAE-57BC-3713-7358-7814EB1EE680">
+        <File Id="Install_DoulosSILR_ttf" Source="Fonts\DoulosSILR.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_kaputaunicode" Guid="0D2E6C61-3AE5-21AD-DB36-50F0A627E88B">
+        <File Id="Install_kaputaunicode_ttf" Source="Fonts\kaputaunicode.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_KMon4UOh" Guid="C047B620-79D4-98C0-C0D9-FBFAA6A7770F">
+        <File Id="Install_KMon4UOh_ttf" Source="Fonts\KMon4UOh.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_myanmar1" Guid="F395BE9F-E6EB-4C8D-FB22-C23B545A0B4C">
+        <File Id="Install_myanmar1_ttf" Source="Fonts\myanmar1.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_TibetanMachineUniAlpha" Guid="BE26FB6B-2B3E-9962-AA26-FEA685FD77CE">
+        <File Id="Install_TibetanMachineUniAlpha_ttf" Source="Fonts\TibetanMachineUniAlpha.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_timesx" Guid="95D9518A-03B7-42EA-A5FE-DF16B3DC4F56">
+        <File Id="Install_timesx_ttf" Source="Fonts\timesx.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_timesxbd" Guid="5623DC3A-603A-73D5-7A33-F887644C147A">
+        <File Id="Install_timesxbd_ttf" Source="Fonts\timesxbd.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_timesxbi" Guid="DCC85EB4-10B6-0521-A48D-F68146EC4021">
+        <File Id="Install_timesxbi_ttf" Source="Fonts\timesxbi.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_timesxi" Guid="12BFC6B0-D8DE-7C03-95F8-2217D629EC4B">
+        <File Id="Install_timesxi_ttf" Source="Fonts\timesxi.ttf" TrueType="yes"/>
+      </Component>
+    </DirectoryRef> 
+
+
+        
+
+    <Feature Id='ProgramAndData' Title='Chattha Sangayana Tipitaka 4.0' Description='The program and data.'
+      Display='expand' Level='1' ConfigurableDirectory='INSTALLDIR'>
+
+        <ComponentRef Id='MainExecutable' />
+        <ComponentRef Id='Cst4LoggingConfig' />
+        <ComponentRef Id='CstLibrary' />
+        <ComponentRef Id='Log4netLibrary' />
+        <ComponentRef Id='LuceneLibrary' />
+        <ComponentRef Id='MshtmlLibrary' />
+        <ComponentRef Id='UniscribeLibrary' />
+        
+<!--
+        <ComponentRef Id='RemoveIndexFolder' />
+        <ComponentRef Id='RemoveIndexFiles' />
+-->
+
+        <ComponentRef Id='ProgramMenuDir' />
+        
+        <ComponentRef Id='PaliEnglishDictionary' />
+        <ComponentRef Id='PaliHindiDictionary' />
+        
+        <ComponentRef Id='Font_BNBDOT0N' />
+        <ComponentRef Id='Font_CDACSRBT' />
+        <ComponentRef Id='Font_CDACSRNT' />
+        <ComponentRef Id='Font_DoulosSILR' />
+        <ComponentRef Id='Font_kaputaunicode' />
+        <ComponentRef Id='Font_KMon4UOh' />
+        <ComponentRef Id='Font_myanmar1' />
+        <ComponentRef Id='Font_TibetanMachineUniAlpha' />
+        <ComponentRef Id='Font_timesx' />
+        <ComponentRef Id='Font_timesxbd' />
+        <ComponentRef Id='Font_timesxbi' />
+        <ComponentRef Id='Font_timesxi' />
+        
+        <ComponentRef Id="Install_Font_BNBDOT0N"/>
+        <ComponentRef Id="Install_Font_CDACSRBT"/>
+        <ComponentRef Id="Install_Font_CDACSRNT"/>
+        <ComponentRef Id="Install_Font_DoulosSILR"/>
+        <ComponentRef Id="Install_Font_kaputaunicode"/>
+        <ComponentRef Id="Install_Font_KMon4UOh"/>
+        <ComponentRef Id="Install_Font_myanmar1"/>
+        <ComponentRef Id="Install_Font_TibetanMachineUniAlpha"/>
+        <ComponentRef Id="Install_Font_timesx"/>
+        <ComponentRef Id="Install_Font_timesxbd"/>
+        <ComponentRef Id="Install_Font_timesxbi"/>
+        <ComponentRef Id="Install_Font_timesxi"/>
+
+        <ComponentRef Id="Xml_abh01a_att_xml"/>
+        <ComponentRef Id="Xml_abh01m_mul_xml"/>
+        <ComponentRef Id="Xml_abh01t_tik_xml"/>
+        <ComponentRef Id="Xml_abh02a_att_xml"/>
+        <ComponentRef Id="Xml_abh02m_mul_xml"/>
+        <ComponentRef Id="Xml_abh02t_tik_xml"/>
+        <ComponentRef Id="Xml_abh03a_att_xml"/>
+        <ComponentRef Id="Xml_abh03m1_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m10_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m11_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m2_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m3_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m4_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m5_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m6_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m7_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m8_mul_xml"/>
+        <ComponentRef Id="Xml_abh03m9_mul_xml"/>
+        <ComponentRef Id="Xml_abh03t_tik_xml"/>
+        <ComponentRef Id="Xml_abh04t_nrf_xml"/>
+        <ComponentRef Id="Xml_abh05t_nrf_xml"/>
+        <ComponentRef Id="Xml_abh06t_nrf_xml"/>
+        <ComponentRef Id="Xml_abh07t_nrf_xml"/>
+        <ComponentRef Id="Xml_abh08t_nrf_xml"/>
+        <ComponentRef Id="Xml_abh09t_nrf_xml"/>
+        <ComponentRef Id="Xml_e0101n_mul_xml"/>
+        <ComponentRef Id="Xml_e0102n_mul_xml"/>
+        <ComponentRef Id="Xml_e0103n_att_xml"/>
+        <ComponentRef Id="Xml_e0104n_att_xml"/>
+        <ComponentRef Id="Xml_e0105n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0201n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0301n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0401n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0501n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0601n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0602n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0603n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0604n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0605n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0606n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0607n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0608n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0701n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0702n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0703n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0801n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0802n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0803n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0804n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0805n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0806n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0807n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0808n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0809n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0810n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0811n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0812n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0813n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0901n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0902n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0903n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0904n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0905n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0906n_nrf_xml"/>
+        <ComponentRef Id="Xml_e0907n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1001n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1002n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1003n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1004n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1005n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1006n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1007n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1008n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1009n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1010n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1101n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1102n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1103n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1201n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1202n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1203n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1204n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1205n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1206n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1207n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1208n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1209n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1210n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1211n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1212n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1213n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1214n_nrf_xml"/>
+        <ComponentRef Id="Xml_e1215n_nrf_xml"/>
+        <ComponentRef Id="Xml_s0101a_att_xml"/>
+        <ComponentRef Id="Xml_s0101m_mul_xml"/>
+        <ComponentRef Id="Xml_s0101t_tik_xml"/>
+        <ComponentRef Id="Xml_s0102a_att_xml"/>
+        <ComponentRef Id="Xml_s0102m_mul_xml"/>
+        <ComponentRef Id="Xml_s0102t_tik_xml"/>
+        <ComponentRef Id="Xml_s0103a_att_xml"/>
+        <ComponentRef Id="Xml_s0103m_mul_xml"/>
+        <ComponentRef Id="Xml_s0103t_tik_xml"/>
+        <ComponentRef Id="Xml_s0104t_nrf_xml"/>
+        <ComponentRef Id="Xml_s0105t_nrf_xml"/>
+        <ComponentRef Id="Xml_s0201a_att_xml"/>
+        <ComponentRef Id="Xml_s0201m_mul_xml"/>
+        <ComponentRef Id="Xml_s0201t_tik_xml"/>
+        <ComponentRef Id="Xml_s0202a_att_xml"/>
+        <ComponentRef Id="Xml_s0202m_mul_xml"/>
+        <ComponentRef Id="Xml_s0202t_tik_xml"/>
+        <ComponentRef Id="Xml_s0203a_att_xml"/>
+        <ComponentRef Id="Xml_s0203m_mul_xml"/>
+        <ComponentRef Id="Xml_s0203t_tik_xml"/>
+        <ComponentRef Id="Xml_s0301a_att_xml"/>
+        <ComponentRef Id="Xml_s0301m_mul_xml"/>
+        <ComponentRef Id="Xml_s0301t_tik_xml"/>
+        <ComponentRef Id="Xml_s0302a_att_xml"/>
+        <ComponentRef Id="Xml_s0302m_mul_xml"/>
+        <ComponentRef Id="Xml_s0302t_tik_xml"/>
+        <ComponentRef Id="Xml_s0303a_att_xml"/>
+        <ComponentRef Id="Xml_s0303m_mul_xml"/>
+        <ComponentRef Id="Xml_s0303t_tik_xml"/>
+        <ComponentRef Id="Xml_s0304a_att_xml"/>
+        <ComponentRef Id="Xml_s0304m_mul_xml"/>
+        <ComponentRef Id="Xml_s0304t_tik_xml"/>
+        <ComponentRef Id="Xml_s0305a_att_xml"/>
+        <ComponentRef Id="Xml_s0305m_mul_xml"/>
+        <ComponentRef Id="Xml_s0305t_tik_xml"/>
+        <ComponentRef Id="Xml_s0401a_att_xml"/>
+        <ComponentRef Id="Xml_s0401m_mul_xml"/>
+        <ComponentRef Id="Xml_s0401t_tik_xml"/>
+        <ComponentRef Id="Xml_s0402a_att_xml"/>
+        <ComponentRef Id="Xml_s0402m1_mul_xml"/>
+        <ComponentRef Id="Xml_s0402m2_mul_xml"/>
+        <ComponentRef Id="Xml_s0402m3_mul_xml"/>
+        <ComponentRef Id="Xml_s0402t_tik_xml"/>
+        <ComponentRef Id="Xml_s0403a_att_xml"/>
+        <ComponentRef Id="Xml_s0403m1_mul_xml"/>
+        <ComponentRef Id="Xml_s0403m2_mul_xml"/>
+        <ComponentRef Id="Xml_s0403m3_mul_xml"/>
+        <ComponentRef Id="Xml_s0403t_tik_xml"/>
+        <ComponentRef Id="Xml_s0404a_att_xml"/>
+        <ComponentRef Id="Xml_s0404m1_mul_xml"/>
+        <ComponentRef Id="Xml_s0404m2_mul_xml"/>
+        <ComponentRef Id="Xml_s0404m3_mul_xml"/>
+        <ComponentRef Id="Xml_s0404m4_mul_xml"/>
+        <ComponentRef Id="Xml_s0404t_tik_xml"/>
+        <ComponentRef Id="Xml_s0501a_att_xml"/>
+        <ComponentRef Id="Xml_s0501m_mul_xml"/>
+        <ComponentRef Id="Xml_s0501t_nrf_xml"/>
+        <ComponentRef Id="Xml_s0502a_att_xml"/>
+        <ComponentRef Id="Xml_s0502m_mul_xml"/>
+        <ComponentRef Id="Xml_s0503a_att_xml"/>
+        <ComponentRef Id="Xml_s0503m_mul_xml"/>
+        <ComponentRef Id="Xml_s0504a_att_xml"/>
+        <ComponentRef Id="Xml_s0504m_mul_xml"/>
+        <ComponentRef Id="Xml_s0505a_att_xml"/>
+        <ComponentRef Id="Xml_s0505m_mul_xml"/>
+        <ComponentRef Id="Xml_s0506a_att_xml"/>
+        <ComponentRef Id="Xml_s0506m_mul_xml"/>
+        <ComponentRef Id="Xml_s0507a_att_xml"/>
+        <ComponentRef Id="Xml_s0507m_mul_xml"/>
+        <ComponentRef Id="Xml_s0508a1_att_xml"/>
+        <ComponentRef Id="Xml_s0508a2_att_xml"/>
+        <ComponentRef Id="Xml_s0508m_mul_xml"/>
+        <ComponentRef Id="Xml_s0509a_att_xml"/>
+        <ComponentRef Id="Xml_s0509m_mul_xml"/>
+        <ComponentRef Id="Xml_s0510a_att_xml"/>
+        <ComponentRef Id="Xml_s0510m1_mul_xml"/>
+        <ComponentRef Id="Xml_s0510m2_mul_xml"/>
+        <ComponentRef Id="Xml_s0511a_att_xml"/>
+        <ComponentRef Id="Xml_s0511m_mul_xml"/>
+        <ComponentRef Id="Xml_s0512a_att_xml"/>
+        <ComponentRef Id="Xml_s0512m_mul_xml"/>
+        <ComponentRef Id="Xml_s0513a1_att_xml"/>
+        <ComponentRef Id="Xml_s0513a2_att_xml"/>
+        <ComponentRef Id="Xml_s0513a3_att_xml"/>
+        <ComponentRef Id="Xml_s0513a4_att_xml"/>
+        <ComponentRef Id="Xml_s0513m_mul_xml"/>
+        <ComponentRef Id="Xml_s0514a1_att_xml"/>
+        <ComponentRef Id="Xml_s0514a2_att_xml"/>
+        <ComponentRef Id="Xml_s0514a3_att_xml"/>
+        <ComponentRef Id="Xml_s0514m_mul_xml"/>
+        <ComponentRef Id="Xml_s0515a_att_xml"/>
+        <ComponentRef Id="Xml_s0515m_mul_xml"/>
+        <ComponentRef Id="Xml_s0516a_att_xml"/>
+        <ComponentRef Id="Xml_s0516m_mul_xml"/>
+        <ComponentRef Id="Xml_s0517a_att_xml"/>
+        <ComponentRef Id="Xml_s0517m_mul_xml"/>
+        <ComponentRef Id="Xml_s0518m_nrf_xml"/>
+        <ComponentRef Id="Xml_s0519a_att_xml"/>
+        <ComponentRef Id="Xml_s0519m_mul_xml"/>
+        <ComponentRef Id="Xml_s0519t_tik_xml"/>
+        <ComponentRef Id="Xml_s0520m_nrf_xml"/>
+        <ComponentRef Id="Xml_tipitaka_deva_xsl"/>
+        <ComponentRef Id="Xml_vin01a_att_xml"/>
+        <ComponentRef Id="Xml_vin01m_mul_xml"/>
+        <ComponentRef Id="Xml_vin01t1_tik_xml"/>
+        <ComponentRef Id="Xml_vin01t2_tik_xml"/>
+        <ComponentRef Id="Xml_vin02a1_att_xml"/>
+        <ComponentRef Id="Xml_vin02a2_att_xml"/>
+        <ComponentRef Id="Xml_vin02a3_att_xml"/>
+        <ComponentRef Id="Xml_vin02a4_att_xml"/>
+        <ComponentRef Id="Xml_vin02m1_mul_xml"/>
+        <ComponentRef Id="Xml_vin02m2_mul_xml"/>
+        <ComponentRef Id="Xml_vin02m3_mul_xml"/>
+        <ComponentRef Id="Xml_vin02m4_mul_xml"/>
+        <ComponentRef Id="Xml_vin02t_tik_xml"/>
+        <ComponentRef Id="Xml_vin04t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin05t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin06t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin07t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin08t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin09t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin10t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin11t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin12t_nrf_xml"/>
+        <ComponentRef Id="Xml_vin13t_nrf_xml"/>
+        
+        <ComponentRef Id="Xsl_report_all_words_latn_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_beng_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_cyrl_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_deva_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_gujr_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_guru_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_khmr_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_knda_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_latn_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_mlym_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_mymr_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_sinh_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_telu_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_thai_xsl"/>
+        <ComponentRef Id="Xsl_tipitaka_tibt_xsl"/>
+
+    </Feature>
+
+    <Feature Id='MultilingualUI' Title='Multilingual User Interface' Description='Resources for displaying the CST4 user interface in languages other than English.'
+      Display='expand' Level='1' ConfigurableDirectory='INSTALLDIR'>
+
+        <ComponentRef Id='bnIN_Resources' />
+        <ComponentRef Id='cs_Resources' />
+        <ComponentRef Id='de_Resources' />
+        <ComponentRef Id='es_Resources' />
+        <ComponentRef Id='fa_Resources' />
+        <ComponentRef Id='fi_Resources' />
+        <ComponentRef Id='fr_Resources' />
+        <ComponentRef Id='gu_Resources' />
+        <ComponentRef Id='hi_Resources' />
+        <ComponentRef Id='id_Resources' />
+        <ComponentRef Id='it_Resources' />
+        <ComponentRef Id='mlIN_Resources' />
+        <ComponentRef Id='no_Resources' />
+        <ComponentRef Id='pa_Resources' />
+        <ComponentRef Id='pt_Resources' />
+        <ComponentRef Id='ru_Resources' />
+        <ComponentRef Id='sv_Resources' />
+        <ComponentRef Id='ta_Resources' />
+        <ComponentRef Id='te_Resources' />
+        <ComponentRef Id='th_Resources' />
+        <ComponentRef Id='zhCHS_Resources' />
+        <ComponentRef Id='zhCHT_Resources' />
+        
+    </Feature>   
+
+    <UIRef Id="WixUI_Mondo" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    
+    <Icon Id="Cst4.exe" SourceFile="Cst4.exe" />
+
+  </Product>
+</Wix>
