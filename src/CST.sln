@@ -1,6 +1,6 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 9.00
-# Visual Studio 2005
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CST", "CST\CST.csproj", "{A4930AA3-E712-4C84-A016-CBC9EC0EC346}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cst4", "Cst4\Cst4.csproj", "{350154F9-2C89-4031-A92A-752C5DE5F51F}"
