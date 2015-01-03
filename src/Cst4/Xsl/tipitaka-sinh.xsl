@@ -54,7 +54,7 @@ function getStyleClass (className) {
 </script>
 <style>
 body { 
-  font-family: KaputaUnicode;
+  font-family: UN-Abhaya,KaputaUnicode;
   background: white;
 }
 
