@@ -211,9 +211,6 @@
           <Component Id='Font_DoulosSILR' Guid='3BC5C016-8452-4B27-B833-0138AE5B2C29'>
             <File Id='DoulosSILR_ttf' Name='DoulosSILR.ttf' DiskId='1' Source='Fonts\DoulosSILR.ttf' KeyPath='yes' />
           </Component>
-          <Component Id='Font_kaputaunicode' Guid='E161FF8F-C289-4F83-B9FC-9C62ACF0165A'>
-            <File Id='kaputaunicode_ttf' Name='kaputaunicode.ttf' DiskId='1' Source='Fonts\kaputaunicode.ttf' KeyPath='yes' />
-          </Component>
           <Component Id='Font_KMon4UOh' Guid='7E6609E7-86C5-48AB-924C-6A97BDED0188'>
             <File Id='KMon4UOh_ttf' Name='KMon4UOh.ttf' DiskId='1' Source='Fonts\KMon4UOh.ttf' KeyPath='yes' />
           </Component>
@@ -234,6 +231,12 @@
           </Component>
           <Component Id='Font_timesxi' Guid='10F4A3CF-B897-495A-A0AD-0C142496E035'>
             <File Id='timesxi_ttf' Name='timesxi.ttf' DiskId='1' Source='Fonts\timesxi.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_un_abhaya_prod' Guid='74E01B0A-5EB3-47F5-B735-903EB24033BC'>
+            <File Id='un_abhaya_prod_ttf' Name='un-abhaya-prod.ttf' DiskId='1' Source='Fonts\un-abhaya-prod.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_un_abhaya_bold_prod' Guid='D390982A-15D5-4CA3-B208-859C33D535BE'>
+            <File Id='un_abhaya_bold_prod_ttf' Name='un-abhaya-bold-prod.ttf' DiskId='1' Source='Fonts\un-abhaya-bold-prod.ttf' KeyPath='yes' />
           </Component>
         </Directory>
         
@@ -994,9 +997,6 @@
       <Component Id="Install_Font_DoulosSILR" Guid="E64D5FAE-57BC-3713-7358-7814EB1EE680">
         <File Id="Install_DoulosSILR_ttf" Source="Fonts\DoulosSILR.ttf" TrueType="yes"/>
       </Component>
-      <Component Id="Install_Font_kaputaunicode" Guid="0D2E6C61-3AE5-21AD-DB36-50F0A627E88B">
-        <File Id="Install_kaputaunicode_ttf" Source="Fonts\kaputaunicode.ttf" TrueType="yes"/>
-      </Component>
       <Component Id="Install_Font_KMon4UOh" Guid="C047B620-79D4-98C0-C0D9-FBFAA6A7770F">
         <File Id="Install_KMon4UOh_ttf" Source="Fonts\KMon4UOh.ttf" TrueType="yes"/>
       </Component>
@@ -1017,6 +1017,12 @@
       </Component>
       <Component Id="Install_Font_timesxi" Guid="12BFC6B0-D8DE-7C03-95F8-2217D629EC4B">
         <File Id="Install_timesxi_ttf" Source="Fonts\timesxi.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_un_abhaya_prod" Guid="6E82E615-96AB-4271-B414-B5A3BB64DEAB">
+        <File Id="Install_un_abhaya_prod_ttf" Source="Fonts\un-abhaya-prod.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_un_abhaya_bold_prod" Guid="D3B5BCBE-AB83-44F5-8335-4178E5D8F9F3">
+        <File Id="Install_un_abhaya_bold_prod_ttf" Source="Fonts\un-abhaya-bold-prod.ttf" TrueType="yes"/>
       </Component>
     </DirectoryRef> 
 
@@ -1048,7 +1054,6 @@
         <ComponentRef Id='Font_CDACSRBT' />
         <ComponentRef Id='Font_CDACSRNT' />
         <ComponentRef Id='Font_DoulosSILR' />
-        <ComponentRef Id='Font_kaputaunicode' />
         <ComponentRef Id='Font_KMon4UOh' />
         <ComponentRef Id='Font_myanmar1' />
         <ComponentRef Id='Font_TibetanMachineUniAlpha' />
@@ -1056,12 +1061,13 @@
         <ComponentRef Id='Font_timesxbd' />
         <ComponentRef Id='Font_timesxbi' />
         <ComponentRef Id='Font_timesxi' />
+        <ComponentRef Id='Font_un_abhaya_prod' />
+        <ComponentRef Id='Font_un_abhaya_bold_prod' />
         
         <ComponentRef Id="Install_Font_BNBDOT0N"/>
         <ComponentRef Id="Install_Font_CDACSRBT"/>
         <ComponentRef Id="Install_Font_CDACSRNT"/>
         <ComponentRef Id="Install_Font_DoulosSILR"/>
-        <ComponentRef Id="Install_Font_kaputaunicode"/>
         <ComponentRef Id="Install_Font_KMon4UOh"/>
         <ComponentRef Id="Install_Font_myanmar1"/>
         <ComponentRef Id="Install_Font_TibetanMachineUniAlpha"/>
@@ -1069,6 +1075,8 @@
         <ComponentRef Id="Install_Font_timesxbd"/>
         <ComponentRef Id="Install_Font_timesxbi"/>
         <ComponentRef Id="Install_Font_timesxi"/>
+        <ComponentRef Id="Install_Font_un_abhaya_prod"/>
+        <ComponentRef Id="Install_Font_un_abhaya_bold_prod"/>
 
         <ComponentRef Id="Xml_abh01a_att_xml"/>
         <ComponentRef Id="Xml_abh01m_mul_xml"/>
