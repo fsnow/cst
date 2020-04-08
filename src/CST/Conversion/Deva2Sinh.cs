@@ -139,6 +139,9 @@ namespace CST.Conversion
             // change joiners before U+0DBB Rayanna to Virama + ZWJ
             str = str.Replace("\x0DCA\x200C\x0DBB", "\x0DCA\x200D\x0DBB");
 
+            // change joiners between "kk"
+            str = str.Replace("\x0D9A\x0DCA\x200C\x0D9A", "\x0D9A\x0DCA\x200D\x0D9A");
+
             return str;
         }
 
