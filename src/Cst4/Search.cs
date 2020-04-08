@@ -357,7 +357,7 @@ namespace CST
 
 			TimeSpan elapsed3 = start.Subtract(DateTime.Now);
 			
-			int x = 0;
+			//int x = 0;
 		}
 
 		private static List<WordPosition> GetFirstTermPositions(
@@ -378,7 +378,7 @@ namespace CST
 				bool isNext = termPos.Next();
 				if (isNext == false)
 				{
-					int q = 0;  // bad!!!
+					//int q = 0;  // bad!!!
 				}
 
 				int termPosDoc = termPos.Doc();
@@ -426,7 +426,7 @@ namespace CST
 				bool isNext = termPos.Next();
 				if (isNext == false)
 				{
-					int q = 0;  // bad!!!
+					//int q = 0;  // bad!!!
 				}
 
 				int termPosDoc = termPos.Doc();
@@ -562,11 +562,11 @@ namespace CST
 				// check some assumptions
 				if (termPositions[wp.PositionIndex] != wp.Position)
 				{
-					int z1 = 0;
+					//int z1 = 0;
 				}
 				if (termPositions.Length != tvoiArray.Length)
 				{
-					int z2 = 0;
+					//int z2 = 0;
 				}
 
 				wp.StartOffset = tvoiArray[wp.PositionIndex].GetStartOffset();

@@ -15,7 +15,7 @@
   OutFile "Cst4_Installer.exe"
 
   ;Default installation folder
-  InstallDir "$PROGRAMFILES\Chattha Sangayana Tipitaka 4.0"
+  InstallDir "c:\Chattha Sangayana Tipitaka 4.0"
   
   ;Vista redirects $SMPROGRAMS to all users without this
   RequestExecutionLevel admin
@@ -127,9 +127,10 @@ Section "Dummy Section" SecDummy
   File bin\Debug\Cst4.exe
   File bin\Debug\Cst4.exe.config
   File bin\Debug\CST.dll
+  File bin\Debug\log4net.dll
   File bin\Debug\Lucene.Net.dll
   File bin\Debug\Microsoft.mshtml.dll
-  File bin\Debug\usp10.dll
+  File bin\Debug\usp10.dll  
   
   SetOutPath "$INSTDIR\bn-IN"
   File bin\Debug\de\*.*
@@ -323,6 +324,7 @@ Section "Uninstall"
   Delete "$INSTDIR\Cst4.exe.config"
   Delete "$INSTDIR\CST.dll"
   Delete "$INSTDIR\Lucene.Net.dll"
+  Delete "$INSTDIR\log4net.dll"
   Delete "$INSTDIR\Microsoft.mshtml.dll"
   Delete "$INSTDIR\usp10.dll"
   Delete "$INSTDIR\*.dat"
@@ -352,7 +354,7 @@ Section "Uninstall"
   StrCpy $MUI_TEMP "$SMPROGRAMS\$MUI_TEMP"
  
   startMenuDeleteLoop:
-	ClearErrors
+  ClearErrors
     RMDir $MUI_TEMP
     GetFullPathName $MUI_TEMP "$MUI_TEMP\.."
     

@@ -23,7 +23,8 @@ namespace CST
 			//this.labelCopyright.Text = AssemblyCopyright;
 			//this.labelCompanyName.Text = AssemblyCompany;
 			//this.textBoxDescription.Text = AssemblyDescription;
-			int i = 0;
+			
+            //int i = 0;
 		}
 
 		#region Assembly Attribute Accessors

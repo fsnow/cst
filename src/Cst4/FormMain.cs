@@ -141,7 +141,7 @@ namespace CST
 					int j = 0;
 				}
 			}
-			catch (Exception ex)
+			catch (Exception)
 			{
 				int j = 0;
 			}
