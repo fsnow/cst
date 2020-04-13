@@ -203,7 +203,9 @@ namespace CST
 
             word = Any2Ipe.Convert(word);
 
+            // search for the exact word
             int index = words.BinarySearch(new DictionaryWord(word, ""), new DictionaryWordComparer());
+
             // word is in the list
             if (index >= 0)
             {
