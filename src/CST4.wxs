@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='windows-1252'?>
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
   <Product Name='Chattha Sangayana Tipitaka 4.0' Id='A0C75468-DE8B-4F9C-8144-0E1E66F4030E' UpgradeCode='09A7EE86-E07B-4056-933D-8FF70BCA19EF'
-    Language='1033' Codepage='1252' Version='4.0.0.16' Manufacturer='Frank Snow / Tipitaka.org'>
+    Language='1033' Codepage='1252' Version='4.0.0.15' Manufacturer='Frank Snow / Tipitaka.org'>
 
     <Package Id='*' Keywords='Installer' Description="Chattha Sangayana Tipitaka 4.0 Installer"
       Comments='Installer for CST4' Manufacturer='Frank Snow / Tipitaka.org'
@@ -11,9 +11,9 @@
     <Property Id='DiskPrompt' Value="Chattha Sangayana Tipitaka 4.0 Installation [1]" />
 
     <Directory Id='TARGETDIR' Name='SourceDir'>
-      
+
       <Directory Id="FontsFolder" />
-      
+
       <Directory Id='INSTALLDIR' Name='Cst4'>
 
         <Component Id='MainExecutable' Guid='7479EACF-DCEF-481E-AAEE-3D6248AAA8A9'>
@@ -26,7 +26,7 @@
         <Component Id='Cst4LoggingConfig' Guid='F5562F29-4303-4669-8194-FDB3A37AA5F5'>
           <File Id='Cst4ExeConfig' Name='Cst4.exe.config' DiskId='1' Source='Cst4.exe.config' KeyPath='yes' />
         </Component>
-        
+
         <Component Id='CstLibrary' Guid='0B93AF44-8BF2-4B04-9ED9-3D68A244099C'>
           <File Id='CSTDLL' Name='CST.dll' DiskId='1' Source='CST.dll' KeyPath='yes' />
         </Component>
@@ -46,7 +46,7 @@
         <Component Id='UniscribeLibrary' Guid='AAAE468D-E3CF-408E-ACD2-F94976CAE3F2'>
           <File Id='Usp10DLL' Name='usp10.dll' DiskId='1' Source='usp10.dll' KeyPath='yes' />
         </Component>
-        
+
 <!--
         <Directory Id="IndexFolder" Name="Index">
           <Component Id='RemoveIndexFiles' Guid='CDF5E0D6-5373-4869-8400-677D61D2255D'>
@@ -55,57 +55,57 @@
             <RemoveFile Id="Index_6p_cfs" Name="_6p.cfs" On="uninstall"/>
           </Component>
         </Directory>
-          
+
         <Component Id='RemoveIndexFolder' Guid='EC993A97-96A1-4EC5-8AF5-277A5D9C4EB2'>
           <RemoveFolder Id="Index" On="uninstall"/>
         </Component>
 -->
 
-        
-        <!-- ****************   Multilingual Resources  ******************   -->    
-        
+
+        <!-- ****************   Multilingual Resources  ******************   -->
+
         <Directory Id='bnIN' Name='bn-IN'>
           <Component Id='bnIN_Resources' Guid='5C9FEC93-5581-45F0-95F3-FCEE85CC1190'>
             <File Id='bnIN_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='bn-IN\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='cs' Name='cs'>
           <Component Id='cs_Resources' Guid='08CE9834-130A-400C-BF81-AB9E523AAE38'>
             <File Id='cs_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='cs\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='de' Name='de'>
           <Component Id='de_Resources' Guid='1FD4134C-9EB8-4B93-8856-1EB0F9E0D236'>
             <File Id='de_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='de\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='es' Name='es'>
           <Component Id='es_Resources' Guid='9B205FAF-FB09-4DDE-B462-553172C1314C'>
             <File Id='es_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='es\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='fa' Name='fa'>
           <Component Id='fa_Resources' Guid='3941BB8C-8AB5-4F4A-BC79-41E1B2125429'>
             <File Id='fa_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='fa\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='fi' Name='fi'>
           <Component Id='fi_Resources' Guid='0CFD788C-EF56-42C1-B942-A951B92585C6'>
             <File Id='fi_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='fi\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='fr' Name='fr'>
           <Component Id='fr_Resources' Guid='CE41D1CC-0B7D-46F0-B499-135C7D0D0ECD'>
             <File Id='fr_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='fr\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='gu' Name='gu'>
           <Component Id='gu_Resources' Guid='CE5C8BBA-793D-461E-B008-DB1C398C07B0'>
             <File Id='gu_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='gu\Cst4.resources.dll' KeyPath='yes' />
@@ -117,86 +117,86 @@
             <File Id='hi_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='hi\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='id' Name='id'>
           <Component Id='id_Resources' Guid='2588310B-6627-4E97-9575-ADDD58DE5D35'>
             <File Id='id_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='id\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='it' Name='it'>
           <Component Id='it_Resources' Guid='04872A8A-C80C-4732-90F1-62E34BA90BCB'>
             <File Id='it_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='it\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='mlIN' Name='ml-IN'>
           <Component Id='mlIN_Resources' Guid='3A86D68B-2A3A-4BF1-AE43-BC872EE82176'>
             <File Id='mlIN_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ml-IN\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='no' Name='no'>
           <Component Id='no_Resources' Guid='7CFE2FA0-D18B-4776-BFC6-DE5655E13FB6'>
             <File Id='no_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='no\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='pa' Name='pa'>
           <Component Id='pa_Resources' Guid='E3D77CDA-A06C-4F6E-98A3-EE47A53C292D'>
             <File Id='pa_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='pa\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='pt' Name='pt'>
           <Component Id='pt_Resources' Guid='71F36D84-BA85-44A3-8CE5-52579A4C7AF5'>
             <File Id='pt_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='pt\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='ru' Name='ru'>
           <Component Id='ru_Resources' Guid='8F732414-E5DF-4CFE-BB7D-58279829C8A4'>
             <File Id='ru_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ru\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='sv' Name='sv'>
           <Component Id='sv_Resources' Guid='261C9985-A936-47F1-9B76-C8A37821E9D5'>
             <File Id='sv_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='sv\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='ta' Name='ta'>
           <Component Id='ta_Resources' Guid='A1446CE8-896F-4D0D-9B7C-2F65EAB82DA9'>
             <File Id='ta_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ta\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='te' Name='te'>
           <Component Id='te_Resources' Guid='6E643F78-946B-40F3-9ADF-F962F96D45CF'>
             <File Id='te_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='te\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='th' Name='th'>
           <Component Id='th_Resources' Guid='6C14FA65-86E9-473A-927E-51B3D5729E9E'>
             <File Id='th_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='th\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='zhCHS' Name='zh-CHS'>
           <Component Id='zhCHS_Resources' Guid='7C3A1C0C-988F-44DC-AB37-81BF5990DEAA'>
             <File Id='zhCHS_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='zh-CHS\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
+
         <Directory Id='zhCHT' Name='zh-CHT'>
           <Component Id='zhCHT_Resources' Guid='0513FB54-9707-4137-B0B8-6C993D27EB14'>
             <File Id='zhCHT_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='zh-CHT\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
-        
-        <!-- ****************   Fonts Directory  ******************   -->  
+
+        <!-- ****************   Fonts Directory  ******************   -->
 
         <Directory Id='Fonts' Name='Fonts'>
           <Component Id='Font_BNBDOT0N' Guid='198FE675-2370-49E2-9EC0-E1FA078EF138'>
@@ -239,27 +239,27 @@
             <File Id='un_abhaya_bold_prod_ttf' Name='un-abhaya-bold-prod.ttf' DiskId='1' Source='Fonts\un-abhaya-bold-prod.ttf' KeyPath='yes' />
           </Component>
         </Directory>
-        
-        
-        <!-- ****************   Reference Directory (Dictionaries)  ******************   -->   
-        
+
+
+        <!-- ****************   Reference Directory (Dictionaries)  ******************   -->
+
         <Directory Id='Reference' Name='Reference'>
           <Component Id='PaliHindiDictionary' Guid='B769DE49-D2B1-477C-A3FC-59964833C886'>
             <File Id='PaliHindiDictionaryTxt' Name='pali-hindi-dictionary.txt' DiskId='1' Source='Reference\pali-hindi-dictionary.txt' KeyPath='yes' />
           </Component>
-          
+
           <Directory Id='Reference_en' Name='en'>
             <Component Id='PaliEnglishDictionary' Guid='AF963048-17B7-474B-A54E-FDE7ED589423'>
               <File Id='PaliEnglishDictionaryTxt' Name='pali-english-dictionary.txt' DiskId='1' Source='Reference\en\pali-english-dictionary.txt' KeyPath='yes' />
             </Component>
           </Directory>
         </Directory>
-        
-    
-        <!-- ****************   Xml Directory  ******************   -->  
-        
+
+
+        <!-- ****************   Xml Directory  ******************   -->
+
         <Directory Id='Xml' Name='Xml'>
-        
+
           <Component Id="Xml_abh01a_att_xml" Guid="C466E9E7-1A0F-524C-B5C3-A314E3746CC9">
             <File Id="abh01a_att_xml" Name="abh01a.att.xml" DiskId="1" Source="Xml\abh01a.att.xml" KeyPath="yes"/>
           </Component>
@@ -916,12 +916,12 @@
           </Component>
 
         </Directory>
-        
-        
-        <!-- ****************   Xsl Directory  ******************   -->   
-        
+
+
+        <!-- ****************   Xsl Directory  ******************   -->
+
         <Directory Id='Xsl' Name='Xsl'>
-        
+
           <Component Id="Xsl_report_all_words_latn_xsl" Guid="93D522BE-B369-0985-5DF9-6545E6EC98A3">
             <File Id="report_all_words_latn_xsl" Name="report-all-words-latn.xsl" DiskId="1" Source="Xsl\report-all-words-latn.xsl" KeyPath="yes"/>
           </Component>
@@ -967,7 +967,7 @@
           <Component Id="Xsl_tipitaka_tibt_xsl" Guid="CB1356AA-EEF4-09A9-9AE5-4EC1DC470942">
             <File Id="tipitaka_tibt_xsl" Name="tipitaka-tibt.xsl" DiskId="1" Source="Xsl\tipitaka-tibt.xsl" KeyPath="yes"/>
           </Component>
-          
+
         </Directory>
 
       </Directory>
@@ -983,8 +983,8 @@
 
       <Directory Id="DesktopFolder" Name="Desktop" />
     </Directory>
-    
-    <DirectoryRef Id="FontsFolder"> 
+
+    <DirectoryRef Id="FontsFolder">
       <Component Id="Install_Font_BNBDOT0N" Guid="A48D052C-A0E3-4BCF-229F-E33DC14E40FA">
         <File Id="Install_BNBDOT0N_ttf" Source="Fonts\BNBDOT0N.ttf" TrueType="yes"/>
       </Component>
@@ -1024,10 +1024,10 @@
       <Component Id="Install_Font_un_abhaya_bold_prod" Guid="D3B5BCBE-AB83-44F5-8335-4178E5D8F9F3">
         <File Id="Install_un_abhaya_bold_prod_ttf" Source="Fonts\un-abhaya-bold-prod.ttf" TrueType="yes"/>
       </Component>
-    </DirectoryRef> 
+    </DirectoryRef>
 
 
-        
+
 
     <Feature Id='ProgramAndData' Title='Chattha Sangayana Tipitaka 4.0' Description='The program and data.'
       Display='expand' Level='1' ConfigurableDirectory='INSTALLDIR'>
@@ -1039,17 +1039,17 @@
         <ComponentRef Id='LuceneLibrary' />
         <ComponentRef Id='MshtmlLibrary' />
         <ComponentRef Id='UniscribeLibrary' />
-        
+
 <!--
         <ComponentRef Id='RemoveIndexFolder' />
         <ComponentRef Id='RemoveIndexFiles' />
 -->
 
         <ComponentRef Id='ProgramMenuDir' />
-        
+
         <ComponentRef Id='PaliEnglishDictionary' />
         <ComponentRef Id='PaliHindiDictionary' />
-        
+
         <ComponentRef Id='Font_BNBDOT0N' />
         <ComponentRef Id='Font_CDACSRBT' />
         <ComponentRef Id='Font_CDACSRNT' />
@@ -1063,7 +1063,7 @@
         <ComponentRef Id='Font_timesxi' />
         <ComponentRef Id='Font_un_abhaya_prod' />
         <ComponentRef Id='Font_un_abhaya_bold_prod' />
-        
+
         <ComponentRef Id="Install_Font_BNBDOT0N"/>
         <ComponentRef Id="Install_Font_CDACSRBT"/>
         <ComponentRef Id="Install_Font_CDACSRNT"/>
@@ -1296,7 +1296,7 @@
         <ComponentRef Id="Xml_vin11t_nrf_xml"/>
         <ComponentRef Id="Xml_vin12t_nrf_xml"/>
         <ComponentRef Id="Xml_vin13t_nrf_xml"/>
-        
+
         <ComponentRef Id="Xsl_report_all_words_latn_xsl"/>
         <ComponentRef Id="Xsl_tipitaka_beng_xsl"/>
         <ComponentRef Id="Xsl_tipitaka_cyrl_xsl"/>
@@ -1340,12 +1340,12 @@
         <ComponentRef Id='th_Resources' />
         <ComponentRef Id='zhCHS_Resources' />
         <ComponentRef Id='zhCHT_Resources' />
-        
-    </Feature>   
+
+    </Feature>
 
     <UIRef Id="WixUI_Mondo" />
     <UIRef Id="WixUI_ErrorProgressText" />
-    
+
     <Icon Id="Cst4.exe" SourceFile="Cst4.exe" />
 
   </Product>
