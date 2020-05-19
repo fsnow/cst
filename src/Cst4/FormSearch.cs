@@ -705,5 +705,10 @@ namespace CST
         {
             ClearResults();
         }
+
+        private void gbLimitSearch_Enter(object sender, EventArgs e)
+        {
+
+        }
     }
 }

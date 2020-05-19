@@ -190,6 +190,9 @@
   <data name="lblSelectBookColl.Text" xml:space="preserve">
     <value>یا مجموعه کتاب را انتخاب کنید:</value>
   </data>
+  <data name="gbLimitSearch.Text" xml:space="preserve">
+    <value>محدودیت جستجو</value>
+  </data>
   <data name="btnReport.Text" xml:space="preserve">
     <value>گزارش...</value>
   </data>

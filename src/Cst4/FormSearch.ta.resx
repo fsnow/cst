@@ -128,7 +128,7 @@
     <value>தேடு</value>
   </data>
   <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>62, 13</value>
+    <value>66, 13</value>
   </data>
   <data name="lblWords.Text" xml:space="preserve">
     <value>சொற்கள்</value>
@@ -137,7 +137,7 @@
     <value>391, 212</value>
   </data>
   <data name="lblOccurrencesBooks.Size" type="System.Drawing.Size, System.Drawing">
-    <value>172, 13</value>
+    <value>171, 13</value>
   </data>
   <data name="lblOccurrencesBooks.Text" xml:space="preserve">
     <value>தோன்றுமிடங்கள் - நூல்கள்</value>
@@ -146,7 +146,7 @@
     <value>மூடு</value>
   </data>
   <data name="lblUse.Size" type="System.Drawing.Size, System.Drawing">
-    <value>82, 13</value>
+    <value>87, 13</value>
   </data>
   <data name="lblUse.Text" xml:space="preserve">
     <value>பயன்படுத்து:</value>
@@ -161,13 +161,13 @@
     <value>214, 21</value>
   </data>
   <data name="cbOtherTexts.Size" type="System.Drawing.Size, System.Drawing">
-    <value>116, 17</value>
+    <value>114, 17</value>
   </data>
   <data name="cbOtherTexts.Text" xml:space="preserve">
     <value>மற்ற உரைகள்</value>
   </data>
   <data name="cbAll.Size" type="System.Drawing.Size, System.Drawing">
-    <value>96, 17</value>
+    <value>98, 17</value>
   </data>
   <data name="cbAll.Text" xml:space="preserve">
     <value>அனைத்தும்</value>
@@ -182,7 +182,7 @@
     <value>236, 21</value>
   </data>
   <data name="linkLabelDelete.Size" type="System.Drawing.Size, System.Drawing">
-    <value>30, 13</value>
+    <value>33, 13</value>
   </data>
   <data name="linkLabelDelete.Text" xml:space="preserve">
     <value>அழி</value>
@@ -206,16 +206,16 @@
     <value>தேடலை சுருக்கிடு</value>
   </data>
   <data name="btnReport.Location" type="System.Drawing.Point, System.Drawing">
-    <value>692, 437</value>
+    <value>690, 437</value>
   </data>
   <data name="btnReport.Size" type="System.Drawing.Size, System.Drawing">
-    <value>82, 23</value>
+    <value>84, 23</value>
   </data>
   <data name="btnReport.Text" xml:space="preserve">
     <value>அறிக்கை...</value>
   </data>
   <data name="lblContextDistance.Size" type="System.Drawing.Size, System.Drawing">
-    <value>123, 13</value>
+    <value>119, 13</value>
   </data>
   <data name="lblContextDistance.Text" xml:space="preserve">
     <value>சொல் இடைவெளி:</value>

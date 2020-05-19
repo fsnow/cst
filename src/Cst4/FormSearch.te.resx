@@ -119,7 +119,7 @@
   </resheader>
   <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
   <data name="lblSearchFor.Size" type="System.Drawing.Size, System.Drawing">
-    <value>84, 13</value>
+    <value>97, 13</value>
   </data>
   <data name="lblSearchFor.Text" xml:space="preserve">
     <value>దీనికొరకు వెతుకు:</value>
@@ -128,13 +128,13 @@
     <value>వెతుకు</value>
   </data>
   <data name="lblWords.Size" type="System.Drawing.Size, System.Drawing">
-    <value>51, 13</value>
+    <value>57, 13</value>
   </data>
   <data name="lblWords.Text" xml:space="preserve">
     <value>పదములు</value>
   </data>
   <data name="lblOccurrencesBooks.Size" type="System.Drawing.Size, System.Drawing">
-    <value>82, 13</value>
+    <value>88, 13</value>
   </data>
   <data name="lblOccurrencesBooks.Text" xml:space="preserve">
     <value>పుస్తకముల ఉనికి</value>
@@ -143,7 +143,7 @@
     <value>మూసిపెట్టు</value>
   </data>
   <data name="lblUse.Size" type="System.Drawing.Size, System.Drawing">
-    <value>33, 13</value>
+    <value>36, 13</value>
   </data>
   <data name="lblUse.Text" xml:space="preserve">
     <value>వాడు:</value>
@@ -155,49 +155,49 @@
     <value>వైల్డ్-కార్డ్స</value>
   </data>
   <data name="cbVinaya.Size" type="System.Drawing.Size, System.Drawing">
-    <value>77, 17</value>
+    <value>84, 17</value>
   </data>
   <data name="cbVinaya.Text" xml:space="preserve">
     <value>వినయపిటక</value>
   </data>
   <data name="cbSutta.Size" type="System.Drawing.Size, System.Drawing">
-    <value>68, 17</value>
+    <value>74, 17</value>
   </data>
   <data name="cbSutta.Text" xml:space="preserve">
     <value>సుత్తపిటక</value>
   </data>
   <data name="cbAbhi.Size" type="System.Drawing.Size, System.Drawing">
-    <value>89, 17</value>
+    <value>99, 17</value>
   </data>
   <data name="cbAbhi.Text" xml:space="preserve">
     <value>అభిధమ్మపిటక</value>
   </data>
   <data name="cbMula.Size" type="System.Drawing.Size, System.Drawing">
-    <value>53, 17</value>
+    <value>56, 17</value>
   </data>
   <data name="cbMula.Text" xml:space="preserve">
     <value>మూల</value>
   </data>
   <data name="cbAttha.Size" type="System.Drawing.Size, System.Drawing">
-    <value>59, 17</value>
+    <value>66, 17</value>
   </data>
   <data name="cbAttha.Text" xml:space="preserve">
     <value>అట్ఠకథా</value>
   </data>
   <data name="cbTika.Size" type="System.Drawing.Size, System.Drawing">
-    <value>43, 17</value>
+    <value>45, 17</value>
   </data>
   <data name="cbTika.Text" xml:space="preserve">
     <value>టీకా</value>
   </data>
   <data name="cbOtherTexts.Size" type="System.Drawing.Size, System.Drawing">
-    <value>99, 17</value>
+    <value>113, 17</value>
   </data>
   <data name="cbOtherTexts.Text" xml:space="preserve">
     <value>ఇతర సాహిత్యము</value>
   </data>
   <data name="cbAll.Size" type="System.Drawing.Size, System.Drawing">
-    <value>48, 17</value>
+    <value>53, 17</value>
   </data>
   <data name="cbAll.Text" xml:space="preserve">
     <value>అన్ని</value>
@@ -209,19 +209,19 @@
     <value>క్రోత్తగా ప్రారంబించు...</value>
   </data>
   <data name="linkLabelDelete.Size" type="System.Drawing.Size, System.Drawing">
-    <value>48, 13</value>
+    <value>57, 13</value>
   </data>
   <data name="linkLabelDelete.Text" xml:space="preserve">
     <value>తొలగించు</value>
   </data>
   <data name="linkLabelEdit.Size" type="System.Drawing.Size, System.Drawing">
-    <value>37, 13</value>
+    <value>42, 13</value>
   </data>
   <data name="linkLabelEdit.Text" xml:space="preserve">
     <value>మార్చు</value>
   </data>
   <data name="lblSelectBookColl.Size" type="System.Drawing.Size, System.Drawing">
-    <value>163, 13</value>
+    <value>178, 13</value>
   </data>
   <data name="lblSelectBookColl.Text" xml:space="preserve">
     <value>లేదా పుస్తక సమూహమును ఏంచుకో:</value>
@@ -230,22 +230,22 @@
     <value>పరిమిత అన్వేషణ</value>
   </data>
   <data name="btnReport.Location" type="System.Drawing.Point, System.Drawing">
-    <value>643, 437</value>
+    <value>631, 437</value>
   </data>
   <data name="btnReport.Size" type="System.Drawing.Size, System.Drawing">
-    <value>77, 23</value>
+    <value>89, 23</value>
   </data>
   <data name="btnReport.Text" xml:space="preserve">
     <value>వృత్తాంతము...</value>
   </data>
   <data name="lblContextDistance.Size" type="System.Drawing.Size, System.Drawing">
-    <value>82, 13</value>
+    <value>91, 13</value>
   </data>
   <data name="lblContextDistance.Text" xml:space="preserve">
     <value>పదము దూరము:</value>
   </data>
   <data name="numContextDistance.Location" type="System.Drawing.Point, System.Drawing">
-    <value>95, 62</value>
+    <value>109, 62</value>
   </data>
   <data name="$this.Text" xml:space="preserve">
     <value>వెతుకు</value>

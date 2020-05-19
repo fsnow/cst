@@ -167,6 +167,9 @@
   <data name="lblMeaning.Text" xml:space="preserve">
     <value>معنی:</value>
   </data>
+  <data name="wbMeaning.MinimumSize" type="System.Drawing.Size, System.Drawing">
+    <value>20, 20</value>
+  </data>
   <data name="txtForBorder.RightToLeft" type="System.Windows.Forms.RightToLeft, System.Windows.Forms">
     <value>No</value>
   </data>

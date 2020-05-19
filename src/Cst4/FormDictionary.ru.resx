@@ -134,7 +134,7 @@
     <comment>Meaning:</comment>
   </data>
   <data name="lblDefinitionLanguage.Text" xml:space="preserve">
-    <value>Определяющий язык:</value>
+    <value>Язык определения:</value>
     <comment>Definition Language:</comment>
   </data>
   <data name="cbDefinitionLanguage.Items" xml:space="preserve">
