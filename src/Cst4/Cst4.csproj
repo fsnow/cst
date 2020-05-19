@@ -158,7 +158,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormAdvancedSearch.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormBookCollEditor.bn-IN.resx">
+    <EmbeddedResource Include="FormBookCollEditor.bn.resx">
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -206,7 +206,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormBookCollEditor.ml-IN.resx">
+    <EmbeddedResource Include="FormBookCollEditor.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
     </EmbeddedResource>
@@ -258,7 +258,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormBookCollEditor.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormBookDisplay.bn-IN.resx">
+    <EmbeddedResource Include="FormBookDisplay.bn.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
@@ -306,7 +306,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormBookDisplay.ml-IN.resx">
+    <EmbeddedResource Include="FormBookDisplay.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormBookDisplay.cs</DependentUpon>
     </EmbeddedResource>
@@ -362,7 +362,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormBrowser.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormChooseReport.bn-IN.resx">
+    <EmbeddedResource Include="FormChooseReport.bn.resx">
       <DependentUpon>FormChooseReport.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -410,7 +410,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormChooseReport.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormChooseReport.ml-IN.resx">
+    <EmbeddedResource Include="FormChooseReport.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormChooseReport.cs</DependentUpon>
     </EmbeddedResource>
@@ -462,7 +462,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormChooseReport.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormDictionary.bn-IN.resx">
+    <EmbeddedResource Include="FormDictionary.bn.resx">
       <DependentUpon>FormDictionary.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -510,7 +510,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormDictionary.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormDictionary.ml-IN.resx">
+    <EmbeddedResource Include="FormDictionary.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormDictionary.cs</DependentUpon>
     </EmbeddedResource>
@@ -562,7 +562,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormDictionary.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormGoTo.bn-IN.resx">
+    <EmbeddedResource Include="FormGoTo.bn.resx">
       <DependentUpon>FormGoTo.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -610,7 +610,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormGoTo.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormGoTo.ml-IN.resx">
+    <EmbeddedResource Include="FormGoTo.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormGoTo.cs</DependentUpon>
     </EmbeddedResource>
@@ -662,7 +662,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormGoTo.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormMain.bn-IN.resx">
+    <EmbeddedResource Include="FormMain.bn.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
@@ -710,7 +710,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormMain.ml-IN.resx">
+    <EmbeddedResource Include="FormMain.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
@@ -762,7 +762,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormMain.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormReport.bn-IN.resx">
+    <EmbeddedResource Include="FormReport.bn.resx">
       <DependentUpon>FormReport.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -810,7 +810,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormReport.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormReport.ml-IN.resx">
+    <EmbeddedResource Include="FormReport.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormReport.cs</DependentUpon>
     </EmbeddedResource>
@@ -862,7 +862,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormReport.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormSearch.bn-IN.resx">
+    <EmbeddedResource Include="FormSearch.bn.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
@@ -910,7 +910,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormSearch.ml-IN.resx">
+    <EmbeddedResource Include="FormSearch.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
@@ -962,7 +962,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormSearch.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormSelectBook.bn-IN.resx">
+    <EmbeddedResource Include="FormSelectBook.bn.resx">
       <DependentUpon>FormSelectBook.cs</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -1010,7 +1010,7 @@
       <SubType>Designer</SubType>
       <DependentUpon>FormSelectBook.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="FormSelectBook.ml-IN.resx">
+    <EmbeddedResource Include="FormSelectBook.ml.resx">
       <SubType>Designer</SubType>
       <DependentUpon>FormSelectBook.cs</DependentUpon>
     </EmbeddedResource>
@@ -1064,7 +1064,7 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="Properties\Resources.bn-IN.resx">
+    <EmbeddedResource Include="Properties\Resources.bn.resx">
       <DependentUpon>Resources.resx</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
@@ -1112,7 +1112,7 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <EmbeddedResource Include="Properties\Resources.ml-IN.resx">
+    <EmbeddedResource Include="Properties\Resources.ml.resx">
       <DependentUpon>Resources.resx</DependentUpon>
       <SubType>Designer</SubType>
     </EmbeddedResource>

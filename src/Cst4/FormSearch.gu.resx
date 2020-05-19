@@ -202,9 +202,6 @@
   <data name="cbAll.Text" xml:space="preserve">
     <value>સમગ્ર</value>
   </data>
-  <data name="gbLimitSearch.Text" xml:space="preserve">
-    <value>શોધની સીમા</value>
-  </data>
   <data name="comboBookSet.Items" xml:space="preserve">
     <value>કાંઈ નહિ</value>
   </data>
@@ -228,6 +225,9 @@
   </data>
   <data name="lblSelectBookColl.Text" xml:space="preserve">
     <value>અથવા પુસ્તક સંગ્રહ પસંદ કરીએ:</value>
+  </data>
+  <data name="gbLimitSearch.Text" xml:space="preserve">
+    <value>શોધની સીમા</value>
   </data>
   <data name="btnReport.Text" xml:space="preserve">
     <value>હેવાલ...</value>

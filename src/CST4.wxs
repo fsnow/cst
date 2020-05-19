@@ -64,9 +64,9 @@
 
         <!-- ****************   Multilingual Resources  ******************   -->
 
-        <Directory Id='bnIN' Name='bn-IN'>
-          <Component Id='bnIN_Resources' Guid='5C9FEC93-5581-45F0-95F3-FCEE85CC1190'>
-            <File Id='bnIN_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='bn-IN\Cst4.resources.dll' KeyPath='yes' />
+        <Directory Id='bn' Name='bn'>
+          <Component Id='bn_Resources' Guid='5C9FEC93-5581-45F0-95F3-FCEE85CC1190'>
+            <File Id='bn_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='bn\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
 
@@ -130,9 +130,9 @@
           </Component>
         </Directory>
 
-        <Directory Id='mlIN' Name='ml-IN'>
-          <Component Id='mlIN_Resources' Guid='3A86D68B-2A3A-4BF1-AE43-BC872EE82176'>
-            <File Id='mlIN_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ml-IN\Cst4.resources.dll' KeyPath='yes' />
+        <Directory Id='ml' Name='ml'>
+          <Component Id='ml_Resources' Guid='3A86D68B-2A3A-4BF1-AE43-BC872EE82176'>
+            <File Id='ml_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='ml\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
 
@@ -145,6 +145,12 @@
         <Directory Id='pa' Name='pa'>
           <Component Id='pa_Resources' Guid='E3D77CDA-A06C-4F6E-98A3-EE47A53C292D'>
             <File Id='pa_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='pa\Cst4.resources.dll' KeyPath='yes' />
+          </Component>
+        </Directory>
+
+        <Directory Id='pl' Name='pl'>
+          <Component Id='pl_Resources' Guid='2ECC751B-CAA9-4C29-ABE6-6A94E0E59DAF'>
+            <File Id='pl_Cst4resourcesDLL' Name='Cst4.resources.dll' DiskId='1' Source='pl\Cst4.resources.dll' KeyPath='yes' />
           </Component>
         </Directory>
 
