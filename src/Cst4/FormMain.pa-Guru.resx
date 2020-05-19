@@ -119,124 +119,64 @@
   </resheader>
   <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
   <data name="tsmiOpenBook.Size" type="System.Drawing.Size, System.Drawing">
-    <value>204, 22</value>
-  </data>
-  <data name="tsmiOpenBook.Text" xml:space="preserve">
-    <value>തുറക്കുക</value>
+    <value>177, 22</value>
   </data>
   <data name="tsmiMru.Size" type="System.Drawing.Size, System.Drawing">
-    <value>204, 22</value>
-  </data>
-  <data name="tsmiMru.Text" xml:space="preserve">
-    <value>ഈയിടെക്കണ്ട കാഴ്ച</value>
+    <value>177, 22</value>
   </data>
   <data name="tsmiPrint.Size" type="System.Drawing.Size, System.Drawing">
-    <value>204, 22</value>
-  </data>
-  <data name="tsmiPrint.Text" xml:space="preserve">
-    <value>അച്ചടിക്കുക...</value>
+    <value>177, 22</value>
   </data>
   <data name="tsmiPrintPreview.Size" type="System.Drawing.Size, System.Drawing">
-    <value>204, 22</value>
-  </data>
-  <data name="tsmiPrintPreview.Text" xml:space="preserve">
-    <value>അച്ചടി മുന്‍കാഴ്ച...</value>
+    <value>177, 22</value>
   </data>
   <data name="tsmiPageSetup.Size" type="System.Drawing.Size, System.Drawing">
-    <value>204, 22</value>
-  </data>
-  <data name="tsmiPageSetup.Text" xml:space="preserve">
-    <value>പേജ് സെറ്റപ്പ്...</value>
+    <value>177, 22</value>
   </data>
   <data name="tsmiSave.Size" type="System.Drawing.Size, System.Drawing">
-    <value>204, 22</value>
-  </data>
-  <data name="tsmiSave.Text" xml:space="preserve">
-    <value>കരുതുക</value>
+    <value>177, 22</value>
   </data>
   <data name="tsmiExit.Size" type="System.Drawing.Size, System.Drawing">
-    <value>204, 22</value>
-  </data>
-  <data name="tsmiExit.Text" xml:space="preserve">
-    <value>ബഹിര്‍ഗ്ഗമനം</value>
+    <value>177, 22</value>
   </data>
   <data name="fooToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
-    <value>73, 20</value>
-  </data>
-  <data name="fooToolStripMenuItem.Text" xml:space="preserve">
-    <value>പുസ്തകം</value>
+    <value>49, 20</value>
   </data>
   <data name="tsmiSearchWord.Size" type="System.Drawing.Size, System.Drawing">
-    <value>152, 22</value>
-  </data>
-  <data name="tsmiSearchWord.Text" xml:space="preserve">
-    <value>വാക്ക്</value>
+    <value>119, 22</value>
   </data>
   <data name="tsmiDictionary.Size" type="System.Drawing.Size, System.Drawing">
-    <value>152, 22</value>
-  </data>
-  <data name="tsmiDictionary.Text" xml:space="preserve">
-    <value>ശബ്ദകോശം</value>
+    <value>119, 22</value>
   </data>
   <data name="advancedToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
-    <value>152, 22</value>
-  </data>
-  <data name="advancedToolStripMenuItem.Text" xml:space="preserve">
-    <value>ഉന്നതം </value>
+    <value>119, 22</value>
   </data>
   <data name="searchToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
-    <value>106, 20</value>
-  </data>
-  <data name="searchToolStripMenuItem.Text" xml:space="preserve">
-    <value>അന്വേഷണം</value>
+    <value>36, 20</value>
   </data>
   <data name="tsmiCascade.Size" type="System.Drawing.Size, System.Drawing">
-    <value>250, 22</value>
-  </data>
-  <data name="tsmiCascade.Text" xml:space="preserve">
-    <value>കാസ്ക്കേഡ്</value>
+    <value>117, 22</value>
   </data>
   <data name="tsmiTileHorizontal.Size" type="System.Drawing.Size, System.Drawing">
-    <value>250, 22</value>
-  </data>
-  <data name="tsmiTileHorizontal.Text" xml:space="preserve">
-    <value>തിരശ്ചീനമായി അടുക്കുക</value>
+    <value>117, 22</value>
   </data>
   <data name="tsmiTileVertical.Size" type="System.Drawing.Size, System.Drawing">
-    <value>250, 22</value>
-  </data>
-  <data name="tsmiTileVertical.Text" xml:space="preserve">
-    <value>ലംബമായി അടുക്കുക</value>
+    <value>117, 22</value>
   </data>
   <data name="windowToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
-    <value>80, 20</value>
-  </data>
-  <data name="windowToolStripMenuItem.Text" xml:space="preserve">
-    <value>വിന്‍‌ഡോ</value>
+    <value>40, 20</value>
   </data>
   <data name="tsmiContents.Size" type="System.Drawing.Size, System.Drawing">
-    <value>346, 22</value>
-  </data>
-  <data name="tsmiContents.Text" xml:space="preserve">
-    <value>ഉള്ളടക്കം</value>
+    <value>126, 22</value>
   </data>
   <data name="tsmiCheckForUpdates.Size" type="System.Drawing.Size, System.Drawing">
-    <value>346, 22</value>
-  </data>
-  <data name="tsmiCheckForUpdates.Text" xml:space="preserve">
-    <value>നിലവിലുള്ള അപ്ഡെയ്റ്റ് അന്വേഷിക്കുക</value>
+    <value>126, 22</value>
   </data>
   <data name="tsmiAbout.Size" type="System.Drawing.Size, System.Drawing">
-    <value>346, 22</value>
-  </data>
-  <data name="tsmiAbout.Text" xml:space="preserve">
-    <value>സംബന്ധിച്ച്</value>
+    <value>126, 22</value>
   </data>
   <data name="helpToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
-    <value>79, 20</value>
-  </data>
-  <data name="helpToolStripMenuItem.Text" xml:space="preserve">
-    <value>സഹായം</value>
+    <value>43, 20</value>
   </data>
   <data name="tsbOpenBook.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -254,9 +194,6 @@
         RU5ErkJggg==
 </value>
   </data>
-  <data name="tsbOpenBook.Text" xml:space="preserve">
-    <value>പുസ്തകം തുറക്കുക</value>
-  </data>
   <data name="tsbSave.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
         iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
@@ -272,9 +209,6 @@
         NPoGxDF4u7YeWm1OtODkiR6+nrRhtCQ0ZxoVdZsaRjXTq5QE74zLEoJ/D0laA2xoOmtG+TV7AAAAAElF
         TkSuQmCC
 </value>
-  </data>
-  <data name="tsbSave.Text" xml:space="preserve">
-    <value>കരുതുക</value>
   </data>
   <data name="tsbPrint.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -292,9 +226,6 @@
         gg==
 </value>
   </data>
-  <data name="tsbPrint.Text" xml:space="preserve">
-    <value>അച്ചടിക്കുക</value>
-  </data>
   <data name="tsbPrintPreview.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
         iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
@@ -309,9 +240,6 @@
         q+JvkXfqJAW5J2JlheI387V4u67XNBoAAAAASUVORK5CYII=
 </value>
   </data>
-  <data name="tsbPrintPreview.Text" xml:space="preserve">
-    <value>അച്ചടി മുന്‍കാഴ്ച</value>
-  </data>
   <data name="tsbPageSetup.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
         iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
@@ -323,9 +251,6 @@
         2CGD7csolSv4+CzgJZmFpkONEJf4X2Dt36F9N3sNWO3WQ9ephbp9CYttC1C1qhr7A7Yve7h0Jk8Pxz2/
         QtmixEkw3piApdRICthhIyNUmoFM9gOTJs5hOU70RQAAAABJRU5ErkJggg==
 </value>
-  </data>
-  <data name="tsbPageSetup.Text" xml:space="preserve">
-    <value>പേജ് സെറ്റപ്പ്</value>
   </data>
   <data name="tsbSearchWord.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -341,9 +266,6 @@
         qWs+S7mhE01tOxp9G6vKhR8mGQNt/UmqTAHK9nag3uVmSVFjVso/wh8aUAbkU28OKqU0/g4q1Ted96bF
         EK/byQAAAABJRU5ErkJggg==
 </value>
-  </data>
-  <data name="tsbSearchWord.Text" xml:space="preserve">
-    <value>വാക്ക് അന്വേഷണം</value>
   </data>
   <data name="tsbDictionary.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -364,9 +286,6 @@
         AElFTkSuQmCC
 </value>
   </data>
-  <data name="tsbDictionary.Text" xml:space="preserve">
-    <value>ശബ്ദകോശം</value>
-  </data>
   <data name="tsbGoto.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
         iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
@@ -378,62 +297,11 @@
         YII=
 </value>
   </data>
-  <data name="tsbGoto.Text" xml:space="preserve">
-    <value>ഇന്ന പാരാഗ്രാഫ, പേജിലേക്ക് പോകുക</value>
-  </data>
   <data name="tslInterfaceLanguage.Size" type="System.Drawing.Size, System.Drawing">
-    <value>126, 22</value>
-  </data>
-  <data name="tslInterfaceLanguage.Text" xml:space="preserve">
-    <value>ഇന്‍റര്‍‌ഫെയ്സ ഭാഷാ:</value>
+    <value>79, 22</value>
   </data>
   <data name="tslPaliScript.Size" type="System.Drawing.Size, System.Drawing">
-    <value>80, 22</value>
-  </data>
-  <data name="tslPaliScript.Text" xml:space="preserve">
-    <value>പാലി ലിപി:</value>
-  </data>
-  <data name="tscbPaliScript.Items" xml:space="preserve">
-    <value>ബംഗാളി</value>
-  </data>
-  <data name="tscbPaliScript.Items1" xml:space="preserve">
-    <value>സിറില്ലിക്</value>
-  </data>
-  <data name="tscbPaliScript.Items2" xml:space="preserve">
-    <value>ദേവനാഗരി</value>
-  </data>
-  <data name="tscbPaliScript.Items3" xml:space="preserve">
-    <value>ഗുജരാത്തി</value>
-  </data>
-  <data name="tscbPaliScript.Items4" xml:space="preserve">
-    <value>ഗുര്‍മുഖി</value>
-  </data>
-  <data name="tscbPaliScript.Items5" xml:space="preserve">
-    <value>കന്നഡ</value>
-  </data>
-  <data name="tscbPaliScript.Items6" xml:space="preserve">
-    <value>ഖ്മേര്‍</value>
-  </data>
-  <data name="tscbPaliScript.Items7" xml:space="preserve">
-    <value>മലയാളം</value>
-  </data>
-  <data name="tscbPaliScript.Items8" xml:space="preserve">
-    <value>മ്യന്‍മാര്‍</value>
-  </data>
-  <data name="tscbPaliScript.Items9" xml:space="preserve">
-    <value>റോമന്‍</value>
-  </data>
-  <data name="tscbPaliScript.Items10" xml:space="preserve">
-    <value>സിംഹള</value>
-  </data>
-  <data name="tscbPaliScript.Items11" xml:space="preserve">
-    <value>തെലുഗു</value>
-  </data>
-  <data name="tscbPaliScript.Items12" xml:space="preserve">
-    <value>ഥൈ</value>
-  </data>
-  <data name="tscbPaliScript.Items13" xml:space="preserve">
-    <value>തിബെറ്റന്‍</value>
+    <value>58, 22</value>
   </data>
   <data name="$this.Icon" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -499,8 +367,5 @@
         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
         AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 </value>
-  </data>
-  <data name="$this.Text" xml:space="preserve">
-    <value>ഛട്ഠ സങ്ഗായന തിപിടക ൪.൧</value>
   </data>
 </root>

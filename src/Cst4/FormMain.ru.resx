@@ -117,139 +117,384 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+  <data name="tsmiOpenBook.Size" type="System.Drawing.Size, System.Drawing">
+    <value>283, 22</value>
+  </data>
   <data name="tsmiOpenBook.Text" xml:space="preserve">
-    <value>Открыть</value><comment>&amp;Open</comment>
+    <value>Открыть</value>
+  </data>
+  <data name="tsmiMru.Size" type="System.Drawing.Size, System.Drawing">
+    <value>283, 22</value>
   </data>
   <data name="tsmiMru.Text" xml:space="preserve">
-    <value>Недавний просмотр</value><comment>Recently Viewed</comment>
+    <value>Недавний просмотр</value>
+  </data>
+  <data name="tsmiPrint.Size" type="System.Drawing.Size, System.Drawing">
+    <value>283, 22</value>
   </data>
   <data name="tsmiPrint.Text" xml:space="preserve">
-    <value>Печать...</value><comment>&amp;Print...</comment>
+    <value>Печать...</value>
+  </data>
+  <data name="tsmiPrintPreview.Size" type="System.Drawing.Size, System.Drawing">
+    <value>283, 22</value>
   </data>
   <data name="tsmiPrintPreview.Text" xml:space="preserve">
-    <value>Предварительный просмотр печати...</value><comment>Print Preview...</comment>
+    <value>Предварительный просмотр печати...</value>
+  </data>
+  <data name="tsmiPageSetup.Size" type="System.Drawing.Size, System.Drawing">
+    <value>283, 22</value>
   </data>
   <data name="tsmiPageSetup.Text" xml:space="preserve">
-    <value>Параметры страницы...</value><comment>Page Setup...</comment>
+    <value>Параметры страницы...</value>
+  </data>
+  <data name="tsmiSave.Size" type="System.Drawing.Size, System.Drawing">
+    <value>283, 22</value>
   </data>
   <data name="tsmiSave.Text" xml:space="preserve">
-    <value>Сохранить</value><comment>&amp;Save</comment>
+    <value>Сохранить</value>
+  </data>
+  <data name="tsmiExit.Size" type="System.Drawing.Size, System.Drawing">
+    <value>283, 22</value>
   </data>
   <data name="tsmiExit.Text" xml:space="preserve">
-    <value>Выход</value><comment>E&amp;xit</comment>
+    <value>Выход</value>
+  </data>
+  <data name="fooToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
+    <value>51, 20</value>
   </data>
   <data name="fooToolStripMenuItem.Text" xml:space="preserve">
-    <value>Книга</value><comment>&amp;Book</comment>
+    <value>Книга</value>
+  </data>
+  <data name="tsmiSearchWord.Size" type="System.Drawing.Size, System.Drawing">
+    <value>154, 22</value>
   </data>
   <data name="tsmiSearchWord.Text" xml:space="preserve">
-    <value>Слово</value><comment>Wo&amp;rd</comment>
+    <value>Слово</value>
+  </data>
+  <data name="tsmiDictionary.Size" type="System.Drawing.Size, System.Drawing">
+    <value>154, 22</value>
   </data>
   <data name="tsmiDictionary.Text" xml:space="preserve">
-    <value>Словарь</value><comment>&amp;Dictionary</comment>
+    <value>Словарь</value>
+  </data>
+  <data name="advancedToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
+    <value>154, 22</value>
   </data>
   <data name="advancedToolStripMenuItem.Text" xml:space="preserve">
-    <value>Расширенный</value><comment>Advanced</comment>
+    <value>Расширенный</value>
   </data>
   <data name="searchToolStripMenuItem.Text" xml:space="preserve">
-    <value>Поиск</value><comment>&amp;Search</comment>
+    <value>Поиск</value>
+  </data>
+  <data name="tsmiCascade.Size" type="System.Drawing.Size, System.Drawing">
+    <value>216, 22</value>
   </data>
   <data name="tsmiCascade.Text" xml:space="preserve">
-    <value>Каскадное расположение</value><comment>Cascade</comment>
+    <value>Каскадное расположение</value>
+  </data>
+  <data name="tsmiTileHorizontal.Size" type="System.Drawing.Size, System.Drawing">
+    <value>216, 22</value>
   </data>
   <data name="tsmiTileHorizontal.Text" xml:space="preserve">
-    <value>Горизонтальная мозаика</value><comment>Tile Horizontal</comment>
+    <value>Горизонтальная мозаика</value>
+  </data>
+  <data name="tsmiTileVertical.Size" type="System.Drawing.Size, System.Drawing">
+    <value>216, 22</value>
   </data>
   <data name="tsmiTileVertical.Text" xml:space="preserve">
-    <value>Вертикальная мозаика</value><comment>Tile Vertical</comment>
+    <value>Вертикальная мозаика</value>
+  </data>
+  <data name="windowToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
+    <value>48, 20</value>
   </data>
   <data name="windowToolStripMenuItem.Text" xml:space="preserve">
-    <value>Окно</value><comment>&amp;Window</comment>
+    <value>Окно</value>
+  </data>
+  <data name="tsmiContents.Size" type="System.Drawing.Size, System.Drawing">
+    <value>204, 22</value>
   </data>
   <data name="tsmiContents.Text" xml:space="preserve">
-    <value>Содержание</value><comment>Contents</comment>
+    <value>Содержание</value>
+  </data>
+  <data name="tsmiCheckForUpdates.Size" type="System.Drawing.Size, System.Drawing">
+    <value>204, 22</value>
   </data>
   <data name="tsmiCheckForUpdates.Text" xml:space="preserve">
-    <value>Проверить обновления</value><comment>Check for Updates</comment>
+    <value>Проверить обновления</value>
+  </data>
+  <data name="tsmiAbout.Size" type="System.Drawing.Size, System.Drawing">
+    <value>204, 22</value>
   </data>
   <data name="tsmiAbout.Text" xml:space="preserve">
-    <value>О программе</value><comment>&amp;About</comment>
+    <value>О программе</value>
+  </data>
+  <data name="helpToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing">
+    <value>65, 20</value>
   </data>
   <data name="helpToolStripMenuItem.Text" xml:space="preserve">
-    <value>Справка</value><comment>&amp;Help</comment>
+    <value>Справка</value>
+  </data>
+  <data name="tsbOpenBook.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIwSURBVDhPldDdT1JhHAdw/qYu2qy1tbmVF9Wym8q2cs4E
+        i2CYoHIgwZeI6hhmvKwzdI45dRGsOSpxTDmQIhRUgxj5gsBQATecrlor/XZewmRwkd/tuXn2+372ex7B
+        4Qy9XMJsOI/izk/8vfr/kLYY2LDIg7EvRwNeOdPoNywC+0A2v4unjqUyYHw6gWH7AgZsQRjGI5W41RqF
+        Vj+PfQbYKGzD6cvi1+89vHAvY9QR5Ipb29+5DeWD/krAZIqgu49mF8AmA3jDaUwy5Sl/CquZHHa//eDK
+        bGSPpmGlErBPpuGb2+ExkgxArZ0D9ngg9jUDLRXATDBZAdzSTCCZKoCyxGExxnhAp/eDuOfhBkqA2kxX
+        BVpUNqTWtzjAQH7kgZ5+L7pU5YD4vrMq0KwcRnazCIsphsf6DzygIFzoJNzcQAkQdU9UBRo7zNjIF2Ec
+        ikLXt8gDrW1j6FSWA02q0eqAwszNPCEjUClpCGovt+PMlS5I707hmTFwADQqRw6AVLYAFx1HC0EhHE1i
+        jfmDh7oQ5HIPv0EJaVe8xXMqxAHXOyygP2UxH05wRc2gHaHPK1hO5ZDM5KHVvINE8oYH2BxGSgC7rqR3
+        BE53EL73ce5+NZ1DYmWdefIsbooc/wA2LHL2KsEhp+rv4FjtNQiFLoiEryGVzkDW5oFS4UWvdgEqNY0b
+        YqocYMMi7DlxXoTjdc2oOdeKmgu3cfKimEHFOH1JhroGAvVNPWgQk5XA0SIQ/AEX9kmKy3zBVQAAAABJ
+        RU5ErkJggg==
+</value>
   </data>
   <data name="tsbOpenBook.Text" xml:space="preserve">
-    <value>Открыть книгу</value><comment>Open Book</comment>
+    <value>Открыть книгу</value>
+  </data>
+  <data name="tsbSave.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIvSURBVDhPrZLdS9NRGMd//0L33QRddFtTYzgXq8GvXENZ
+        Ngwrwl5+kWZpukwTFSvTqPkG2QqXTlqtJuGkIl/AFCkRZSpZmrmiJQ41xSaCwdfznP3yuIouogeem8P5
+        fM55XqT/Es+fhUHpa11Ci3cRD93zaGoM4a5jGnW1X2C/FcD18kmUloyjsOAt8nJHcP6cHyouSQR2dQK1
+        NSv4WyyvrMKU2oVDqU95qrgkeZ8scEFlxTf16u9BcGh+GbssL6DRKLAe9AiB+8EcF5SWfFWvR8dP+GNw
+        ATFmHwouTeGApVkInA0zXHDR9kFFRGyEhydC2CZ7kZM9huQkpxDU3w5yQdbZERWLxK9wnz+IzQY3FGUA
+        ZrNDCGqqP3OBcmpARf8Md/Z/wqb4Rhw+8gqJiXVCcKNyCh3tYKMEjh1/A+vRXt5tahjVTN+mlyNwN1Ks
+        LyHLdiG4UjaBNh/YDgDNrh9s7t9Rfm2WN5UaRjVnZvjX4f3JrTAaK4TgcuEYPI+A+85VtjhhmNKyo9KS
+        bkPamaIInMTgfR4YDGVCYMsbZTBQXRXmLxNE5zE6GYPvZzA6OQsl9yr2mFo4rNvtgl5fJAS0lo47WP82
+        CQg+nX8T7wJzCEwv4kKxHbEGF4ObEJtwD7r4fCHIzBhidS9xeKvRgy07ZDxu64GvvQ8d3f3ofT2IvWYr
+        NPoGxDF4u7YeWm1OtODkiR6+nrRhtCQ0ZxoVdZsaRjXTq5QE74zLEoJ/D0laA2xoOmtG+TV7AAAAAElF
+        TkSuQmCC
+</value>
   </data>
   <data name="tsbSave.Text" xml:space="preserve">
-    <value>Сохранить</value><comment>Save</comment>
+    <value>Сохранить</value>
+  </data>
+  <data name="tsbPrint.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIqSURBVDhPrZL7T1JxAMVZP/b/tLa2Wm21mail1YZlRjid
+        k6JhTApClhGmktrDWlKjK3OBDrLAMWJaY9MZZJbo0umWQIEFXRPQMB6ne788HFpbW322s93d3fM598X5
+        7xjtUxh0vId5dOaPMY14kL18O6zgrcePrWz8TMIbWMGgbQIlZy6DW31pu4Qts0ml0gjRETjdH0iGHC4Y
+        LONwz/hQJVITQbZSiN7qxsfPdHYzA7u8Go1jdnEZJruLLP92XWsaB5sks+4LhgvWbc5puDxeVDaocOSs
+        HBrtM9zps21KFJ1PSHnENZ9fzS0HwzHML4XRa3CglC+Dsqsfj0xjKGVEpNzUpof6/hAoyxs8MDqhf/4a
+        tyk7rt4yQtyiBb+xA+U1ChSfluLkuevo1lkhUWlRnHuMm49fIBKLk+WtJJIprMcT5E6+0uv49CUKeTuF
+        OmkXcweyjEB1zwzLq3d46nCDMr/E3b5hqHsGIGvXQdTcA8HFDvAaWnBUIEfRKQnOM+cqhdew/7goI1B2
+        D8AfCGU3C4msbcAbXMVOcEh2UBzwxW0oqZZi1+GajKC504DpuSUw7ywPe/wtmsCcfw1jszQpW7OCY7UK
+        7KsQbgqUGgqaXhN8oTjoWBqB72ksLqcwsfADw5NR9DtXSDGXQzwxKecF9ZJWyG7oMDrpJ9/2b1IgYJGo
+        HqKiTokywRVwmd+0qKoJB3mNOHDiAvaWC7GnrB67ubX5YkH53+BwfgHgHTGbZU7qDAAAAABJRU5ErkJg
+        gg==
+</value>
   </data>
   <data name="tsbPrint.Text" xml:space="preserve">
-    <value>Печать</value><comment>Print</comment>
+    <value>Печать</value>
+  </data>
+  <data name="tsbPrintPreview.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAHUSURBVDhPrZDbS5NxHMb3z0RXXkRZIt5EkCaKhOWchwud
+        uIiJUKjgzW4ygg42h25KzZaLNOkt3lk5T8tNa0FRwWLahQNRpyxPKE63uU/b2phvr9MueuDh9+X5/p7P
+        e1D8F4nOGf62MOFhwP4Vq+1TwsmrhyteSI4yPRp8z9nCuqMhrxw/Mi47rXZGpj1HQwZHv2cEGJ6+S5RT
+        TsZSPX/7WbYIh3aYnJ7E2Gvh1n09d/Sd5BWrDwf0iW7JYnd3B3F4mDHnFP7AL+aXA1gFEbW2iWptqxxi
+        FlyS0DHlwu5wJrJwBLaC+yytRTCYX6Cq0cgBPQMTkrDLbGFxJUCqvLwRZnYxhM01Q3lVlRzQ9WxEErYb
+        e1hYWf1TXo/Eynu4Z4N0v3RTWlYmB8T/dHJMSBBtiHYH/vXYk5dCfPwZ5M2XbRpadJRXVKBva5JCDgKi
+        0ShzPh932w087h/itcuLSXDT0KxDqbpK/8NqRFOjFHIQsBeKsLYZxOP10mE0ormupbaunkrlZQw3L+B/
+        ks/+hxosD26kISlA/Mzkttv3uFZ8hm+6bBZM51m1KWnWlKQB2ZfUx/pi4RU0RacZb8mhviALVdG59Gf8
+        q+JvkXfqJAW5J2JlheI387V4u67XNBoAAAAASUVORK5CYII=
+</value>
   </data>
   <data name="tsbPrintPreview.Text" xml:space="preserve">
-    <value>Предварительный просмотр печати</value><comment>Print Preview</comment>
+    <value>Предварительный просмотр печати</value>
+  </data>
+  <data name="tsbPageSetup.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFkSURBVDhPrZC/S0JRGIYda2ipIQgaamqKlqKtMYpoiCCI
+        hkD/GYWCFKXsh5FKqWFhYGilZRmpWUlesKJBGkQsS8PU1PvG+boXNOTm4AMf73DO+9z7HVnTcPhi+Dt2
+        TxQW1y1MBwEa4Wp9WIHxoOAoq1mznWJoXCEt2fNyiMmj4OYjiMzdIDwTRGDqEhcTZ9CaXHD7o9IS21GE
+        vnY3G6asRrN1SGVxhEot285ruhyavqKsxjG8TxJRJFRqMTp+i/5JH6UIz/PYHbAi+ZYjweCYvL5gw35O
+        Be/oMaVI8bsMc58R8URGWqC3eKjgGnFSMsoVHtlcEYaedTzG09ICndlNJbavSL5QQur9Cytdy7h/SkkL
+        2CGD7csolSv4+CzgJZmFpkONEJf4X2Dt36F9N3sNWO3WQ9ephbp9CYttC1C1qhr7A7Yve7h0Jk8Pxz2/
+        QtmixEkw3piApdRICthhIyNUmoFM9gOTJs5hOU70RQAAAABJRU5ErkJggg==
+</value>
   </data>
   <data name="tsbPageSetup.Text" xml:space="preserve">
-    <value>Параметры страницы</value><comment>Page Setup</comment>
+    <value>Параметры страницы</value>
+  </data>
+  <data name="tsbSearchWord.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAH9SURBVDhPzZFPSJNxHMZ37FDQobBDUIFYBoU7pAwNO4Tl
+        IkeYTewwauDFHaa0WW296zB92Z+0uTQommNW9MfSBssmSYjDohjIIKhDWVYmFTWpLLX16X3ftWq46FCH
+        Hvjyg+f7fJ/f8/v+VP8U7u5hGl1himva+E4p+B2/AKV1fqY/zLJYbWG5xq6I5fNXXhHmgnzLYd8AuoYz
+        FOk8rNe2KmLfuVhOfgEcXYN8np3n2shjLL4R1mxtYdFGKxk+HBtHDI2RX5HD4GB7BEdnFKPQS2X9aTbo
+        vFLsExTXdmG0XcAsvV/f1MM6rSgZOzEeufTTRI5u74jyKvmJ5EyK2P0kBkeEgu0iSzfZsB4LI+P9zDzD
+        ibfssV4hf5uYbdDk6ldEtxMv8YTusdN0nrwyQRmWK/FwkviDN7iCd6mx9rKi1M4BbyRt4gkMYWrpp6qh
+        G3W1j8JKkYIKJ3nS9uUEZvFqurdb6u1ws3KznWUlzZToj6cNWk8NkUp95enUR27ceY4zEGf1FiFrUfuF
+        y7yYmmZ84jV9tx5hct2kMPMbNt915ua+SMPP8PbEMRyN/mcG8rBcE5PvGBx9gv/iGNWWPtZKu1IE+w4F
+        qWs+S7mhE01tOxp9G6vKhR8mGQNt/UmqTAHK9nag3uVmSVFjVso/wh8aUAbkU28OKqU0/g4q1Ted96bF
+        EK/byQAAAABJRU5ErkJggg==
+</value>
   </data>
   <data name="tsbSearchWord.Text" xml:space="preserve">
-    <value>Поиск Слова</value><comment>Word Search</comment>
+    <value>Поиск Слова</value>
+  </data>
+  <data name="tsbDictionary.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAALmSURBVDhPrdFNTBNpGMBxrnsy7tWTidnE7M148GDCQUzQ
+        rIYqULC0VsoWwYYCWhFbPtx2KbSl0IpIa8GxIl9iKS1QrcqXIViVuFUXVtmsmqgxGmNijBFS+TuMbGaz
+        Z5/kSeby/70z76R9lxGEhwQCSTrO3mUk+ozI8D+Ew4uEQo8ZHFxgYOARvb1JurvvIwgJJif/ZC39NoKQ
+        JBp5hd+XYHYGpqdWGB9PEYt9Yij8gb7+dwjB13T4n2NreMTqHDeFZOSc/554yt+0nZ5hYiLF9fhnRkY/
+        0mSM4jDF6RJecMb3lBbvEyw1cxJgLOuRgfb2WbovzuNpnSS+Fvd2vyTrhyxyfsznrBi3ehZpdM1jOnFb
+        AgyGizLg9d6iq+s+za7rjIrxldB76gt7OLytFvWmI1QfvERT8zynbEnKKqcloOSwIAMt7gl8HQka7TFC
+        Q+/p7XvDgQ2FnDKMcCy3C83mCn5rSGKuuYu+dFwCivWdMuB0XMPrmcZqjYgX9haPLSG9vvbnSlQbS6Tn
+        4+U3qDwxi0YXk4AinU8GHI4YbvdN6moGES684kh6A0VbzZjFNzAVD6P6yYh6i4XSiimUBREJ0B48IwMu
+        15gIxLFY+jnt/Yvs9XlSbLU/wFI3R0lOkH3rlBTqRlEor5BKpdCo2/77CVGam8eoq+3H07aI072AtUGM
+        6+c4Vn0bQ8U0RaU3KdBdJVPRz/LyMgUqrww02odwNA2LQN+3eO1k00kxFm/93zhXHWXH7ksSkJfXIgO/
+        2waxiWs+GcTuXKDW+gdV5juUHZ1Bb5hA82tcjMdQ5EfYnnGBpaUlcrOdMlBZHqDCGECnbUVbOIBWF+GA
+        Jkx23mX27u8h85cgGZnnSc/oJH1HkJWVL+xX2GWgxR2l3HgOd2cYl28Ipz8srWN1ff9b/zCJ5GOy9tpk
+        YHXqas9TUhxAr/eJ/7gd7SEvak0rKpULpbKR7Bwb+xT17NlTw+5d1ezcWSUCaWlfASJcO+fwNrBUAAAA
+        AElFTkSuQmCC
+</value>
   </data>
   <data name="tsbDictionary.Text" xml:space="preserve">
-    <value>Словарь</value><comment>Dictionary</comment>
+    <value>Словарь</value>
+  </data>
+  <data name="tsbGoto.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8
+        YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAD/SURBVDhPYxghoGzOi/+xzef/Q7mkg+KZT//7lR39rx+9
+        EbchIFsKpj36n9F3639860UUnDXh9v/sWd//a0esA2OoFlRQNOPJ/2WHf/+ft+/v/1m7//6fsv3f/77N
+        //63r//3v3H1///5c3/8D2x+ituQnEn3/k/f+ed/xdK//4sX/v6fM+fn/9Sp3/7HTfjyP7Ln0//glqf/
+        fapv/HfMO4bdgNTu6/87N/z9HzPh+/+wjjco2L/+3n+Psov/nfKO/DcMW/RfxXMapgGgUFZ2n/Rf1XvW
+        f3X/RShYM2T1f/us/f+1AhZg10wIqPrO/a/hN5c8zSAA0ki25mEPGBgAfemyo5FDYMwAAAAASUVORK5C
+        YII=
+</value>
   </data>
   <data name="tsbGoto.Text" xml:space="preserve">
-    <value>Перейти к параграфу или странице</value><comment>Go to a paragraph or page</comment>
+    <value>Перейти к параграфу или странице</value>
+  </data>
+  <data name="tslInterfaceLanguage.Size" type="System.Drawing.Size, System.Drawing">
+    <value>106, 22</value>
   </data>
   <data name="tslInterfaceLanguage.Text" xml:space="preserve">
-    <value>Язык интерфейса:</value><comment>Interface Language:</comment>
+    <value>Язык интерфейса:</value>
+  </data>
+  <data name="tslPaliScript.Size" type="System.Drawing.Size, System.Drawing">
+    <value>116, 22</value>
   </data>
   <data name="tslPaliScript.Text" xml:space="preserve">
-    <value>Шрифт языка Пали:</value><comment>Pali Script:</comment>
+    <value>Шрифт языка Пали:</value>
   </data>
   <data name="tscbPaliScript.Items" xml:space="preserve">
-    <value>Бенгальский язык</value><comment>Bengali</comment>
+    <value>Бенгальский язык</value>
   </data>
   <data name="tscbPaliScript.Items1" xml:space="preserve">
-    <value>Кириллица</value><comment>Cyrillic</comment>
+    <value>Кириллица</value>
   </data>
   <data name="tscbPaliScript.Items2" xml:space="preserve">
-    <value>Деванагари</value><comment>Devanagari</comment>
+    <value>Деванагари</value>
   </data>
   <data name="tscbPaliScript.Items3" xml:space="preserve">
-    <value>Гуджарати</value><comment>Gujarati</comment>
+    <value>Гуджарати</value>
   </data>
   <data name="tscbPaliScript.Items4" xml:space="preserve">
-    <value>Гурмухи</value><comment>Gurmukhi</comment>
+    <value>Гурмухи</value>
   </data>
   <data name="tscbPaliScript.Items5" xml:space="preserve">
-    <value>Каннада</value><comment>Kannada</comment>
+    <value>Каннада</value>
   </data>
   <data name="tscbPaliScript.Items6" xml:space="preserve">
-    <value>Кхмер</value><comment>Khmer</comment>
+    <value>Кхмер</value>
   </data>
   <data name="tscbPaliScript.Items7" xml:space="preserve">
-    <value>Малаялам</value><comment>Malayalam</comment>
+    <value>Малаялам</value>
   </data>
   <data name="tscbPaliScript.Items8" xml:space="preserve">
-    <value>Бирманский</value><comment>Myanmar</comment>
+    <value>Бирманский</value>
   </data>
   <data name="tscbPaliScript.Items9" xml:space="preserve">
-    <value>Латинский</value><comment>Roman</comment>
+    <value>Латинский</value>
   </data>
   <data name="tscbPaliScript.Items10" xml:space="preserve">
-    <value>Синхала</value><comment>Sinhala</comment>
+    <value>Синхала</value>
   </data>
   <data name="tscbPaliScript.Items11" xml:space="preserve">
-    <value>Телугу</value><comment>Telugu</comment>
+    <value>Телугу</value>
   </data>
   <data name="tscbPaliScript.Items12" xml:space="preserve">
-    <value>Тайский</value><comment>Thai</comment>
+    <value>Тайский</value>
   </data>
   <data name="tscbPaliScript.Items13" xml:space="preserve">
-    <value>Тибетский</value><comment>Tibetan</comment>
+    <value>Тибетский</value>
   </data>
-  <data name="$this.Text" xml:space="preserve">
-    <value>Chattha Sangayana Tipitaka 4.0</value><comment>Chattha Sangayana Tipitaka 4.0</comment>
+  <data name="$this.Icon" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        AAABAAIAEBAAAAAAAABoBQAAJgAAACAgAAAAAAAAqAgAAI4FAAAoAAAAEAAAACAAAAABAAgAAAAAAEAB
+        AAAAAAAAAAAAAAAAAAAAAAAA////AP/+9AD/9PAA9v//APLs7QDu7e4A4u3pAODi7gDf9/YA2uj0AM7x
+        /wDG4NQAweHAANXdyADU0ckAxdzSAM/TzQDEycQAxuC6AMLSvgC/5+EAtd//AL7b4QC7xvYAoNLzALjd
+        zwCp1NAAosPfAJrS7wCawu8Agd//AILU/wCCwfoAicTlAL7SvQCPveYAubOwALS+rwCzuKUAr7mmAISs
+        uwCMkbAAk5qRAJaWlACNn44AiJCHAImKhgCHjIcAa8b7AGfC/wBdyf0AW8D/AFPE/wB6vf8AZ7L5AHOq
+        yABpnsUAULHkAFCi/wBdo+cAT6XkAFih2wBTrNEAU6vPAFqR4wBbj+EAW5jaAF2YyABbksUAR4vVAEiD
+        ywBmoqIAYZypAFeMvgBdfsoAR37SAEd0xQBnf7UAZ1yZAFp9vgBddb4AR3S5AFpyngAzabcAMmydAHx6
+        egB6d3QAcX95AHZtcAB1bWgAbWxsAG5mbQBqZ2AAaWZfAFVVUgBWSlIAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAFYAAwIBU0xLRVFUAQIDAFYsEyUrW01CO0NBTlorJSIsEVpcV0gwQDtKPTBIV11VEAFb
+        Rz4zAEZQRFIAMj9HWwEANzkyAC8pSU84LgAyPCgAAAg0Cg1ZHDo6GVgTCjQGAAAAFgBaJhgjNhcnWgEU
+        AAAAAAQqVQwgMSEdElUtBAAAAAAABV4PNR4fNQtfBwAAAAAAAAAADhUJGhskAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKAAAACAAAABAAAAAAQAIAAAA
+        AACABAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAIAAAIAAAACAgACAAAAAgACAAICAAACAgIAAwNzAAPDK
+        pgCqPyoA/z8qAABfKgBVXyoAql8qAP9fKgAAfyoAVX8qAKp/KgD/fyoAAJ8qAFWfKgCqnyoA/58qAAC/
+        KgBVvyoAqr8qAP+/KgAA3yoAVd8qAKrfKgD/3yoAAP8qAFX/KgCq/yoA//8qAAAAVQBVAFUAqgBVAP8A
+        VQAAH1UAVR9VAKofVQD/H1UAAD9VAFU/VQCqP1UA/z9VAABfVQBVX1UAql9VAP9fVQAAf1UAVX9VAKp/
+        VQD/f1UAAJ9VAFWfVQCqn1UA/59VAAC/VQBVv1UAqr9VAP+/VQAA31UAVd9VAKrfVQD/31UAAP9VAFX/
+        VQCq/1UA//9VAAAAfwBVAH8AqgB/AP8AfwAAH38AVR9/AKoffwD/H38AAD9/AFU/fwCqP38A/z9/AABf
+        fwBVX38Aql9/AP9ffwAAf38AVX9/AKp/fwD/f38AAJ9/AFWffwCqn38A/59/AAC/fwBVv38Aqr9/AP+/
+        fwAA338AVd9/AKrffwD/338AAP9/AFX/fwCq/38A//9/AAAAqgBVAKoAqgCqAP8AqgAAH6oAVR+qAKof
+        qgD/H6oAAD+qAFU/qgCqP6oA/z+qAABfqgBVX6oAql+qAP9fqgAAf6oAVX+qAKp/qgD/f6oAAJ+qAFWf
+        qgCqn6oA/5+qAAC/qgBVv6oAqr+qAP+/qgAA36oAVd+qAKrfqgD/36oAAP+qAFX/qgCq/6oA//+qAAAA
+        1ABVANQAqgDUAP8A1AAAH9QAVR/UAKof1AD/H9QAAD/UAFU/1ACqP9QA/z/UAABf1ABVX9QAql/UAP9f
+        1AAAf9QAVX/UAKp/1AD/f9QAAJ/UAFWf1ACqn9QA/5/UAAC/1ABVv9QAqr/UAP+/1AAA39QAVd/UAKrf
+        1AD/39QAAP/UAFX/1ACq/9QA///UAFUA/wCqAP8AAB//AFUf/wCqH/8A/x//AAA//wBVP/8Aqj//AP8/
+        /wAAX/8AVV//AKpf/wD/X/8AAH//AFV//wCqf/8A/3//AACf/wBVn/8Aqp//AP+f/wAAv/8AVb//AKq/
+        /wD/v/8AAN//AFXf/wCq3/8A/9//AFX//wCq//8A/8zMAP/M/wD//zMA//9mAP//mQD//8wAAH8AAFV/
+        AACqfwAA/38AAACfAABVnwAAqp8AAP+fAAAAvwAAVb8AAKq/AAD/vwAAAN8AAFXfAACq3wAA/98AAFX/
+        AACq/wAAAAAqAFUAKgCqACoA/wAqAAAfKgBVHyoAqh8qAP8fKgAAPyoAVT8qAPD7/wCkoKAAgICAAAAA
+        /wAA/wAAAP//AP8AAAD/AP8A//8AAP///wD/////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////8A9vb29vb29vb2fX19oaGhoaF9fX19
+        9v/29vb29vb2APX29vb29q+vrwihoaGhoaWlpaGhfX0Ir6+v9vb2//b1MQgICAiGhoL3B6F9pcfHy8el
+        paF5eQf3goaGCAgICDEHhoaC9/cHBzFVB6GhfX2hfX2hoXkHVTEHB/f3goaGBwj3BwcHMTEHB4GlpcfH
+        x8ehocelpaWBBwcxMQcH9/cI/wcHMTEHB4GBpcvQfaF9paV5oYHQy6WBgQcHMTEH9///CFUHB4GBpaXL
+        0P99oXmlfX2hB//Qy6mlgYEHB1UI//+vBweBgaWpy9D2hn3HoXmhpaVVCPbQy6mlgYEHB6////99gaWp
+        qcvQ9ggH93l9oaFVofcHCPbQy8ulpYEH//////+lpcvL0Pb291WGoX2lx32ghlX39vbQy8ulpf//////
+        /6nLy9DQ/4YxBwjHx8elx6UIBzGG9tDQy8up////////9svQ0PYI9wf3CMfHpcfHqgiCBwcI9tDQy6//
+        ////////qtD2r/cxB4aqzNChocvMqoYHMfev9tCu//////////8I9v8IBwf3CK7L0KXH0MyqCPcHB4b/
+        9gj////////////3CPcxB4YIqsvPx6XQzKoIhgcx9wj3///////////////3Bwf3hq7My9DHpdDLqgiG
+        9wcHB/////////////////8HB4IIqszLz9DQy8vMqgiCB1X///////////////////8xMQiqzMvL0NDL
+        y8yqCC0x////////////////////////gobMy8v29svLqgcH//////////////////////////////b2
+        9q8IhoL2////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+</value>
   </data>
 </root>

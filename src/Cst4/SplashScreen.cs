@@ -97,9 +97,9 @@ namespace CST
 			this.lblTimeRemaining = new System.Windows.Forms.Label();
 			this.timer1 = new System.Windows.Forms.Timer(this.components);
 			this.SuspendLayout();
-			// 
+			//
 			// lblStatus
-			// 
+			//
 			this.lblStatus.BackColor = System.Drawing.Color.White;
 			this.lblStatus.Location = new System.Drawing.Point(5, 370);
 			this.lblStatus.Name = "lblStatus";
@@ -107,9 +107,9 @@ namespace CST
 			this.lblStatus.TabIndex = 0;
 			this.lblStatus.TextAlign = System.Drawing.ContentAlignment.TopCenter;
 			this.lblStatus.DoubleClick += new System.EventHandler(this.SplashScreen_DoubleClick);
-			// 
+			//
 			// pnlStatus
-			// 
+			//
 			this.pnlStatus.BackColor = System.Drawing.Color.White;
 			this.pnlStatus.Location = new System.Drawing.Point(112, 365);
 			this.pnlStatus.Name = "pnlStatus";
@@ -117,22 +117,22 @@ namespace CST
 			this.pnlStatus.TabIndex = 1;
 			this.pnlStatus.DoubleClick += new System.EventHandler(this.SplashScreen_DoubleClick);
 			this.pnlStatus.Paint += new System.Windows.Forms.PaintEventHandler(this.pnlStatus_Paint);
-			// 
+			//
 			// lblTimeRemaining
-			// 
+			//
 			this.lblTimeRemaining.BackColor = System.Drawing.Color.Transparent;
 			this.lblTimeRemaining.Location = new System.Drawing.Point(112, 341);
 			this.lblTimeRemaining.Name = "lblTimeRemaining";
 			this.lblTimeRemaining.Size = new System.Drawing.Size(279, 16);
 			this.lblTimeRemaining.TabIndex = 2;
 			this.lblTimeRemaining.DoubleClick += new System.EventHandler(this.SplashScreen_DoubleClick);
-			// 
+			//
 			// timer1
-			// 
+			//
 			this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
-			// 
+			//
 			// SplashScreen
-			// 
+			//
 			this.AutoScaleBaseSize = new System.Drawing.Size(5, 13);
 			this.BackColor = System.Drawing.Color.White;
 			this.BackgroundImage = ((System.Drawing.Image)(resources.GetObject("$this.BackgroundImage")));
@@ -144,7 +144,7 @@ namespace CST
 			this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
 			this.Name = "SplashScreen";
 			this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-			this.Text = "Chattha Sangayana Tipitaka 4.0 by Vipassana Research Institute";
+			this.Text = "Chattha Sangayana Tipitaka 4.1 by Vipassana Research Institute";
 			this.DoubleClick += new System.EventHandler(this.SplashScreen_DoubleClick);
 			this.ResumeLayout(false);
 
@@ -153,7 +153,7 @@ namespace CST
 
 		// ************* Static Methods *************** //
 
-		// A static method to create the thread and 
+		// A static method to create the thread and
 		// launch the SplashScreen.
 		static public void ShowSplashScreen()
 		{
@@ -165,7 +165,7 @@ namespace CST
             ms_oThread.SetApartmentState(ApartmentState.STA);
 			ms_oThread.Start();
 		}
-        
+
         // FES
         static public void ShowAboutScreen(int millisecs)
         {
@@ -175,14 +175,14 @@ namespace CST
             Thread.Sleep(millisecs);
             CloseForm();
         }
-        
+
 		// A property returning the splash screen instance
-		static public SplashScreen SplashForm 
+		static public SplashScreen SplashForm
 		{
 			get
 			{
 				return ms_frmSplash;
-			} 
+			}
 		}
 
 		// A private entry point for the thread.
@@ -197,7 +197,7 @@ namespace CST
 		{
 			if( ms_frmSplash != null && ms_frmSplash.IsDisposed == false )
 			{
-                // FES: suppress the black flash of these controls' rectangles as the 
+                // FES: suppress the black flash of these controls' rectangles as the
                 // splash screen goes away in Help | About mode
                 ms_frmSplash.pnlStatus.Visible = false;
                 ms_frmSplash.lblTimeRemaining.Visible = false;
@@ -234,7 +234,7 @@ namespace CST
 				ms_frmSplash.SetReferenceInternal();
 		}
 
-		// Static method called from the initializing application to 
+		// Static method called from the initializing application to
 		// give the splash screen reference points.  Not needed if
 		// you are using a lot of status strings.
 		static public void SetReferencePoint()
@@ -265,7 +265,7 @@ namespace CST
 				m_dblCompletionFraction = ( m_iIndex > 0 )? 1: 0;
 		}
 
-		// Utility function to return elapsed Milliseconds since the 
+		// Utility function to return elapsed Milliseconds since the
 		// SplashScreen was launched.
 		private double ElapsedMilliSeconds()
 		{

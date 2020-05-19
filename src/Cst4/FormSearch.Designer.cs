@@ -138,12 +138,12 @@ namespace CST
             // 
             // comboWildRegex
             // 
+            resources.ApplyResources(this.comboWildRegex, "comboWildRegex");
             this.comboWildRegex.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboWildRegex.FormattingEnabled = true;
             this.comboWildRegex.Items.AddRange(new object[] {
             resources.GetString("comboWildRegex.Items"),
             resources.GetString("comboWildRegex.Items1")});
-            resources.ApplyResources(this.comboWildRegex, "comboWildRegex");
             this.comboWildRegex.Name = "comboWildRegex";
             this.comboWildRegex.SelectedIndexChanged += new System.EventHandler(this.comboWildRegex_SelectedIndexChanged);
             // 
@@ -221,6 +221,7 @@ namespace CST
             // 
             // gbLimitSearch
             // 
+            resources.ApplyResources(this.gbLimitSearch, "gbLimitSearch");
             this.gbLimitSearch.Controls.Add(this.comboBookSet);
             this.gbLimitSearch.Controls.Add(this.linkLabelDelete);
             this.gbLimitSearch.Controls.Add(this.linkLabelEdit);
@@ -233,19 +234,18 @@ namespace CST
             this.gbLimitSearch.Controls.Add(this.cbSutta);
             this.gbLimitSearch.Controls.Add(this.cbVinaya);
             this.gbLimitSearch.Controls.Add(this.lblSelectBookColl);
-            resources.ApplyResources(this.gbLimitSearch, "gbLimitSearch");
             this.gbLimitSearch.Name = "gbLimitSearch";
             this.gbLimitSearch.TabStop = false;
             this.gbLimitSearch.Enter += new System.EventHandler(this.gbLimitSearch_Enter);
             // 
             // comboBookSet
             // 
+            resources.ApplyResources(this.comboBookSet, "comboBookSet");
             this.comboBookSet.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboBookSet.FormattingEnabled = true;
             this.comboBookSet.Items.AddRange(new object[] {
             resources.GetString("comboBookSet.Items"),
             resources.GetString("comboBookSet.Items1")});
-            resources.ApplyResources(this.comboBookSet, "comboBookSet");
             this.comboBookSet.Name = "comboBookSet";
             this.comboBookSet.SelectedIndexChanged += new System.EventHandler(this.comboBookSet_SelectedIndexChanged);
             // 
