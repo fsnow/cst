@@ -45,6 +45,7 @@ namespace CST
 			AppState.Deserialize();
 			XmlFileDates.Deserialize();
 			ChapterLists.Deserialize();
+			BookCollections.Deserialize();
 
 			SplashScreen.SetStatus("Checking Fonts");
 

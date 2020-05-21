@@ -17,6 +17,7 @@ namespace CST
 			AppState.Serialize();
 			XmlFileDates.Serialize();
 			ChapterLists.Serialize();
+            BookCollections.Serialize();
 
 			if (disposing && (components != null))
 			{
@@ -246,7 +247,6 @@ namespace CST
             // 
             resources.ApplyResources(this.tsbOpenBook, "tsbOpenBook");
             this.tsbOpenBook.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
-            this.tsbOpenBook.Margin = new System.Windows.Forms.Padding(10, 1, 0, 2);
             this.tsbOpenBook.Name = "tsbOpenBook";
             this.tsbOpenBook.Click += new System.EventHandler(this.tsbOpenBook_Click);
             // 
