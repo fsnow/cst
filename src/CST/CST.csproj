@@ -76,22 +76,17 @@
     <Compile Include="Conversion\VriDevToUni.cs" />
     <Compile Include="IpeAnalyzer.cs" />
     <Compile Include="Conversion\Deva2Ipe.cs" />
-    <Compile Include="DevaXmlTokenizer.cs" />
     <Compile Include="Conversion\Ipe2Latn.cs" />
-    <Compile Include="DevaXmlAnalyzer.cs" />
     <Compile Include="IpeComparer.cs" />
     <Compile Include="IpeFilter.cs" />
     <Compile Include="Conversion\LatinCapitalizer.cs" />
     <Compile Include="Conversion\Latn2Deva.cs" />
     <Compile Include="Conversion\Latn2Ipe.cs" />
     <Compile Include="Conversion\Mymr2Deva.cs" />
-    <Compile Include="BookIndexer.cs" />
     <Compile Include="IpeWordChecker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Conversion\ScriptConverter.cs" />
     <Compile Include="Set.cs" />
-    <Compile Include="TermMatchEvaluator.cs" />
-    <Compile Include="TermVectorOffsetInfoComparer.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

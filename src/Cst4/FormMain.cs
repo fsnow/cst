@@ -34,6 +34,8 @@ namespace CST
 
 			DateTime t0 = DateTime.Now;
 
+			string foo = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
 			// Set current directory to be the directory containing the EXE.
 			// All file paths are relative to that directory.
 			string path = Assembly.GetExecutingAssembly().Location;

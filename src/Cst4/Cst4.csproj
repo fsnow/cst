@@ -1197,6 +1197,10 @@
     <None Include="Resources\folder-closed.png" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CST.Lucene\CST.Lucene.csproj">
+      <Project>{0ae03d7b-2045-4b7c-8a27-e647d5f1a7d9}</Project>
+      <Name>CST.Lucene</Name>
+    </ProjectReference>
     <ProjectReference Include="..\CST\CST.csproj">
       <Project>{A4930AA3-E712-4C84-A016-CBC9EC0EC346}</Project>
       <Name>CST</Name>
