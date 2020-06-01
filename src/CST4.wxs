@@ -1,14 +1,14 @@
 <?xml version='1.0' encoding='windows-1252'?>
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
-  <Product Name='Chattha Sangayana Tipitaka 4.0' Id='A0C75468-DE8B-4F9C-8144-0E1E66F4030E' UpgradeCode='09A7EE86-E07B-4056-933D-8FF70BCA19EF'
-    Language='1033' Codepage='1252' Version='4.0.0.15' Manufacturer='Frank Snow / Tipitaka.org'>
+  <Product Name='Chattha Sangayana Tipitaka 4.1' Id='A0C75468-DE8B-4F9C-8144-0E1E66F4030E' UpgradeCode='09A7EE86-E07B-4056-933D-8FF70BCA19EF'
+    Language='1033' Codepage='1252' Version='4.1.0.1' Manufacturer='Frank Snow / Tipitaka.org'>
 
-    <Package Id='*' Keywords='Installer' Description="Chattha Sangayana Tipitaka 4.0 Installer"
+    <Package Id='*' Keywords='Installer' Description="Chattha Sangayana Tipitaka 4.1 Installer"
       Comments='Installer for CST4' Manufacturer='Frank Snow / Tipitaka.org'
       InstallerVersion='100' Languages='1033' Compressed='yes' SummaryCodepage='1252' />
 
     <Media Id='1' Cabinet='Sample.cab' EmbedCab='yes' DiskPrompt="CD-ROM #1" />
-    <Property Id='DiskPrompt' Value="Chattha Sangayana Tipitaka 4.0 Installation [1]" />
+    <Property Id='DiskPrompt' Value="Chattha Sangayana Tipitaka 4.1 Installation [1]" />
 
     <Directory Id='TARGETDIR' Name='SourceDir'>
 
@@ -18,8 +18,8 @@
 
         <Component Id='MainExecutable' Guid='7479EACF-DCEF-481E-AAEE-3D6248AAA8A9'>
           <File Id='Cst4EXE' Name='Cst4.exe' DiskId='1' Source='Cst4.exe' KeyPath='yes'>
-            <Shortcut Id="startmenuCst4" Directory="ProgramMenuDir" Name="Chattha Sangayana Tipitaka 4.0" WorkingDirectory='INSTALLDIR' Icon="Cst4.exe" IconIndex="0" Advertise="yes" />
-            <Shortcut Id="desktopCst4" Directory="DesktopFolder" Name="Chattha Sangayana Tipitaka 4.0" WorkingDirectory='INSTALLDIR' Icon="Cst4.exe" IconIndex="0" Advertise="yes" />
+            <Shortcut Id="startmenuCst4" Directory="ProgramMenuDir" Name="Chattha Sangayana Tipitaka 4.1" WorkingDirectory='INSTALLDIR' Icon="Cst4.exe" IconIndex="0" Advertise="yes" />
+            <Shortcut Id="desktopCst4" Directory="DesktopFolder" Name="Chattha Sangayana Tipitaka 4.1" WorkingDirectory='INSTALLDIR' Icon="Cst4.exe" IconIndex="0" Advertise="yes" />
           </File>
         </Component>
 
@@ -29,6 +29,10 @@
 
         <Component Id='CstLibrary' Guid='0B93AF44-8BF2-4B04-9ED9-3D68A244099C'>
           <File Id='CSTDLL' Name='CST.dll' DiskId='1' Source='CST.dll' KeyPath='yes' />
+        </Component>
+
+        <Component Id='CstLuceneLibrary' Guid='6E7F633C-6AE3-4F17-84D0-38274013F6BD'>
+          <File Id='CSTLuceneDLL' Name='CST.Lucene.dll' DiskId='1' Source='CST.Lucene.dll' KeyPath='yes' />
         </Component>
 
         <Component Id='Log4netLibrary' Guid='7B0BC690-F241-4552-BD2E-492F77C0D409'>
@@ -979,10 +983,10 @@
       </Directory>
 
       <Directory Id="ProgramMenuFolder" Name="Programs">
-        <Directory Id="ProgramMenuDir" Name="Chattha Sangayana Tipitaka 4.0">
+        <Directory Id="ProgramMenuDir" Name="Chattha Sangayana Tipitaka 4.1">
           <Component Id="ProgramMenuDir" Guid="53448BCD-BD5B-4E8E-8BEB-8958F9A5EE9D">
             <RemoveFolder Id='ProgramMenuDir' On='uninstall' />
-            <RegistryValue Root='HKCU' Key='Software\Tipitaka.org\Chattha Sangayana Tipitaka 4.0' Type='string' Value='' KeyPath='yes' />
+            <RegistryValue Root='HKCU' Key='Software\Tipitaka.org\Chattha Sangayana Tipitaka 4.1' Type='string' Value='' KeyPath='yes' />
           </Component>
         </Directory>
       </Directory>
@@ -1035,12 +1039,13 @@
 
 
 
-    <Feature Id='ProgramAndData' Title='Chattha Sangayana Tipitaka 4.0' Description='The program and data.'
+    <Feature Id='ProgramAndData' Title='Chattha Sangayana Tipitaka 4.1' Description='The program and data.'
       Display='expand' Level='1' ConfigurableDirectory='INSTALLDIR'>
 
         <ComponentRef Id='MainExecutable' />
         <ComponentRef Id='Cst4LoggingConfig' />
         <ComponentRef Id='CstLibrary' />
+        <ComponentRef Id='CstLuceneLibrary' />
         <ComponentRef Id='Log4netLibrary' />
         <ComponentRef Id='LuceneLibrary' />
         <ComponentRef Id='MshtmlLibrary' />
