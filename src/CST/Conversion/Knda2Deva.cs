@@ -1,16 +1,16 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 
 namespace CST.Conversion
 {
     public static class Knda2Deva
     {
-        private static Hashtable knda2Deva;
+        private static IDictionary<char, object> knda2Deva;
 
         static Knda2Deva()
         {
-            knda2Deva = new Hashtable();
+            knda2Deva = new Dictionary<char, object>();
 
             // various signs
             knda2Deva['\x0C82'] = '\x0902'; // anusvara
@@ -42,7 +42,7 @@ namespace CST.Conversion
             knda2Deva['\x0C9B'] = '\x091B'; // cha
             knda2Deva['\x0C9C'] = '\x091C'; // ja
             knda2Deva['\x0C9D'] = '\x091D'; // jha
-            knda2Deva['\x0C9E'] = '\x091E'; // ña
+            knda2Deva['\x0C9E'] = '\x091E'; // n tilde a
 
             // retroflex stops
             knda2Deva['\x0C9F'] = '\x091F'; // t underdot a

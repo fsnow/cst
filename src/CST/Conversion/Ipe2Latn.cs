@@ -36,7 +36,7 @@ namespace CST
             ipe2Latn["\x00CF"] = "ch"; // cha
             ipe2Latn["\x00D0"] = "j"; // ja
             ipe2Latn["\x00D1"] = "jh"; // jha
-            ipe2Latn["\x00D2"] = "ñ"; // ña
+            ipe2Latn["\x00D2"] = "\u00F1"; // n tilde a
 
             // retroflex stops
             ipe2Latn["\x00D3"] = "\x1E6D"; // t underdot a

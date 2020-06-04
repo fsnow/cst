@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -8,98 +8,98 @@ namespace CST.Conversion
 {
     public static class Deva2Tibt
     {
-        private static Hashtable deva2Tibt;
+        private static IDictionary<char, object> deva2Tibt;
 
         static Deva2Tibt()
         {
-            deva2Tibt = new Hashtable();
+            deva2Tibt = new Dictionary<char, object>();
 
-            deva2Tibt['\x0902'] = '\x0F7E'; // niggahita
+            deva2Tibt['\u0902'] = '\u0F7E'; // niggahita
 
             // independent vowels
-            deva2Tibt['\x0905'] = '\x0F68'; // a
-            deva2Tibt['\x0906'] = "\x0F68\x0F71"; // aa
-            deva2Tibt['\x0907'] = "\x0F68\x0F72"; // i
-            deva2Tibt['\x0908'] = "\x0F68\x0F71\x0F72"; // ii
-            deva2Tibt['\x0909'] = "\x0F68\x0F74"; // u
-            deva2Tibt['\x090A'] = "\x0F68\x0F71\x0F74"; // uu
-            deva2Tibt['\x090F'] = "\x0F68\x0F7A"; // e
-            deva2Tibt['\x0913'] = "\x0F68\x0F7C"; // o
+            deva2Tibt['\u0905'] = '\u0F68'; // a
+            deva2Tibt['\u0906'] = "\u0F68\u0F71"; // aa
+            deva2Tibt['\u0907'] = "\u0F68\u0F72"; // i
+            deva2Tibt['\u0908'] = "\u0F68\u0F71\u0F72"; // ii
+            deva2Tibt['\u0909'] = "\u0F68\u0F74"; // u
+            deva2Tibt['\u090A'] = "\u0F68\u0F71\u0F74"; // uu
+            deva2Tibt['\u090F'] = "\u0F68\u0F7A"; // e
+            deva2Tibt['\u0913'] = "\u0F68\u0F7C"; // o
 
             // velar stops
-            deva2Tibt['\x0915'] = '\x0F40'; // ka
-            deva2Tibt['\x0916'] = '\x0F41'; // kha
-            deva2Tibt['\x0917'] = '\x0F42'; // ga
-            deva2Tibt['\x0918'] = '\x0F43'; // gha
-            deva2Tibt['\x0919'] = '\x0F44'; // n overdot a
+            deva2Tibt['\u0915'] = '\u0F40'; // ka
+            deva2Tibt['\u0916'] = '\u0F41'; // kha
+            deva2Tibt['\u0917'] = '\u0F42'; // ga
+            deva2Tibt['\u0918'] = '\u0F43'; // gha
+            deva2Tibt['\u0919'] = '\u0F44'; // n overdot a
             
             // palatal stops
             // Note that these 4 stops are represented by the Tibetan
             // tsa, tsha, dza, dzha, not ca, cha, ... (per cfynn. see below)
-            deva2Tibt['\x091A'] = '\x0F59'; // ca
-            deva2Tibt['\x091B'] = '\x0F5A'; // cha 
-            deva2Tibt['\x091C'] = '\x0F5B'; // ja
-            deva2Tibt['\x091D'] = '\x0F5C'; // jha  
-            deva2Tibt['\x091E'] = '\x0F49'; // ña
+            deva2Tibt['\u091A'] = '\u0F59'; // ca
+            deva2Tibt['\u091B'] = '\u0F5A'; // cha 
+            deva2Tibt['\u091C'] = '\u0F5B'; // ja
+            deva2Tibt['\u091D'] = '\u0F5C'; // jha  
+            deva2Tibt['\u091E'] = '\u0F49'; // n tilde a
 
             // retroflex stops
-            deva2Tibt['\x091F'] = '\x0F4A'; // t underdot a
-            deva2Tibt['\x0920'] = '\x0F4B'; // t underdot ha
-            deva2Tibt['\x0921'] = '\x0F4C'; // d underdot a
-            deva2Tibt['\x0922'] = '\x0F4D'; // d underdot ha
-            deva2Tibt['\x0923'] = '\x0F4E'; // n underdot a
+            deva2Tibt['\u091F'] = '\u0F4A'; // t underdot a
+            deva2Tibt['\u0920'] = '\u0F4B'; // t underdot ha
+            deva2Tibt['\u0921'] = '\u0F4C'; // d underdot a
+            deva2Tibt['\u0922'] = '\u0F4D'; // d underdot ha
+            deva2Tibt['\u0923'] = '\u0F4E'; // n underdot a
 
             // dental stops
-            deva2Tibt['\x0924'] = '\x0F4F'; // ta
-            deva2Tibt['\x0925'] = '\x0F50'; // tha
-            deva2Tibt['\x0926'] = '\x0F51'; // da
-            deva2Tibt['\x0927'] = '\x0F52'; // dha
-            deva2Tibt['\x0928'] = '\x0F53'; // na
+            deva2Tibt['\u0924'] = '\u0F4F'; // ta
+            deva2Tibt['\u0925'] = '\u0F50'; // tha
+            deva2Tibt['\u0926'] = '\u0F51'; // da
+            deva2Tibt['\u0927'] = '\u0F52'; // dha
+            deva2Tibt['\u0928'] = '\u0F53'; // na
 
             // labial stops
-            deva2Tibt['\x092A'] = '\x0F54'; // pa
-            deva2Tibt['\x092B'] = '\x0F55'; // pha
-            deva2Tibt['\x092C'] = '\x0F56'; // ba
-            deva2Tibt['\x092D'] = '\x0F57'; // bha
-            deva2Tibt['\x092E'] = '\x0F58'; // ma
+            deva2Tibt['\u092A'] = '\u0F54'; // pa
+            deva2Tibt['\u092B'] = '\u0F55'; // pha
+            deva2Tibt['\u092C'] = '\u0F56'; // ba
+            deva2Tibt['\u092D'] = '\u0F57'; // bha
+            deva2Tibt['\u092E'] = '\u0F58'; // ma
 
             // liquids, fricatives, etc.
-            deva2Tibt['\x092F'] = '\x0F61'; // ya
-            deva2Tibt['\x0930'] = '\x0F62'; // ra
-            deva2Tibt['\x0932'] = '\x0F63'; // la
-            deva2Tibt['\x0935'] = '\x0F5D'; // va
-            deva2Tibt['\x0938'] = '\x0F66'; // sa
-            deva2Tibt['\x0939'] = '\x0F67'; // ha
-            deva2Tibt['\x0933'] = "\x0F63\x0F39"; // l underdot a (***** PENDING FURTHER RESEARCH BY CFYNN ****)
+            deva2Tibt['\u092F'] = '\u0F61'; // ya
+            deva2Tibt['\u0930'] = '\u0F62'; // ra
+            deva2Tibt['\u0932'] = '\u0F63'; // la
+            deva2Tibt['\u0935'] = '\u0F5D'; // va
+            deva2Tibt['\u0938'] = '\u0F66'; // sa
+            deva2Tibt['\u0939'] = '\u0F67'; // ha
+            deva2Tibt['\u0933'] = "\u0F63\u0F39"; // l underdot a (***** PENDING FURTHER RESEARCH BY CFYNN ****)
 
             // dependent vowel signs
-            deva2Tibt['\x093E'] = '\x0F71'; // aa
-            deva2Tibt['\x093F'] = '\x0F72'; // i
-            deva2Tibt['\x0940'] = "\x0F71\x0F72"; // ii
-            deva2Tibt['\x0941'] = "\x0F74"; // u
-            deva2Tibt['\x0942'] = "\x0F71\x0F74"; // uu
-            deva2Tibt['\x0947'] = '\x0F7A'; // e
-            deva2Tibt['\x094B'] = '\x0F7C'; // o
+            deva2Tibt['\u093E'] = '\u0F71'; // aa
+            deva2Tibt['\u093F'] = '\u0F72'; // i
+            deva2Tibt['\u0940'] = "\u0F71\u0F72"; // ii
+            deva2Tibt['\u0941'] = "\u0F74"; // u
+            deva2Tibt['\u0942'] = "\u0F71\u0F74"; // uu
+            deva2Tibt['\u0947'] = '\u0F7A'; // e
+            deva2Tibt['\u094B'] = '\u0F7C'; // o
 
-            deva2Tibt['\x094D'] = '\x0F84'; // virama
-            deva2Tibt['\x0964'] = '\x0F0D'; // danda
-            deva2Tibt['\x0965'] = '\x0F0E'; // double danda
+            deva2Tibt['\u094D'] = '\u0F84'; // virama
+            deva2Tibt['\u0964'] = '\u0F0D'; // danda
+            deva2Tibt['\u0965'] = '\u0F0E'; // double danda
 
             // numerals
-            deva2Tibt['\x0966'] = '\x0F20';
-            deva2Tibt['\x0967'] = '\x0F21';
-            deva2Tibt['\x0968'] = '\x0F22';
-            deva2Tibt['\x0969'] = '\x0F23';
-            deva2Tibt['\x096A'] = '\x0F24';
-            deva2Tibt['\x096B'] = '\x0F25';
-            deva2Tibt['\x096C'] = '\x0F26';
-            deva2Tibt['\x096D'] = '\x0F27';
-            deva2Tibt['\x096E'] = '\x0F28';
-            deva2Tibt['\x096F'] = '\x0F29';
+            deva2Tibt['\u0966'] = '\u0F20';
+            deva2Tibt['\u0967'] = '\u0F21';
+            deva2Tibt['\u0968'] = '\u0F22';
+            deva2Tibt['\u0969'] = '\u0F23';
+            deva2Tibt['\u096A'] = '\u0F24';
+            deva2Tibt['\u096B'] = '\u0F25';
+            deva2Tibt['\u096C'] = '\u0F26';
+            deva2Tibt['\u096D'] = '\u0F27';
+            deva2Tibt['\u096E'] = '\u0F28';
+            deva2Tibt['\u096F'] = '\u0F29';
 
             // zero-width joiners
-            deva2Tibt['\x200C'] = ""; // ZWNJ (ignore)
-            deva2Tibt['\x200D'] = ""; // ZWJ (ignore)
+            deva2Tibt['\u200C'] = ""; // ZWNJ (ignore)
+            deva2Tibt['\u200D'] = ""; // ZWJ (ignore)
         }
 
         public static string ConvertBook(string devStr)
@@ -115,8 +115,8 @@ namespace CST.Conversion
         public static string Convert(string devStr)
         {
 			// add intersyllabic tsheg between "syllables".
-			devStr = Regex.Replace(devStr, "([\x0900-\x094C])([\x0904-\x0939])", "$1\x0F0B$2");
-			devStr = Regex.Replace(devStr, "([\x0900-\x094C])([\x0904-\x0939])", "$1\x0F0B$2");
+			devStr = Regex.Replace(devStr, "([\u0900-\u094C])([\u0904-\u0939])", "$1\u0F0B$2");
+			devStr = Regex.Replace(devStr, "([\u0900-\u094C])([\u0904-\u0939])", "$1\u0F0B$2");
 
             StringBuilder sb = new StringBuilder();
 
@@ -134,18 +134,18 @@ namespace CST.Conversion
             // Replace with the corresponding subjoined consonant (without halant)
             for (int i = 0; i <= 39; i++)
             {
-                tib = tib.Replace(String.Concat("\x0F84", System.Convert.ToChar(0xF40 + i)),
+                tib = tib.Replace(String.Concat("\u0F84", System.Convert.ToChar(0xF40 + i)),
                     System.Convert.ToChar(0xF90 + i).ToString());
             }
 
             // exceptions: yya and vva use the "fixed-form subjoined consonants as the 2nd one
-            tib = tib.Replace("\x0F61\x0FB1", "\x0F61\x0FBB"); //yya
-            tib = tib.Replace("\x0F5D\x0FAD", "\x0F5D\x0FBA"); //vva
+            tib = tib.Replace("\u0F61\u0FB1", "\u0F61\u0FBB"); //yya
+            tib = tib.Replace("\u0F5D\u0FAD", "\u0F5D\u0FBA"); //vva
 
             // exceptions: jjha, yha and vha use explicit (visible) halant between
-            tib = tib.Replace("\x0F5B\x0FAC", "\x0F5B\x0F84\x0F5C"); //jjha
-            tib = tib.Replace("\x0F61\x0FB7", "\x0F61\x0F84\x0F67"); //yha
-            tib = tib.Replace("\x0F5D\x0FB7", "\x0F5D\x0F84\x0F67"); //vha
+            tib = tib.Replace("\u0F5B\u0FAC", "\u0F5B\u0F84\u0F5C"); //jjha
+            tib = tib.Replace("\u0F61\u0FB7", "\u0F61\u0F84\u0F67"); //yha
+            tib = tib.Replace("\u0F5D\u0FB7", "\u0F5D\u0F84\u0F67"); //vha
 
             return tib;
         }

@@ -202,7 +202,7 @@ namespace CST
 			{
 				List<string> matchingWords = matchingWordsArray[i];
 				List<BitArray> matchingBookBits = matchingBookBitsArray[i];
-				CST.Collections.Set deleteThese = new CST.Collections.Set();
+				ISet<int> deleteThese = new HashSet<int>();
 				
 				for (int j = 0; j < matchingBookBits.Count; j++)
 				{

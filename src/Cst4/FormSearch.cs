@@ -13,7 +13,6 @@ using Lucene.Net.Index;
 using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
 using CST.Conversion;
-using CST.Collections;
 
 namespace CST
 {

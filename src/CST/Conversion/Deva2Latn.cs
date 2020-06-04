@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Text;
@@ -9,102 +9,102 @@ namespace CST.Conversion
 {
     public static class Deva2Latn
     {
-        private static Hashtable deva2Latn;
+        private static IDictionary<char, object> deva2Latn;
 
         static Deva2Latn()
         {
-            deva2Latn = new Hashtable();
+            deva2Latn = new Dictionary<char, object>();
 
-            deva2Latn['\x0902'] = '\x1E43'; // niggahita
+            deva2Latn['\u0902'] = '\u1E43'; // niggahita
 
             // independent vowels
-            deva2Latn['\x0905'] = 'a'; // a
-            deva2Latn['\x0906'] = '\x0101'; // aa
-            deva2Latn['\x0907'] = 'i'; // i
-            deva2Latn['\x0908'] = '\x012B'; // ii
-            deva2Latn['\x0909'] = 'u'; // u
-			deva2Latn['\x0910'] = "ai"; // ai
-            deva2Latn['\x090A'] = '\x016B'; // uu
-            deva2Latn['\x090F'] = 'e'; // e
-            deva2Latn['\x0913'] = 'o'; // o
-			deva2Latn['\x0914'] = "au"; // au
+            deva2Latn['\u0905'] = 'a'; // a
+            deva2Latn['\u0906'] = '\u0101'; // aa
+            deva2Latn['\u0907'] = 'i'; // i
+            deva2Latn['\u0908'] = '\u012B'; // ii
+            deva2Latn['\u0909'] = 'u'; // u
+			deva2Latn['\u0910'] = "ai"; // ai
+            deva2Latn['\u090A'] = '\u016B'; // uu
+            deva2Latn['\u090F'] = 'e'; // e
+            deva2Latn['\u0913'] = 'o'; // o
+			deva2Latn['\u0914'] = "au"; // au
 
             // velar stops
-            deva2Latn['\x0915'] = 'k'; // ka
-            deva2Latn['\x0916'] = "kh"; // kha
-            deva2Latn['\x0917'] = 'g'; // ga
-            deva2Latn['\x0918'] = "gh"; // gha
-            deva2Latn['\x0919'] = "\x1E45"; // n overdot a
+            deva2Latn['\u0915'] = 'k'; // ka
+            deva2Latn['\u0916'] = "kh"; // kha
+            deva2Latn['\u0917'] = 'g'; // ga
+            deva2Latn['\u0918'] = "gh"; // gha
+            deva2Latn['\u0919'] = "\u1E45"; // n overdot a
             
             // palatal stops
-            deva2Latn['\x091A'] = 'c'; // ca
-            deva2Latn['\x091B'] = "ch"; // cha
-            deva2Latn['\x091C'] = 'j'; // ja
-            deva2Latn['\x091D'] = "jh"; // jha
-            deva2Latn['\x091E'] = 'ñ'; // ña
+            deva2Latn['\u091A'] = 'c'; // ca
+            deva2Latn['\u091B'] = "ch"; // cha
+            deva2Latn['\u091C'] = 'j'; // ja
+            deva2Latn['\u091D'] = "jh"; // jha
+            deva2Latn['\u091E'] = "\u00F1"; // n tilde a
 
             // retroflex stops
-            deva2Latn['\x091F'] = '\x1E6D'; // t underdot a
-            deva2Latn['\x0920'] = "\x1E6Dh"; // t underdot ha
-            deva2Latn['\x0921'] = '\x1E0D'; // d underdot a
-            deva2Latn['\x0922'] = "\x1E0Dh"; // d underdot ha
-            deva2Latn['\x0923'] = '\x1E47'; // n underdot a
+            deva2Latn['\u091F'] = '\u1E6D'; // t underdot a
+            deva2Latn['\u0920'] = "\u1E6Dh"; // t underdot ha
+            deva2Latn['\u0921'] = '\u1E0D'; // d underdot a
+            deva2Latn['\u0922'] = "\u1E0Dh"; // d underdot ha
+            deva2Latn['\u0923'] = '\u1E47'; // n underdot a
 
             // dental stops
-            deva2Latn['\x0924'] = 't'; // ta
-            deva2Latn['\x0925'] = "th"; // tha
-            deva2Latn['\x0926'] = 'd'; // da
-            deva2Latn['\x0927'] = "dh"; // dha
-            deva2Latn['\x0928'] = 'n'; // na
+            deva2Latn['\u0924'] = 't'; // ta
+            deva2Latn['\u0925'] = "th"; // tha
+            deva2Latn['\u0926'] = 'd'; // da
+            deva2Latn['\u0927'] = "dh"; // dha
+            deva2Latn['\u0928'] = 'n'; // na
 
             // labial stops
-            deva2Latn['\x092A'] = 'p'; // pa
-            deva2Latn['\x092B'] = "ph"; // pha
-            deva2Latn['\x092C'] = 'b'; // ba
-            deva2Latn['\x092D'] = "bh"; // bha
-            deva2Latn['\x092E'] = 'm'; // ma
+            deva2Latn['\u092A'] = 'p'; // pa
+            deva2Latn['\u092B'] = "ph"; // pha
+            deva2Latn['\u092C'] = 'b'; // ba
+            deva2Latn['\u092D'] = "bh"; // bha
+            deva2Latn['\u092E'] = 'm'; // ma
 
             // liquids, fricatives, etc.
-            deva2Latn['\x092F'] = 'y'; // ya
-            deva2Latn['\x0930'] = 'r'; // ra
-            deva2Latn['\x0932'] = 'l'; // la
-            deva2Latn['\x0935'] = 'v'; // va
-            deva2Latn['\x0938'] = 's'; // sa
-            deva2Latn['\x0939'] = 'h'; // ha
-            deva2Latn['\x0933'] = "\x1E37"; // l underdot a
+            deva2Latn['\u092F'] = 'y'; // ya
+            deva2Latn['\u0930'] = 'r'; // ra
+            deva2Latn['\u0932'] = 'l'; // la
+            deva2Latn['\u0935'] = 'v'; // va
+            deva2Latn['\u0938'] = 's'; // sa
+            deva2Latn['\u0939'] = 'h'; // ha
+            deva2Latn['\u0933'] = "\u1E37"; // l underdot a
 
             // dependent vowel signs
-            deva2Latn['\x093E'] = '\x0101'; // aa
-            deva2Latn['\x093F'] = 'i'; // i
-            deva2Latn['\x0940'] = "\x012B"; // ii
-            deva2Latn['\x0941'] = 'u'; // u
-            deva2Latn['\x0942'] = '\x016B'; // uu
-            deva2Latn['\x0947'] = 'e'; // e
-			deva2Latn['\x0948'] = "ai"; // ai
-            deva2Latn['\x094B'] = 'o'; // o
-			deva2Latn['\x094C'] = "au"; // au
+            deva2Latn['\u093E'] = '\u0101'; // aa
+            deva2Latn['\u093F'] = 'i'; // i
+            deva2Latn['\u0940'] = "\u012B"; // ii
+            deva2Latn['\u0941'] = 'u'; // u
+            deva2Latn['\u0942'] = '\u016B'; // uu
+            deva2Latn['\u0947'] = 'e'; // e
+			deva2Latn['\u0948'] = "ai"; // ai
+            deva2Latn['\u094B'] = 'o'; // o
+			deva2Latn['\u094C'] = "au"; // au
 
-            deva2Latn['\x094D'] = ""; // virama
+            deva2Latn['\u094D'] = ""; // virama
 
             // numerals
-            deva2Latn['\x0966'] = '0';
-            deva2Latn['\x0967'] = '1';
-            deva2Latn['\x0968'] = '2';
-            deva2Latn['\x0969'] = '3';
-            deva2Latn['\x096A'] = '4';
-            deva2Latn['\x096B'] = '5';
-            deva2Latn['\x096C'] = '6';
-            deva2Latn['\x096D'] = '7';
-            deva2Latn['\x096E'] = '8';
-            deva2Latn['\x096F'] = '9';
+            deva2Latn['\u0966'] = '0';
+            deva2Latn['\u0967'] = '1';
+            deva2Latn['\u0968'] = '2';
+            deva2Latn['\u0969'] = '3';
+            deva2Latn['\u096A'] = '4';
+            deva2Latn['\u096B'] = '5';
+            deva2Latn['\u096C'] = '6';
+            deva2Latn['\u096D'] = '7';
+            deva2Latn['\u096E'] = '8';
+            deva2Latn['\u096F'] = '9';
 
             // we let dandas and double dandas pass through and handle
             // them in ConvertDandas()
-            //deva2Latn['\x0964'] = '.'; // danda 
-            deva2Latn['\x0970'] = '.'; // Devanagari abbreviation sign
+            //deva2Latn['\u0964'] = '.'; // danda 
+            deva2Latn['\u0970'] = '.'; // Devanagari abbreviation sign
             
-            deva2Latn['\x200C'] = ""; // ZWNJ (ignore)
-            deva2Latn['\x200D'] = ""; // ZWJ (ignore)
+            deva2Latn['\u200C'] = ""; // ZWNJ (ignore)
+            deva2Latn['\u200D'] = ""; // ZWJ (ignore)
         }
 
         public static string ConvertBook(string devStr)
@@ -113,11 +113,11 @@ namespace CST.Conversion
             LatinCapitalizer capitalizer = new LatinCapitalizer(
                 new string[] {"p", "head", "trailer" }, 
                 new string[] {"note"},
-                "\x4676");
+                "\u4676");
             devStr = capitalizer.MarkCapitals(devStr);
 
             // remove Dev abbreviation sign before an ellipsis. We don't want a 4th dot after pe.
-            devStr = devStr.Replace("\x0970\x2026", "\x2026");
+            devStr = devStr.Replace("\u0970\u2026", "\u2026");
 
             string str = Convert(devStr);
 
@@ -137,13 +137,13 @@ namespace CST.Conversion
         public static string Convert(string devStr)
         {
             // insert 'a' after all consonants that are not followed by virama, dependent vowel or 'a'
-            devStr = Regex.Replace(devStr, "([\x0915-\x0939])([^\x093E-\x094Da])", "$1a$2", RegexOptions.Compiled);
-            devStr = Regex.Replace(devStr, "([\x0915-\x0939])([^\x093E-\x094Da])", "$1a$2", RegexOptions.Compiled);
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094Da])", "$1a$2", RegexOptions.Compiled);
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094Da])", "$1a$2", RegexOptions.Compiled);
             // TODO: figure out how to backtrack so this replace doesn't have to be done twice
 
             // subtle bug not encountered in Tipitaka files:
             // insert a after consonant that is at end of string
-            devStr = Regex.Replace(devStr, "([\x0915-\x0939])$", "$1a", RegexOptions.Compiled);
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])$", "$1a", RegexOptions.Compiled);
 
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
@@ -169,23 +169,23 @@ namespace CST.Conversion
                 new MatchEvaluator(RemoveNamoTassaDandas), RegexOptions.Compiled);
 
             // convert all others to period
-            str = str.Replace("\x0964", ".");
-            str = str.Replace("\x0965", ".");
+            str = str.Replace("\u0964", ".");
+            str = str.Replace("\u0965", ".");
             return str;
         }
 
         public static string ConvertGathaDandas(Match m)
         {
             string str = m.Value;
-            str = str.Replace("\x0964", ";");
-            str = str.Replace("\x0965", ".");
+            str = str.Replace("\u0964", ";");
+            str = str.Replace("\u0965", ".");
             return str;
         }
 
         public static string RemoveNamoTassaDandas(Match m)
         {
             string str = m.Value;
-            return str.Replace("\x0965", "");
+            return str.Replace("\u0965", "");
         }
 
         // There should be no spaces before these

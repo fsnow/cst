@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -8,95 +8,95 @@ namespace CST.Conversion
 {
     public static class Deva2Thai
     {
-        private static Hashtable dev2Thai;
+        private static IDictionary<char, object> dev2Thai;
 
         static Deva2Thai()
         {
-            dev2Thai = new Hashtable();
+            dev2Thai = new Dictionary<char, object>();
 
-            dev2Thai['\x0902'] = '\x0E4D'; // niggahita
+            dev2Thai['\u0902'] = '\u0E4D'; // niggahita
 
             // independent vowels
-            dev2Thai['\x0905'] = '\x0E2D'; // a
-            dev2Thai['\x0906'] = "\x0E2D\x0E32"; // aa
-            dev2Thai['\x0907'] = "\x0E2D\x0E34"; // i
-            dev2Thai['\x0908'] = "\x0E2D\x0E35"; // ii
-            dev2Thai['\x0909'] = "\x0E2D\x0E38"; // u
-            dev2Thai['\x090A'] = "\x0E2D\x0E39"; // uu
-            dev2Thai['\x090F'] = "\x0E40\x0E2D"; // e
-            dev2Thai['\x0913'] = "\x0E42\x0E2D"; // o
+            dev2Thai['\u0905'] = '\u0E2D'; // a
+            dev2Thai['\u0906'] = "\u0E2D\u0E32"; // aa
+            dev2Thai['\u0907'] = "\u0E2D\u0E34"; // i
+            dev2Thai['\u0908'] = "\u0E2D\u0E35"; // ii
+            dev2Thai['\u0909'] = "\u0E2D\u0E38"; // u
+            dev2Thai['\u090A'] = "\u0E2D\u0E39"; // uu
+            dev2Thai['\u090F'] = "\u0E40\u0E2D"; // e
+            dev2Thai['\u0913'] = "\u0E42\u0E2D"; // o
 
             // velar stops
-            dev2Thai['\x0915'] = '\x0E01'; // ka
-            dev2Thai['\x0916'] = '\x0E02'; // kha
-            dev2Thai['\x0917'] = '\x0E04'; // ga
-            dev2Thai['\x0918'] = '\x0E06'; // gha
-            dev2Thai['\x0919'] = '\x0E07'; // n overdot a
+            dev2Thai['\u0915'] = '\u0E01'; // ka
+            dev2Thai['\u0916'] = '\u0E02'; // kha
+            dev2Thai['\u0917'] = '\u0E04'; // ga
+            dev2Thai['\u0918'] = '\u0E06'; // gha
+            dev2Thai['\u0919'] = '\u0E07'; // n overdot a
             
             // palatal stops
-            dev2Thai['\x091A'] = '\x0E08'; // ca
-            dev2Thai['\x091B'] = '\x0E09'; // cha
-            dev2Thai['\x091C'] = '\x0E0A'; // ja
-            dev2Thai['\x091D'] = '\x0E0C'; // jha
-            dev2Thai['\x091E'] = '\x0E0D'; // ña
+            dev2Thai['\u091A'] = '\u0E08'; // ca
+            dev2Thai['\u091B'] = '\u0E09'; // cha
+            dev2Thai['\u091C'] = '\u0E0A'; // ja
+            dev2Thai['\u091D'] = '\u0E0C'; // jha
+            dev2Thai['\u091E'] = '\u0E0D'; // n tilde a
 
             // retroflex stops
-            dev2Thai['\x091F'] = '\x0E0F'; // t underdot a
-            dev2Thai['\x0920'] = '\x0E10'; // t underdot ha
-            dev2Thai['\x0921'] = '\x0E11'; // d underdot a
-            dev2Thai['\x0922'] = '\x0E12'; // d underdot ha
-            dev2Thai['\x0923'] = '\x0E13'; // n underdot a
+            dev2Thai['\u091F'] = '\u0E0F'; // t underdot a
+            dev2Thai['\u0920'] = '\u0E10'; // t underdot ha
+            dev2Thai['\u0921'] = '\u0E11'; // d underdot a
+            dev2Thai['\u0922'] = '\u0E12'; // d underdot ha
+            dev2Thai['\u0923'] = '\u0E13'; // n underdot a
 
             // dental stops
-            dev2Thai['\x0924'] = '\x0E15'; // ta
-            dev2Thai['\x0925'] = '\x0E16'; // tha
-            dev2Thai['\x0926'] = '\x0E17'; // da
-            dev2Thai['\x0927'] = '\x0E18'; // dha
-            dev2Thai['\x0928'] = '\x0E19'; // na
+            dev2Thai['\u0924'] = '\u0E15'; // ta
+            dev2Thai['\u0925'] = '\u0E16'; // tha
+            dev2Thai['\u0926'] = '\u0E17'; // da
+            dev2Thai['\u0927'] = '\u0E18'; // dha
+            dev2Thai['\u0928'] = '\u0E19'; // na
 
             // labial stops
-            dev2Thai['\x092A'] = '\x0E1B'; // pa
-            dev2Thai['\x092B'] = '\x0E1C'; // pha
-            dev2Thai['\x092C'] = '\x0E1E'; // ba
-            dev2Thai['\x092D'] = '\x0E20'; // bha
-            dev2Thai['\x092E'] = '\x0E21'; // ma
+            dev2Thai['\u092A'] = '\u0E1B'; // pa
+            dev2Thai['\u092B'] = '\u0E1C'; // pha
+            dev2Thai['\u092C'] = '\u0E1E'; // ba
+            dev2Thai['\u092D'] = '\u0E20'; // bha
+            dev2Thai['\u092E'] = '\u0E21'; // ma
 
             // liquids, fricatives, etc.
-            dev2Thai['\x092F'] = '\x0E22'; // ya
-            dev2Thai['\x0930'] = '\x0E23'; // ra
-            dev2Thai['\x0932'] = '\x0E25'; // la
-            dev2Thai['\x0935'] = '\x0E27'; // va
-            dev2Thai['\x0938'] = '\x0E2A'; // sa
-            dev2Thai['\x0939'] = '\x0E2B'; // ha
-            dev2Thai['\x0933'] = '\x0E2C'; // l underdot a
+            dev2Thai['\u092F'] = '\u0E22'; // ya
+            dev2Thai['\u0930'] = '\u0E23'; // ra
+            dev2Thai['\u0932'] = '\u0E25'; // la
+            dev2Thai['\u0935'] = '\u0E27'; // va
+            dev2Thai['\u0938'] = '\u0E2A'; // sa
+            dev2Thai['\u0939'] = '\u0E2B'; // ha
+            dev2Thai['\u0933'] = '\u0E2C'; // l underdot a
 
             // dependent vowel signs
-            dev2Thai['\x093E'] = '\x0E32'; // aa
-            dev2Thai['\x093F'] = '\x0E34'; // i
-            dev2Thai['\x0940'] = '\x0E35'; // ii
-            dev2Thai['\x0941'] = '\x0E38'; // u
-            dev2Thai['\x0942'] = '\x0E39'; // uu
-            dev2Thai['\x0947'] = '\x0E40'; // e
-            dev2Thai['\x094B'] = '\x0E42'; // o
+            dev2Thai['\u093E'] = '\u0E32'; // aa
+            dev2Thai['\u093F'] = '\u0E34'; // i
+            dev2Thai['\u0940'] = '\u0E35'; // ii
+            dev2Thai['\u0941'] = '\u0E38'; // u
+            dev2Thai['\u0942'] = '\u0E39'; // uu
+            dev2Thai['\u0947'] = '\u0E40'; // e
+            dev2Thai['\u094B'] = '\u0E42'; // o
 
-            dev2Thai['\x094D'] = '\x0E3A'; // virama
+            dev2Thai['\u094D'] = '\u0E3A'; // virama
 
             // numerals
-            dev2Thai['\x0966'] = '\x0E50';
-            dev2Thai['\x0967'] = '\x0E51';
-            dev2Thai['\x0968'] = '\x0E52';
-            dev2Thai['\x0969'] = '\x0E53';
-            dev2Thai['\x096A'] = '\x0E54';
-            dev2Thai['\x096B'] = '\x0E55';
-            dev2Thai['\x096C'] = '\x0E56';
-            dev2Thai['\x096D'] = '\x0E57';
-            dev2Thai['\x096E'] = '\x0E58';
-            dev2Thai['\x096F'] = '\x0E59';
+            dev2Thai['\u0966'] = '\u0E50';
+            dev2Thai['\u0967'] = '\u0E51';
+            dev2Thai['\u0968'] = '\u0E52';
+            dev2Thai['\u0969'] = '\u0E53';
+            dev2Thai['\u096A'] = '\u0E54';
+            dev2Thai['\u096B'] = '\u0E55';
+            dev2Thai['\u096C'] = '\u0E56';
+            dev2Thai['\u096D'] = '\u0E57';
+            dev2Thai['\u096E'] = '\u0E58';
+            dev2Thai['\u096F'] = '\u0E59';
 
             // other
-            dev2Thai['\x0970'] = '.'; // Dev. abbreviation sign
-            dev2Thai['\x200C'] = ""; // ZWNJ (remove)
-            dev2Thai['\x200D'] = ""; // ZWJ (remove)
+            dev2Thai['\u0970'] = '.'; // Dev. abbreviation sign
+            dev2Thai['\u200C'] = ""; // ZWNJ (remove)
+            dev2Thai['\u200D'] = ""; // ZWJ (remove)
         }
 
         public static string ConvertBook(string devStr)
@@ -115,19 +115,19 @@ namespace CST.Conversion
         public static string Convert(string devStr)
         {
             // first remove all the ZWJs
-            devStr = devStr.Replace("\x200D", "");
+            devStr = devStr.Replace("\u200D", "");
 
             // pre-processing step for Thai: put the e vowel before its consonants
-            //devStr = Regex.Replace(devStr, "([\x0915-\x0939]\x094D[\x0915-\x0939]\x094D[\x0915-\x0939]\x094D[\x0915-\x0939])\x0947", "\x0E40$1");
-            //devStr = Regex.Replace(devStr, "([\x0915-\x0939]\x094D[\x0915-\x0939]\x094D[\x0915-\x0939])\x0947", "\x0E40$1");
-            //devStr = Regex.Replace(devStr, "([\x0915-\x0939]\x094D[\x0915-\x0939])\x0947", "\x0E40$1");
-            devStr = Regex.Replace(devStr, "([\x0915-\x0939])\x0947", "\x0E40$1");
+            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u0947", "\u0E40$1");
+            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u0947", "\u0E40$1");
+            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939])\u0947", "\u0E40$1");
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])\u0947", "\u0E40$1");
 
             // pre-processing step for Thai: put the o vowel before its consonants
-            //devStr = Regex.Replace(devStr, "([\x0915-\x0939]\x094D[\x0915-\x0939]\x094D[\x0915-\x0939]\x094D[\x0915-\x0939])\x094B", "\x0E42$1");
-            //devStr = Regex.Replace(devStr, "([\x0915-\x0939]\x094D[\x0915-\x0939]\x094D[\x0915-\x0939])\x094B", "\x0E42$1");
-            //devStr = Regex.Replace(devStr, "([\x0915-\x0939]\x094D[\x0915-\x0939])\x094B", "\x0E42$1");
-            devStr = Regex.Replace(devStr, "([\x0915-\x0939])\x094B", "\x0E42$1");
+            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u094B", "\u0E42$1");
+            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u094B", "\u0E42$1");
+            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939])\u094B", "\u0E42$1");
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])\u094B", "\u0E42$1");
 
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
@@ -153,23 +153,23 @@ namespace CST.Conversion
                 new MatchEvaluator(ConvertNamoTassaDandas), RegexOptions.Compiled);
 
             // convert all others to Thai paiyannoi
-            str = str.Replace("\x0964", "\x0E2F");
-            str = str.Replace("\x0965", "\x0E2F");
+            str = str.Replace("\u0964", "\u0E2F");
+            str = str.Replace("\u0965", "\u0E2F");
             return str;
         }
 
         public static string ConvertGathaDandas(Match m)
         {
             string str = m.Value;
-            str = str.Replace("\x0964", ";");
-            str = str.Replace("\x0965", "\x0E2F");
+            str = str.Replace("\u0964", ";");
+            str = str.Replace("\u0965", "\u0E2F");
             return str;
         }
 
         public static string ConvertNamoTassaDandas(Match m)
         {
             string str = m.Value;
-            return str.Replace("\x0965", "\x0E2F");
+            return str.Replace("\u0965", "\u0E2F");
         }
 
         // There should be no spaces before these

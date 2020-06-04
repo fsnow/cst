@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -7,106 +7,106 @@ namespace CST.Conversion
 {
     public static class Deva2Guru
     {
-        private static Hashtable deva2Guru;
+        private static IDictionary<char, object> deva2Guru;
 
         static Deva2Guru()
         {
-            deva2Guru = new Hashtable();
+            deva2Guru = new Dictionary<char, object>();
 
             // various signs
-            deva2Guru['\x0901'] = '\x0A01'; // candrabindhu
-            deva2Guru['\x0902'] = '\x0A02'; // anusvara
-            deva2Guru['\x0903'] = '\x0A03'; // visarga
+            deva2Guru['\u0901'] = '\u0A01'; // candrabindhu
+            deva2Guru['\u0902'] = '\u0A02'; // anusvara
+            deva2Guru['\u0903'] = '\u0A03'; // visarga
 
             // independent vowels
-            deva2Guru['\x0905'] = '\x0A05'; // a
-            deva2Guru['\x0906'] = '\x0A06'; // aa
-            deva2Guru['\x0907'] = '\x0A07'; // i
-            deva2Guru['\x0908'] = '\x0A08'; // ii
-            deva2Guru['\x0909'] = '\x0A09'; // u
-            deva2Guru['\x090A'] = '\x0A0A'; // uu
-            deva2Guru['\x090F'] = '\x0A0F'; // e
-            deva2Guru['\x0910'] = '\x0A10'; // ai
-            deva2Guru['\x0913'] = '\x0A13'; // o
-            deva2Guru['\x0914'] = '\x0A14'; // au
+            deva2Guru['\u0905'] = '\u0A05'; // a
+            deva2Guru['\u0906'] = '\u0A06'; // aa
+            deva2Guru['\u0907'] = '\u0A07'; // i
+            deva2Guru['\u0908'] = '\u0A08'; // ii
+            deva2Guru['\u0909'] = '\u0A09'; // u
+            deva2Guru['\u090A'] = '\u0A0A'; // uu
+            deva2Guru['\u090F'] = '\u0A0F'; // e
+            deva2Guru['\u0910'] = '\u0A10'; // ai
+            deva2Guru['\u0913'] = '\u0A13'; // o
+            deva2Guru['\u0914'] = '\u0A14'; // au
 
             // velar stops
-            deva2Guru['\x0915'] = '\x0A15'; // ka
-            deva2Guru['\x0916'] = '\x0A16'; // kha
-            deva2Guru['\x0917'] = '\x0A17'; // ga
-            deva2Guru['\x0918'] = '\x0A18'; // gha
-            deva2Guru['\x0919'] = '\x0A19'; // n overdot a
+            deva2Guru['\u0915'] = '\u0A15'; // ka
+            deva2Guru['\u0916'] = '\u0A16'; // kha
+            deva2Guru['\u0917'] = '\u0A17'; // ga
+            deva2Guru['\u0918'] = '\u0A18'; // gha
+            deva2Guru['\u0919'] = '\u0A19'; // n overdot a
             
             // palatal stops
-            deva2Guru['\x091A'] = '\x0A1A'; // ca
-            deva2Guru['\x091B'] = '\x0A1B'; // cha
-            deva2Guru['\x091C'] = '\x0A1C'; // ja
-            deva2Guru['\x091D'] = '\x0A1D'; // jha
-            deva2Guru['\x091E'] = '\x0A1E'; // ña
+            deva2Guru['\u091A'] = '\u0A1A'; // ca
+            deva2Guru['\u091B'] = '\u0A1B'; // cha
+            deva2Guru['\u091C'] = '\u0A1C'; // ja
+            deva2Guru['\u091D'] = '\u0A1D'; // jha
+            deva2Guru['\u091E'] = '\u0A1E'; // n tilde a
 
             // retroflex stops
-            deva2Guru['\x091F'] = '\x0A1F'; // t underdot a
-            deva2Guru['\x0920'] = '\x0A20'; // t underdot ha
-            deva2Guru['\x0921'] = '\x0A21'; // d underdot a
-            deva2Guru['\x0922'] = '\x0A22'; // d underdot ha
-            deva2Guru['\x0923'] = '\x0A23'; // n underdot a
+            deva2Guru['\u091F'] = '\u0A1F'; // t underdot a
+            deva2Guru['\u0920'] = '\u0A20'; // t underdot ha
+            deva2Guru['\u0921'] = '\u0A21'; // d underdot a
+            deva2Guru['\u0922'] = '\u0A22'; // d underdot ha
+            deva2Guru['\u0923'] = '\u0A23'; // n underdot a
 
             // dental stops
-            deva2Guru['\x0924'] = '\x0A24'; // ta
-            deva2Guru['\x0925'] = '\x0A25'; // tha
-            deva2Guru['\x0926'] = '\x0A26'; // da
-            deva2Guru['\x0927'] = '\x0A27'; // dha
-            deva2Guru['\x0928'] = '\x0A28'; // na
+            deva2Guru['\u0924'] = '\u0A24'; // ta
+            deva2Guru['\u0925'] = '\u0A25'; // tha
+            deva2Guru['\u0926'] = '\u0A26'; // da
+            deva2Guru['\u0927'] = '\u0A27'; // dha
+            deva2Guru['\u0928'] = '\u0A28'; // na
 
             // labial stops
-            deva2Guru['\x092A'] = '\x0A2A'; // pa
-            deva2Guru['\x092B'] = '\x0A2B'; // pha
-            deva2Guru['\x092C'] = '\x0A2C'; // ba
-            deva2Guru['\x092D'] = '\x0A2D'; // bha
-            deva2Guru['\x092E'] = '\x0A2E'; // ma
+            deva2Guru['\u092A'] = '\u0A2A'; // pa
+            deva2Guru['\u092B'] = '\u0A2B'; // pha
+            deva2Guru['\u092C'] = '\u0A2C'; // ba
+            deva2Guru['\u092D'] = '\u0A2D'; // bha
+            deva2Guru['\u092E'] = '\u0A2E'; // ma
 
             // liquids, fricatives, etc.
-            deva2Guru['\x092F'] = '\x0A2F'; // ya
-            deva2Guru['\x0930'] = '\x0A30'; // ra
-            deva2Guru['\x0932'] = '\x0A32'; // la
-            deva2Guru['\x0933'] = '\x0A33'; // l underdot a
-            deva2Guru['\x0935'] = '\x0AB5'; // va
-            deva2Guru['\x0936'] = '\x0A36'; // sha (palatal)
-            deva2Guru['\x0938'] = '\x0A38'; // sa
-            deva2Guru['\x0939'] = '\x0A39'; // ha
+            deva2Guru['\u092F'] = '\u0A2F'; // ya
+            deva2Guru['\u0930'] = '\u0A30'; // ra
+            deva2Guru['\u0932'] = '\u0A32'; // la
+            deva2Guru['\u0933'] = '\u0A33'; // l underdot a
+            deva2Guru['\u0935'] = '\u0AB5'; // va
+            deva2Guru['\u0936'] = '\u0A36'; // sha (palatal)
+            deva2Guru['\u0938'] = '\u0A38'; // sa
+            deva2Guru['\u0939'] = '\u0A39'; // ha
 
             // dependent vowel signs
-            deva2Guru['\x093E'] = '\x0A3E'; // aa
-            deva2Guru['\x093F'] = '\x0A3F'; // i
-            deva2Guru['\x0940'] = '\x0A40'; // ii
-            deva2Guru['\x0941'] = '\x0A41'; // u
-            deva2Guru['\x0942'] = '\x0A42'; // uu
-            deva2Guru['\x0947'] = '\x0A47'; // e
-            deva2Guru['\x0948'] = '\x0A48'; // ai
-            deva2Guru['\x094B'] = '\x0A4B'; // o
-            deva2Guru['\x094C'] = '\x0A4C'; // au
+            deva2Guru['\u093E'] = '\u0A3E'; // aa
+            deva2Guru['\u093F'] = '\u0A3F'; // i
+            deva2Guru['\u0940'] = '\u0A40'; // ii
+            deva2Guru['\u0941'] = '\u0A41'; // u
+            deva2Guru['\u0942'] = '\u0A42'; // uu
+            deva2Guru['\u0947'] = '\u0A47'; // e
+            deva2Guru['\u0948'] = '\u0A48'; // ai
+            deva2Guru['\u094B'] = '\u0A4B'; // o
+            deva2Guru['\u094C'] = '\u0A4C'; // au
 
             // various signs
-            deva2Guru['\x094D'] = '\x0A4D'; // virama
+            deva2Guru['\u094D'] = '\u0A4D'; // virama
 
             // let Devanagari danda (U+0964) and double danda (U+0965) 
             // pass through unmodified
 
             // digits
-            deva2Guru['\x0966'] = '\x0A66';
-            deva2Guru['\x0967'] = '\x0A67';
-            deva2Guru['\x0968'] = '\x0A68';
-            deva2Guru['\x0969'] = '\x0A69';
-            deva2Guru['\x096A'] = '\x0A6A';
-            deva2Guru['\x096B'] = '\x0A6B';
-            deva2Guru['\x096C'] = '\x0A6C';
-            deva2Guru['\x096D'] = '\x0A6D';
-            deva2Guru['\x096E'] = '\x0A6E';
-            deva2Guru['\x096F'] = '\x0A6F';
+            deva2Guru['\u0966'] = '\u0A66';
+            deva2Guru['\u0967'] = '\u0A67';
+            deva2Guru['\u0968'] = '\u0A68';
+            deva2Guru['\u0969'] = '\u0A69';
+            deva2Guru['\u096A'] = '\u0A6A';
+            deva2Guru['\u096B'] = '\u0A6B';
+            deva2Guru['\u096C'] = '\u0A6C';
+            deva2Guru['\u096D'] = '\u0A6D';
+            deva2Guru['\u096E'] = '\u0A6E';
+            deva2Guru['\u096F'] = '\u0A6F';
 
             // zero-width joiners
-            deva2Guru['\x200C'] = ""; // ZWNJ (remove)
-            deva2Guru['\x200D'] = ""; // ZWJ (remove)
+            deva2Guru['\u200C'] = ""; // ZWNJ (remove)
+            deva2Guru['\u200D'] = ""; // ZWJ (remove)
         }
 
         public static string ConvertBook(string devStr)

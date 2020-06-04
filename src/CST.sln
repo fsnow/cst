@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cst4", "Cst4\Cst4.csproj", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CST.Lucene", "CST.Lucene\CST.Lucene.csproj", "{0AE03D7B-2045-4B7C-8A27-E647D5F1A7D9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CstBlazor", "CstBlazor\CstBlazor.csproj", "{236A084B-51E0-465D-83F3-DB671BC9EEAF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,18 @@ Global
 		{0AE03D7B-2045-4B7C-8A27-E647D5F1A7D9}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{0AE03D7B-2045-4B7C-8A27-E647D5F1A7D9}.Release|x86.ActiveCfg = Release|Any CPU
 		{0AE03D7B-2045-4B7C-8A27-E647D5F1A7D9}.Release|x86.Build.0 = Release|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Debug|x86.Build.0 = Debug|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Release|x86.ActiveCfg = Release|Any CPU
+		{236A084B-51E0-465D-83F3-DB671BC9EEAF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

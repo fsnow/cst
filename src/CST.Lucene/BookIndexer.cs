@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
-using CST.Collections;
 
 namespace CST
 {

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using CST.Collections;
 
 namespace CST.Conversion
 {
@@ -143,14 +142,14 @@ namespace CST.Conversion
             charMap['R'] = "\x094D\x0930"; // diagonal ra
             charMap['Ã'] = "\x094D\x0930"; // caret ra
 
-            indVowels = new Set();
+            indVowels = new HashSet<char>();
             indVowels.Add('S'); // a
             indVowels.Add('W'); // uu
             indVowels.Add('a'); // e
             indVowels.Add('q'); // i
             indVowels.Add('w'); // u
 
-            depVowels = new Set();
+            depVowels = new HashSet<char>();
             depVowels.Add('A'); // aa
             depVowels.Add('I'); // ii
             depVowels.Add('O'); // uu (low form)
@@ -168,7 +167,7 @@ namespace CST.Conversion
             // break this up in pre-processing step
             // 02DC = i + m. (maybe not break up. they both need to jump over the following consonants.)
 
-            fullConsonants = new Set();
+            fullConsonants = new HashSet<string>();
             fullConsonants.Add("B"); // bha
             fullConsonants.Add("C"); // cha
             fullConsonants.Add("D"); // dha
@@ -239,7 +238,7 @@ namespace CST.Conversion
             fullConsonantsCC = SetToCharacterClass(fullConsonants);
 
 
-            halfConsonants = new Set();
+            halfConsonants = new HashSet<string>();
             halfConsonants.Add("E"); // 1/2 ka
             halfConsonants.Add("F"); // 1/2 pa
             halfConsonants.Add("\x0086"); // 1/2 ya
@@ -281,7 +280,7 @@ namespace CST.Conversion
             halfConsonants.Add("ð"); // 1/2 pta
             halfConsonantsCC = SetToCharacterClass(halfConsonants);
 
-            followers = new Set();
+            followers = new HashSet<string>();
             followers.Add("Q"); // hook ra
             followers.Add("R"); // diagonal ra
             followers.Add("Ã"); // caret ra
@@ -290,16 +289,16 @@ namespace CST.Conversion
             followersCC = SetToCharacterClass(followers);
         }
 
-        private static Set indVowels;
-        private static Set depVowels;
-        private static Set fullConsonants;
+        private static ISet<char> indVowels;
+        private static ISet<char> depVowels;
+        private static ISet<string> fullConsonants;
         private static string fullConsonantsCC;
-        private static Set halfConsonants;
+        private static ISet<string> halfConsonants;
         private static string halfConsonantsCC;
-        private static Set followers;
+        private static ISet<string> followers;
         private static string followersCC;
 
-        private static Dictionary<char, string> charMap;
+        private static IDictionary<char, string> charMap;
 
         public static string ConvertBook(string str)
         {
@@ -499,7 +498,7 @@ namespace CST.Conversion
             return s2;
         }
 
-        private static string SetToCharacterClass(Set set)
+        private static string SetToCharacterClass(ISet<string> set)
         {
             string cc = "[";
             foreach (string s in set)

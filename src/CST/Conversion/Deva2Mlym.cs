@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -8,114 +8,114 @@ namespace CST.Conversion
 {
     public static class Deva2Mlym
     {
-        private static Hashtable deva2Mlym;
+        private static IDictionary<char, object> deva2Mlym;
 
         static Deva2Mlym()
         {
-            deva2Mlym = new Hashtable();
+            deva2Mlym = new Dictionary<char, object>();
 
             // various signs
-            deva2Mlym['\x0902'] = '\x0D02'; // anusvara
-            deva2Mlym['\x0903'] = '\x0D03'; // visarga
+            deva2Mlym['\u0902'] = '\u0D02'; // anusvara
+            deva2Mlym['\u0903'] = '\u0D03'; // visarga
 
             // independent vowels
-            deva2Mlym['\x0905'] = '\x0D05'; // a
-            deva2Mlym['\x0906'] = '\x0D06'; // aa
-            deva2Mlym['\x0907'] = '\x0D07'; // i
-            deva2Mlym['\x0908'] = '\x0D08'; // ii
-            deva2Mlym['\x0909'] = '\x0D09'; // u
-            deva2Mlym['\x090A'] = '\x0D0A'; // uu
-            deva2Mlym['\x090B'] = '\x0D0B'; // vocalic r
-            deva2Mlym['\x090C'] = '\x0D0C'; // vocalic l
-            deva2Mlym['\x090F'] = '\x0D0F'; // e
-            deva2Mlym['\x0910'] = '\x0D10'; // ai
-            deva2Mlym['\x0913'] = '\x0D13'; // o
-            deva2Mlym['\x0914'] = '\x0D14'; // au
+            deva2Mlym['\u0905'] = '\u0D05'; // a
+            deva2Mlym['\u0906'] = '\u0D06'; // aa
+            deva2Mlym['\u0907'] = '\u0D07'; // i
+            deva2Mlym['\u0908'] = '\u0D08'; // ii
+            deva2Mlym['\u0909'] = '\u0D09'; // u
+            deva2Mlym['\u090A'] = '\u0D0A'; // uu
+            deva2Mlym['\u090B'] = '\u0D0B'; // vocalic r
+            deva2Mlym['\u090C'] = '\u0D0C'; // vocalic l
+            deva2Mlym['\u090F'] = '\u0D0F'; // e
+            deva2Mlym['\u0910'] = '\u0D10'; // ai
+            deva2Mlym['\u0913'] = '\u0D13'; // o
+            deva2Mlym['\u0914'] = '\u0D14'; // au
 
             // velar stops
-            deva2Mlym['\x0915'] = '\x0D15'; // ka
-            deva2Mlym['\x0916'] = '\x0D16'; // kha
-            deva2Mlym['\x0917'] = '\x0D17'; // ga
-            deva2Mlym['\x0918'] = '\x0D18'; // gha
-            deva2Mlym['\x0919'] = '\x0D19'; // n overdot a
+            deva2Mlym['\u0915'] = '\u0D15'; // ka
+            deva2Mlym['\u0916'] = '\u0D16'; // kha
+            deva2Mlym['\u0917'] = '\u0D17'; // ga
+            deva2Mlym['\u0918'] = '\u0D18'; // gha
+            deva2Mlym['\u0919'] = '\u0D19'; // n overdot a
  
             // palatal stops
-            deva2Mlym['\x091A'] = '\x0D1A'; // ca
-            deva2Mlym['\x091B'] = '\x0D1B'; // cha
-            deva2Mlym['\x091C'] = '\x0D1C'; // ja
-            deva2Mlym['\x091D'] = '\x0D1D'; // jha
-            deva2Mlym['\x091E'] = '\x0D1E'; // ña
+            deva2Mlym['\u091A'] = '\u0D1A'; // ca
+            deva2Mlym['\u091B'] = '\u0D1B'; // cha
+            deva2Mlym['\u091C'] = '\u0D1C'; // ja
+            deva2Mlym['\u091D'] = '\u0D1D'; // jha
+            deva2Mlym['\u091E'] = '\u0D1E'; // n tilde a
 
             // retroflex stops
-            deva2Mlym['\x091F'] = '\x0D1F'; // t underdot a
-            deva2Mlym['\x0920'] = '\x0D20'; // t underdot ha
-            deva2Mlym['\x0921'] = '\x0D21'; // d underdot a
-            deva2Mlym['\x0922'] = '\x0D22'; // d underdot ha
-            deva2Mlym['\x0923'] = '\x0D23'; // n underdot a
+            deva2Mlym['\u091F'] = '\u0D1F'; // t underdot a
+            deva2Mlym['\u0920'] = '\u0D20'; // t underdot ha
+            deva2Mlym['\u0921'] = '\u0D21'; // d underdot a
+            deva2Mlym['\u0922'] = '\u0D22'; // d underdot ha
+            deva2Mlym['\u0923'] = '\u0D23'; // n underdot a
 
             // dental stops
-            deva2Mlym['\x0924'] = '\x0D24'; // ta
-            deva2Mlym['\x0925'] = '\x0D25'; // tha
-            deva2Mlym['\x0926'] = '\x0D26'; // da
-            deva2Mlym['\x0927'] = '\x0D27'; // dha
-            deva2Mlym['\x0928'] = '\x0D28'; // na
+            deva2Mlym['\u0924'] = '\u0D24'; // ta
+            deva2Mlym['\u0925'] = '\u0D25'; // tha
+            deva2Mlym['\u0926'] = '\u0D26'; // da
+            deva2Mlym['\u0927'] = '\u0D27'; // dha
+            deva2Mlym['\u0928'] = '\u0D28'; // na
 
             // labial stops
-            deva2Mlym['\x092A'] = '\x0D2A'; // pa
-            deva2Mlym['\x092B'] = '\x0D2B'; // pha
-            deva2Mlym['\x092C'] = '\x0D2C'; // ba
-            deva2Mlym['\x092D'] = '\x0D2D'; // bha
-            deva2Mlym['\x092E'] = '\x0D2E'; // ma
+            deva2Mlym['\u092A'] = '\u0D2A'; // pa
+            deva2Mlym['\u092B'] = '\u0D2B'; // pha
+            deva2Mlym['\u092C'] = '\u0D2C'; // ba
+            deva2Mlym['\u092D'] = '\u0D2D'; // bha
+            deva2Mlym['\u092E'] = '\u0D2E'; // ma
 
             // liquids, fricatives, etc.
-            deva2Mlym['\x092F'] = '\x0D2F'; // ya
-            deva2Mlym['\x0930'] = '\x0D30'; // ra
-            deva2Mlym['\x0931'] = '\x0D31'; // rra (Dravidian-specific)
-            deva2Mlym['\x0932'] = '\x0D32'; // la
-            deva2Mlym['\x0933'] = '\x0D33'; // l underdot a
-            deva2Mlym['\x0935'] = '\x0D35'; // va
-            deva2Mlym['\x0936'] = '\x0D36'; // sha (palatal)
-            deva2Mlym['\x0937'] = '\x0D37'; // sha (retroflex)
-            deva2Mlym['\x0938'] = '\x0D38'; // sa
-            deva2Mlym['\x0939'] = '\x0D39'; // ha
+            deva2Mlym['\u092F'] = '\u0D2F'; // ya
+            deva2Mlym['\u0930'] = '\u0D30'; // ra
+            deva2Mlym['\u0931'] = '\u0D31'; // rra (Dravidian-specific)
+            deva2Mlym['\u0932'] = '\u0D32'; // la
+            deva2Mlym['\u0933'] = '\u0D33'; // l underdot a
+            deva2Mlym['\u0935'] = '\u0D35'; // va
+            deva2Mlym['\u0936'] = '\u0D36'; // sha (palatal)
+            deva2Mlym['\u0937'] = '\u0D37'; // sha (retroflex)
+            deva2Mlym['\u0938'] = '\u0D38'; // sa
+            deva2Mlym['\u0939'] = '\u0D39'; // ha
 
             // dependent vowel signs
-            deva2Mlym['\x093E'] = '\x0D3E'; // aa
-            deva2Mlym['\x093F'] = '\x0D3F'; // i
-            deva2Mlym['\x0940'] = '\x0D40'; // ii
-            deva2Mlym['\x0941'] = '\x0D41'; // u
-            deva2Mlym['\x0942'] = '\x0D42'; // uu
-            deva2Mlym['\x0943'] = '\x0D43'; // vocalic r
-            deva2Mlym['\x0947'] = '\x0D47'; // e
-            deva2Mlym['\x0948'] = '\x0D48'; // ai
-            deva2Mlym['\x094B'] = '\x0D4B'; // o
-            deva2Mlym['\x094C'] = '\x0D4C'; // au
+            deva2Mlym['\u093E'] = '\u0D3E'; // aa
+            deva2Mlym['\u093F'] = '\u0D3F'; // i
+            deva2Mlym['\u0940'] = '\u0D40'; // ii
+            deva2Mlym['\u0941'] = '\u0D41'; // u
+            deva2Mlym['\u0942'] = '\u0D42'; // uu
+            deva2Mlym['\u0943'] = '\u0D43'; // vocalic r
+            deva2Mlym['\u0947'] = '\u0D47'; // e
+            deva2Mlym['\u0948'] = '\u0D48'; // ai
+            deva2Mlym['\u094B'] = '\u0D4B'; // o
+            deva2Mlym['\u094C'] = '\u0D4C'; // au
 
             // various signs
-            deva2Mlym['\x094D'] = '\x0D4D'; // virama
+            deva2Mlym['\u094D'] = '\u0D4D'; // virama
 
             // additional vowels for Sanskrit
-            deva2Mlym['\x0960'] = '\x0D60'; // vocalic rr
-            deva2Mlym['\x0961'] = '\x0D61'; // vocalic ll
+            deva2Mlym['\u0960'] = '\u0D60'; // vocalic rr
+            deva2Mlym['\u0961'] = '\u0D61'; // vocalic ll
 
             // we let dandas (U+0964) and double dandas (U+0965) pass through 
             // and handle them in ConvertDandas()
 
             // digits
-            deva2Mlym['\x0966'] = '\x0D66';
-            deva2Mlym['\x0967'] = '\x0D67';
-            deva2Mlym['\x0968'] = '\x0D68';
-            deva2Mlym['\x0969'] = '\x0D69';
-            deva2Mlym['\x096A'] = '\x0D6A';
-            deva2Mlym['\x096B'] = '\x0D6B';
-            deva2Mlym['\x096C'] = '\x0D6C';
-            deva2Mlym['\x096D'] = '\x0D6D';
-            deva2Mlym['\x096E'] = '\x0D6E';
-            deva2Mlym['\x096F'] = '\x0D6F';
+            deva2Mlym['\u0966'] = '\u0D66';
+            deva2Mlym['\u0967'] = '\u0D67';
+            deva2Mlym['\u0968'] = '\u0D68';
+            deva2Mlym['\u0969'] = '\u0D69';
+            deva2Mlym['\u096A'] = '\u0D6A';
+            deva2Mlym['\u096B'] = '\u0D6B';
+            deva2Mlym['\u096C'] = '\u0D6C';
+            deva2Mlym['\u096D'] = '\u0D6D';
+            deva2Mlym['\u096E'] = '\u0D6E';
+            deva2Mlym['\u096F'] = '\u0D6F';
 
             // zero-width joiners
-            deva2Mlym['\x200C'] = ""; // ZWNJ (remove)
-            deva2Mlym['\x200D'] = ""; // ZWJ (remove)
+            deva2Mlym['\u200C'] = ""; // ZWNJ (remove)
+            deva2Mlym['\u200D'] = ""; // ZWJ (remove)
         }
 
         public static string ConvertBook(string devStr)
@@ -157,23 +157,23 @@ namespace CST.Conversion
                 new MatchEvaluator(RemoveNamoTassaDandas), RegexOptions.Compiled);
 
             // convert all others to period
-            str = str.Replace("\x0964", ".");
-            str = str.Replace("\x0965", ".");
+            str = str.Replace("\u0964", ".");
+            str = str.Replace("\u0965", ".");
             return str;
         }
 
         public static string ConvertGathaDandas(Match m)
         {
             string str = m.Value;
-            str = str.Replace("\x0964", ";");
-            str = str.Replace("\x0965", ".");
+            str = str.Replace("\u0964", ";");
+            str = str.Replace("\u0965", ".");
             return str;
         }
 
         public static string RemoveNamoTassaDandas(Match m)
         {
             string str = m.Value;
-            return str.Replace("\x0965", "");
+            return str.Replace("\u0965", "");
         }
 
         // There should be no spaces before these

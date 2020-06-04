@@ -7,7 +7,7 @@ namespace CST.Conversion
     {
         public static string Convert(string str)
         {
-           string deva = "";
+            string deva = "";
             string run = "";
             Script lastScript = Script.Latin;
             
@@ -51,6 +51,7 @@ namespace CST.Conversion
                 return str;
         }
 
+        // TODO: add Cyrillic, Tamil(?)
         public static Script GetScript(char c)
         {
             int ccode = System.Convert.ToInt32(c);
