@@ -231,6 +231,7 @@ namespace CST
 			isPhrase = (ipeTerm.StartsWith("\"") || ipeTerm.EndsWith("\""));
 
 			// delete all kinds of quotation marks from the search terms
+            // FSnow 2020-06-04 Should this include single straight quote / apostrophe ?
 			ipeTerm = ipeTerm.Replace("\"", "");
 			ipeTerm = ipeTerm.Replace("‘", "");
 			ipeTerm = ipeTerm.Replace("’", "");
