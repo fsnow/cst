@@ -60,7 +60,7 @@ namespace CST.Conversion
 
             // independent vowels
             mymr2Deva['\u1021'] = '\u0905'; // a
-            //deva2Mymr['\u0906'] = "\u1021\u102C"; // aa
+            //deva2Mymr['\u0906'] = "\u1021\u102C"; // independent aa handled by regex in Convert()
             mymr2Deva['\u1023'] = '\u0907'; // i
             mymr2Deva['\u1024'] = '\u0908'; // ii
             mymr2Deva['\u1025'] = '\u0909'; // u
@@ -75,7 +75,19 @@ namespace CST.Conversion
             mymr2Deva['\u102F'] = '\u0941'; // u
             mymr2Deva['\u1030'] = '\u0942'; // uu
             mymr2Deva['\u1031'] = '\u0947'; // e
-            //deva2Mymr['\u094B'] = "\u1031\u102C"; // o
+            //deva2Mymr['\u094B'] = "\u1031\u102C"; // dependent o handled by regex in Convert()
+
+            // remove asat/killer, used for rendering in Myanmar like ZWJ/ZWNJ in Deva
+            mymr2Deva['\u103A'] = "";
+
+            // replace the dependent consonant signs ya, ra, wa and ha (with no preceding virama) with virama + deva letter
+            mymr2Deva['\u103B'] = "\u1039\u101A";
+            mymr2Deva['\u103C'] = "\u1039\u101B";
+            mymr2Deva['\u103D'] = "\u1039\u101D";
+            mymr2Deva['\u103E'] = "\u1039\u101F";
+
+            // Myanmar great sa becomes Deva sa + virama + sa
+            mymr2Deva['\u103F'] = "\u101E\u1039\u101E";
 
             // numerals
             mymr2Deva['\u1040'] = '\u0966';
@@ -101,7 +113,13 @@ namespace CST.Conversion
         // no stylesheet modifications, capitalization, etc.
         public static string Convert(string str)
         {
+            // replace all sign tall aa with sign aa
+            str = str.Replace("\u102B", "\u102C");
+
+            // independent "a" plus dependent sign aa = independent aa
 			str = str.Replace("\u1021\u102C", "\u0906");
+
+            // dependent e plus dependent sign aa = dependent o
 			str = str.Replace("\u1031\u102C", "\u094B");
 
             StringBuilder sb = new StringBuilder();
