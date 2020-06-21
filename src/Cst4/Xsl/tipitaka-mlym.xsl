@@ -1,13 +1,13 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" > 
+<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" >
 
-<xsl:template match = "/" > 
+<xsl:template match = "/" >
 <html>
 <head>
 <title></title>
 <script>
 function setHitsVisibility(isVisible)
-{ 
+{
   var c = getStyleClass('hit');
   if (isVisible)
   {
@@ -48,13 +48,13 @@ function getStyleClass (className) {
 			}
 		}
 	}
-	
+
 	return null;
 }
 </script>
 <style>
-body { 
-  font-family: Kartika, "Arial Unicode MS";
+body {
+  font-family: Kartika;
   background: white;
 }
 
