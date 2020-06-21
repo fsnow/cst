@@ -25,8 +25,10 @@ namespace CST.Conversion
             mlym2Deva['\u0D0A'] = '\u090A'; // uu
             mlym2Deva['\u0D0B'] = '\u090B'; // vocalic r
             mlym2Deva['\u0D0C'] = '\u090C'; // vocalic l
+            mlym2Deva['\u0D0E'] = '\u090F'; // e -- both the long and short forms of Malayalam e map to Devanagari e
             mlym2Deva['\u0D0F'] = '\u090F'; // e
             mlym2Deva['\u0D10'] = '\u0910'; // ai
+            mlym2Deva['\u0D12'] = '\u0913'; // o -- both the long and short forms of Malayalam o map to Devanagari o
             mlym2Deva['\u0D13'] = '\u0913'; // o
             mlym2Deva['\u0D14'] = '\u0914'; // au
 
@@ -84,8 +86,10 @@ namespace CST.Conversion
             mlym2Deva['\u0D41'] = '\u0941'; // u
             mlym2Deva['\u0D42'] = '\u0942'; // uu
             mlym2Deva['\u0D43'] = '\u0943'; // vocalic r
+            mlym2Deva['\u0D46'] = '\u0947'; // e -- both the long and short forms of Malayalam e map to Devanagari e
             mlym2Deva['\u0D47'] = '\u0947'; // e
             mlym2Deva['\u0D48'] = '\u0948'; // ai
+            mlym2Deva['\u0D4A'] = '\u094B'; // o -- both the long and short forms of Malayalam o map to Devanagari o
             mlym2Deva['\u0D4B'] = '\u094B'; // o
             mlym2Deva['\u0D4C'] = '\u094C'; // au
 
