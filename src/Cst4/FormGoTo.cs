@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace CST
@@ -68,5 +69,38 @@ namespace CST
 		{
 			textBoxNumber.Focus();
 		}
+
+        private void textBoxNumber_TextChanged(object sender, EventArgs e)
+        {
+			// keyboard shortcut to save a mouse click. type letter in number box to switch radio buttons.
+			if (Regex.IsMatch(textBoxNumber.Text, "^[VvMmPpTt]"))
+            {
+				string letter = textBoxNumber.Text.Substring(0, 1).ToUpper();
+				textBoxNumber.Text = textBoxNumber.Text.Substring(1);
+				switch (letter)
+                {
+					case "V":
+						radioButtonVriPage.Checked = true;
+						break;
+
+					case "M":
+						radioButtonMyanmarPage.Checked = true;
+						break;
+
+					case "P":
+						radioButtonPtsPage.Checked = true;
+						break;
+
+					case "T":
+						radioButtonThaiPage.Checked = true;
+						break;
+
+					default:
+						break;
+                }
+
+				textBoxNumber.Focus();
+            }
+        }
     }
 }

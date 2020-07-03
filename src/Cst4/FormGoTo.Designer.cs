@@ -28,182 +28,132 @@ namespace CST
         /// </summary>
         private void InitializeComponent()
         {
-			System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormGoTo));
-			this.lblGoToWhat = new System.Windows.Forms.Label();
-			this.panel1 = new System.Windows.Forms.Panel();
-			this.radioButtonOtherPage = new System.Windows.Forms.RadioButton();
-			this.radioButtonThaiPage = new System.Windows.Forms.RadioButton();
-			this.radioButtonPtsPage = new System.Windows.Forms.RadioButton();
-			this.radioButtonMyanmarPage = new System.Windows.Forms.RadioButton();
-			this.radioButtonVriPage = new System.Windows.Forms.RadioButton();
-			this.radioButtonParagraph = new System.Windows.Forms.RadioButton();
-			this.lblNumber = new System.Windows.Forms.Label();
-			this.textBoxNumber = new System.Windows.Forms.TextBox();
-			this.buttonOK = new System.Windows.Forms.Button();
-			this.buttonCancel = new System.Windows.Forms.Button();
-			this.panel1.SuspendLayout();
-			this.SuspendLayout();
-			// 
-			// lblGoToWhat
-			// 
-			this.lblGoToWhat.AccessibleDescription = null;
-			this.lblGoToWhat.AccessibleName = null;
-			resources.ApplyResources(this.lblGoToWhat, "lblGoToWhat");
-			this.lblGoToWhat.Font = null;
-			this.lblGoToWhat.Name = "lblGoToWhat";
-			// 
-			// panel1
-			// 
-			this.panel1.AccessibleDescription = null;
-			this.panel1.AccessibleName = null;
-			resources.ApplyResources(this.panel1, "panel1");
-			this.panel1.BackgroundImage = null;
-			this.panel1.Controls.Add(this.radioButtonOtherPage);
-			this.panel1.Controls.Add(this.radioButtonThaiPage);
-			this.panel1.Controls.Add(this.radioButtonPtsPage);
-			this.panel1.Controls.Add(this.radioButtonMyanmarPage);
-			this.panel1.Controls.Add(this.radioButtonVriPage);
-			this.panel1.Controls.Add(this.radioButtonParagraph);
-			this.panel1.Font = null;
-			this.panel1.Name = "panel1";
-			// 
-			// radioButtonOtherPage
-			// 
-			this.radioButtonOtherPage.AccessibleDescription = null;
-			this.radioButtonOtherPage.AccessibleName = null;
-			resources.ApplyResources(this.radioButtonOtherPage, "radioButtonOtherPage");
-			this.radioButtonOtherPage.BackgroundImage = null;
-			this.radioButtonOtherPage.Font = null;
-			this.radioButtonOtherPage.Name = "radioButtonOtherPage";
-			this.radioButtonOtherPage.TabStop = true;
-			this.radioButtonOtherPage.UseVisualStyleBackColor = true;
-			this.radioButtonOtherPage.Click += new System.EventHandler(this.radioButtonOtherPage_Click);
-			// 
-			// radioButtonThaiPage
-			// 
-			this.radioButtonThaiPage.AccessibleDescription = null;
-			this.radioButtonThaiPage.AccessibleName = null;
-			resources.ApplyResources(this.radioButtonThaiPage, "radioButtonThaiPage");
-			this.radioButtonThaiPage.BackgroundImage = null;
-			this.radioButtonThaiPage.Font = null;
-			this.radioButtonThaiPage.Name = "radioButtonThaiPage";
-			this.radioButtonThaiPage.TabStop = true;
-			this.radioButtonThaiPage.UseVisualStyleBackColor = true;
-			this.radioButtonThaiPage.Click += new System.EventHandler(this.radioButtonThaiPage_Click);
-			// 
-			// radioButtonPtsPage
-			// 
-			this.radioButtonPtsPage.AccessibleDescription = null;
-			this.radioButtonPtsPage.AccessibleName = null;
-			resources.ApplyResources(this.radioButtonPtsPage, "radioButtonPtsPage");
-			this.radioButtonPtsPage.BackgroundImage = null;
-			this.radioButtonPtsPage.Font = null;
-			this.radioButtonPtsPage.Name = "radioButtonPtsPage";
-			this.radioButtonPtsPage.TabStop = true;
-			this.radioButtonPtsPage.UseVisualStyleBackColor = true;
-			this.radioButtonPtsPage.Click += new System.EventHandler(this.radioButtonPtsPage_Click);
-			// 
-			// radioButtonMyanmarPage
-			// 
-			this.radioButtonMyanmarPage.AccessibleDescription = null;
-			this.radioButtonMyanmarPage.AccessibleName = null;
-			resources.ApplyResources(this.radioButtonMyanmarPage, "radioButtonMyanmarPage");
-			this.radioButtonMyanmarPage.BackgroundImage = null;
-			this.radioButtonMyanmarPage.Font = null;
-			this.radioButtonMyanmarPage.Name = "radioButtonMyanmarPage";
-			this.radioButtonMyanmarPage.TabStop = true;
-			this.radioButtonMyanmarPage.UseVisualStyleBackColor = true;
-			this.radioButtonMyanmarPage.Click += new System.EventHandler(this.radioButtonMyanmarPage_Click);
-			// 
-			// radioButtonVriPage
-			// 
-			this.radioButtonVriPage.AccessibleDescription = null;
-			this.radioButtonVriPage.AccessibleName = null;
-			resources.ApplyResources(this.radioButtonVriPage, "radioButtonVriPage");
-			this.radioButtonVriPage.BackgroundImage = null;
-			this.radioButtonVriPage.Font = null;
-			this.radioButtonVriPage.Name = "radioButtonVriPage";
-			this.radioButtonVriPage.TabStop = true;
-			this.radioButtonVriPage.UseVisualStyleBackColor = true;
-			this.radioButtonVriPage.Click += new System.EventHandler(this.radioButtonVriPage_Click);
-			// 
-			// radioButtonParagraph
-			// 
-			this.radioButtonParagraph.AccessibleDescription = null;
-			this.radioButtonParagraph.AccessibleName = null;
-			resources.ApplyResources(this.radioButtonParagraph, "radioButtonParagraph");
-			this.radioButtonParagraph.BackgroundImage = null;
-			this.radioButtonParagraph.Font = null;
-			this.radioButtonParagraph.Name = "radioButtonParagraph";
-			this.radioButtonParagraph.TabStop = true;
-			this.radioButtonParagraph.UseVisualStyleBackColor = true;
-			this.radioButtonParagraph.Click += new System.EventHandler(this.radioButtonParagraph_Click);
-			// 
-			// lblNumber
-			// 
-			this.lblNumber.AccessibleDescription = null;
-			this.lblNumber.AccessibleName = null;
-			resources.ApplyResources(this.lblNumber, "lblNumber");
-			this.lblNumber.Font = null;
-			this.lblNumber.Name = "lblNumber";
-			// 
-			// textBoxNumber
-			// 
-			this.textBoxNumber.AccessibleDescription = null;
-			this.textBoxNumber.AccessibleName = null;
-			resources.ApplyResources(this.textBoxNumber, "textBoxNumber");
-			this.textBoxNumber.BackgroundImage = null;
-			this.textBoxNumber.Font = null;
-			this.textBoxNumber.Name = "textBoxNumber";
-			// 
-			// buttonOK
-			// 
-			this.buttonOK.AccessibleDescription = null;
-			this.buttonOK.AccessibleName = null;
-			resources.ApplyResources(this.buttonOK, "buttonOK");
-			this.buttonOK.BackgroundImage = null;
-			this.buttonOK.DialogResult = System.Windows.Forms.DialogResult.OK;
-			this.buttonOK.Font = null;
-			this.buttonOK.Name = "buttonOK";
-			this.buttonOK.UseVisualStyleBackColor = true;
-			// 
-			// buttonCancel
-			// 
-			this.buttonCancel.AccessibleDescription = null;
-			this.buttonCancel.AccessibleName = null;
-			resources.ApplyResources(this.buttonCancel, "buttonCancel");
-			this.buttonCancel.BackgroundImage = null;
-			this.buttonCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-			this.buttonCancel.Font = null;
-			this.buttonCancel.Name = "buttonCancel";
-			this.buttonCancel.UseVisualStyleBackColor = true;
-			// 
-			// FormGoTo
-			// 
-			this.AcceptButton = this.buttonOK;
-			this.AccessibleDescription = null;
-			this.AccessibleName = null;
-			resources.ApplyResources(this, "$this");
-			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.BackgroundImage = null;
-			this.CancelButton = this.buttonCancel;
-			this.Controls.Add(this.buttonCancel);
-			this.Controls.Add(this.buttonOK);
-			this.Controls.Add(this.textBoxNumber);
-			this.Controls.Add(this.lblNumber);
-			this.Controls.Add(this.panel1);
-			this.Controls.Add(this.lblGoToWhat);
-			this.Font = null;
-			this.Icon = null;
-			this.MaximizeBox = false;
-			this.Name = "FormGoTo";
-			this.ShowIcon = false;
-			this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
-			this.Load += new System.EventHandler(this.FormGoTo_Load);
-			this.panel1.ResumeLayout(false);
-			this.panel1.PerformLayout();
-			this.ResumeLayout(false);
-			this.PerformLayout();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormGoTo));
+            this.lblGoToWhat = new System.Windows.Forms.Label();
+            this.panel1 = new System.Windows.Forms.Panel();
+            this.radioButtonOtherPage = new System.Windows.Forms.RadioButton();
+            this.radioButtonThaiPage = new System.Windows.Forms.RadioButton();
+            this.radioButtonPtsPage = new System.Windows.Forms.RadioButton();
+            this.radioButtonMyanmarPage = new System.Windows.Forms.RadioButton();
+            this.radioButtonVriPage = new System.Windows.Forms.RadioButton();
+            this.radioButtonParagraph = new System.Windows.Forms.RadioButton();
+            this.lblNumber = new System.Windows.Forms.Label();
+            this.textBoxNumber = new System.Windows.Forms.TextBox();
+            this.buttonOK = new System.Windows.Forms.Button();
+            this.buttonCancel = new System.Windows.Forms.Button();
+            this.panel1.SuspendLayout();
+            this.SuspendLayout();
+            // 
+            // lblGoToWhat
+            // 
+            resources.ApplyResources(this.lblGoToWhat, "lblGoToWhat");
+            this.lblGoToWhat.Name = "lblGoToWhat";
+            // 
+            // panel1
+            // 
+            this.panel1.Controls.Add(this.radioButtonOtherPage);
+            this.panel1.Controls.Add(this.radioButtonThaiPage);
+            this.panel1.Controls.Add(this.radioButtonPtsPage);
+            this.panel1.Controls.Add(this.radioButtonMyanmarPage);
+            this.panel1.Controls.Add(this.radioButtonVriPage);
+            this.panel1.Controls.Add(this.radioButtonParagraph);
+            resources.ApplyResources(this.panel1, "panel1");
+            this.panel1.Name = "panel1";
+            // 
+            // radioButtonOtherPage
+            // 
+            resources.ApplyResources(this.radioButtonOtherPage, "radioButtonOtherPage");
+            this.radioButtonOtherPage.Name = "radioButtonOtherPage";
+            this.radioButtonOtherPage.TabStop = true;
+            this.radioButtonOtherPage.UseVisualStyleBackColor = true;
+            this.radioButtonOtherPage.Click += new System.EventHandler(this.radioButtonOtherPage_Click);
+            // 
+            // radioButtonThaiPage
+            // 
+            resources.ApplyResources(this.radioButtonThaiPage, "radioButtonThaiPage");
+            this.radioButtonThaiPage.Name = "radioButtonThaiPage";
+            this.radioButtonThaiPage.TabStop = true;
+            this.radioButtonThaiPage.UseVisualStyleBackColor = true;
+            this.radioButtonThaiPage.Click += new System.EventHandler(this.radioButtonThaiPage_Click);
+            // 
+            // radioButtonPtsPage
+            // 
+            resources.ApplyResources(this.radioButtonPtsPage, "radioButtonPtsPage");
+            this.radioButtonPtsPage.Name = "radioButtonPtsPage";
+            this.radioButtonPtsPage.TabStop = true;
+            this.radioButtonPtsPage.UseVisualStyleBackColor = true;
+            this.radioButtonPtsPage.Click += new System.EventHandler(this.radioButtonPtsPage_Click);
+            // 
+            // radioButtonMyanmarPage
+            // 
+            resources.ApplyResources(this.radioButtonMyanmarPage, "radioButtonMyanmarPage");
+            this.radioButtonMyanmarPage.Name = "radioButtonMyanmarPage";
+            this.radioButtonMyanmarPage.TabStop = true;
+            this.radioButtonMyanmarPage.UseVisualStyleBackColor = true;
+            this.radioButtonMyanmarPage.Click += new System.EventHandler(this.radioButtonMyanmarPage_Click);
+            // 
+            // radioButtonVriPage
+            // 
+            resources.ApplyResources(this.radioButtonVriPage, "radioButtonVriPage");
+            this.radioButtonVriPage.Name = "radioButtonVriPage";
+            this.radioButtonVriPage.TabStop = true;
+            this.radioButtonVriPage.UseVisualStyleBackColor = true;
+            this.radioButtonVriPage.Click += new System.EventHandler(this.radioButtonVriPage_Click);
+            // 
+            // radioButtonParagraph
+            // 
+            resources.ApplyResources(this.radioButtonParagraph, "radioButtonParagraph");
+            this.radioButtonParagraph.Name = "radioButtonParagraph";
+            this.radioButtonParagraph.TabStop = true;
+            this.radioButtonParagraph.UseVisualStyleBackColor = true;
+            this.radioButtonParagraph.Click += new System.EventHandler(this.radioButtonParagraph_Click);
+            // 
+            // lblNumber
+            // 
+            resources.ApplyResources(this.lblNumber, "lblNumber");
+            this.lblNumber.Name = "lblNumber";
+            // 
+            // textBoxNumber
+            // 
+            resources.ApplyResources(this.textBoxNumber, "textBoxNumber");
+            this.textBoxNumber.Name = "textBoxNumber";
+            this.textBoxNumber.TextChanged += new System.EventHandler(this.textBoxNumber_TextChanged);
+            // 
+            // buttonOK
+            // 
+            this.buttonOK.DialogResult = System.Windows.Forms.DialogResult.OK;
+            resources.ApplyResources(this.buttonOK, "buttonOK");
+            this.buttonOK.Name = "buttonOK";
+            this.buttonOK.UseVisualStyleBackColor = true;
+            // 
+            // buttonCancel
+            // 
+            this.buttonCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
+            resources.ApplyResources(this.buttonCancel, "buttonCancel");
+            this.buttonCancel.Name = "buttonCancel";
+            this.buttonCancel.UseVisualStyleBackColor = true;
+            // 
+            // FormGoTo
+            // 
+            this.AcceptButton = this.buttonOK;
+            resources.ApplyResources(this, "$this");
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.CancelButton = this.buttonCancel;
+            this.Controls.Add(this.buttonCancel);
+            this.Controls.Add(this.buttonOK);
+            this.Controls.Add(this.textBoxNumber);
+            this.Controls.Add(this.lblNumber);
+            this.Controls.Add(this.panel1);
+            this.Controls.Add(this.lblGoToWhat);
+            this.MaximizeBox = false;
+            this.Name = "FormGoTo";
+            this.ShowIcon = false;
+            this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
+            this.Load += new System.EventHandler(this.FormGoTo_Load);
+            this.panel1.ResumeLayout(false);
+            this.panel1.PerformLayout();
+            this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 
