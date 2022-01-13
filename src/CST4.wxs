@@ -1329,7 +1329,7 @@
     <Feature Id='MultilingualUI' Title='Multilingual User Interface' Description='Resources for displaying the CST4 user interface in languages other than English.'
       Display='expand' Level='1' ConfigurableDirectory='INSTALLDIR'>
 
-        <ComponentRef Id='bnIN_Resources' />
+        <ComponentRef Id='bn_Resources' />
         <ComponentRef Id='cs_Resources' />
         <ComponentRef Id='de_Resources' />
         <ComponentRef Id='es_Resources' />
@@ -1340,7 +1340,7 @@
         <ComponentRef Id='hi_Resources' />
         <ComponentRef Id='id_Resources' />
         <ComponentRef Id='it_Resources' />
-        <ComponentRef Id='mlIN_Resources' />
+        <ComponentRef Id='ml_Resources' />
         <ComponentRef Id='no_Resources' />
         <ComponentRef Id='pa_Resources' />
         <ComponentRef Id='pt_Resources' />
