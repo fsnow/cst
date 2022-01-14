@@ -54,6 +54,9 @@ namespace CST
 
         public static void Serialize()
         {
+            if (bookColls == null)
+                bookColls = new BookCollections();
+
             FileStream fs = new FileStream(fileName, FileMode.Create);
 
             BinaryFormatter formatter = new BinaryFormatter();

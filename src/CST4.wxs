@@ -1343,6 +1343,7 @@
         <ComponentRef Id='ml_Resources' />
         <ComponentRef Id='no_Resources' />
         <ComponentRef Id='pa_Resources' />
+        <ComponentRef Id='pl_Resources' />
         <ComponentRef Id='pt_Resources' />
         <ComponentRef Id='ru_Resources' />
         <ComponentRef Id='sv_Resources' />
