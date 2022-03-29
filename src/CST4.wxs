@@ -224,8 +224,11 @@
           <Component Id='Font_KMon4UOh' Guid='7E6609E7-86C5-48AB-924C-6A97BDED0188'>
             <File Id='KMon4UOh_ttf' Name='KMon4UOh.ttf' DiskId='1' Source='Fonts\KMon4UOh.ttf' KeyPath='yes' />
           </Component>
-          <Component Id='Font_myanmar1' Guid='EE0E5609-AFD3-41C0-84B9-B3CEB358CCC8'>
-            <File Id='myanmar1_ttf' Name='myanmar1.ttf' DiskId='1' Source='Fonts\myanmar1.ttf' KeyPath='yes' />
+          <Component Id='Font_Padauk_Regular' Guid='A94E5E47-4EA3-4721-ADBD-D2F6F52BF60C'>
+            <File Id='padauk_regular_ttf' Name='Padauk-Regular.ttf' DiskId='1' Source='Fonts\Padauk-Regular.ttf' KeyPath='yes' />
+          </Component>
+          <Component Id='Font_Padauk_Bold' Guid='BF7184EB-794C-4777-B674-3F6B7F09887F'>
+            <File Id='padauk_bold_ttf' Name='Padauk-Bold.ttf' DiskId='1' Source='Fonts\Padauk-Bold.ttf' KeyPath='yes' />
           </Component>
           <Component Id='Font_TibetanMachineUniAlpha' Guid='3B81084D-3316-4BA1-A5BC-ADD1C6429E2F'>
             <File Id='TibetanMachineUniAlpha_ttf' Name='TibetanMachineUniAlpha.ttf' DiskId='1' Source='Fonts\TibetanMachineUniAlpha.ttf' KeyPath='yes' />
@@ -1010,8 +1013,11 @@
       <Component Id="Install_Font_KMon4UOh" Guid="C047B620-79D4-98C0-C0D9-FBFAA6A7770F">
         <File Id="Install_KMon4UOh_ttf" Source="Fonts\KMon4UOh.ttf" TrueType="yes"/>
       </Component>
-      <Component Id="Install_Font_myanmar1" Guid="F395BE9F-E6EB-4C8D-FB22-C23B545A0B4C">
-        <File Id="Install_myanmar1_ttf" Source="Fonts\myanmar1.ttf" TrueType="yes"/>
+      <Component Id="Install_Font_Padauk_Regular" Guid="63C70533-B05B-4471-B699-C7D8BAC3BFA3">
+        <File Id="Install_Padauk_Regular_ttf" Source="Fonts\Padauk-Regular.ttf" TrueType="yes"/>
+      </Component>
+      <Component Id="Install_Font_Padauk_Bold" Guid="25A670C3-33CC-4B76-B7D4-F59E2A0AEAB7">
+        <File Id="Install_Padauk_Bold_ttf" Source="Fonts\Padauk-Bold.ttf" TrueType="yes"/>
       </Component>
       <Component Id="Install_Font_TibetanMachineUniAlpha" Guid="BE26FB6B-2B3E-9962-AA26-FEA685FD77CE">
         <File Id="Install_TibetanMachineUniAlpha_ttf" Source="Fonts\TibetanMachineUniAlpha.ttf" TrueType="yes"/>
@@ -1066,7 +1072,8 @@
         <ComponentRef Id='Font_CDACSRNT' />
         <ComponentRef Id='Font_DoulosSILR' />
         <ComponentRef Id='Font_KMon4UOh' />
-        <ComponentRef Id='Font_myanmar1' />
+        <ComponentRef Id='Font_Padauk_Regular' />
+        <ComponentRef Id='Font_Padauk_Bold' />
         <ComponentRef Id='Font_TibetanMachineUniAlpha' />
         <ComponentRef Id='Font_timesx' />
         <ComponentRef Id='Font_timesxbd' />
@@ -1080,7 +1087,8 @@
         <ComponentRef Id="Install_Font_CDACSRNT"/>
         <ComponentRef Id="Install_Font_DoulosSILR"/>
         <ComponentRef Id="Install_Font_KMon4UOh"/>
-        <ComponentRef Id="Install_Font_myanmar1"/>
+        <ComponentRef Id="Install_Font_Padauk_Regular"/>
+        <ComponentRef Id="Install_Font_Padauk_Bold"/>
         <ComponentRef Id="Install_Font_TibetanMachineUniAlpha"/>
         <ComponentRef Id="Install_Font_timesx"/>
         <ComponentRef Id="Install_Font_timesxbd"/>
