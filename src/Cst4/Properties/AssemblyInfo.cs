@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Chaṭṭha Saṅgāyana Tipiṭaka 4.1")]
-[assembly: AssemblyCopyright("Copyright © 2008 - 2020")]
+[assembly: AssemblyCopyright("Copyright © 2008 - 2022")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,5 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("4.1.0.1")]
-[assembly: AssemblyFileVersion("4.1.0.1")]
+[assembly: AssemblyVersion("4.1.0.2")]
+[assembly: AssemblyFileVersion("4.1.0.2")]
