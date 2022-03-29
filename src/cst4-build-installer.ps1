@@ -9,6 +9,9 @@
   -- cst and tipitaka.org repositories are under a single parent directory.
   -- tipitaka.org local repo has latest data from correct branch
 
+  Generates CST4.msi in the bin\Debug directory.
+  Last step is to rename, e.g. cts4-2022-03-29-4.1.0.2.msi
+
   FSnow, January 14, 2022
 #>
 
