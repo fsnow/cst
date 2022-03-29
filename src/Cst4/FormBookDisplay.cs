@@ -11,6 +11,7 @@ using System.Windows.Forms;
 using System.Xml;
 using System.Xml.XPath;
 using System.Xml.Xsl;
+using CST;
 using CST.Conversion;
 using mshtml;
 
@@ -849,6 +850,35 @@ namespace CST
 				((FormMain)MdiParent).OpenBrowser(url);
 		}
 
+		private void ShowSource(bool is1957)
+		{
+			//MessageBox.Show("Show Source " + divId + ", mPage " + mPage);
+
+			Sources.SourceType st;
+			if (is1957)
+				st = Sources.SourceType.Burmese1957;
+			else
+				st = Sources.SourceType.Burmese2010;
+
+			Sources.Source source = Sources.Inst.GetSource(book.FileName, st);
+			if (source != null)
+            {
+				string url = source.Url;
+
+				int pageOffset = 0;
+				int dotIndex = mPage.LastIndexOf('.');
+				if (dotIndex >= 0)
+                {
+					string afterDot = mPage.Substring(dotIndex + 1);
+					if (Int32.TryParse(afterDot, out int pageNum))
+						pageOffset = pageNum - 1;
+				}
+				url += "#page=" + (source.PageStart + pageOffset);
+
+				((FormMain)MdiParent).OpenBrowser(url);
+			}
+		}
+
 		private void tscbPaliScript_SelectedIndexChanged(object sender, EventArgs e)
 		{
 			/* // sometimes hangs the app
@@ -1174,10 +1204,15 @@ namespace CST
 							((FormMain)MdiParent).SearchWord(selection);
 					}
 				}
+				// Q (Show Burmese 1957 edition)
+				else if (e.KeyPressedCode == 17)
+					ShowSource(true);
+				// E (Show Burmese 2010 edition)
+				else if (e.KeyPressedCode == 5)
+					ShowSource(false);
+				// T
 				else if (e.KeyPressedCode == 20)
-				{
 					Translate();
-				}
 			}
 			else
 			{
@@ -1225,10 +1260,12 @@ namespace CST
 
 					((FormMain)MdiParent).SearchWord(selection);
 				}
+				else if (e.KeyCode == Keys.Q)
+					ShowSource(true);
+				else if (e.KeyCode == Keys.E)
+					ShowSource(false);
 				else if (e.KeyCode == Keys.T)
-				{
 					Translate();
-				}
 			}
 		}
 
@@ -1240,6 +1277,13 @@ namespace CST
 		private void FormBookDisplay_ResizeEnd(object sender, EventArgs e)
 		{
 			if (documentCompleted == false)
+				return;
+
+			// these can be null if the user drags a PDF file onto a book window
+			if (this.webBrowser == null || 
+				this.webBrowser.Document == null || 
+				this.webBrowser.Document.Body == null || 
+				this.webBrowser.Document.Body.ScrollRectangle == null)
 				return;
 
 			int height = this.webBrowser.Document.Body.ScrollRectangle.Height;

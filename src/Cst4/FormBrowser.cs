@@ -32,7 +32,10 @@ namespace CST
 
 		private void webBrowser_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
 		{
-			this.Text = webBrowser.Document.Title;
+			if (webBrowser.Document != null)
+				this.Text = webBrowser.Document.Title;
+			else if (webBrowser.Url != null)
+				this.Text = webBrowser.Url.ToString();
 		}
 	}
 }
