@@ -53,58 +53,58 @@ function getStyleClass (className) {
 }
 </script>
 <style>
-body { 
-  font-family: Myanmar1;
-  background: white;
-}
+	body {
+	font-family: Padauk,Tharlon,Myanmar1;
+	background: white;
+	}
 
-span {}
-.note {color: blue}
-.bld {font-weight: bold; }
-.paranum {font-weight: bold; }
-.hit {background-color: blue; color: white; }
-.context {background-color: green; color: white; }
+	span {}
+	.note {color: blue}
+	.bld {font-weight: bold; }
+	.paranum {font-weight: bold; }
+	.hit {background-color: blue; color: white; }
+	.context {background-color: green; color: white; }
 
-p {
-  border-top: 0in; border-bottom: 0in;
-  padding-top: 0in; padding-bottom: 0in;
-  margin-top: 0in; margin-bottom: 0.5cm;
-}
+	p {
+	border-top: 0in; border-bottom: 0in;
+	padding-top: 0in; padding-bottom: 0in;
+	margin-top: 0in; margin-bottom: 0.5cm;
+	}
 
-.indent { font-size: 17pt; text-indent: 2em; margin-left: 3em;}
+	.indent { font-size: 17pt; text-indent: 2em; margin-left: 3em;}
 
-.bodytext { font-size: 17pt; text-indent: 2em;}
+	.bodytext { font-size: 17pt; text-indent: 2em;}
 
-.hangnum { font-size: 17pt; margin-bottom: -14.4pt; text-indent: 2em;}
+	.hangnum { font-size: 17pt; margin-bottom: -14.4pt; text-indent: 2em;}
 
-/* Namo tassa, and nitthita -- no unique structural distinction */
-.centered { font-size: 17pt; text-align:center;}
+	/* Namo tassa, and nitthita -- no unique structural distinction */
+	.centered { font-size: 17pt; text-align:center;}
 
-.unindented { font-size: 17pt;}
+	.unindented { font-size: 17pt;}
 
-.book { font-size: 21pt; text-align:center; font-weight: bold;}
+	.book { font-size: 21pt; text-align:center; font-weight: bold;}
 
-.chapter { font-size: 19pt; text-align:center; font-weight: bold;}
+	.chapter { font-size: 19pt; text-align:center; font-weight: bold;}
 
-.nikaya { font-size: 24pt; text-align:center; font-weight: bold;}
+	.nikaya { font-size: 24pt; text-align:center; font-weight: bold;}
 
-.title { font-size: 17pt; text-align:center; font-weight: bold;}
+	.title { font-size: 17pt; text-align:center; font-weight: bold;}
 
-.subhead { font-size: 17pt; text-align:center; font-weight: bold;}
+	.subhead { font-size: 17pt; text-align:center; font-weight: bold;}
 
-.subsubhead { font-size: 17pt; text-align:center; font-weight: bold;}
+	.subsubhead { font-size: 17pt; text-align:center; font-weight: bold;}
 
-/* Gatha line 1 */
-.gatha1 { font-size: 17pt; margin-bottom: 0em; margin-left: 4em;}
+	/* Gatha line 1 */
+	.gatha1 { font-size: 17pt; margin-bottom: 0em; margin-left: 4em;}
 
-/* Gatha line 2 */
-.gatha2 { font-size: 17pt; margin-bottom: 0em; margin-left: 4em;}
+	/* Gatha line 2 */
+	.gatha2 { font-size: 17pt; margin-bottom: 0em; margin-left: 4em;}
 
-/* Gatha line 3 */
-.gatha3 { font-size: 17pt; margin-bottom: 0em; margin-left: 4em;}
+	/* Gatha line 3 */
+	.gatha3 { font-size: 17pt; margin-bottom: 0em; margin-left: 4em;}
 
-/* Gatha last line */
-.gathalast { font-size: 17pt; margin-bottom: 0.5cm; margin-left: 4em;}
+	/* Gatha last line */
+	.gathalast { font-size: 17pt; margin-bottom: 0.5cm; margin-left: 4em;}
 </style>
 </head>
 <body>
