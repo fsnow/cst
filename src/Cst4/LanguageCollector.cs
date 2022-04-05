@@ -144,7 +144,9 @@ namespace CST
             CultureInfo[] cis = CultureInfo.GetCultures(CultureTypes.AllCultures);
             Hashtable allCultures = new Hashtable(cis.Length);
             foreach (CultureInfo ci in cis) {
-                allCultures.Add(ci.Name, ci);
+                // FES 2022-04-04: there can be multiple instances of Name in the result of GetCultures()
+                if (!allCultures.ContainsKey(ci.Name))
+                    allCultures.Add(ci.Name, ci);
             }
             return allCultures;
         }
