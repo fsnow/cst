@@ -19,7 +19,7 @@ namespace CST
             return ScriptConverter.Convert(
                 Heading,
                 Script.Devanagari,
-                Fonts.GetWindowsSafeScript(bookScript),
+                bookScript,
                 true);
         }
         public string Id

@@ -214,7 +214,7 @@ namespace CST
 			documentCompleted = false;
 			webBrowser.DocumentStream = htmlStream;
 			string windowTitle = ScriptConverter.Convert(book.LongNavPath,
-				Script.Devanagari, Fonts.GetWindowsSafeScript(bookScript), true);
+				Script.Devanagari, bookScript, true);
 			// put spaces around the path slashes for display
 			windowTitle = windowTitle.Replace("/", " / ");
 			this.Text = windowTitle;

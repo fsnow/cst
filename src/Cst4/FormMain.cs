@@ -873,7 +873,7 @@ namespace CST
 
 		private void tsmiCheckForUpdates_Click(object sender, EventArgs e)
 		{
-			MessageBox.Show(Fonts.WindowsVersion.ToString());
+			MessageBox.Show("Check for Updates (TODO)");
 		}
 
 		private void tsmiAbout_Click(object sender, EventArgs e)

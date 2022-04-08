@@ -39,7 +39,7 @@ namespace CST
 			return ScriptConverter.Convert(
 				Books.Inst[index].LongNavPath.Replace("/", " / "), 
 				Script.Devanagari,
-				Fonts.GetWindowsSafeScript(BookScript), 
+				BookScript, 
 				true);
 		}
 	}

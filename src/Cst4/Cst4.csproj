@@ -1185,7 +1185,6 @@
     <Compile Include="SplashScreen.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="WindowsVersion.cs" />
     <Compile Include="WordPosition.cs" />
     <Compile Include="XmlFileDates.cs" />
   </ItemGroup>
