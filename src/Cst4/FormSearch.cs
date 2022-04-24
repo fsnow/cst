@@ -10,7 +10,6 @@ using System.Xml;
 
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
-using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
 using CST.Conversion;
 
@@ -562,15 +561,17 @@ namespace CST
             BitArray bookBits = CalculateBookBits();
 
             IpeWordChecker wordChecker = new IpeWordChecker();
-            TermEnum terms = Search.NdxReader.Terms(new Term("text", ""));
-            while (terms.Next())
+            Fields fields = MultiFields.GetFields(Search.NdxReader);
+            Terms terms = fields.GetTerms("text");
+            TermsEnum termsEnum = terms.GetEnumerator();
+            while (termsEnum.MoveNext())
             {
-                Term term = terms.Term();
-                wordChecker.Word = term.Text();
+                string term = termsEnum.Current.Term.Utf8ToString();
+                wordChecker.Word = term;
                 if (wordChecker.IsBad())
                 {
                     MatchingWord mw = new MatchingWord();
-                    mw.Word = term.Text();
+                    mw.Word = term;
 					List<MatchingWordBook> matchingBooks = Search.GetMatchingWordBooks(mw.Word, bookBits);
                     if (matchingBooks.Count > 0)
                     {

@@ -1,31 +1,35 @@
-using System;
 using System.IO;
-using System.Text;
 using Lucene.Net.Analysis;
-using Lucene.Net.Analysis.Standard;
+using Lucene.Net.Util;
 
 namespace CST
 {
     public class DevaXmlAnalyzer : Lucene.Net.Analysis.Analyzer
     {
-        public DevaXmlAnalyzer()
+        private readonly LuceneVersion matchVersion;
+        private DevaXmlTokenizer tokenizer;
+
+        public DevaXmlAnalyzer(LuceneVersion matchVersion)
         {
+            this.matchVersion = matchVersion;
         }
 
-  
-        /// <summary>
-        /// Creates a TokenStream which tokenizes all the text in the provided Reader.
-        /// </summary>
-        /// <param name="fieldName"></param>
-        /// <param name="reader"></param>
-        /// <returns>A TokenStream built from the DevaXmlTokenizer</returns>
-        public override TokenStream TokenStream(String fieldName, TextReader reader)
+        protected override TokenStreamComponents CreateComponents(string fieldName, TextReader reader)
         {
-            if (fieldName == null) throw new Exception("fieldName must not be null");
-            if (reader == null) throw new Exception("reader must not be null");
+            tokenizer = new DevaXmlTokenizer(matchVersion, reader);
+            //WhitespaceTokenizer tokenizer = new WhitespaceTokenizer(matchVersion, reader);
+            //DummyTokenizer tokenizer = new DummyTokenizer(matchVersion, reader);
+            return new TokenStreamComponents(tokenizer);
+        }
 
-            TokenStream result = new DevaXmlTokenizer(reader);
-            return result;
+        protected override TextReader InitReader(string fieldName, TextReader reader)
+        {
+            TextReader reader2 = base.InitReader(fieldName, reader);
+            if (tokenizer != null)
+            {
+                tokenizer.InitPerBook(reader2);
+            }
+            return reader2;
         }
     }
 }

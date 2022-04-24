@@ -6,8 +6,9 @@ using System.Windows.Forms;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
-using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
+using Lucene.Net.Store;
+using Lucene.Net.Util;
 using CST.Conversion;
 
 namespace CST
@@ -32,7 +33,7 @@ namespace CST
             {
                 if (ndxReader == null)
                 {
-                    ndxReader = IndexReader.Open(Config.Inst.IndexDirectory);
+                    ndxReader = DirectoryReader.Open(FSDirectory.Open(Config.Inst.IndexDirectory));
                 }
                 return ndxReader;
             }
@@ -69,15 +70,20 @@ namespace CST
 			else
 			{
 				bool foundMatch = false;
-				TermEnum terms = Search.NdxReader.Terms(new Term("text", ""));
-				while (terms.Next())
+
+				Fields fields = MultiFields.GetFields(Search.NdxReader);
+				Terms terms = fields.GetTerms("text");
+				TermsEnum termsEnum = terms.GetEnumerator();
+
+				while (termsEnum.MoveNext())
 				{
-					Term term = terms.Term();
-					if (tme.Evaluate(term.Text()))
+					string term = termsEnum.Current.Term.Utf8ToString();
+
+					if (tme.Evaluate(term))
 					{
 						foundMatch = true;
 						MatchingWord mw = new MatchingWord();
-						mw.Word = term.Text();
+						mw.Word = term;
 						List<MatchingWordBook> matchingBooks = Search.GetMatchingWordBooks(mw.Word, bookBits);
 						if (matchingBooks.Count > 0)
 						{
@@ -137,14 +143,18 @@ namespace CST
 				else
 				{
 					bool foundMatch = false;
-					TermEnum terms = Search.NdxReader.Terms(new Term("text", ""));
-					while (terms.Next())
+
+					Fields fields = MultiFields.GetFields(Search.NdxReader);
+					Terms terms = fields.GetTerms("text");
+					TermsEnum termsEnum = terms.GetEnumerator();
+					while (termsEnum.MoveNext())
 					{
-						Term term = terms.Term();
-						if (tme.Evaluate(term.Text()))
+						string term = termsEnum.Current.Term.Utf8ToString();
+
+						if (tme.Evaluate(term))
 						{
 							foundMatch = true;
-							matchingWordsArray[i].Add(term.Text());
+							matchingWordsArray[i].Add(term);
 						}
 						else if (tme.QueryType == QueryType.StartsWith && foundMatch)
 						{
@@ -366,31 +376,28 @@ namespace CST
 			int docId = Books.Inst[bookIndex].DocId;
 			List<WordPosition> wordPositions = new List<WordPosition>();
 
+			IBits liveDocs = MultiFields.GetLiveDocs(Search.NdxReader);
+
 			for (int i = 0; i < matchingWords.Count; i++)
 			{
 				// skip words that are not in the book
 				if (matchingBookBits[i][bookIndex] == false)
 					continue;
 
-				TermPositions termPos = NdxReader.TermPositions(new Term("text", matchingWords[i]));
+				DocsAndPositionsEnum dape = MultiFields.GetTermPositionsEnum(Search.NdxReader, liveDocs, "text",
+					new BytesRef(System.Text.UTF8Encoding.UTF8.GetBytes(matchingWords[i])));
 
-				// skip to this book
-				bool isNext = termPos.Next();
-				if (isNext == false)
+				List<MatchingWordBook> matchingBooks = new List<MatchingWordBook>();
+
+				int termPosDoc = dape.NextDoc();
+				while (termPosDoc != DocIdSetIterator.NO_MORE_DOCS && termPosDoc < docId)
 				{
-					//int q = 0;  // bad!!!
+					termPosDoc = dape.NextDoc();
 				}
 
-				int termPosDoc = termPos.Doc();
-				while (termPosDoc < docId && isNext)
+				for (int j = 0; j < dape.Freq; j++)
 				{
-					isNext = termPos.Next();
-					termPosDoc = termPos.Doc();
-				}
-
-				for (int j = 0; j < termPos.Freq(); j++)
-				{
-					wordPositions.Add(new WordPosition(i, termPos.NextPosition(), j, true));
+					wordPositions.Add(new WordPosition(i, dape.NextPosition(), j, true));
 				}
 			}
 
@@ -414,31 +421,27 @@ namespace CST
 			int docId = Books.Inst[bookIndex].DocId;
 			Dictionary<int, WordPosition> wordPositions = new Dictionary<int, WordPosition>();
 
+			IBits liveDocs = MultiFields.GetLiveDocs(Search.NdxReader);
+
 			for (int i = 0; i < matchingWords.Count; i++)
 			{
 				// skip words that are not in the book
 				if (matchingBookBits[i][bookIndex] == false)
 					continue;
 
-				TermPositions termPos = NdxReader.TermPositions(new Term("text", matchingWords[i]));
+				DocsAndPositionsEnum dape = MultiFields.GetTermPositionsEnum(Search.NdxReader, liveDocs, "text",
+					new BytesRef(System.Text.UTF8Encoding.UTF8.GetBytes(matchingWords[i])));
 
 				// skip to this book
-				bool isNext = termPos.Next();
-				if (isNext == false)
+				int termPosDoc = dape.NextDoc();
+				while (termPosDoc != DocIdSetIterator.NO_MORE_DOCS && termPosDoc < docId)
 				{
-					//int q = 0;  // bad!!!
+					termPosDoc = dape.NextDoc();
 				}
 
-				int termPosDoc = termPos.Doc();
-				while (termPosDoc < docId && isNext)
+				for (int j = 0; j < dape.Freq; j++)
 				{
-					isNext = termPos.Next();
-					termPosDoc = termPos.Doc();
-				}
-
-				for (int j = 0; j < termPos.Freq(); j++)
-				{
-					int nextPos = termPos.NextPosition();
+					int nextPos = dape.NextPosition();
 					wordPositions.Add(nextPos, new WordPosition(i, nextPos, j, false));
 				}
 			}
@@ -497,25 +500,31 @@ namespace CST
 		public static List<MatchingWordBook> GetMatchingWordBooks(string term, BitArray bookBits)
         {
             Books books = Books.Inst;
-            TermDocs termDocs = NdxReader.TermDocs(new Term("text", term));
-            List<MatchingWordBook> matchingBooks = new List<MatchingWordBook>();
-            int lastDocId = -1;
-            while (termDocs.Next())
-            {
-                int docId = termDocs.Doc();
-                // for reasons unknown, TermDocs sometimes returns 
-                // multiple instances of the same doc with the same frequency
-                if (docId == lastDocId)
-                    continue;
-                else
-                    lastDocId = docId;
 
-                Book book = books.FromDocId(docId);
+			IBits liveDocs = MultiFields.GetLiveDocs(Search.NdxReader);
+			DocsAndPositionsEnum dape = MultiFields.GetTermPositionsEnum(Search.NdxReader, liveDocs, "text",
+				new BytesRef(System.Text.UTF8Encoding.UTF8.GetBytes(term)));
+
+			List<MatchingWordBook> matchingBooks = new List<MatchingWordBook>();
+			int lastDocId = -1;
+			int docId = dape.NextDoc();
+
+			while (docId != DocIdSetIterator.NO_MORE_DOCS)
+			{
+				// for reasons unknown, TermDocs sometimes returns 
+				// multiple instances of the same doc with the same frequency
+				// FSnow 2020-05-17 See if this is still true
+				if (docId == lastDocId)
+					continue;
+				else
+					lastDocId = docId;
+
+				Book book = books.FromDocId(docId);
                 if (bookBits[book.Index])
                 {
                     MatchingWordBook mwb = new MatchingWordBook();
                     mwb.Book = book;
-                    mwb.Count = termDocs.Freq();
+                    mwb.Count = dape.Freq;
                     matchingBooks.Add(mwb);
                 }
             }
@@ -526,12 +535,14 @@ namespace CST
 		public static BitArray GetMatchingBookBits(string term, BitArray bookBits)
 		{
 			Books books = Books.Inst;
-			TermDocs termDocs = NdxReader.TermDocs(new Term("text", term));
+			IBits liveDocs = MultiFields.GetLiveDocs(Search.NdxReader);
+			DocsAndPositionsEnum dape = MultiFields.GetTermPositionsEnum(Search.NdxReader, liveDocs, "text",
+				new BytesRef(System.Text.UTF8Encoding.UTF8.GetBytes(term)));
 			BitArray matchingBookBits = new BitArray(books.Count);
 			int lastDocId = -1;
-			while (termDocs.Next())
+			int docId = dape.NextDoc();
+			while (docId != DocIdSetIterator.NO_MORE_DOCS)
 			{
-				int docId = termDocs.Doc();
 				// for reasons unknown, TermDocs sometimes returns 
 				// multiple instances of the same doc with the same frequency
 				if (docId == lastDocId)
@@ -550,6 +561,28 @@ namespace CST
 		public static string HighlightMultiWordTerms(string devXml, int docId, 
 			SortedDictionary<int, WordPosition> wordPositions, out int totalHits)
 		{
+			// FSnow 2022-04-22 TODO: pasting in this section for later
+			/*
+			IBits liveDocs = MultiFields.GetLiveDocs(Search.NdxReader);
+			DocsAndPositionsEnum dape = MultiFields.GetTermPositionsEnum(Search.NdxReader, liveDocs, "text",
+				new BytesRef(System.Text.UTF8Encoding.UTF8.GetBytes(matchingWords[i])));
+
+			// skip to this book
+			int termPosDoc = dape.NextDoc();
+			while (termPosDoc != DocIdSetIterator.NO_MORE_DOCS && termPosDoc < docId)
+			{
+				termPosDoc = dape.NextDoc();
+			}
+
+			for (int j = 0; j < dape.Freq; j++)
+			{
+				int nextPos = dape.NextPosition();
+				wordPositions.Add(nextPos, new WordPosition(i, nextPos, j, false));
+			}
+			*/
+
+			// FSnow 2022-04-22 TODO: commenting out everything except the return value
+			/*
 			TermPositionVector tpv = (TermPositionVector)NdxReader.GetTermFreqVector(docId, "text");
 			string[] termArray = tpv.GetTerms();
 
@@ -635,11 +668,19 @@ namespace CST
 			totalHits = i;
 
 			return sb.ToString();
+			*/
+
+			// TODO: the minimum to return
+			totalHits = 0;
+			return devXml;
 		}
 
         public static string HighlightTerms(string devXml, int docId,
 			List<string> terms, out int totalHits)
         {
+			// FSnow 2022-04-22 TODO: uncomment and make this work
+
+			/*
             TermPositionVector tpv = (TermPositionVector)NdxReader.GetTermFreqVector(docId, "text");
             string[] termArray = tpv.GetTerms();
             
@@ -710,10 +751,16 @@ namespace CST
             totalHits = i;
 
             return sb.ToString();
+			*/
+
+			// minimum return value to get this working
+			totalHits = 0;
+			return devXml;
         }
 
 		public static string AdvancedSearch(string queryString)
 		{
+			/*
 			queryString = ScriptConverter.Convert(queryString, Script.Unknown, Script.Ipe);
 			Query query = null;
 			try
@@ -739,21 +786,24 @@ namespace CST
 			int hitCount = hits.Length();
 			StringBuilder sb = new StringBuilder();
 			sb.Append("Total hits: " + hitCount + "\r\n");
-		/*	IEnumerator hitsIterator = hits.Iterator();
-			while (hitsIterator.MoveNext())
-			{
-				Hit hit = (Hit)hitsIterator.Current;
-				Book book = Books.Inst.FromDocId(hit.GetId());
-				if (book == null)
-				{
-					sb.Append("Error: Could not get Book object for file");
-					continue;
-				}
-
-				sb.Append(ScriptConverter.Convert(book.ShortNavPath, Script.Devanagari, AppState.Inst.CurrentScript, true)
-					+ " (Score: " + ((float)(hit.GetScore() * 100.0)).ToString("0.00") + ")\r\n");
-			}
 			*/
+			/*	IEnumerator hitsIterator = hits.Iterator();
+				while (hitsIterator.MoveNext())
+				{
+					Hit hit = (Hit)hitsIterator.Current;
+					Book book = Books.Inst.FromDocId(hit.GetId());
+					if (book == null)
+					{
+						sb.Append("Error: Could not get Book object for file");
+						continue;
+					}
+
+					sb.Append(ScriptConverter.Convert(book.ShortNavPath, Script.Devanagari, AppState.Inst.CurrentScript, true)
+						+ " (Score: " + ((float)(hit.GetScore() * 100.0)).ToString("0.00") + ")\r\n");
+				}
+				*/
+
+			/*
 			for (int i = 0; i < hitCount; i++)
 			{
 				Document doc = hits.Doc(i);
@@ -771,6 +821,9 @@ namespace CST
 			}
 
 			return sb.ToString();
+			*/
+
+			return "";
 		}
 
 		/*
