@@ -515,7 +515,10 @@ namespace CST
 				// multiple instances of the same doc with the same frequency
 				// FSnow 2020-05-17 See if this is still true
 				if (docId == lastDocId)
+				{
+					docId = dape.NextDoc();
 					continue;
+				}
 				else
 					lastDocId = docId;
 
@@ -527,7 +530,9 @@ namespace CST
                     mwb.Count = dape.Freq;
                     matchingBooks.Add(mwb);
                 }
-            }
+
+				docId = dape.NextDoc();
+			}
 
             return matchingBooks;
         }
@@ -679,7 +684,30 @@ namespace CST
 			List<string> terms, out int totalHits)
         {
 			// FSnow 2022-04-22 TODO: uncomment and make this work
+			IBits liveDocs = MultiFields.GetLiveDocs(Search.NdxReader);
 
+			TermsEnum termsEnum = NdxReader.GetTermVector(docId, "text").GetEnumerator();
+			while(termsEnum.MoveNext())
+            {
+				TermsEnum te2 = termsEnum.Current;
+				DocsAndPositionsEnum dape = te2.DocsAndPositions(liveDocs, null);
+
+				int lastDocId = -1;
+				int docId = dape.NextDoc();
+				while (docId != DocIdSetIterator.NO_MORE_DOCS)
+				{
+					// for reasons unknown, TermDocs sometimes returns 
+					// multiple instances of the same doc with the same frequency
+					if (docId == lastDocId)
+						continue;
+					else
+						lastDocId = docId;
+
+					Book book = books.FromDocId(docId);
+					matchingBookBits.Set(book.Index, true);
+				}
+
+			}
 			/*
             TermPositionVector tpv = (TermPositionVector)NdxReader.GetTermFreqVector(docId, "text");
             string[] termArray = tpv.GetTerms();
