@@ -10,6 +10,8 @@ using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
 using CST.Conversion;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.ProgressBar;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.ToolTip;
 
 namespace CST
 {
@@ -683,64 +685,69 @@ namespace CST
         public static string HighlightTerms(string devXml, int docId,
 			List<string> terms, out int totalHits)
         {
-			// FSnow 2022-04-22 TODO: uncomment and make this work
-			IBits liveDocs = MultiFields.GetLiveDocs(Search.NdxReader);
+            Books books = Books.Inst;
+            IBits liveDocs = MultiFields.GetLiveDocs(ndxReader);
+			List<Tuple<int, int>> positionsList = new List<Tuple<int, int>>();
 
-			TermsEnum termsEnum = NdxReader.GetTermVector(docId, "text").GetEnumerator();
-			while(termsEnum.MoveNext())
-            {
-				TermsEnum te2 = termsEnum.Current;
-				DocsAndPositionsEnum dape = te2.DocsAndPositions(liveDocs, null);
+			foreach (string term in terms)
+			{
+				DocsAndPositionsEnum dape = MultiFields.GetTermPositionsEnum(ndxReader, liveDocs, "text",
+	new BytesRef(System.Text.UTF8Encoding.UTF8.GetBytes(term)));
 
 				int lastDocId = -1;
-				int docId = dape.NextDoc();
-				while (docId != DocIdSetIterator.NO_MORE_DOCS)
+				int thisDocId = dape.NextDoc();
+
+				// advance the doc pointer to the doc we're highlighting (docId)
+				while (thisDocId != DocIdSetIterator.NO_MORE_DOCS)
 				{
 					// for reasons unknown, TermDocs sometimes returns 
 					// multiple instances of the same doc with the same frequency
-					if (docId == lastDocId)
+					// FSnow 2020-05-17 See if this is still true
+					if (thisDocId == lastDocId)
+					{
+						thisDocId = dape.NextDoc();
 						continue;
-					else
-						lastDocId = docId;
+					}
+					else if (thisDocId == docId)
+						break;
 
-					Book book = books.FromDocId(docId);
-					matchingBookBits.Set(book.Index, true);
-				}
-
-			}
-			/*
-            TermPositionVector tpv = (TermPositionVector)NdxReader.GetTermFreqVector(docId, "text");
-            string[] termArray = tpv.GetTerms();
-            
-            int pos = 0;
-            List<TermVectorOffsetInfo> tvoiList = new List<TermVectorOffsetInfo>();
-
-            foreach (string term in terms)
-            {
-                int index = System.Array.BinarySearch(termArray, term, new IpeComparer());
-                TermVectorOffsetInfo[] tvoiArray = tpv.GetOffsets(index);
-                foreach (TermVectorOffsetInfo tvoi in tvoiArray)
-                {
-                    tvoiList.Add(tvoi);
+					lastDocId = thisDocId;
+                    thisDocId = dape.NextDoc();
                 }
 
-				//int[] termPositions = tpv.GetTermPositions(index);
-				//int j = 0;
-            }
+				// there were no hits on this book for this term?
+				if (thisDocId != docId)
+					continue;
 
-            tvoiList.Sort(new TermVectorOffsetInfoComparer());
+				// iterate over occurrences of the term in this book
+				int posCount = 0;
+				while (posCount < dape.Freq)
+				{
+					dape.NextPosition();
+					int start = dape.StartOffset;
+					int end = dape.EndOffset;
+					posCount++;
+					positionsList.Add(new Tuple<int, int>(start, end));
+				}
+			}
 
-            StringBuilder sb = new StringBuilder();
-            int i = 0;
+            // iterate over positionsList
+            positionsList.Sort(new TupleItem1of2IntsComparer());
+
+            Book book = books.FromDocId(docId);
+
+			StringBuilder sb = new StringBuilder();
+			int i = 0;
 
 			string hiBoldOpen = "<hi rend=\"bold\">";
 			string hiClose = "</hi>";
 
-            foreach (TermVectorOffsetInfo tvoi in tvoiList)
-            {
-                int start = tvoi.GetStartOffset();
-                int end = tvoi.GetEndOffset();
-                sb.Append(devXml.Substring(pos, start - pos));
+            int pos = 0;
+            foreach (Tuple<int, int> posTuple in positionsList)
+			{
+				int start = posTuple.Item1;
+				int end = posTuple.Item2;
+				sb.Append(devXml.Substring(pos, start - pos));
 
 				string word = devXml.Substring(start, end - start + 1);
 				bool hasHiOpen = word.Contains("<hi");
@@ -762,7 +769,8 @@ namespace CST
 					sb.Append(hiClose); // close hi hit
 					sb.Append(hiBoldOpen);
 				}
-				else if (hasHiClose)
+
+                else if (hasHiClose)
 				{
 					sb.Append(hiClose); // close hi bold
 					sb.Append(hiHitOpen);
@@ -771,19 +779,14 @@ namespace CST
 					sb.Append(hiClose); // close hi hit
 				}
 
-                pos = end + 1;
-                i++;
+				pos = end + 1;
+				i++;
             }
             sb.Append(devXml.Substring(pos, devXml.Length - pos));
 
-            totalHits = i;
+			totalHits = i;
 
-            return sb.ToString();
-			*/
-
-			// minimum return value to get this working
-			totalHits = 0;
-			return devXml;
+			return sb.ToString();
         }
 
 		public static string AdvancedSearch(string queryString)

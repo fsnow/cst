@@ -113,10 +113,5 @@ namespace CST
 			}
 		}
 		#endregion
-
-		private void textBoxDescription_TextChanged(object sender, EventArgs e)
-		{
-
-		}
-	}
+    }
 }

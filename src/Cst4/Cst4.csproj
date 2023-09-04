@@ -1350,6 +1350,7 @@
     <Compile Include="SplashScreen.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="TupleItem1of2IntsComparer.cs" />
     <Compile Include="WordPosition.cs" />
     <Compile Include="XmlFileDates.cs" />
   </ItemGroup>

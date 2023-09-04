@@ -77,18 +77,19 @@ namespace CST
             // 
             // menuStrip1
             // 
-            resources.ApplyResources(this.menuStrip1, "menuStrip1");
+            this.menuStrip1.GripMargin = new System.Windows.Forms.Padding(2, 2, 0, 2);
+            this.menuStrip1.ImageScalingSize = new System.Drawing.Size(32, 32);
             this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.fooToolStripMenuItem,
             this.searchToolStripMenuItem,
             this.windowToolStripMenuItem,
             this.helpToolStripMenuItem});
+            resources.ApplyResources(this.menuStrip1, "menuStrip1");
             this.menuStrip1.MdiWindowListItem = this.windowToolStripMenuItem;
             this.menuStrip1.Name = "menuStrip1";
             // 
             // fooToolStripMenuItem
             // 
-            resources.ApplyResources(this.fooToolStripMenuItem, "fooToolStripMenuItem");
             this.fooToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsmiOpenBook,
             this.tsmiMru,
@@ -98,17 +99,18 @@ namespace CST
             this.tsmiSave,
             this.tsmiExit});
             this.fooToolStripMenuItem.Name = "fooToolStripMenuItem";
+            resources.ApplyResources(this.fooToolStripMenuItem, "fooToolStripMenuItem");
             // 
             // tsmiOpenBook
             // 
-            resources.ApplyResources(this.tsmiOpenBook, "tsmiOpenBook");
             this.tsmiOpenBook.Name = "tsmiOpenBook";
+            resources.ApplyResources(this.tsmiOpenBook, "tsmiOpenBook");
             this.tsmiOpenBook.Click += new System.EventHandler(this.tsmiOpenBook_Click);
             // 
             // tsmiMru
             // 
-            resources.ApplyResources(this.tsmiMru, "tsmiMru");
             this.tsmiMru.Name = "tsmiMru";
+            resources.ApplyResources(this.tsmiMru, "tsmiMru");
             // 
             // tsmiPrint
             // 
@@ -136,45 +138,45 @@ namespace CST
             // 
             // tsmiExit
             // 
-            resources.ApplyResources(this.tsmiExit, "tsmiExit");
             this.tsmiExit.Name = "tsmiExit";
+            resources.ApplyResources(this.tsmiExit, "tsmiExit");
             this.tsmiExit.Click += new System.EventHandler(this.tsmiExit_Click);
             // 
             // searchToolStripMenuItem
             // 
-            resources.ApplyResources(this.searchToolStripMenuItem, "searchToolStripMenuItem");
             this.searchToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsmiSearchWord,
             this.tsmiDictionary,
             this.advancedToolStripMenuItem});
             this.searchToolStripMenuItem.Name = "searchToolStripMenuItem";
+            resources.ApplyResources(this.searchToolStripMenuItem, "searchToolStripMenuItem");
             // 
             // tsmiSearchWord
             // 
-            resources.ApplyResources(this.tsmiSearchWord, "tsmiSearchWord");
             this.tsmiSearchWord.Name = "tsmiSearchWord";
+            resources.ApplyResources(this.tsmiSearchWord, "tsmiSearchWord");
             this.tsmiSearchWord.Click += new System.EventHandler(this.tsmiSearchWord_Click);
             // 
             // tsmiDictionary
             // 
-            resources.ApplyResources(this.tsmiDictionary, "tsmiDictionary");
             this.tsmiDictionary.Name = "tsmiDictionary";
+            resources.ApplyResources(this.tsmiDictionary, "tsmiDictionary");
             this.tsmiDictionary.Click += new System.EventHandler(this.tsmiDictionary_Click);
             // 
             // advancedToolStripMenuItem
             // 
-            resources.ApplyResources(this.advancedToolStripMenuItem, "advancedToolStripMenuItem");
             this.advancedToolStripMenuItem.Name = "advancedToolStripMenuItem";
+            resources.ApplyResources(this.advancedToolStripMenuItem, "advancedToolStripMenuItem");
             this.advancedToolStripMenuItem.Click += new System.EventHandler(this.advancedToolStripMenuItem_Click);
             // 
             // windowToolStripMenuItem
             // 
-            resources.ApplyResources(this.windowToolStripMenuItem, "windowToolStripMenuItem");
             this.windowToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsmiCascade,
             this.tsmiTileHorizontal,
             this.tsmiTileVertical});
             this.windowToolStripMenuItem.Name = "windowToolStripMenuItem";
+            resources.ApplyResources(this.windowToolStripMenuItem, "windowToolStripMenuItem");
             this.windowToolStripMenuItem.DropDownOpening += new System.EventHandler(this.windowToolStripMenuItem_DropDownOpening);
             // 
             // tsmiCascade
@@ -197,35 +199,35 @@ namespace CST
             // 
             // helpToolStripMenuItem
             // 
-            resources.ApplyResources(this.helpToolStripMenuItem, "helpToolStripMenuItem");
             this.helpToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsmiContents,
             this.tsmiCheckForUpdates,
             this.tsmiAbout});
             this.helpToolStripMenuItem.Name = "helpToolStripMenuItem";
+            resources.ApplyResources(this.helpToolStripMenuItem, "helpToolStripMenuItem");
             // 
             // tsmiContents
             // 
-            resources.ApplyResources(this.tsmiContents, "tsmiContents");
             this.tsmiContents.Name = "tsmiContents";
+            resources.ApplyResources(this.tsmiContents, "tsmiContents");
             this.tsmiContents.Click += new System.EventHandler(this.tsmiContents_Click);
             // 
             // tsmiCheckForUpdates
             // 
-            resources.ApplyResources(this.tsmiCheckForUpdates, "tsmiCheckForUpdates");
             this.tsmiCheckForUpdates.Name = "tsmiCheckForUpdates";
+            resources.ApplyResources(this.tsmiCheckForUpdates, "tsmiCheckForUpdates");
             this.tsmiCheckForUpdates.Click += new System.EventHandler(this.tsmiCheckForUpdates_Click);
             // 
             // tsmiAbout
             // 
-            resources.ApplyResources(this.tsmiAbout, "tsmiAbout");
             this.tsmiAbout.Name = "tsmiAbout";
+            resources.ApplyResources(this.tsmiAbout, "tsmiAbout");
             this.tsmiAbout.Click += new System.EventHandler(this.tsmiAbout_Click);
             // 
             // toolStrip1
             // 
-            resources.ApplyResources(this.toolStrip1, "toolStrip1");
             this.toolStrip1.GripStyle = System.Windows.Forms.ToolStripGripStyle.Hidden;
+            this.toolStrip1.ImageScalingSize = new System.Drawing.Size(32, 32);
             this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsbOpenBook,
             this.tsbSave,
@@ -241,98 +243,98 @@ namespace CST
             this.tscbInterfaceLanguage,
             this.tslPaliScript,
             this.tscbPaliScript});
+            resources.ApplyResources(this.toolStrip1, "toolStrip1");
             this.toolStrip1.Name = "toolStrip1";
             // 
             // tsbOpenBook
             // 
-            resources.ApplyResources(this.tsbOpenBook, "tsbOpenBook");
             this.tsbOpenBook.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbOpenBook, "tsbOpenBook");
             this.tsbOpenBook.Name = "tsbOpenBook";
             this.tsbOpenBook.Click += new System.EventHandler(this.tsbOpenBook_Click);
             // 
             // tsbSave
             // 
-            resources.ApplyResources(this.tsbSave, "tsbSave");
             this.tsbSave.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbSave, "tsbSave");
             this.tsbSave.Name = "tsbSave";
             this.tsbSave.Click += new System.EventHandler(this.tsbSave_Click);
             // 
             // toolStripSeparator1
             // 
-            resources.ApplyResources(this.toolStripSeparator1, "toolStripSeparator1");
             this.toolStripSeparator1.Name = "toolStripSeparator1";
+            resources.ApplyResources(this.toolStripSeparator1, "toolStripSeparator1");
             // 
             // tsbPrint
             // 
-            resources.ApplyResources(this.tsbPrint, "tsbPrint");
             this.tsbPrint.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbPrint, "tsbPrint");
             this.tsbPrint.Margin = new System.Windows.Forms.Padding(5, 1, 0, 2);
             this.tsbPrint.Name = "tsbPrint";
             this.tsbPrint.Click += new System.EventHandler(this.tsbPrint_Click);
             // 
             // tsbPrintPreview
             // 
-            resources.ApplyResources(this.tsbPrintPreview, "tsbPrintPreview");
             this.tsbPrintPreview.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbPrintPreview, "tsbPrintPreview");
             this.tsbPrintPreview.Name = "tsbPrintPreview";
             this.tsbPrintPreview.Click += new System.EventHandler(this.tsbPrintPreview_Click);
             // 
             // tsbPageSetup
             // 
-            resources.ApplyResources(this.tsbPageSetup, "tsbPageSetup");
             this.tsbPageSetup.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbPageSetup, "tsbPageSetup");
             this.tsbPageSetup.Name = "tsbPageSetup";
             this.tsbPageSetup.Click += new System.EventHandler(this.tsbPageSetup_Click);
             // 
             // toolStripSeparator2
             // 
-            resources.ApplyResources(this.toolStripSeparator2, "toolStripSeparator2");
             this.toolStripSeparator2.Name = "toolStripSeparator2";
+            resources.ApplyResources(this.toolStripSeparator2, "toolStripSeparator2");
             // 
             // tsbSearchWord
             // 
-            resources.ApplyResources(this.tsbSearchWord, "tsbSearchWord");
             this.tsbSearchWord.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbSearchWord, "tsbSearchWord");
             this.tsbSearchWord.Margin = new System.Windows.Forms.Padding(5, 1, 0, 2);
             this.tsbSearchWord.Name = "tsbSearchWord";
             this.tsbSearchWord.Click += new System.EventHandler(this.tsbSearchWord_Click);
             // 
             // tsbDictionary
             // 
-            resources.ApplyResources(this.tsbDictionary, "tsbDictionary");
             this.tsbDictionary.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbDictionary, "tsbDictionary");
             this.tsbDictionary.Name = "tsbDictionary";
             this.tsbDictionary.Click += new System.EventHandler(this.tsbDictionary_Click);
             // 
             // tsbGoto
             // 
-            resources.ApplyResources(this.tsbGoto, "tsbGoto");
             this.tsbGoto.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            resources.ApplyResources(this.tsbGoto, "tsbGoto");
             this.tsbGoto.Name = "tsbGoto";
             this.tsbGoto.Click += new System.EventHandler(this.tsbGoto_Click);
             // 
             // tslInterfaceLanguage
             // 
-            resources.ApplyResources(this.tslInterfaceLanguage, "tslInterfaceLanguage");
             this.tslInterfaceLanguage.Margin = new System.Windows.Forms.Padding(100, 1, 0, 2);
             this.tslInterfaceLanguage.Name = "tslInterfaceLanguage";
+            resources.ApplyResources(this.tslInterfaceLanguage, "tslInterfaceLanguage");
             // 
             // tscbInterfaceLanguage
             // 
-            resources.ApplyResources(this.tscbInterfaceLanguage, "tscbInterfaceLanguage");
             this.tscbInterfaceLanguage.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.tscbInterfaceLanguage.Name = "tscbInterfaceLanguage";
+            resources.ApplyResources(this.tscbInterfaceLanguage, "tscbInterfaceLanguage");
             this.tscbInterfaceLanguage.SelectedIndexChanged += new System.EventHandler(this.tscbInterfaceLanguage_SelectedIndexChanged);
             // 
             // tslPaliScript
             // 
-            resources.ApplyResources(this.tslPaliScript, "tslPaliScript");
             this.tslPaliScript.Margin = new System.Windows.Forms.Padding(30, 1, 0, 2);
             this.tslPaliScript.Name = "tslPaliScript";
+            resources.ApplyResources(this.tslPaliScript, "tslPaliScript");
             // 
             // tscbPaliScript
             // 
-            resources.ApplyResources(this.tscbPaliScript, "tscbPaliScript");
             this.tscbPaliScript.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.tscbPaliScript.Items.AddRange(new object[] {
             resources.GetString("tscbPaliScript.Items"),
@@ -350,6 +352,7 @@ namespace CST
             resources.GetString("tscbPaliScript.Items12"),
             resources.GetString("tscbPaliScript.Items13")});
             this.tscbPaliScript.Name = "tscbPaliScript";
+            resources.ApplyResources(this.tscbPaliScript, "tscbPaliScript");
             this.tscbPaliScript.SelectedIndexChanged += new System.EventHandler(this.tscbPaliScript_SelectedIndexChanged);
             // 
             // FormMain

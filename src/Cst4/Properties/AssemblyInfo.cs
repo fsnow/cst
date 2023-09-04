@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Chaṭṭha Saṅgāyana Tipiṭaka 4.1")]
+[assembly: AssemblyTitle("Chaṭṭha Saṅgāyana Tipiṭaka 4.2")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Chaṭṭha Saṅgāyana Tipiṭaka 4.1")]
-[assembly: AssemblyCopyright("Copyright © 2008 - 2022")]
+[assembly: AssemblyProduct("Chaṭṭha Saṅgāyana Tipiṭaka 4.2")]
+[assembly: AssemblyCopyright("Copyright © 2007 - 2023")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -29,5 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("4.1.0.4")]
-[assembly: AssemblyFileVersion("4.1.0.4")]
+[assembly: AssemblyVersion("4.2.0.0")]
+[assembly: AssemblyFileVersion("4.2.0.0")]
