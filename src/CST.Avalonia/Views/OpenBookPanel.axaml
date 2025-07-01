@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:CST.Avalonia.ViewModels"
+             xmlns:converters="using:CST.Avalonia.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="600"
+             x:Class="CST.Avalonia.Views.OpenBookPanel"
+             x:DataType="vm:OpenBookDialogViewModel">
+
+    <UserControl.Resources>
+        <!-- Define icons as text since we don't have image resources yet -->
+        <x:String x:Key="FolderClosedIcon">📁</x:String>
+        <x:String x:Key="FolderOpenIcon">📂</x:String>
+        <x:String x:Key="BookIcon">📖</x:String>
+    </UserControl.Resources>
+
+    <DockPanel>
+
+        <!-- Status Bar -->
+        <Grid DockPanel.Dock="Bottom" Background="LightGray" Height="24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding StatusText}" 
+                       VerticalAlignment="Center" Margin="6,0" FontSize="10"/>
+            <TextBlock Grid.Column="1" Text="{Binding TotalBooks, StringFormat=Books: \\{0\\}}" 
+                       VerticalAlignment="Center" Margin="6,0" FontSize="10"/>
+        </Grid>
+
+        <!-- Main Content -->
+        <Grid DockPanel.Dock="Top">
+            <!-- Book Tree -->
+            <Border BorderBrush="Gray" BorderThickness="1">
+                <DockPanel>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <TreeView ItemsSource="{Binding BookTree}"
+                                  SelectedItem="{Binding SelectedNode}"
+                                  Background="White"
+                                  DoubleTapped="TreeView_DoubleTapped">
+                            <TreeView.Styles>
+                                <!-- Style for TreeViewItem -->
+                                <Style Selector="TreeViewItem" x:DataType="vm:BookTreeNode">
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                </Style>
+                                <!-- Style for book nodes (leaf nodes) -->
+                                <Style Selector="TreeViewItem /template/ ContentPresenter" x:DataType="vm:BookTreeNode">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                                <Style Selector="TreeViewItem:selected /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="LightBlue"/>
+                                </Style>
+                            </TreeView.Styles>
+                            <TreeView.DataTemplates>
+                                <TreeDataTemplate DataType="vm:BookTreeNode" ItemsSource="{Binding Children}">
+                                    <StackPanel Orientation="Horizontal" Margin="2">
+                                        <!-- Icon -->
+                                        <TextBlock Text="📖" Margin="0,0,3,0" VerticalAlignment="Center" FontSize="10"
+                                                   IsVisible="{Binding IsBook}"/>
+                                        <TextBlock Text="📁" Margin="0,0,3,0" VerticalAlignment="Center" FontSize="10"
+                                                   IsVisible="{Binding IsCategory}"/>
+                                        <!-- Text -->
+                                        <TextBlock Text="{Binding DisplayName}" 
+                                                   VerticalAlignment="Center"
+                                                   FontWeight="Normal"
+                                                   FontSize="11"/>
+                                        <!-- Book count for categories -->
+                                        <TextBlock Text="{Binding BookCount, StringFormat=(\\{0\\})}}" 
+                                                   Margin="3,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="9"
+                                                   Foreground="Gray"
+                                                   IsVisible="{Binding IsCategory}"/>
+                                    </StackPanel>
+                                </TreeDataTemplate>
+                            </TreeView.DataTemplates>
+                        </TreeView>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

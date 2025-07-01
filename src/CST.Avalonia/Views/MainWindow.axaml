@@ -1,0 +1,132 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
+        x:CompileBindings="False"
+        Title="CST - Chaṭṭha Saṅgāyana Tipiṭaka"
+        WindowStartupLocation="CenterScreen"
+        Width="1400" Height="900"
+        MinWidth="800" MinHeight="600">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <!-- Left panel for Open Book tree -->
+            <ColumnDefinition Width="350" MinWidth="200"/>
+            <!-- Splitter -->
+            <ColumnDefinition Width="Auto"/>
+            <!-- Right panel for book tabs -->
+            <ColumnDefinition Width="*" MinWidth="400"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Panel: Open Book Tree -->
+        <Border Grid.Column="0" 
+                BorderBrush="Gray" 
+                BorderThickness="0,0,1,0">
+            <DockPanel>
+                <!-- Panel Header -->
+                <Border DockPanel.Dock="Top" 
+                        Background="LightBlue" 
+                        BorderBrush="Gray" 
+                        BorderThickness="0,0,0,1">
+                    <TextBlock Text="Open Book" 
+                               FontWeight="Bold" 
+                               VerticalAlignment="Center"
+                               Margin="8,4"/>
+                </Border>
+                
+                <!-- Open Book Content Placeholder -->
+                <ContentControl Name="OpenBookContentHost" />
+            </DockPanel>
+        </Border>
+
+        <!-- Splitter -->
+        <GridSplitter Grid.Column="1" 
+                      Background="Gray" 
+                      Width="4"
+                      HorizontalAlignment="Stretch"/>
+
+        <!-- Right Panel: Book Display Area -->
+        <DockPanel Grid.Column="2">
+            <!-- Tab Strip -->
+            <Border DockPanel.Dock="Top" 
+                    Background="LightGray" 
+                    BorderBrush="Gray" 
+                    BorderThickness="0,0,0,1"
+                    MinHeight="32">
+                <DockPanel Margin="4">
+                    <!-- Tab Headers -->
+                    <ItemsControl Name="BookTabsControl" 
+                                  VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="White"
+                                        BorderBrush="Gray"
+                                        BorderThickness="1,1,1,0"
+                                        Margin="0,0,2,0"
+                                        Cursor="Hand">
+                                    <DockPanel Margin="8,4">
+                                        <Button DockPanel.Dock="Right"
+                                                Name="CloseTabButton"
+                                                Content="✕"
+                                                Width="16" Height="16"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                FontSize="10"
+                                                Margin="4,0,0,0"
+                                                ToolTip.Tip="Close book"/>
+                                        <TextBlock Text="{Binding DisplayTitle}" 
+                                                   MaxWidth="150"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Tab Actions -->
+                    <StackPanel DockPanel.Dock="Right" 
+                                Orientation="Horizontal" 
+                                VerticalAlignment="Center">
+                        <Button Name="CloseAllTabsButton"
+                                Content="Close All"
+                                Padding="8,2"
+                                Margin="4,0"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Book Display Content -->
+            <Grid>
+                <!-- Welcome Message (when no books are open) -->
+                <Border Name="WelcomePanel"
+                        Background="WhiteSmoke">
+                    <StackPanel HorizontalAlignment="Center" 
+                                VerticalAlignment="Center"
+                                Spacing="16">
+                        <TextBlock Text="📖" 
+                                   FontSize="48" 
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="Welcome to CST" 
+                                   FontSize="24" 
+                                   FontWeight="Bold"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="Select a book from the Open Book panel to begin reading"
+                                   FontSize="14"
+                                   Foreground="Gray"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Selected Book Display -->
+                <ContentControl Name="SelectedBookContentHost"/>
+            </Grid>
+        </DockPanel>
+    </Grid>
+</Window>

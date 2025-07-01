@@ -1,0 +1,141 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CST.Avalonia.ViewModels"
+             xmlns:cef="using:Xilium.CefGlue.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="CST.Avalonia.Views.BookDisplayView"
+             x:DataType="vm:BookDisplayViewModel">
+
+    <Design.DataContext>
+        <vm:BookDisplayViewModel/>
+    </Design.DataContext>
+
+    <DockPanel>
+        <!-- Toolbar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="LightGray" Height="40">
+            <!-- Script Selector -->
+            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
+                <TextBlock Text="Script:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <ComboBox ItemsSource="{Binding AvailableScripts}"
+                          SelectedItem="{Binding BookScript}"
+                          MinWidth="120"
+                          ToolTip.Tip="Select script for displaying Pali text">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+            
+            <Separator/>
+            
+            <!-- Chapter Navigation -->
+            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center" 
+                        IsVisible="{Binding HasChapters}">
+                <TextBlock Text="Chapter:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <ComboBox ItemsSource="{Binding Chapters}"
+                          SelectedItem="{Binding SelectedChapter}"
+                          MinWidth="200"
+                          ToolTip.Tip="Navigate to chapter">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+            
+            <Separator/>
+            
+            <!-- Search Navigation (visible when search terms present) -->
+            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
+                        IsVisible="{Binding HasSearchHighlights}">
+                <Button Command="{Binding FirstHitCommand}" ToolTip.Tip="First search result" Margin="2">
+                    <TextBlock Text="⏮"/>
+                </Button>
+                <Button Command="{Binding PreviousHitCommand}" ToolTip.Tip="Previous search result" Margin="2">
+                    <TextBlock Text="◀"/>
+                </Button>
+                <TextBlock Text="{Binding HitStatusText}" VerticalAlignment="Center" Margin="5,0"/>
+                <Button Command="{Binding NextHitCommand}" ToolTip.Tip="Next search result" Margin="2">
+                    <TextBlock Text="▶"/>
+                </Button>
+                <Button Command="{Binding LastHitCommand}" ToolTip.Tip="Last search result" Margin="2">
+                    <TextBlock Text="⏭"/>
+                </Button>
+            </StackPanel>
+            
+            <Separator/>
+            
+            <!-- Book Type Navigation (Mula/Atthakatha/Tika) -->
+            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
+                        IsVisible="{Binding HasLinkedBooks}">
+                <Button Command="{Binding OpenMulaCommand}" 
+                        IsEnabled="{Binding HasMula}"
+                        ToolTip.Tip="Open root text" Margin="2">
+                    <TextBlock Text="Mula"/>
+                </Button>
+                <Button Command="{Binding OpenAtthakathaCommand}" 
+                        IsEnabled="{Binding HasAtthakatha}"
+                        ToolTip.Tip="Open commentary" Margin="2">
+                    <TextBlock Text="Aṭṭha"/>
+                </Button>
+                <Button Command="{Binding OpenTikaCommand}" 
+                        IsEnabled="{Binding HasTika}"
+                        ToolTip.Tip="Open sub-commentary" Margin="2">
+                    <TextBlock Text="Ṭīkā"/>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Status Bar -->
+        <Grid DockPanel.Dock="Bottom" Background="LightGray" Height="26">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Page Numbers -->
+            <TextBlock Grid.Column="0" Text="{Binding PageStatusText}" 
+                       VerticalAlignment="Center" Margin="8,0"
+                       ToolTip.Tip="Page numbers: V=VRI, M=Myanmar, P=PTS, T=Thai, O=Other"/>
+            
+            <!-- Book Info -->
+            <TextBlock Grid.Column="1" Text="{Binding BookInfoText}" 
+                       VerticalAlignment="Center" Margin="8,0"/>
+            
+            <!-- Loading Indicator -->
+            <ProgressBar Grid.Column="2" IsIndeterminate="True" 
+                         IsVisible="{Binding IsLoading}" 
+                         Width="100" Height="16" Margin="8,0"/>
+        </Grid>
+
+        <!-- Main Browser Control -->
+        <Border DockPanel.Dock="Top" BorderBrush="Gray" BorderThickness="1">
+            <Panel>
+                <!-- CefGlue Browser -->
+                <Decorator x:Name="browserWrapper" 
+                           IsVisible="{Binding IsCefGlueAvailable}"/>
+                
+                <!-- Fallback Text Display -->
+                <ScrollViewer x:Name="fallbackBrowser" 
+                              Background="White"
+                              IsVisible="{Binding !IsCefGlueAvailable}">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="=== FALLBACK TEXT DISPLAY ===" FontWeight="Bold" Margin="0,0,0,10"/>
+                        <TextBlock Text="{Binding BookInfoText}" FontWeight="Bold" Margin="0,0,0,5"/>
+                        <TextBlock Text="{Binding PageStatusText}" Margin="0,0,0,10"/>
+                        <TextBlock Text="{Binding HtmlContent}" 
+                                   TextWrapping="Wrap" 
+                                   FontFamily="Times New Roman"
+                                   FontSize="14"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Panel>
+        </Border>
+    </DockPanel>
+</UserControl>

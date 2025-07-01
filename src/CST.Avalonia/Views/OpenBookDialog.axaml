@@ -1,0 +1,234 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CST.Avalonia.ViewModels"
+        xmlns:converters="using:CST.Avalonia.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="700"
+        x:Class="CST.Avalonia.Views.OpenBookDialog"
+        x:DataType="vm:OpenBookDialogViewModel"
+        Title="Open Book - Chaṭṭha Saṅgāyana Tipiṭaka"
+        WindowStartupLocation="CenterOwner"
+        Width="900" Height="700"
+        MinWidth="600" MinHeight="400">
+
+    <Design.DataContext>
+        <vm:OpenBookDialogViewModel/>
+    </Design.DataContext>
+
+    <Window.Resources>
+        <!-- Define icons as text since we don't have image resources yet -->
+        <x:String x:Key="FolderClosedIcon">📁</x:String>
+        <x:String x:Key="FolderOpenIcon">📂</x:String>
+        <x:String x:Key="BookIcon">📖</x:String>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Toolbar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="LightGray" Height="40">
+            <Button Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh tree" Margin="5">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🔄" Margin="0,0,5,0"/>
+                    <TextBlock Text="Refresh"/>
+                </StackPanel>
+            </Button>
+            <Separator/>
+            <Button Command="{Binding ExpandAllCommand}" ToolTip.Tip="Expand all categories" Margin="5">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📂" Margin="0,0,5,0"/>
+                    <TextBlock Text="Expand All"/>
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding CollapseAllCommand}" ToolTip.Tip="Collapse all categories" Margin="5">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📁" Margin="0,0,5,0"/>
+                    <TextBlock Text="Collapse All"/>
+                </StackPanel>
+            </Button>
+            <Separator/>
+            <Button Command="{Binding OpenBookCommand}" 
+                    CommandParameter="{Binding SelectedNode}"
+                    ToolTip.Tip="Open selected book" 
+                    Margin="5"
+                    IsEnabled="{Binding SelectedNode.IsBook}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📖" Margin="0,0,5,0"/>
+                    <TextBlock Text="Open Book"/>
+                </StackPanel>
+            </Button>
+            <Separator/>
+            <!-- Script Selector -->
+            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
+                <TextBlock Text="Script:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <ComboBox ItemsSource="{Binding AvailableScripts}"
+                          SelectedItem="{Binding CurrentScript}"
+                          MinWidth="150"
+                          ToolTip.Tip="Select script for displaying Pali text">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding ., Converter={x:Static converters:ScriptDisplayNameConverter.Instance}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Status Bar -->
+        <Grid DockPanel.Dock="Bottom" Background="LightGray" Height="28">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding StatusText}" 
+                       VerticalAlignment="Center" Margin="8,0"/>
+            <TextBlock Grid.Column="1" Text="{Binding TotalBooks, StringFormat=Total Books: \{0\}}" 
+                       VerticalAlignment="Center" Margin="8,0"/>
+            <ProgressBar Grid.Column="2" IsIndeterminate="True" 
+                         IsVisible="{Binding IsLoading}" 
+                         Width="100" Height="16" Margin="8,0"/>
+        </Grid>
+
+        <!-- Main Content -->
+        <Grid DockPanel.Dock="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" MinWidth="300"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="1*" MinWidth="200"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Book Tree -->
+            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" 
+                               Text="Buddhist Text Collection" 
+                               FontWeight="Bold" 
+                               Padding="8" 
+                               Background="LightBlue"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <TreeView ItemsSource="{Binding BookTree}"
+                                  SelectedItem="{Binding SelectedNode}"
+                                  Background="White">
+                            <TreeView.Styles>
+                                <!-- Style for TreeViewItem -->
+                                <Style Selector="TreeViewItem" x:DataType="vm:BookTreeNode">
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                </Style>
+                                <!-- Style for book nodes (leaf nodes) -->
+                                <Style Selector="TreeViewItem /template/ ContentPresenter" x:DataType="vm:BookTreeNode">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                                <Style Selector="TreeViewItem:pointerover /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="LightGray"/>
+                                </Style>
+                                <Style Selector="TreeViewItem:selected /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="LightBlue"/>
+                                </Style>
+                            </TreeView.Styles>
+                            <TreeView.DataTemplates>
+                                <TreeDataTemplate DataType="vm:BookTreeNode" ItemsSource="{Binding Children}">
+                                    <StackPanel Orientation="Horizontal" Margin="2">
+                                        <!-- Icon -->
+                                        <TextBlock Text="📖" Margin="0,0,5,0" VerticalAlignment="Center" 
+                                                   IsVisible="{Binding IsBook}"/>
+                                        <TextBlock Text="📁" Margin="0,0,5,0" VerticalAlignment="Center" 
+                                                   IsVisible="{Binding IsCategory}"/>
+                                        <!-- Text -->
+                                        <TextBlock Text="{Binding DisplayName}" 
+                                                   VerticalAlignment="Center"
+                                                   FontWeight="Normal"/>
+                                        <!-- Book count for categories -->
+                                        <TextBlock Text="{Binding BookCount, StringFormat=(\{0\})}" 
+                                                   Margin="5,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="11"
+                                                   Foreground="Gray"
+                                                   IsVisible="{Binding IsCategory}"/>
+                                    </StackPanel>
+                                </TreeDataTemplate>
+                            </TreeView.DataTemplates>
+                        </TreeView>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Background="Gray" HorizontalAlignment="Stretch"/>
+
+            <!-- Book Information Panel -->
+            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" 
+                               Text="Book Information" 
+                               FontWeight="Bold" 
+                               Padding="8" 
+                               Background="LightYellow"/>
+                    
+                    <ScrollViewer Padding="10">
+                        <StackPanel Spacing="10">
+                            <!-- Selection Info -->
+                            <TextBlock Text="{Binding SelectedBookInfo}" 
+                                       TextWrapping="Wrap"
+                                       FontFamily="Consolas, Monaco, 'Courier New', monospace"
+                                       FontSize="12"/>
+                            
+                            <!-- Action Buttons -->
+                            <StackPanel Spacing="8" IsVisible="{Binding SelectedNode.IsBook}">
+                                <Button Command="{Binding OpenBookCommand}" 
+                                        CommandParameter="{Binding SelectedNode}"
+                                        Content="📖 Open This Book"
+                                        HorizontalAlignment="Stretch"
+                                        Padding="10,8"
+                                        FontWeight="Bold"/>
+                                
+                                <Separator/>
+                                
+                                <!-- Book Details -->
+                                <TextBlock Text="Book Details:" FontWeight="Bold" FontSize="13"/>
+                                <StackPanel Spacing="4"  IsVisible="{Binding SelectedNode.IsBook}">
+                                    <TextBlock Text="{Binding SelectedNode.CstBook.FileName, StringFormat=File: \{0\}}" 
+                                               FontSize="11" Foreground="DarkBlue"/>
+                                    <TextBlock Text="{Binding SelectedNode.CstBook.Pitaka, StringFormat=Collection: \{0\}}" 
+                                               FontSize="11" Foreground="DarkBlue"/>
+                                    <TextBlock Text="{Binding SelectedNode.CstBook.Matn, StringFormat=Type: \{0\}}" 
+                                               FontSize="11" Foreground="DarkBlue"/>
+                                    <TextBlock Text="{Binding SelectedNode.CstBook.Index, StringFormat=Index: \{0\}}" 
+                                               FontSize="11" Foreground="DarkBlue"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <!-- Category Info -->
+                            <StackPanel Spacing="8" IsVisible="{Binding SelectedNode.IsCategory}">
+                                <TextBlock Text="Category Information:" FontWeight="Bold" FontSize="13"/>
+                                <TextBlock Text="{Binding SelectedNode.BookCount, StringFormat=Contains \{0\} books}" 
+                                           FontSize="12" Foreground="DarkGreen"/>
+                                <TextBlock Text="Double-click to expand/collapse this category" 
+                                           FontSize="11" FontStyle="Italic" Foreground="Gray"/>
+                            </StackPanel>
+
+                            <!-- Instructions -->
+                            <StackPanel Spacing="4" Margin="0,20,0,0">
+                                <TextBlock Text="Instructions:" FontWeight="Bold" FontSize="12"/>
+                                <TextBlock Text="• Click to select a book or category" FontSize="11"/>
+                                <TextBlock Text="• Double-click to open a book" FontSize="11"/>
+                                <TextBlock Text="• Double-click categories to expand/collapse" FontSize="11"/>
+                                <TextBlock Text="• Use toolbar buttons for bulk operations" FontSize="11"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Close button area -->
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" 
+                    HorizontalAlignment="Right" Margin="10" Height="40">
+            <Button Command="{Binding CloseCommand}" 
+                    Content="Close" 
+                    Width="80" Height="30" 
+                    Margin="5"/>
+        </StackPanel>
+    </DockPanel>
+
+</Window>

@@ -3,3 +3,5 @@ Debug
 /.vs/
 /src/.vs/
 
+
+.DS_Store
