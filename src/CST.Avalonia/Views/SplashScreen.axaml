@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CST.Avalonia.Views.SplashScreen"
+        Title="CST Avalonia"
+        Width="400"
+        Height="300"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        ShowInTaskbar="False"
+        SystemDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+    
+    <Border CornerRadius="10" Background="White" BorderBrush="Gray" BorderThickness="1">
+        <Grid>
+            <!-- Background Image -->
+            <Image Name="BackgroundImage" 
+                   Stretch="Fill" 
+                   HorizontalAlignment="Stretch" 
+                   VerticalAlignment="Stretch" />
+            
+            <!-- Status and Progress Area -->
+            <StackPanel VerticalAlignment="Bottom" 
+                        Margin="20" 
+                        Background="#80FFFFFF">
+                
+                <!-- Status Text -->
+                <TextBlock Name="StatusLabel" 
+                          Text="Loading..."
+                          FontSize="12"
+                          HorizontalAlignment="Center"
+                          Margin="0,10,0,5" />
+                
+                <!-- Progress Bar -->
+                <ProgressBar Name="ProgressBar"
+                            Height="20"
+                            Minimum="0"
+                            Maximum="100"
+                            Value="0"
+                            Margin="0,5,0,5" />
+                
+                <!-- Time Remaining -->
+                <TextBlock Name="TimeRemainingLabel"
+                          Text=""
+                          FontSize="10"
+                          HorizontalAlignment="Center"
+                          Margin="0,5,0,10" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

@@ -486,6 +486,41 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
     {
         return _scriptService.ConvertToCurrentScript(devanagariText);
     }
+    
+    /// <summary>
+    /// Update the tree display to use the specified script
+    /// </summary>
+    public void UpdateTreeScript(Script newScript)
+    {
+        // Update all nodes in the tree to display the new script
+        UpdateNodeScripts(BookTree, newScript);
+    }
+    
+    private void UpdateNodeScripts(IEnumerable<BookTreeNode> nodes, Script script)
+    {
+        foreach (var node in nodes)
+        {
+            // If node has original Devanagari text, convert it to the selected script
+            if (!string.IsNullOrEmpty(node.OriginalDevanagariText))
+            {
+                if (script == Script.Devanagari)
+                {
+                    node.DisplayName = node.OriginalDevanagariText;
+                }
+                else
+                {
+                    // Convert from Devanagari to the target script
+                    node.DisplayName = ScriptConverter.Convert(node.OriginalDevanagariText, Script.Devanagari, script);
+                }
+            }
+            
+            // Recursively update children
+            if (node.Children.Any())
+            {
+                UpdateNodeScripts(node.Children, script);
+            }
+        }
+    }
 
     /// <summary>
     /// Handle script changes - equivalent to FormSelectBook.ChangeScript()

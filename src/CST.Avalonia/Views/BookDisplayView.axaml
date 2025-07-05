@@ -42,7 +42,7 @@
                           ToolTip.Tip="Navigate to chapter">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
+                            <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
@@ -54,17 +54,17 @@
             <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
                         IsVisible="{Binding HasSearchHighlights}">
                 <Button Command="{Binding FirstHitCommand}" ToolTip.Tip="First search result" Margin="2">
-                    <TextBlock Text="⏮"/>
+                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowFirst.png" Width="16" Height="16"/>
                 </Button>
                 <Button Command="{Binding PreviousHitCommand}" ToolTip.Tip="Previous search result" Margin="2">
-                    <TextBlock Text="◀"/>
+                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowPrevious.png" Width="16" Height="16"/>
                 </Button>
                 <TextBlock Text="{Binding HitStatusText}" VerticalAlignment="Center" Margin="5,0"/>
                 <Button Command="{Binding NextHitCommand}" ToolTip.Tip="Next search result" Margin="2">
-                    <TextBlock Text="▶"/>
+                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowNext.png" Width="16" Height="16"/>
                 </Button>
                 <Button Command="{Binding LastHitCommand}" ToolTip.Tip="Last search result" Margin="2">
-                    <TextBlock Text="⏭"/>
+                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowLast.png" Width="16" Height="16"/>
                 </Button>
             </StackPanel>
             
@@ -99,10 +99,10 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
-            <!-- Page Numbers -->
-            <TextBlock Grid.Column="0" Text="{Binding PageStatusText}" 
+            <!-- Page References (VRI, Myanmar, PTS, Thai, Other) -->
+            <TextBlock Grid.Column="0" Text="{Binding PageReferencesText}" 
                        VerticalAlignment="Center" Margin="8,0"
-                       ToolTip.Tip="Page numbers: V=VRI, M=Myanmar, P=PTS, T=Thai, O=Other"/>
+                       ToolTip.Tip="Page numbers: VRI=Vipassana Research Institute, Myanmar=Burmese edition, PTS=Pali Text Society, Thai=Thai edition, Other=Miscellaneous editions"/>
             
             <!-- Book Info -->
             <TextBlock Grid.Column="1" Text="{Binding BookInfoText}" 

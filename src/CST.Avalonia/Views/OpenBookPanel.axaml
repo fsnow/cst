@@ -17,18 +17,6 @@
 
     <DockPanel>
 
-        <!-- Status Bar -->
-        <Grid DockPanel.Dock="Bottom" Background="LightGray" Height="24">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding StatusText}" 
-                       VerticalAlignment="Center" Margin="6,0" FontSize="10"/>
-            <TextBlock Grid.Column="1" Text="{Binding TotalBooks, StringFormat=Books: \\{0\\}}" 
-                       VerticalAlignment="Center" Margin="6,0" FontSize="10"/>
-        </Grid>
-
         <!-- Main Content -->
         <Grid DockPanel.Dock="Top">
             <!-- Book Tree -->

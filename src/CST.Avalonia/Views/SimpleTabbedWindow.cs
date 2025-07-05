@@ -10,7 +10,10 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using CST.Avalonia.ViewModels;
+using CST.Avalonia.Services;
 using CST;
+using CST.Conversion;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CST.Avalonia.Views;
 
@@ -22,6 +25,8 @@ public class SimpleTabbedWindow : Window
     private ContentControl _selectedBookHost;
     private StackPanel _tabsPanel;
     private Border _welcomePanel;
+    private Script _defaultScript = Script.Latin;
+    private ComboBox? _paliScriptCombo;
 
     public SimpleTabbedWindow()
     {
@@ -38,6 +43,14 @@ public class SimpleTabbedWindow : Window
 
     private void BuildUI()
     {
+        // Create main content container with toolbar
+        var mainContainer = new DockPanel();
+        
+        // Top Toolbar
+        var toolbar = CreateMainToolbar();
+        DockPanel.SetDock(toolbar, Dock.Top);
+        mainContainer.Children.Add(toolbar);
+        
         // Create main grid
         var mainGrid = new Grid();
         
@@ -71,7 +84,7 @@ public class SimpleTabbedWindow : Window
         
         var leftHeaderText = new TextBlock
         {
-            Text = "Open Book",
+            Text = "Select a Book",
             FontWeight = FontWeight.Bold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 4)
@@ -296,7 +309,7 @@ public class SimpleTabbedWindow : Window
 
         welcomeStack.Children.Add(new TextBlock
         {
-            Text = "Select a book from the Open Book panel to begin reading",
+            Text = "Select a book to begin reading",
             FontSize = 14,
             Foreground = Brushes.Gray,
             HorizontalAlignment = HorizontalAlignment.Center
@@ -311,13 +324,101 @@ public class SimpleTabbedWindow : Window
 
         rightPanel.Children.Add(contentGrid);
         mainGrid.Children.Add(rightPanel);
+        
+        // Add main grid to container and set as content
+        mainContainer.Children.Add(mainGrid);
+        Content = mainContainer;
+    }
 
-        Content = mainGrid;
+    private Border CreateMainToolbar()
+    {
+        var toolbar = new Border
+        {
+            Background = Brushes.LightGray,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Height = 40
+        };
+
+        var toolbarPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 4)
+        };
+
+        // Interface Language dropdown (placeholder)
+        var interfaceLangLabel = new TextBlock
+        {
+            Text = "Interface Language:",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 5, 0)
+        };
+        toolbarPanel.Children.Add(interfaceLangLabel);
+
+        var interfaceLangCombo = new ComboBox
+        {
+            MinWidth = 120,
+            Margin = new Thickness(0, 0, 20, 0)
+        };
+        interfaceLangCombo.Items.Add("English");
+        interfaceLangCombo.SelectedIndex = 0;
+        toolbarPanel.Children.Add(interfaceLangCombo);
+
+        // Pali Script dropdown - this controls the default script for new books and the tree
+        var paliScriptLabel = new TextBlock
+        {
+            Text = "Pali Script:",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 5, 0)
+        };
+        toolbarPanel.Children.Add(paliScriptLabel);
+
+        _paliScriptCombo = new ComboBox
+        {
+            MinWidth = 120
+        };
+        ToolTip.SetTip(_paliScriptCombo, "Default script for Select a Book tree and new book windows");
+        
+        // Add available scripts (excluding Unknown and IPE like we did for book display)
+        var availableScripts = Enum.GetValues<Script>().Where(s => s != Script.Unknown && s != Script.Ipe);
+        foreach (var script in availableScripts)
+        {
+            _paliScriptCombo.Items.Add(script);
+        }
+        _paliScriptCombo.SelectedItem = _defaultScript; // Default to Latin
+        _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
+        toolbarPanel.Children.Add(_paliScriptCombo);
+
+        toolbar.Child = toolbarPanel;
+        return toolbar;
     }
 
     public void SetOpenBookContent(Control content)
     {
         _openBookHost.Content = content;
+        
+        // If it's an OpenBookPanel, set the initial script
+        if (content is OpenBookPanel openBookPanel)
+        {
+            openBookPanel.UpdateScript(_defaultScript);
+        }
+    }
+    
+    public Script DefaultScript => _defaultScript;
+    
+    private void OnDefaultScriptChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_paliScriptCombo?.SelectedItem is Script selectedScript)
+        {
+            _defaultScript = selectedScript;
+            
+            // Update the OpenBookPanel to use the new script
+            if (_openBookHost.Content is OpenBookPanel openBookPanel)
+            {
+                openBookPanel.UpdateScript(_defaultScript);
+            }
+        }
     }
 
     public void OpenBook(Book book, List<string>? searchTerms = null)
@@ -333,9 +434,14 @@ public class SimpleTabbedWindow : Window
             return;
         }
 
-        // Create new book display
-        Console.WriteLine($"Creating BookDisplayViewModel with {searchTerms?.Count ?? 0} search terms");
-        var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms ?? new List<string>());
+        // Create new book display with the default script
+        Console.WriteLine($"Creating BookDisplayViewModel with {searchTerms?.Count ?? 0} search terms and default script {_defaultScript}");
+        
+        // Get ChapterListsService from dependency injection
+        var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
+        
+        var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms ?? new List<string>(), null, chapterListsService);
+        bookDisplayViewModel.BookScript = _defaultScript; // Set the default script
         var bookDisplayView = new BookDisplayView
         {
             DataContext = bookDisplayViewModel
@@ -386,6 +492,18 @@ public class SimpleTabbedWindow : Window
             MaxWidth = 150
         };
         tabDockPanel.Children.Add(titleText);
+        
+        // Store reference to text block for updates
+        bookTab.TabTextBlock = titleText;
+        
+        // Subscribe to DisplayTitle changes
+        bookTab.BookDisplayViewModel.PropertyChanged += (sender, args) =>
+        {
+            if (args.PropertyName == nameof(BookDisplayViewModel.DisplayTitle))
+            {
+                titleText.Text = bookTab.DisplayTitle;
+            }
+        };
 
         tabBorder.Child = tabDockPanel;
         
@@ -463,13 +581,13 @@ public class BookTabInfo
         Book = book;
         BookDisplayViewModel = viewModel;
         BookView = view;
-        DisplayTitle = book.LongNavPath?.Split('/').LastOrDefault() ?? book.FileName;
     }
 
     public Book Book { get; }
     public BookDisplayViewModel BookDisplayViewModel { get; }
     public BookDisplayView BookView { get; }
-    public string DisplayTitle { get; }
+    public string DisplayTitle => BookDisplayViewModel.DisplayTitle;
     public bool IsSelected { get; set; }
     public Border? TabUI { get; set; }
+    public TextBlock? TabTextBlock { get; set; }
 }

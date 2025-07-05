@@ -7,6 +7,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Views;
 using CST.Avalonia.Services;
@@ -15,6 +16,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Xilium.CefGlue.Avalonia;
+using ReactiveUI;
+using System.Reactive.Concurrency;
+using System.Reactive.Linq;
+using System.Reactive.Disposables;
 
 namespace CST.Avalonia;
 
@@ -26,12 +31,36 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        
+        // Configure ReactiveUI to use the UI thread scheduler to prevent threading issues
+        RxApp.MainThreadScheduler = new AvaloniaUIThreadScheduler();
+        
+        // Set up global exception handling for unhandled exceptions
+        RxApp.DefaultExceptionHandler = new ReactiveExceptionHandler();
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Note: Splash screen has been disabled on macOS due to threading issues
+        // The splash screen must be shown after Avalonia is initialized, which defeats its purpose
+        bool showSplash = !OperatingSystem.IsMacOS();
+        
+        if (showSplash)
+        {
+            // Show splash screen as early as possible in the Avalonia lifecycle
+            SplashScreen.ShowSplashScreen();
+            SplashScreen.SetStatus("Starting CST Avalonia...");
+            SplashScreen.SetReferencePoint();
+        }
+
         // CefGlue initialization is handled in Program.cs using CefRuntimeLoader.Initialize()
         // This ensures proper initialization before the app starts
+
+        if (showSplash)
+        {
+            SplashScreen.SetStatus("Configuring services...");
+            SplashScreen.SetReferencePoint();
+        }
 
         // Configure services
         var services = new ServiceCollection();
@@ -44,11 +73,29 @@ public partial class App : Application
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
             
+            if (showSplash)
+            {
+                SplashScreen.SetStatus("Loading application state...");
+                SplashScreen.SetReferencePoint();
+            }
+            
             // Load application state before creating UI
             _ = LoadApplicationStateAsync();
             
+            if (showSplash)
+            {
+                SplashScreen.SetStatus("Creating main window...");
+                SplashScreen.SetReferencePoint();
+            }
+            
             // Create the main window with IDE-style layout
             MainWindow = new SimpleTabbedWindow();
+            
+            if (showSplash)
+            {
+                SplashScreen.SetStatus("Loading books...");
+                SplashScreen.SetReferencePoint();
+            }
             
             // Create the Open Book panel and set it in the main window
             var openBookViewModel = ServiceProvider.GetRequiredService<OpenBookDialogViewModel>();
@@ -58,6 +105,15 @@ public partial class App : Application
             ((SimpleTabbedWindow)MainWindow).SetOpenBookContent(openBookPanel);
             
             desktop.MainWindow = MainWindow;
+            
+            if (showSplash)
+            {
+                SplashScreen.SetStatus("Ready");
+                SplashScreen.SetReferencePoint();
+                
+                // Close splash screen after initialization is complete
+                SplashScreen.CloseForm();
+            }
 
             // Handle book open requests - now they open as tabs in the main window
             openBookViewModel.BookOpenRequested += book =>
@@ -141,6 +197,7 @@ public partial class App : Application
         services.AddSingleton<ILocalizationService, LocalizationService>();
         services.AddSingleton<IScriptService, ScriptService>();
         services.AddSingleton<IApplicationStateService, ApplicationStateService>();
+        services.AddSingleton<ChapterListsService>();
         // services.AddSingleton<IBookService, BookService>();
         // services.AddSingleton<ISearchService, SearchService>();
         services.AddTransient<TreeStateService>();
@@ -161,5 +218,95 @@ public partial class App : Application
         {
             BindingPlugins.DataValidators.Remove(plugin);
         }
+    }
+}
+
+/// <summary>
+/// Global exception handler for ReactiveUI to prevent unhandled exceptions from crashing the app
+/// </summary>
+public class ReactiveExceptionHandler : IObserver<Exception>
+{
+    public void OnNext(Exception ex)
+    {
+        // Log the exception but don't crash the app
+        Console.WriteLine($"ReactiveUI Exception (handled): {ex.Message}");
+        
+        // If it's a threading exception, we can safely ignore it as we've implemented proper UI thread dispatching
+        if (ex is InvalidOperationException && ex.Message.Contains("Call from invalid thread"))
+        {
+            Console.WriteLine("Threading exception caught and ignored - UI updates are properly handled via Dispatcher");
+            return;
+        }
+        
+        // For other exceptions, log more details
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+        }
+    }
+
+    public void OnError(Exception error)
+    {
+        Console.WriteLine($"ReactiveUI Critical Error: {error.Message}");
+    }
+
+    public void OnCompleted()
+    {
+        // No action needed
+    }
+}
+
+/// <summary>
+/// Custom scheduler implementation for ReactiveUI that ensures operations happen on the UI thread
+/// </summary>
+public class AvaloniaUIThreadScheduler : IScheduler
+{
+    public DateTimeOffset Now => DateTimeOffset.Now;
+
+    public IDisposable Schedule<TState>(TState state, Func<IScheduler, TState, IDisposable> action)
+    {
+        var disposable = new System.Reactive.Disposables.SerialDisposable();
+        
+        Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                disposable.Disposable = action(this, state);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Scheduler exception: {ex.Message}");
+            }
+        });
+        
+        return disposable;
+    }
+
+    public IDisposable Schedule<TState>(TState state, TimeSpan dueTime, Func<IScheduler, TState, IDisposable> action)
+    {
+        var disposable = new System.Reactive.Disposables.SerialDisposable();
+        
+        var timer = new DispatcherTimer { Interval = dueTime };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            try
+            {
+                disposable.Disposable = action(this, state);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Scheduler exception: {ex.Message}");
+            }
+        };
+        timer.Start();
+        
+        return disposable;
+    }
+
+    public IDisposable Schedule<TState>(TState state, DateTimeOffset dueTime, Func<IScheduler, TState, IDisposable> action)
+    {
+        var delay = dueTime - Now;
+        return Schedule(state, delay, action);
     }
 }

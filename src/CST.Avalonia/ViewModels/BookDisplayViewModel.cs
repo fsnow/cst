@@ -14,23 +14,35 @@ using ReactiveUI;
 using CST;
 using CST.Conversion;
 using CST.Avalonia.Services;
+using CST.Avalonia.Models;
+using CST.Avalonia.Views;
 
 namespace CST.Avalonia.ViewModels
 {
     public class BookDisplayViewModel : ViewModelBase
     {
         private readonly ScriptService _scriptService;
+        private readonly ChapterListsService? _chapterListsService;
         private readonly Book _book;
         private readonly List<string>? _searchTerms;
         private readonly string? _initialAnchor;
         
         public event Action<int>? NavigateToHighlightRequested;
+        public event Action<string>? NavigateToChapterRequested;
         
         private Script _bookScript;
         private bool _isLoading;
         private string _pageStatusText = "";
         private string _bookInfoText = "";
         private string _hitStatusText = "";
+        private string _pageReferencesText = "";
+        
+        // Page reference properties (from CST4 FormBookDisplay.cs)
+        private string _vriPage = "*";
+        private string _myanmarPage = "*";
+        private string _ptsPage = "*";
+        private string _thaiPage = "*";
+        private string _otherPage = "*";
         private int _currentHitIndex;
         private int _totalHits;
         private bool _hasSearchHighlights;
@@ -39,14 +51,16 @@ namespace CST.Avalonia.ViewModels
         private bool _hasMula;
         private bool _hasAtthakatha;
         private bool _hasTika;
-        private ChapterModel? _selectedChapter;
+        private DivTag? _selectedChapter;
         private string _htmlContent = "";
-        private bool _isCefGlueAvailable = false;
+        private bool _isCefGlueAvailable = true; // Start optimistically to avoid fallback flash
+        private bool _updatingChapterFromScroll = false;
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null)
         {
             // For now, create ScriptService without logger
             _scriptService = new ScriptService();
+            _chapterListsService = chapterListsService;
             _book = book;
             _searchTerms = searchTerms;
             _initialAnchor = initialAnchor;
@@ -55,22 +69,22 @@ namespace CST.Avalonia.ViewModels
             // Initialize collections - exclude Unknown and IPE from UI dropdown
             AvailableScripts = new ObservableCollection<Script>(
                 Enum.GetValues<Script>().Where(s => s != Script.Unknown && s != Script.Ipe));
-            Chapters = new ObservableCollection<ChapterModel>();
+            Chapters = new ObservableCollection<DivTag>();
             
             // Initialize properties
             _totalHits = searchTerms?.Count ?? 0;
             _hasSearchHighlights = _totalHits > 0;
-            _bookInfoText = $"{GetBookDisplayName(book)} ({book.Matn})";
+            _bookInfoText = $"{GetBookInfoDisplayName(book)} ({book.Matn})";
             
-            // Initialize commands
-            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit, this.WhenAnyValue(x => x.HasSearchHighlights));
-            PreviousHitCommand = ReactiveCommand.Create(NavigateToPreviousHit, this.WhenAnyValue(x => x.CurrentHitIndex, index => index > 1));
-            NextHitCommand = ReactiveCommand.Create(NavigateToNextHit, this.WhenAnyValue(x => x.CurrentHitIndex, x => x.TotalHits, (current, total) => current < total));
-            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit, this.WhenAnyValue(x => x.HasSearchHighlights));
+            // Initialize commands with simple setup to avoid threading issues
+            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit);
+            PreviousHitCommand = ReactiveCommand.Create(NavigateToPreviousHit);
+            NextHitCommand = ReactiveCommand.Create(NavigateToNextHit);
+            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit);
             
-            OpenMulaCommand = ReactiveCommand.Create(OpenMulaBook, this.WhenAnyValue(x => x.HasMula));
-            OpenAtthakathaCommand = ReactiveCommand.Create(OpenAtthakathaBook, this.WhenAnyValue(x => x.HasAtthakatha));
-            OpenTikaCommand = ReactiveCommand.Create(OpenTikaBook, this.WhenAnyValue(x => x.HasTika));
+            OpenMulaCommand = ReactiveCommand.Create(OpenMulaBook);
+            OpenAtthakathaCommand = ReactiveCommand.Create(OpenAtthakathaBook);
+            OpenTikaCommand = ReactiveCommand.Create(OpenTikaBook);
             
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
@@ -78,19 +92,84 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(async script => 
                 {
                     Console.WriteLine($"Script changed to {script} - reloading from source files");
+                    
+                    // Save current page anchor for position preservation
+                    string savedPageAnchor = "";
+                    if (BookDisplayControl != null)
+                    {
+                        savedPageAnchor = BookDisplayControl.GetCurrentPageAnchor();
+                        if (!string.IsNullOrEmpty(savedPageAnchor))
+                        {
+                            Console.WriteLine($"Saved page anchor: {savedPageAnchor}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("No page anchor available, won't restore position");
+                        }
+                    }
+                    
+                    // Ensure property updates happen on UI thread
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        // Update book info text with new script
+                        BookInfoText = $"{GetBookInfoDisplayName(_book)} ({_book.Matn})";
+                        // Notify that DisplayTitle has changed (for tab updates)
+                        this.RaisePropertyChanged(nameof(DisplayTitle));
+                        
+                        // Preserve the current selected chapter
+                        var currentSelectedChapter = SelectedChapter;
+                        
+                        // Update all chapters to use the new script
+                        foreach (var chapter in Chapters)
+                        {
+                            chapter.BookScript = script;
+                        }
+                        
+                        // Force the chapters dropdown to refresh its display
+                        var temp = Chapters.ToList();
+                        Chapters.Clear();
+                        foreach (var chapter in temp)
+                        {
+                            Chapters.Add(chapter);
+                        }
+                        
+                        // Restore the selected chapter
+                        if (currentSelectedChapter != null)
+                        {
+                            var matchingChapter = Chapters.FirstOrDefault(c => c.Id == currentSelectedChapter.Id);
+                            if (matchingChapter != null)
+                            {
+                                _updatingChapterFromScroll = true;
+                                SelectedChapter = matchingChapter;
+                                _updatingChapterFromScroll = false;
+                            }
+                        }
+                    });
                     await LoadBookContentAsync();
+                    
+                    // Restore page position after content loads
+                    if (!string.IsNullOrEmpty(savedPageAnchor) && BookDisplayControl != null)
+                    {
+                        // Wait a bit for content to render and page references to be calculated
+                        await Task.Delay(1000);
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            BookDisplayControl.ScrollToPageAnchor(savedPageAnchor);
+                            Console.WriteLine($"Restored position to page anchor: {savedPageAnchor}");
+                        });
+                    }
                 });
                 
             this.WhenAnyValue(x => x.SelectedChapter)
                 .Where(chapter => chapter != null)
                 .Subscribe(chapter => NavigateToChapter(chapter!));
                 
-            // Initialize data
-            _ = Task.Run(InitializeAsync);
+            // Initialize data on UI thread to prevent threading issues
+            _ = Dispatcher.UIThread.InvokeAsync(InitializeAsync);
         }
         
         public ObservableCollection<Script> AvailableScripts { get; }
-        public ObservableCollection<ChapterModel> Chapters { get; }
+        public ObservableCollection<DivTag> Chapters { get; }
         
         public ReactiveCommand<Unit, Unit> FirstHitCommand { get; }
         public ReactiveCommand<Unit, Unit> PreviousHitCommand { get; }
@@ -129,6 +208,45 @@ namespace CST.Avalonia.ViewModels
             get => _hitStatusText;
             set => this.RaiseAndSetIfChanged(ref _hitStatusText, value);
         }
+
+        public string PageReferencesText
+        {
+            get => _pageReferencesText;
+            set => this.RaiseAndSetIfChanged(ref _pageReferencesText, value);
+        }
+
+        public string VriPage
+        {
+            get => _vriPage;
+            set => this.RaiseAndSetIfChanged(ref _vriPage, value);
+        }
+
+        public string MyanmarPage
+        {
+            get => _myanmarPage;
+            set => this.RaiseAndSetIfChanged(ref _myanmarPage, value);
+        }
+
+        public string PtsPage
+        {
+            get => _ptsPage;
+            set => this.RaiseAndSetIfChanged(ref _ptsPage, value);
+        }
+
+        public string ThaiPage
+        {
+            get => _thaiPage;
+            set => this.RaiseAndSetIfChanged(ref _thaiPage, value);
+        }
+
+        public string OtherPage
+        {
+            get => _otherPage;
+            set => this.RaiseAndSetIfChanged(ref _otherPage, value);
+        }
+        
+        // Store raw anchor name for position preservation
+        public string CurrentVriAnchor { get; private set; } = "";
 
         public int CurrentHitIndex
         {
@@ -178,7 +296,7 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _hasTika, value);
         }
 
-        public ChapterModel? SelectedChapter
+        public DivTag? SelectedChapter
         {
             get => _selectedChapter;
             set => this.RaiseAndSetIfChanged(ref _selectedChapter, value);
@@ -189,6 +307,9 @@ namespace CST.Avalonia.ViewModels
             get => _htmlContent;
             set => this.RaiseAndSetIfChanged(ref _htmlContent, value);
         }
+        
+        // Reference to the BookDisplayView control for scroll position management
+        public BookDisplayView? BookDisplayControl { get; set; }
 
         public bool IsCefGlueAvailable
         {
@@ -197,21 +318,72 @@ namespace CST.Avalonia.ViewModels
         }
 
         public Book Book => _book;
-        public string DisplayTitle => $"{GetBookDisplayName(_book)} - {_scriptService.GetScriptDisplayName(_bookScript)}";
+        public string DisplayTitle => GetBookDisplayName(_book);
 
         private string GetBookDisplayName(Book book)
         {
-            // Use the last part of the ShortNavPath or FileName if no nav path
-            if (!string.IsNullOrEmpty(book.ShortNavPath))
+            // Use the last part of the LongNavPath (which is in Devanagari) and convert to current script with capitalization
+            string bookName = "";
+            
+            if (!string.IsNullOrEmpty(book.LongNavPath))
             {
-                var parts = book.ShortNavPath.Split('/');
-                return parts[parts.Length - 1];
+                var parts = book.LongNavPath.Split('/');
+                bookName = parts[parts.Length - 1];
+                
+                // Convert from Devanagari to current script with capitalization
+                if (_bookScript != Script.Devanagari)
+                {
+                    bookName = ScriptConverter.Convert(bookName, Script.Devanagari, _bookScript, true);
+                }
             }
             else if (!string.IsNullOrEmpty(book.FileName))
             {
-                return Path.GetFileNameWithoutExtension(book.FileName);
+                bookName = Path.GetFileNameWithoutExtension(book.FileName);
             }
-            return "Unknown Book";
+            else
+            {
+                bookName = "Unknown Book";
+            }
+            
+            return bookName;
+        }
+        
+        private string GetBookInfoDisplayName(Book book)
+        {
+            // Use ShortNavPath for bottom bar display (more concise than LongNavPath)
+            string bookName = "";
+            
+            if (!string.IsNullOrEmpty(book.ShortNavPath))
+            {
+                bookName = book.ShortNavPath;
+                
+                // Convert from Devanagari to current script with capitalization
+                if (_bookScript != Script.Devanagari)
+                {
+                    bookName = ScriptConverter.Convert(bookName, Script.Devanagari, _bookScript, true);
+                }
+            }
+            else if (!string.IsNullOrEmpty(book.LongNavPath))
+            {
+                // Fallback to LongNavPath if ShortNavPath is not available
+                var parts = book.LongNavPath.Split('/');
+                bookName = parts[parts.Length - 1];
+                
+                if (_bookScript != Script.Devanagari)
+                {
+                    bookName = ScriptConverter.Convert(bookName, Script.Devanagari, _bookScript, true);
+                }
+            }
+            else if (!string.IsNullOrEmpty(book.FileName))
+            {
+                bookName = Path.GetFileNameWithoutExtension(book.FileName);
+            }
+            else
+            {
+                bookName = "Unknown Book";
+            }
+            
+            return bookName;
         }
 
         private async Task InitializeAsync()
@@ -273,12 +445,12 @@ namespace CST.Avalonia.ViewModels
         {
             try
             {
-                // Re-enable CefGlue for debugging the white screen issue
-                Console.WriteLine("CefGlue availability check - enabling for debugging");
+                // Start optimistically with CefGlue enabled to avoid fallback flash
+                Console.WriteLine("CefGlue availability check - starting optimistically enabled");
                 Dispatcher.UIThread.Post(() =>
                 {
-                    IsCefGlueAvailable = false; // Will be set to true by browser initialization
-                    PageStatusText = "Checking CefGlue browser availability...";
+                    IsCefGlueAvailable = true; // Start enabled, will be disabled if browser fails
+                    PageStatusText = "Initializing browser...";
                 });
             }
             catch (Exception ex)
@@ -302,11 +474,35 @@ namespace CST.Avalonia.ViewModels
 
         private async Task LoadChaptersAsync()
         {
-            await Task.Run(() =>
+            // Load chapters from ChapterListsService
+            var chapters = await Task.Run(() =>
             {
-                // TODO: Load chapters from ChapterLists.Inst[book.Index]
-                // For now, simulate no chapters
-                HasChapters = false;
+                if (_chapterListsService == null)
+                    return new List<DivTag>();
+                    
+                return _chapterListsService.GetChapterList(_book.Index) ?? new List<DivTag>();
+            });
+            
+            // Update UI properties on UI thread
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Chapters.Clear();
+                foreach (var chapter in chapters)
+                {
+                    // Set the script for proper display conversion
+                    chapter.BookScript = _bookScript;
+                    Chapters.Add(chapter);
+                }
+                HasChapters = chapters.Count > 0;
+                
+                // Set the first chapter as selected by default
+                if (chapters.Count > 0 && SelectedChapter == null)
+                {
+                    SelectedChapter = Chapters.First();
+                    Console.WriteLine($"Set default selected chapter to: {SelectedChapter.Id} - {SelectedChapter.Heading}");
+                }
+                
+                Console.WriteLine($"Loaded {chapters.Count} chapters for book {_book.FileName}");
             });
         }
 
@@ -331,6 +527,8 @@ namespace CST.Avalonia.ViewModels
                 {
                     HtmlContent = htmlContent;
                     PageStatusText = "Content loaded";
+                    // Initialize page references text
+                    UpdatePageReferencesText();
                 });
             }
             finally
@@ -376,6 +574,15 @@ namespace CST.Avalonia.ViewModels
                         var convertedXml = ScriptConverter.ConvertBook(xmlDoc.OuterXml, _bookScript);
                         xmlDoc.LoadXml(convertedXml);
                     }
+                    
+                    // Update chapter display script after script conversion
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        foreach (var chapter in Chapters)
+                        {
+                            chapter.BookScript = _bookScript;
+                        }
+                    });
 
                     // Apply search highlighting if needed
                     if (_searchTerms?.Any() == true)
@@ -569,46 +776,59 @@ namespace CST.Avalonia.ViewModels
 
         private void NavigateToFirstHit()
         {
-            if (TotalHits > 0)
+            // Check if we have search highlights
+            if (!HasSearchHighlights || TotalHits <= 0) return;
+            
+            Dispatcher.UIThread.Post(() =>
             {
                 CurrentHitIndex = 1;
                 UpdateHitStatusText();
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to first hit: hit_1";
-            }
+            });
         }
 
         private void NavigateToPreviousHit()
         {
-            if (CurrentHitIndex > 1)
+            // Check if we can navigate to previous hit
+            if (CurrentHitIndex <= 1) return;
+            
+            Dispatcher.UIThread.Post(() =>
             {
                 CurrentHitIndex--;
                 UpdateHitStatusText();
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
-            }
+            });
         }
 
         private void NavigateToNextHit()
         {
-            if (CurrentHitIndex < TotalHits)
+            // Check if we can navigate to next hit
+            if (CurrentHitIndex >= TotalHits) return;
+            
+            Dispatcher.UIThread.Post(() =>
             {
                 CurrentHitIndex++;
                 UpdateHitStatusText();
+                Console.WriteLine($"NavigateToNextHit: Invoking NavigateToHighlightRequested with index {CurrentHitIndex}");
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
-            }
+            });
         }
 
         private void NavigateToLastHit()
         {
-            if (TotalHits > 0)
+            // Check if we have search highlights
+            if (!HasSearchHighlights || TotalHits <= 0) return;
+            
+            Dispatcher.UIThread.Post(() =>
             {
                 CurrentHitIndex = TotalHits;
                 UpdateHitStatusText();
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to last hit: hit_{TotalHits}";
-            }
+            });
         }
 
         private void UpdateHitStatusText()
@@ -623,9 +843,20 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        private void NavigateToChapter(ChapterModel chapter)
+        private void NavigateToChapter(DivTag chapter)
         {
-            // TODO: Navigate to chapter anchor in browser
+            // Don't navigate if this change is coming from scroll position updates
+            if (_updatingChapterFromScroll)
+            {
+                return;
+            }
+            
+            Console.WriteLine($"Navigating to chapter: {chapter.Id} - {chapter.Heading}");
+            
+            // Navigate to the chapter anchor
+            NavigateToChapterRequested?.Invoke(chapter.Id);
+            
+            PageStatusText = $"Chapter: {chapter.Heading.Trim()}";
         }
 
         private void OpenMulaBook()
@@ -642,12 +873,125 @@ namespace CST.Avalonia.ViewModels
         {
             // TODO: Find and open related Tika book
         }
+        
+        // Page references functionality (ported from CST4 FormBookDisplay.cs line 387)
+        public void CalculatePageStatus(int scrollTop)
+        {
+            // Port of CST4's CalculatePageStatus method
+            // This will be called from JavaScript when scroll position changes
+            Dispatcher.UIThread.Post(() =>
+            {
+                // For now, set placeholder values - will be updated when JavaScript bridge provides page anchors
+                VriPage = "*";
+                MyanmarPage = "*";
+                PtsPage = "*";
+                ThaiPage = "*";
+                OtherPage = "*";
+                
+                UpdatePageReferencesText();
+            });
+        }
+        
+        private void UpdatePageReferencesText()
+        {
+            // Port of CST4's SetPageStatusText method
+            // TODO: Use LocalizationService once it's fully implemented
+            // For now, use the same format as CST4's PageNumbersStatusFormat from Resources.resx
+            // string format = _localizationService.GetString("PageNumbersStatusFormat");
+            // PageReferencesText = string.Format(format, VriPage, MyanmarPage, PtsPage, ThaiPage, OtherPage);
+            
+            // Temporary hardcoded format until localization is implemented
+            PageReferencesText = $"VRI: {VriPage}   Myanmar: {MyanmarPage}   PTS: {PtsPage}   Thai: {ThaiPage}   Other: {OtherPage}";
+        }
+        
+        // Method to update page references from JavaScript bridge
+        public void UpdatePageReferences(string vriPage, string myanmarPage, string ptsPage, string thaiPage, string otherPage)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                // Store the raw anchor name for position preservation
+                CurrentVriAnchor = vriPage;
+                
+                VriPage = ParsePage(vriPage);
+                MyanmarPage = ParsePage(myanmarPage);
+                PtsPage = ParsePage(ptsPage);
+                ThaiPage = ParsePage(thaiPage);
+                OtherPage = ParsePage(otherPage);
+                UpdatePageReferencesText();
+            });
+        }
+        
+        // Method to update current chapter from JavaScript bridge
+        public void UpdateCurrentChapter(string chapterId)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    // Find the chapter in our chapters list
+                    var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
+                    if (chapter != null && chapter != SelectedChapter)
+                    {
+                        // Set a flag to prevent the navigation event from triggering when we update programmatically
+                        _updatingChapterFromScroll = true;
+                        SelectedChapter = chapter;
+                        Console.WriteLine($"Updated selected chapter to: {chapter.Id} - {chapter.Heading}");
+                        _updatingChapterFromScroll = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error updating current chapter: {ex.Message}");
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Parse anchor name to display format (port of CST4's ParsePage method)
+        /// Examples: 'V1.0023' -> '1.23', 'V0.0001' -> '1', 'V01234' -> '1.234'
+        /// </summary>
+        private string ParsePage(string anchorName)
+        {
+            if (string.IsNullOrEmpty(anchorName) || anchorName == "*")
+                return "*";
+                
+            try
+            {
+                // Remove prefix (V, M, P, T, O)
+                if (anchorName.Length > 1)
+                {
+                    string pageNumber = anchorName.Substring(1);
+                    
+                    // Handle format like "1.0023" -> "1.23" or "0.0001" -> "1"
+                    if (pageNumber.Contains('.'))
+                    {
+                        string[] parts = pageNumber.Split('.');
+                        string wholePart = parts[0];
+                        string decimalPart = parts[1];
+                        
+                        // If leading digit is zero, strip "0." and any leading zeroes from decimal part
+                        if (wholePart == "0")
+                        {
+                            return int.Parse(decimalPart).ToString();
+                        }
+                        else
+                        {
+                            // Strip leading zeroes from decimal part
+                            int trimmedDecimal = int.Parse(decimalPart);
+                            return $"{wholePart}.{trimmedDecimal}";
+                        }
+                    }
+                    
+                    return pageNumber;
+                }
+                
+                return anchorName;
+            }
+            catch
+            {
+                return "*";
+            }
+        }
     }
 
-    public class ChapterModel
-    {
-        public string Id { get; set; } = "";
-        public string DisplayName { get; set; } = "";
-        public string Anchor { get; set; } = "";
-    }
 }

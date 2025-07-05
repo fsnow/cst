@@ -1,0 +1,98 @@
+2025-07-05 07:03:15.280 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:03:15.295 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:03:15.295 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:03:32.297 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:03:32.313 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:03:32.313 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:04:02.287 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:04:02.303 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:04:02.304 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:04:40.582 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:04:40.597 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:04:40.598 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:09:13.423 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:09:13.447 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:09:13.448 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:09:13.620 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:09:13.620 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:09:19.743 -04:00 [INF] Opening book: s0101m.mul.xml
+2025-07-05 07:09:19.755 -04:00 [INF] Loaded chapter lists for 1 books
+2025-07-05 07:09:19.969 -04:00 [INF] Book 0 (s0101m.mul.xml): ChapterListTypes = 'book,sutta'
+2025-07-05 07:13:20.253 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:13:20.277 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:13:20.278 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:13:20.445 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:13:20.445 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:14:10.325 -04:00 [INF] Opening book: s0101m.mul.xml
+2025-07-05 07:14:10.340 -04:00 [INF] Loaded chapter lists for 1 books
+2025-07-05 07:14:10.537 -04:00 [INF] Book 0 (s0101m.mul.xml): ChapterListTypes = 'book,sutta'
+2025-07-05 07:14:15.188 -04:00 [INF] Script changed from "Latin" to "Devanagari"
+2025-07-05 07:14:15.189 -04:00 [INF] Script changed to "Devanagari", updating tree display
+2025-07-05 07:16:43.367 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:16:43.392 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:16:43.393 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:16:43.554 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:16:43.554 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:16:48.792 -04:00 [INF] Opening book: s0101m.mul.xml
+2025-07-05 07:16:48.807 -04:00 [INF] Loaded chapter lists for 1 books
+2025-07-05 07:16:49.009 -04:00 [INF] Book 0 (s0101m.mul.xml): ChapterListTypes = 'book,sutta'
+2025-07-05 07:18:30.366 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:18:30.390 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:18:30.391 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:18:30.554 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:18:30.555 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:18:35.688 -04:00 [INF] Opening book: s0101m.mul.xml
+2025-07-05 07:18:35.697 -04:00 [INF] Loaded chapter lists for 1 books
+2025-07-05 07:18:35.885 -04:00 [INF] Book 0 (s0101m.mul.xml): ChapterListTypes = 'book,sutta'
+2025-07-05 07:18:39.806 -04:00 [INF] Script changed from "Latin" to "Devanagari"
+2025-07-05 07:18:39.806 -04:00 [INF] Script changed to "Devanagari", updating tree display
+2025-07-05 07:18:44.754 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:18:44.755 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:24:23.280 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:24:23.306 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:24:23.307 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:24:23.471 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:24:23.471 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:24:31.353 -04:00 [INF] Opening book: s0101m.mul.xml
+2025-07-05 07:24:31.367 -04:00 [INF] Loaded chapter lists for 1 books
+2025-07-05 07:24:31.574 -04:00 [INF] Book 0 (s0101m.mul.xml): ChapterListTypes = 'book,sutta'
+2025-07-05 07:33:46.335 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:33:46.360 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:33:46.361 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:33:46.534 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:33:46.534 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:37:27.501 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:37:27.525 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:37:27.526 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:37:27.709 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:37:27.709 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:37:33.586 -04:00 [INF] Opening book: s0101m.mul.xml
+2025-07-05 07:37:33.595 -04:00 [INF] Loaded chapter lists for 1 books
+2025-07-05 07:37:33.781 -04:00 [INF] Book 0 (s0101m.mul.xml): ChapterListTypes = 'book,sutta'
+2025-07-05 07:44:06.107 -04:00 [INF] Initializing resource managers for localization
+2025-07-05 07:44:06.130 -04:00 [INF] Script changed from "Devanagari" to "Latin"
+2025-07-05 07:44:06.131 -04:00 [INF] Script changed to "Latin", updating tree display
+2025-07-05 07:44:06.294 -04:00 [INF] Application state loaded successfully from /Users/fsnow/Library/Application Support/CST.Avalonia/application-state.json
+2025-07-05 07:44:06.294 -04:00 [INF] Open Book dialog initialized with 0 books
+2025-07-05 07:44:21.064 -04:00 [INF] Opening book: s0101t.tik.xml
+2025-07-05 07:44:21.091 -04:00 [INF] Loaded chapter lists for 1 books
+2025-07-05 07:44:21.286 -04:00 [INF] Book 108 (s0101t.tik.xml): ChapterListTypes = 'book,sutta'
+2025-07-05 07:44:21.286 -04:00 [INF] Book has ChapterListTypes but no generated chapters. Generating now...
+2025-07-05 07:44:21.286 -04:00 [INF] Generating chapter lists for 1 changed books
+2025-07-05 07:44:21.291 -04:00 [INF] Book s0101t.tik.xml ChapterListTypes: 'book,sutta' -> Parsed: [book, sutta]
+2025-07-05 07:44:21.318 -04:00 [INF] Adding chapter: ID='dn1', Type='book', Heading='सीलक्खन्धवग्गटीका'
+2025-07-05 07:44:21.318 -04:00 [INF] Adding chapter: ID='dn1_1', Type='sutta', Heading='१. ब्रह्मजालसुत्तवण्णना'
+2025-07-05 07:44:21.318 -04:00 [INF] Adding chapter: ID='dn1_2', Type='sutta', Heading='२. सामञ्‍ञफलसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_3', Type='sutta', Heading='३. अम्बट्ठसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_4', Type='sutta', Heading='४. सोणदण्डसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_5', Type='sutta', Heading='५. कूटदन्तसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_6', Type='sutta', Heading='६. महालिसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_7', Type='sutta', Heading='७. जालियसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_8', Type='sutta', Heading='८. महासीहनादसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_9', Type='sutta', Heading='९. पोट्ठपादसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_10', Type='sutta', Heading='१०. सुभसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_11', Type='sutta', Heading='११. केवट्टसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_12', Type='sutta', Heading='१२. लोहिच्‍चसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Adding chapter: ID='dn1_13', Type='sutta', Heading='१३. तेविज्‍जसुत्तवण्णना'
+2025-07-05 07:44:21.319 -04:00 [INF] Generated 14 chapters for book s0101t.tik.xml
+2025-07-05 07:44:21.325 -04:00 [INF] Saved chapter lists to /Users/fsnow/Library/Application Support/CST/chapter_lists.json

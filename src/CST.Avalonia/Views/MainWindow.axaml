@@ -5,6 +5,7 @@
         mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
         x:CompileBindings="False"
         Title="CST - Chaṭṭha Saṅgāyana Tipiṭaka"
+        Icon="/Assets/cst.icns"
         WindowStartupLocation="CenterScreen"
         Width="1400" Height="900"
         MinWidth="800" MinHeight="600">
@@ -29,7 +30,7 @@
                         Background="LightBlue" 
                         BorderBrush="Gray" 
                         BorderThickness="0,0,0,1">
-                    <TextBlock Text="Open Book" 
+                    <TextBlock Text="Select a Book" 
                                FontWeight="Bold" 
                                VerticalAlignment="Center"
                                Margin="8,4"/>
@@ -117,7 +118,7 @@
                                    FontSize="24" 
                                    FontWeight="Bold"
                                    HorizontalAlignment="Center"/>
-                        <TextBlock Text="Select a book from the Open Book panel to begin reading"
+                        <TextBlock Text="Select a book to begin reading"
                                    FontSize="14"
                                    Foreground="Gray"
                                    HorizontalAlignment="Center"/>
