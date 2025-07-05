@@ -1,11 +1,11 @@
-Debug
+.DS_Store
 
 /.vs/
 /src/.vs/
 
-
-.DS_Store
+Debug
 
 src/CST.Avalonia/DawnCache/
-
 src/CST.Avalonia/GPUCache/
+src/CST.Avalonia/CST_CefGlue_*/
+src/CST.Avalonia/logs/
