@@ -5,3 +5,7 @@ Debug
 
 
 .DS_Store
+
+src/CST.Avalonia/DawnCache/
+
+src/CST.Avalonia/GPUCache/
