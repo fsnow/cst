@@ -27,19 +27,13 @@ namespace CST.Avalonia.Services
         public const string SchemeName = "http";
         public const string DomainName = "cst-local";
         
+        // Logging service for both console and file output
+        private static readonly LoggingService _logger = LoggingService.Instance;
+        
         // Thread-safe storage for HTML content
         private static readonly ConcurrentDictionary<string, string> _contentStore = new();
         
-        // Event for page reference updates
-        public static event Action<PageReferences>? PageReferencesUpdated;
-        
-        /// <summary>
-        /// Internal method to trigger page reference update events
-        /// </summary>
-        internal static void TriggerPageReferencesUpdated(PageReferences pageReferences)
-        {
-            PageReferencesUpdated?.Invoke(pageReferences);
-        }
+        // Note: Static events removed to prevent cross-tab interference
         
         /// <summary>
         /// Store HTML content and return the URL to access it
@@ -60,10 +54,10 @@ namespace CST.Avalonia.Services
 
         protected override CefResourceHandler Create(CefBrowser browser, CefFrame frame, string schemeName, CefRequest request)
         {
-            Console.WriteLine($"CstSchemeHandlerFactory.Create called:");
-            Console.WriteLine($"  Scheme: {schemeName}");
-            Console.WriteLine($"  URL: {request.Url}");
-            Console.WriteLine($"  Method: {request.Method}");
+            _logger.LogDebug("CstSchemeHandlerFactory", "Create called");
+            _logger.LogDebug("CstSchemeHandlerFactory", "Scheme", schemeName);
+            _logger.LogDebug("CstSchemeHandlerFactory", "URL", request.Url);
+            _logger.LogDebug("CstSchemeHandlerFactory", "Method", request.Method);
             
             // Extract content ID from URL path
             var uri = new Uri(request.Url);
@@ -72,25 +66,25 @@ namespace CST.Avalonia.Services
             // Handle page reference callback
             if (path == "page-references" && request.Method == "POST")
             {
-                Console.WriteLine("  Handling page reference callback");
+                _logger.LogDebug("CstSchemeHandlerFactory", "Handling page reference callback");
                 return new CstPageReferenceHandler();
             }
             
             var contentId = path.Replace(".html", "");
             
-            Console.WriteLine($"  Extracted content ID: '{contentId}'");
-            Console.WriteLine($"  Available content IDs: [{string.Join(", ", _contentStore.Keys)}]");
+            _logger.LogDebug("CstSchemeHandlerFactory", "Extracted content ID", contentId);
+            _logger.LogDebug("CstSchemeHandlerFactory", "Available content IDs", $"[{string.Join(", ", _contentStore.Keys)}]");
             
             // Retrieve stored content
             if (_contentStore.TryGetValue(contentId, out var htmlContent))
             {
-                Console.WriteLine($"  Found content for '{contentId}' - length: {htmlContent.Length}");
-                Console.WriteLine($"  Content preview: {htmlContent.Substring(0, Math.Min(100, htmlContent.Length))}...");
+                _logger.LogDebug("CstSchemeHandlerFactory", "Found content", $"'{contentId}' - length: {htmlContent.Length}");
+                _logger.LogDebug("CstSchemeHandlerFactory", "Content preview", htmlContent.Substring(0, Math.Min(100, htmlContent.Length)) + "...");
                 return new CstResourceHandler(htmlContent);
             }
             
             // Return 404 if content not found
-            Console.WriteLine($"  Content NOT found for '{contentId}' - returning 404");
+            _logger.LogWarning("CstSchemeHandlerFactory", "Content NOT found - returning 404", contentId);
             return new CstResourceHandler("<html><body><h1>404 - Content Not Found</h1><p>Requested: " + contentId + "</p></body></html>", 404);
         }
     }
@@ -104,6 +98,7 @@ namespace CST.Avalonia.Services
         private readonly int _statusCode;
         private int _offset;
         private bool _isOpen;
+        private static readonly LoggingService _logger = LoggingService.Instance;
 
         public CstResourceHandler(string htmlContent, int statusCode = 200)
         {
@@ -115,7 +110,7 @@ namespace CST.Avalonia.Services
 
         protected override bool Open(CefRequest request, out bool handleRequest, CefCallback callback)
         {
-            Console.WriteLine($"CstResourceHandler.Open called - data length: {_data.Length}, status: {_statusCode}");
+            _logger.LogDebug("CstResourceHandler", "Open called", $"data length: {_data.Length}, status: {_statusCode}");
             
             // Signal that we'll handle the request
             handleRequest = true;
@@ -129,7 +124,7 @@ namespace CST.Avalonia.Services
 
         protected override void GetResponseHeaders(CefResponse response, out long responseLength, out string redirectUrl)
         {
-            Console.WriteLine($"CstResourceHandler.GetResponseHeaders called - setting up response for {_data.Length} bytes");
+            _logger.LogDebug("CstResourceHandler", "GetResponseHeaders called", $"setting up response for {_data.Length} bytes");
             
             response.Status = _statusCode;
             response.StatusText = _statusCode == 200 ? "OK" : "Not Found";
@@ -144,14 +139,14 @@ namespace CST.Avalonia.Services
             responseLength = _data.Length;
             redirectUrl = "";
             
-            Console.WriteLine($"Response headers set - length: {responseLength}, status: {_statusCode}");
+            _logger.LogDebug("CstResourceHandler", "Response headers set", $"length: {responseLength}, status: {_statusCode}");
         }
 
         protected override bool Read(Stream response, int bytesToRead, out int bytesRead, CefResourceReadCallback callback)
         {
             if (!_isOpen || _offset >= _data.Length)
             {
-                Console.WriteLine($"CstResourceHandler.Read - end of data (open: {_isOpen}, offset: {_offset}, data length: {_data.Length})");
+                _logger.LogDebug("CstResourceHandler", "Read - end of data", $"open: {_isOpen}, offset: {_offset}, data length: {_data.Length}");
                 bytesRead = 0;
                 return false;
             }
@@ -160,7 +155,7 @@ namespace CST.Avalonia.Services
             response.Write(_data, _offset, bytesRead);
             _offset += bytesRead;
             
-            Console.WriteLine($"CstResourceHandler.Read - sent {bytesRead} bytes (offset now: {_offset}/{_data.Length})");
+            _logger.LogDebug("CstResourceHandler", "Read - sent bytes", $"{bytesRead} bytes (offset now: {_offset}/{_data.Length})");
             
             // Call the callback to signal completion
             callback.Continue(bytesRead);
@@ -225,6 +220,7 @@ namespace CST.Avalonia.Services
         private readonly byte[] _responseData;
         private int _offset;
         private bool _isOpen;
+        private static readonly LoggingService _logger = LoggingService.Instance;
 
         public CstPageReferenceHandler()
         {
@@ -235,7 +231,7 @@ namespace CST.Avalonia.Services
 
         protected override bool Open(CefRequest request, out bool handleRequest, CefCallback callback)
         {
-            Console.WriteLine("CstPageReferenceHandler.Open called");
+            _logger.LogDebug("CstPageReferenceHandler", "Open called");
             
             handleRequest = true;
             _isOpen = true;
@@ -252,22 +248,22 @@ namespace CST.Avalonia.Services
                     if (data != null)
                     {
                         var jsonString = Encoding.UTF8.GetString(data);
-                        Console.WriteLine($"Received page reference data: {jsonString}");
+                        _logger.LogDebug("CstPageReferenceHandler", "Received page reference data", jsonString);
                         
                         try
                         {
                             var pageReferences = JsonSerializer.Deserialize<PageReferences>(jsonString);
                             if (pageReferences != null)
                             {
-                                Console.WriteLine($"Parsed page references: VRI={pageReferences.Vri}, Myanmar={pageReferences.Myanmar}, PTS={pageReferences.Pts}, Thai={pageReferences.Thai}, Other={pageReferences.Other}");
+                                _logger.LogDebug("CstPageReferenceHandler", "Parsed page references", $"VRI={pageReferences.Vri}, Myanmar={pageReferences.Myanmar}, PTS={pageReferences.Pts}, Thai={pageReferences.Thai}, Other={pageReferences.Other}");
                                 
                                 // Fire the event to notify subscribers
-                                CstSchemeHandlerFactory.TriggerPageReferencesUpdated(pageReferences);
+                                // Note: Static event triggering removed to prevent cross-tab interference
                             }
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error parsing page reference JSON: {ex.Message}");
+                            _logger.LogError("CstPageReferenceHandler", "Error parsing page reference JSON", ex.Message);
                         }
                     }
                 }

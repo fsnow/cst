@@ -27,6 +27,12 @@ namespace CST.Avalonia.ViewModels
         private readonly List<string>? _searchTerms;
         private readonly string? _initialAnchor;
         
+        // Logging service for both console and file output
+        private static readonly LoggingService _logger = LoggingService.Instance;
+        
+        // Event for requesting new book to be opened (will be handled by SimpleTabbedWindow)
+        public event Action<Book, string?>? OpenBookRequested;
+        
         public event Action<int>? NavigateToHighlightRequested;
         public event Action<string>? NavigateToChapterRequested;
         
@@ -43,6 +49,7 @@ namespace CST.Avalonia.ViewModels
         private string _ptsPage = "*";
         private string _thaiPage = "*";
         private string _otherPage = "*";
+        private string _currentParagraph = "*";
         private int _currentHitIndex;
         private int _totalHits;
         private bool _hasSearchHighlights;
@@ -82,16 +89,16 @@ namespace CST.Avalonia.ViewModels
             NextHitCommand = ReactiveCommand.Create(NavigateToNextHit);
             LastHitCommand = ReactiveCommand.Create(NavigateToLastHit);
             
-            OpenMulaCommand = ReactiveCommand.Create(OpenMulaBook);
-            OpenAtthakathaCommand = ReactiveCommand.Create(OpenAtthakathaBook);
-            OpenTikaCommand = ReactiveCommand.Create(OpenTikaBook);
+            OpenMulaCommand = ReactiveCommand.CreateFromTask(OpenMulaBookAsync);
+            OpenAtthakathaCommand = ReactiveCommand.CreateFromTask(OpenAtthakathaBookAsync);
+            OpenTikaCommand = ReactiveCommand.CreateFromTask(OpenTikaBookAsync);
             
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
                 .Skip(1) // Skip initial value
                 .Subscribe(async script => 
                 {
-                    Console.WriteLine($"Script changed to {script} - reloading from source files");
+                    _logger.LogInfo("BookDisplayViewModel", "Script changed - reloading from source files", script.ToString());
                     
                     // Save current page anchor for position preservation
                     string savedPageAnchor = "";
@@ -100,11 +107,11 @@ namespace CST.Avalonia.ViewModels
                         savedPageAnchor = BookDisplayControl.GetCurrentPageAnchor();
                         if (!string.IsNullOrEmpty(savedPageAnchor))
                         {
-                            Console.WriteLine($"Saved page anchor: {savedPageAnchor}");
+                            _logger.LogInfo("BookDisplayViewModel", "Saved page anchor", savedPageAnchor);
                         }
                         else
                         {
-                            Console.WriteLine("No page anchor available, won't restore position");
+                            _logger.LogInfo("BookDisplayViewModel", "No page anchor available, won't restore position");
                         }
                     }
                     
@@ -155,7 +162,7 @@ namespace CST.Avalonia.ViewModels
                         await Dispatcher.UIThread.InvokeAsync(() =>
                         {
                             BookDisplayControl.ScrollToPageAnchor(savedPageAnchor);
-                            Console.WriteLine($"Restored position to page anchor: {savedPageAnchor}");
+                            _logger.LogInfo("BookDisplayViewModel", "Restored position to page anchor", savedPageAnchor);
                         });
                     }
                 });
@@ -243,6 +250,12 @@ namespace CST.Avalonia.ViewModels
         {
             get => _otherPage;
             set => this.RaiseAndSetIfChanged(ref _otherPage, value);
+        }
+
+        public string CurrentParagraph
+        {
+            get => _currentParagraph;
+            set => this.RaiseAndSetIfChanged(ref _currentParagraph, value);
         }
         
         // Store raw anchor name for position preservation
@@ -388,39 +401,52 @@ namespace CST.Avalonia.ViewModels
 
         private async Task InitializeAsync()
         {
-            Console.WriteLine($"BookDisplayViewModel.InitializeAsync starting for: {_book.FileName}");
+            _logger.LogInfo("BookDisplayViewModel", "InitializeAsync starting", _book.FileName);
             
             // Ensure UI property updates happen on UI thread
             await Dispatcher.UIThread.InvokeAsync(() => IsLoading = true);
             
             try
             {
-                Console.WriteLine("Step 1: Checking CefGlue availability");
+                _logger.LogDebug("BookDisplayViewModel", "Step 1: Checking CefGlue availability");
                 // Check if CefGlue is available
                 CheckCefGlueAvailability();
                 
-                Console.WriteLine("Step 2: Loading chapters");
+                _logger.LogDebug("BookDisplayViewModel", "Step 2: Loading chapters");
                 // Load chapters if available
                 await LoadChaptersAsync();
                 
-                Console.WriteLine("Step 3: Checking linked books");
+                _logger.LogDebug("BookDisplayViewModel", "Step 3: Checking linked books");
                 // Check for linked books (must run on UI thread due to ReactiveUI property updates)
                 await Dispatcher.UIThread.InvokeAsync(() => CheckLinkedBooks());
                 
-                Console.WriteLine("Step 4: Loading book content");
+                _logger.LogDebug("BookDisplayViewModel", "Step 4: Loading book content");
                 // Load book content
                 await LoadBookContentAsync();
                 
-                Console.WriteLine("Step 5: Handling initial navigation");
+                _logger.LogDebug("BookDisplayViewModel", "Step 5: Handling initial navigation");
                 // Navigate to initial position if specified
                 if (!string.IsNullOrEmpty(_initialAnchor))
                 {
-                    Console.WriteLine($"Navigating to anchor: {_initialAnchor}");
-                    // TODO: Navigate to anchor
+                    _logger.LogInfo("BookDisplayViewModel", "Navigating to initial anchor", _initialAnchor);
+                    // Wait a bit for content to render, then navigate to anchor
+                    await Task.Delay(1000);
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        if (BookDisplayControl != null)
+                        {
+                            BookDisplayControl.ScrollToPageAnchor(_initialAnchor);
+                            _logger.LogInfo("BookDisplayViewModel", "Scrolled to initial anchor", _initialAnchor);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("BookDisplayViewModel", "BookDisplayControl is null, cannot navigate to anchor");
+                        }
+                    });
                 }
                 else if (_searchTerms?.Any() == true)
                 {
-                    Console.WriteLine($"Setting up search navigation for {_searchTerms.Count} terms");
+                    _logger.LogInfo("BookDisplayViewModel", "Setting up search navigation", $"{_searchTerms.Count} terms");
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         CurrentHitIndex = 1;
@@ -428,12 +454,12 @@ namespace CST.Avalonia.ViewModels
                     });
                 }
                 
-                Console.WriteLine("BookDisplayViewModel.InitializeAsync completed successfully");
+                _logger.LogInfo("BookDisplayViewModel", "InitializeAsync completed successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in InitializeAsync: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                _logger.LogError("BookDisplayViewModel", "Error in InitializeAsync", ex.Message);
+                _logger.LogError("BookDisplayViewModel", "Stack trace", ex.StackTrace ?? "null");
             }
             finally
             {
@@ -446,7 +472,7 @@ namespace CST.Avalonia.ViewModels
             try
             {
                 // Start optimistically with CefGlue enabled to avoid fallback flash
-                Console.WriteLine("CefGlue availability check - starting optimistically enabled");
+                _logger.LogDebug("BookDisplayViewModel", "CefGlue availability check - starting optimistically enabled");
                 Dispatcher.UIThread.Post(() =>
                 {
                     IsCefGlueAvailable = true; // Start enabled, will be disabled if browser fails
@@ -480,7 +506,11 @@ namespace CST.Avalonia.ViewModels
                 if (_chapterListsService == null)
                     return new List<DivTag>();
                     
-                return _chapterListsService.GetChapterList(_book.Index) ?? new List<DivTag>();
+                var originalChapters = _chapterListsService.GetChapterList(_book.Index) ?? new List<DivTag>();
+                
+                // Create a deep copy of the chapter list to prevent mutating the global static cache.
+                // This is the fix for the chapter list corruption bug.
+                return originalChapters.Select(c => new DivTag(c.Id, c.Heading, c.IndentLevel)).ToList();
             });
             
             // Update UI properties on UI thread
@@ -499,21 +529,38 @@ namespace CST.Avalonia.ViewModels
                 if (chapters.Count > 0 && SelectedChapter == null)
                 {
                     SelectedChapter = Chapters.First();
-                    Console.WriteLine($"Set default selected chapter to: {SelectedChapter.Id} - {SelectedChapter.Heading}");
+                    _logger.LogInfo("BookDisplayViewModel", "Set default selected chapter", $"{SelectedChapter.Id} - {SelectedChapter.Heading}");
                 }
                 
-                Console.WriteLine($"Loaded {chapters.Count} chapters for book {_book.FileName}");
+                _logger.LogInfo("BookDisplayViewModel", "Loaded chapters", $"{chapters.Count} chapters for book {_book.FileName}");
             });
         }
 
         private void CheckLinkedBooks()
         {
-            // TODO: Check for related books (Mula/Atthakatha/Tika)
-            // For now, set based on current book type
-            HasMula = _book.Matn != CommentaryLevel.Mula;
-            HasAtthakatha = _book.Matn == CommentaryLevel.Mula;
-            HasTika = _book.Matn != CommentaryLevel.Tika;
-            HasLinkedBooks = HasMula || HasAtthakatha || HasTika;
+            // Port of CST4 FormBookDisplay.Init() logic (L112-122)
+            // Check if the current Book object has any defined links
+            if (_book.MulaIndex < 0 && _book.AtthakathaIndex < 0 && _book.TikaIndex < 0)
+            {
+                // No linked books available
+                HasMula = false;
+                HasAtthakatha = false;
+                HasTika = false;
+                HasLinkedBooks = false;
+                _logger.LogInfo("BookDisplayViewModel", "No linked books found", _book.FileName);
+            }
+            else
+            {
+                // Set each button's enabled state based on whether its corresponding index is valid (>= 0)
+                HasMula = _book.MulaIndex >= 0;
+                HasAtthakatha = _book.AtthakathaIndex >= 0;
+                HasTika = _book.TikaIndex >= 0;
+                HasLinkedBooks = HasMula || HasAtthakatha || HasTika;
+                
+                _logger.LogInfo("BookDisplayViewModel", "Linked books", $"Book: {_book.FileName}, Mula={HasMula} (index={_book.MulaIndex}), " +
+                                 $"Atthakatha={HasAtthakatha} (index={_book.AtthakathaIndex}), " +
+                                 $"Tika={HasTika} (index={_book.TikaIndex})");
+            }
         }
 
         private async Task LoadBookContentAsync()
@@ -545,18 +592,18 @@ namespace CST.Avalonia.ViewModels
                 {
                     // Load XML content
                     var xmlPath = Path.Combine(GetBooksDirectory(), _book.FileName);
-                    Console.WriteLine($"Loading XML from: {xmlPath}");
+                    _logger.LogInfo("BookDisplayViewModel", "Loading XML from", xmlPath);
                     
                     if (!File.Exists(xmlPath))
                     {
-                        Console.WriteLine($"XML file not found: {xmlPath}");
+                        _logger.LogWarning("BookDisplayViewModel", "XML file not found", xmlPath);
                         return "<html><body><h1>Book file not found</h1><p>File: " + xmlPath + "</p></body></html>";
                     }
 
                     var xmlDoc = new XmlDocument();
                     
                     // Use XmlReader with automatic encoding detection
-                    Console.WriteLine("Loading XML with automatic encoding detection");
+                    _logger.LogDebug("BookDisplayViewModel", "Loading XML with automatic encoding detection");
                     using (var fileStream = File.OpenRead(xmlPath))
                     {
                         // Let XmlReader detect encoding automatically
@@ -565,12 +612,12 @@ namespace CST.Avalonia.ViewModels
                             xmlDoc.Load(xmlReader);
                         }
                     }
-                    Console.WriteLine($"XML loaded successfully, root element: {xmlDoc.DocumentElement?.Name}");
+                    _logger.LogInfo("BookDisplayViewModel", "XML loaded successfully", $"root element: {xmlDoc.DocumentElement?.Name}");
 
                     // Apply script conversion if needed - use ConvertBook for proper XML handling
                     if (_bookScript != Script.Devanagari)
                     {
-                        Console.WriteLine($"Converting script from Devanagari to {_bookScript}");
+                        _logger.LogInfo("BookDisplayViewModel", "Converting script", $"Devanagari to {_bookScript}");
                         var convertedXml = ScriptConverter.ConvertBook(xmlDoc.OuterXml, _bookScript);
                         xmlDoc.LoadXml(convertedXml);
                     }
@@ -587,17 +634,17 @@ namespace CST.Avalonia.ViewModels
                     // Apply search highlighting if needed
                     if (_searchTerms?.Any() == true)
                     {
-                        Console.WriteLine($"Applying search highlighting for {_searchTerms.Count} terms");
+                        _logger.LogInfo("BookDisplayViewModel", "Applying search highlighting", $"{_searchTerms.Count} terms");
                         ApplySearchHighlighting(xmlDoc);
                     }
 
                     // Apply XSL transformation
                     var xslPath = GetXslPath(_bookScript);
-                    Console.WriteLine($"Using XSL file: {xslPath}");
+                    _logger.LogInfo("BookDisplayViewModel", "Using XSL file", xslPath);
                     
                     if (!File.Exists(xslPath))
                     {
-                        Console.WriteLine($"XSL file not found: {xslPath}");
+                        _logger.LogWarning("BookDisplayViewModel", "XSL file not found", xslPath);
                         return "<html><body><h1>XSL file not found</h1><p>File: " + xslPath + "</p></body></html>";
                     }
 
@@ -608,15 +655,15 @@ namespace CST.Avalonia.ViewModels
                     xslTransform.Transform(xmlDoc, null, stringWriter);
                     
                     var htmlContent = stringWriter.ToString();
-                    Console.WriteLine($"Generated HTML content length: {htmlContent.Length}");
-                    Console.WriteLine($"HTML content preview (first 500 chars): {htmlContent.Substring(0, Math.Min(500, htmlContent.Length))}");
+                    _logger.LogInfo("BookDisplayViewModel", "Generated HTML content", $"length: {htmlContent.Length}");
+                    _logger.LogDebug("BookDisplayViewModel", "HTML content preview", htmlContent.Substring(0, Math.Min(500, htmlContent.Length)));
                     
                     return htmlContent;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error generating HTML content: {ex.Message}");
-                    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                    _logger.LogError("BookDisplayViewModel", "Error generating HTML content", ex.Message);
+                    _logger.LogError("BookDisplayViewModel", "Stack trace", ex.StackTrace ?? "null");
                     return $"<html><body><h1>Error loading book</h1><p>{ex.Message}</p><pre>{ex.StackTrace}</pre></body></html>";
                 }
             });
@@ -811,7 +858,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex++;
                 UpdateHitStatusText();
-                Console.WriteLine($"NavigateToNextHit: Invoking NavigateToHighlightRequested with index {CurrentHitIndex}");
+                _logger.LogInfo("BookDisplayViewModel", "NavigateToNextHit", $"index {CurrentHitIndex}");
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
             });
@@ -851,7 +898,7 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
             
-            Console.WriteLine($"Navigating to chapter: {chapter.Id} - {chapter.Heading}");
+            _logger.LogInfo("BookDisplayViewModel", "Navigating to chapter", $"{chapter.Id} - {chapter.Heading}");
             
             // Navigate to the chapter anchor
             NavigateToChapterRequested?.Invoke(chapter.Id);
@@ -859,19 +906,261 @@ namespace CST.Avalonia.ViewModels
             PageStatusText = $"Chapter: {chapter.Heading.Trim()}";
         }
 
-        private void OpenMulaBook()
+        private async Task OpenMulaBookAsync()
         {
-            // TODO: Find and open related Mula book
+            await OpenLinkedBookAsync(CommentaryLevel.Mula);
         }
 
-        private void OpenAtthakathaBook()
+        private async Task OpenAtthakathaBookAsync()
         {
-            // TODO: Find and open related Atthakatha book
+            await OpenLinkedBookAsync(CommentaryLevel.Atthakatha);
         }
 
-        private void OpenTikaBook()
+        private async Task OpenTikaBookAsync()
         {
-            // TODO: Find and open related Tika book
+            await OpenLinkedBookAsync(CommentaryLevel.Tika);
+        }
+
+        /// <summary>
+        /// Port of CST4 FormBookDisplay.OpenLinkedBook method (L789-923)
+        /// Opens a linked book (Mula/Atthakatha/Tika) and attempts to maintain reading position
+        /// </summary>
+        private async Task OpenLinkedBookAsync(CommentaryLevel linkedBookType)
+        {
+            try
+            {
+                _logger.LogInfo("BookDisplayViewModel", "Opening linked book", linkedBookType.ToString());
+                
+                // Step 1: Identify the Target Book (port of CST4 L790-800)
+                Book? linkedBook = null;
+                switch (linkedBookType)
+                {
+                    case CommentaryLevel.Mula:
+                        if (_book.MulaIndex >= 0 && _book.MulaIndex < Books.Inst.Count)
+                            linkedBook = Books.Inst[_book.MulaIndex];
+                        break;
+                    case CommentaryLevel.Atthakatha:
+                        if (_book.AtthakathaIndex >= 0 && _book.AtthakathaIndex < Books.Inst.Count)
+                            linkedBook = Books.Inst[_book.AtthakathaIndex];
+                        break;
+                    case CommentaryLevel.Tika:
+                        if (_book.TikaIndex >= 0 && _book.TikaIndex < Books.Inst.Count)
+                            linkedBook = Books.Inst[_book.TikaIndex];
+                        break;
+                }
+
+                if (linkedBook == null)
+                {
+                    _logger.LogWarning("BookDisplayViewModel", "No linked book found for type", linkedBookType.ToString());
+                    return;
+                }
+
+                _logger.LogInfo("BookDisplayViewModel", "Found linked book", linkedBook.FileName);
+
+                // Step 2: Determine the Navigation Anchor (port of CST4 L801-850)
+                string? anchor = await CalculateNavigationAnchorAsync(linkedBook);
+                
+                _logger.LogInfo("BookDisplayViewModel", "Calculated navigation anchor", anchor ?? "null");
+
+                // Step 3: Open the New Book (port of CST4 L920-923)
+                // Trigger event for SimpleTabbedWindow to handle opening the new tab
+                OpenBookRequested?.Invoke(linkedBook, anchor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("BookDisplayViewModel", "Error opening linked book", ex.Message);
+                _logger.LogError("BookDisplayViewModel", "Stack trace", ex.StackTrace ?? "null");
+            }
+        }
+
+        /// <summary>
+        /// Calculate the appropriate navigation anchor based on current position and book types (async)
+        /// Port of CST4 FormBookDisplay.OpenLinkedBook anchor calculation logic (L801-919)
+        /// </summary>
+        private async Task<string?> CalculateNavigationAnchorAsync(Book targetBook)
+        {
+            try
+            {
+                // Use the last known paragraph from status updates
+                // This comes from the unified CST_STATUS_UPDATE messaging system
+                string? currentAnchor = $"para{CurrentParagraph}";
+                
+                // If we don't have a current paragraph from status updates, try direct detection
+                if (string.IsNullOrEmpty(CurrentParagraph) || CurrentParagraph == "*")
+                {
+                    _logger.LogDebug("BookDisplayViewModel", "No current paragraph from status updates");
+                    currentAnchor = null;
+                }
+                
+                if (!string.IsNullOrEmpty(currentAnchor))
+                {
+                    _logger.LogInfo("BookDisplayViewModel", "Using continuously tracked paragraph anchor", currentAnchor);
+                    _logger.LogDebug("BookDisplayViewModel", "Status bar should now show", $"Para: {ParseParagraph(currentAnchor)}");
+                }
+                else
+                {
+                    _logger.LogDebug("BookDisplayViewModel", "Still no continuously tracked paragraph available");
+                    // No fallback available since GetCurrentParagraphAnchorAsync was removed
+                    currentAnchor = null;
+                    
+                    if (!string.IsNullOrEmpty(currentAnchor))
+                    {
+                        _logger.LogInfo("BookDisplayViewModel", "Fallback detection got paragraph anchor", currentAnchor);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("BookDisplayViewModel", "No paragraph anchor available - unable to calculate navigation anchor");
+                        return null;
+                    }
+                }
+
+                _logger.LogInfo("BookDisplayViewModel", "Current position anchor", currentAnchor);
+                _logger.LogInfo("BookDisplayViewModel", "Book types", $"Source: {_book.BookType}, Target: {targetBook.BookType}");
+
+                // Handle complex book type mappings like CST4 does
+                // For most cases (Whole to Whole), we can use the paragraph anchor directly
+                // For complex cases (Multi, Split), we may need additional logic
+                
+                if (_book.BookType == BookType.Multi && targetBook.BookType == BookType.Whole)
+                {
+                    // Similar to CST4 L851-870: Multi book to Whole book navigation
+                    // May need to extract book code from anchor if it has format like "para123_an4"
+                    if (currentAnchor.Contains("_"))
+                    {
+                        // Extract base paragraph number without book code
+                        var parts = currentAnchor.Split('_');
+                        currentAnchor = parts[0]; // e.g., "para123_an4" → "para123"
+                        _logger.LogInfo("BookDisplayViewModel", "Extracted base paragraph anchor", currentAnchor);
+                    }
+                }
+                else if (_book.BookType == BookType.Whole && targetBook.BookType == BookType.Multi)
+                {
+                    // Whole book to Multi book navigation
+                    // May need to add book code to paragraph anchor based on target book
+                    // This is more complex and may require additional logic
+                    _logger.LogInfo("BookDisplayViewModel", "Navigation from Whole to Multi book - using direct anchor");
+                }
+                
+                return currentAnchor;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("BookDisplayViewModel", "Error calculating navigation anchor", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Get current paragraph anchor asynchronously - implementation via JavaScript bridge
+        /// Port of CST4's GetPara() method with async/await pattern - ONLY for book linking, not position restoration
+        /// </summary>
+        private async Task<string?> GetCurrentParagraphAnchorAsync()
+        {
+            if (BookDisplayControl == null)
+            {
+                _logger.LogWarning("BookDisplayViewModel", "BookDisplayControl is null in GetCurrentParagraphAnchorAsync");
+                return null;
+            }
+                
+            _logger.LogDebug("BookDisplayViewModel", "Calling BookDisplayControl.GetCurrentParagraphAnchorAsync()");
+            // This is ONLY used for book linking navigation, not for script position restoration
+            
+            try
+            {
+                var result = await BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                _logger.LogDebug("BookDisplayViewModel", "GetCurrentParagraphAnchorAsync returned", result ?? "null");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("BookDisplayViewModel", "GetCurrentParagraphAnchorAsync failed", ex.Message);
+                return null;
+            }
+        }
+
+        // REMOVED: GetParaWithBookCode() - dead code, never called
+        // This method wrapped GetCurrentParagraphAnchorWithBookCode() but was not used
+
+        /// <summary>
+        /// Handle navigation from Whole books to Split books
+        /// Port of CST4 FormBookDisplay.OpenLinkedBook L820-830
+        /// </summary>
+        private string? HandleWholesToSplitNavigation(string? currentPara, Book targetBook)
+        {
+            // TODO: Implement special handling for split books (Theragatha, etc.)
+            // For now, return simple anchor
+            return currentPara;
+        }
+
+        /// <summary>
+        /// Handle navigation from Multi books to Whole books  
+        /// Port of CST4 FormBookDisplay.OpenLinkedBook L851-870
+        /// </summary>
+        private string? HandleMultiToWholeNavigation(string? currentPara, Book targetBook)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(currentPara))
+                    return null;
+
+                // Extract book code from paragraph anchor (e.g., "para123_an4" -> "an4")
+                string? bookCode = GetBookCode(currentPara);
+                if (string.IsNullOrEmpty(bookCode))
+                {
+                    _logger.LogDebug("BookDisplayViewModel", "No book code found in paragraph anchor");
+                    return currentPara;
+                }
+
+                _logger.LogInfo("BookDisplayViewModel", "Extracted book code", bookCode);
+
+                // TODO: Implement book code to target book mapping
+                // This requires understanding the relationship between book codes and target books
+                // For now, return the original anchor without book code
+                return ParseParaAnchor(currentPara);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("BookDisplayViewModel", "Error handling Multi to Whole navigation", ex.Message);
+                return currentPara;
+            }
+        }
+
+        /// <summary>
+        /// Extract book code from paragraph anchor with book code
+        /// Port of CST4 FormBookDisplay.GetBookCode method
+        /// </summary>
+        private string? GetBookCode(string? paraWithBook)
+        {
+            if (string.IsNullOrEmpty(paraWithBook))
+                return null;
+
+            // Extract book code after underscore (e.g., "para123_an4" -> "an4")
+            int underscoreIndex = paraWithBook.LastIndexOf('_');
+            if (underscoreIndex >= 0 && underscoreIndex < paraWithBook.Length - 1)
+            {
+                return paraWithBook.Substring(underscoreIndex + 1);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Parse paragraph number from anchor string
+        /// Port of CST4 FormBookDisplay.ParseParaAnchor method
+        /// </summary>
+        private string? ParseParaAnchor(string? paraWithBook)
+        {
+            if (string.IsNullOrEmpty(paraWithBook))
+                return null;
+
+            // Remove book code suffix (e.g., "para123_an4" -> "para123")
+            int underscoreIndex = paraWithBook.LastIndexOf('_');
+            if (underscoreIndex >= 0)
+            {
+                return paraWithBook.Substring(0, underscoreIndex);
+            }
+
+            return paraWithBook;
         }
         
         // Page references functionality (ported from CST4 FormBookDisplay.cs line 387)
@@ -894,30 +1183,73 @@ namespace CST.Avalonia.ViewModels
         
         private void UpdatePageReferencesText()
         {
+            _logger.LogDebug("BookDisplayViewModel", "UpdatePageReferencesText called", DisplayTitle);
+            
             // Port of CST4's SetPageStatusText method
             // TODO: Use LocalizationService once it's fully implemented
             // For now, use the same format as CST4's PageNumbersStatusFormat from Resources.resx
             // string format = _localizationService.GetString("PageNumbersStatusFormat");
             // PageReferencesText = string.Format(format, VriPage, MyanmarPage, PtsPage, ThaiPage, OtherPage);
             
-            // Temporary hardcoded format until localization is implemented
-            PageReferencesText = $"VRI: {VriPage}   Myanmar: {MyanmarPage}   PTS: {PtsPage}   Thai: {ThaiPage}   Other: {OtherPage}";
+            // Temporary hardcoded format until localization is implemented - now includes paragraph number for debugging
+            var newText = $"VRI: {VriPage}   Myanmar: {MyanmarPage}   PTS: {PtsPage}   Thai: {ThaiPage}   Other: {OtherPage}   Para: {CurrentParagraph}";
+            var oldText = PageReferencesText;
+            PageReferencesText = newText;
+            
+            _logger.LogDebug("BookDisplayViewModel", "PageReferencesText updated", $"{DisplayTitle}: '{oldText}' -> '{newText}'");
         }
         
         // Method to update page references from JavaScript bridge
         public void UpdatePageReferences(string vriPage, string myanmarPage, string ptsPage, string thaiPage, string otherPage)
         {
+            _logger.LogDebug("BookDisplayViewModel", "UpdatePageReferences called", $"{DisplayTitle} - VRI: {vriPage}, Myanmar: {myanmarPage}, PTS: {ptsPage}, Thai: {thaiPage}, Other: {otherPage}");
+            
             Dispatcher.UIThread.Post(() =>
             {
+                _logger.LogDebug("BookDisplayViewModel", "UpdatePageReferences executing on UI thread", DisplayTitle);
+                
                 // Store the raw anchor name for position preservation
                 CurrentVriAnchor = vriPage;
+                
+                var oldVri = VriPage;
+                var oldMyanmar = MyanmarPage;
+                var oldPts = PtsPage;
+                var oldThai = ThaiPage;
+                var oldOther = OtherPage;
                 
                 VriPage = ParsePage(vriPage);
                 MyanmarPage = ParsePage(myanmarPage);
                 PtsPage = ParsePage(ptsPage);
                 ThaiPage = ParsePage(thaiPage);
                 OtherPage = ParsePage(otherPage);
+                
+                _logger.LogDebug("BookDisplayViewModel", "Page values updated", $"{DisplayTitle} - VRI: {oldVri}->{VriPage}, Myanmar: {oldMyanmar}->{MyanmarPage}, PTS: {oldPts}->{PtsPage}, Thai: {oldThai}->{ThaiPage}, Other: {oldOther}->{OtherPage}");
+                
                 UpdatePageReferencesText();
+                
+                _logger.LogDebug("BookDisplayViewModel", "UpdatePageReferences completed", DisplayTitle);
+            });
+        }
+        
+        // Method to update current paragraph from JavaScript bridge
+        public void UpdateCurrentParagraph(string paragraphAnchor)
+        {
+            _logger.LogDebug("BookDisplayViewModel", "UpdateCurrentParagraph called", $"{DisplayTitle} with: {paragraphAnchor}");
+            
+            Dispatcher.UIThread.Post(() =>
+            {
+                _logger.LogDebug("BookDisplayViewModel", "UpdateCurrentParagraph executing on UI thread", DisplayTitle);
+                
+                var oldParagraph = CurrentParagraph;
+                
+                // Store the raw paragraph anchor and parse it for display
+                CurrentParagraph = ParseParagraph(paragraphAnchor);
+                
+                _logger.LogDebug("BookDisplayViewModel", "Paragraph updated", $"{DisplayTitle}: '{oldParagraph}' -> '{CurrentParagraph}'");
+                
+                UpdatePageReferencesText(); // Refresh the status bar
+                
+                _logger.LogDebug("BookDisplayViewModel", "UpdateCurrentParagraph completed", DisplayTitle);
             });
         }
         
@@ -928,20 +1260,25 @@ namespace CST.Avalonia.ViewModels
             {
                 try
                 {
-                    // Find the chapter in our chapters list
-                    var chapter = Chapters.FirstOrDefault(c => c.Id == chapterId);
+                    // Use case-insensitive comparison for robustness against data source inconsistencies.
+                    var chapter = Chapters.FirstOrDefault(c => c.Id.Equals(chapterId, StringComparison.OrdinalIgnoreCase));
+
                     if (chapter != null && chapter != SelectedChapter)
                     {
-                        // Set a flag to prevent the navigation event from triggering when we update programmatically
                         _updatingChapterFromScroll = true;
                         SelectedChapter = chapter;
-                        Console.WriteLine($"Updated selected chapter to: {chapter.Id} - {chapter.Heading}");
-                        _updatingChapterFromScroll = false;
+                        _logger.LogInfo("BookDisplayViewModel", "Updated selected chapter", $"{chapter.Id} - {chapter.Heading}");
+
+                        // Post a subsequent, lower-priority action to reset the flag.
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            _updatingChapterFromScroll = false;
+                        }, DispatcherPriority.Background);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error updating current chapter: {ex.Message}");
+                    _logger.LogError("BookDisplayViewModel", "Error updating current chapter", ex.Message);
                 }
             });
         }
@@ -986,6 +1323,31 @@ namespace CST.Avalonia.ViewModels
                 }
                 
                 return anchorName;
+            }
+            catch
+            {
+                return "*";
+            }
+        }
+        
+        /// <summary>
+        /// Parse paragraph anchor to display format
+        /// Examples: 'para123' -> '123', 'para502-503' -> '502-503'
+        /// </summary>
+        private string ParseParagraph(string paragraphAnchor)
+        {
+            if (string.IsNullOrEmpty(paragraphAnchor) || paragraphAnchor == "*")
+                return "*";
+                
+            try
+            {
+                // Remove 'para' prefix
+                if (paragraphAnchor.StartsWith("para"))
+                {
+                    return paragraphAnchor.Substring(4); // Remove "para"
+                }
+                
+                return paragraphAnchor;
             }
             catch
             {

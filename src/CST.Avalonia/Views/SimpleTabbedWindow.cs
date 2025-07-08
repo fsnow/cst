@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -9,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
 using CST;
@@ -27,6 +29,9 @@ public class SimpleTabbedWindow : Window
     private Border _welcomePanel;
     private Script _defaultScript = Script.Latin;
     private ComboBox? _paliScriptCombo;
+    
+    // Logging service for both console and file output
+    private static readonly LoggingService _logger = LoggingService.Instance;
 
     public SimpleTabbedWindow()
     {
@@ -39,6 +44,7 @@ public class SimpleTabbedWindow : Window
 
         BuildUI();
         UpdateDisplayState();
+        SetupGlobalKeyboardHandling();
     }
 
     private void BuildUI()
@@ -390,6 +396,18 @@ public class SimpleTabbedWindow : Window
         _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
         toolbarPanel.Children.Add(_paliScriptCombo);
 
+        // Copy Selected Text button
+        var copyButton = new Button
+        {
+            Content = "Copy Selected Text",
+            Margin = new Thickness(20, 0, 0, 0),
+            Padding = new Thickness(10, 4),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        copyButton.Click += OnCopyButtonClick;
+        ToolTip.SetTip(copyButton, "Copy selected text from the active book (Cmd+C alternative)");
+        toolbarPanel.Children.Add(copyButton);
+
         toolbar.Child = toolbarPanel;
         return toolbar;
     }
@@ -423,25 +441,71 @@ public class SimpleTabbedWindow : Window
 
     public void OpenBook(Book book, List<string>? searchTerms = null)
     {
-        Console.WriteLine($"OpenBook called for: {book.FileName}");
+        OpenBookWithAnchor(book, null, searchTerms);
+    }
+    
+    private void OpenBookWithAnchor(Book book, string? initialAnchor, List<string>? searchTerms = null)
+    {
+        _logger.LogInfo("SimpleTabbedWindow", "OpenBookWithAnchor called", $"{book.FileName} with anchor: {initialAnchor ?? "null"}");
         
         // Check if book is already open
         var existingTab = _openBooks.FirstOrDefault(t => t.Book.FileName == book.FileName);
         if (existingTab != null)
         {
-            Console.WriteLine("Book already open, selecting existing tab");
+            _logger.LogInfo("SimpleTabbedWindow", "Book already open, selecting existing tab");
             SelectBook(existingTab);
+            
+            // Navigate to anchor if provided
+            if (!string.IsNullOrEmpty(initialAnchor))
+            {
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    await Task.Delay(500); // Give time for tab switching
+                    existingTab.BookView.ScrollToPageAnchor(initialAnchor);
+                    _logger.LogInfo("SimpleTabbedWindow", "Navigated to anchor in existing tab", initialAnchor);
+                });
+            }
             return;
         }
 
         // Create new book display with the default script
-        Console.WriteLine($"Creating BookDisplayViewModel with {searchTerms?.Count ?? 0} search terms and default script {_defaultScript}");
+        _logger.LogInfo("SimpleTabbedWindow", "Creating BookDisplayViewModel", $"{searchTerms?.Count ?? 0} search terms, anchor '{initialAnchor ?? "null"}', script {_defaultScript}");
         
         // Get ChapterListsService from dependency injection
         var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
         
-        var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms ?? new List<string>(), null, chapterListsService);
+        var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms ?? new List<string>(), initialAnchor, chapterListsService);
         bookDisplayViewModel.BookScript = _defaultScript; // Set the default script
+        
+        // Subscribe to the OpenBookRequested event to handle cross-references
+        bookDisplayViewModel.OpenBookRequested += (linkedBook, anchor) =>
+        {
+            // Check if the linked book is already open
+            var existingLinkedTab = _openBooks.FirstOrDefault(t => t.Book.FileName == linkedBook.FileName);
+            if (existingLinkedTab != null)
+            {
+                // Book already open, just switch to it and navigate to anchor
+                _logger.LogInfo("SimpleTabbedWindow", "Linked book already open, selecting existing tab and navigating to anchor", anchor);
+                SelectBook(existingLinkedTab);
+                
+                // Navigate to anchor if provided
+                if (!string.IsNullOrEmpty(anchor))
+                {
+                    // Wait a bit for the tab to become active, then navigate
+                    Dispatcher.UIThread.Post(async () =>
+                    {
+                        await Task.Delay(500); // Give time for tab switching
+                        existingLinkedTab.BookView.ScrollToPageAnchor(anchor);
+                        _logger.LogInfo("SimpleTabbedWindow", "Navigated to anchor in existing tab", anchor);
+                    });
+                }
+                return;
+            }
+            
+            // Open the linked book with no search terms but with initial anchor
+            OpenBookWithAnchor(linkedBook, anchor);
+        };
+        
         var bookDisplayView = new BookDisplayView
         {
             DataContext = bookDisplayViewModel
@@ -455,7 +519,7 @@ public class SimpleTabbedWindow : Window
         
         SelectBook(bookTab);
         UpdateDisplayState();
-        Console.WriteLine("Book tab created and selected");
+        _logger.LogInfo("SimpleTabbedWindow", "Book tab created and selected");
     }
 
     private void CreateTabUI(BookTabInfo bookTab)
@@ -571,6 +635,61 @@ public class SimpleTabbedWindow : Window
         var hasBooks = _openBooks.Any();
         _welcomePanel.IsVisible = !hasBooks;
         _selectedBookHost.IsVisible = hasBooks;
+    }
+
+    private void SetupGlobalKeyboardHandling()
+    {
+        _logger.LogInfo("SimpleTabbedWindow", "Setting up global keyboard handling for copy functionality");
+        this.KeyDown += OnGlobalKeyDown;
+        
+        // Also try AddHandler for tunneling events that fire before normal events
+        this.AddHandler(KeyDownEvent, OnGlobalKeyDown, handledEventsToo: true);
+    }
+
+    private async void OnGlobalKeyDown(object? sender, KeyEventArgs e)
+    {
+        // Debug: Log all key events to see what we're receiving
+        _logger.LogInfo("SimpleTabbedWindow", "Key event received", $"Key: {e.Key}, Modifiers: {e.KeyModifiers}, Handled: {e.Handled}");
+        
+        // Handle Cmd+C (macOS) or Ctrl+C (Windows/Linux) to copy selected text
+        if ((e.KeyModifiers.HasFlag(KeyModifiers.Meta) && System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)) ||
+            (e.KeyModifiers.HasFlag(KeyModifiers.Control) && !System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)))
+        {
+            if (e.Key == Key.C)
+            {
+                _logger.LogInfo("SimpleTabbedWindow", "Global copy shortcut detected - delegating to active tab");
+                
+                // Find the currently active BookDisplayView
+                var activeTab = _openBooks.FirstOrDefault(b => b.IsSelected);
+                if (activeTab?.BookView != null)
+                {
+                    // Call the copy method on the active BookDisplayView
+                    await activeTab.BookView.HandleCopyFromGlobalShortcut();
+                    e.Handled = true;
+                }
+                else
+                {
+                    _logger.LogInfo("SimpleTabbedWindow", "No active tab found for copy operation");
+                }
+            }
+        }
+    }
+
+    private async void OnCopyButtonClick(object? sender, RoutedEventArgs e)
+    {
+        _logger.LogInfo("SimpleTabbedWindow", "Copy button clicked - attempting to copy selected text");
+        
+        // Find the currently active BookDisplayView
+        var activeTab = _openBooks.FirstOrDefault(b => b.IsSelected);
+        if (activeTab?.BookView != null)
+        {
+            // Call the copy method on the active BookDisplayView
+            await activeTab.BookView.HandleCopyFromGlobalShortcut();
+        }
+        else
+        {
+            _logger.LogInfo("SimpleTabbedWindow", "No active tab found for copy operation");
+        }
     }
 }
 

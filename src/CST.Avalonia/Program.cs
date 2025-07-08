@@ -14,6 +14,9 @@ namespace CST.Avalonia;
 
 sealed class Program
 {
+    // Logging service for both console and file output
+    private static readonly LoggingService _logger = LoggingService.Instance;
+    
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -35,7 +38,7 @@ sealed class Program
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error during CefGlue shutdown: {ex.Message}");
+                _logger.LogError("Program", "Error during CefGlue shutdown", ex.Message);
             }
         }
     }
@@ -128,11 +131,11 @@ sealed class Program
                         new CstSchemeHandlerFactory()
                     );
                     
-                    Console.WriteLine($"CefGlue initialized successfully with cache path: {_currentCachePath}");
+                    _logger.LogInfo("Program", "CefGlue initialized successfully", _currentCachePath);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to initialize CefGlue: {ex.Message}");
+                    _logger.LogError("Program", "Failed to initialize CefGlue", ex.Message);
                     // Continue without CefGlue - fallback text display will be used
                 }
                 
@@ -186,18 +189,18 @@ sealed class Program
                 orphanedDirs.Add(dir);
             }
             
-            Console.WriteLine($"Found {cacheDirectories.Length} CefGlue cache directories: {activeDirs.Count} active, {orphanedDirs.Count} orphaned");
+            _logger.LogInfo("Program", "CefGlue cache directories", $"Found {cacheDirectories.Length} total: {activeDirs.Count} active, {orphanedDirs.Count} orphaned");
             
             foreach (var dir in orphanedDirs)
             {
                 try
                 {
                     Directory.Delete(dir, true);
-                    Console.WriteLine($"Cleaned up orphaned cache directory: {Path.GetFileName(dir)}");
+                    _logger.LogInfo("Program", "Cleaned up orphaned cache directory", Path.GetFileName(dir));
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Could not delete orphaned cache directory {Path.GetFileName(dir)}: {ex.Message}");
+                    _logger.LogWarning("Program", "Could not delete orphaned cache directory", $"{Path.GetFileName(dir)}: {ex.Message}");
                 }
             }
         }

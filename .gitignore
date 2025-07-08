@@ -8,4 +8,6 @@ Debug
 src/CST.Avalonia/DawnCache/
 src/CST.Avalonia/GPUCache/
 src/CST.Avalonia/CST_CefGlue_*/
+*.log
+
 src/CST.Avalonia/logs/
