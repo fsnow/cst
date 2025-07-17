@@ -586,18 +586,31 @@ public partial class BookDisplayView : UserControl
                             }}
                             
                             if (bestPara) {{
-                                var match = bestPara.name.match(/^para(\d+)(_.*)?$/);
-                                if (match) {{
-                                    return match[1];
+                                // Extract paragraph number, handling both simple and range formats
+                                var paraName = bestPara.name;
+                                if (paraName.startsWith(""para"")) {{
+                                    var paraText = paraName.substring(4); // Remove ""para"" prefix
+                                    var underscoreIndex = paraText.indexOf(""_"");
+                                    if (underscoreIndex !== -1) {{
+                                        paraText = paraText.substring(0, underscoreIndex); // Remove book code suffix
+                                    }}
+                                    return paraText; // Returns ""548"" or ""548-9""
                                 }}
                             }}
                             
-                            return '*';
+                            return ""*"";
                         }}
                     }};
                     
                     // Build the cache immediately
                     window.cstAnchorCache.build();
+                    
+                    // Rebuild cache when window is resized
+                    window.addEventListener('resize', function() {{
+                        setTimeout(function() {{
+                            window.cstAnchorCache.build();
+                        }}, 100); // Small delay to let text reflow
+                    }});
                 }})();
             ";
 
@@ -1372,30 +1385,31 @@ public partial class BookDisplayView : UserControl
             _logger.LogTabDebug(_tabId, "ScrollToPageAnchor acquired JS lock successfully", anchorName);
             try
             {
-                // Scroll to the anchor element
                 var script = $@"
                     (function() {{
-                        
-                        // Try multiple selector patterns for paragraph anchors
                         var anchor = document.querySelector('a[name=""{anchorName}""]') || 
                                     document.querySelector('a[id=""{anchorName}""]') ||
                                     document.getElementById('{anchorName}');
                                     
                         if (anchor) {{
-                            anchor.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                            anchor.scrollIntoView({{ behavior: ""instant"", block: ""start"" }});
                         }} else {{
+                            var allAnchors = Array.from(document.querySelectorAll(""a[name]""));
+                            var paraAnchors = allAnchors.filter(a => a.name && a.name.startsWith(""para""));
                             
-                            // Try to find closest paragraph anchor with smarter fallback for commentary texts
-                            var allAnchors = Array.from(document.querySelectorAll('a[name]'));
-                            var paraAnchors = allAnchors.filter(a => a.name && a.name.startsWith('para'));
-                            
-                            if ('{anchorName}'.startsWith('para')) {{
-                                // Extract paragraph number
-                                var targetNum = parseInt('{anchorName}'.substring(4));
+                            if ('{anchorName}'.startsWith(""para"")) {{
+                                var targetText = '{anchorName}'.substring(4);
+                                if (targetText.indexOf(""-"") !== -1) {{
+                                    targetText = targetText.substring(0, targetText.indexOf(""-""));
+                                }}
+                                var targetNum = parseInt(targetText);
                                 
-                                // Convert anchor names to numbers and sort them
                                 var anchorNumbers = paraAnchors.map(function(anchor) {{
-                                    var num = parseInt(anchor.name.substring(4));
+                                    var paraText = anchor.name.substring(4);
+                                    if (paraText.indexOf(""-"") !== -1) {{
+                                        paraText = paraText.substring(0, paraText.indexOf(""-""));
+                                    }}
+                                    var num = parseInt(paraText);
                                     return {{ anchor: anchor, number: num }};
                                 }}).filter(function(item) {{
                                     return !isNaN(item.number);
@@ -1403,12 +1417,10 @@ public partial class BookDisplayView : UserControl
                                     return a.number - b.number;
                                 }});
                                 
-                                
                                 if (anchorNumbers.length > 0) {{
                                     var closest = null;
                                     var closestDiff = Infinity;
                                     
-                                    // Find the closest paragraph number (for sparse commentary numbering)
                                     anchorNumbers.forEach(function(item) {{
                                         var diff = Math.abs(item.number - targetNum);
                                         if (diff < closestDiff) {{
@@ -1417,13 +1429,11 @@ public partial class BookDisplayView : UserControl
                                         }}
                                     }});
                                     
-                                    // For commentary texts, allow larger gaps since numbering is sparse
-                                    var maxAllowedDiff = anchorNumbers.length < 300 ? 100 : 50; // Larger tolerance for sparse commentary texts
+                                    var maxAllowedDiff = anchorNumbers.length < 300 ? 100 : 50;
                                     
                                     if (closest && closestDiff <= maxAllowedDiff) {{
-                                        closest.anchor.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                                        closest.anchor.scrollIntoView({{ behavior: ""instant"", block: ""start"" }});
                                         return;
-                                    }} else {{
                                     }}
                                 }}
                             }}

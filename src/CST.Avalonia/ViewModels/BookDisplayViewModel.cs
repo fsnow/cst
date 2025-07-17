@@ -1331,7 +1331,8 @@ namespace CST.Avalonia.ViewModels
         
         /// <summary>
         /// Parse paragraph anchor to display format
-        /// Examples: 'para123' -> '123', 'para502-503' -> '502-503'
+        /// Examples: 'para123' -> '123', 'para548-9' -> '548'
+        /// Note: For ranges, extracts the start number for CST4 compatibility
         /// </summary>
         private string ParseParagraph(string paragraphAnchor)
         {
@@ -1343,7 +1344,16 @@ namespace CST.Avalonia.ViewModels
                 // Remove 'para' prefix
                 if (paragraphAnchor.StartsWith("para"))
                 {
-                    return paragraphAnchor.Substring(4); // Remove "para"
+                    string para = paragraphAnchor.Substring(4); // Remove "para"
+                    
+                    // For ranges like "548-9", extract just the start number
+                    // This matches CST4's ParseParaAnchor behavior
+                    if (para.Contains("-"))
+                    {
+                        para = para.Substring(0, para.IndexOf('-'));
+                    }
+                    
+                    return para; // Return start number: "548-9" → "548"
                 }
                 
                 return paragraphAnchor;
