@@ -11,3 +11,5 @@ src/CST.Avalonia/CST_CefGlue_*/
 *.log
 
 src/CST.Avalonia/logs/
+
+src/CST.Core/obj/
