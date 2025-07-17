@@ -656,7 +656,6 @@ namespace CST.Avalonia.ViewModels
                     
                     var htmlContent = stringWriter.ToString();
                     _logger.LogInfo("BookDisplayViewModel", "Generated HTML content", $"length: {htmlContent.Length}");
-                    _logger.LogDebug("BookDisplayViewModel", "HTML content preview", htmlContent.Substring(0, Math.Min(500, htmlContent.Length)));
                     
                     return htmlContent;
                 }
