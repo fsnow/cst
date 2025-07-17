@@ -256,7 +256,7 @@ public partial class BookDisplayView : UserControl
 
         // Create the timer immediately on the UI thread.
         _logger.LogTabDebug(_tabId, "Creating scroll timer");
-        _scrollTimer = new System.Timers.Timer(2000);
+        _scrollTimer = new System.Timers.Timer(200);
         _scrollTimer.Elapsed += OnScrollPositionCheck;
         _scrollTimer.AutoReset = true;
 
