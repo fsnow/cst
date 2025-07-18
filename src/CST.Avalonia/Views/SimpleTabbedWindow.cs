@@ -401,18 +401,6 @@ public class SimpleTabbedWindow : Window
         _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
         toolbarPanel.Children.Add(_paliScriptCombo);
 
-        // Copy Selected Text button
-        var copyButton = new Button
-        {
-            Content = "Copy Selected Text",
-            Margin = new Thickness(20, 0, 0, 0),
-            Padding = new Thickness(10, 4),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        copyButton.Click += OnCopyButtonClick;
-        ToolTip.SetTip(copyButton, "Copy selected text from the active book (Cmd+C alternative)");
-        toolbarPanel.Children.Add(copyButton);
-
         toolbar.Child = toolbarPanel;
         return toolbar;
     }
@@ -680,22 +668,6 @@ public class SimpleTabbedWindow : Window
         }
     }
 
-    private async void OnCopyButtonClick(object? sender, RoutedEventArgs e)
-    {
-        _logger.Information("Copy button clicked - attempting to copy selected text");
-        
-        // Find the currently active BookDisplayView
-        var activeTab = _openBooks.FirstOrDefault(b => b.IsSelected);
-        if (activeTab?.BookView != null)
-        {
-            // Call the copy method on the active BookDisplayView
-            await activeTab.BookView.HandleCopyFromGlobalShortcut();
-        }
-        else
-        {
-            _logger.Information("No active tab found for copy operation");
-        }
-    }
 }
 
 public class BookTabInfo
