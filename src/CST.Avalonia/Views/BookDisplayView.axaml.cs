@@ -13,6 +13,7 @@ using Xilium.CefGlue.Avalonia;
 using Xilium.CefGlue.Common.Events;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
+using Serilog;
 
 namespace CST.Avalonia.Views;
 
@@ -21,8 +22,8 @@ public partial class BookDisplayView : UserControl
     // Shared lock to serialize JavaScript execution across all instances
     private static readonly SemaphoreSlim _jsExecutionLock = new SemaphoreSlim(1, 1);
 
-    // Logging service for both console and file output
-    private static readonly LoggingService _logger = LoggingService.Instance;
+    // Logger instance with tab context
+    private readonly ILogger _logger;
 
     private BookDisplayViewModel? _viewModel;
     private AvaloniaCefBrowser? _cefBrowser;
@@ -46,6 +47,10 @@ public partial class BookDisplayView : UserControl
     public BookDisplayView()
     {
         InitializeComponent();
+
+        // Get logger with tab context
+        _logger = Log.ForContext<BookDisplayView>()
+            .ForContext("TabId", _tabId);
 
         _browserWrapper = this.FindControl<Decorator>("browserWrapper");
         _fallbackBrowser = this.FindControl<ScrollViewer>("fallbackBrowser");
@@ -71,12 +76,12 @@ public partial class BookDisplayView : UserControl
 
                 _browserWrapper.Child = _cefBrowser;
 
-                _logger.LogTabInfo(_tabId, "CefGlue browser created successfully");
+                _logger.Information("CefGlue browser created successfully");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogTabError(_tabId, "Failed to create CefGlue browser", ex.Message);
+            _logger.Error(ex, "Failed to create CefGlue browser");
             _cefBrowser = null;
         }
     }
@@ -85,7 +90,7 @@ public partial class BookDisplayView : UserControl
     {
         base.OnLoaded(e);
         this.PropertyChanged += OnIsVisibleChanged;
-        _logger.LogTabDebug(_tabId, "OnLoaded called");
+        _logger.Debug("OnLoaded called");
         SetupCSharpScrollTracking();
         SetupKeyboardHandling();
     }
@@ -105,7 +110,7 @@ public partial class BookDisplayView : UserControl
 
         // Then, subscribe to the new ViewModel
         _viewModel = DataContext as BookDisplayViewModel;
-        _logger.LogTabDebug(_tabId, "DataContext changed.", $"ViewModel is now: {_viewModel?.BookInfoText ?? "null"}");
+        _logger.Debug("DataContext changed. ViewModel is now: {BookInfo}", _viewModel?.BookInfoText ?? "null");
 
         if (_viewModel != null)
         {
@@ -123,12 +128,12 @@ public partial class BookDisplayView : UserControl
             var isVisible = e.GetNewValue<bool>();
             if (isVisible)
             {
-                _logger.LogTabDebug(_tabId, "View became visible, starting scroll timer.");
+                _logger.Debug("View became visible, starting scroll timer.");
                 _scrollTimer.Start();
             }
             else
             {
-                _logger.LogTabDebug(_tabId, "View was hidden, stopping scroll timer.");
+                _logger.Debug("View was hidden, stopping scroll timer.");
                 _scrollTimer.Stop();
             }
         }
@@ -145,71 +150,71 @@ public partial class BookDisplayView : UserControl
 
     private void LoadHtmlContent()
     {
-        _logger.LogDebug("LoadHtmlContent", "Method called", $"ViewModel: {_viewModel != null}, HtmlContent empty: {string.IsNullOrEmpty(_viewModel?.HtmlContent)}");
+        _logger.Debug("Method called - ViewModel: {HasViewModel}, HtmlContent empty: {IsHtmlEmpty}", _viewModel != null, string.IsNullOrEmpty(_viewModel?.HtmlContent));
 
         if (_viewModel == null || string.IsNullOrEmpty(_viewModel.HtmlContent))
         {
-            _logger.LogDebug("LoadHtmlContent", "Exiting - no viewmodel or content");
+            _logger.Debug("Exiting - no viewmodel or content");
             return;
         }
 
         // Ensure we're on the UI thread for CefGlue operations
         if (!Dispatcher.UIThread.CheckAccess())
         {
-            _logger.LogDebug("LoadHtmlContent", "Dispatching to UI thread");
+            _logger.Debug("Dispatching to UI thread");
             Dispatcher.UIThread.Post(LoadHtmlContent);
             return;
         }
 
         try
         {
-            _logger.LogDebug("LoadHtmlContent", "CefGlue status", $"available: {_viewModel.IsCefGlueAvailable}, Browser: {_cefBrowser != null}");
+            _logger.Debug("CefGlue status - available: {IsCefGlueAvailable}, Browser: {HasBrowser}", _viewModel.IsCefGlueAvailable, _cefBrowser != null);
 
             if (_viewModel.IsCefGlueAvailable && _cefBrowser != null)
             {
                 try
                 {
                     // Check content size and use appropriate loading method
-                    _logger.LogInfo("LoadHtmlContent", "Loading HTML content", $"length: {_viewModel.HtmlContent.Length}");
-                    //_logger.LogDebug("LoadHtmlContent", "HTML content preview", _viewModel.HtmlContent.Substring(0, Math.Min(200, _viewModel.HtmlContent.Length)) + "...");
+                    _logger.Information("Loading HTML content - length: {Length}", _viewModel.HtmlContent.Length);
+                    //_logger.Debug("LoadHtmlContent", "HTML content preview", _viewModel.HtmlContent.Substring(0, Math.Min(200, _viewModel.HtmlContent.Length)) + "...");
 
                     // Write HTML content to temporary file and load it
                     // This completely bypasses data URI size limitations
                     var tempFileName = $"cst_book_{_viewModel.Book.FileName.Replace('.', '_')}_{_tabId}.html";
                     var tempFilePath = Path.Combine(Path.GetTempPath(), tempFileName);
 
-                    _logger.LogDebug("LoadHtmlContent", "Writing to temp file", tempFilePath);
+                    _logger.Debug("Writing to temp file | {Details}", tempFilePath);
                     File.WriteAllText(tempFilePath, _viewModel.HtmlContent, System.Text.Encoding.UTF8);
 
                     var fileUrl = $"file://{tempFilePath}";
-                    _logger.LogDebug("LoadHtmlContent", "Loading from file URL", fileUrl);
+                    _logger.Debug("Loading from file URL | {Details}", fileUrl);
 
                     _cefBrowser.Address = fileUrl;
                     _viewModel.PageStatusText = "Loading content from file...";
-                    _logger.LogInfo("LoadHtmlContent", "HTML content loaded from temporary file");
+                    _logger.Information("HTML content loaded from temporary file");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("LoadHtmlContent", "Failed to load HTML content", ex.Message);
+                    _logger.Error("Failed to load HTML content | {Details}", ex.Message);
                     _viewModel.SetCefGlueAvailability(false, "Failed to load content - using fallback");
                 }
             }
             else if (_cefBrowser == null)
             {
                 // Browser creation failed, disable CefGlue
-                _logger.LogWarning("LoadHtmlContent", "Browser is null - setting CefGlue unavailable");
+                _logger.Warning("Browser is null - setting CefGlue unavailable");
                 _viewModel.SetCefGlueAvailability(false, "CefGlue browser unavailable - using fallback text display");
             }
             else
             {
-                _logger.LogInfo("LoadHtmlContent", "CefGlue not available - using fallback");
+                _logger.Information("CefGlue not available - using fallback");
             }
             // Fallback is already handled by data binding in XAML
         }
         catch (Exception ex)
         {
             // If CefGlue fails, mark it as unavailable and fall back to text display
-            _logger.LogError("LoadHtmlContent", "Exception occurred", ex.Message);
+            _logger.Error("Exception occurred | {Details}", ex.Message);
             _viewModel?.SetCefGlueAvailability(false, $"CefGlue error, using fallback: {ex.Message}");
         }
     }
@@ -223,18 +228,18 @@ public partial class BookDisplayView : UserControl
             Dispatcher.UIThread.Post(() =>
             {
                 // Browser is now ready - no need to change availability since we started optimistically
-                _logger.LogInfo("BrowserInit", "Browser initialized successfully");
+                _logger.Information("Browser initialized successfully");
                 _viewModel.PageStatusText = "Browser ready";
 
                 // Load content if it's ready
                 if (!string.IsNullOrEmpty(_viewModel.HtmlContent))
                 {
-                    _logger.LogDebug("BrowserInit", "Loading content immediately", $"HTML length: {_viewModel.HtmlContent.Length}");
+                    _logger.Debug("Loading content immediately - HTML length: {Length}", _viewModel.HtmlContent.Length);
                     LoadHtmlContent();
                 }
                 else
                 {
-                    _logger.LogDebug("BrowserInit", "No HTML content ready yet - will load when content is generated");
+                    _logger.Debug("No HTML content ready yet - will load when content is generated");
                 }
 
                 // Set up C# scroll tracking for reliable status bar updates
@@ -248,14 +253,14 @@ public partial class BookDisplayView : UserControl
         // If timer already exists, do nothing. This makes the method idempotent.
         if (_scrollTimer != null) return;
 
-        _logger.LogTabDebug(_tabId, "SetupCSharpScrollTracking called");
+        _logger.Debug("SetupCSharpScrollTracking called");
 
         // Set up initial scroll position tracking
         _lastKnownScrollY = 0;
         _lastScrollTime = DateTime.Now;
 
         // Create the timer immediately on the UI thread.
-        _logger.LogTabDebug(_tabId, "Creating scroll timer");
+        _logger.Debug("Creating scroll timer");
         _scrollTimer = new System.Timers.Timer(200);
         _scrollTimer.Elapsed += OnScrollPositionCheck;
         _scrollTimer.AutoReset = true;
@@ -265,8 +270,8 @@ public partial class BookDisplayView : UserControl
         {
             _scrollTimer.Start();
         }
-        _logger.LogTabDebug(_tabId, "Scroll timer created", $"enabled: {_scrollTimer.Enabled}");
-        _logger.LogTabDebug(_tabId, "C# scroll position monitoring setup completed");
+        _logger.Debug("Scroll timer created - enabled: {Enabled}", _scrollTimer.Enabled);
+        _logger.Debug("C# scroll position monitoring setup completed");
     }
 
     private void OnScrollPositionCheck(object? sender, System.Timers.ElapsedEventArgs e)
@@ -283,24 +288,24 @@ public partial class BookDisplayView : UserControl
             // It happens BEFORE the lock is acquired, so it does not block other UI operations.
             await Task.Delay(200);
 
-            _logger.LogTabDebug(_tabId, "OnScrollPositionCheck attempting to acquire JS lock");
+            _logger.Debug("OnScrollPositionCheck attempting to acquire JS lock");
             if (await _jsExecutionLock.WaitAsync(0))
             {
-                _logger.LogTabDebug(_tabId, "OnScrollPositionCheck acquired JS lock successfully");
+                _logger.Debug("OnScrollPositionCheck acquired JS lock successfully");
                 try
                 {
                     UpdateScrollBasedStatus();
                 }
                 finally
                 {
-                    _logger.LogTabDebug(_tabId, "OnScrollPositionCheck releasing JS lock");
+                    _logger.Debug("OnScrollPositionCheck releasing JS lock");
                     _jsExecutionLock.Release();
-                    _logger.LogTabDebug(_tabId, "OnScrollPositionCheck released JS lock");
+                    _logger.Debug("OnScrollPositionCheck released JS lock");
                 }
             }
             else
             {
-                _logger.LogTabDebug(_tabId, "OnScrollPositionCheck failed to acquire JS lock - skipped status update");
+                _logger.Debug("OnScrollPositionCheck failed to acquire JS lock - skipped status update");
             }
         });
     }
@@ -309,16 +314,16 @@ public partial class BookDisplayView : UserControl
     {
         try
         {
-            _logger.LogTabDebug(_tabId, "UpdateScrollBasedStatus called", $"anchorCacheBuilt={_anchorCacheBuilt}");
+            _logger.Debug("UpdateScrollBasedStatus called - anchorCacheBuilt: {AnchorCacheBuilt}", _anchorCacheBuilt);
 
             if (!_anchorCacheBuilt || _cefBrowser == null)
             {
-                _logger.LogTabDebug(_tabId, "UpdateScrollBasedStatus skipped", $"anchorCacheBuilt={_anchorCacheBuilt}, browser={_cefBrowser != null}");
+                _logger.Debug("UpdateScrollBasedStatus skipped - anchorCacheBuilt: {AnchorCacheBuilt}, browser: {HasBrowser}", _anchorCacheBuilt, _cefBrowser != null);
                 return;
             }
 
             // Try to get scroll position and status in a single JavaScript call
-            _logger.LogTabDebug(_tabId, "Executing JavaScript for status update");
+            _logger.Debug("Executing JavaScript for status update");
             var script = $@"
                 try {{
                     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
@@ -418,7 +423,7 @@ public partial class BookDisplayView : UserControl
         }
         catch (Exception ex)
         {
-            _logger.LogTabError(_tabId, "Error updating scroll-based status", ex.Message);
+            _logger.Error("Error updating scroll-based status | {Details}", ex.Message);
         }
     }
 
@@ -428,13 +433,13 @@ public partial class BookDisplayView : UserControl
     {
         if (_cefBrowser == null) return;
 
-        _logger.LogTabDebug(_tabId, "BuildAnchorPositionCache attempting to acquire JS lock");
+        _logger.Debug("BuildAnchorPositionCache attempting to acquire JS lock");
         if (await _jsExecutionLock.WaitAsync(10))
         {
-            _logger.LogTabDebug(_tabId, "BuildAnchorPositionCache acquired JS lock successfully");
+            _logger.Debug("BuildAnchorPositionCache acquired JS lock successfully");
             try
             {
-                _logger.LogTabInfo(_tabId, "Building anchor position cache");
+                _logger.Information("Building anchor position cache");
 
                 // Store anchor positions directly in JavaScript  
                 var script = $@"
@@ -623,23 +628,23 @@ public partial class BookDisplayView : UserControl
                 await Task.Delay(500);
 
                 _anchorCacheBuilt = true;
-                _logger.LogTabInfo(_tabId, "Anchor position cache built");
+                _logger.Information("Anchor position cache built");
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Error building anchor cache", ex.Message);
+                _logger.Error("Error building anchor cache | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "BuildAnchorPositionCache releasing JS lock");
+                _logger.Debug("BuildAnchorPositionCache releasing JS lock");
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "BuildAnchorPositionCache released JS lock");
+                _logger.Debug("BuildAnchorPositionCache released JS lock");
             }
         }
         else
         {
             // If lock is busy, retry after a delay
-            _logger.LogTabDebug(_tabId, "BuildAnchorPositionCache failed to acquire JS lock - retrying after delay");
+            _logger.Debug("BuildAnchorPositionCache failed to acquire JS lock - retrying after delay");
             await Task.Delay(100);
             await BuildAnchorPositionCache();
         }
@@ -651,20 +656,20 @@ public partial class BookDisplayView : UserControl
         {
             Dispatcher.UIThread.Post(() =>
             {
-                _logger.LogInfo("OnLoadEnd", "Main frame loaded successfully", $"URL: {e.Frame.Url}");
+                _logger.Information("Main frame loaded successfully - URL: {Url}", e.Frame.Url);
                 _viewModel.PageStatusText = "Document loaded successfully";
 
                 // Set up JavaScript bridge after content loads
                 SetupJavaScriptBridge();
 
                 // Build the anchor position cache in the background.
-                _logger.LogTabDebug(_tabId, "Starting background task to build anchor cache");
+                _logger.Debug("Starting background task to build anchor cache");
                 Task.Run(async () =>
                 {
-                    _logger.LogTabDebug(_tabId, "Background task started, waiting for content to settle");
+                    _logger.Debug("Background task started, waiting for content to settle");
                     await Task.Delay(2000); // Wait for content to settle
 
-                    _logger.LogTabDebug(_tabId, "Building anchor cache");
+                    _logger.Debug("Building anchor cache");
                     await BuildAnchorPositionCache();
                 });
 
@@ -683,7 +688,7 @@ public partial class BookDisplayView : UserControl
         {
             Dispatcher.UIThread.Post(() =>
             {
-                _logger.LogError("OnLoadError", "Load error occurred", $"Error: {e.ErrorText}, Code: {e.ErrorCode}, URL: {e.FailedUrl}");
+                _logger.Error("Load error occurred - Error: {ErrorText}, Code: {ErrorCode}, URL: {FailedUrl}", e.ErrorText, e.ErrorCode, e.FailedUrl);
                 _viewModel.PageStatusText = $"Load error: {e.ErrorText}";
             });
         }
@@ -691,7 +696,7 @@ public partial class BookDisplayView : UserControl
 
     private void OnTitleChanged(object? sender, string title)
     {
-        _logger.LogTabDebug(_tabId, "Page title changed", title);
+        _logger.Debug("Page title changed | {Details}", title);
 
         // Check for new atomic status update with tab ID filtering
         if (title != null && title.StartsWith("CST_STATUS_UPDATE:"))
@@ -715,11 +720,11 @@ public partial class BookDisplayView : UserControl
                 // CRITICAL: Only process messages intended for this specific tab
                 if (messageTabId != _tabId)
                 {
-                    _logger.LogTabDebug(_tabId, "Ignoring message for tab", messageTabId);
+                    _logger.Debug("Ignoring message for tab | {Details}", messageTabId);
                     return;
                 }
 
-                _logger.LogTabDebug(_tabId, "Processing status update message");
+                _logger.Debug("Processing status update message");
 
                 // Parse message components
                 string vri = "*", myanmar = "*", pts = "*", thai = "*", para = "*", chapter = "*";
@@ -742,7 +747,7 @@ public partial class BookDisplayView : UserControl
                         var pageCount = counts.Length > 0 ? counts[0] : "0";
                         var paraCount = counts.Length > 1 ? counts[1] : "0";
                         var chapterCount = counts.Length > 2 ? counts[2] : "0";
-                        _logger.LogTabDebug(_tabId, "Anchor cache built", $"{pageCount} page anchors, {paraCount} paragraph anchors, {chapterCount} chapter anchors");
+                        _logger.Debug("Anchor cache built - {PageCount} page anchors, {ParaCount} paragraph anchors, {ChapterCount} chapter anchors", pageCount, paraCount, chapterCount);
                     }
                 }
 
@@ -754,7 +759,7 @@ public partial class BookDisplayView : UserControl
                 else
                 {
                     // Handle status update
-                    _logger.LogTabDebug(_tabId, "Status values", $"VRI: {vri}, Myanmar: {myanmar}, PTS: {pts}, Thai: {thai}, Para: {para}, Chapter: {chapter}, Scroll: {scrollY}");
+                    _logger.Debug("Status values - VRI: {Vri}, Myanmar: {Myanmar}, PTS: {Pts}, Thai: {Thai}, Para: {Para}, Chapter: {Chapter}, Scroll: {ScrollY}", vri, myanmar, pts, thai, para, chapter, scrollY);
 
                     // Update scroll position
                     if (scrollY > 0) _lastKnownScrollY = scrollY;
@@ -771,25 +776,25 @@ public partial class BookDisplayView : UserControl
                     {
                         Dispatcher.UIThread.Post(() =>
                         {
-                            _logger.LogTabDebug(_tabId, "Updating ViewModel on UI thread");
+                            _logger.Debug("Updating ViewModel on UI thread");
                             _viewModel.UpdatePageReferences(vri, myanmar, pts, thai, "*");
                             _viewModel.UpdateCurrentParagraph($"para{para}");
                             
                             // Update current chapter if we have a valid chapter ID
                             if (chapter != "*")
                             {
-                                _logger.LogTabDebug(_tabId, "Updating current chapter", chapter);
+                                _logger.Debug("Updating current chapter | {Details}", chapter);
                                 _viewModel.UpdateCurrentChapter(chapter);
                             }
                             
-                            _logger.LogTabDebug(_tabId, "ViewModel updated successfully");
+                            _logger.Debug("ViewModel updated successfully");
                         });
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Error processing atomic status update", ex.Message);
+                _logger.Error("Error processing atomic status update | {Details}", ex.Message);
             }
         }
         // Check for current chapter data in title
@@ -803,7 +808,7 @@ public partial class BookDisplayView : UserControl
 
                 if (messageTabId == _tabId)
                 {
-                    _logger.LogDebug("OnTitleChanged", "Detected current chapter", chapterId);
+                    _logger.Debug("Detected current chapter | {Details}", chapterId);
                     if (_viewModel != null)
                     {
                         _viewModel.UpdateCurrentChapter(chapterId);
@@ -812,7 +817,7 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogError("OnTitleChanged", "Error parsing current chapter", ex.Message);
+                _logger.Error("Error parsing current chapter | {Details}", ex.Message);
             }
         }
         // Check for GetPara result
@@ -826,14 +831,14 @@ public partial class BookDisplayView : UserControl
 
                 if (messageTabId == _tabId)
                 {
-                    _logger.LogDebug("OnTitleChanged", "GetPara result", result);
+                    _logger.Debug("GetPara result | {Details}", result);
                     // Signal completion for async await pattern
                     _paraAnchorTcs?.TrySetResult(result == "null" ? null : result);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError("OnTitleChanged", "Error parsing GetPara result", ex.Message);
+                _logger.Error("Error parsing GetPara result | {Details}", ex.Message);
                 _paraAnchorTcs?.TrySetException(ex);
             }
         }
@@ -848,12 +853,12 @@ public partial class BookDisplayView : UserControl
 
                 if (messageTabId == _tabId)
                 {
-                    _logger.LogTabInfo(_tabId, "Copy operation successful", $"{lengthStr} characters copied");
+                    _logger.Information("Copy operation successful - {CharacterCount} characters copied", lengthStr);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Error parsing copy success message", ex.Message);
+                _logger.Error("Error parsing copy success message | {Details}", ex.Message);
             }
         }
         else if (title != null && title.StartsWith("CST_COPY_FAILED:"))
@@ -866,12 +871,12 @@ public partial class BookDisplayView : UserControl
 
                 if (messageTabId == _tabId)
                 {
-                    _logger.LogTabWarning(_tabId, "Copy operation failed", reason);
+                    _logger.Warning("Copy operation failed | {Details}", reason);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Error parsing copy failure message", ex.Message);
+                _logger.Error("Error parsing copy failure message | {Details}", ex.Message);
             }
         }
         // Check for JS log messages
@@ -894,16 +899,16 @@ public partial class BookDisplayView : UserControl
                         switch (level.ToUpper())
                         {
                             case "INFO":
-                                _logger.LogTabInfo(_tabId, "JS Log", message);
+                                _logger.Information("JS Log | {Details}", message);
                                 break;
                             case "WARN":
-                                _logger.LogTabWarning(_tabId, "JS Log", message);
+                                _logger.Warning("JS Log | {Details}", message);
                                 break;
                             case "ERROR":
-                                _logger.LogTabError(_tabId, "JS Log", message);
+                                _logger.Error("JS Log | {Details}", message);
                                 break;
                             default:
-                                _logger.LogTabDebug(_tabId, "JS Log", message);
+                                _logger.Debug("JS Log | {Details}", message);
                                 break;
                         }
                     }
@@ -911,7 +916,7 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogError("OnTitleChanged", "Error parsing JS log message", ex.Message);
+                _logger.Error("Error parsing JS log message | {Details}", ex.Message);
             }
         }
     }
@@ -927,10 +932,10 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.LogTabDebug(_tabId, "SetupJavaScriptBridge attempting to acquire JS lock");
+        _logger.Debug("SetupJavaScriptBridge attempting to acquire JS lock");
         if (_jsExecutionLock.Wait(0))
         {
-            _logger.LogTabDebug(_tabId, "SetupJavaScriptBridge acquired JS lock successfully");
+            _logger.Debug("SetupJavaScriptBridge acquired JS lock successfully");
             try
             {
                 // Add JavaScript functions for search navigation
@@ -1143,18 +1148,18 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogError("SetupJavaScriptBridge", "Failed to setup JavaScript bridge", ex.Message);
+                _logger.Error("Failed to setup JavaScript bridge | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "SetupJavaScriptBridge releasing JS lock");
+                _logger.Debug("SetupJavaScriptBridge releasing JS lock");
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "SetupJavaScriptBridge released JS lock");
+                _logger.Debug("SetupJavaScriptBridge released JS lock");
             }
         }
         else
         {
-            _logger.LogTabDebug(_tabId, "SetupJavaScriptBridge failed to acquire JS lock - retrying after delay");
+            _logger.Debug("SetupJavaScriptBridge failed to acquire JS lock - retrying after delay");
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(100);
@@ -1167,7 +1172,7 @@ public partial class BookDisplayView : UserControl
     {
         if (_cefBrowser == null)
         {
-            _logger.LogTabWarning(_tabId, "NavigateToHighlight called but _cefBrowser is null");
+            _logger.Warning("NavigateToHighlight called but _cefBrowser is null");
             return;
         }
 
@@ -1177,11 +1182,11 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.LogDebug("NavigateToHighlight", "Method called", $"hitIndex: {hitIndex}");
-        _logger.LogTabDebug(_tabId, "NavigateToHighlight attempting to acquire JS lock");
+        _logger.Debug("Method called - hitIndex: {HitIndex}", hitIndex);
+        _logger.Debug("NavigateToHighlight attempting to acquire JS lock");
         if (_jsExecutionLock.Wait(0))
         {
-            _logger.LogTabDebug(_tabId, "NavigateToHighlight acquired JS lock successfully");
+            _logger.Debug("NavigateToHighlight acquired JS lock successfully");
             try
             {
                 var script = $"window.cstSearchHighlights?.navigateToHit({hitIndex});";
@@ -1189,18 +1194,18 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Failed to navigate to highlight", ex.Message);
+                _logger.Error("Failed to navigate to highlight | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "NavigateToHighlight releasing JS lock");
+                _logger.Debug("NavigateToHighlight releasing JS lock");
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "NavigateToHighlight released JS lock");
+                _logger.Debug("NavigateToHighlight released JS lock");
             }
         }
         else
         {
-            _logger.LogTabWarning(_tabId, "NavigateToHighlight failed to acquire JS lock - retrying after delay", $"hitIndex: {hitIndex}");
+            _logger.Warning("NavigateToHighlight failed to acquire JS lock - retrying after delay - hitIndex: {HitIndex}", hitIndex);
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(100);
@@ -1220,11 +1225,11 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.LogTabInfo(_tabId, "NavigateToAnchor called", anchor);
-        _logger.LogTabDebug(_tabId, "NavigateToAnchor attempting to acquire JS lock", anchor);
+        _logger.Information("NavigateToAnchor called | {Details}", anchor);
+        _logger.Debug("NavigateToAnchor attempting to acquire JS lock | {Details}", anchor);
         if (_jsExecutionLock.Wait(0))
         {
-            _logger.LogTabDebug(_tabId, "NavigateToAnchor acquired JS lock successfully", anchor);
+            _logger.Debug("NavigateToAnchor acquired JS lock successfully | {Details}", anchor);
             try
             {
                 var script = $@"
@@ -1240,18 +1245,18 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Failed to navigate to anchor", ex.Message);
+                _logger.Error("Failed to navigate to anchor | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "NavigateToAnchor releasing JS lock", anchor);
+                _logger.Debug("NavigateToAnchor releasing JS lock | {Details}", anchor);
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "NavigateToAnchor released JS lock", anchor);
+                _logger.Debug("NavigateToAnchor released JS lock | {Details}", anchor);
             }
         }
         else
         {
-            _logger.LogTabWarning(_tabId, "NavigateToAnchor failed to acquire JS lock - retrying after delay", anchor);
+            _logger.Warning("NavigateToAnchor failed to acquire JS lock - retrying after delay | {Details}", anchor);
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(100);
@@ -1271,10 +1276,10 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.LogTabDebug(_tabId, "SetHighlightVisibility attempting to acquire JS lock");
+        _logger.Debug("SetHighlightVisibility attempting to acquire JS lock");
         if (_jsExecutionLock.Wait(0))
         {
-            _logger.LogTabDebug(_tabId, "SetHighlightVisibility acquired JS lock successfully");
+            _logger.Debug("SetHighlightVisibility acquired JS lock successfully");
             try
             {
                 var script = $"window.cstSearchHighlights?.showHits({visible.ToString().ToLower()});";
@@ -1282,18 +1287,18 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Failed to set highlight visibility", ex.Message);
+                _logger.Error("Failed to set highlight visibility | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "SetHighlightVisibility releasing JS lock");
+                _logger.Debug("SetHighlightVisibility releasing JS lock");
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "SetHighlightVisibility released JS lock");
+                _logger.Debug("SetHighlightVisibility released JS lock");
             }
         }
         else
         {
-            _logger.LogTabDebug(_tabId, "SetHighlightVisibility failed to acquire JS lock - retrying after delay");
+            _logger.Debug("SetHighlightVisibility failed to acquire JS lock - retrying after delay");
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(100);
@@ -1324,10 +1329,10 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.LogTabDebug(_tabId, "SetScrollPosition attempting to acquire JS lock");
+        _logger.Debug("SetScrollPosition attempting to acquire JS lock");
         if (_jsExecutionLock.Wait(0))
         {
-            _logger.LogTabDebug(_tabId, "SetScrollPosition acquired JS lock successfully");
+            _logger.Debug("SetScrollPosition acquired JS lock successfully");
             try
             {
                 var script = $"window.scrollTo(0, {position});";
@@ -1336,18 +1341,18 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Failed to set scroll position", ex.Message);
+                _logger.Error("Failed to set scroll position | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "SetScrollPosition releasing JS lock");
+                _logger.Debug("SetScrollPosition releasing JS lock");
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "SetScrollPosition released JS lock");
+                _logger.Debug("SetScrollPosition released JS lock");
             }
         }
         else
         {
-            _logger.LogTabDebug(_tabId, "SetScrollPosition failed to acquire JS lock - retrying after delay");
+            _logger.Debug("SetScrollPosition failed to acquire JS lock - retrying after delay");
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(100);
@@ -1379,10 +1384,10 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.LogTabDebug(_tabId, "ScrollToPageAnchor attempting to acquire JS lock", anchorName);
+        _logger.Debug("ScrollToPageAnchor attempting to acquire JS lock | {Details}", anchorName);
         if (_jsExecutionLock.Wait(0))
         {
-            _logger.LogTabDebug(_tabId, "ScrollToPageAnchor acquired JS lock successfully", anchorName);
+            _logger.Debug("ScrollToPageAnchor acquired JS lock successfully | {Details}", anchorName);
             try
             {
                 var script = $@"
@@ -1444,18 +1449,18 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Failed to scroll to anchor", ex.Message);
+                _logger.Error("Failed to scroll to anchor | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "ScrollToPageAnchor releasing JS lock", anchorName);
+                _logger.Debug("ScrollToPageAnchor releasing JS lock | {Details}", anchorName);
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "ScrollToPageAnchor released JS lock", anchorName);
+                _logger.Debug("ScrollToPageAnchor released JS lock | {Details}", anchorName);
             }
         }
         else
         {
-            _logger.LogTabDebug(_tabId, "ScrollToPageAnchor failed to acquire JS lock - retrying after delay", anchorName);
+            _logger.Debug("ScrollToPageAnchor failed to acquire JS lock - retrying after delay | {Details}", anchorName);
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(100);
@@ -1475,10 +1480,10 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.LogTabDebug(_tabId, "SetFootnoteVisibility attempting to acquire JS lock");
+        _logger.Debug("SetFootnoteVisibility attempting to acquire JS lock");
         if (_jsExecutionLock.Wait(0))
         {
-            _logger.LogTabDebug(_tabId, "SetFootnoteVisibility acquired JS lock successfully");
+            _logger.Debug("SetFootnoteVisibility acquired JS lock successfully");
             try
             {
                 var script = $"window.cstSearchHighlights?.showFootnotes({visible.ToString().ToLower()});";
@@ -1486,18 +1491,18 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Failed to set footnote visibility", ex.Message);
+                _logger.Error("Failed to set footnote visibility | {Details}", ex.Message);
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "SetFootnoteVisibility releasing JS lock");
+                _logger.Debug("SetFootnoteVisibility releasing JS lock");
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "SetFootnoteVisibility released JS lock");
+                _logger.Debug("SetFootnoteVisibility released JS lock");
             }
         }
         else
         {
-            _logger.LogTabDebug(_tabId, "SetFootnoteVisibility failed to acquire JS lock - retrying after delay");
+            _logger.Debug("SetFootnoteVisibility failed to acquire JS lock - retrying after delay");
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(100);
@@ -1515,14 +1520,14 @@ public partial class BookDisplayView : UserControl
     {
         if (_cefBrowser == null || !_isBrowserInitialized)
         {
-            _logger.LogTabWarning(_tabId, "GetCurrentParagraphAnchorAsync: Browser not available");
+            _logger.Warning("GetCurrentParagraphAnchorAsync: Browser not available");
             return null;
         }
 
-        _logger.LogTabDebug(_tabId, "GetCurrentParagraphAnchorAsync attempting to acquire JS lock");
+        _logger.Debug("GetCurrentParagraphAnchorAsync attempting to acquire JS lock");
         if (await _jsExecutionLock.WaitAsync(10))
         {
-            _logger.LogTabDebug(_tabId, "GetCurrentParagraphAnchorAsync acquired JS lock successfully");
+            _logger.Debug("GetCurrentParagraphAnchorAsync acquired JS lock successfully");
             try
             {
 
@@ -1566,20 +1571,20 @@ public partial class BookDisplayView : UserControl
             }
             catch (Exception ex)
             {
-                _logger.LogTabError(_tabId, "Error getting current paragraph anchor", ex.Message);
+                _logger.Error("Error getting current paragraph anchor | {Details}", ex.Message);
                 _paraAnchorTcs?.TrySetException(ex);
                 return null;
             }
             finally
             {
-                _logger.LogTabDebug(_tabId, "GetCurrentParagraphAnchorAsync releasing JS lock");
+                _logger.Debug("GetCurrentParagraphAnchorAsync releasing JS lock");
                 _jsExecutionLock.Release();
-                _logger.LogTabDebug(_tabId, "GetCurrentParagraphAnchorAsync released JS lock");
+                _logger.Debug("GetCurrentParagraphAnchorAsync released JS lock");
             }
         }
         else
         {
-            _logger.LogTabDebug(_tabId, "GetCurrentParagraphAnchorAsync failed to acquire JS lock - retrying after delay");
+            _logger.Debug("GetCurrentParagraphAnchorAsync failed to acquire JS lock - retrying after delay");
             await Task.Delay(100);
             return await GetCurrentParagraphAnchorAsync();
         }
@@ -1588,7 +1593,7 @@ public partial class BookDisplayView : UserControl
 
     private void SetupKeyboardHandling()
     {
-        _logger.LogTabDebug(_tabId, "Setting up keyboard handling for copy functionality");
+        _logger.Debug("Setting up keyboard handling for copy functionality");
         this.KeyDown += OnKeyDown;
     }
 
@@ -1600,7 +1605,7 @@ public partial class BookDisplayView : UserControl
         {
             if (e.Key == Key.C)
             {
-                _logger.LogTabDebug(_tabId, "Copy shortcut detected - attempting to copy selected text");
+                _logger.Debug("Copy shortcut detected - attempting to copy selected text");
                 await HandleCopySelectedText();
                 e.Handled = true;
             }
@@ -1609,7 +1614,7 @@ public partial class BookDisplayView : UserControl
 
     public async Task HandleCopyFromGlobalShortcut()
     {
-        _logger.LogTabDebug(_tabId, "Global copy shortcut received - attempting to copy selected text");
+        _logger.Debug("Global copy shortcut received - attempting to copy selected text");
         await HandleCopySelectedText();
     }
 
@@ -1649,7 +1654,7 @@ public partial class BookDisplayView : UserControl
         }
         catch (Exception ex)
         {
-            _logger.LogTabError(_tabId, "Error in GetSelectedTextAsync", ex.Message);
+            _logger.Error("Error in GetSelectedTextAsync | {Details}", ex.Message);
             return null;
         }
     }
@@ -1658,7 +1663,7 @@ public partial class BookDisplayView : UserControl
     {
         if (_cefBrowser == null || !_isBrowserInitialized)
         {
-            _logger.LogTabDebug(_tabId, "Copy failed - browser not available");
+            _logger.Debug("Copy failed - browser not available");
             return;
         }
 
@@ -1705,7 +1710,7 @@ public partial class BookDisplayView : UserControl
                         document.title = 'CST_COPY_FAILED:' + err.message + '|TAB:' + window.cstTabId;
                     }";
 
-                _logger.LogTabDebug(_tabId, "Executing copy script");
+                _logger.Debug("Executing copy script");
                 _cefBrowser.ExecuteJavaScript(copyScript);
             }
             finally
@@ -1715,7 +1720,7 @@ public partial class BookDisplayView : UserControl
         }
         catch (Exception ex)
         {
-            _logger.LogTabError(_tabId, "Error in HandleCopySelectedText", ex.Message);
+            _logger.Error("Error in HandleCopySelectedText | {Details}", ex.Message);
         }
     }
 
@@ -1731,7 +1736,7 @@ public partial class BookDisplayView : UserControl
             _scrollTimer.Stop();
             _scrollTimer.Dispose();
             _scrollTimer = null;
-            _logger.LogTabInfo(_tabId, "Paused and disposed scroll tracking");
+            _logger.Information("Paused and disposed scroll tracking");
         }
     }
 }

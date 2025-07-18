@@ -15,6 +15,7 @@ using CST;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Events;
 using Xilium.CefGlue.Avalonia;
 using ReactiveUI;
 using System.Reactive.Concurrency;
@@ -185,10 +186,24 @@ public partial class App : Application
 
     private void ConfigureServices(IServiceCollection services)
     {
-        // Configure logging
+        // Configure logging with environment variable support
+        var logLevel = Environment.GetEnvironmentVariable("CST_LOG_LEVEL")?.ToLowerInvariant() switch
+        {
+            "debug" => LogEventLevel.Debug,
+            "information" => LogEventLevel.Information,
+            "warning" => LogEventLevel.Warning,
+            "error" => LogEventLevel.Error,
+            "fatal" => LogEventLevel.Fatal,
+            _ => LogEventLevel.Debug // Default
+        };
+        
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .WriteTo.File("logs/cst-avalonia-.log", rollingInterval: RollingInterval.Day)
+            .MinimumLevel.Is(logLevel)
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File("logs/cst-avalonia-.log", 
+                rollingInterval: RollingInterval.Day,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
+            .Enrich.FromLogContext()
             .CreateLogger();
 
         services.AddLogging(builder => builder.AddSerilog());

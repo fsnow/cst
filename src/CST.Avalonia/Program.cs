@@ -9,13 +9,14 @@ using Xilium.CefGlue.Common;
 using Xilium.CefGlue.Common.Shared;
 using CST.Avalonia.Services;
 using CST.Avalonia.Views;
+using Serilog;
 
 namespace CST.Avalonia;
 
 sealed class Program
 {
-    // Logging service for both console and file output
-    private static readonly LoggingService _logger = LoggingService.Instance;
+    // Logger instance for Program class
+    private static readonly ILogger _logger = Log.ForContext<Program>();
     
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
@@ -38,7 +39,7 @@ sealed class Program
             }
             catch (Exception ex)
             {
-                _logger.LogError("Program", "Error during CefGlue shutdown", ex.Message);
+                _logger.Error(ex, "Error during CefGlue shutdown");
             }
         }
     }
@@ -131,11 +132,11 @@ sealed class Program
                         new CstSchemeHandlerFactory()
                     );
                     
-                    _logger.LogInfo("Program", "CefGlue initialized successfully", _currentCachePath);
+                    _logger.Information("CefGlue initialized successfully {CachePath}", _currentCachePath);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("Program", "Failed to initialize CefGlue", ex.Message);
+                    _logger.Error(ex, "Failed to initialize CefGlue");
                     // Continue without CefGlue - fallback text display will be used
                 }
                 
@@ -189,18 +190,19 @@ sealed class Program
                 orphanedDirs.Add(dir);
             }
             
-            _logger.LogInfo("Program", "CefGlue cache directories", $"Found {cacheDirectories.Length} total: {activeDirs.Count} active, {orphanedDirs.Count} orphaned");
+            _logger.Information("CefGlue cache directories | Found {Total} total: {Active} active, {Orphaned} orphaned", 
+                cacheDirectories.Length, activeDirs.Count, orphanedDirs.Count);
             
             foreach (var dir in orphanedDirs)
             {
                 try
                 {
                     Directory.Delete(dir, true);
-                    _logger.LogInfo("Program", "Cleaned up orphaned cache directory", Path.GetFileName(dir));
+                    _logger.Information("Cleaned up orphaned cache directory | {Directory}", Path.GetFileName(dir));
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning("Program", "Could not delete orphaned cache directory", $"{Path.GetFileName(dir)}: {ex.Message}");
+                    _logger.Warning(ex, "Could not delete orphaned cache directory | {Directory}", Path.GetFileName(dir));
                 }
             }
         }

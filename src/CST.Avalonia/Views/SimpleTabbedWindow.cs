@@ -17,6 +17,7 @@ using CST.Avalonia.Services;
 using CST;
 using CST.Conversion;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 
 namespace CST.Avalonia.Views;
 
@@ -31,11 +32,14 @@ public class SimpleTabbedWindow : Window
     private Script _defaultScript = Script.Latin;
     private ComboBox? _paliScriptCombo;
     
-    // Logging service for both console and file output
-    private static readonly LoggingService _logger = LoggingService.Instance;
+    // Logger instance for SimpleTabbedWindow class
+    private readonly ILogger _logger;
 
     public SimpleTabbedWindow()
     {
+        // Get logger using Serilog
+        _logger = Log.ForContext<SimpleTabbedWindow>();
+        
         Title = "CST - Chaṭṭha Saṅgāyana Tipiṭaka";
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Width = 1400;
@@ -447,13 +451,13 @@ public class SimpleTabbedWindow : Window
     
     private void OpenBookWithAnchor(Book book, string? initialAnchor, List<string>? searchTerms = null)
     {
-        _logger.LogInfo("SimpleTabbedWindow", "OpenBookWithAnchor called", $"{book.FileName} with anchor: {initialAnchor ?? "null"}");
+        _logger.Information("OpenBookWithAnchor called - {FileName} with anchor: {InitialAnchor}", book.FileName, initialAnchor ?? "null");
         
         // Check if book is already open
         var existingTab = _openBooks.FirstOrDefault(t => t.Book.FileName == book.FileName);
         if (existingTab != null)
         {
-            _logger.LogInfo("SimpleTabbedWindow", "Book already open, selecting existing tab");
+            _logger.Information("Book already open, selecting existing tab");
             SelectBook(existingTab);
             
             // Navigate to anchor if provided
@@ -463,14 +467,14 @@ public class SimpleTabbedWindow : Window
                 {
                     await Task.Delay(500); // Give time for tab switching
                     existingTab.BookView.ScrollToPageAnchor(initialAnchor);
-                    _logger.LogInfo("SimpleTabbedWindow", "Navigated to anchor in existing tab", initialAnchor);
+                    _logger.Information("Navigated to anchor in existing tab: {InitialAnchor}", initialAnchor);
                 });
             }
             return;
         }
 
         // Create new book display with the default script
-        _logger.LogInfo("SimpleTabbedWindow", "Creating BookDisplayViewModel", $"{searchTerms?.Count ?? 0} search terms, anchor '{initialAnchor ?? "null"}', script {_defaultScript}");
+        _logger.Information("Creating BookDisplayViewModel - {SearchTermCount} search terms, anchor '{InitialAnchor}', script {DefaultScript}", searchTerms?.Count ?? 0, initialAnchor ?? "null", _defaultScript);
         
         // Get ChapterListsService from dependency injection
         var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
@@ -486,7 +490,7 @@ public class SimpleTabbedWindow : Window
             if (existingLinkedTab != null)
             {
                 // Book already open, just switch to it and navigate to anchor
-                _logger.LogInfo("SimpleTabbedWindow", "Linked book already open, selecting existing tab and navigating to anchor", anchor);
+                _logger.Information("Linked book already open, selecting existing tab and navigating to anchor: {Anchor}", anchor);
                 SelectBook(existingLinkedTab);
                 
                 // Navigate to anchor if provided
@@ -497,7 +501,7 @@ public class SimpleTabbedWindow : Window
                     {
                         await Task.Delay(500); // Give time for tab switching
                         existingLinkedTab.BookView.ScrollToPageAnchor(anchor);
-                        _logger.LogInfo("SimpleTabbedWindow", "Navigated to anchor in existing tab", anchor);
+                        _logger.Information("Navigated to anchor in existing tab: {Anchor}", anchor);
                     });
                 }
                 return;
@@ -520,7 +524,7 @@ public class SimpleTabbedWindow : Window
         
         SelectBook(bookTab);
         UpdateDisplayState();
-        _logger.LogInfo("SimpleTabbedWindow", "Book tab created and selected");
+        _logger.Information("Book tab created and selected");
     }
 
     private void CreateTabUI(BookTabInfo bookTab)
@@ -640,7 +644,7 @@ public class SimpleTabbedWindow : Window
 
     private void SetupGlobalKeyboardHandling()
     {
-        _logger.LogInfo("SimpleTabbedWindow", "Setting up global keyboard handling for copy functionality");
+        _logger.Information("Setting up global keyboard handling for copy functionality");
         this.KeyDown += OnGlobalKeyDown;
         
         // Also try AddHandler for tunneling events that fire before normal events
@@ -650,7 +654,7 @@ public class SimpleTabbedWindow : Window
     private async void OnGlobalKeyDown(object? sender, KeyEventArgs e)
     {
         // Debug: Log all key events to see what we're receiving
-        _logger.LogInfo("SimpleTabbedWindow", "Key event received", $"Key: {e.Key}, Modifiers: {e.KeyModifiers}, Handled: {e.Handled}");
+        _logger.Information("Key event received - Key: {Key}, Modifiers: {KeyModifiers}, Handled: {Handled}", e.Key, e.KeyModifiers, e.Handled);
         
         // Handle Cmd+C (macOS) or Ctrl+C (Windows/Linux) to copy selected text
         if ((e.KeyModifiers.HasFlag(KeyModifiers.Meta) && System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)) ||
@@ -658,7 +662,7 @@ public class SimpleTabbedWindow : Window
         {
             if (e.Key == Key.C)
             {
-                _logger.LogInfo("SimpleTabbedWindow", "Global copy shortcut detected - delegating to active tab");
+                _logger.Information("Global copy shortcut detected - delegating to active tab");
                 
                 // Find the currently active BookDisplayView
                 var activeTab = _openBooks.FirstOrDefault(b => b.IsSelected);
@@ -670,7 +674,7 @@ public class SimpleTabbedWindow : Window
                 }
                 else
                 {
-                    _logger.LogInfo("SimpleTabbedWindow", "No active tab found for copy operation");
+                    _logger.Information("No active tab found for copy operation");
                 }
             }
         }
@@ -678,7 +682,7 @@ public class SimpleTabbedWindow : Window
 
     private async void OnCopyButtonClick(object? sender, RoutedEventArgs e)
     {
-        _logger.LogInfo("SimpleTabbedWindow", "Copy button clicked - attempting to copy selected text");
+        _logger.Information("Copy button clicked - attempting to copy selected text");
         
         // Find the currently active BookDisplayView
         var activeTab = _openBooks.FirstOrDefault(b => b.IsSelected);
@@ -689,7 +693,7 @@ public class SimpleTabbedWindow : Window
         }
         else
         {
-            _logger.LogInfo("SimpleTabbedWindow", "No active tab found for copy operation");
+            _logger.Information("No active tab found for copy operation");
         }
     }
 }
