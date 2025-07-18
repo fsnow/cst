@@ -42,6 +42,7 @@ public partial class BookDisplayView : UserControl
     private string _lastKnownMyanmar = "*";
     private string _lastKnownPts = "*";
     private string _lastKnownThai = "*";
+    private string _lastKnownOther = "*";
     private string _lastKnownPara = "*";
 
     public BookDisplayView()
@@ -328,7 +329,7 @@ public partial class BookDisplayView : UserControl
                 try {{
                     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
                     
-                    var vri = '*', myanmar = '*', pts = '*', thai = '*', para = '*';
+                    var vri = '*', myanmar = '*', pts = '*', thai = '*', other = '*', para = '*';
                     
                     // Try to get page references
                     try {{
@@ -338,6 +339,7 @@ public partial class BookDisplayView : UserControl
                             myanmar = refs.myanmar || '*';
                             pts = refs.pts || '*';
                             thai = refs.thai || '*';
+                            other = refs.other || '*';
                         }}
                     }} catch(pageError) {{
                     }}
@@ -410,9 +412,9 @@ public partial class BookDisplayView : UserControl
                     }}
                     
                     // ATOMIC UPDATE: Send all status info in one message with tab ID including chapter
-                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|SCROLL=' + scrollY + '|TAB:__TAB_ID_PLACEHOLDER__';
+                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|SCROLL=' + scrollY + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
-                    document.title = 'CST_STATUS_UPDATE:VRI=*|MYANMAR=*|PTS=*|THAI=*|PARA=*|CHAPTER=*|SCROLL=0|TAB:__TAB_ID_PLACEHOLDER__';
+                    document.title = 'CST_STATUS_UPDATE:VRI=*|MYANMAR=*|PTS=*|THAI=*|OTHER=*|PARA=*|CHAPTER=*|SCROLL=0|TAB:__TAB_ID_PLACEHOLDER__';
                 }}
             ";
 
@@ -450,7 +452,7 @@ public partial class BookDisplayView : UserControl
                         paragraphAnchors: {{}},
                         chapterAnchors: {{}},
                         // Add properties to hold the pre-sorted lists for performance
-                        sortedPageAnchors: {{ V: [], M: [], P: [], T: [] }},
+                        sortedPageAnchors: {{ V: [], M: [], P: [], T: [], O: [] }},
                         sortedParagraphAnchors: [],
                         sortedChapterAnchors: [],
                         
@@ -458,7 +460,7 @@ public partial class BookDisplayView : UserControl
                             this.pageAnchors = {{}};
                             this.paragraphAnchors = {{}};
                             this.chapterAnchors = {{}};
-                            this.sortedPageAnchors = {{ V: [], M: [], P: [], T: [] }};
+                            this.sortedPageAnchors = {{ V: [], M: [], P: [], T: [], O: [] }};
                             this.sortedParagraphAnchors = [];
                             this.sortedChapterAnchors = [];
 
@@ -471,7 +473,7 @@ public partial class BookDisplayView : UserControl
                             }}
 
                             // Collect page anchors with the CORRECT position calculation.
-                            ['V', 'M', 'P', 'T'].forEach(function(prefix) {{
+                            ['V', 'M', 'P', 'T', 'O'].forEach(function(prefix) {{
                                 var anchors = document.querySelectorAll('a[name^=""' + prefix + '""]');
                                 anchors.forEach(function(anchor) {{
                                     var rect = anchor.getBoundingClientRect();
@@ -498,7 +500,7 @@ public partial class BookDisplayView : UserControl
                             chapterAnchors.forEach(function(anchor) {{
                                 if (anchor.name && anchor.name.match(/^[a-z]+\d+(_\d+)?$/) && 
                                     !anchor.name.startsWith('para') && 
-                                    !anchor.name.match(/^[VMPT]/)) {{
+                                    !anchor.name.match(/^[VMPTO]/)) {{
                                     var rect = anchor.getBoundingClientRect();
                                     // THE FIX: Add window.pageYOffset to get the absolute document position.
                                     var position = Math.round(rect.top + window.pageYOffset);
@@ -533,7 +535,7 @@ public partial class BookDisplayView : UserControl
                         }},
                         
                         getPageReferences: function(scrollY) {{
-                            var result = {{ vri: '*', myanmar: '*', pts: '*', thai: '*' }};
+                            var result = {{ vri: '*', myanmar: '*', pts: '*', thai: '*', other: '*' }};
                             var docPos = scrollY + 20; // CST4 algorithm offset
                             
                             // PERFORMANCE OPTIMIZATION: Use pre-sorted lists instead of expensive sorting on every call
@@ -562,11 +564,13 @@ public partial class BookDisplayView : UserControl
                             var myanmarAnchor = findBestAnchor(this.sortedPageAnchors.M);
                             var ptsAnchor = findBestAnchor(this.sortedPageAnchors.P);
                             var thaiAnchor = findBestAnchor(this.sortedPageAnchors.T);
+                            var otherAnchor = findBestAnchor(this.sortedPageAnchors.O);
                             
                             result.vri = vriAnchor ? vriAnchor.name : '*';
                             result.myanmar = myanmarAnchor ? myanmarAnchor.name : '*';
                             result.pts = ptsAnchor ? ptsAnchor.name : '*';
                             result.thai = thaiAnchor ? thaiAnchor.name : '*';
+                            result.other = otherAnchor ? otherAnchor.name : '*';
                             
                             return result;
                         }},
@@ -727,7 +731,7 @@ public partial class BookDisplayView : UserControl
                 _logger.Debug("Processing status update message");
 
                 // Parse message components
-                string vri = "*", myanmar = "*", pts = "*", thai = "*", para = "*", chapter = "*";
+                string vri = "*", myanmar = "*", pts = "*", thai = "*", other = "*", para = "*", chapter = "*";
                 int scrollY = 0;
                 bool isCacheBuilt = false;
 
@@ -737,6 +741,7 @@ public partial class BookDisplayView : UserControl
                     else if (part.StartsWith("MYANMAR=")) myanmar = part.Substring(8);
                     else if (part.StartsWith("PTS=")) pts = part.Substring(4);
                     else if (part.StartsWith("THAI=")) thai = part.Substring(5);
+                    else if (part.StartsWith("OTHER=")) other = part.Substring(6);
                     else if (part.StartsWith("PARA=")) para = part.Substring(5);
                     else if (part.StartsWith("CHAPTER=")) chapter = part.Substring(8);
                     else if (part.StartsWith("SCROLL=")) int.TryParse(part.Substring(7), out scrollY);
@@ -759,7 +764,7 @@ public partial class BookDisplayView : UserControl
                 else
                 {
                     // Handle status update
-                    _logger.Debug("Status values - VRI: {Vri}, Myanmar: {Myanmar}, PTS: {Pts}, Thai: {Thai}, Para: {Para}, Chapter: {Chapter}, Scroll: {ScrollY}", vri, myanmar, pts, thai, para, chapter, scrollY);
+                    _logger.Debug("Status values - VRI: {Vri}, Myanmar: {Myanmar}, PTS: {Pts}, Thai: {Thai}, Other: {Other}, Para: {Para}, Chapter: {Chapter}, Scroll: {ScrollY}", vri, myanmar, pts, thai, other, para, chapter, scrollY);
 
                     // Update scroll position
                     if (scrollY > 0) _lastKnownScrollY = scrollY;
@@ -769,6 +774,7 @@ public partial class BookDisplayView : UserControl
                     if (myanmar != "*") _lastKnownMyanmar = myanmar;
                     if (pts != "*") _lastKnownPts = pts;
                     if (thai != "*") _lastKnownThai = thai;
+                    if (other != "*") _lastKnownOther = other;
                     if (para != "*") _lastKnownPara = para;
 
                     // Update the ViewModel
@@ -777,7 +783,7 @@ public partial class BookDisplayView : UserControl
                         Dispatcher.UIThread.Post(() =>
                         {
                             _logger.Debug("Updating ViewModel on UI thread");
-                            _viewModel.UpdatePageReferences(vri, myanmar, pts, thai, "*");
+                            _viewModel.UpdatePageReferences(vri, myanmar, pts, thai, other);
                             _viewModel.UpdateCurrentParagraph($"para{para}");
                             
                             // Update current chapter if we have a valid chapter ID
