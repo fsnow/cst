@@ -3,10 +3,11 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:CST.Avalonia.ViewModels"
-             xmlns:cef="using:Xilium.CefGlue.Avalonia"
+             xmlns:wv="using:WebViewControl"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="CST.Avalonia.Views.BookDisplayView"
-             x:DataType="vm:BookDisplayViewModel">
+             x:DataType="vm:BookDisplayViewModel"
+             Focusable="True">
 
     <Design.DataContext>
         <vm:BookDisplayViewModel/>
@@ -117,14 +118,16 @@
         <!-- Main Browser Control -->
         <Border DockPanel.Dock="Top" BorderBrush="Gray" BorderThickness="1">
             <Panel>
-                <!-- CefGlue Browser -->
-                <Decorator x:Name="browserWrapper" 
-                           IsVisible="{Binding IsCefGlueAvailable}"/>
+                <!-- WebView Browser -->
+                <wv:WebView x:Name="webView" 
+                           IsVisible="{Binding IsWebViewAvailable}"
+                           Focusable="True"
+                           IsTabStop="True"/>
                 
                 <!-- Fallback Text Display -->
                 <ScrollViewer x:Name="fallbackBrowser" 
                               Background="White"
-                              IsVisible="{Binding !IsCefGlueAvailable}">
+                              IsVisible="{Binding !IsWebViewAvailable}">
                     <StackPanel Margin="10">
                         <TextBlock Text="=== FALLBACK TEXT DISPLAY ===" FontWeight="Bold" Margin="0,0,0,10"/>
                         <TextBlock Text="{Binding BookInfoText}" FontWeight="Bold" Margin="0,0,0,5"/>

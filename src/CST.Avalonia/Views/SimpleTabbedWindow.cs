@@ -18,6 +18,7 @@ using CST;
 using CST.Conversion;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using ReactiveUI;
 
 namespace CST.Avalonia.Views;
 
@@ -49,7 +50,13 @@ public class SimpleTabbedWindow : Window
 
         BuildUI();
         UpdateDisplayState();
-        SetupGlobalKeyboardHandling();
+        
+        // Add diagnostic logging for focus and keyboard events
+        GotFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow GotFocus. Source: {Source}", e.Source?.GetType().Name);
+        LostFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow LostFocus. Source: {Source}", e.Source?.GetType().Name);
+        AddHandler(KeyDownEvent, (s, e) => {
+            _logger.Debug("KEYBOARD: SimpleTabbedWindow KeyDown. Key: {Key}, Modifiers: {Modifiers}, Source: {Source}", e.Key, e.KeyModifiers, e.Source?.GetType().Name);
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     private void BuildUI()
@@ -630,43 +637,6 @@ public class SimpleTabbedWindow : Window
         _selectedBookHost.IsVisible = hasBooks;
     }
 
-    private void SetupGlobalKeyboardHandling()
-    {
-        _logger.Information("Setting up global keyboard handling for copy functionality");
-        this.KeyDown += OnGlobalKeyDown;
-        
-        // Also try AddHandler for tunneling events that fire before normal events
-        this.AddHandler(KeyDownEvent, OnGlobalKeyDown, handledEventsToo: true);
-    }
-
-    private async void OnGlobalKeyDown(object? sender, KeyEventArgs e)
-    {
-        // Debug: Log all key events to see what we're receiving
-        _logger.Information("Key event received - Key: {Key}, Modifiers: {KeyModifiers}, Handled: {Handled}", e.Key, e.KeyModifiers, e.Handled);
-        
-        // Handle Cmd+C (macOS) or Ctrl+C (Windows/Linux) to copy selected text
-        if ((e.KeyModifiers.HasFlag(KeyModifiers.Meta) && System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)) ||
-            (e.KeyModifiers.HasFlag(KeyModifiers.Control) && !System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)))
-        {
-            if (e.Key == Key.C)
-            {
-                _logger.Information("Global copy shortcut detected - delegating to active tab");
-                
-                // Find the currently active BookDisplayView
-                var activeTab = _openBooks.FirstOrDefault(b => b.IsSelected);
-                if (activeTab?.BookView != null)
-                {
-                    // Call the copy method on the active BookDisplayView
-                    await activeTab.BookView.HandleCopyFromGlobalShortcut();
-                    e.Handled = true;
-                }
-                else
-                {
-                    _logger.Information("No active tab found for copy operation");
-                }
-            }
-        }
-    }
 
 }
 

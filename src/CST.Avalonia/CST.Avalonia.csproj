@@ -18,7 +18,7 @@
     <ProjectReference Include="..\CST.Core\CST.Core.csproj" />
   </ItemGroup>
 
-  <!-- Re-enable BookDisplayView for CefGlue implementation -->
+  <!-- WebView implementation with excluded legacy views -->
   <ItemGroup>
     <Compile Remove="ViewModels\SearchViewModel.cs" />
     <Compile Remove="ViewModels\SelectBookViewModel.cs" />
@@ -47,7 +47,7 @@
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="CefGlue.Avalonia.ARM64" Version="120.6099.211" />
+    <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" />
     <PackageReference Include="Mono.Cecil" Version="0.11.6" />
     <PackageReference Include="ReactiveUI" Version="19.4.1" />
     <PackageReference Include="ReactiveUI.Avalonia" Version="14.7.1" />

@@ -16,7 +16,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
-using Xilium.CefGlue.Avalonia;
 using ReactiveUI;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
@@ -54,8 +53,7 @@ public partial class App : Application
             SplashScreen.SetReferencePoint();
         }
 
-        // CefGlue initialization is handled in Program.cs using CefRuntimeLoader.Initialize()
-        // This ensures proper initialization before the app starts
+        // WebView initialization is handled automatically by OutSystems WebView package
 
         if (showSplash)
         {

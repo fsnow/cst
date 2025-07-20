@@ -9,8 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Xilium.CefGlue.Avalonia;
-using Xilium.CefGlue.Common.Events;
+using WebViewControl;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
 using Serilog;
@@ -26,9 +25,8 @@ public partial class BookDisplayView : UserControl
     private readonly ILogger _logger;
 
     private BookDisplayViewModel? _viewModel;
-    private AvaloniaCefBrowser? _cefBrowser;
+    private WebView? _webView;
     private ScrollViewer? _fallbackBrowser;
-    private Decorator? _browserWrapper;
     private int _lastScrollPosition = 0;
     private bool _isBrowserInitialized = false;
     private TaskCompletionSource<string?>? _paraAnchorTcs = null;
@@ -53,37 +51,82 @@ public partial class BookDisplayView : UserControl
         _logger = Log.ForContext<BookDisplayView>()
             .ForContext("TabId", _tabId);
 
-        _browserWrapper = this.FindControl<Decorator>("browserWrapper");
         _fallbackBrowser = this.FindControl<ScrollViewer>("fallbackBrowser");
 
-        // Try to create CefGlue browser
-        TryCreateCefBrowser();
+        // Make this UserControl focusable to receive keyboard events
+        this.Focusable = true;
+
+        // Add focus and keyboard event handlers at UserControl level
+        this.GotFocus += (s, e) => _logger.Debug("FOCUS: BookDisplayView GotFocus. Source: {Source}", e.Source?.GetType().Name);
+        this.LostFocus += (s, e) => _logger.Debug("FOCUS: BookDisplayView LostFocus. Source: {Source}", e.Source?.GetType().Name);
+        
+        // Add keyboard event handler with highest priority to intercept before WebView
+        this.AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+        // Try to create WebView browser
+        TryCreateWebView();
     }
 
-    private void TryCreateCefBrowser()
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        _logger.Debug("KEYBOARD: BookDisplayView KeyDown. Key: {Key}, Modifiers: {Modifiers}, Source: {Source}", e.Key, e.KeyModifiers, e.Source?.GetType().Name);
+        
+        // Check for Cmd+C or Ctrl+C
+        if (e.Key == Key.C && (e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)))
+        {
+            _logger.Information("*** COPY SHORTCUT DETECTED IN BookDisplayView ***");
+            e.Handled = true; // Prevent further processing
+            ExecuteCopy();
+            return;
+        }
+        
+        // Check for Cmd+A or Ctrl+A (Select All)
+        if (e.Key == Key.A && (e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)))
+        {
+            _logger.Information("*** SELECT ALL SHORTCUT DETECTED IN BookDisplayView ***");
+            e.Handled = true; // Prevent further processing
+            if (_webView != null)
+            {
+                try
+                {
+                    _webView.EditCommands.SelectAll();
+                    _logger.Information("WebView SelectAll executed successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error executing SelectAll");
+                }
+            }
+            return;
+        }
+    }
+
+    private void TryCreateWebView()
     {
         try
         {
-            if (_browserWrapper != null)
+            _webView = this.FindControl<WebView>("webView");
+            if (_webView != null)
             {
-                // Create browser with unique context to try to isolate instances
-                _cefBrowser = new AvaloniaCefBrowser();
+                // Set up event handlers
+                _webView.Navigated += OnNavigationCompleted;
+                _webView.TitleChanged += OnTitleChanged;
 
-                // Set up event handlers for debugging
-                _cefBrowser.BrowserInitialized += () => OnBrowserInitialized(null, EventArgs.Empty);
-                _cefBrowser.LoadEnd += OnLoadEnd;
-                _cefBrowser.LoadError += OnLoadError;
-                _cefBrowser.TitleChanged += OnTitleChanged;
+                // Add diagnostic logging for focus on the WebView itself
+                _webView.GotFocus += (s, e) => _logger.Debug("FOCUS: WebView GotFocus. Source: {Source}", e.Source?.GetType().Name);
+                _webView.LostFocus += (s, e) => _logger.Debug("FOCUS: WebView LostFocus. Source: {Source}", e.Source?.GetType().Name);
 
-                _browserWrapper.Child = _cefBrowser;
-
-                _logger.Information("CefGlue browser created successfully");
+                _logger.Information("WebView control found and events attached successfully");
+            }
+            else
+            {
+                _logger.Error("Failed to find WebView control in the view");
             }
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Failed to create CefGlue browser");
-            _cefBrowser = null;
+            _logger.Error(ex, "Failed to initialize WebView");
+            _webView = null;
         }
     }
 
@@ -93,7 +136,6 @@ public partial class BookDisplayView : UserControl
         this.PropertyChanged += OnIsVisibleChanged;
         _logger.Debug("OnLoaded called");
         SetupCSharpScrollTracking();
-        SetupKeyboardHandling();
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -159,7 +201,7 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        // Ensure we're on the UI thread for CefGlue operations
+        // Ensure we're on the UI thread for WebView operations
         if (!Dispatcher.UIThread.CheckAccess())
         {
             _logger.Debug("Dispatching to UI thread");
@@ -169,9 +211,9 @@ public partial class BookDisplayView : UserControl
 
         try
         {
-            _logger.Debug("CefGlue status - available: {IsCefGlueAvailable}, Browser: {HasBrowser}", _viewModel.IsCefGlueAvailable, _cefBrowser != null);
+            _logger.Debug("WebView status - available: {IsWebViewAvailable}, Browser: {HasBrowser}", _viewModel.IsWebViewAvailable, _webView != null);
 
-            if (_viewModel.IsCefGlueAvailable && _cefBrowser != null)
+            if (_viewModel.IsWebViewAvailable && _webView != null)
             {
                 try
                 {
@@ -190,33 +232,33 @@ public partial class BookDisplayView : UserControl
                     var fileUrl = $"file://{tempFilePath}";
                     _logger.Debug("Loading from file URL | {Details}", fileUrl);
 
-                    _cefBrowser.Address = fileUrl;
+                    _webView.LoadUrl(fileUrl);
                     _viewModel.PageStatusText = "Loading content from file...";
                     _logger.Information("HTML content loaded from temporary file");
                 }
                 catch (Exception ex)
                 {
                     _logger.Error("Failed to load HTML content | {Details}", ex.Message);
-                    _viewModel.SetCefGlueAvailability(false, "Failed to load content - using fallback");
+                    _viewModel.SetWebViewAvailability(false, "Failed to load content - using fallback");
                 }
             }
-            else if (_cefBrowser == null)
+            else if (_webView == null)
             {
-                // Browser creation failed, disable CefGlue
-                _logger.Warning("Browser is null - setting CefGlue unavailable");
-                _viewModel.SetCefGlueAvailability(false, "CefGlue browser unavailable - using fallback text display");
+                // Browser creation failed, disable WebView
+                _logger.Warning("Browser is null - setting WebView unavailable");
+                _viewModel.SetWebViewAvailability(false, "WebView browser unavailable - using fallback text display");
             }
             else
             {
-                _logger.Information("CefGlue not available - using fallback");
+                _logger.Information("WebView not available - using fallback");
             }
             // Fallback is already handled by data binding in XAML
         }
         catch (Exception ex)
         {
-            // If CefGlue fails, mark it as unavailable and fall back to text display
+            // If WebView fails, mark it as unavailable and fall back to text display
             _logger.Error("Exception occurred | {Details}", ex.Message);
-            _viewModel?.SetCefGlueAvailability(false, $"CefGlue error, using fallback: {ex.Message}");
+            _viewModel?.SetWebViewAvailability(false, $"WebView error, using fallback: {ex.Message}");
         }
     }
 
@@ -277,7 +319,7 @@ public partial class BookDisplayView : UserControl
 
     private void OnScrollPositionCheck(object? sender, System.Timers.ElapsedEventArgs e)
     {
-        if (_cefBrowser == null || !_isBrowserInitialized || _viewModel == null)
+        if (_webView == null || !_isBrowserInitialized || _viewModel == null)
         {
             return;
         }
@@ -317,9 +359,9 @@ public partial class BookDisplayView : UserControl
         {
             _logger.Debug("UpdateScrollBasedStatus called - anchorCacheBuilt: {AnchorCacheBuilt}", _anchorCacheBuilt);
 
-            if (!_anchorCacheBuilt || _cefBrowser == null)
+            if (!_anchorCacheBuilt || _webView == null)
             {
-                _logger.Debug("UpdateScrollBasedStatus skipped - anchorCacheBuilt: {AnchorCacheBuilt}, browser: {HasBrowser}", _anchorCacheBuilt, _cefBrowser != null);
+                _logger.Debug("UpdateScrollBasedStatus skipped - anchorCacheBuilt: {AnchorCacheBuilt}, browser: {HasBrowser}", _anchorCacheBuilt, _webView != null);
                 return;
             }
 
@@ -421,7 +463,7 @@ public partial class BookDisplayView : UserControl
             // Replace tab ID placeholder with actual tab ID value
             script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
             
-            _cefBrowser.ExecuteJavaScript(script);
+            _webView.ExecuteScript(script);
         }
         catch (Exception ex)
         {
@@ -433,7 +475,7 @@ public partial class BookDisplayView : UserControl
 
     private async Task BuildAnchorPositionCache()
     {
-        if (_cefBrowser == null) return;
+        if (_webView == null) return;
 
         _logger.Debug("BuildAnchorPositionCache attempting to acquire JS lock");
         if (await _jsExecutionLock.WaitAsync(10))
@@ -626,7 +668,7 @@ public partial class BookDisplayView : UserControl
                 // Replace tab ID placeholder with actual tab ID value
                 script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
 
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
 
                 // Wait for the cache to be built
                 await Task.Delay(500);
@@ -654,15 +696,27 @@ public partial class BookDisplayView : UserControl
         }
     }
 
-    private void OnLoadEnd(object? sender, LoadEndEventArgs e)
+    private void OnNavigationCompleted(string url, string frameName)
     {
-        if (_viewModel != null && e.Frame.IsMain)
+        if (_viewModel != null)
         {
             Dispatcher.UIThread.Post(() =>
             {
-                _logger.Information("Main frame loaded successfully - URL: {Url}", e.Frame.Url);
+                _logger.Information("Navigation completed successfully");
                 _viewModel.PageStatusText = "Document loaded successfully";
 
+                // Mark browser as initialized for scroll tracking
+                _isBrowserInitialized = true;
+
+                // Signal the ViewModel that initialization is complete and navigation can be enabled
+                _viewModel.CompleteInitialization();
+
+                // Make sure this UserControl can receive keyboard focus
+                this.Focusable = true;
+                // Focus the UserControl for keyboard shortcuts
+                this.Focus();
+                _logger.Debug("BookDisplayView focused for keyboard shortcuts");
+                
                 // Set up JavaScript bridge after content loads
                 SetupJavaScriptBridge();
 
@@ -686,20 +740,10 @@ public partial class BookDisplayView : UserControl
         }
     }
 
-    private void OnLoadError(object? sender, LoadErrorEventArgs e)
-    {
-        if (_viewModel != null)
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                _logger.Error("Load error occurred - Error: {ErrorText}, Code: {ErrorCode}, URL: {FailedUrl}", e.ErrorText, e.ErrorCode, e.FailedUrl);
-                _viewModel.PageStatusText = $"Load error: {e.ErrorText}";
-            });
-        }
-    }
 
-    private void OnTitleChanged(object? sender, string title)
+    private void OnTitleChanged()
     {
+        var title = _webView?.Title ?? "";
         _logger.Debug("Page title changed | {Details}", title);
 
         // Check for new atomic status update with tab ID filtering
@@ -885,6 +929,55 @@ public partial class BookDisplayView : UserControl
                 _logger.Error("Error parsing copy failure message | {Details}", ex.Message);
             }
         }
+        // Check for copy request from JavaScript
+        else if (title != null && title.StartsWith("CST_COPY_REQUESTED:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Information("*** COPY REQUESTED FROM JAVASCRIPT ***");
+                    ExecuteCopy();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing copy request from JavaScript | {Details}", ex.Message);
+            }
+        }
+        // Check for select all request from JavaScript
+        else if (title != null && title.StartsWith("CST_SELECT_ALL_REQUESTED:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Information("*** SELECT ALL REQUESTED FROM JAVASCRIPT ***");
+                    if (_webView != null)
+                    {
+                        try
+                        {
+                            _webView.EditCommands.SelectAll();
+                            _logger.Information("WebView SelectAll executed successfully from JavaScript request");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error(ex, "Error executing SelectAll from JavaScript request");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing select all request from JavaScript | {Details}", ex.Message);
+            }
+        }
         // Check for JS log messages
         else if (title != null && title.StartsWith("CST_LOG_MSG::"))
         {
@@ -930,7 +1023,7 @@ public partial class BookDisplayView : UserControl
 
     private void SetupJavaScriptBridge()
     {
-        if (_cefBrowser == null) return;
+        if (_webView == null) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
@@ -944,8 +1037,42 @@ public partial class BookDisplayView : UserControl
             _logger.Debug("SetupJavaScriptBridge acquired JS lock successfully");
             try
             {
-                // Add JavaScript functions for search navigation
+                // Add JavaScript functions for search navigation and keyboard capture
                 var script = @"
+                    // Keyboard event capture system
+                    window.cstKeyboardCapture = {
+                        init: function() {
+                            document.addEventListener('keydown', function(event) {
+                                // Log all keyboard events for debugging
+                                window.cstLogger.log('DEBUG', 'JS KeyDown: ' + event.key + ' + modifiers: ' + event.ctrlKey + '/' + event.metaKey + '/' + event.altKey + '/' + event.shiftKey);
+                                
+                                // Check for Cmd+C or Ctrl+C
+                                if (event.key === 'c' && (event.metaKey || event.ctrlKey)) {
+                                    window.cstLogger.log('INFO', 'Copy shortcut detected in JavaScript');
+                                    event.preventDefault(); // Prevent default browser behavior
+                                    event.stopPropagation(); // Stop event bubbling
+                                    
+                                    // Signal C# to handle copy operation
+                                    document.title = 'CST_COPY_REQUESTED:|TAB:{_tabId}';
+                                    return false;
+                                }
+                                
+                                // Check for Cmd+A or Ctrl+A
+                                if (event.key === 'a' && (event.metaKey || event.ctrlKey)) {
+                                    window.cstLogger.log('INFO', 'Select All shortcut detected in JavaScript');
+                                    event.preventDefault(); // Prevent default browser behavior
+                                    event.stopPropagation(); // Stop event bubbling
+                                    
+                                    // Signal C# to handle select all operation
+                                    document.title = 'CST_SELECT_ALL_REQUESTED:|TAB:{_tabId}';
+                                    return false;
+                                }
+                            }, true); // Use capture phase to intercept before other handlers
+                            
+                            window.cstLogger.log('INFO', 'Keyboard capture initialized');
+                        }
+                    };
+
                     window.cstLogger = {
                         log: function(level, message, ...args) {
                             try {
@@ -1139,10 +1266,12 @@ public partial class BookDisplayView : UserControl
                     if (document.readyState === 'complete') {
                         setTimeout(initializeHighlights, 100);
                         setTimeout(initializeChapterTracking, 200);
+                        setTimeout(function() { window.cstKeyboardCapture.init(); }, 50);
                     } else {
                         document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(initializeHighlights, 100);
                             setTimeout(initializeChapterTracking, 200);
+                            setTimeout(function() { window.cstKeyboardCapture.init(); }, 50);
                         });
                     }
                 ";
@@ -1150,7 +1279,7 @@ public partial class BookDisplayView : UserControl
                 // Replace tab ID placeholder with actual tab ID value
                 script = script.Replace("{_tabId}", _tabId);
 
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
             }
             catch (Exception ex)
             {
@@ -1176,15 +1305,41 @@ public partial class BookDisplayView : UserControl
 
     private void NavigateToHighlight(int hitIndex)
     {
-        if (_cefBrowser == null)
+        if (_webView == null)
         {
-            _logger.Warning("NavigateToHighlight called but _cefBrowser is null");
+            _logger.Warning("NavigateToHighlight called but _webView is null");
             return;
         }
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
             Dispatcher.UIThread.Post(() => NavigateToHighlight(hitIndex));
+            return;
+        }
+
+        // Handle special signals for copy and select all
+        if (hitIndex == -1)
+        {
+            _logger.Information("*** COPY COMMAND TRIGGERED VIA KEYBOARD SHORTCUT ***");
+            HandleCopySelectedText();
+            return;
+        }
+        
+        if (hitIndex == -2)
+        {
+            _logger.Information("*** SELECT ALL COMMAND TRIGGERED VIA KEYBOARD SHORTCUT ***");
+            if (_webView != null)
+            {
+                try
+                {
+                    _webView.EditCommands.SelectAll();
+                    _logger.Information("WebView SelectAll executed successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error executing SelectAll");
+                }
+            }
             return;
         }
 
@@ -1196,7 +1351,7 @@ public partial class BookDisplayView : UserControl
             try
             {
                 var script = $"window.cstSearchHighlights?.navigateToHit({hitIndex});";
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
             }
             catch (Exception ex)
             {
@@ -1223,7 +1378,7 @@ public partial class BookDisplayView : UserControl
     // Public method to navigate to a specific anchor
     public void NavigateToAnchor(string anchor)
     {
-        if (_cefBrowser == null || string.IsNullOrEmpty(anchor)) return;
+        if (_webView == null || string.IsNullOrEmpty(anchor)) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
@@ -1247,7 +1402,7 @@ public partial class BookDisplayView : UserControl
                         }}
                     }} catch (error) {{ }}
                 }})();";
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
             }
             catch (Exception ex)
             {
@@ -1274,7 +1429,7 @@ public partial class BookDisplayView : UserControl
     // Public method to toggle search highlighting visibility
     public void SetHighlightVisibility(bool visible)
     {
-        if (_cefBrowser == null) return;
+        if (_webView == null) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
@@ -1289,7 +1444,7 @@ public partial class BookDisplayView : UserControl
             try
             {
                 var script = $"window.cstSearchHighlights?.showHits({visible.ToString().ToLower()});";
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
             }
             catch (Exception ex)
             {
@@ -1317,7 +1472,7 @@ public partial class BookDisplayView : UserControl
     public int GetScrollPosition()
     {
         // Return 0 if browser is not ready
-        if (_cefBrowser == null || !_isBrowserInitialized)
+        if (_webView == null || !_isBrowserInitialized)
             return 0;
 
         // Return the last known scroll position
@@ -1327,7 +1482,7 @@ public partial class BookDisplayView : UserControl
     // Public method to restore scroll position
     public void SetScrollPosition(int position)
     {
-        if (_cefBrowser == null || !_isBrowserInitialized || position <= 0) return;
+        if (_webView == null || !_isBrowserInitialized || position <= 0) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
@@ -1342,7 +1497,7 @@ public partial class BookDisplayView : UserControl
             try
             {
                 var script = $"window.scrollTo(0, {position});";
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
                 _lastScrollPosition = position;
             }
             catch (Exception ex)
@@ -1382,7 +1537,7 @@ public partial class BookDisplayView : UserControl
     // Public method to scroll to a page anchor
     public void ScrollToPageAnchor(string anchorName)
     {
-        if (_cefBrowser == null || !_isBrowserInitialized || string.IsNullOrEmpty(anchorName)) return;
+        if (_webView == null || !_isBrowserInitialized || string.IsNullOrEmpty(anchorName)) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
@@ -1451,7 +1606,7 @@ public partial class BookDisplayView : UserControl
                         }}
                     }})();
                 ";
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
             }
             catch (Exception ex)
             {
@@ -1478,7 +1633,7 @@ public partial class BookDisplayView : UserControl
     // Public method to toggle footnote visibility
     public void SetFootnoteVisibility(bool visible)
     {
-        if (_cefBrowser == null) return;
+        if (_webView == null) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
@@ -1493,7 +1648,7 @@ public partial class BookDisplayView : UserControl
             try
             {
                 var script = $"window.cstSearchHighlights?.showFootnotes({visible.ToString().ToLower()});";
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
             }
             catch (Exception ex)
             {
@@ -1524,7 +1679,7 @@ public partial class BookDisplayView : UserControl
     /// </summary>
     public async Task<string?> GetCurrentParagraphAnchorAsync()
     {
-        if (_cefBrowser == null || !_isBrowserInitialized)
+        if (_webView == null || !_isBrowserInitialized)
         {
             _logger.Warning("GetCurrentParagraphAnchorAsync: Browser not available");
             return null;
@@ -1560,7 +1715,7 @@ public partial class BookDisplayView : UserControl
                 // Replace tab ID placeholder with actual tab ID value
                 script = script.Replace("{_tabId}", _tabId);
 
-                _cefBrowser.ExecuteJavaScript(script);
+                _webView.ExecuteScript(script);
 
                 var timeoutTask = Task.Delay(TimeSpan.FromMilliseconds(1000));
                 var completedTask = await Task.WhenAny(_paraAnchorTcs.Task, timeoutTask);
@@ -1597,37 +1752,17 @@ public partial class BookDisplayView : UserControl
     }
 
 
-    private void SetupKeyboardHandling()
-    {
-        _logger.Debug("Setting up keyboard handling for copy functionality");
-        this.KeyDown += OnKeyDown;
-    }
 
-    private async void OnKeyDown(object? sender, KeyEventArgs e)
-    {
-        // Handle Cmd+C (macOS) or Ctrl+C (Windows/Linux) to copy selected text
-        if ((e.KeyModifiers.HasFlag(KeyModifiers.Meta) && RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) ||
-            (e.KeyModifiers.HasFlag(KeyModifiers.Control) && !RuntimeInformation.IsOSPlatform(OSPlatform.OSX)))
-        {
-            if (e.Key == Key.C)
-            {
-                _logger.Debug("Copy shortcut detected - attempting to copy selected text");
-                await HandleCopySelectedText();
-                e.Handled = true;
-            }
-        }
-    }
-
-    public async Task HandleCopyFromGlobalShortcut()
+    public Task HandleCopyFromGlobalShortcut()
     {
         _logger.Debug("Global copy shortcut received - attempting to copy selected text");
-        await HandleCopySelectedText();
+        return HandleCopySelectedText();
     }
 
     // Alternative approach: Poll the JavaScript for selected text and provide copy functionality
     public async Task<string?> GetSelectedTextAsync()
     {
-        if (_cefBrowser == null || !_isBrowserInitialized)
+        if (_webView == null || !_isBrowserInitialized)
         {
             return null;
         }
@@ -1645,7 +1780,7 @@ public partial class BookDisplayView : UserControl
                         document.title = 'CST_SELECTED_TEXT:ERROR:' + err.message + '|TAB:' + window.cstTabId;
                     }";
 
-                _cefBrowser.ExecuteJavaScript(getSelectedTextScript);
+                _webView.ExecuteScript(getSelectedTextScript);
                 
                 // Wait a moment for the result
                 await Task.Delay(100);
@@ -1665,76 +1800,38 @@ public partial class BookDisplayView : UserControl
         }
     }
 
-    private async Task HandleCopySelectedText()
+    private Task HandleCopySelectedText()
     {
-        if (_cefBrowser == null || !_isBrowserInitialized)
+        if (_webView == null)
         {
-            _logger.Debug("Copy failed - browser not available");
-            return;
+            _logger.Debug("Copy failed - WebView not available");
+            return Task.CompletedTask;
         }
 
         try
         {
-            // Use JavaScript to get selected text and copy to clipboard
-            await _jsExecutionLock.WaitAsync();
-            try
-            {
-                var copyScript = @"
-                    try {
-                        var selectedText = window.getSelection().toString();
-                        if (selectedText && selectedText.length > 0) {
-                            // Try to use the Clipboard API if available
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                                navigator.clipboard.writeText(selectedText).then(function() {
-                                    document.title = 'CST_COPY_SUCCESS:' + selectedText.length + '|TAB:' + window.cstTabId;
-                                }).catch(function(err) {
-                                    document.title = 'CST_COPY_FAILED:Clipboard API failed|TAB:' + window.cstTabId;
-                                });
-                            } else {
-                                // Fallback: try to use execCommand
-                                var textArea = document.createElement('textarea');
-                                textArea.value = selectedText;
-                                document.body.appendChild(textArea);
-                                textArea.select();
-                                try {
-                                    var successful = document.execCommand('copy');
-                                    document.body.removeChild(textArea);
-                                    if (successful) {
-                                        document.title = 'CST_COPY_SUCCESS:' + selectedText.length + '|TAB:' + window.cstTabId;
-                                    } else {
-                                        document.title = 'CST_COPY_FAILED:execCommand failed|TAB:' + window.cstTabId;
-                                    }
-                                } catch (err) {
-                                    document.body.removeChild(textArea);
-                                    document.title = 'CST_COPY_FAILED:' + err.message + '|TAB:' + window.cstTabId;
-                                }
-                            }
-                        } else {
-                            document.title = 'CST_COPY_FAILED:No text selected|TAB:' + window.cstTabId;
-                        }
-                    } catch (err) {
-                        document.title = 'CST_COPY_FAILED:' + err.message + '|TAB:' + window.cstTabId;
-                    }";
-
-                _logger.Debug("Executing copy script");
-                _cefBrowser.ExecuteJavaScript(copyScript);
-            }
-            finally
-            {
-                _jsExecutionLock.Release();
-            }
+            _logger.Debug("Using WebView native copy command");
+            _webView.EditCommands.Copy();
+            _logger.Information("Copy command executed successfully");
         }
         catch (Exception ex)
         {
             _logger.Error("Error in HandleCopySelectedText | {Details}", ex.Message);
         }
+        
+        return Task.CompletedTask;
+    }
+
+    public void ExecuteCopy()
+    {
+        _logger.Debug("ACTION: ExecuteCopy called.");
+        HandleCopySelectedText();
     }
 
     protected override void OnUnloaded(RoutedEventArgs e)
     {
         base.OnUnloaded(e);
         this.PropertyChanged -= OnIsVisibleChanged;
-        this.KeyDown -= OnKeyDown;
 
         // Stop and dispose the timer to prevent resource leaks
         if (_scrollTimer != null)

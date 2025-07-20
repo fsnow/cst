@@ -61,8 +61,9 @@ namespace CST.Avalonia.ViewModels
         private bool _hasTika;
         private DivTag? _selectedChapter;
         private string _htmlContent = "";
-        private bool _isCefGlueAvailable = true; // Start optimistically to avoid fallback flash
+        private bool _isWebViewAvailable = true; // Start optimistically to avoid fallback flash
         private bool _updatingChapterFromScroll = false;
+        private bool _isInitializing = true;
 
         public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null)
         {
@@ -94,6 +95,10 @@ namespace CST.Avalonia.ViewModels
             OpenMulaCommand = ReactiveCommand.CreateFromTask(OpenMulaBookAsync);
             OpenAtthakathaCommand = ReactiveCommand.CreateFromTask(OpenAtthakathaBookAsync);
             OpenTikaCommand = ReactiveCommand.CreateFromTask(OpenTikaBookAsync);
+            
+            // WebView edit commands
+            CopyCommand = ReactiveCommand.Create(ExecuteCopy);
+            SelectAllCommand = ReactiveCommand.Create(ExecuteSelectAll);
             
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
@@ -170,7 +175,7 @@ namespace CST.Avalonia.ViewModels
                 });
                 
             this.WhenAnyValue(x => x.SelectedChapter)
-                .Where(chapter => chapter != null)
+                .Where(chapter => chapter != null && !_isInitializing)
                 .Subscribe(chapter => NavigateToChapter(chapter!));
                 
             // Initialize data on UI thread to prevent threading issues
@@ -187,6 +192,8 @@ namespace CST.Avalonia.ViewModels
         public ReactiveCommand<Unit, Unit> OpenMulaCommand { get; }
         public ReactiveCommand<Unit, Unit> OpenAtthakathaCommand { get; }
         public ReactiveCommand<Unit, Unit> OpenTikaCommand { get; }
+        public ReactiveCommand<Unit, Unit> CopyCommand { get; }
+        public ReactiveCommand<Unit, Unit> SelectAllCommand { get; }
 
         public Script BookScript
         {
@@ -326,10 +333,10 @@ namespace CST.Avalonia.ViewModels
         // Reference to the BookDisplayView control for scroll position management
         public BookDisplayView? BookDisplayControl { get; set; }
 
-        public bool IsCefGlueAvailable
+        public bool IsWebViewAvailable
         {
-            get => _isCefGlueAvailable;
-            set => this.RaiseAndSetIfChanged(ref _isCefGlueAvailable, value);
+            get => _isWebViewAvailable;
+            set => this.RaiseAndSetIfChanged(ref _isWebViewAvailable, value);
         }
 
         public Book Book => _book;
@@ -410,9 +417,9 @@ namespace CST.Avalonia.ViewModels
             
             try
             {
-                _logger.Debug("Step 1: Checking CefGlue availability");
-                // Check if CefGlue is available
-                CheckCefGlueAvailability();
+                _logger.Debug("Step 1: Checking WebView availability");
+                // Check if WebView is available
+                CheckWebViewAvailability();
                 
                 _logger.Debug("Step 2: Loading chapters");
                 // Load chapters if available
@@ -468,15 +475,15 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        private void CheckCefGlueAvailability()
+        private void CheckWebViewAvailability()
         {
             try
             {
-                // Start optimistically with CefGlue enabled to avoid fallback flash
-                _logger.Debug("CefGlue availability check - starting optimistically enabled");
+                // Start optimistically with WebView enabled to avoid fallback flash
+                _logger.Debug("WebView availability check - starting optimistically enabled");
                 Dispatcher.UIThread.Post(() =>
                 {
-                    IsCefGlueAvailable = true; // Start enabled, will be disabled if browser fails
+                    IsWebViewAvailable = true; // Start enabled, will be disabled if browser fails
                     PageStatusText = "Initializing browser...";
                 });
             }
@@ -484,19 +491,25 @@ namespace CST.Avalonia.ViewModels
             {
                 Dispatcher.UIThread.Post(() =>
                 {
-                    IsCefGlueAvailable = false;
+                    IsWebViewAvailable = false;
                     PageStatusText = $"Using fallback text display: {ex.Message}";
                 });
             }
         }
         
-        public void SetCefGlueAvailability(bool available, string statusMessage = "")
+        public void SetWebViewAvailability(bool available, string statusMessage = "")
         {
-            IsCefGlueAvailable = available;
+            IsWebViewAvailable = available;
             if (!string.IsNullOrEmpty(statusMessage))
             {
                 PageStatusText = statusMessage;
             }
+        }
+
+        public void CompleteInitialization()
+        {
+            _isInitializing = false;
+            _logger.Information("ViewModel initialization complete. Navigation enabled.");
         }
 
         private async Task LoadChaptersAsync()
@@ -875,6 +888,20 @@ namespace CST.Avalonia.ViewModels
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to last hit: hit_{TotalHits}";
             });
+        }
+
+        private void ExecuteCopy()
+        {
+            _logger.Information("*** EXECUTE COPY COMMAND CALLED ***");
+            // Signal the view to execute copy directly
+            NavigateToHighlightRequested?.Invoke(-1); // Use -1 as a special signal for copy
+        }
+
+        private void ExecuteSelectAll()
+        {
+            _logger.Information("*** EXECUTE SELECT ALL COMMAND CALLED ***");
+            // Signal the view to execute select all directly
+            NavigateToHighlightRequested?.Invoke(-2); // Use -2 as a special signal for select all
         }
 
         private void UpdateHitStatusText()
