@@ -13,6 +13,7 @@ using CST.Avalonia.Services;
 using CST.Conversion;
 using CstBook = CST.Book;
 using Microsoft.Extensions.Logging;
+using ReactiveUI;
 
 namespace CST.Avalonia.ViewModels;
 
@@ -20,7 +21,7 @@ namespace CST.Avalonia.ViewModels;
 /// ViewModel for the Open Book dialog - replacement for FormSelectBook
 /// Provides hierarchical tree navigation of Buddhist texts with state persistence
 /// </summary>
-public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
+public class OpenBookDialogViewModel : ViewModelBase, IDisposable
 {
     private readonly ILocalizationService _localizationService;
     private readonly IScriptService _scriptService;
@@ -70,8 +71,8 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
         set
         {
             _selectedNode = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(SelectedBookInfo));
+            this.RaisePropertyChanged();
+            this.RaisePropertyChanged(nameof(SelectedBookInfo));
             ((SimpleCommand<BookTreeNode>)OpenBookCommand).RaiseCanExecuteChanged();
         }
     }
@@ -83,7 +84,7 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
         set
         {
             _statusText = value;
-            OnPropertyChanged();
+            this.RaisePropertyChanged();
         }
     }
 
@@ -94,7 +95,7 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
         set
         {
             _totalBooks = value;
-            OnPropertyChanged();
+            this.RaisePropertyChanged();
         }
     }
 
@@ -105,7 +106,7 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
         set
         {
             _isLoading = value;
-            OnPropertyChanged();
+            this.RaisePropertyChanged();
         }
     }
 
@@ -176,10 +177,11 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task BuildBookTreeAsync()
     {
-        await Task.Run(() =>
+        var cstBooks = CST.Books.Inst;
+        
+        var rootNodes = await Task.Run(() =>
         {
-            var cstBooks = CST.Books.Inst;
-            var rootNodes = new Dictionary<string, BookTreeNode>();
+            var nodes = new Dictionary<string, BookTreeNode>();
 
             // Build tree exactly like FormSelectBook does
             foreach (var book in cstBooks)
@@ -188,7 +190,7 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
                 
                 // Add root node if it doesn't exist
                 BookTreeNode? node = null;
-                if (rootNodes.TryGetValue(parts[0], out node) == false)
+                if (nodes.TryGetValue(parts[0], out node) == false)
                 {
                     node = new BookTreeNode
                     {
@@ -198,7 +200,7 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
                         Level = 0,
                         NodeType = BookTreeNodeType.Category
                     };
-                    rootNodes[parts[0]] = node;
+                    nodes[parts[0]] = node;
                 }
 
                 // Add everything under the root
@@ -229,37 +231,45 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
                     node = node2;
                 }
             }
+            
+            return nodes;
+        });
 
-            Dispatcher.UIThread.Post(() =>
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            BookTree.Clear();
+            
+            // Maintain insertion order like CST4 - don't sort alphabetically
+            var orderedRootNodes = new List<BookTreeNode>();
+            var seenRootNames = new HashSet<string>();
+            
+            // Iterate through books in order to preserve root node insertion order
+            foreach (var book in cstBooks)
             {
-                BookTree.Clear();
-                
-                // Maintain insertion order like CST4 - don't sort alphabetically
-                var orderedRootNodes = new List<BookTreeNode>();
-                var seenRootNames = new HashSet<string>();
-                
-                // Iterate through books in order to preserve root node insertion order
-                foreach (var book in cstBooks)
+                string rootName = book.LongNavPath.Split('/')[0];
+                if (!seenRootNames.Contains(rootName))
                 {
-                    string rootName = book.LongNavPath.Split('/')[0];
-                    if (!seenRootNames.Contains(rootName))
-                    {
-                        seenRootNames.Add(rootName);
-                        orderedRootNodes.Add(rootNodes[rootName]);
-                    }
+                    seenRootNames.Add(rootName);
+                    orderedRootNodes.Add(rootNodes[rootName]);
                 }
-                
-                foreach (var rootNode in orderedRootNodes)
-                {
-                    BookTree.Add(rootNode);
-                }
+            }
+            
+            foreach (var rootNode in orderedRootNodes)
+            {
+                BookTree.Add(rootNode);
+            }
 
-                TotalBooks = cstBooks.Count();
-                CalculateChildCounts();
-                
-                // Restore tree expansion state after tree is built
-                _ = RestoreTreeExpansionState();
-            });
+            TotalBooks = cstBooks.Count();
+            CalculateChildCounts();
+            
+            // Debug logging
+            _logger.LogInformation("BookTree populated with {Count} root nodes", BookTree.Count);
+            
+            // Trigger property change to ensure UI updates
+            this.RaisePropertyChanged(nameof(BookTree));
+            
+            // Restore tree expansion state after tree is built
+            _ = RestoreTreeExpansionState();
         });
     }
 
@@ -533,7 +543,7 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
         Dispatcher.UIThread.Post(() =>
         {
             UpdateNodeDisplayNamesRecursive(BookTree);
-            OnPropertyChanged(nameof(CurrentScript));
+            this.RaisePropertyChanged(nameof(CurrentScript));
         });
     }
 
@@ -553,14 +563,6 @@ public class OpenBookDialogViewModel : INotifyPropertyChanged, IDisposable
                 UpdateNodeDisplayNamesRecursive(node.Children);
             }
         }
-    }
-
-    // INotifyPropertyChanged implementation
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
     public void Dispose()

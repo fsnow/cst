@@ -15,3 +15,5 @@ src/CST.Avalonia/logs/
 src/CST.Core/obj/
 
 src/CST.Avalonia/obj/
+
+dock_reflection/obj/

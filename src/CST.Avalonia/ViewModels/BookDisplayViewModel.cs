@@ -105,7 +105,7 @@ namespace CST.Avalonia.ViewModels
                 .Skip(1) // Skip initial value
                 .Subscribe(async script => 
                 {
-                    _logger.Information("Script changed - reloading from source files: {Script}", script.ToString());
+                    _logger.Debug("Script changed - reloading from source files: {Script}", script.ToString());
                     
                     // Save current page anchor for position preservation
                     string savedPageAnchor = "";
@@ -114,11 +114,11 @@ namespace CST.Avalonia.ViewModels
                         savedPageAnchor = BookDisplayControl.GetCurrentPageAnchor();
                         if (!string.IsNullOrEmpty(savedPageAnchor))
                         {
-                            _logger.Information("Saved page anchor: {Anchor}", savedPageAnchor);
+                            _logger.Debug("Saved page anchor: {Anchor}", savedPageAnchor);
                         }
                         else
                         {
-                            _logger.Information("No page anchor available, won't restore position");
+                            _logger.Warning("No page anchor available, won't restore position");
                         }
                     }
                     
@@ -169,7 +169,7 @@ namespace CST.Avalonia.ViewModels
                         await Dispatcher.UIThread.InvokeAsync(() =>
                         {
                             BookDisplayControl.ScrollToPageAnchor(savedPageAnchor);
-                            _logger.Information("Restored position to page anchor: {Anchor}", savedPageAnchor);
+                            _logger.Debug("Restored position to page anchor: {Anchor}", savedPageAnchor);
                         });
                     }
                 });
@@ -410,7 +410,7 @@ namespace CST.Avalonia.ViewModels
 
         private async Task InitializeAsync()
         {
-            _logger.Information("InitializeAsync starting: {FileName}", _book.FileName);
+            _logger.Debug("InitializeAsync starting: {FileName}", _book.FileName);
             
             // Ensure UI property updates happen on UI thread
             await Dispatcher.UIThread.InvokeAsync(() => IsLoading = true);
@@ -437,7 +437,7 @@ namespace CST.Avalonia.ViewModels
                 // Navigate to initial position if specified
                 if (!string.IsNullOrEmpty(_initialAnchor))
                 {
-                    _logger.Information("Navigating to initial anchor: {Anchor}", _initialAnchor);
+                    _logger.Debug("Navigating to initial anchor: {Anchor}", _initialAnchor);
                     // Wait a bit for content to render, then navigate to anchor
                     await Task.Delay(1000);
                     await Dispatcher.UIThread.InvokeAsync(() =>
@@ -445,7 +445,7 @@ namespace CST.Avalonia.ViewModels
                         if (BookDisplayControl != null)
                         {
                             BookDisplayControl.ScrollToPageAnchor(_initialAnchor);
-                            _logger.Information("Scrolled to initial anchor: {Anchor}", _initialAnchor);
+                            _logger.Debug("Scrolled to initial anchor: {Anchor}", _initialAnchor);
                         }
                         else
                         {
@@ -455,7 +455,7 @@ namespace CST.Avalonia.ViewModels
                 }
                 else if (_searchTerms?.Any() == true)
                 {
-                    _logger.Information("Setting up search navigation: {TermCount} terms", _searchTerms.Count);
+                    _logger.Debug("Setting up search navigation: {TermCount} terms", _searchTerms.Count);
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         CurrentHitIndex = 1;
@@ -463,7 +463,7 @@ namespace CST.Avalonia.ViewModels
                     });
                 }
                 
-                _logger.Information("InitializeAsync completed successfully");
+                _logger.Debug("InitializeAsync completed successfully");
             }
             catch (Exception ex)
             {
@@ -509,7 +509,7 @@ namespace CST.Avalonia.ViewModels
         public void CompleteInitialization()
         {
             _isInitializing = false;
-            _logger.Information("ViewModel initialization complete. Navigation enabled.");
+            _logger.Debug("ViewModel initialization complete. Navigation enabled.");
         }
 
         private async Task LoadChaptersAsync()
@@ -543,10 +543,10 @@ namespace CST.Avalonia.ViewModels
                 if (chapters.Count > 0 && SelectedChapter == null)
                 {
                     SelectedChapter = Chapters.First();
-                    _logger.Information("Set default selected chapter: {ChapterId} - {ChapterHeading}", SelectedChapter.Id, SelectedChapter.Heading);
+                    _logger.Debug("Set default selected chapter: {ChapterId} - {ChapterHeading}", SelectedChapter.Id, SelectedChapter.Heading);
                 }
                 
-                _logger.Information("Loaded chapters: {ChapterCount} chapters for book {FileName}", chapters.Count, _book.FileName);
+                _logger.Debug("Loaded chapters: {ChapterCount} chapters for book {FileName}", chapters.Count, _book.FileName);
             });
         }
 
@@ -561,7 +561,7 @@ namespace CST.Avalonia.ViewModels
                 HasAtthakatha = false;
                 HasTika = false;
                 HasLinkedBooks = false;
-                _logger.Information("No linked books found: {FileName}", _book.FileName);
+                _logger.Debug("No linked books found: {FileName}", _book.FileName);
             }
             else
             {
@@ -571,7 +571,7 @@ namespace CST.Avalonia.ViewModels
                 HasTika = _book.TikaIndex >= 0;
                 HasLinkedBooks = HasMula || HasAtthakatha || HasTika;
                 
-                _logger.Information("Linked books - Book: {FileName}, Mula={HasMula} (index={MulaIndex}), " +
+                _logger.Debug("Linked books - Book: {FileName}, Mula={HasMula} (index={MulaIndex}), " +
                                  $"Atthakatha={HasAtthakatha} (index={_book.AtthakathaIndex}), " +
                                  $"Tika={HasTika} (index={_book.TikaIndex})");
             }
@@ -606,7 +606,7 @@ namespace CST.Avalonia.ViewModels
                 {
                     // Load XML content
                     var xmlPath = Path.Combine(GetBooksDirectory(), _book.FileName);
-                    _logger.Information("Loading XML from: {XmlPath}", xmlPath);
+                    _logger.Debug("Loading XML from: {XmlPath}", xmlPath);
                     
                     if (!File.Exists(xmlPath))
                     {
@@ -626,12 +626,12 @@ namespace CST.Avalonia.ViewModels
                             xmlDoc.Load(xmlReader);
                         }
                     }
-                    _logger.Information("XML loaded successfully - root element: {RootElement}", xmlDoc.DocumentElement?.Name);
+                    _logger.Debug("XML loaded successfully - root element: {RootElement}", xmlDoc.DocumentElement?.Name);
 
                     // Apply script conversion if needed - use ConvertBook for proper XML handling
                     if (_bookScript != Script.Devanagari)
                     {
-                        _logger.Information("Converting script - Devanagari to {Script}", _bookScript);
+                        _logger.Debug("Converting script - Devanagari to {Script}", _bookScript);
                         var convertedXml = ScriptConverter.ConvertBook(xmlDoc.OuterXml, _bookScript);
                         xmlDoc.LoadXml(convertedXml);
                     }
@@ -648,13 +648,13 @@ namespace CST.Avalonia.ViewModels
                     // Apply search highlighting if needed
                     if (_searchTerms?.Any() == true)
                     {
-                        _logger.Information("Applying search highlighting - {TermCount} terms", _searchTerms.Count);
+                        _logger.Debug("Applying search highlighting - {TermCount} terms", _searchTerms.Count);
                         ApplySearchHighlighting(xmlDoc);
                     }
 
                     // Apply XSL transformation
                     var xslPath = GetXslPath(_bookScript);
-                    _logger.Information("Using XSL file: {XslPath}", xslPath);
+                    _logger.Debug("Using XSL file: {XslPath}", xslPath);
                     
                     if (!File.Exists(xslPath))
                     {
@@ -669,7 +669,7 @@ namespace CST.Avalonia.ViewModels
                     xslTransform.Transform(xmlDoc, null, stringWriter);
                     
                     var htmlContent = stringWriter.ToString();
-                    _logger.Information("Generated HTML content - length: {Length}", htmlContent.Length);
+                    _logger.Debug("Generated HTML content - length: {Length}", htmlContent.Length);
                     
                     return htmlContent;
                 }
@@ -870,7 +870,7 @@ namespace CST.Avalonia.ViewModels
             {
                 CurrentHitIndex++;
                 UpdateHitStatusText();
-                _logger.Information("NavigateToNextHit - index {Index}", CurrentHitIndex);
+                _logger.Debug("NavigateToNextHit - index {Index}", CurrentHitIndex);
                 NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
                 PageStatusText = $"Navigated to hit: hit_{CurrentHitIndex}";
             });
@@ -892,14 +892,14 @@ namespace CST.Avalonia.ViewModels
 
         private void ExecuteCopy()
         {
-            _logger.Information("*** EXECUTE COPY COMMAND CALLED ***");
+            _logger.Debug("*** EXECUTE COPY COMMAND CALLED ***");
             // Signal the view to execute copy directly
             NavigateToHighlightRequested?.Invoke(-1); // Use -1 as a special signal for copy
         }
 
         private void ExecuteSelectAll()
         {
-            _logger.Information("*** EXECUTE SELECT ALL COMMAND CALLED ***");
+            _logger.Debug("*** EXECUTE SELECT ALL COMMAND CALLED ***");
             // Signal the view to execute select all directly
             NavigateToHighlightRequested?.Invoke(-2); // Use -2 as a special signal for select all
         }
@@ -924,7 +924,7 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
             
-            _logger.Information("Navigating to chapter: {ChapterId} - {ChapterHeading}", chapter.Id, chapter.Heading);
+            _logger.Debug("Navigating to chapter: {ChapterId} - {ChapterHeading}", chapter.Id, chapter.Heading);
             
             // Navigate to the chapter anchor
             NavigateToChapterRequested?.Invoke(chapter.Id);
@@ -955,7 +955,7 @@ namespace CST.Avalonia.ViewModels
         {
             try
             {
-                _logger.Information("Opening linked book: {BookType}", linkedBookType.ToString());
+                _logger.Debug("Opening linked book: {BookType}", linkedBookType.ToString());
                 
                 // Step 1: Identify the Target Book (port of CST4 L790-800)
                 Book? linkedBook = null;
@@ -981,12 +981,12 @@ namespace CST.Avalonia.ViewModels
                     return;
                 }
 
-                _logger.Information("Found linked book: {FileName}", linkedBook.FileName);
+                _logger.Debug("Found linked book: {FileName}", linkedBook.FileName);
 
                 // Step 2: Determine the Navigation Anchor (port of CST4 L801-850)
                 string? anchor = await CalculateNavigationAnchorAsync(linkedBook);
                 
-                _logger.Information("Calculated navigation anchor: {Anchor}", anchor ?? "null");
+                _logger.Debug("Calculated navigation anchor: {Anchor}", anchor ?? "null");
 
                 // Step 3: Open the New Book (port of CST4 L920-923)
                 // Trigger event for SimpleTabbedWindow to handle opening the new tab
@@ -1019,7 +1019,7 @@ namespace CST.Avalonia.ViewModels
                 
                 if (!string.IsNullOrEmpty(currentAnchor))
                 {
-                    _logger.Information("Using continuously tracked paragraph anchor: {Anchor}", currentAnchor);
+                    _logger.Debug("Using continuously tracked paragraph anchor: {Anchor}", currentAnchor);
                     _logger.Debug("Status bar should now show - Para: {Para}", ParseParagraph(currentAnchor));
                 }
                 else
@@ -1039,8 +1039,8 @@ namespace CST.Avalonia.ViewModels
                     }
                 }
 
-                _logger.Information("Current position anchor: {Anchor}", currentAnchor);
-                _logger.Information("Book types - Source: {SourceType}, Target: {TargetType}", _book.BookType, targetBook.BookType);
+                _logger.Debug("Current position anchor: {Anchor}", currentAnchor);
+                _logger.Debug("Book types - Source: {SourceType}, Target: {TargetType}", _book.BookType, targetBook.BookType);
 
                 // Handle complex book type mappings like CST4 does
                 // For most cases (Whole to Whole), we can use the paragraph anchor directly
@@ -1055,7 +1055,7 @@ namespace CST.Avalonia.ViewModels
                         // Extract base paragraph number without book code
                         var parts = currentAnchor.Split('_');
                         currentAnchor = parts[0]; // e.g., "para123_an4" → "para123"
-                        _logger.Information("Extracted base paragraph anchor: {Anchor}", currentAnchor);
+                        _logger.Debug("Extracted base paragraph anchor: {Anchor}", currentAnchor);
                     }
                 }
                 else if (_book.BookType == BookType.Whole && targetBook.BookType == BookType.Multi)
@@ -1063,7 +1063,7 @@ namespace CST.Avalonia.ViewModels
                     // Whole book to Multi book navigation
                     // May need to add book code to paragraph anchor based on target book
                     // This is more complex and may require additional logic
-                    _logger.Information("Navigation from Whole to Multi book - using direct anchor");
+                    _logger.Debug("Navigation from Whole to Multi book - using direct anchor");
                 }
                 
                 return currentAnchor;
@@ -1136,7 +1136,7 @@ namespace CST.Avalonia.ViewModels
                     return currentPara;
                 }
 
-                _logger.Information("Extracted book code: {BookCode}", bookCode);
+                _logger.Debug("Extracted book code: {BookCode}", bookCode);
 
                 // TODO: Implement book code to target book mapping
                 // This requires understanding the relationship between book codes and target books
@@ -1292,7 +1292,7 @@ namespace CST.Avalonia.ViewModels
                     {
                         _updatingChapterFromScroll = true;
                         SelectedChapter = chapter;
-                        _logger.Information("Updated selected chapter: {ChapterId} - {ChapterHeading}", chapter.Id, chapter.Heading);
+                        _logger.Debug("Updated selected chapter: {ChapterId} - {ChapterHeading}", chapter.Id, chapter.Heading);
 
                         // Post a subsequent, lower-priority action to reset the flag.
                         Dispatcher.UIThread.Post(() =>

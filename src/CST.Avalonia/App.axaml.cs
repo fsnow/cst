@@ -83,25 +83,25 @@ public partial class App : Application
             
             if (showSplash)
             {
-                SplashScreen.SetStatus("Creating main window...");
-                SplashScreen.SetReferencePoint();
-            }
-            
-            // Create the main window with IDE-style layout
-            MainWindow = new SimpleTabbedWindow();
-            
-            if (showSplash)
-            {
                 SplashScreen.SetStatus("Loading books...");
                 SplashScreen.SetReferencePoint();
             }
             
-            // Create the Open Book panel and set it in the main window
+            // Get and initialize the OpenBookDialogViewModel BEFORE creating the layout
             var openBookViewModel = ServiceProvider.GetRequiredService<OpenBookDialogViewModel>();
-            var openBookPanel = new OpenBookPanel { DataContext = openBookViewModel };
             
-            // Set the panel in the left pane of the main window
-            ((SimpleTabbedWindow)MainWindow).SetOpenBookContent(openBookPanel);
+            if (showSplash)
+            {
+                SplashScreen.SetStatus("Creating main window...");
+                SplashScreen.SetReferencePoint();
+            }
+            
+            // Create the main window with dockable layout (this will now get the initialized ViewModel)
+            var layoutViewModel = new LayoutViewModel();
+            MainWindow = new SimpleTabbedWindow
+            {
+                DataContext = layoutViewModel
+            };
             
             desktop.MainWindow = MainWindow;
             
@@ -114,16 +114,13 @@ public partial class App : Application
                 SplashScreen.CloseForm();
             }
 
-            // Handle book open requests - now they open as tabs in the main window
+            // Handle book open requests - now they open as documents in the dockable layout
             openBookViewModel.BookOpenRequested += book =>
             {
                 System.Console.WriteLine($"Book selected: {book.FileName} - {book.LongNavPath}");
                 
-                // Create BookDisplayViewModel with sample search terms
-                var searchTerms = new System.Collections.Generic.List<string> { "buddha", "dhamma" };
-                
-                // Open book as tab in main window
-                ((SimpleTabbedWindow)MainWindow).OpenBook(book, searchTerms);
+                // Open book via LayoutViewModel
+                layoutViewModel.OpenBook(book);
             };
 
             openBookViewModel.CloseRequested += () =>
@@ -216,7 +213,7 @@ public partial class App : Application
         services.AddTransient<TreeStateService>();
 
         // Register ViewModels
-        services.AddTransient<OpenBookDialogViewModel>();
+        services.AddSingleton<OpenBookDialogViewModel>();
         // services.AddTransient<MainWindowViewModel>();
     }
 

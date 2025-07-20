@@ -2,15 +2,85 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="CST.Avalonia.App"
              xmlns:local="using:CST.Avalonia"
+             xmlns:vm="using:CST.Avalonia.ViewModels"
+             xmlns:views="using:CST.Avalonia.Views"
+             xmlns:dock="using:Dock.Model.Mvvm.Controls"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
-    <!-- Temporarily removed ViewLocator -->
-    <!-- <Application.DataTemplates>
-        <local:ViewLocator/>
-    </Application.DataTemplates> -->
+    <Application.DataTemplates>
+        <!-- This is the key: We provide a template for the Tool control itself. -->
+        <DataTemplate DataType="{x:Type dock:Tool}">
+            <!-- This ContentControl will then use the correct template for the ViewModel stored in the Context property -->
+            <ContentControl Content="{Binding Context}" />
+        </DataTemplate>
+        
+        <!-- DataTemplate for Document control to resolve ViewModels in Context property -->
+        <DataTemplate DataType="{x:Type dock:Document}">
+            <ContentControl Content="{Binding Context}" />
+        </DataTemplate>
+        
+        <!-- DataTemplate for OpenBookDialogViewModel -> OpenBookPanel -->
+        <DataTemplate DataType="{x:Type vm:OpenBookDialogViewModel}">
+            <views:OpenBookPanel />
+        </DataTemplate>
+        
+        <!-- DataTemplate for BookDisplayViewModel -> BookDisplayView -->
+        <DataTemplate DataType="{x:Type vm:BookDisplayViewModel}">
+            <views:BookDisplayView />
+        </DataTemplate>
+        
+        <!-- DataTemplate for WelcomeViewModel -> Welcome screen -->
+        <DataTemplate DataType="{x:Type vm:WelcomeViewModel}">
+            <Border Background="#F8F9FA" Padding="40">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24" MaxWidth="600">
+                    <!-- Logo/Icon -->
+                    <TextBlock Text="🏛️" FontSize="64" HorizontalAlignment="Center" Opacity="0.8"/>
+                    
+                    <!-- Title -->
+                    <StackPanel Spacing="8" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="Bold" 
+                                  HorizontalAlignment="Center" Foreground="#2E3440"/>
+                        <TextBlock Text="{Binding Subtitle}" FontSize="16" 
+                                  HorizontalAlignment="Center" Foreground="#5E81AC" Opacity="0.8"/>
+                    </StackPanel>
+                    
+                    <!-- Instructions -->
+                    <TextBlock Text="{Binding Instructions}" FontSize="14" 
+                              HorizontalAlignment="Center" TextWrapping="Wrap" 
+                              Foreground="#4C566A" Margin="0,16,0,24"/>
+                    
+                    <!-- Quick Actions -->
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Quick Actions:" FontSize="16" FontWeight="SemiBold" 
+                                  Foreground="#2E3440" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <ItemsControl ItemsSource="{Binding QuickActions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontSize="14" 
+                                              Margin="0,4" Foreground="#434C5E"
+                                              HorizontalAlignment="Center"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+        
+        <!-- DataTemplate for string content (welcome message) -->
+        <DataTemplate DataType="{x:Type x:String}">
+            <Border Background="WhiteSmoke" Padding="20">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                    <TextBlock Text="📖" FontSize="48" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding}" FontSize="16" HorizontalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </Application.DataTemplates>
   
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://Dock.Avalonia/Themes/DockFluentTheme.axaml" />
     </Application.Styles>
 </Application>

@@ -1,14 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using WebViewControl;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
@@ -43,6 +47,17 @@ public partial class BookDisplayView : UserControl
     private string _lastKnownOther = "*";
     private string _lastKnownPara = "*";
 
+    // Timer-based drag monitoring fields
+    private System.Timers.Timer? _dragMonitoringTimer;
+    private DateTime _lastPointerPressedTime = DateTime.MinValue;
+    private DateTime _webViewHiddenTime = DateTime.MinValue;
+    private Point _lastPointerPressedPosition;
+    private bool _isDragInProgress = false;
+    private bool _isPointerPressed = false;
+    private const double DRAG_THRESHOLD = 5.0; // pixels
+    private const int DRAG_TIMER_INTERVAL = 50; // milliseconds
+    private const int MIN_WEBVIEW_HIDE_DURATION = 500; // milliseconds - minimum time WebView stays hidden
+
     public BookDisplayView()
     {
         InitializeComponent();
@@ -74,7 +89,7 @@ public partial class BookDisplayView : UserControl
         // Check for Cmd+C or Ctrl+C
         if (e.Key == Key.C && (e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)))
         {
-            _logger.Information("*** COPY SHORTCUT DETECTED IN BookDisplayView ***");
+            _logger.Debug("*** COPY SHORTCUT DETECTED IN BookDisplayView ***");
             e.Handled = true; // Prevent further processing
             ExecuteCopy();
             return;
@@ -83,14 +98,14 @@ public partial class BookDisplayView : UserControl
         // Check for Cmd+A or Ctrl+A (Select All)
         if (e.Key == Key.A && (e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)))
         {
-            _logger.Information("*** SELECT ALL SHORTCUT DETECTED IN BookDisplayView ***");
+            _logger.Debug("*** SELECT ALL SHORTCUT DETECTED IN BookDisplayView ***");
             e.Handled = true; // Prevent further processing
             if (_webView != null)
             {
                 try
                 {
                     _webView.EditCommands.SelectAll();
-                    _logger.Information("WebView SelectAll executed successfully");
+                    _logger.Debug("WebView SelectAll executed successfully");
                 }
                 catch (Exception ex)
                 {
@@ -116,7 +131,7 @@ public partial class BookDisplayView : UserControl
                 _webView.GotFocus += (s, e) => _logger.Debug("FOCUS: WebView GotFocus. Source: {Source}", e.Source?.GetType().Name);
                 _webView.LostFocus += (s, e) => _logger.Debug("FOCUS: WebView LostFocus. Source: {Source}", e.Source?.GetType().Name);
 
-                _logger.Information("WebView control found and events attached successfully");
+                _logger.Debug("WebView control found and events attached successfully");
             }
             else
             {
@@ -134,8 +149,12 @@ public partial class BookDisplayView : UserControl
     {
         base.OnLoaded(e);
         this.PropertyChanged += OnIsVisibleChanged;
-        _logger.Debug("OnLoaded called");
+        _logger.Information("BookDisplayView OnLoaded called");
         SetupCSharpScrollTracking();
+        
+        // Monitor drag operations to temporarily hide WebView for drop indicators
+        _logger.Information("Calling SetupDragMonitoring from OnLoaded");
+        SetupDragMonitoring();
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -161,6 +180,14 @@ public partial class BookDisplayView : UserControl
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             _viewModel.NavigateToHighlightRequested += NavigateToHighlight;
             _viewModel.NavigateToChapterRequested += NavigateToAnchor;
+            
+            // If the ViewModel already has HTML content, load it immediately
+            // This handles the case where the view is recreated but the ViewModel persists
+            if (!string.IsNullOrEmpty(_viewModel.HtmlContent))
+            {
+                _logger.Debug("ViewModel already has HTML content ({Length} chars), loading immediately", _viewModel.HtmlContent.Length);
+                Dispatcher.UIThread.Post(() => LoadHtmlContent());
+            }
         }
     }
 
@@ -218,7 +245,7 @@ public partial class BookDisplayView : UserControl
                 try
                 {
                     // Check content size and use appropriate loading method
-                    _logger.Information("Loading HTML content - length: {Length}", _viewModel.HtmlContent.Length);
+                    _logger.Debug("Loading HTML content - length: {Length}", _viewModel.HtmlContent.Length);
                     //_logger.Debug("LoadHtmlContent", "HTML content preview", _viewModel.HtmlContent.Substring(0, Math.Min(200, _viewModel.HtmlContent.Length)) + "...");
 
                     // Write HTML content to temporary file and load it
@@ -234,7 +261,7 @@ public partial class BookDisplayView : UserControl
 
                     _webView.LoadUrl(fileUrl);
                     _viewModel.PageStatusText = "Loading content from file...";
-                    _logger.Information("HTML content loaded from temporary file");
+                    _logger.Debug("HTML content loaded from temporary file");
                 }
                 catch (Exception ex)
                 {
@@ -250,7 +277,7 @@ public partial class BookDisplayView : UserControl
             }
             else
             {
-                _logger.Information("WebView not available - using fallback");
+                _logger.Warning("WebView not available - using fallback");
             }
             // Fallback is already handled by data binding in XAML
         }
@@ -271,7 +298,7 @@ public partial class BookDisplayView : UserControl
             Dispatcher.UIThread.Post(() =>
             {
                 // Browser is now ready - no need to change availability since we started optimistically
-                _logger.Information("Browser initialized successfully");
+                _logger.Debug("Browser initialized successfully");
                 _viewModel.PageStatusText = "Browser ready";
 
                 // Load content if it's ready
@@ -483,7 +510,7 @@ public partial class BookDisplayView : UserControl
             _logger.Debug("BuildAnchorPositionCache acquired JS lock successfully");
             try
             {
-                _logger.Information("Building anchor position cache");
+                _logger.Debug("Building anchor position cache");
 
                 // Store anchor positions directly in JavaScript  
                 var script = $@"
@@ -674,7 +701,7 @@ public partial class BookDisplayView : UserControl
                 await Task.Delay(500);
 
                 _anchorCacheBuilt = true;
-                _logger.Information("Anchor position cache built");
+                _logger.Debug("Anchor position cache built");
             }
             catch (Exception ex)
             {
@@ -702,7 +729,7 @@ public partial class BookDisplayView : UserControl
         {
             Dispatcher.UIThread.Post(() =>
             {
-                _logger.Information("Navigation completed successfully");
+                _logger.Debug("Navigation completed successfully");
                 _viewModel.PageStatusText = "Document loaded successfully";
 
                 // Mark browser as initialized for scroll tracking
@@ -903,7 +930,7 @@ public partial class BookDisplayView : UserControl
 
                 if (messageTabId == _tabId)
                 {
-                    _logger.Information("Copy operation successful - {CharacterCount} characters copied", lengthStr);
+                    _logger.Debug("Copy operation successful - {CharacterCount} characters copied", lengthStr);
                 }
             }
             catch (Exception ex)
@@ -939,7 +966,7 @@ public partial class BookDisplayView : UserControl
 
                 if (messageTabId == _tabId)
                 {
-                    _logger.Information("*** COPY REQUESTED FROM JAVASCRIPT ***");
+                    _logger.Debug("*** COPY REQUESTED FROM JAVASCRIPT ***");
                     ExecuteCopy();
                 }
             }
@@ -958,13 +985,13 @@ public partial class BookDisplayView : UserControl
 
                 if (messageTabId == _tabId)
                 {
-                    _logger.Information("*** SELECT ALL REQUESTED FROM JAVASCRIPT ***");
+                    _logger.Debug("*** SELECT ALL REQUESTED FROM JAVASCRIPT ***");
                     if (_webView != null)
                     {
                         try
                         {
                             _webView.EditCommands.SelectAll();
-                            _logger.Information("WebView SelectAll executed successfully from JavaScript request");
+                            _logger.Debug("WebView SelectAll executed successfully from JavaScript request");
                         }
                         catch (Exception ex)
                         {
@@ -1048,7 +1075,7 @@ public partial class BookDisplayView : UserControl
                                 
                                 // Check for Cmd+C or Ctrl+C
                                 if (event.key === 'c' && (event.metaKey || event.ctrlKey)) {
-                                    window.cstLogger.log('INFO', 'Copy shortcut detected in JavaScript');
+                                    window.cstLogger.log('DEBUG', 'Copy shortcut detected in JavaScript');
                                     event.preventDefault(); // Prevent default browser behavior
                                     event.stopPropagation(); // Stop event bubbling
                                     
@@ -1059,7 +1086,7 @@ public partial class BookDisplayView : UserControl
                                 
                                 // Check for Cmd+A or Ctrl+A
                                 if (event.key === 'a' && (event.metaKey || event.ctrlKey)) {
-                                    window.cstLogger.log('INFO', 'Select All shortcut detected in JavaScript');
+                                    window.cstLogger.log('DEBUG', 'Select All shortcut detected in JavaScript');
                                     event.preventDefault(); // Prevent default browser behavior
                                     event.stopPropagation(); // Stop event bubbling
                                     
@@ -1069,7 +1096,7 @@ public partial class BookDisplayView : UserControl
                                 }
                             }, true); // Use capture phase to intercept before other handlers
                             
-                            window.cstLogger.log('INFO', 'Keyboard capture initialized');
+                            window.cstLogger.log('DEBUG', 'Keyboard capture initialized');
                         }
                     };
 
@@ -1320,20 +1347,20 @@ public partial class BookDisplayView : UserControl
         // Handle special signals for copy and select all
         if (hitIndex == -1)
         {
-            _logger.Information("*** COPY COMMAND TRIGGERED VIA KEYBOARD SHORTCUT ***");
+            _logger.Debug("*** COPY COMMAND TRIGGERED VIA KEYBOARD SHORTCUT ***");
             HandleCopySelectedText();
             return;
         }
         
         if (hitIndex == -2)
         {
-            _logger.Information("*** SELECT ALL COMMAND TRIGGERED VIA KEYBOARD SHORTCUT ***");
+            _logger.Debug("*** SELECT ALL COMMAND TRIGGERED VIA KEYBOARD SHORTCUT ***");
             if (_webView != null)
             {
                 try
                 {
                     _webView.EditCommands.SelectAll();
-                    _logger.Information("WebView SelectAll executed successfully");
+                    _logger.Debug("WebView SelectAll executed successfully");
                 }
                 catch (Exception ex)
                 {
@@ -1386,7 +1413,7 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
-        _logger.Information("NavigateToAnchor called | {Details}", anchor);
+        _logger.Debug("NavigateToAnchor called | {Details}", anchor);
         _logger.Debug("NavigateToAnchor attempting to acquire JS lock | {Details}", anchor);
         if (_jsExecutionLock.Wait(0))
         {
@@ -1812,7 +1839,7 @@ public partial class BookDisplayView : UserControl
         {
             _logger.Debug("Using WebView native copy command");
             _webView.EditCommands.Copy();
-            _logger.Information("Copy command executed successfully");
+            _logger.Debug("Copy command executed successfully");
         }
         catch (Exception ex)
         {
@@ -1833,13 +1860,237 @@ public partial class BookDisplayView : UserControl
         base.OnUnloaded(e);
         this.PropertyChanged -= OnIsVisibleChanged;
 
-        // Stop and dispose the timer to prevent resource leaks
+        // Stop and dispose the timers to prevent resource leaks
         if (_scrollTimer != null)
         {
             _scrollTimer.Stop();
             _scrollTimer.Dispose();
             _scrollTimer = null;
-            _logger.Information("Paused and disposed scroll tracking");
+            _logger.Debug("Paused and disposed scroll tracking");
+        }
+        
+        if (_dragMonitoringTimer != null)
+        {
+            _dragMonitoringTimer.Stop();
+            _dragMonitoringTimer.Dispose();
+            _dragMonitoringTimer = null;
+            _logger.Debug("Disposed drag monitoring timer");
         }
     }
+
+    private void SetupDragMonitoring()
+    {
+        _logger.Information("Setting up timer-based drag monitoring to handle WebView interference");
+        
+        // Create timer for monitoring drag operations
+        _dragMonitoringTimer = new System.Timers.Timer(DRAG_TIMER_INTERVAL);
+        _dragMonitoringTimer.Elapsed += OnDragMonitoringTimer;
+        _dragMonitoringTimer.AutoReset = true;
+        
+        var window = TopLevel.GetTopLevel(this) as Window;
+        if (window != null)
+        {
+            // Monitor pointer events to detect potential drag operations
+            window.AddHandler(InputElement.PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel);
+            window.AddHandler(InputElement.PointerReleasedEvent, OnWindowPointerReleased, RoutingStrategies.Tunnel);
+            window.AddHandler(InputElement.PointerMovedEvent, OnWindowPointerMoved, RoutingStrategies.Tunnel);
+            _logger.Information("Timer-based drag monitoring setup on parent window");
+        }
+        
+        // Start the monitoring timer
+        _dragMonitoringTimer.Start();
+        _logger.Information("Drag monitoring timer started");
+    }
+
+    private void OnDragMonitoringTimer(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var now = DateTime.Now;
+            
+            // Check if a drag operation might be in progress
+            if (_isPointerPressed && !_isDragInProgress)
+            {
+                var timeSincePress = now - _lastPointerPressedTime;
+                if (timeSincePress.TotalMilliseconds > 200) // Drag threshold time
+                {
+                    _logger.Information("*** TIMER DETECTED POTENTIAL DRAG - HIDING WebView ***");
+                    _isDragInProgress = true;
+                    HideWebViewForDrag();
+                }
+            }
+            
+            // If drag ended, restore WebView (but only after minimum hide duration)
+            if (!_isPointerPressed && _isDragInProgress)
+            {
+                var timeSinceHidden = now - _webViewHiddenTime;
+                if (timeSinceHidden.TotalMilliseconds >= MIN_WEBVIEW_HIDE_DURATION)
+                {
+                    _logger.Information("*** TIMER DETECTED DRAG END - RESTORING WebView (hidden for {HideDuration}ms) ***", timeSinceHidden.TotalMilliseconds);
+                    _isDragInProgress = false;
+                    RestoreWebViewAfterDrag();
+                }
+                else
+                {
+                    _logger.Debug("*** Drag ended but WebView hidden for only {HideDuration}ms - waiting for minimum {MinDuration}ms ***", 
+                        timeSinceHidden.TotalMilliseconds, MIN_WEBVIEW_HIDE_DURATION);
+                }
+            }
+            
+            // Fallback: If WebView has been hidden for too long (>10 seconds), restore it
+            if (_isDragInProgress)
+            {
+                var timeSinceDragStart = now - _lastPointerPressedTime;
+                if (timeSinceDragStart.TotalMilliseconds > 10000) // 10 second timeout
+                {
+                    _logger.Information("*** FALLBACK TIMEOUT - RESTORING WebView after 10 seconds ***");
+                    _isDragInProgress = false;
+                    _isPointerPressed = false;
+                    RestoreWebViewAfterDrag();
+                }
+            }
+        });
+    }
+
+    private void HideWebViewForDrag()
+    {
+        _logger.Information("Hiding all WebViews across all windows to allow dock drop indicators");
+        _webViewHiddenTime = DateTime.Now;
+        
+        // Hide WebViews in all application windows for cross-window drag support
+        HideAllWebViewsInAllWindows();
+    }
+    
+    private void HideAllWebViewsInWindow(Window window)
+    {
+        var webViews = window.GetVisualDescendants().OfType<WebViewControl.WebView>();
+        foreach (var webView in webViews)
+        {
+            if (webView.IsVisible)
+            {
+                _logger.Information("Hiding WebView for drag operation");
+                webView.IsVisible = false;
+                webView.IsHitTestVisible = false;
+            }
+        }
+    }
+
+    private void RestoreWebViewAfterDrag()
+    {
+        _logger.Information("Restoring all WebViews across all windows after drag operation");
+        
+        // Restore WebViews in all application windows for cross-window drag support
+        RestoreAllWebViewsInAllWindows();
+    }
+    
+    private void HideAllWebViewsInAllWindows()
+    {
+        try
+        {
+            // Get all application windows
+            var app = Application.Current;
+            if (app?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                foreach (var window in desktop.Windows)
+                {
+                    HideAllWebViewsInWindow(window);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "Error hiding WebViews across all windows");
+            // Fallback to hiding just current WebView
+            if (_webView != null && _webView.IsVisible)
+            {
+                _logger.Information("Fallback: Hiding only current WebView");
+                _webView.IsVisible = false;
+                _webView.IsHitTestVisible = false;
+            }
+        }
+    }
+    
+    private void RestoreAllWebViewsInAllWindows()
+    {
+        try
+        {
+            // Get all application windows
+            var app = Application.Current;
+            if (app?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                foreach (var window in desktop.Windows)
+                {
+                    RestoreAllWebViewsInWindow(window);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(ex, "Error restoring WebViews across all windows");
+            // Fallback to restoring just current WebView
+            if (_webView != null && !_webView.IsVisible && _viewModel?.IsWebViewAvailable == true)
+            {
+                _logger.Information("Fallback: Restoring only current WebView");
+                _webView.IsVisible = true;
+                _webView.IsHitTestVisible = true;
+            }
+        }
+    }
+    
+    private void RestoreAllWebViewsInWindow(Window window)
+    {
+        var webViews = window.GetVisualDescendants().OfType<WebViewControl.WebView>();
+        foreach (var webView in webViews)
+        {
+            if (!webView.IsVisible)
+            {
+                _logger.Information("Restoring WebView after drag operation");
+                webView.IsVisible = true;
+                webView.IsHitTestVisible = true;
+            }
+        }
+    }
+
+    private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        _isPointerPressed = true;
+        _lastPointerPressedTime = DateTime.Now;
+        _lastPointerPressedPosition = e.GetPosition(this);
+        _logger.Debug("Pointer pressed - monitoring for potential drag");
+    }
+
+    private void OnWindowPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _isPointerPressed = false;
+        _logger.Debug("Pointer released - ending drag monitoring");
+        
+        // Ensure WebView is restored when pointer is released
+        if (_isDragInProgress)
+        {
+            var timeSinceHidden = DateTime.Now - _webViewHiddenTime;
+            _logger.Information("*** POINTER RELEASED - RESTORING WebView (hidden for {HideDuration}ms) ***", timeSinceHidden.TotalMilliseconds);
+            _isDragInProgress = false;
+            RestoreWebViewAfterDrag();
+        }
+    }
+
+    private void OnWindowPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_isPointerPressed && !_isDragInProgress)
+        {
+            var currentPosition = e.GetPosition(this);
+            var distance = Math.Sqrt(
+                Math.Pow(currentPosition.X - _lastPointerPressedPosition.X, 2) +
+                Math.Pow(currentPosition.Y - _lastPointerPressedPosition.Y, 2)
+            );
+            
+            if (distance > DRAG_THRESHOLD)
+            {
+                _logger.Information("*** POINTER MOVEMENT DETECTED DRAG - HIDING WebView ***");
+                _isDragInProgress = true;
+                HideWebViewForDrag();
+            }
+        }
+    }
+
 }

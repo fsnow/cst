@@ -10,6 +10,17 @@ public partial class OpenBookPanel : UserControl
     public OpenBookPanel()
     {
         InitializeComponent();
+        
+        // Debug: Check if DataContext is set
+        this.DataContextChanged += (s, e) =>
+        {
+            var vm = DataContext as OpenBookDialogViewModel;
+            System.Console.WriteLine($"OpenBookPanel DataContext changed to: {vm?.GetType().Name ?? "null"}");
+            if (vm != null)
+            {
+                System.Console.WriteLine($"ViewModel has {vm.BookTree.Count} root nodes");
+            }
+        };
     }
     
     public void UpdateScript(Script script)

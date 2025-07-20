@@ -122,7 +122,9 @@
                 <wv:WebView x:Name="webView" 
                            IsVisible="{Binding IsWebViewAvailable}"
                            Focusable="True"
-                           IsTabStop="True"/>
+                           IsTabStop="True"
+                           ZIndex="-1000"
+                           IsHitTestVisible="True"/>
                 
                 <!-- Fallback Text Display -->
                 <ScrollViewer x:Name="fallbackBrowser" 
