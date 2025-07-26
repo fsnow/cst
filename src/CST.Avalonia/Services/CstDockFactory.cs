@@ -169,13 +169,20 @@ namespace CST.Avalonia.Services
                 };
             }
 
-            // Create main proportional dock (horizontal split)
+            // Create splitter between left tool dock and document dock to enable resizing
+            var splitter = new ProportionalDockSplitter
+            {
+                Id = "MainSplitter",
+                Title = "MainSplitter"
+            };
+
+            // Create main proportional dock (horizontal split) with splitter for resizing
             var mainDock = new ProportionalDock
             {
                 Id = "MainDock",
                 Title = "Main",
                 Orientation = Orientation.Horizontal,
-                VisibleDockables = CreateList<IDockable>(leftToolDock, documentDock)
+                VisibleDockables = CreateList<IDockable>(leftToolDock, splitter, documentDock)
             };
 
             // Create root dock
@@ -215,7 +222,7 @@ namespace CST.Avalonia.Services
             }
             else if (dockable is IDockable otherDockable)
             {
-                // For tools and documents, we might need to set factory too
+                // For tools, documents, and splitters, we might need to set factory too
                 if (otherDockable is Tool tool)
                 {
                     tool.Factory = this;
@@ -223,6 +230,10 @@ namespace CST.Avalonia.Services
                 else if (otherDockable is Document document)
                 {
                     document.Factory = this;
+                }
+                else if (otherDockable is ProportionalDockSplitter splitter)
+                {
+                    splitter.Factory = this;
                 }
             }
         }
