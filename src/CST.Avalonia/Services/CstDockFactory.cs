@@ -137,6 +137,29 @@ namespace CST.Avalonia.Services
                         }
                     }
                     
+                    // SYNCHRONOUS cleanup when documents are removed - prevent empty areas from ever being visible
+                    if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems?.Count > 0)
+                    {
+                        Log.Information("*** SYNCHRONOUS cleanup triggered by document removal ***");
+                        try
+                        {
+                            // Run cleanup synchronously FIRST to prevent any visibility of empty areas
+                            CleanupEmptySplits();
+                            Log.Information("*** SYNCHRONOUS cleanup completed successfully ***");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "*** ERROR in synchronous cleanup - scheduling async backup ***");
+                        }
+                        
+                        // Also schedule async cleanup as backup in case synchronous cleanup missed something
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            Log.Information("*** ASYNC backup cleanup after document removal ***");
+                            CleanupEmptySplits();
+                        }, DispatcherPriority.Render);
+                    }
+                    
                     // Check if this is the main document dock or a floating window dock
                     Log.Information("*** Main dock collection changed - checking for empty floating windows ***");
                     CheckForEmptyFloatingWindows();
@@ -415,7 +438,7 @@ namespace CST.Avalonia.Services
             return null;
         }
         
-        // Override split operations to handle document splits and create new DocumentDocks
+        // Override split operations with simplified approach - let framework handle splits, then fix proportions
         public override void SplitToDock(IDock dock, IDockable dockable, DockOperation operation)
         {
             // Detailed logging for debugging drag operations
@@ -449,184 +472,209 @@ namespace CST.Avalonia.Services
                 }
             }
             
-            // Handle Document/DocumentDock split operations to create new DocumentDocks
-            if (dock is DocumentDock targetDock && (dockable is Document || dockable is DocumentDock))
-            {
-                var operationStr = operation.ToString();
-                Log.Information("*** Document/DocumentDock operation detected: {Operation} on DocumentDock ***", operationStr);
-                Log.Information("*** Dockable type: {DockableType}, Target dock: {DockId} ***", dockable.GetType().Name, targetDock.Id);
-                
-                if (operationStr == "Left" || operationStr == "Right" || operationStr == "Top" || operationStr == "Bottom")
-                {
-                    Log.Information("*** Split operation detected: {Operation} - attempting custom split ***", operationStr);
-                    
-                    // For Document, use existing logic
-                    if (dockable is Document document)
-                    {
-                        if (CreateDocumentSplit(targetDock, document, operation))
-                        {
-                            Log.Information("*** Document split completed successfully - skipping default behavior ***");
-                            return; // Skip default behavior since we handled it
-                        }
-                        else
-                        {
-                            Log.Warning("*** Document split failed, falling back to default behavior ***");
-                        }
-                    }
-                    // For DocumentDock (e.g., floating window being docked back), let default behavior handle it
-                    // but log the proportions to understand what's happening
-                    else if (dockable is DocumentDock sourceDock)
-                    {
-                        Log.Information("*** DocumentDock split - using default behavior but monitoring proportions ***");
-                        Log.Information("*** Source dock proportion: {SourceProp}, Target dock proportion: {TargetProp} ***", 
-                            sourceDock.Proportion, targetDock.Proportion);
-                    }
-                }
-                else
-                {
-                    Log.Information("*** Tab operation (Fill) detected - using default behavior ***");
-                }
-            }
-            else if (dockable is Document)
-            {
-                Log.Information("*** Document operation on non-DocumentDock: DockType={DockType}, Operation={Operation} ***", dock?.GetType().Name, operation);
-            }
+            Log.Information("*** Using framework default split behavior ***");
             
+            // Let the framework handle the split
             base.SplitToDock(dock, dockable, operation);
             
-            // Schedule proportion fix after split operations complete
-            ScheduleProportionFix();
+            // Immediately set 50/50 proportions for split operations
+            var operationString = operation.ToString();
+            if (operationString == "Left" || operationString == "Right" || operationString == "Top" || operationString == "Bottom")
+            {
+                Log.Information("*** Setting equal proportions after {Operation} split ***", operationString);
+                SetEqualProportions(dock);
+            }
             
-            // Schedule empty split cleanup after split operations complete
+            // IMMEDIATE cleanup after split operations - run at multiple priorities to ensure fast execution
             Dispatcher.UIThread.Post(() =>
             {
-                Log.Information("*** Post-split cleanup - checking for empty splits ***");
+                Log.Information("*** IMMEDIATE Post-split cleanup (priority Render) ***");
+                CleanupEmptySplits();
+            }, DispatcherPriority.Render);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                Log.Information("*** SECONDARY Post-split cleanup (priority Background) ***");
                 CleanupEmptySplits();
             }, DispatcherPriority.Background);
             
             Log.Information("*** SplitToDock completed ***");
+            
+            // DEBUG: Log complete dock hierarchy after split to identify empty areas
+            LogCompleteHierarchy();
         }
         
         /// <summary>
-        /// Create a split layout when a document is dragged to create a new DocumentDock
+        /// DEBUG: Log the complete dock hierarchy including floating windows to identify structure issues
         /// </summary>
-        private bool CreateDocumentSplit(DocumentDock originalDock, Document documentToSplit, DockOperation operation)
+        private void LogCompleteHierarchy()
         {
             try
             {
-                Log.Information("*** CreateDocumentSplit starting - Operation: {Operation} ***", operation);
+                Log.Information("*** ===== COMPLETE DOCK HIERARCHY DEBUG (Main + Floating Windows) ===== ***");
                 
-                // Find the parent of the original DocumentDock
-                var parentDock = FindParentDock(originalDock);
-                if (parentDock == null)
+                // Log main window hierarchy
+                Log.Information("*** MAIN WINDOW HIERARCHY: ***");
+                if (_context is IDock rootDock)
                 {
-                    Log.Warning("*** Cannot find parent dock for split operation ***");
-                    return false;
-                }
-                
-                Log.Information("*** Found parent dock: {ParentType} (ID: {ParentId}) ***", parentDock.GetType().Name, parentDock.Id);
-                
-                // Remove the document from the original dock first
-                if (originalDock.VisibleDockables?.Contains(documentToSplit) == true)
-                {
-                    originalDock.VisibleDockables.Remove(documentToSplit);
-                    Log.Information("*** Removed document from original dock ***");
-                }
-                
-                // Store original dock's proportion before modifying
-                var originalProportion = originalDock.Proportion;
-                Log.Information("*** Original dock proportion: {OriginalProportion} ***", originalProportion);
-                
-                // Create a new DocumentDock for the split document
-                var newDocumentDock = CreateDocumentDock();
-                newDocumentDock.Id = $"SplitDocumentDock_{Guid.NewGuid():N}";
-                newDocumentDock.Title = "Documents";
-                newDocumentDock.VisibleDockables = CreateList<IDockable>(documentToSplit);
-                newDocumentDock.ActiveDockable = documentToSplit;
-                newDocumentDock.Factory = this;
-                
-                Log.Information("*** Created new DocumentDock: {NewDockId} ***", newDocumentDock.Id);
-                
-                // Set up collection monitoring for the new dock
-                SetupDocumentDockMonitoring(newDocumentDock);
-                
-                // Create ProportionalDock based on operation
-                var proportionalDock = new ProportionalDock();
-                proportionalDock.Id = $"SplitContainer_{Guid.NewGuid():N}";
-                proportionalDock.Title = "Split Container";
-                proportionalDock.Factory = this;
-                
-                // Configure orientation and dockable order based on operation
-                switch (operation)
-                {
-                    case DockOperation.Left:
-                        proportionalDock.Orientation = Orientation.Horizontal;
-                        proportionalDock.VisibleDockables = CreateList<IDockable>(newDocumentDock, originalDock);
-                        newDocumentDock.Proportion = 1.0; // Equal weight for 50/50 split
-                        originalDock.Proportion = 1.0;   // Equal weight for 50/50 split
-                        break;
-                    case DockOperation.Right:
-                        proportionalDock.Orientation = Orientation.Horizontal;
-                        proportionalDock.VisibleDockables = CreateList<IDockable>(originalDock, newDocumentDock);
-                        originalDock.Proportion = 1.0;   // Equal weight for 50/50 split
-                        newDocumentDock.Proportion = 1.0; // Equal weight for 50/50 split
-                        break;
-                    case DockOperation.Top:
-                        proportionalDock.Orientation = Orientation.Vertical;
-                        proportionalDock.VisibleDockables = CreateList<IDockable>(newDocumentDock, originalDock);
-                        newDocumentDock.Proportion = 1.0; // Equal weight for 50/50 split
-                        originalDock.Proportion = 1.0;   // Equal weight for 50/50 split
-                        break;
-                    case DockOperation.Bottom:
-                        proportionalDock.Orientation = Orientation.Vertical;
-                        proportionalDock.VisibleDockables = CreateList<IDockable>(originalDock, newDocumentDock);
-                        originalDock.Proportion = 1.0;   // Equal weight for 50/50 split
-                        newDocumentDock.Proportion = 1.0; // Equal weight for 50/50 split
-                        break;
-                    default:
-                        Log.Warning("*** Unsupported split operation: {Operation} ***", operation);
-                        return false;
-                }
-                
-                // Force equal proportions after switch statement
-                if (proportionalDock.VisibleDockables != null && proportionalDock.VisibleDockables.Count == 2)
-                {
-                    var firstDock = proportionalDock.VisibleDockables[0];
-                    var secondDock = proportionalDock.VisibleDockables[1];
-                    
-                    // Reset to ensure no inherited proportions
-                    firstDock.Proportion = double.NaN;
-                    secondDock.Proportion = double.NaN;
-                    
-                    // Set equal proportions
-                    firstDock.Proportion = 0.5;
-                    secondDock.Proportion = 0.5;
-                    
-                    Log.Information("*** Final proportions set - First: {FirstProp}, Second: {SecondProp} ***", 
-                        firstDock.Proportion, secondDock.Proportion);
-                }
-                
-                Log.Information("*** Created ProportionalDock: {ProportionalDockId}, Orientation: {Orientation} ***", 
-                    proportionalDock.Id, proportionalDock.Orientation);
-                
-                // Replace the original DocumentDock with the ProportionalDock in the parent
-                if (ReplaceInParent(parentDock, originalDock, proportionalDock))
-                {
-                    Log.Information("*** Successfully replaced DocumentDock with ProportionalDock in parent ***");
-                    return true;
+                    LogDockHierarchyRecursive(rootDock, 0);
                 }
                 else
                 {
-                    Log.Warning("*** Failed to replace DocumentDock in parent ***");
-                    // Restore document to original dock if split failed
-                    originalDock.VisibleDockables?.Add(documentToSplit);
-                    return false;
+                    Log.Information("*** No main window context available ***");
+                }
+                
+                // Log all floating windows
+                Log.Information("*** FLOATING WINDOWS HIERARCHY (Total: {HostWindowCount}): ***", HostWindows.Count);
+                for (int i = 0; i < HostWindows.Count; i++)
+                {
+                    var hostWindow = HostWindows[i];
+                    
+                    if (hostWindow is CstHostWindow cstHostWindow)
+                    {
+                        Log.Information("*** FLOATING WINDOW {Index}: {WindowId} ***", i, cstHostWindow.Id);
+                        
+                        if (cstHostWindow.Layout is IDock floatingDock)
+                        {
+                            LogDockHierarchyRecursive(floatingDock, 1);
+                        }
+                        else
+                        {
+                            Log.Information("***   No dock layout ***");
+                        }
+                    }
+                    else
+                    {
+                        Log.Information("*** FLOATING WINDOW {Index}: Not CstHostWindow (Type: {WindowType}) ***", i, hostWindow.GetType().Name);
+                    }
+                }
+                
+                Log.Information("*** ===== END DOCK HIERARCHY DEBUG ===== ***");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "*** ERROR logging dock hierarchy ***");
+            }
+        }
+        
+        /// <summary>
+        /// Recursively log dock hierarchy with indentation
+        /// </summary>
+        private void LogDockHierarchyRecursive(IDock dock, int level)
+        {
+            try
+            {
+                string indent = new string(' ', level * 2);
+                string dockInfo = $"{dock.GetType().Name} (ID: {dock.Id ?? "null"})";
+                
+                if (dock is DocumentDock docDock)
+                {
+                    var documents = docDock.VisibleDockables?.OfType<Document>().ToList() ?? new List<Document>();
+                    dockInfo += $" - {docDock.VisibleDockables?.Count ?? 0} total, {documents.Count} documents";
+                    if (documents.Count == 0)
+                    {
+                        dockInfo += " *** EMPTY DOCUMENT DOCK ***";
+                    }
+                }
+                else if (dock is ProportionalDock propDock)
+                {
+                    var nonSplitters = propDock.VisibleDockables?.Where(d => !(d is ProportionalDockSplitter)).ToList() ?? new List<IDockable>();
+                    dockInfo += $" - {propDock.VisibleDockables?.Count ?? 0} total, {nonSplitters.Count} non-splitters";
+                    if (nonSplitters.Count == 0)
+                    {
+                        dockInfo += " *** EMPTY PROPORTIONAL DOCK ***";
+                    }
+                    else if (nonSplitters.Count == 1)
+                    {
+                        dockInfo += " *** SINGLE-CHILD PROPORTIONAL DOCK ***";
+                    }
+                }
+                else if (dock is ToolDock toolDock)
+                {
+                    var tools = toolDock.VisibleDockables?.OfType<Tool>().ToList() ?? new List<Tool>();
+                    dockInfo += $" - {toolDock.VisibleDockables?.Count ?? 0} total, {tools.Count} tools";
+                }
+                
+                Log.Information($"*** {indent}{dockInfo} ***");
+                
+                // Log documents in DocumentDocks
+                if (dock is DocumentDock docDockForDetails && docDockForDetails.VisibleDockables != null)
+                {
+                    foreach (var dockable in docDockForDetails.VisibleDockables)
+                    {
+                        if (dockable is Document doc)
+                        {
+                            Log.Information($"*** {indent}  - Document: {doc.Title} (ID: {doc.Id}) ***");
+                        }
+                        else
+                        {
+                            Log.Information($"*** {indent}  - Other: {dockable.GetType().Name} (ID: {dockable.Id ?? "null"}) ***");
+                        }
+                    }
+                }
+                
+                // Recursively log child docks
+                if (dock.VisibleDockables != null)
+                {
+                    foreach (var dockable in dock.VisibleDockables)
+                    {
+                        if (dockable is IDock childDock)
+                        {
+                            LogDockHierarchyRecursive(childDock, level + 1);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "*** Error in CreateDocumentSplit ***");
-                return false;
+                Log.Error(ex, "*** ERROR in LogDockHierarchyRecursive ***");
+            }
+        }
+        
+        /// <summary>
+        /// Set equal proportions (50/50) for splits by finding the parent and adjusting child proportions
+        /// </summary>
+        private void SetEqualProportions(IDock dock)
+        {
+            try
+            {
+                Log.Information("*** SetEqualProportions called for dock: {DockType} (ID: {DockId}) ***", 
+                    dock?.GetType().Name, dock?.Id);
+                
+                // Find the parent that contains this dock
+                var parent = FindParentDock(dock);
+                if (parent is ProportionalDock proportionalParent && proportionalParent.VisibleDockables != null)
+                {
+                    Log.Information("*** Found ProportionalDock parent: {ParentId} with {ChildCount} dockables ***", 
+                        proportionalParent.Id, proportionalParent.VisibleDockables.Count);
+                    
+                    var nonSplitters = proportionalParent.VisibleDockables
+                        .Where(d => !(d is ProportionalDockSplitter))
+                        .ToList();
+                        
+                    if (nonSplitters.Count == 2)
+                    {
+                        Log.Information("*** Setting 50/50 proportions for 2 child docks ***");
+                        nonSplitters[0].Proportion = 0.5;
+                        nonSplitters[1].Proportion = 0.5;
+                        
+                        Log.Information("*** Proportions set - First: {FirstProp}, Second: {SecondProp} ***", 
+                            nonSplitters[0].Proportion, nonSplitters[1].Proportion);
+                    }
+                    else
+                    {
+                        Log.Information("*** Parent has {ChildCount} non-splitter children - not setting proportions ***", 
+                            nonSplitters.Count);
+                    }
+                }
+                else
+                {
+                    Log.Information("*** No ProportionalDock parent found or parent has no children ***");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "*** Error in SetEqualProportions ***");
             }
         }
         
@@ -693,128 +741,6 @@ namespace CST.Avalonia.Services
             }
         }
         
-        /// <summary>
-        /// Set up collection monitoring for a DocumentDock (similar to existing monitoring)
-        /// </summary>
-        private void SetupDocumentDockMonitoring(DocumentDock documentDock)
-        {
-            if (documentDock.VisibleDockables is ObservableCollection<IDockable> observableCollection)
-            {
-                observableCollection.CollectionChanged += (sender, e) =>
-                {
-                    Log.Information("*** SPLIT DOCK COLLECTION CHANGED: Action={Action}, NewItems={NewCount}, RemovedItems={RemoveCount} ***", 
-                        e.Action, e.NewItems?.Count ?? 0, e.OldItems?.Count ?? 0);
-                    
-                    if (e.OldItems != null)
-                    {
-                        foreach (var item in e.OldItems)
-                        {
-                            Log.Information("*** SPLIT DOCK REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
-                        }
-                    }
-                    if (e.NewItems != null)
-                    {
-                        foreach (var item in e.NewItems)
-                        {
-                            Log.Information("*** SPLIT DOCK ADDED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
-                            
-                            // Prevent Tools and ToolDocks from being added to split DocumentDocks too
-                            if (item is Tool || item is ToolDock)
-                            {
-                                Log.Warning("*** Tool/ToolDock being added to split DocumentDock - preventing tab docking ***");
-                                System.Threading.Tasks.Task.Run(async () =>
-                                {
-                                    await System.Threading.Tasks.Task.Delay(50);
-                                    await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                                    {
-                                        if (observableCollection.Contains(item as IDockable))
-                                        {
-                                            observableCollection.Remove(item as IDockable);
-                                            if (item is IDockable dockable)
-                                            {
-                                                FloatDockable(dockable);
-                                                Log.Information("*** Floated Tool/ToolDock instead of tab docking in split ***");
-                                            }
-                                        }
-                                    });
-                                });
-                            }
-                        }
-                    }
-                    
-                    // Check for empty split docks and potentially merge them back
-                    CheckForEmptySplitDocks();
-                };
-            }
-        }
-        
-        /// <summary>
-        /// Check for empty split DocumentDocks and clean up the layout
-        /// </summary>
-        private void CheckForEmptySplitDocks()
-        {
-            try
-            {
-                Log.Information("*** CheckForEmptySplitDocks called ***");
-                
-                if (_context is not RootDock rootDock)
-                    return;
-                    
-                // Find empty DocumentDocks in ProportionalDocks and clean them up
-                CheckForEmptySplitDocksRecursive(rootDock);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "*** Error checking for empty split docks ***");
-            }
-        }
-        
-        private void CheckForEmptySplitDocksRecursive(IDock dock)
-        {
-            if (dock.VisibleDockables == null)
-                return;
-                
-            // Process children first (depth-first)
-            var children = dock.VisibleDockables.OfType<IDock>().ToList();
-            foreach (var child in children)
-            {
-                CheckForEmptySplitDocksRecursive(child);
-            }
-            
-            // Now check if this dock is a ProportionalDock with empty DocumentDocks
-            if (dock is ProportionalDock proportionalDock)
-            {
-                var documentDocks = proportionalDock.VisibleDockables?.OfType<DocumentDock>().ToList() ?? new List<DocumentDock>();
-                var emptyDocks = documentDocks.Where(d => d.VisibleDockables?.OfType<Document>().Any() != true).ToList();
-                
-                if (emptyDocks.Any())
-                {
-                    Log.Information("*** Found {EmptyCount} empty DocumentDocks in ProportionalDock {DockId} ***", emptyDocks.Count, proportionalDock.Id);
-                    
-                    // If only one DocumentDock remains, replace the ProportionalDock with it
-                    var remainingDocks = documentDocks.Except(emptyDocks).ToList();
-                    if (remainingDocks.Count == 1)
-                    {
-                        var remainingDock = remainingDocks[0];
-                        var parent = FindParentDock(proportionalDock);
-                        if (parent != null)
-                        {
-                            Log.Information("*** Replacing ProportionalDock with single remaining DocumentDock ***");
-                            ReplaceInParent(parent, proportionalDock, remainingDock);
-                        }
-                    }
-                    else
-                    {
-                        // Remove empty docks from the ProportionalDock
-                        foreach (var emptyDock in emptyDocks)
-                        {
-                            proportionalDock.VisibleDockables?.Remove(emptyDock);
-                            Log.Information("*** Removed empty DocumentDock {DockId} ***", emptyDock.Id);
-                        }
-                    }
-                }
-            }
-        }
         
         // Override to handle floating operations
         public override void FloatDockable(IDockable dockable)
@@ -893,148 +819,53 @@ namespace CST.Avalonia.Services
             CleanupEmptySplits();
         }
         
-        // Override SwapDockable to debug tab operations
+        // Override SwapDockable to debug tab operations and trigger cleanup
         public override void SwapDockable(IDock dock, IDockable sourceDockable, IDockable targetDockable)
         {
             Log.Information("*** SwapDockable called - Dock: {DockId}, Source: {SourceId}, Target: {TargetId} ***", dock?.Id, sourceDockable?.Id, targetDockable?.Id);
             base.SwapDockable(dock, sourceDockable, targetDockable);
             Log.Information("*** SwapDockable completed ***");
-        }
-        
-        // Schedule proportion fixes after split operations complete
-        private void ScheduleProportionFix()
-        {
-            System.Threading.Tasks.Task.Run(async () =>
-            {
-                await System.Threading.Tasks.Task.Delay(100); // Small delay to let split layout complete
-                await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    FixSplitProportions();
-                });
-            });
-        }
-        
-        /// <summary>
-        /// Fix proportions in ProportionalDocks to ensure 50/50 splits
-        /// </summary>
-        private void FixSplitProportions()
-        {
-            try
-            {
-                Log.Information("*** FixSplitProportions called ***");
-                
-                if (_context is not RootDock rootDock)
-                    return;
-                    
-                FixSplitProportionsRecursive(rootDock);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "*** Error in FixSplitProportions ***");
-            }
-        }
-        
-        private void FixSplitProportionsRecursive(IDock dock)
-        {
-            if (dock.VisibleDockables == null)
-            {
-                Log.Information("*** FixSplitProportionsRecursive - dock has no visible dockables: {DockType} {DockId} ***", dock.GetType().Name, dock.Id);
-                return;
-            }
-                
-            Log.Information("*** FixSplitProportionsRecursive - processing dock: {DockType} {DockId} with {DockableCount} dockables ***", 
-                dock.GetType().Name, dock.Id, dock.VisibleDockables.Count);
-                
-            // Process children first
-            foreach (var child in dock.VisibleDockables.OfType<IDock>())
-            {
-                Log.Information("*** Processing child dock: {ChildType} {ChildId} ***", child.GetType().Name, child.Id);
-                FixSplitProportionsRecursive(child);
-            }
             
-            // If this is a ProportionalDock, analyze its structure and fix proportions
-            if (dock is ProportionalDock proportionalDock)
-            {
-                Log.Information("*** Found ProportionalDock {DockId} with {DockableCount} dockables ***", proportionalDock.Id, proportionalDock.VisibleDockables?.Count ?? 0);
-                
-                // Log all dockables to understand the structure
-                if (proportionalDock.VisibleDockables != null)
-                {
-                    for (int i = 0; i < proportionalDock.VisibleDockables.Count; i++)
-                    {
-                        var dockable = proportionalDock.VisibleDockables[i];
-                        Log.Information("*** Dockable {Index}: {DockableType} (ID: {DockableId}, Proportion: {Proportion}) ***", 
-                            i, dockable.GetType().Name, dockable.Id, dockable.Proportion);
-                    }
-                }
-                
-                var documentDocks = proportionalDock.VisibleDockables?.OfType<DocumentDock>().ToList() ?? new List<DocumentDock>();
-                Log.Information("*** ProportionalDock has {DocumentDockCount} DocumentDocks ***", documentDocks.Count);
-                
-                // Handle both 2 and 3 dockable cases (in case there are splitters or other elements)
-                if (documentDocks.Count == 2)
-                {
-                    var first = documentDocks[0];
-                    var second = documentDocks[1];
-                    
-                    Log.Information("*** Current DocumentDock proportions - First: {FirstProp}, Second: {SecondProp} ***", 
-                        first.Proportion, second.Proportion);
-                    
-                    // Only fix if proportions are unequal
-                    if (Math.Abs(first.Proportion - 0.5) > 0.01 || Math.Abs(second.Proportion - 0.5) > 0.01)
-                    {
-                        Log.Information("*** Fixing unequal DocumentDock proportions - First: {FirstProp}, Second: {SecondProp} ***", 
-                            first.Proportion, second.Proportion);
-                        
-                        first.Proportion = 0.5;
-                        second.Proportion = 0.5;
-                        
-                        Log.Information("*** DocumentDock proportions SET to 50/50 ***");
-                        
-                        // Verify the proportions were actually set
-                        Log.Information("*** VERIFICATION - First proportion after set: {FirstProp}, Second after set: {SecondProp} ***", 
-                            first.Proportion, second.Proportion);
-                        
-                        // Note: We've set the proportions, but the visual layout may need time to update
-                    }
-                    else
-                    {
-                        Log.Information("*** DocumentDock proportions already equal - no fix needed ***");
-                    }
-                }
-                else if (proportionalDock.VisibleDockables?.Count == 2)
-                {
-                    // Handle case where we have exactly 2 dockables that might not be DocumentDocks
-                    var first = proportionalDock.VisibleDockables[0];
-                    var second = proportionalDock.VisibleDockables[1];
-                    
-                    Log.Information("*** Current general proportions - First: {FirstProp}, Second: {SecondProp} ***", 
-                        first.Proportion, second.Proportion);
-                    
-                    if (Math.Abs(first.Proportion - 0.5) > 0.01 || Math.Abs(second.Proportion - 0.5) > 0.01)
-                    {
-                        Log.Information("*** Fixing unequal general proportions - First: {FirstProp}, Second: {SecondProp} ***", 
-                            first.Proportion, second.Proportion);
-                        
-                        first.Proportion = 0.5;
-                        second.Proportion = 0.5;
-                        
-                        Log.Information("*** General proportions SET to 50/50 ***");
-                        
-                        // Verify the proportions were actually set
-                        Log.Information("*** VERIFICATION - First proportion after set: {FirstProp}, Second after set: {SecondProp} ***", 
-                            first.Proportion, second.Proportion);
-                        
-                        // Note: We've set the proportions, but the visual layout may need time to update
-                    }
-                    else
-                    {
-                        Log.Information("*** General proportions already equal - no fix needed ***");
-                    }
-                }
-            }
+            // Trigger cleanup after swap operations as they can leave empty structures
+            Log.Information("*** Post-swap cleanup - checking for empty splits ***");
+            CleanupEmptySplits();
         }
         
+        // Override MoveDockable to trigger cleanup after tab moves
+        public override void MoveDockable(IDock dock, IDockable sourceDockable, IDockable targetDockable)
+        {
+            Log.Information("*** MoveDockable called - Dock: {DockId}, Source: {SourceId}, Target: {TargetId} ***", dock?.Id, sourceDockable?.Id, targetDockable?.Id);
+            base.MoveDockable(dock, sourceDockable, targetDockable);
+            Log.Information("*** MoveDockable completed ***");
+            
+            // Trigger cleanup after move operations as they can leave empty structures
+            Log.Information("*** Post-move cleanup - checking for empty splits ***");
+            CleanupEmptySplits();
+        }
+        
+        // Override AddDockable to trigger cleanup 
+        public override void AddDockable(IDock dock, IDockable dockable)
+        {
+            Log.Information("*** AddDockable called - Dock: {DockId}, Dockable: {DockableId} ***", dock?.Id, dockable?.Id);
+            base.AddDockable(dock, dockable);
+            Log.Information("*** AddDockable completed ***");
+            
+            // Trigger cleanup after add operations 
+            Log.Information("*** Post-add cleanup - checking for empty splits ***");
+            CleanupEmptySplits();
+        }
+        
+        // Override RemoveDockable to trigger cleanup
+        public override void RemoveDockable(IDockable dockable, bool collapse)
+        {
+            Log.Information("*** RemoveDockable called - Dockable: {DockableId}, Collapse: {Collapse} ***", dockable?.Id, collapse);
+            base.RemoveDockable(dockable, collapse);
+            Log.Information("*** RemoveDockable completed ***");
+            
+            // Trigger cleanup after remove operations
+            Log.Information("*** Post-remove cleanup - checking for empty splits ***");
+            CleanupEmptySplits();
+        }
         
         
         // Initialize host window support for floating windows
@@ -1280,13 +1111,13 @@ namespace CST.Avalonia.Services
         }
         
         /// <summary>
-        /// Recursively traverse the dock layout and clean up empty splits after drag operations
+        /// Recursively traverse all dock layouts (main + floating windows) and clean up empty splits after drag operations
         /// </summary>
         private void CleanupEmptySplits()
         {
             try
             {
-                Log.Information("*** CleanupEmptySplits called - starting iterative cleanup ***");
+                Log.Information("*** CleanupEmptySplits called - starting iterative cleanup (Main + {FloatingCount} floating windows) ***", HostWindows.Count);
                 int totalRemoved = 0;
                 int iteration = 0;
                 
@@ -1299,14 +1130,40 @@ namespace CST.Avalonia.Services
                     
                     var emptySplits = new List<IDock>();
                     
+                    // Check main window
                     if (_context is IDock rootDock && rootDock.VisibleDockables != null)
                     {
+                        Log.Information("*** Checking main window for empty splits ***");
                         foreach (var dockable in rootDock.VisibleDockables)
                         {
                             if (dockable is IDock dock)
                             {
                                 FindEmptySplits(dock, emptySplits);
                             }
+                        }
+                    }
+                    
+                    // Check all floating windows
+                    for (int i = 0; i < HostWindows.Count; i++)
+                    {
+                        var hostWindow = HostWindows[i];
+                        
+                        if (hostWindow is CstHostWindow cstHostWindow)
+                        {
+                            Log.Information("*** Checking floating window {Index} ({WindowId}) for empty splits ***", i, cstHostWindow.Id);
+                            
+                            if (cstHostWindow.Layout is IDock floatingDock)
+                            {
+                                FindEmptySplits(floatingDock, emptySplits);
+                            }
+                            else
+                            {
+                                Log.Information("***   Floating window {Index} has no dock layout ***", i);
+                            }
+                        }
+                        else
+                        {
+                            Log.Information("*** Floating window {Index}: Not CstHostWindow (Type: {WindowType}) ***", i, hostWindow.GetType().Name);
                         }
                     }
                     
@@ -1463,7 +1320,6 @@ namespace CST.Avalonia.Services
             {
                 if (dock?.VisibleDockables == null || dock.VisibleDockables.Count == 0)
                 {
-                    Log.Information("*** Dock {DockId} is empty - no visible dockables ***", dock?.Id ?? "null");
                     return true;
                 }
                 
@@ -1471,69 +1327,74 @@ namespace CST.Avalonia.Services
                 if (dock is DocumentDock documentDock)
                 {
                     var documents = documentDock.VisibleDockables?.OfType<Document>().ToList() ?? new List<Document>();
-                    bool isEmpty = documents.Count == 0;
                     
-                    Log.Information("*** DocumentDock {DockId} has {DocumentCount} documents - Empty: {IsEmpty} ***", 
-                        documentDock.Id ?? "null", documents.Count, isEmpty);
+                    // Enhanced logging to debug the empty dock issue
+                    if (documentDock.VisibleDockables?.Count > 0)
+                    {
+                        Log.Information("***   DocumentDock {DockId} has {Count} dockables:", 
+                            documentDock.Id ?? "null", documentDock.VisibleDockables.Count);
+                        foreach (var dockable in documentDock.VisibleDockables)
+                        {
+                            Log.Information("***     - {DockableType} (ID: {DockableId})", 
+                                dockable.GetType().Name, dockable.Id ?? "null");
+                        }
+                        Log.Information("***   But only {DocumentCount} are actual Documents", documents.Count);
+                    }
                     
-                    return isEmpty;
+                    return documents.Count == 0;
                 }
                 
                 // For ToolDock, check if it has any actual tools
                 if (dock is ToolDock toolDock)
                 {
                     var tools = toolDock.VisibleDockables?.OfType<Tool>().ToList() ?? new List<Tool>();
-                    bool isEmpty = tools.Count == 0;
-                    
-                    Log.Debug("*** ToolDock {DockId} has {ToolCount} tools - Empty: {IsEmpty} ***", 
-                        toolDock.Id ?? "null", tools.Count, isEmpty);
-                    
-                    return isEmpty;
+                    return tools.Count == 0;
                 }
                 
-                // For ProportionalDock, recursively check if all children are empty
+                // For ProportionalDock, check if all children are empty OR if it's a redundant single-child container
                 if (dock is ProportionalDock proportionalDock)
                 {
                     var nonSplitterChildren = proportionalDock.VisibleDockables
-                        .Where(d => !(d is ProportionalDockSplitter))
-                        .ToList();
+                        ?.Where(d => !(d is ProportionalDockSplitter))
+                        .ToList() ?? new List<IDockable>();
                     
                     if (nonSplitterChildren.Count == 0)
                     {
-                        Log.Debug("*** ProportionalDock {DockId} is empty - no non-splitter children ***", 
+                        return true;
+                    }
+                    
+                    // Check if this is a redundant single-child ProportionalDock (unnecessary nesting)
+                    if (nonSplitterChildren.Count == 1 && nonSplitterChildren[0] is IDock)
+                    {
+                        Log.Information("*** ProportionalDock {DockId} is redundant - has only one child dock (unnecessary nesting) ***", 
                             proportionalDock.Id ?? "null");
                         return true;
                     }
                     
-                    bool allChildrenEmpty = true;
+                    // Note: Duplicate DocumentDock IDs after splits are normal behavior from the framework
+                    // Only mark as empty if we have actual empty DocumentDocks, not just duplicates
+                    
+                    // All children must be empty for the ProportionalDock to be empty
                     foreach (var child in nonSplitterChildren)
                     {
                         if (child is IDock childDock)
                         {
                             if (!IsEmptyDock(childDock))
                             {
-                                allChildrenEmpty = false;
-                                break;
+                                return false;
                             }
                         }
                         else
                         {
                             // Non-dock dockable - not empty
-                            allChildrenEmpty = false;
-                            break;
+                            return false;
                         }
                     }
                     
-                    Log.Debug("*** ProportionalDock {DockId} with {ChildCount} children - All empty: {AllEmpty} ***", 
-                        proportionalDock.Id ?? "null", nonSplitterChildren.Count, allChildrenEmpty);
-                    
-                    return allChildrenEmpty;
+                    return true; // All children are empty
                 }
                 
                 // Default: if dock has any visible dockables, it's not empty
-                Log.Debug("*** Dock {DockId} ({DockType}) has {DockableCount} dockables - not empty ***", 
-                    dock.Id ?? "null", dock.GetType().Name, dock.VisibleDockables.Count);
-                
                 return false;
             }
             catch (Exception ex)
@@ -1557,10 +1418,53 @@ namespace CST.Avalonia.Services
                 var parent = FindParentDock(emptySplit);
                 if (parent?.VisibleDockables != null && parent.VisibleDockables.Contains(emptySplit))
                 {
-                    Log.Information("*** Found parent dock: {ParentType} (ID: {ParentId}) - removing empty child ***", 
-                        parent.GetType().Name, parent.Id ?? "null");
-                    
-                    parent.VisibleDockables.Remove(emptySplit);
+                    // Special handling for ProportionalDock issues
+                    if (emptySplit is ProportionalDock problemSplit)
+                    {
+                        var nonSplitterChildren = problemSplit.VisibleDockables
+                            ?.Where(d => !(d is ProportionalDockSplitter))
+                            .ToList() ?? new List<IDockable>();
+                        
+                        // Handle single-child ProportionalDock - replace with child
+                        if (nonSplitterChildren.Count == 1 && nonSplitterChildren[0] is IDock onlyChild)
+                        {
+                            Log.Information("*** Replacing single-child ProportionalDock with its child: {ChildType} (ID: {ChildId}) ***", 
+                                onlyChild.GetType().Name, onlyChild.Id ?? "null");
+                            
+                            // Replace the single-child ProportionalDock with its child
+                            var index = parent.VisibleDockables.IndexOf(emptySplit);
+                            if (index >= 0)
+                            {
+                                parent.VisibleDockables[index] = onlyChild;
+                                
+                                // Update active dockable if needed
+                                if (parent.ActiveDockable == emptySplit)
+                                {
+                                    parent.ActiveDockable = onlyChild;
+                                }
+                                
+                                Log.Information("*** Successfully replaced single-child ProportionalDock with child ***");
+                            }
+                            else
+                            {
+                                Log.Warning("*** Could not find index of single-child ProportionalDock in parent ***");
+                                // Fallback to regular removal
+                            }
+                            return;
+                        }
+                        
+                        // Normal ProportionalDock removal - no special duplicate handling needed
+                        // The framework creates duplicate DocumentDock IDs during splits which is normal behavior
+                        
+                        // If we get here, it's a ProportionalDock without special handling needed
+                        Log.Information("*** ProportionalDock has no special handling - removing completely ***");
+                        parent.VisibleDockables.Remove(emptySplit);
+                    }
+                    else
+                    {
+                        Log.Information("*** Removing empty dock completely ***");
+                        parent.VisibleDockables.Remove(emptySplit);
+                    }
                     
                     // If parent is also a ProportionalDock, clean up splitters
                     if (parent is ProportionalDock parentProportional)
@@ -1568,7 +1472,7 @@ namespace CST.Avalonia.Services
                         CleanupSplitters(parentProportional);
                     }
                     
-                    Log.Information("*** Successfully removed empty split from parent ***");
+                    Log.Information("*** Successfully processed empty split ***");
                 }
                 else
                 {
@@ -1621,16 +1525,49 @@ namespace CST.Avalonia.Services
         }
         
         /// <summary>
-        /// Find the parent dock of a given dock
+        /// Find the parent dock of a given dock by searching all dock hierarchies (main + floating windows)
         /// </summary>
         private IDock? FindParentDock(IDock targetDock)
         {
             try
             {
-                if (!(_context is IDock rootDock) || rootDock.VisibleDockables == null)
-                    return null;
+                Log.Information("*** FindParentDock searching for parent of: {TargetDockType} (ID: {TargetDockId}) ***", 
+                    targetDock?.GetType().Name, targetDock?.Id ?? "null");
                 
-                return FindParentDockRecursive(rootDock, targetDock);
+                // Search in main window first
+                if (_context is IDock rootDock && rootDock.VisibleDockables != null)
+                {
+                    Log.Information("*** Searching in main window hierarchy ***");
+                    var parent = FindParentDockRecursive(rootDock, targetDock);
+                    if (parent != null)
+                    {
+                        Log.Information("*** Found parent in main window: {ParentType} (ID: {ParentId}) ***", 
+                            parent.GetType().Name, parent.Id ?? "null");
+                        return parent;
+                    }
+                }
+                
+                // Search in all floating windows
+                for (int i = 0; i < HostWindows.Count; i++)
+                {
+                    var hostWindow = HostWindows[i];
+                    
+                    if (hostWindow is CstHostWindow cstHostWindow && cstHostWindow.Layout is IDock floatingDock)
+                    {
+                        Log.Information("*** Searching in floating window {Index} ({WindowId}) ***", i, cstHostWindow.Id);
+                        var parent = FindParentDockRecursive(floatingDock, targetDock);
+                        if (parent != null)
+                        {
+                            Log.Information("*** Found parent in floating window {Index}: {ParentType} (ID: {ParentId}) ***", 
+                                i, parent.GetType().Name, parent.Id ?? "null");
+                            return parent;
+                        }
+                    }
+                }
+                
+                Log.Warning("*** Parent dock not found in any hierarchy for: {TargetDockType} (ID: {TargetDockId}) ***", 
+                    targetDock?.GetType().Name, targetDock?.Id ?? "null");
+                return null;
             }
             catch (Exception ex)
             {
