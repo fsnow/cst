@@ -269,7 +269,12 @@ namespace CST.Avalonia.Services
 
         public void OpenBook(CST.Book book)
         {
-            System.Console.WriteLine($"Opening book: {book.FileName} - {book.LongNavPath}");
+            OpenBook(book, null);
+        }
+
+        public void OpenBook(CST.Book book, string? anchor)
+        {
+            System.Console.WriteLine($"Opening book: {book.FileName} - {book.LongNavPath} with anchor: {anchor ?? "null"}");
             
             // Allow multiple copies of the same book to be opened
             // This is useful for comparing the same text in different scripts
@@ -277,7 +282,7 @@ namespace CST.Avalonia.Services
             // Create BookDisplayViewModel for the book content with proper script service
             var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
             var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
-            var bookDisplayViewModel = new BookDisplayViewModel(book, null, null, chapterListsService);
+            var bookDisplayViewModel = new BookDisplayViewModel(book, null, anchor, chapterListsService);
             
             // Set the correct script after construction
             if (scriptService != null && bookDisplayViewModel != null)
@@ -286,6 +291,14 @@ namespace CST.Avalonia.Services
                 bookDisplayViewModel.BookScript = scriptService.CurrentScript;
                 System.Console.WriteLine($"Set book script to: {scriptService.CurrentScript}");
             }
+            
+            // Subscribe to OpenBookRequested event for Attha/Tika button functionality
+            bookDisplayViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
+            {
+                System.Console.WriteLine($"OpenBookRequested: {linkedBook.FileName} with anchor: {anchorForLinked ?? "null"}");
+                // Open the linked book with anchor navigation for positioning
+                OpenBook(linkedBook, anchorForLinked);
+            };
             
             // Use the same DisplayTitle logic as BookDisplayViewModel to ensure consistency
             string documentTitle = bookDisplayViewModel.DisplayTitle;
