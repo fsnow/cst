@@ -64,7 +64,7 @@ namespace CST.Avalonia.Services
                 CanClose = false // Prevent closing
             };
 
-            // Create a permanent welcome document that can't be closed
+            // Create a permanent welcome document that prevents tab area collapse
             var welcomeDocument = new Document
             {
                 Id = "WelcomeDocument",
@@ -337,19 +337,24 @@ namespace CST.Avalonia.Services
 
         public void CloseBook(string bookId)
         {
-            // Prevent closing the Welcome document
-            if (bookId == "WelcomeDocument")
-            {
-                System.Console.WriteLine("Cannot close Welcome document - it's permanent");
-                return;
-            }
-            
             var document = FindDocument(bookId);
             if (document != null)
             {
                 RemoveDocumentFromLayout(document);
                 System.Console.WriteLine($"Closed book: {bookId}");
             }
+        }
+
+        public void ShowWelcomeScreen()
+        {
+            // TODO: Implement a separate welcome screen dialog or window
+            // The "Show Welcome screen on startup" setting should show a separate welcome dialog,
+            // not related to the Welcome document tab which prevents collapse
+        }
+
+        public void HideWelcomeScreen()
+        {
+            // TODO: Implement hiding of the separate welcome screen dialog
         }
         
         private Document? FindDocument(string documentId)

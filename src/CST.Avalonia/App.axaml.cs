@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -6,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
@@ -35,6 +37,12 @@ public partial class App : Application
         // Configure ReactiveUI to use the UI thread scheduler to prevent threading issues
         RxApp.MainThreadScheduler = new AvaloniaUIThreadScheduler();
         
+        // Wire up native menu events on macOS
+        if (OperatingSystem.IsMacOS())
+        {
+            SetupNativeMenuEvents();
+        }
+        
         // Set up global exception handling for unhandled exceptions
         RxApp.DefaultExceptionHandler = new ReactiveExceptionHandler();
     }
@@ -44,6 +52,12 @@ public partial class App : Application
         // Note: Splash screen has been disabled on macOS due to threading issues
         // The splash screen must be shown after Avalonia is initialized, which defeats its purpose
         bool showSplash = !OperatingSystem.IsMacOS();
+        
+        // Check the "Show Welcome screen on startup" setting if platform supports splash screen
+        if (showSplash)
+        {
+            showSplash = ShouldShowSplashScreen();
+        }
         
         if (showSplash)
         {
@@ -71,6 +85,15 @@ public partial class App : Application
             // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
+            
+            if (showSplash)
+            {
+                SplashScreen.SetStatus("Loading settings...");
+                SplashScreen.SetReferencePoint();
+            }
+
+            // Load settings before application state
+            _ = LoadSettingsAsync();
             
             if (showSplash)
             {
@@ -114,6 +137,7 @@ public partial class App : Application
                 SplashScreen.CloseForm();
             }
 
+
             // Handle book open requests - now they open as documents in the dockable layout
             openBookViewModel.BookOpenRequested += book =>
             {
@@ -139,6 +163,75 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Check if splash screen should be shown based on user settings
+    /// This reads only the specific setting we need without loading the full settings system
+    /// </summary>
+    private bool ShouldShowSplashScreen()
+    {
+        try
+        {
+            var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CST.Avalonia", "settings.json");
+            
+            if (!File.Exists(settingsPath))
+            {
+                // If settings file doesn't exist, default to showing splash screen
+                return true;
+            }
+
+            var settingsJson = File.ReadAllText(settingsPath);
+            
+            // Parse just the ShowWelcomeOnStartup setting
+            if (settingsJson.Contains("\"ShowWelcomeOnStartup\""))
+            {
+                // Simple JSON parsing to avoid loading full settings system
+                var startIndex = settingsJson.IndexOf("\"ShowWelcomeOnStartup\":");
+                if (startIndex >= 0)
+                {
+                    var valueStart = settingsJson.IndexOf(':', startIndex) + 1;
+                    var valueEnd = settingsJson.IndexOfAny(new[] { ',', '}' }, valueStart);
+                    if (valueEnd > valueStart)
+                    {
+                        var valueStr = settingsJson.Substring(valueStart, valueEnd - valueStart).Trim();
+                        if (bool.TryParse(valueStr, out bool showSplash))
+                        {
+                            return showSplash;
+                        }
+                    }
+                }
+            }
+            
+            // Default to showing splash screen if parsing fails
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Use basic console logging since Serilog isn't configured yet
+            Console.WriteLine($"Warning: Failed to read splash screen setting, defaulting to show splash: {ex.Message}");
+            // Default to showing splash screen on error
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Load settings on startup
+    /// </summary>
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var settingsService = ServiceProvider?.GetRequiredService<ISettingsService>();
+            if (settingsService != null)
+            {
+                await settingsService.LoadSettingsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load settings: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -206,6 +299,7 @@ public partial class App : Application
         // Register services
         services.AddSingleton<ILocalizationService, LocalizationService>();
         services.AddSingleton<IScriptService, ScriptService>();
+        services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IApplicationStateService, ApplicationStateService>();
         services.AddSingleton<ChapterListsService>();
         // services.AddSingleton<IBookService, BookService>();
@@ -215,6 +309,49 @@ public partial class App : Application
         // Register ViewModels
         services.AddSingleton<OpenBookDialogViewModel>();
         // services.AddTransient<MainWindowViewModel>();
+    }
+
+    private void SetupNativeMenuEvents()
+    {
+        var menu = NativeMenu.GetMenu(this);
+        if (menu != null && menu.Count() > 0)
+        {
+            // Find the Settings menu item
+            foreach (var item in menu)
+            {
+                if (item is NativeMenuItem menuItem && menuItem.Header?.ToString() == "Settings...")
+                {
+                    menuItem.Click += async (s, e) =>
+                    {
+                        Log.Information("Settings menu clicked via native menu");
+                        await ShowSettingsWindow();
+                    };
+                    break;
+                }
+            }
+        }
+    }
+    
+    private async Task ShowSettingsWindow()
+    {
+        try
+        {
+            var settingsService = ServiceProvider?.GetRequiredService<ISettingsService>();
+            if (settingsService != null && MainWindow != null)
+            {
+                var settingsViewModel = new SettingsViewModel(settingsService);
+                var settingsWindow = new SettingsWindow
+                {
+                    DataContext = settingsViewModel
+                };
+                
+                await settingsWindow.ShowDialog(MainWindow);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to open settings window from native menu");
+        }
     }
 
     private void DisableAvaloniaDataAnnotationValidation()

@@ -66,6 +66,16 @@ namespace CST.Avalonia.ViewModels
             _factory.CloseBook(bookId);
         }
 
+        public void ShowWelcomeScreen()
+        {
+            _factory.ShowWelcomeScreen();
+        }
+
+        public void HideWelcomeScreen()
+        {
+            _factory.HideWelcomeScreen();
+        }
+
         private void ToggleBookPanel()
         {
             // Find the LeftToolDock and toggle its visibility
@@ -151,7 +161,7 @@ namespace CST.Avalonia.ViewModels
         private void ShowAbout()
         {
             // TODO: Implement About dialog
-            System.Console.WriteLine("About CST - Buddhist text reader application");
+            System.Console.WriteLine("About CST - Tipitaka text reader application");
         }
     }
 }

@@ -9,11 +9,8 @@
         MinWidth="800" MinHeight="600"
         WindowStartupLocation="CenterScreen">
     
-    <!-- Main Layout with Menu, Toolbar and DockControl -->
+    <!-- Main Layout with Toolbar and DockControl -->
     <DockPanel>
-        <!-- Menu Bar - Temporarily removed for testing -->
-        <!-- TODO: Re-enable menu once DataContext binding is fixed -->
-        
         <!-- Top Toolbar -->
         <Border Background="LightGray" 
                 BorderBrush="Gray" 

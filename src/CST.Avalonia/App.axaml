@@ -68,19 +68,17 @@
             </Border>
         </DataTemplate>
         
-        <!-- DataTemplate for string content (welcome message) -->
-        <DataTemplate DataType="{x:Type x:String}">
-            <Border Background="WhiteSmoke" Padding="20">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
-                    <TextBlock Text="📖" FontSize="48" HorizontalAlignment="Center"/>
-                    <TextBlock Text="{Binding}" FontSize="16" HorizontalAlignment="Center" TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
-        </DataTemplate>
     </Application.DataTemplates>
   
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Dock.Avalonia/Themes/DockFluentTheme.axaml" />
     </Application.Styles>
+    
+    <!-- Native Menu for macOS -->
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="Settings..." Gesture="Cmd+OemComma" />
+        </NativeMenu>
+    </NativeMenu.Menu>
 </Application>
