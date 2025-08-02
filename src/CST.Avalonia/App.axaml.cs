@@ -168,7 +168,29 @@ public partial class App : Application
             // Handle application shutdown to save state
             desktop.ShutdownRequested += async (sender, args) =>
             {
-                await SaveApplicationStateAsync();
+                Log.Information("SHUTDOWN: ShutdownRequested event triggered");
+                
+                // Cancel shutdown temporarily to allow async save to complete
+                args.Cancel = true;
+                
+                try
+                {
+                    await SaveApplicationStateAsync();
+                    
+                    // Dispose ServiceProvider to trigger disposal of all singleton services
+                    ServiceProvider?.Dispose();
+                    
+                    Log.Information("SHUTDOWN: All cleanup completed, proceeding with shutdown");
+                    
+                    // Now allow shutdown to proceed
+                    desktop.Shutdown(0);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "SHUTDOWN: Error during shutdown sequence");
+                    // Force shutdown even if save failed
+                    desktop.Shutdown(1);
+                }
             };
         }
 
@@ -456,9 +478,9 @@ public partial class App : Application
                         }
                     }
                     
-                    // Find the document with the matching WindowId
+                    // Find the document with the matching WindowId (exact match)
                     var targetDocument = documentDock.VisibleDockables?
-                        .FirstOrDefault(d => d.Id?.Contains(selectedWindowId) == true);
+                        .FirstOrDefault(d => d.Id == selectedWindowId);
                     
                     if (targetDocument != null)
                     {
@@ -521,15 +543,22 @@ public partial class App : Application
     {
         try
         {
+            Log.Information("SHUTDOWN: Starting final application state save");
             var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
             if (stateService != null)
             {
-                await stateService.SaveStateAsync();
+                // Force immediate save on shutdown
+                var success = await stateService.ForceSaveAsync();
+                Log.Information("SHUTDOWN: Final state save completed - Success: {Success}", success);
+            }
+            else
+            {
+                Log.Warning("SHUTDOWN: ApplicationStateService not available");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to save application state: {ex.Message}");
+            Log.Error(ex, "SHUTDOWN: Failed to save application state");
         }
     }
 

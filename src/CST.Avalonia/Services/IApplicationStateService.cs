@@ -115,6 +115,16 @@ public interface IApplicationStateService
     /// Control whether StateChanged events are suppressed (for restoration scenarios)
     /// </summary>
     void SetStateChangedEventsSuppression(bool suppress);
+    
+    /// <summary>
+    /// Mark the state as dirty for later saving (timer-based)
+    /// </summary>
+    void MarkDirty();
+    
+    /// <summary>
+    /// Force immediate save of state (for shutdown scenarios)
+    /// </summary>
+    Task<bool> ForceSaveAsync();
 }
 
 /// <summary>

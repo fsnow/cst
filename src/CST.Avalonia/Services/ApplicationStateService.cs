@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Timers;
 using CST.Avalonia.Models;
 using CST.Conversion;
 using Microsoft.Extensions.Logging;
@@ -13,17 +14,20 @@ namespace CST.Avalonia.Services;
 /// <summary>
 /// Application state service with JSON serialization for debugging and reliability
 /// </summary>
-public class ApplicationStateService : IApplicationStateService
+public class ApplicationStateService : IApplicationStateService, IDisposable
 {
     private readonly ILogger<ApplicationStateService> _logger;
     private readonly string _stateFilePath;
     private readonly string _backupDirectory;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly Timer _saveTimer;
 
     public ApplicationState Current { get; private set; }
     public event Action<ApplicationState>? StateChanged;
     
     private bool _suppressStateChangedEvents = false;
+    private bool _isDirty = false;
+    private readonly object _dirtyLock = new object();
     
     public void SetStateChangedEventsSuppression(bool suppress)
     {
@@ -69,6 +73,59 @@ public class ApplicationStateService : IApplicationStateService
         };
 
         Current = new ApplicationState();
+        
+        // Initialize timer for periodic state saving (every 60 seconds)
+        _saveTimer = new Timer(60000); // 60 seconds
+        _saveTimer.Elapsed += OnSaveTimerElapsed;
+        _saveTimer.AutoReset = true;
+        _saveTimer.Start();
+        
+        _logger.LogInformation("ApplicationStateService initialized with 60-second save timer");
+    }
+    
+    /// <summary>
+    /// Mark the state as dirty for later saving
+    /// </summary>
+    public void MarkDirty()
+    {
+        lock (_dirtyLock)
+        {
+            if (!_isDirty)
+            {
+                _isDirty = true;
+                _logger.LogDebug("State marked as dirty");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Timer callback to save state if dirty
+    /// </summary>
+    private async void OnSaveTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        bool shouldSave = false;
+        lock (_dirtyLock)
+        {
+            shouldSave = _isDirty;
+        }
+        
+        if (shouldSave)
+        {
+            _logger.LogDebug("Timer triggered: saving dirty state");
+            var success = await SaveStateAsync();
+            if (success)
+            {
+                lock (_dirtyLock)
+                {
+                    _isDirty = false;
+                }
+                _logger.LogDebug("Timer save completed successfully");
+            }
+            else
+            {
+                _logger.LogWarning("Timer save failed - state remains dirty");
+            }
+        }
     }
 
     public async Task<bool> LoadStateAsync()
@@ -188,8 +245,8 @@ public class ApplicationStateService : IApplicationStateService
         Current.MainWindow = mainWindowState;
         FireStateChangedEvent();
         
-        // Save state to persist the change
-        _ = SaveStateAsync();
+        // Mark dirty for timer-based saving
+        MarkDirty();
     }
 
     public void UpdateOpenBookDialogState(OpenBookDialogState dialogState)
@@ -225,8 +282,8 @@ public class ApplicationStateService : IApplicationStateService
         Current.BookWindows.Add(bookWindowState);
         FireStateChangedEvent();
         
-        // Save state to persist the change
-        _ = SaveStateAsync();
+        // Mark dirty for timer-based saving
+        MarkDirty();
     }
 
     public void UpdateBookWindowScript(string windowId, Script newScript)
@@ -237,8 +294,8 @@ public class ApplicationStateService : IApplicationStateService
             existing.BookScript = newScript;
             FireStateChangedEvent();
             
-            // Save state to persist the change
-            _ = SaveStateAsync();
+            // Mark dirty for timer-based saving
+            MarkDirty();
         }
     }
 
@@ -250,8 +307,8 @@ public class ApplicationStateService : IApplicationStateService
             Current.BookWindows.Remove(existing);
             FireStateChangedEvent();
             
-            // Save state to persist the change
-            _ = SaveStateAsync();
+            // Mark dirty for timer-based saving
+            MarkDirty();
         }
     }
 
@@ -263,8 +320,8 @@ public class ApplicationStateService : IApplicationStateService
             Current.BookWindows.Remove(existing);
             FireStateChangedEvent();
             
-            // Save state to persist the change
-            _ = SaveStateAsync();
+            // Mark dirty for timer-based saving
+            MarkDirty();
         }
     }
 
@@ -500,5 +557,62 @@ public class ApplicationStateService : IApplicationStateService
         }
 
         _logger.LogInformation("Applied fixes to application state");
+    }
+    
+    /// <summary>
+    /// Force immediate save of state (for shutdown scenarios)
+    /// </summary>
+    public async Task<bool> ForceSaveAsync()
+    {
+        _logger.LogInformation("Force saving application state");
+        var success = await SaveStateAsync();
+        if (success)
+        {
+            lock (_dirtyLock)
+            {
+                _isDirty = false;
+            }
+        }
+        return success;
+    }
+    
+    public void Dispose()
+    {
+        _logger.LogInformation("Disposing ApplicationStateService - performing final save");
+        
+        // Stop the timer
+        _saveTimer?.Stop();
+        
+        // Force save any dirty state before disposal
+        bool shouldSave = false;
+        lock (_dirtyLock)
+        {
+            shouldSave = _isDirty;
+        }
+        
+        if (shouldSave)
+        {
+            // Synchronous save during disposal
+            try
+            {
+                var task = SaveStateAsync();
+                task.Wait(TimeSpan.FromSeconds(5)); // Wait up to 5 seconds
+                if (task.IsCompletedSuccessfully)
+                {
+                    _logger.LogInformation("Final state save completed successfully");
+                }
+                else
+                {
+                    _logger.LogWarning("Final state save did not complete within timeout");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save state during disposal");
+            }
+        }
+        
+        _saveTimer?.Dispose();
+        _logger.LogInformation("ApplicationStateService disposed");
     }
 }
