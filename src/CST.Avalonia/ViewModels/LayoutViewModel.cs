@@ -57,9 +57,9 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _isBookPanelVisible, value);
         }
 
-        public void OpenBook(CST.Book book, Script? bookScript = null)
+        public void OpenBook(CST.Book book, Script? bookScript = null, string? windowId = null)
         {
-            _factory.OpenBook(book, bookScript);
+            _factory.OpenBook(book, null, bookScript, windowId);
         }
 
         public void CloseBook(string bookId)

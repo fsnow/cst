@@ -169,6 +169,19 @@ namespace CST.Avalonia.Services
                     CleanupEmptySplits();
                 };
             }
+            
+            // Monitor ActiveDockable changes to save state when user switches tabs
+            if (documentDock is INotifyPropertyChanged propertyChanged)
+            {
+                propertyChanged.PropertyChanged += (sender, e) =>
+                {
+                    if (e.PropertyName == nameof(documentDock.ActiveDockable))
+                    {
+                        Log.Information("*** ACTIVE TAB CHANGED - Saving all book window states ***");
+                        SaveAllBookWindowStates();
+                    }
+                };
+            }
 
             // Create splitter between left tool dock and document dock to enable resizing
             var splitter = new ProportionalDockSplitter
@@ -285,7 +298,12 @@ namespace CST.Avalonia.Services
 
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript)
         {
-            System.Console.WriteLine($"Opening book: {book.FileName} - {book.LongNavPath} with anchor: {anchor ?? "null"}");
+            OpenBook(book, anchor, bookScript, null);
+        }
+        
+        public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId)
+        {
+            System.Console.WriteLine($"Opening book: {book.FileName} - {book.LongNavPath} with anchor: {anchor ?? "null"}, windowId: {windowId ?? "auto-generated"}");
             
             // Allow multiple copies of the same book to be opened
             // This is useful for comparing the same text in different scripts
@@ -316,11 +334,12 @@ namespace CST.Avalonia.Services
             // Use the same DisplayTitle logic as BookDisplayViewModel to ensure consistency
             string documentTitle = bookDisplayViewModel.DisplayTitle;
 
-            // Create a new document for the book with a unique ID
-            // Using a GUID suffix to allow multiple copies of the same book
+            // Create a new document for the book
+            // Use provided windowId for restoration, or generate new GUID for new instances
+            var documentId = windowId ?? $"Book_{book.FileName}_{Guid.NewGuid():N}";
             var document = new Document
             {
-                Id = $"Book_{book.FileName}_{Guid.NewGuid():N}",
+                Id = documentId,
                 Title = documentTitle,
                 Context = bookDisplayViewModel,
                 CanFloat = true,   // Allow floating for multi-window support
@@ -345,8 +364,7 @@ namespace CST.Avalonia.Services
             // Add to the document dock
             AddDocumentToLayout(document);
             
-            // Save book window state
-            SaveBookWindowState(book, bookDisplayViewModel, document);
+            // Don't save state immediately - let tab changes trigger state saving
             
             // Subscribe to script changes to update state when script changes
             bookDisplayViewModel.PropertyChanged += (sender, e) =>
@@ -360,7 +378,37 @@ namespace CST.Avalonia.Services
             System.Console.WriteLine($"Created document: {document.Id} with title: {document.Title}");
         }
 
-        private void SaveBookWindowState(CST.Book book, BookDisplayViewModel bookDisplayViewModel, Document document)
+        private void SaveAllBookWindowStates()
+        {
+            try
+            {
+                var documentDock = FindDocumentDock();
+                if (documentDock?.VisibleDockables == null) return;
+                
+                var activeDocument = documentDock.ActiveDockable;
+                Log.Information("*** Saving all book states - Active document: {ActiveId} ***", activeDocument?.Id ?? "none");
+                
+                foreach (var dockable in documentDock.VisibleDockables)
+                {
+                    if (dockable is Document document && 
+                        document.Context is BookDisplayViewModel bookDisplayViewModel && 
+                        bookDisplayViewModel.Book != null)
+                    {
+                        // Only the active document gets IsSelected = true
+                        var isSelected = document == activeDocument;
+                        SaveBookWindowState(bookDisplayViewModel.Book, bookDisplayViewModel, document, isSelected);
+                        Log.Information("*** Saved state for {BookFileName} - IsSelected: {IsSelected} ***", 
+                            bookDisplayViewModel.Book.FileName, isSelected);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to save all book window states");
+            }
+        }
+
+        private void SaveBookWindowState(CST.Book book, BookDisplayViewModel bookDisplayViewModel, Document document, bool? isSelected = null)
         {
             try
             {
@@ -382,6 +430,9 @@ namespace CST.Avalonia.Services
                     return;
                 }
                 
+                // Use provided isSelected value or determine it dynamically
+                var isSelectedValue = isSelected ?? (document == FindDocumentDock()?.ActiveDockable);
+                
                 // Create book window state using document.Id as WindowId
                 var bookWindowState = new BookWindowState
                 {
@@ -391,7 +442,7 @@ namespace CST.Avalonia.Services
                     BookScript = bookDisplayViewModel.BookScript,
                     SearchTerms = new List<string>(), // TODO: Get search terms from BookDisplayViewModel
                     TabIndex = 0, // TODO: Get actual tab index from dock
-                    IsSelected = document == FindDocumentDock()?.ActiveDockable,
+                    IsSelected = isSelectedValue,
                     ShowFootnotes = true, // Default for now
                     ShowSearchTerms = false // TODO: Get search terms status from BookDisplayViewModel
                 };

@@ -129,12 +129,12 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    public void OpenBook(Book book, List<string>? searchTerms = null, Script? bookScript = null)
+    public void OpenBook(Book book, List<string>? searchTerms = null, Script? bookScript = null, string? windowId = null)
     {
         // Delegate to LayoutViewModel if available
         if (DataContext is LayoutViewModel layoutViewModel)
         {
-            layoutViewModel.OpenBook(book, bookScript);
+            layoutViewModel.OpenBook(book, bookScript, windowId);
         }
         else
         {

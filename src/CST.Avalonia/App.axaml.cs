@@ -15,6 +15,8 @@ using CST.Avalonia.ViewModels;
 using CST.Avalonia.Views;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
+using Dock.Model.Core;
+using Dock.Model.Mvvm.Controls;
 using CST;
 using CST.Conversion;
 using Microsoft.Extensions.DependencyInjection;
@@ -353,10 +355,19 @@ public partial class App : Application
                         // Use the SimpleTabbedWindow's OpenBook method directly
                         // Create a copy to avoid collection modification issues
                         var bookWindowsCopy = bookWindows.ToList();
+                        string? selectedBookWindowId = null;
+                        
+                        // First pass: Open all books and identify which one should be selected
                         foreach (var bookWindowState in bookWindowsCopy)
                         {
                             try
                             {
+                                // Remember which book was selected
+                                if (bookWindowState.IsSelected)
+                                {
+                                    selectedBookWindowId = bookWindowState.WindowId;
+                                }
+                                
                                 // Get the book from Books.Inst by index
                                 if (bookWindowState.BookIndex >= 0 && bookWindowState.BookIndex < Books.Inst.Count)
                                 {
@@ -365,9 +376,9 @@ public partial class App : Application
                                     // Validate the book filename matches (for extra safety)
                                     if (book.FileName == bookWindowState.BookFileName)
                                     {
-                                        // Open the book through SimpleTabbedWindow with saved script
-                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript);
-                                        Console.WriteLine($"Restored book: {book.FileName} with script: {bookWindowState.BookScript}");
+                                        // Open the book through SimpleTabbedWindow with saved script and WindowId
+                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId);
+                                        Console.WriteLine($"Restored book: {book.FileName} with script: {bookWindowState.BookScript} and WindowId: {bookWindowState.WindowId}");
                                     }
                                     else
                                     {
@@ -383,6 +394,14 @@ public partial class App : Application
                             {
                                 Console.WriteLine($"Failed to restore book {bookWindowState.BookFileName}: {ex.Message}");
                             }
+                        }
+                        
+                        // Second pass: Restore the selected tab if we found one
+                        if (!string.IsNullOrEmpty(selectedBookWindowId))
+                        {
+                            // Add a small delay to ensure all tabs are fully loaded before setting selection
+                            await Task.Delay(100);
+                            RestoreSelectedBookTab(selectedBookWindowId);
                         }
                     }
                     else
@@ -408,6 +427,91 @@ public partial class App : Application
             Console.WriteLine($"Failed to restore book windows: {ex.Message}");
             _isRestoringBookWindows = false;
         }
+    }
+    
+    private void RestoreSelectedBookTab(string selectedWindowId)
+    {
+        try
+        {
+            Console.WriteLine($"Attempting to restore selection to WindowId: {selectedWindowId}");
+            
+            // Get the layout to access the document dock
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && 
+                desktop.MainWindow is SimpleTabbedWindow mainWindow &&
+                mainWindow.DataContext is LayoutViewModel layoutViewModel)
+            {
+                // Find the document dock by traversing the layout hierarchy
+                var documentDock = FindDocumentDockInLayout(layoutViewModel.Layout);
+                
+                if (documentDock != null)
+                {
+                    Console.WriteLine($"Found {documentDock.VisibleDockables?.Count ?? 0} visible dockables");
+                    
+                    // Log all document IDs for debugging
+                    if (documentDock.VisibleDockables != null)
+                    {
+                        foreach (var doc in documentDock.VisibleDockables)
+                        {
+                            Console.WriteLine($"  Document ID: {doc.Id}");
+                        }
+                    }
+                    
+                    // Find the document with the matching WindowId
+                    var targetDocument = documentDock.VisibleDockables?
+                        .FirstOrDefault(d => d.Id?.Contains(selectedWindowId) == true);
+                    
+                    if (targetDocument != null)
+                    {
+                        documentDock.ActiveDockable = targetDocument;
+                        Console.WriteLine($"Successfully restored selection to book with WindowId: {selectedWindowId}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Could not find document with WindowId: {selectedWindowId}");
+                        // Fallback: select the last opened tab if no specific selection found
+                        if (documentDock.VisibleDockables?.Count > 0)
+                        {
+                            documentDock.ActiveDockable = documentDock.VisibleDockables.Last();
+                            Console.WriteLine("Fallback: Selected last opened tab");
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Could not find document dock for tab selection restoration");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to restore selected tab: {ex.Message}");
+        }
+    }
+    
+    private IDock? FindDocumentDockInLayout(IDock? dock)
+    {
+        if (dock == null) return null;
+        
+        // Check if this dock is the MainDocumentDock or any DocumentDock
+        if (dock.Id == "MainDocumentDock" || dock is DocumentDock)
+        {
+            return dock;
+        }
+        
+        // Recursively search in visible dockables
+        if (dock.VisibleDockables != null)
+        {
+            foreach (var child in dock.VisibleDockables)
+            {
+                if (child is IDock childDock)
+                {
+                    var result = FindDocumentDockInLayout(childDock);
+                    if (result != null) return result;
+                }
+            }
+        }
+        
+        return null;
     }
 
     /// <summary>
