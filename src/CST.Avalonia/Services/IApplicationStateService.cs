@@ -99,6 +99,11 @@ public interface IApplicationStateService
     /// Create backup of current state
     /// </summary>
     Task<bool> CreateBackupAsync();
+    
+    /// <summary>
+    /// Control whether StateChanged events are suppressed (for restoration scenarios)
+    /// </summary>
+    void SetStateChangedEventsSuppression(bool suppress);
 }
 
 /// <summary>

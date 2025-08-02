@@ -21,6 +21,26 @@ public class ApplicationStateService : IApplicationStateService
 
     public ApplicationState Current { get; private set; }
     public event Action<ApplicationState>? StateChanged;
+    
+    private bool _suppressStateChangedEvents = false;
+    
+    public void SetStateChangedEventsSuppression(bool suppress)
+    {
+        _suppressStateChangedEvents = suppress;
+        _logger.LogDebug($"StateChanged events suppression: {suppress}");
+    }
+    
+    private void FireStateChangedEvent()
+    {
+        if (!_suppressStateChangedEvents)
+        {
+            StateChanged?.Invoke(Current);
+        }
+        else
+        {
+            _logger.LogDebug("StateChanged event suppressed");
+        }
+    }
 
     public ApplicationStateService(ILogger<ApplicationStateService> logger)
     {
@@ -87,7 +107,8 @@ public class ApplicationStateService : IApplicationStateService
             }
 
             Current = state;
-            StateChanged?.Invoke(Current);
+            // Don't fire StateChanged on load to prevent infinite loops
+            // Initial state will be handled separately
             
             _logger.LogInformation("Application state loaded successfully from {FilePath}", _stateFilePath);
             return true;
@@ -131,7 +152,7 @@ public class ApplicationStateService : IApplicationStateService
             File.Move(tempPath, _stateFilePath);
 
             _logger.LogInformation("Application state saved successfully to {FilePath}", _stateFilePath);
-            StateChanged?.Invoke(Current);
+            // Don't fire StateChanged event on save - only on modifications
             return true;
         }
         catch (Exception ex)
@@ -144,25 +165,25 @@ public class ApplicationStateService : IApplicationStateService
     public void UpdateMainWindowState(MainWindowState mainWindowState)
     {
         Current.MainWindow = mainWindowState;
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
     }
 
     public void UpdateOpenBookDialogState(OpenBookDialogState dialogState)
     {
         Current.OpenBookDialog = dialogState;
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
     }
 
     public void UpdateSearchDialogState(SearchDialogState dialogState)
     {
         Current.SearchDialog = dialogState;
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
     }
 
     public void UpdateDictionaryDialogState(DictionaryDialogState dialogState)
     {
         Current.DictionaryDialog = dialogState;
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
     }
 
     public void UpdateBookWindowState(BookWindowState bookWindowState)
@@ -174,7 +195,10 @@ public class ApplicationStateService : IApplicationStateService
         }
         
         Current.BookWindows.Add(bookWindowState);
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
+        
+        // Save state to persist the change
+        _ = SaveStateAsync();
     }
 
     public void RemoveBookWindowState(int bookIndex)
@@ -183,14 +207,17 @@ public class ApplicationStateService : IApplicationStateService
         if (existing != null)
         {
             Current.BookWindows.Remove(existing);
-            StateChanged?.Invoke(Current);
+            FireStateChangedEvent();
+            
+            // Save state to persist the change
+            _ = SaveStateAsync();
         }
     }
 
     public void UpdatePreferences(ApplicationPreferences preferences)
     {
         Current.Preferences = preferences;
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
     }
 
     public bool[] GetTreeExpansionStates()
@@ -203,7 +230,7 @@ public class ApplicationStateService : IApplicationStateService
         Current.OpenBookDialog.TreeExpansionStates = states.ToList();
         Current.OpenBookDialog.TreeVersion = treeVersion;
         Current.OpenBookDialog.TotalNodeCount = totalNodeCount;
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
     }
 
     public void AddRecentBook(int bookIndex, string fileName, string displayName)
@@ -230,7 +257,7 @@ public class ApplicationStateService : IApplicationStateService
             recent.RemoveAt(recent.Count - 1);
         }
 
-        StateChanged?.Invoke(Current);
+        FireStateChangedEvent();
     }
 
     public async Task ClearStateAsync()
@@ -244,7 +271,7 @@ public class ApplicationStateService : IApplicationStateService
             }
 
             Current = new ApplicationState();
-            StateChanged?.Invoke(Current);
+            FireStateChangedEvent();
         }
         catch (Exception ex)
         {
@@ -325,7 +352,7 @@ public class ApplicationStateService : IApplicationStateService
                                 ApplyStateFixes(state, validation);
                                 
                             Current = state;
-                            StateChanged?.Invoke(Current);
+                            FireStateChangedEvent();
                             
                             _logger.LogInformation("Loaded application state from backup: {BackupPath}", backupPath);
                             return true;

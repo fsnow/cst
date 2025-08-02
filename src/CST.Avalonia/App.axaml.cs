@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,7 +14,9 @@ using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Views;
 using CST.Avalonia.Services;
+using CST.Avalonia.Models;
 using CST;
+using CST.Conversion;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -29,6 +32,8 @@ public partial class App : Application
 {
     public static ServiceProvider? ServiceProvider { get; private set; }
     public static Window? MainWindow { get; private set; }
+    private bool _isRestoringBookWindows = false;
+    private bool _hasRestoredInitialBooks = false;
 
     public override void Initialize()
     {
@@ -247,12 +252,154 @@ public partial class App : Application
             var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
             if (stateService != null)
             {
+                // Subscribe to state changes for future modifications (not for initial load)
+                stateService.StateChanged += OnApplicationStateChanged;
+                
                 await stateService.LoadStateAsync();
+                
+                // Manually handle initial state restoration without StateChanged events
+                await InitializeFromLoadedState(stateService.Current);
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to load application state: {ex.Message}");
+        }
+    }
+    
+    private async Task InitializeFromLoadedState(ApplicationState state)
+    {
+        // Initialize script service with loaded script preference
+        var scriptService = ServiceProvider?.GetRequiredService<IScriptService>();
+        if (scriptService != null)
+        {
+            scriptService.InitializeFromState();
+        }
+        
+        // Restore book windows if any exist
+        if (state.BookWindows.Any() && !_hasRestoredInitialBooks)
+        {
+            _hasRestoredInitialBooks = true;
+            
+            // Suppress StateChanged events during restoration to prevent loops
+            var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
+            if (stateService != null)
+            {
+                stateService.SetStateChangedEventsSuppression(true);
+            }
+            
+            try
+            {
+                RestoreBookWindows(state.BookWindows);
+            }
+            finally
+            {
+                // Re-enable StateChanged events after restoration
+                if (stateService != null)
+                {
+                    stateService.SetStateChangedEventsSuppression(false);
+                }
+            }
+        }
+    }
+
+    private void OnApplicationStateChanged(ApplicationState state)
+    {
+        // Restore book windows from saved state - but only once during initial load
+        if (state.BookWindows.Any() && !_isRestoringBookWindows && !_hasRestoredInitialBooks)
+        {
+            _hasRestoredInitialBooks = true;
+            RestoreBookWindows(state.BookWindows);
+        }
+    }
+
+    private void RestoreBookWindows(List<BookWindowState> bookWindows)
+    {
+        try
+        {
+            Console.WriteLine($"Restoring {bookWindows.Count} book windows from saved state");
+            
+            // Set flag to prevent re-entrant restoration
+            _isRestoringBookWindows = true;
+            
+            // We need to delay restoration until the UI is fully loaded
+            // Schedule the restoration on the UI thread after a delay
+            Dispatcher.UIThread.Post(async () =>
+            {
+                var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
+                
+                try
+                {
+                    // Wait for UI to be fully initialized
+                    await Task.Delay(500);
+                    
+                    // Suppress StateChanged events to prevent feedback loop
+                    if (stateService != null)
+                    {
+                        stateService.SetStateChangedEventsSuppression(true);
+                    }
+                    
+                    // Get the main window and its dock factory
+                    if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && 
+                        desktop.MainWindow is SimpleTabbedWindow mainWindow)
+                    {
+                        // Use the SimpleTabbedWindow's OpenBook method directly
+                        // Create a copy to avoid collection modification issues
+                        var bookWindowsCopy = bookWindows.ToList();
+                        foreach (var bookWindowState in bookWindowsCopy)
+                        {
+                            try
+                            {
+                                // Get the book from Books.Inst by index
+                                if (bookWindowState.BookIndex >= 0 && bookWindowState.BookIndex < Books.Inst.Count)
+                                {
+                                    var book = Books.Inst[bookWindowState.BookIndex];
+                                    
+                                    // Validate the book filename matches (for extra safety)
+                                    if (book.FileName == bookWindowState.BookFileName)
+                                    {
+                                        // Open the book through SimpleTabbedWindow
+                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms);
+                                        Console.WriteLine($"Restored book: {book.FileName}");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Book filename mismatch: expected {bookWindowState.BookFileName}, got {book.FileName}");
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Invalid book index: {bookWindowState.BookIndex}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to restore book {bookWindowState.BookFileName}: {ex.Message}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Main window not available for book restoration");
+                    }
+                }
+                finally
+                {
+                    // Re-enable StateChanged events
+                    if (stateService != null)
+                    {
+                        stateService.SetStateChangedEventsSuppression(false);
+                    }
+                    
+                    // Clear flag when restoration is complete
+                    _isRestoringBookWindows = false;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to restore book windows: {ex.Message}");
+            _isRestoringBookWindows = false;
         }
     }
 

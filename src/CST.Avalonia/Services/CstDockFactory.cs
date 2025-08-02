@@ -10,6 +10,7 @@ using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Views;
+using CST.Avalonia.Models;
 using CST.Conversion;
 using Microsoft.Extensions.DependencyInjection;
 using Avalonia.Input;
@@ -333,7 +334,82 @@ namespace CST.Avalonia.Services
             // Add to the document dock
             AddDocumentToLayout(document);
             
+            // Save book window state
+            SaveBookWindowState(book, bookDisplayViewModel, document);
+            
             System.Console.WriteLine($"Created document: {document.Id} with title: {document.Title}");
+        }
+
+        private void SaveBookWindowState(CST.Book book, BookDisplayViewModel bookDisplayViewModel, Document document)
+        {
+            try
+            {
+                // Get the book index
+                var booksList = Books.Inst.ToList();
+                var bookIndex = booksList.IndexOf(book);
+                
+                if (bookIndex == -1)
+                {
+                    Log.Warning("Could not find book index for {BookFileName}", book.FileName);
+                    return;
+                }
+                
+                // Get the application state service
+                var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
+                if (stateService == null)
+                {
+                    Log.Warning("ApplicationStateService not available");
+                    return;
+                }
+                
+                // Create book window state
+                var bookWindowState = new BookWindowState
+                {
+                    BookIndex = bookIndex,
+                    BookFileName = book.FileName,
+                    BookScript = bookDisplayViewModel.BookScript,
+                    SearchTerms = new List<string>(), // TODO: Get search terms from BookDisplayViewModel
+                    TabIndex = 0, // TODO: Get actual tab index from dock
+                    IsSelected = document == FindDocumentDock()?.ActiveDockable,
+                    ShowFootnotes = true, // Default for now
+                    ShowSearchTerms = false // TODO: Get search terms status from BookDisplayViewModel
+                };
+                
+                // Update the state
+                stateService.UpdateBookWindowState(bookWindowState);
+                
+                Log.Information("Saved book window state for {BookFileName} (index {BookIndex})", book.FileName, bookIndex);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to save book window state for {BookFileName}", book.FileName);
+            }
+        }
+
+        private void RemoveBookWindowState(Document document)
+        {
+            try
+            {
+                // Extract book info from document context
+                if (document.Context is BookDisplayViewModel bookDisplayViewModel)
+                {
+                    var book = bookDisplayViewModel.Book;
+                    var booksList = Books.Inst.ToList();
+                    var bookIndex = booksList.IndexOf(book);
+                    
+                    if (bookIndex != -1)
+                    {
+                        var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
+                        stateService?.RemoveBookWindowState(bookIndex);
+                        
+                        Log.Information("Removed book window state for {BookFileName} (index {BookIndex})", book.FileName, bookIndex);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to remove book window state for document {DocumentId}", document.Id);
+            }
         }
 
         public void CloseBook(string bookId)
@@ -341,6 +417,9 @@ namespace CST.Avalonia.Services
             var document = FindDocument(bookId);
             if (document != null)
             {
+                // Remove book window state before removing the document
+                RemoveBookWindowState(document);
+                
                 RemoveDocumentFromLayout(document);
                 System.Console.WriteLine($"Closed book: {bookId}");
             }
