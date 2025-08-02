@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
+using CST.Avalonia.Models;
 using CST;
 using CST.Conversion;
 using Serilog;
@@ -19,6 +21,8 @@ public partial class SimpleTabbedWindow : Window
     private Script _defaultScript = Script.Latin;
     private ComboBox? _paliScriptCombo;
     private readonly ILogger _logger;
+    private bool _isInitialized = false;
+    private DateTime _lastSaveTime = DateTime.MinValue;
 
     public SimpleTabbedWindow()
     {
@@ -27,6 +31,9 @@ public partial class SimpleTabbedWindow : Window
         
         // Initialize Pali Script ComboBox
         InitializePaliScriptCombo();
+        
+        // Initialize window state management
+        InitializeWindowStateManagement();
         
         // Add diagnostic logging for focus and keyboard events
         GotFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow GotFocus. Source: {Source}", e.Source?.GetType().Name);
@@ -122,12 +129,12 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    public void OpenBook(Book book, List<string>? searchTerms = null)
+    public void OpenBook(Book book, List<string>? searchTerms = null, Script? bookScript = null)
     {
         // Delegate to LayoutViewModel if available
         if (DataContext is LayoutViewModel layoutViewModel)
         {
-            layoutViewModel.OpenBook(book);
+            layoutViewModel.OpenBook(book, bookScript);
         }
         else
         {
@@ -148,6 +155,111 @@ public partial class SimpleTabbedWindow : Window
             _paliScriptCombo.SelectionChanged -= OnDefaultScriptChanged;
             _paliScriptCombo.SelectedItem = newScript;
             _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
+        }
+    }
+
+    private void InitializeWindowStateManagement()
+    {
+        // Subscribe to window events to save state when window changes
+        PropertyChanged += OnWindowPropertyChanged;
+        Opened += OnWindowOpened;
+        
+        // Restore window state from saved application state
+        RestoreWindowState();
+    }
+
+    private void OnWindowOpened(object? sender, EventArgs e)
+    {
+        _isInitialized = true;
+        _logger.Information("Window opened and initialized");
+    }
+
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        // Only save state after window is fully initialized to avoid saving during startup
+        if (!_isInitialized) return;
+
+        // Save state when relevant properties change
+        if (e.Property == WidthProperty || 
+            e.Property == HeightProperty || 
+            e.Property == WindowStateProperty)
+        {
+            SaveWindowState();
+        }
+    }
+
+    private void RestoreWindowState()
+    {
+        try
+        {
+            var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
+            if (stateService?.Current?.MainWindow != null)
+            {
+                var mainWindowState = stateService.Current.MainWindow;
+                
+                // Restore window dimensions
+                if (mainWindowState.Width > 0 && mainWindowState.Height > 0)
+                {
+                    Width = mainWindowState.Width;
+                    Height = mainWindowState.Height;
+                    _logger.Information("Restored window size: {Width}x{Height}", Width, Height);
+                }
+
+                // Restore window position if saved
+                if (mainWindowState.X.HasValue && mainWindowState.Y.HasValue)
+                {
+                    Position = new PixelPoint((int)mainWindowState.X.Value, (int)mainWindowState.Y.Value);
+                    _logger.Information("Restored window position: {X},{Y}", mainWindowState.X.Value, mainWindowState.Y.Value);
+                }
+
+                // Restore window state (Normal, Maximized, Minimized)
+                WindowState = (global::Avalonia.Controls.WindowState)mainWindowState.WindowState;
+                _logger.Information("Restored window state: {WindowState}", WindowState);
+            }
+            else
+            {
+                _logger.Information("No saved window state found, using defaults");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to restore window state");
+        }
+    }
+
+    private void SaveWindowState()
+    {
+        try
+        {
+            // Debounce saves to prevent excessive file I/O during window resizing
+            var now = DateTime.Now;
+            if ((now - _lastSaveTime).TotalMilliseconds < 500) // Only save every 500ms
+            {
+                return;
+            }
+            _lastSaveTime = now;
+
+            var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
+            if (stateService != null)
+            {
+                var mainWindowState = new MainWindowState
+                {
+                    Width = Width,
+                    Height = Height,
+                    X = Position.X,
+                    Y = Position.Y,
+                    WindowState = (CST.Avalonia.Models.WindowState)WindowState,
+                    IsMaximized = WindowState == global::Avalonia.Controls.WindowState.Maximized
+                };
+
+                stateService.UpdateMainWindowState(mainWindowState);
+                _logger.Debug("Saved window state: {Width}x{Height} at {X},{Y}, State: {WindowState}", 
+                    Width, Height, Position.X, Position.Y, WindowState);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to save window state");
         }
     }
 }

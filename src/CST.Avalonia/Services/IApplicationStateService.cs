@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
+using CST.Conversion;
 
 namespace CST.Avalonia.Services;
 
@@ -54,6 +55,16 @@ public interface IApplicationStateService
     /// Add or update a book window state
     /// </summary>
     void UpdateBookWindowState(BookWindowState bookWindowState);
+
+    /// <summary>
+    /// Update script for a specific book window
+    /// </summary>
+    void UpdateBookWindowScript(string windowId, Script newScript);
+
+    /// <summary>
+    /// Remove book window state by window ID
+    /// </summary>
+    void RemoveBookWindowStateByWindowId(string windowId);
 
     /// <summary>
     /// Remove a book window state

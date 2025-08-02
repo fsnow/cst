@@ -270,10 +270,20 @@ namespace CST.Avalonia.Services
 
         public void OpenBook(CST.Book book)
         {
-            OpenBook(book, null);
+            OpenBook(book, (string?)null);
+        }
+
+        public void OpenBook(CST.Book book, Script? bookScript)
+        {
+            OpenBook(book, null, bookScript);
         }
 
         public void OpenBook(CST.Book book, string? anchor)
+        {
+            OpenBook(book, anchor, null);
+        }
+
+        public void OpenBook(CST.Book book, string? anchor, Script? bookScript)
         {
             System.Console.WriteLine($"Opening book: {book.FileName} - {book.LongNavPath} with anchor: {anchor ?? "null"}");
             
@@ -287,11 +297,12 @@ namespace CST.Avalonia.Services
             var bookDisplayViewModel = new BookDisplayViewModel(book, null, anchor, chapterListsService, settingsService);
             
             // Set the correct script after construction
-            if (scriptService != null && bookDisplayViewModel != null)
+            if (bookDisplayViewModel != null)
             {
-                // Set the script to match the current application setting
-                bookDisplayViewModel.BookScript = scriptService.CurrentScript;
-                System.Console.WriteLine($"Set book script to: {scriptService.CurrentScript}");
+                // Use provided script or fall back to current application setting
+                Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
+                bookDisplayViewModel.BookScript = targetScript;
+                System.Console.WriteLine($"Set book script to: {targetScript} (requested: {bookScript?.ToString() ?? "null"})");
             }
             
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
@@ -337,6 +348,15 @@ namespace CST.Avalonia.Services
             // Save book window state
             SaveBookWindowState(book, bookDisplayViewModel, document);
             
+            // Subscribe to script changes to update state when script changes
+            bookDisplayViewModel.PropertyChanged += (sender, e) =>
+            {
+                if (e.PropertyName == nameof(BookDisplayViewModel.BookScript))
+                {
+                    UpdateBookScriptInState(document.Id, bookDisplayViewModel.BookScript);
+                }
+            };
+            
             System.Console.WriteLine($"Created document: {document.Id} with title: {document.Title}");
         }
 
@@ -362,9 +382,10 @@ namespace CST.Avalonia.Services
                     return;
                 }
                 
-                // Create book window state
+                // Create book window state using document.Id as WindowId
                 var bookWindowState = new BookWindowState
                 {
+                    WindowId = document.Id,
                     BookIndex = bookIndex,
                     BookFileName = book.FileName,
                     BookScript = bookDisplayViewModel.BookScript,
@@ -386,24 +407,32 @@ namespace CST.Avalonia.Services
             }
         }
 
+        private void UpdateBookScriptInState(string windowId, Script newScript)
+        {
+            try
+            {
+                var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
+                if (stateService != null)
+                {
+                    stateService.UpdateBookWindowScript(windowId, newScript);
+                    Log.Information("Updated book script in state for window {WindowId}: {Script}", windowId, newScript);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to update book script in state for window {WindowId}", windowId);
+            }
+        }
+
         private void RemoveBookWindowState(Document document)
         {
             try
             {
-                // Extract book info from document context
-                if (document.Context is BookDisplayViewModel bookDisplayViewModel)
+                var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
+                if (stateService != null)
                 {
-                    var book = bookDisplayViewModel.Book;
-                    var booksList = Books.Inst.ToList();
-                    var bookIndex = booksList.IndexOf(book);
-                    
-                    if (bookIndex != -1)
-                    {
-                        var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
-                        stateService?.RemoveBookWindowState(bookIndex);
-                        
-                        Log.Information("Removed book window state for {BookFileName} (index {BookIndex})", book.FileName, bookIndex);
-                    }
+                    stateService.RemoveBookWindowStateByWindowId(document.Id);
+                    Log.Information("Removed book window state for document {DocumentId}", document.Id);
                 }
             }
             catch (Exception ex)

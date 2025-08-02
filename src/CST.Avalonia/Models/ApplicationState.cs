@@ -137,6 +137,11 @@ public class DictionaryDialogState
 public class BookWindowState
 {
     /// <summary>
+    /// Unique identifier for this book window instance (allows multiple instances of same book)
+    /// </summary>
+    public string WindowId { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>
     /// Index of the book in Books.Inst collection
     /// </summary>
     public int BookIndex { get; set; }

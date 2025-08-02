@@ -358,9 +358,9 @@ public partial class App : Application
                                     // Validate the book filename matches (for extra safety)
                                     if (book.FileName == bookWindowState.BookFileName)
                                     {
-                                        // Open the book through SimpleTabbedWindow
-                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms);
-                                        Console.WriteLine($"Restored book: {book.FileName}");
+                                        // Open the book through SimpleTabbedWindow with saved script
+                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript);
+                                        Console.WriteLine($"Restored book: {book.FileName} with script: {bookWindowState.BookScript}");
                                     }
                                     else
                                     {

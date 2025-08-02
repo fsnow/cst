@@ -2,6 +2,7 @@ using ReactiveUI;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using CST.Avalonia.Services;
+using CST.Conversion;
 using System.Reactive;
 using System.Linq;
 using Avalonia;
@@ -56,9 +57,9 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _isBookPanelVisible, value);
         }
 
-        public void OpenBook(CST.Book book)
+        public void OpenBook(CST.Book book, Script? bookScript = null)
         {
-            _factory.OpenBook(book);
+            _factory.OpenBook(book, bookScript);
         }
 
         public void CloseBook(string bookId)

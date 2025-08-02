@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
+using CST.Conversion;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services;
@@ -146,10 +147,15 @@ public class ApplicationStateService : IApplicationStateService
             var tempPath = _stateFilePath + ".tmp";
             await File.WriteAllTextAsync(tempPath, json);
             
-            // Atomic replacement
+            // Atomic replacement using File.Replace for true atomicity
             if (File.Exists(_stateFilePath))
-                File.Delete(_stateFilePath);
-            File.Move(tempPath, _stateFilePath);
+            {
+                File.Replace(tempPath, _stateFilePath, null);
+            }
+            else
+            {
+                File.Move(tempPath, _stateFilePath);
+            }
 
             _logger.LogInformation("Application state saved successfully to {FilePath}", _stateFilePath);
             // Don't fire StateChanged event on save - only on modifications
@@ -158,6 +164,21 @@ public class ApplicationStateService : IApplicationStateService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save application state to {FilePath}", _stateFilePath);
+            
+            // Clean up temp file if it exists
+            try
+            {
+                var tempPath = _stateFilePath + ".tmp";
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogWarning(cleanupEx, "Failed to clean up temporary file");
+            }
+            
             return false;
         }
     }
@@ -188,7 +209,11 @@ public class ApplicationStateService : IApplicationStateService
 
     public void UpdateBookWindowState(BookWindowState bookWindowState)
     {
-        var existing = Current.BookWindows.FirstOrDefault(w => w.BookIndex == bookWindowState.BookIndex);
+        // Find by WindowId for unique instances, fallback to BookIndex for backward compatibility
+        var existing = Current.BookWindows.FirstOrDefault(w => 
+            !string.IsNullOrEmpty(w.WindowId) && w.WindowId == bookWindowState.WindowId) ??
+            Current.BookWindows.FirstOrDefault(w => w.BookIndex == bookWindowState.BookIndex);
+            
         if (existing != null)
         {
             Current.BookWindows.Remove(existing);
@@ -199,6 +224,32 @@ public class ApplicationStateService : IApplicationStateService
         
         // Save state to persist the change
         _ = SaveStateAsync();
+    }
+
+    public void UpdateBookWindowScript(string windowId, Script newScript)
+    {
+        var existing = Current.BookWindows.FirstOrDefault(w => w.WindowId == windowId);
+        if (existing != null)
+        {
+            existing.BookScript = newScript;
+            FireStateChangedEvent();
+            
+            // Save state to persist the change
+            _ = SaveStateAsync();
+        }
+    }
+
+    public void RemoveBookWindowStateByWindowId(string windowId)
+    {
+        var existing = Current.BookWindows.FirstOrDefault(w => w.WindowId == windowId);
+        if (existing != null)
+        {
+            Current.BookWindows.Remove(existing);
+            FireStateChangedEvent();
+            
+            // Save state to persist the change
+            _ = SaveStateAsync();
+        }
     }
 
     public void RemoveBookWindowState(int bookIndex)
