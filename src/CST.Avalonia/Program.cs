@@ -39,10 +39,7 @@ sealed class Program
         {
             SplashScreen.SetStatus("Initializing application...");
             SplashScreen.SetReferencePoint();
-        }
-        
-        if (showSplash)
-        {
+
             SplashScreen.SetStatus("Configuring UI framework...");
             SplashScreen.SetReferencePoint();
         }

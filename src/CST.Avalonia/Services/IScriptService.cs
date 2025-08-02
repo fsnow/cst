@@ -40,4 +40,9 @@ public interface IScriptService
     /// Get display name for script (for UI)
     /// </summary>
     string GetScriptDisplayName(Script script);
+
+    /// <summary>
+    /// Initialize the current script from application state after state has been loaded
+    /// </summary>
+    void InitializeFromState();
 }

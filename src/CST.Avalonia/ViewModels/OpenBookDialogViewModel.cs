@@ -56,8 +56,13 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
         // Subscribe to script changes
         _scriptService.ScriptChanged += OnScriptChanged;
 
-        // Load the tree
-        _ = InitializeAsync();
+        // Delay tree initialization to allow state to load first
+        _ = Task.Run(async () =>
+        {
+            // Give the application state time to load
+            await Task.Delay(100);
+            await Dispatcher.UIThread.InvokeAsync(async () => await InitializeAsync());
+        });
     }
 
     // Properties
@@ -157,12 +162,13 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
         {
             IsLoading = true;
             StatusText = "Loading book collection...";
+            _logger.LogInformation("InitializeAsync started. Current script from ScriptService: {Script}", _scriptService.CurrentScript);
 
             // Books are loaded automatically via CST.Books.Inst
             await BuildBookTreeAsync();
 
             StatusText = $"Ready - {TotalBooks} books available";
-            _logger.LogInformation("Open Book dialog initialized with {BookCount} books", TotalBooks);
+            _logger.LogInformation("Open Book dialog initialized with {BookCount} books using script {Script}", TotalBooks, _scriptService.CurrentScript);
         }
         catch (Exception ex)
         {
@@ -494,7 +500,13 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
     /// </summary>
     private string GetNodeText(string devanagariText)
     {
-        return _scriptService.ConvertToCurrentScript(devanagariText);
+        var result = _scriptService.ConvertToCurrentScript(devanagariText);
+        if (!_nodeCache.ContainsKey(devanagariText))
+        {
+            _logger.LogDebug("GetNodeText converting '{Text}' using script {Script}, result: '{Result}'", 
+                devanagariText, _scriptService.CurrentScript, result);
+        }
+        return result;
     }
     
     /// <summary>

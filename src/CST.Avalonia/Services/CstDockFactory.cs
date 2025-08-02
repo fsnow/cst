@@ -282,7 +282,8 @@ namespace CST.Avalonia.Services
             // Create BookDisplayViewModel for the book content with proper script service
             var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
             var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
-            var bookDisplayViewModel = new BookDisplayViewModel(book, null, anchor, chapterListsService);
+            var settingsService = App.ServiceProvider?.GetRequiredService<ISettingsService>();
+            var bookDisplayViewModel = new BookDisplayViewModel(book, null, anchor, chapterListsService, settingsService);
             
             // Set the correct script after construction
             if (scriptService != null && bookDisplayViewModel != null)

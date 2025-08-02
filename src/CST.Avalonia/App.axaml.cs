@@ -104,6 +104,9 @@ public partial class App : Application
             // Load application state before creating UI
             _ = LoadApplicationStateAsync();
             
+            // Initialize script service from loaded state (will be called after state loads)
+            // State service will notify ScriptService via event when state is ready
+            
             if (showSplash)
             {
                 SplashScreen.SetStatus("Loading books...");

@@ -24,6 +24,7 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ScriptService _scriptService;
         private readonly ChapterListsService? _chapterListsService;
+        private readonly ISettingsService? _settingsService;
         private readonly Book _book;
         private readonly List<string>? _searchTerms;
         private readonly string? _initialAnchor;
@@ -65,12 +66,13 @@ namespace CST.Avalonia.ViewModels
         private bool _updatingChapterFromScroll = false;
         private bool _isInitializing = true;
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             // For now, create ScriptService without logger
             _scriptService = new ScriptService();
             _chapterListsService = chapterListsService;
+            _settingsService = settingsService;
             _book = book;
             _searchTerms = searchTerms;
             _initialAnchor = initialAnchor;
@@ -604,8 +606,16 @@ namespace CST.Avalonia.ViewModels
             {
                 try
                 {
+                    // Get the books directory
+                    var booksDir = GetBooksDirectory();
+                    if (booksDir == null)
+                    {
+                        _logger.Error("Cannot load book - no valid XML directory configured");
+                        return "<html><body><h3>Error: No XML directory configured</h3><p>Please configure a valid XML directory in Settings.</p></body></html>";
+                    }
+                    
                     // Load XML content
-                    var xmlPath = Path.Combine(GetBooksDirectory(), _book.FileName);
+                    var xmlPath = Path.Combine(booksDir, _book.FileName);
                     _logger.Debug("Loading XML from: {XmlPath}", xmlPath);
                     
                     if (!File.Exists(xmlPath))
@@ -804,10 +814,34 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        private string GetBooksDirectory()
+        private string? GetBooksDirectory()
         {
-            // Use the CST unit test data directory for now
-            return "/Users/fsnow/Cloud-Drive/Projects/CST_UnitTestData/Xml";
+            // Use the XML directory from settings if available
+            if (_settingsService?.Settings?.XmlBooksDirectory is string xmlDir && !string.IsNullOrEmpty(xmlDir))
+            {
+                // Validate that the directory exists and contains at least one book file
+                if (Directory.Exists(xmlDir))
+                {
+                    // Check for the first book file (s0101m.mul.xml)
+                    var testFile = Path.Combine(xmlDir, "s0101m.mul.xml");
+                    if (File.Exists(testFile))
+                    {
+                        return xmlDir;
+                    }
+                    else
+                    {
+                        _logger.Warning("XML directory '{Directory}' does not contain expected book file s0101m.mul.xml", xmlDir);
+                    }
+                }
+                else
+                {
+                    _logger.Warning("XML directory '{Directory}' does not exist", xmlDir);
+                }
+            }
+            
+            // No valid XML directory configured
+            _logger.Warning("No valid XML directory configured in settings");
+            return null;
         }
 
         private string GetXslPath(Script script)

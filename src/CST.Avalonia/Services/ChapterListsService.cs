@@ -18,12 +18,14 @@ namespace CST.Avalonia.Services;
 public class ChapterListsService
 {
     private readonly ILogger<ChapterListsService> _logger;
+    private readonly ISettingsService? _settingsService;
     private readonly string _dataFilePath;
     private Dictionary<int, List<DivTag>> _chapterLists;
 
-    public ChapterListsService(ILogger<ChapterListsService> logger)
+    public ChapterListsService(ILogger<ChapterListsService> logger, ISettingsService? settingsService = null)
     {
         _logger = logger;
+        _settingsService = settingsService;
         _dataFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
                                     "CST", "chapter_lists.json");
         _chapterLists = new Dictionary<int, List<DivTag>>();
@@ -49,8 +51,15 @@ public class ChapterListsService
                 if (!string.IsNullOrEmpty(book.ChapterListTypes) && !_chapterLists.ContainsKey(bookIndex))
                 {
                     _logger.LogInformation("Book has ChapterListTypes but no generated chapters. Generating now...");
-                    var xmlDirectory = "/Users/fsnow/Cloud-Drive/Projects/CST_UnitTestData/Xml";
-                    Generate(new List<int> { bookIndex }, xmlDirectory);
+                    var xmlDirectory = GetXmlDirectory();
+                    if (xmlDirectory != null)
+                    {
+                        Generate(new List<int> { bookIndex }, xmlDirectory);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Cannot generate chapters - no valid XML directory configured");
+                    }
                 }
             }
         }
@@ -286,5 +295,38 @@ public class ChapterListsService
     {
         _chapterLists.Clear();
         SaveToFile();
+    }
+    
+    /// <summary>
+    /// Gets the XML directory from settings or returns null if not set
+    /// </summary>
+    private string? GetXmlDirectory()
+    {
+        // Use the XML directory from settings if available
+        if (_settingsService?.Settings?.XmlBooksDirectory is string xmlDir && !string.IsNullOrEmpty(xmlDir))
+        {
+            // Validate that the directory exists and contains at least one book file
+            if (Directory.Exists(xmlDir))
+            {
+                // Check for the first book file (s0101m.mul.xml)
+                var testFile = Path.Combine(xmlDir, "s0101m.mul.xml");
+                if (File.Exists(testFile))
+                {
+                    return xmlDir;
+                }
+                else
+                {
+                    _logger.LogWarning("XML directory '{Directory}' does not contain expected book file s0101m.mul.xml", xmlDir);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("XML directory '{Directory}' does not exist", xmlDir);
+            }
+        }
+        
+        // No valid XML directory configured
+        _logger.LogWarning("No valid XML directory configured in settings");
+        return null;
     }
 }

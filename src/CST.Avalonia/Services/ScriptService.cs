@@ -12,17 +12,26 @@ namespace CST.Avalonia.Services;
 public class ScriptService : IScriptService
 {
     private readonly ILogger<ScriptService> _logger;
+    private readonly IApplicationStateService? _stateService;
     private Script _currentScript = Script.Devanagari;
 
-    public ScriptService(ILogger<ScriptService> logger)
+    public ScriptService(ILogger<ScriptService> logger, IApplicationStateService? stateService = null)
     {
         _logger = logger;
+        _stateService = stateService;
+        
+        // Subscribe to state changes to initialize when state is first loaded
+        if (_stateService != null)
+        {
+            _stateService.StateChanged += OnStateChanged;
+        }
     }
 
-    // Parameterless constructor for when logger is not available
+    // Parameterless constructor for when dependencies are not available
     public ScriptService()
     {
-        _logger = null!; // Will be null, but methods will handle this
+        _logger = null!;
+        _stateService = null;
     }
 
     public Script CurrentScript
@@ -35,12 +44,54 @@ public class ScriptService : IScriptService
                 var oldScript = _currentScript;
                 _currentScript = value;
                 _logger?.LogInformation("Script changed from {OldScript} to {NewScript}", oldScript, value);
+                
+                // Save to application state if available
+                if (_stateService != null)
+                {
+                    _stateService.Current.Preferences.CurrentScript = value;
+                    _logger?.LogDebug("Updated current script in application state: {Script}", value);
+                    
+                    // Trigger state save to persist the change
+                    _ = _stateService.SaveStateAsync();
+                }
+                
                 ScriptChanged?.Invoke(value);
             }
         }
     }
 
     public event Action<Script>? ScriptChanged;
+
+    /// <summary>
+    /// Initialize the current script from application state after state has been loaded
+    /// </summary>
+    public void InitializeFromState()
+    {
+        if (_stateService != null)
+        {
+            var stateScript = _stateService.Current.Preferences.CurrentScript;
+            if (_currentScript != stateScript)
+            {
+                _currentScript = stateScript;
+                _logger?.LogInformation("Initialized current script from application state: {Script}", _currentScript);
+                ScriptChanged?.Invoke(_currentScript);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handle state changes - initialize script when state is first loaded
+    /// </summary>
+    private void OnStateChanged(Models.ApplicationState state)
+    {
+        // Only initialize once when state is first loaded
+        if (state != null && _currentScript == Script.Devanagari && state.Preferences.CurrentScript != Script.Devanagari)
+        {
+            _currentScript = state.Preferences.CurrentScript;
+            _logger?.LogInformation("Auto-initialized current script from loaded state: {Script}", _currentScript);
+            ScriptChanged?.Invoke(_currentScript);
+        }
+    }
 
     public IReadOnlyList<Script> AvailableScripts { get; } = new List<Script>
     {

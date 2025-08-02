@@ -74,6 +74,9 @@ public partial class SimpleTabbedWindow : Window
             {
                 _defaultScript = scriptService.CurrentScript;
                 _logger.Information("Initialized script from ScriptService: {Script}", _defaultScript);
+                
+                // Listen for script changes from ScriptService (e.g., when state is loaded)
+                scriptService.ScriptChanged += OnScriptServiceScriptChanged;
             }
             else
             {
@@ -129,6 +132,22 @@ public partial class SimpleTabbedWindow : Window
         else
         {
             _logger.Warning("Cannot open book - LayoutViewModel not available");
+        }
+    }
+    
+    private void OnScriptServiceScriptChanged(Script newScript)
+    {
+        // Update the combo box when the ScriptService changes the script
+        // This happens when application state is loaded on startup
+        if (_paliScriptCombo != null && _paliScriptCombo.SelectedItem is Script currentSelection && currentSelection != newScript)
+        {
+            _logger.Information("ScriptService changed script to {Script}, updating UI", newScript);
+            _defaultScript = newScript;
+            
+            // Temporarily disable the selection changed handler to avoid feedback loop
+            _paliScriptCombo.SelectionChanged -= OnDefaultScriptChanged;
+            _paliScriptCombo.SelectedItem = newScript;
+            _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
         }
     }
 }
