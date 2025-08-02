@@ -276,6 +276,13 @@ public partial class App : Application
             scriptService.InitializeFromState();
         }
         
+        // Restore main window state (dimensions, position, etc.)
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && 
+            desktop.MainWindow is SimpleTabbedWindow mainWindow)
+        {
+            mainWindow.RestoreWindowState();
+        }
+        
         // Restore book windows if any exist
         if (state.BookWindows.Any() && !_hasRestoredInitialBooks)
         {

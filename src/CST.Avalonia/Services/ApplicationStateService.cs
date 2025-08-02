@@ -187,6 +187,9 @@ public class ApplicationStateService : IApplicationStateService
     {
         Current.MainWindow = mainWindowState;
         FireStateChangedEvent();
+        
+        // Save state to persist the change
+        _ = SaveStateAsync();
     }
 
     public void UpdateOpenBookDialogState(OpenBookDialogState dialogState)

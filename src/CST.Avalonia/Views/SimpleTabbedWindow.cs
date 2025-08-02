@@ -164,8 +164,7 @@ public partial class SimpleTabbedWindow : Window
         PropertyChanged += OnWindowPropertyChanged;
         Opened += OnWindowOpened;
         
-        // Restore window state from saved application state
-        RestoreWindowState();
+        // Don't restore window state here - it will be done after application state is loaded
     }
 
     private void OnWindowOpened(object? sender, EventArgs e)
@@ -188,7 +187,7 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    private void RestoreWindowState()
+    public void RestoreWindowState()
     {
         try
         {
