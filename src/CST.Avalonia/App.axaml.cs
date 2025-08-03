@@ -564,21 +564,66 @@ public partial class App : Application
 
     private void ConfigureServices(IServiceCollection services)
     {
-        // Configure logging with environment variable support
-        var logLevel = Environment.GetEnvironmentVariable("CST_LOG_LEVEL")?.ToLowerInvariant() switch
+        // Configure logging with priority: Environment Variable > Saved Setting > Default
+        LogEventLevel logLevel;
+        
+        // First check environment variable (highest priority for debugging)
+        var envLogLevel = Environment.GetEnvironmentVariable("CST_LOG_LEVEL")?.ToLowerInvariant();
+        if (!string.IsNullOrEmpty(envLogLevel))
         {
-            "debug" => LogEventLevel.Debug,
-            "information" => LogEventLevel.Information,
-            "warning" => LogEventLevel.Warning,
-            "error" => LogEventLevel.Error,
-            "fatal" => LogEventLevel.Fatal,
-            _ => LogEventLevel.Debug // Default
-        };
+            logLevel = envLogLevel switch
+            {
+                "debug" => LogEventLevel.Debug,
+                "information" => LogEventLevel.Information,
+                "warning" => LogEventLevel.Warning,
+                "error" => LogEventLevel.Error,
+                "fatal" => LogEventLevel.Fatal,
+                _ => LogEventLevel.Information
+            };
+        }
+        else
+        {
+            // Check saved setting (will load defaults if no saved setting exists)
+            try
+            {
+                // Create a temporary settings service to load saved log level
+                var tempSettingsService = new SettingsService();
+                var savedLogLevel = tempSettingsService.Settings.DeveloperSettings.LogLevel;
+                logLevel = savedLogLevel.ToLowerInvariant() switch
+                {
+                    "debug" => LogEventLevel.Debug,
+                    "information" => LogEventLevel.Information,
+                    "warning" => LogEventLevel.Warning,
+                    "error" => LogEventLevel.Error,
+                    "fatal" => LogEventLevel.Fatal,
+                    _ => LogEventLevel.Information // Default fallback
+                };
+            }
+            catch
+            {
+                // Fallback to default if settings loading fails
+                logLevel = LogEventLevel.Information;
+            }
+        }
+        
+        // Get the logs directory in user's Application Support
+        var appSupportDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "CST.Avalonia");
+        var logsDir = Path.Combine(appSupportDir, "logs");
+        
+        // Ensure logs directory exists
+        if (!Directory.Exists(logsDir))
+        {
+            Directory.CreateDirectory(logsDir);
+        }
+        
+        var logPath = Path.Combine(logsDir, "cst-avalonia-.log");
         
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Is(logLevel)
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
-            .WriteTo.File("logs/cst-avalonia-.log", 
+            .WriteTo.File(logPath, 
                 rollingInterval: RollingInterval.Day,
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
             .Enrich.FromLogContext()

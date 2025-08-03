@@ -8,14 +8,21 @@ Debug
 src/CST.Avalonia/DawnCache/
 src/CST.Avalonia/GPUCache/
 src/CST.Avalonia/CST_CefGlue_*/
+src/CST.Avalonia/logs/
+src/CST.Avalonia/obj/
+src/CST.Avalonia/bin/Release/
+src/CST.Avalonia/CST.app/
+src/CST.Avalonia/publish/
+
 *.log
 
-src/CST.Avalonia/logs/
-
 src/CST.Core/obj/
-
-src/CST.Avalonia/obj/
+src/CST.Core/bin/
 
 dock_reflection/obj/
 
 screenshots/
+
+
+
+

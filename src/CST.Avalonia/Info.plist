@@ -3,22 +3,49 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>CST</string>
+    <string>CST5</string>
     <key>CFBundleDisplayName</key>
-    <string>CST</string>
+    <string>CST5 - Tipitaka Text Reader</string>
     <key>CFBundleIdentifier</key>
     <string>com.cst.avalonia</string>
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>5.0.0-beta.1</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>5.0.0-beta.1</string>
     <key>CFBundleExecutable</key>
     <string>CST.Avalonia</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>CSTA</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSRequiresAquaSystemAppearance</key>
+    <false/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.reference</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025 Frank Snow</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>xml</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>XML Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+    </array>
 </dict>
 </plist>

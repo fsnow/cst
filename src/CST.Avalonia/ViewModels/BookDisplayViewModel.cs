@@ -864,7 +864,104 @@ namespace CST.Avalonia.ViewModels
                 _ => "latn"
             };
             
-            return Path.Combine("/Users/fsnow/github/fsnow/cst/src/Cst4/Xsl", $"tipitaka-{scriptName}.xsl");
+            var xslFileName = $"tipitaka-{scriptName}.xsl";
+            
+            // Ensure XSL files are set up in user directory
+            EnsureXslFilesInUserDirectory();
+            
+            // Try user's Application Support directory first (editable location)
+            var userXslPath = GetUserXslPath(xslFileName);
+            if (File.Exists(userXslPath))
+            {
+                _logger.Debug("Using user XSL file: {Path}", userXslPath);
+                return userXslPath;
+            }
+            
+            // Fall back to hard-coded path for development
+            var devPath = Path.Combine("/Users/fsnow/github/fsnow/cst/src/Cst4/Xsl", xslFileName);
+            if (File.Exists(devPath))
+            {
+                _logger.Debug("Using development XSL file: {Path}", devPath);
+                return devPath;
+            }
+            
+            _logger.Error("XSL file not found: {FileName}", xslFileName);
+            return devPath; // Return dev path as last resort
+        }
+        
+        private string GetUserXslPath(string xslFileName)
+        {
+            var appSupportDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "CST.Avalonia",
+                "Xsl");
+            return Path.Combine(appSupportDir, xslFileName);
+        }
+        
+        private void EnsureXslFilesInUserDirectory()
+        {
+            try
+            {
+                var userXslDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "CST.Avalonia",
+                    "Xsl");
+                
+                // Create directory if it doesn't exist
+                if (!Directory.Exists(userXslDir))
+                {
+                    Directory.CreateDirectory(userXslDir);
+                    _logger.Information("Created user XSL directory: {Path}", userXslDir);
+                }
+                
+                // Check if we need to copy XSL files from app bundle
+                var existingFiles = Directory.GetFiles(userXslDir, "*.xsl");
+                if (existingFiles.Length == 0)
+                {
+                    // Try to copy from app bundle if running from .app
+                    CopyXslFilesFromBundle(userXslDir);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to ensure XSL files in user directory");
+            }
+        }
+        
+        private void CopyXslFilesFromBundle(string targetDir)
+        {
+            try
+            {
+                // Get the path to the app bundle's Resources/Xsl directory
+                var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                var bundleResourcesPath = Path.Combine(
+                    Path.GetDirectoryName(assemblyLocation) ?? "",
+                    "..", "Resources", "Xsl");
+                
+                if (Directory.Exists(bundleResourcesPath))
+                {
+                    var xslFiles = Directory.GetFiles(bundleResourcesPath, "*.xsl");
+                    foreach (var xslFile in xslFiles)
+                    {
+                        var fileName = Path.GetFileName(xslFile);
+                        var targetPath = Path.Combine(targetDir, fileName);
+                        if (!File.Exists(targetPath))
+                        {
+                            File.Copy(xslFile, targetPath);
+                            _logger.Information("Copied XSL file to user directory: {FileName}", fileName);
+                        }
+                    }
+                    _logger.Information("Copied {Count} XSL files from app bundle", xslFiles.Length);
+                }
+                else
+                {
+                    _logger.Warning("App bundle XSL directory not found at: {Path}", bundleResourcesPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to copy XSL files from app bundle");
+            }
         }
 
         private void NavigateToFirstHit()

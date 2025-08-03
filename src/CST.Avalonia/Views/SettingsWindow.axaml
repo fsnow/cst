@@ -210,6 +210,36 @@
                             </StackPanel>
                         </DataTemplate>
                         
+                        <!-- Developer Settings Template -->
+                        <DataTemplate DataType="vm:DeveloperSettingsViewModel">
+                            <StackPanel>
+                                <TextBlock Text="Developer" Classes="SectionTitle"/>
+                                
+                                <Border Classes="SettingGroup">
+                                    <StackPanel>
+                                        <TextBlock Text="Logging" Classes="SettingLabel"/>
+                                        <TextBlock Text="Configure application logging for debugging and troubleshooting" 
+                                                  Classes="SettingDescription"/>
+                                        
+                                        <StackPanel Margin="0,10,0,15">
+                                            <TextBlock Text="Log Level" Classes="SettingLabel"/>
+                                            <ComboBox ItemsSource="{Binding LogLevels}" 
+                                                     SelectedItem="{Binding LogLevel}"
+                                                     Width="200" HorizontalAlignment="Left"/>
+                                            <TextBlock Text="Controls how much detail is written to log files" 
+                                                      Classes="SettingDescription"/>
+                                        </StackPanel>
+                                        
+                                        <Button Content="Open Logs Folder" 
+                                               Command="{Binding OpenLogsCommand}"
+                                               Width="150" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="Opens the folder containing application log files" 
+                                                  Classes="SettingDescription"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                        
                     </ContentControl.DataTemplates>
                 </ContentControl>
             </ScrollViewer>

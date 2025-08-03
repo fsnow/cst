@@ -32,13 +32,15 @@ namespace CST.Avalonia.ViewModels
             var appearanceSettings = new AppearanceSettingsViewModel(_settingsService);
             var searchSettings = new SearchSettingsViewModel(_settingsService);
             var advancedSettings = new AdvancedSettingsViewModel(_settingsService);
+            var developerSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
             
             Categories = new ObservableCollection<SettingsCategoryViewModel>
             {
                 new SettingsCategoryViewModel("General", "General application settings", generalSettings),
                 new SettingsCategoryViewModel("Appearance", "Theme and display settings", appearanceSettings),
                 new SettingsCategoryViewModel("Search", "Search behavior and options", searchSettings),
-                new SettingsCategoryViewModel("Advanced", "Advanced configuration options", advancedSettings)
+                new SettingsCategoryViewModel("Advanced", "Advanced configuration options", advancedSettings),
+                new SettingsCategoryViewModel("Developer", "Debugging and diagnostic tools", developerSettings)
             };
 
             // Select first category by default
@@ -337,6 +339,123 @@ namespace CST.Avalonia.ViewModels
             catch (Exception ex)
             {
                 _logger.Error(ex, "Failed to open settings directory");
+            }
+        }
+    }
+
+    public class DeveloperSettingsViewModel : ViewModelBase
+    {
+        private readonly ISettingsService _settingsService;
+        private readonly ILogger _logger;
+        private string _logLevel;
+
+        public DeveloperSettingsViewModel(ISettingsService settingsService)
+        {
+            _settingsService = settingsService;
+            _logger = Log.ForContext<DeveloperSettingsViewModel>();
+            _logLevel = _settingsService.Settings.DeveloperSettings.LogLevel;
+
+            // Available log levels
+            LogLevels = new[] { "Debug", "Information", "Warning", "Error", "Fatal" };
+
+            // Open logs folder command
+            OpenLogsCommand = ReactiveCommand.Create(OpenLogsFolder);
+
+            // Update service when log level changes
+            this.WhenAnyValue(x => x.LogLevel)
+                .Skip(1)
+                .Subscribe(value => 
+                {
+                    _settingsService.Settings.DeveloperSettings.LogLevel = value;
+                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
+                    
+                    // Reconfigure logger immediately
+                    ReconfigureLogger(value);
+                    _logger.Information("Log level changed to: {LogLevel}", value);
+                });
+        }
+
+        public string LogLevel
+        {
+            get => _logLevel;
+            set => this.RaiseAndSetIfChanged(ref _logLevel, value);
+        }
+
+        public string[] LogLevels { get; }
+        public ViewModelBase? Parent { get; set; }
+        public ReactiveCommand<Unit, Unit> OpenLogsCommand { get; }
+
+        private void OpenLogsFolder()
+        {
+            try
+            {
+                var appSupportDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "CST.Avalonia");
+                var logsDir = Path.Combine(appSupportDir, "logs");
+                
+                if (Directory.Exists(logsDir))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = logsDir,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                }
+                else
+                {
+                    _logger.Warning("Logs directory does not exist: {LogsDir}", logsDir);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to open logs directory");
+            }
+        }
+
+        private void ReconfigureLogger(string logLevel)
+        {
+            try
+            {
+                // Convert string to Serilog LogEventLevel
+                var serilogLevel = logLevel switch
+                {
+                    "Debug" => Serilog.Events.LogEventLevel.Debug,
+                    "Information" => Serilog.Events.LogEventLevel.Information,
+                    "Warning" => Serilog.Events.LogEventLevel.Warning,
+                    "Error" => Serilog.Events.LogEventLevel.Error,
+                    "Fatal" => Serilog.Events.LogEventLevel.Fatal,
+                    _ => Serilog.Events.LogEventLevel.Information
+                };
+
+                // Get the logs directory
+                var appSupportDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "CST.Avalonia");
+                var logsDir = Path.Combine(appSupportDir, "logs");
+                
+                // Ensure logs directory exists
+                if (!Directory.Exists(logsDir))
+                {
+                    Directory.CreateDirectory(logsDir);
+                }
+                
+                var logPath = Path.Combine(logsDir, "cst-avalonia-.log");
+
+                // Reconfigure the global logger
+                Log.Logger = new Serilog.LoggerConfiguration()
+                    .MinimumLevel.Is(serilogLevel)
+                    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
+                    .WriteTo.File(logPath, 
+                        rollingInterval: Serilog.RollingInterval.Day,
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
+                    .Enrich.FromLogContext()
+                    .CreateLogger();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to reconfigure logger");
             }
         }
     }
