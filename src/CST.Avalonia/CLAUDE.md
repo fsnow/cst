@@ -9,7 +9,23 @@
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
-## Latest Session Update (2025-08-09)
+## Latest Session Update (2025-08-10)
+
+### 🚀 **Search Implementation Phase 1 Complete**
+- **SearchService Created**: Full Lucene.NET integration with position-based search
+- **Search Models Defined**: SearchQuery, SearchResult, MatchingTerm, BookOccurrence, TermPosition
+- **ISearchService Interface**: Clean async API for search operations
+- **Core Features Implemented**:
+  - Single-term exact/wildcard/regex search
+  - Multi-term search (basic, phrase/proximity TODO)
+  - Book filtering by collection (Vinaya, Sutta, etc.)
+  - Position and offset retrieval for highlighting
+  - Search result caching
+  - Script conversion for display
+- **DI Registration**: SearchService registered in App.axaml.cs
+- **Build Status**: ✅ Compiles successfully
+
+## Previous Session Updates (2025-08-09)
 
 ### ✅ **MAJOR MILESTONE: Incremental Indexing Bug Fixes Complete**
 - **Bug Fix #1 - Incremental Detection**: Fixed issue where file changes weren't being detected for indexing by removing conditional check in `App.axaml.cs:line 86`
