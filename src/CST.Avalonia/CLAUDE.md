@@ -11,7 +11,9 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 
 ## Latest Session Update (2025-08-10)
 
-### 🚀 **Search Implementation Phase 1 Complete**
+### 🚀 **Search Implementation Phase 1 & 2 Complete**
+
+#### Phase 1: Core SearchService ✅
 - **SearchService Created**: Full Lucene.NET integration with position-based search
 - **Search Models Defined**: SearchQuery, SearchResult, MatchingTerm, BookOccurrence, TermPosition
 - **ISearchService Interface**: Clean async API for search operations
@@ -23,6 +25,14 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
   - Search result caching
   - Script conversion for display
 - **DI Registration**: SearchService registered in App.axaml.cs
+
+#### Phase 2: SearchViewModel ✅
+- **MVVM Implementation**: Full ReactiveUI-based view model with IActivatableViewModel
+- **Live Search**: Debounced search-as-you-type with 500ms throttle
+- **Reactive Commands**: Search, Clear, and OpenBook commands
+- **Collections Management**: Terms and Occurrences with automatic merging
+- **Statistics Tracking**: Real-time word/occurrence counts
+- **Event System**: OpenBookRequested event for book navigation with search terms
 - **Build Status**: ✅ Compiles successfully
 
 ## Previous Session Updates (2025-08-09)
