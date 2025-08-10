@@ -32,9 +32,11 @@ namespace CST.Avalonia.Services
         {
             System.Console.WriteLine("CreateLayout called - starting dock layout creation");
             
-            // Get OpenBookDialogViewModel from the service provider
+            // Get ViewModels from the service provider
             var openBookViewModel = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
+            var searchViewModel = App.ServiceProvider?.GetRequiredService<SearchViewModel>();
             System.Console.WriteLine($"OpenBookViewModel: {openBookViewModel?.GetType().Name ?? "null"}");
+            System.Console.WriteLine($"SearchViewModel: {searchViewModel?.GetType().Name ?? "null"}");
             
             // Create the book selection tool
             var openBookTool = new Tool
@@ -46,7 +48,18 @@ namespace CST.Avalonia.Services
                 CanClose = false   // Prevent accidental closing
             };
             
+            // Create the search tool
+            var searchTool = new Tool
+            {
+                Id = "SearchTool", 
+                Title = "Search",
+                Context = searchViewModel,
+                CanPin = false,    // Prevent pinning to avoid vertical text issues
+                CanClose = false   // Prevent accidental closing
+            };
+            
             System.Console.WriteLine($"Created OpenBookTool with Context: {openBookTool.Context?.GetType().Name ?? "null"}");
+            System.Console.WriteLine($"Created SearchTool with Context: {searchTool.Context?.GetType().Name ?? "null"}");
             if (openBookViewModel != null)
             {
                 System.Console.WriteLine($"OpenBookViewModel BookTree has {openBookViewModel.BookTree.Count} items");
@@ -56,10 +69,10 @@ namespace CST.Avalonia.Services
             var leftToolDock = new ToolDock
             {
                 Id = "LeftToolDock",
-                Title = "Select a Book",
+                Title = "Tools",
                 Proportion = 0.25, // 25% of width
                 ActiveDockable = openBookTool,
-                VisibleDockables = CreateList<IDockable>(openBookTool),
+                VisibleDockables = CreateList<IDockable>(openBookTool, searchTool),
                 CanFloat = false, // Prevent floating
                 CanPin = false, // Prevent pinning
                 CanClose = false // Prevent closing
@@ -103,6 +116,13 @@ namespace CST.Avalonia.Services
                         foreach (var item in e.OldItems)
                         {
                             Log.Information("*** REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
+                            
+                            // Clean up application state when documents are removed
+                            if (item is Document removedDocument)
+                            {
+                                Log.Information("*** Document removed from UI - cleaning up application state: {DocumentId} ***", removedDocument.Id);
+                                RemoveBookWindowState(removedDocument);
+                            }
                         }
                     }
                     if (e.NewItems != null)
@@ -299,6 +319,72 @@ namespace CST.Avalonia.Services
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript)
         {
             OpenBook(book, anchor, bookScript, null);
+        }
+        
+        public void OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
+        {
+            System.Console.WriteLine($"Opening book from search: {book.FileName} with {searchTerms.Count} search terms");
+            
+            // Get required services from DI container
+            var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
+            var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
+            var settingsService = App.ServiceProvider?.GetRequiredService<ISettingsService>();
+            
+            // Create BookDisplayViewModel with proper services and script
+            var bookDisplayViewModel = new BookDisplayViewModel(
+                book, 
+                searchTerms,  // Pass search terms for highlighting
+                null,         // anchor
+                chapterListsService,
+                settingsService
+            );
+            
+            // Set the correct script after construction
+            if (scriptService != null)
+            {
+                bookDisplayViewModel.BookScript = scriptService.CurrentScript;
+                System.Console.WriteLine($"Set book script to: {scriptService.CurrentScript} for search result");
+            }
+            
+            // Set search terms for highlighting (this will be implemented in Phase 7)
+            // bookDisplayViewModel.SetSearchHighlighting(searchTerms, positions);
+            
+            // Subscribe to OpenBookRequested event for Attha/Tika button functionality
+            bookDisplayViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
+            {
+                System.Console.WriteLine($"OpenBookRequested: {linkedBook.FileName} with anchor: {anchorForLinked ?? "null"}");
+                // Open the linked book with anchor navigation for positioning
+                OpenBook(linkedBook, anchorForLinked);
+            };
+            
+            // Create a document for the book with search context
+            var displayTitle = book.LongNavPath ?? book.FileName ?? "Unknown Book";
+            var document = new Document
+            {
+                Id = $"{book.FileName}-Search-{Guid.NewGuid():N}",
+                Title = $"🔍 {displayTitle}",
+                Context = bookDisplayViewModel,
+                CanClose = true,
+                CanFloat = true,
+                CanPin = false
+            };
+            
+            // Add to the main document dock
+            var documentDock = FindDocumentDock();
+            if (documentDock != null)
+            {
+                Log.Information("*** ADDING SEARCH DOCUMENT TO LAYOUT: {DocumentId} ***", document.Id);
+                documentDock.VisibleDockables?.Add(document);
+                documentDock.ActiveDockable = document;
+                SetFactory(document);
+                Log.Information("*** SEARCH DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
+                System.Console.WriteLine($"Added search document to layout: {document.Id}");
+            }
+            else
+            {
+                Log.Error("*** NO DOCUMENT DOCK FOUND - Cannot add search document ***");
+                System.Console.WriteLine("Error: No document dock found");
+            }
         }
         
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId)
@@ -1189,6 +1275,13 @@ namespace CST.Avalonia.Services
                             foreach (var item in e.OldItems)
                             {
                                 Log.Information("*** FLOATING WINDOW REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
+                                
+                                // Clean up application state when documents are removed from floating windows
+                                if (item is Document removedDocument)
+                                {
+                                    Log.Information("*** Document removed from floating window - cleaning up application state: {DocumentId} ***", removedDocument.Id);
+                                    RemoveBookWindowState(removedDocument);
+                                }
                             }
                         }
                         if (e.NewItems != null)

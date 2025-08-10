@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CST;
 
 namespace CST.Avalonia.Models;
 
@@ -8,6 +9,18 @@ public enum SearchMode
     Exact,
     Wildcard,
     Regex
+}
+
+public class SearchModeItem
+{
+    public SearchMode Value { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+
+    public SearchModeItem(SearchMode value, string displayName)
+    {
+        Value = value;
+        DisplayName = displayName;
+    }
 }
 
 public class SearchQuery

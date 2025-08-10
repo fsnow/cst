@@ -51,23 +51,14 @@
         <!-- Search Mode Selector -->
         <TextBlock Classes="section-header" Text="Search Mode"/>
         <ComboBox Name="SearchModeCombo" 
+                  ItemsSource="{Binding SearchModes}"
                   SelectedItem="{Binding SelectedSearchMode}"
                   Margin="0,4,0,8">
-          <ComboBoxItem Content="Exact Match">
-            <ComboBoxItem.Tag>
-              <models:SearchMode>Exact</models:SearchMode>
-            </ComboBoxItem.Tag>
-          </ComboBoxItem>
-          <ComboBoxItem Content="Wildcard (*?)">
-            <ComboBoxItem.Tag>
-              <models:SearchMode>Wildcard</models:SearchMode>
-            </ComboBoxItem.Tag>
-          </ComboBoxItem>
-          <ComboBoxItem Content="Regex">
-            <ComboBoxItem.Tag>
-              <models:SearchMode>Regex</models:SearchMode>
-            </ComboBoxItem.Tag>
-          </ComboBoxItem>
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding DisplayName}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
         </ComboBox>
         
         <!-- Collection Filter (Placeholder) -->
@@ -125,7 +116,6 @@
           <ListBox Grid.Row="1" Name="TermsList"
                    ItemsSource="{Binding Terms}"
                    SelectionMode="Multiple"
-                   SelectedItems="{Binding SelectedTerms}"
                    Background="Transparent"
                    BorderThickness="0">
             <ListBox.ItemTemplate>
@@ -138,13 +128,17 @@
                             TextTrimming="CharacterEllipsis"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
-                         CornerRadius="10"
-                         Padding="6,2"
-                         Margin="8,0,0,0">
+                         CornerRadius="12"
+                         Padding="8,4"
+                         Margin="8,0,0,0"
+                         MinWidth="24"
+                         MinHeight="24">
                     <TextBlock Text="{Binding TotalCount}"
                               FontSize="10"
                               FontWeight="Medium"
-                              Foreground="{DynamicResource SystemAccentColorDark1}"/>
+                              Foreground="{DynamicResource SystemAccentColorDark1}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"/>
                   </Border>
                 </Grid>
               </DataTemplate>
@@ -180,13 +174,17 @@
                             FontSize="11"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
-                         CornerRadius="10"
-                         Padding="6,2"
-                         Margin="8,0,0,0">
+                         CornerRadius="12"
+                         Padding="8,4"
+                         Margin="8,0,0,0"
+                         MinWidth="24"
+                         MinHeight="24">
                     <TextBlock Text="{Binding Count}"
                               FontSize="10"
                               FontWeight="Medium"
-                              Foreground="{DynamicResource SystemAccentColorDark1}"/>
+                              Foreground="{DynamicResource SystemAccentColorDark1}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"/>
                   </Border>
                 </Grid>
               </DataTemplate>
@@ -208,8 +206,8 @@
             Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
             Padding="12,8"
             Margin="8">
-      <Grid ColumnDefinitions="*,*,Auto">
-        <!-- Statistics -->
+      <Grid ColumnDefinitions="*,*">
+        <!-- Statistics aligned with Terms and Books columns -->
         <TextBlock Grid.Column="0" 
                    Text="{Binding TermStats}"
                    FontSize="11"
@@ -218,43 +216,6 @@
                    Text="{Binding OccurrenceStats}"
                    FontSize="11"
                    VerticalAlignment="Center"/>
-        
-        <!-- Search Status -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal">
-          <!-- Loading indicator -->
-          <Border IsVisible="{Binding IsSearching}"
-                  Background="{DynamicResource SystemAccentColor}"
-                  Width="12" Height="12"
-                  CornerRadius="6"
-                  Margin="0,0,8,0">
-            <Border.RenderTransform>
-              <RotateTransform/>
-            </Border.RenderTransform>
-            <Border.Styles>
-              <Style Selector="Border">
-                <Style.Animations>
-                  <Animation Duration="0:0:1" IterationCount="Infinite">
-                    <KeyFrame Cue="0%">
-                      <Setter Property="RenderTransform">
-                        <RotateTransform Angle="0"/>
-                      </Setter>
-                    </KeyFrame>
-                    <KeyFrame Cue="100%">
-                      <Setter Property="RenderTransform">
-                        <RotateTransform Angle="360"/>
-                      </Setter>
-                    </KeyFrame>
-                  </Animation>
-                </Style.Animations>
-              </Style>
-            </Border.Styles>
-          </Border>
-          
-          <TextBlock Text="{Binding StatusText}"
-                     FontSize="11"
-                     VerticalAlignment="Center"
-                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-        </StackPanel>
       </Grid>
     </Border>
     

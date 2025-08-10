@@ -25,6 +25,11 @@
             <views:OpenBookPanel />
         </DataTemplate>
         
+        <!-- DataTemplate for SearchViewModel -> SearchPanel -->
+        <DataTemplate DataType="{x:Type vm:SearchViewModel}">
+            <views:SearchPanel />
+        </DataTemplate>
+        
         <!-- DataTemplate for BookDisplayViewModel -> BookDisplayView -->
         <DataTemplate DataType="{x:Type vm:BookDisplayViewModel}">
             <views:BookDisplayView />

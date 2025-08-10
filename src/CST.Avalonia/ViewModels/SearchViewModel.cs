@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
 using CST.Conversion;
+using CST;
 using DynamicData;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
@@ -47,8 +48,16 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         Occurrences = new ObservableCollection<BookOccurrenceViewModel>();
         SelectedTerms = new ObservableCollection<MatchingTermViewModel>();
 
+        // Initialize search modes
+        SearchModes = new ObservableCollection<SearchModeItem>
+        {
+            new(SearchMode.Exact, "Exact Match"),
+            new(SearchMode.Wildcard, "Wildcard (*?)"),
+            new(SearchMode.Regex, "Regex")
+        };
+
         // Set default values
-        SelectedSearchMode = SearchMode.Exact;
+        SelectedSearchMode = SearchModes.First();
         
         // Initialize book filters to all true
         IncludeVinaya = true;
@@ -68,6 +77,8 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         SearchCommand = ReactiveCommand.CreateFromTask(
             ExecuteSearchAsync,
             canSearch);
+        
+        // Remove test data since we confirmed left panel works
 
         // Handle search errors
         SearchCommand.ThrownExceptions
@@ -101,10 +112,14 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                 .DisposeWith(disposables);
 
             // Update occurrences when term selection changes
-            this.WhenAnyValue(x => x.SelectedTerms)
-                .Where(terms => terms != null)
-                .Subscribe(_ => UpdateOccurrences())
-                .DisposeWith(disposables);
+            SelectedTerms.CollectionChanged += (_, e) => 
+            {
+                _logger.LogInformation("*** SelectedTerms CollectionChanged: Action={Action}, NewItems={NewCount}, OldItems={OldCount} ***", 
+                    e.Action, e.NewItems?.Count ?? 0, e.OldItems?.Count ?? 0);
+                _logger.LogInformation("*** Selected terms count: {SelectedCount}, Total terms count: {TotalCount} ***", 
+                    SelectedTerms.Count, Terms.Count);
+                UpdateOccurrences();
+            };
 
             // Update statistics
             this.WhenAnyValue(
@@ -126,9 +141,12 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         set => this.RaiseAndSetIfChanged(ref _searchText, value);
     }
 
+    // Search modes collection
+    public ObservableCollection<SearchModeItem> SearchModes { get; private set; }
+
     // Search mode
-    private SearchMode _selectedSearchMode;
-    public SearchMode SelectedSearchMode
+    private SearchModeItem _selectedSearchMode = null!;
+    public SearchModeItem SelectedSearchMode
     {
         get => _selectedSearchMode;
         set => this.RaiseAndSetIfChanged(ref _selectedSearchMode, value);
@@ -250,7 +268,7 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
             var query = new SearchQuery
             {
                 QueryText = SearchText ?? string.Empty,
-                Mode = SelectedSearchMode,
+                Mode = SelectedSearchMode.Value,
                 Filter = new BookFilter
                 {
                     IncludeVinaya = IncludeVinaya,
@@ -299,6 +317,9 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                 }
 
                 StatusText = $"Search completed in {result.SearchDuration.TotalMilliseconds:F0}ms - Found {result.TotalTermCount} terms, {result.TotalOccurrenceCount} occurrences";
+                
+                // Explicitly update statistics after terms are populated and selected
+                UpdateStatistics();
             });
 
             IsSearching = false;
@@ -346,38 +367,99 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
 
     private void UpdateOccurrences()
     {
-        Occurrences.Clear();
-
-        if (!SelectedTerms.Any()) return;
-
-        // Merge occurrences from all selected terms
-        var bookOccurrences = new Dictionary<string, BookOccurrenceViewModel>();
-
-        foreach (var term in SelectedTerms)
+        _logger.LogInformation("*** UpdateOccurrences called - SelectedTerms count: {SelectedCount} ***", SelectedTerms.Count);
+        
+        // Ensure UI operations happen on the UI thread
+        Dispatcher.UIThread.InvokeAsync(() =>
         {
-            foreach (var occurrence in term.Occurrences)
+            Occurrences.Clear();
+
+            if (!SelectedTerms.Any()) 
             {
-                if (!bookOccurrences.TryGetValue(occurrence.Book.FileName, out var existing))
-                {
-                    existing = new BookOccurrenceViewModel
-                    {
-                        Book = occurrence.Book,
-                        Count = 0,
-                        Positions = new List<TermPosition>()
-                    };
-                    bookOccurrences[occurrence.Book.FileName] = existing;
-                }
-
-                existing.Count += occurrence.Count;
-                existing.Positions.AddRange(occurrence.Positions);
+                _logger.LogInformation("*** No selected terms - clearing occurrences ***");
+                return;
             }
-        }
 
-        // Sort by book index and add to collection
-        foreach (var occurrence in bookOccurrences.Values.OrderBy(o => o.Book.Index))
+            // Merge occurrences from all selected terms
+            var bookOccurrences = new Dictionary<string, BookOccurrenceViewModel>();
+
+            foreach (var term in SelectedTerms)
+            {
+                _logger.LogInformation("*** Processing selected term: {Term} with {OccurrenceCount} occurrences ***", 
+                    term.DisplayTerm, term.Occurrences.Count);
+                
+                foreach (var occurrence in term.Occurrences)
+                {
+                    if (!bookOccurrences.TryGetValue(occurrence.Book.FileName, out var existing))
+                    {
+                        // Get the display name in the current script
+                        var originalName = occurrence.Book.ShortNavPath ?? occurrence.Book.FileName;
+                        var displayName = _scriptService.CurrentScript == Script.Devanagari 
+                            ? originalName 
+                            : ScriptConverter.Convert(originalName, Script.Devanagari, _scriptService.CurrentScript, true);
+
+                        existing = new BookOccurrenceViewModel
+                        {
+                            Book = occurrence.Book,
+                            Count = 0,
+                            Positions = new List<TermPosition>(),
+                            DisplayName = displayName
+                        };
+                        bookOccurrences[occurrence.Book.FileName] = existing;
+                        _logger.LogInformation("*** Added new book occurrence: {BookName}, DisplayName: {DisplayName}, Index: {Index} ***", 
+                            occurrence.Book.FileName, 
+                            occurrence.Book.ShortNavPath ?? "NULL", 
+                            occurrence.Book.Index);
+                    }
+
+                    existing.Count += occurrence.Count;
+                    existing.Positions.AddRange(occurrence.Positions);
+                }
+            }
+
+            // Sort by book index and add to collection
+            foreach (var occurrence in bookOccurrences.Values.OrderBy(o => o.Book.Index))
+            {
+                _logger.LogInformation("*** Adding to Occurrences collection: {DisplayName} (Count: {Count}) ***", 
+                    occurrence.DisplayName, occurrence.Count);
+                Occurrences.Add(occurrence);
+            }
+            
+            _logger.LogInformation("*** UpdateOccurrences completed - Added {BookCount} books to occurrences collection ***", Occurrences.Count);
+        });
+    }
+
+    private void AddTestData()
+    {
+        _logger.LogInformation("*** AddTestData called - adding test books to verify UI binding ***");
+        
+        // Add test data to see if UI works at all
+        Dispatcher.UIThread.InvokeAsync(() =>
         {
-            Occurrences.Add(occurrence);
-        }
+            // Add test terms
+            Terms.Add(new MatchingTermViewModel 
+            { 
+                Term = "test", 
+                DisplayTerm = "test", 
+                TotalCount = 123,
+                Occurrences = new List<BookOccurrence>()
+            });
+            
+            // Add test books 
+            Occurrences.Add(new BookOccurrenceViewModel
+            {
+                Book = new Book { FileName = "test-book-1.xml", Index = 1 },
+                Count = 5
+            });
+            
+            Occurrences.Add(new BookOccurrenceViewModel  
+            {
+                Book = new Book { FileName = "test-book-2.xml", Index = 2 },
+                Count = 10
+            });
+            
+            _logger.LogInformation("*** AddTestData completed - added {TermCount} terms and {BookCount} books ***", Terms.Count, Occurrences.Count);
+        });
     }
 
     private void UpdateStatistics()
@@ -389,6 +471,9 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         var totalOccurrences = Occurrences?.Sum(o => o.Count) ?? 0;
         var totalBooks = Occurrences?.Count ?? 0;
         OccurrenceStats = $"Occurrences: {totalOccurrences}, Books: {totalBooks}";
+        
+        _logger.LogInformation("*** UpdateStatistics called - Terms: {TermCount}, Selected: {SelectedCount}, Occurrences: {OccurrenceCount}, Books: {BookCount} ***", 
+            totalTerms, selectedCount, totalOccurrences, totalBooks);
     }
 }
 
@@ -407,8 +492,7 @@ public class BookOccurrenceViewModel : ViewModelBase
     public Book Book { get; set; } = null!;
     public int Count { get; set; }
     public List<TermPosition> Positions { get; set; } = new();
-    
-    public string DisplayName => Book.ShortNavPath ?? Book.FileName;
+    public string DisplayName { get; set; } = string.Empty;
 }
 
 // Event args for opening a book with search

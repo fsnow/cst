@@ -1,7 +1,10 @@
 using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -43,21 +46,59 @@ public partial class SearchPanel : UserControl
             searchModeCombo.SelectionChanged += OnSearchModeChanged;
         }
         
-        // Set up ViewModel event handlers
-        if (DataContext is SearchViewModel viewModel)
+        // Handle terms list selection changes - try both events
+        var termsList = this.FindControl<ListBox>("TermsList");
+        if (termsList != null)
         {
-            viewModel.OpenBookRequested += OnOpenBookRequested;
+            termsList.SelectionChanged += OnTermsListSelectionChanged;
+            termsList.Tapped += OnTermsListTapped;
         }
+        
+        // Note: We handle book opening directly in OnOccurrenceDoubleClick
+        // No need to subscribe to OpenBookRequested event anymore
     }
+    
+    private static bool _isOpening = false;
     
     private void OnOccurrenceDoubleClick(object? sender, TappedEventArgs e)
     {
-        if (sender is ListBox listBox && 
-            listBox.SelectedItem is BookOccurrenceViewModel occurrence &&
-            DataContext is SearchViewModel viewModel)
+        // Prevent multiple rapid calls
+        if (_isOpening)
         {
-            // Execute the OpenBook command
-            viewModel.OpenBookCommand.Execute(occurrence).Subscribe();
+            Console.WriteLine("*** Book opening already in progress - ignoring duplicate call ***");
+            e.Handled = true;
+            return;
+        }
+        
+        if (sender is ListBox listBox && 
+            listBox.SelectedItem is BookOccurrenceViewModel occurrence)
+        {
+            _isOpening = true;
+            e.Handled = true;
+            
+            try
+            {
+                // Open book directly using the same method as Select a Book tree
+                var mainWindow = TopLevel.GetTopLevel(this) as Window;
+                var layoutViewModel = mainWindow?.DataContext as LayoutViewModel;
+                
+                if (layoutViewModel != null)
+                {
+                    Console.WriteLine($"*** [SEARCH PANEL] Opening book: {occurrence.Book.FileName} ***");
+                    Console.WriteLine($"*** [SEARCH PANEL] Before layoutViewModel.OpenBook call ***");
+                    layoutViewModel.OpenBook(occurrence.Book);
+                    Console.WriteLine($"*** [SEARCH PANEL] After layoutViewModel.OpenBook call ***");
+                }
+                else
+                {
+                    Console.WriteLine("*** [SEARCH PANEL] No layout view model found ***");
+                }
+            }
+            finally
+            {
+                // Reset flag after a short delay to allow for legitimate double-clicks
+                Task.Delay(500).ContinueWith(_ => _isOpening = false);
+            }
         }
     }
     
@@ -77,38 +118,84 @@ public partial class SearchPanel : UserControl
     
     private void OnSearchModeChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is ComboBox comboBox && 
-            comboBox.SelectedItem is ComboBoxItem item &&
-            item.Tag is Models.SearchMode mode &&
-            DataContext is SearchViewModel viewModel)
+        // Selection changes are handled automatically through binding
+        // This method can be removed or used for additional logic if needed
+    }
+    
+    private void OnTermsListSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox listBox)
         {
-            viewModel.SelectedSearchMode = mode;
+            Console.WriteLine($"*** Terms ListBox Selection Changed: {listBox.SelectedItems?.Count ?? 0} items selected ***");
+            SyncSelection(listBox);
         }
     }
     
-    private void OnOpenBookRequested(object? sender, OpenBookWithSearchEventArgs e)
+    private void OnTermsListTapped(object? sender, TappedEventArgs e)
     {
-        // This event will be handled by the main application to open the book
-        // For now, we can bubble it up through the visual tree or use a message bus
-        // The actual implementation will depend on how the dock system handles this
-        
-        // TODO: Implement book opening through the dock system
-        // This might involve:
-        // 1. Getting reference to the main dock factory
-        // 2. Creating a new BookDisplayViewModel with search terms
-        // 3. Adding it as a new dockable to the document area
-        
-        Console.WriteLine($"Search panel requesting to open book: {e.Book.FileName} with {e.SearchTerms.Count} search terms");
+        if (sender is ListBox listBox)
+        {
+            Console.WriteLine($"*** Terms ListBox Tapped: {listBox.SelectedItems?.Count ?? 0} items selected ***");
+            
+            // Force a selection update after tap
+            Dispatcher.UIThread.Post(() => 
+            {
+                Console.WriteLine($"*** After tap dispatch: {listBox.SelectedItems?.Count ?? 0} items selected ***");
+                SyncSelection(listBox);
+            }, DispatcherPriority.Background);
+        }
     }
     
-    protected override void OnDataContextChanged(EventArgs e)
+    private void SyncSelection(ListBox listBox)
     {
-        base.OnDataContextChanged(e);
-        
-        // Re-setup event handlers when DataContext changes
         if (DataContext is SearchViewModel viewModel)
         {
-            viewModel.OpenBookRequested += OnOpenBookRequested;
+            Console.WriteLine($"*** ViewModel SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
+            Console.WriteLine($"*** ViewModel Occurrences count: {viewModel.Occurrences.Count} ***");
+            
+            // Manually sync the selection since binding might not be working
+            Console.WriteLine($"*** Before sync - SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
+            viewModel.SelectedTerms.Clear();
+            Console.WriteLine($"*** After clear - SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
+            
+            if (listBox.SelectedItems != null)
+            {
+                Console.WriteLine($"*** ListBox has {listBox.SelectedItems.Count} selected items ***");
+                foreach (var item in listBox.SelectedItems.OfType<MatchingTermViewModel>())
+                {
+                    Console.WriteLine($"*** Adding selected term: {item.DisplayTerm} with {item.Occurrences?.Count ?? 0} occurrences ***");
+                    viewModel.SelectedTerms.Add(item);
+                }
+            }
+            else
+            {
+                Console.WriteLine("*** ListBox.SelectedItems is null ***");
+            }
+            Console.WriteLine($"*** After manual sync - SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
+            
+            // Explicitly trigger UpdateOccurrences since manual sync might not fire CollectionChanged
+            Console.WriteLine("*** Explicitly calling UpdateOccurrences ***");
+            try 
+            {
+                var updateOccurrencesMethod = typeof(SearchViewModel).GetMethod("UpdateOccurrences", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                updateOccurrencesMethod?.Invoke(viewModel, null);
+                Console.WriteLine("*** UpdateOccurrences called successfully ***");
+                
+                // Also explicitly call UpdateStatistics
+                var updateStatisticsMethod = typeof(SearchViewModel).GetMethod("UpdateStatistics", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                updateStatisticsMethod?.Invoke(viewModel, null);
+                Console.WriteLine("*** UpdateStatistics called successfully ***");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"*** Error calling update methods: {ex.Message} ***");
+            }
         }
     }
+    
+    // OnOpenBookRequested method removed - we now handle book opening directly in OnOccurrenceDoubleClick
+    
+    // No longer need OnDataContextChanged since we handle book opening directly
 }
