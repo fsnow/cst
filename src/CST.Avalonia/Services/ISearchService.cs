@@ -1,27 +1,14 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reactive;
+using System.Threading;
 using System.Threading.Tasks;
+using CST.Avalonia.Models;
 
 namespace CST.Avalonia.Services;
 
-// Placeholder classes until project references are restored
-public class BookHit
-{
-    public Book Book { get; set; } = new();
-    public string HighlightedText { get; set; } = string.Empty;
-    public int Score { get; set; }
-}
-
-public class BookIndexer
-{
-    public void IndexBook(Book book) { }
-}
-
 public interface ISearchService
 {
-    IObservable<IEnumerable<BookHit>> SearchAsync(string searchText, Book[] booksToSearch);
-    Task<BookIndexer> GetIndexerAsync();
-    Task IndexBooksAsync(IEnumerable<Book> books, IProgress<string>? progress = null);
+    Task<SearchResult> SearchAsync(SearchQuery query, CancellationToken cancellationToken = default);
+    Task<List<string>> GetAllTermsAsync(string prefix = "", int limit = 100, CancellationToken cancellationToken = default);
+    Task<SearchResult> GetNextPageAsync(string continuationToken, CancellationToken cancellationToken = default);
+    Task<List<TermPosition>> GetTermPositionsAsync(string bookFileName, string term, CancellationToken cancellationToken = default);
 }
