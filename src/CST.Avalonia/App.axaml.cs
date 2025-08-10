@@ -743,6 +743,7 @@ public partial class App : Application
 
         // Register ViewModels
         services.AddSingleton<OpenBookDialogViewModel>();
+        services.AddSingleton<SearchViewModel>();
         // services.AddTransient<MainWindowViewModel>();
     }
 
