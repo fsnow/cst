@@ -24,25 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CST.Core\CST.Core.csproj" />
-  </ItemGroup>
-
-  <!-- WebView implementation with excluded legacy views -->
-  <ItemGroup>
-    <Compile Remove="ViewModels\SearchViewModel.cs" />
-    <Compile Remove="ViewModels\SelectBookViewModel.cs" />
-    <Compile Remove="ViewModels\SimpleMainWindowViewModel.cs" />
-    <Compile Remove="ViewModels\MainWindowViewModel.cs" />
-    <Compile Remove="Services\SearchService.cs" />
-    <Compile Remove="Services\BookService.cs" />
-    <Compile Remove="Views\MainWindow.axaml.cs" />
-    <Compile Remove="Views\SearchView.axaml.cs" />
-    <Compile Remove="Views\SelectBookView.axaml.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <AvaloniaResource Remove="Views\MainWindow.axaml" />
-    <AvaloniaResource Remove="Views\SearchView.axaml" />
-    <AvaloniaResource Remove="Views\SelectBookView.axaml" />
+    <ProjectReference Include="..\CST.Lucene\CST.Lucene.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,7 +40,11 @@
     <PackageReference Include="Dock.Avalonia" Version="11.3.0.15" />
     <PackageReference Include="Dock.Model" Version="11.3.0.15" />
     <PackageReference Include="Dock.Model.Mvvm" Version="11.3.0.15" />
-    <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" />
+    <!-- WebView packages for different architectures -->
+    <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'osx-arm64'" />
+    <PackageReference Include="WebViewControl-Avalonia" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'osx-x64'" />
+    <!-- Fallback for development (when RuntimeIdentifier is not set) -->
+    <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == ''" />
     <PackageReference Include="Mono.Cecil" Version="0.11.6" />
     <PackageReference Include="ReactiveUI" Version="19.4.1" />
     <PackageReference Include="ReactiveUI.Avalonia" Version="14.7.1" />

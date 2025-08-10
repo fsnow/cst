@@ -116,6 +116,20 @@ public partial class App : Application
             
             if (showSplash)
             {
+                SplashScreen.SetStatus("Checking search index...");
+                SplashScreen.SetReferencePoint();
+            }
+            
+            // Initialize indexing service and build index if needed (with delay to ensure settings are loaded)
+            _ = Task.Run(async () =>
+            {
+                // Give settings time to load
+                await Task.Delay(1000);
+                await InitializeIndexingAsync(showSplash);
+            });
+            
+            if (showSplash)
+            {
                 SplashScreen.SetStatus("Loading books...");
                 SplashScreen.SetReferencePoint();
             }
@@ -263,6 +277,88 @@ public partial class App : Application
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to load settings: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Initialize the indexing service and build index if needed
+    /// </summary>
+    private async Task InitializeIndexingAsync(bool showProgress)
+    {
+        try
+        {
+            Log.Information("InitializeIndexingAsync() started");
+            
+            // Debug: Check if settings are available
+            var settingsService = ServiceProvider?.GetRequiredService<ISettingsService>();
+            if (settingsService != null)
+            {
+                Log.Information("Settings check - XmlBooksDirectory: '{XmlDirectory}'", settingsService.Settings.XmlBooksDirectory);
+                Log.Information("Settings check - IndexDirectory: '{IndexDirectory}'", settingsService.Settings.IndexDirectory);
+            }
+            else
+            {
+                Log.Error("Could not get SettingsService from DI container");
+            }
+            
+            var indexingService = ServiceProvider?.GetRequiredService<IIndexingService>();
+            if (indexingService != null)
+            {
+                Log.Information("IndexingService obtained from DI container");
+                
+                Log.Information("Calling indexingService.InitializeAsync()...");
+                await indexingService.InitializeAsync();
+                Log.Information("indexingService.InitializeAsync() completed");
+                
+                // Always call BuildIndexAsync - it will handle both initial indexing and incremental updates
+                Log.Information("Calling BuildIndexAsync to check for updates or build if needed...");
+                
+                if (showProgress)
+                {
+                    SplashScreen.SetStatus("Checking for index updates...");
+                }
+                
+                // Create progress reporter for splash screen
+                var progress = new Progress<CST.Lucene.IndexingProgress>(p =>
+                {
+                    if (showProgress && p != null)
+                    {
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            if (p.TotalBooks > 0)
+                            {
+                                SplashScreen.SetStatus($"Indexing book {p.CurrentBook} of {p.TotalBooks}...");
+                                // Update progress bar (0-100)
+                                var progressValue = p.ProgressPercentage;
+                                if (progressValue > 0)
+                                {
+                                    // Set target progress for smooth animation
+                                    SplashScreen.SetReferencePoint();
+                                }
+                            }
+                            else
+                            {
+                                SplashScreen.SetStatus(p.StatusMessage);
+                            }
+                        });
+                    }
+                });
+                
+                Log.Information("Calling indexingService.BuildIndexAsync()...");
+                await indexingService.BuildIndexAsync(progress);
+                Log.Information("indexingService.BuildIndexAsync() completed");
+                
+                Log.Information("Indexing service initialized successfully");
+            }
+            else
+            {
+                Log.Error("Could not get IndexingService from DI container");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize indexing: {ErrorMessage}", ex.Message);
+            // Don't fail the app startup if indexing fails
         }
     }
 
@@ -640,6 +736,10 @@ public partial class App : Application
         // services.AddSingleton<IBookService, BookService>();
         // services.AddSingleton<ISearchService, SearchService>();
         services.AddTransient<TreeStateService>();
+        
+        // Indexing services
+        services.AddSingleton<IXmlFileDatesService, XmlFileDatesService>();
+        services.AddSingleton<IIndexingService, IndexingService>();
 
         // Register ViewModels
         services.AddSingleton<OpenBookDialogViewModel>();

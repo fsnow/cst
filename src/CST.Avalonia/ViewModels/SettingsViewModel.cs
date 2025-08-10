@@ -81,6 +81,10 @@ namespace CST.Avalonia.ViewModels
 
         // Property to close the window
         public Action? CloseWindow { get; set; }
+        
+        // Actions for folder browsing
+        public Action? BrowseForXmlDirectory { get; set; }
+        public Action? BrowseForIndexDirectory { get; set; }
 
         private void FilterSettings()
         {
@@ -113,13 +117,17 @@ namespace CST.Avalonia.ViewModels
             HasUnsavedChanges = true;
         }
 
-        // Action to trigger browse dialog - will be set by the view
-        public Action? BrowseForXmlDirectory { get; set; }
 
         public void RequestBrowseForXmlDirectory()
         {
             _logger.Debug("Browse for XML directory requested from GeneralSettings");
             BrowseForXmlDirectory?.Invoke();
+        }
+        
+        public void RequestBrowseForIndexDirectory()
+        {
+            _logger.Debug("Browse for Index directory requested from GeneralSettings");
+            BrowseForIndexDirectory?.Invoke();
         }
     }
 
@@ -141,6 +149,7 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private string _xmlBooksDirectory;
+        private string _indexDirectory;
         private bool _showWelcomeOnStartup;
         private int _maxRecentBooks;
 
@@ -148,16 +157,26 @@ namespace CST.Avalonia.ViewModels
         {
             _settingsService = settingsService;
             _xmlBooksDirectory = _settingsService.Settings.XmlBooksDirectory;
+            _indexDirectory = _settingsService.Settings.IndexDirectory;
             _showWelcomeOnStartup = _settingsService.Settings.ShowWelcomeOnStartup;
             _maxRecentBooks = _settingsService.Settings.MaxRecentBooks;
 
-            // Create browse command
+            // Create browse commands
             BrowseCommand = ReactiveCommand.Create(() => 
             {
                 // Request browse from parent
                 if (Parent is SettingsViewModel settingsVm)
                 {
                     settingsVm.RequestBrowseForXmlDirectory();
+                }
+            });
+            
+            BrowseIndexCommand = ReactiveCommand.Create(() => 
+            {
+                // Request browse from parent
+                if (Parent is SettingsViewModel settingsVm)
+                {
+                    settingsVm.RequestBrowseForIndexDirectory();
                 }
             });
 
@@ -167,6 +186,14 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.UpdateSetting(nameof(Settings.XmlBooksDirectory), value);
+                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
+                });
+                
+            this.WhenAnyValue(x => x.IndexDirectory)
+                .Skip(1)
+                .Subscribe(value => 
+                {
+                    _settingsService.UpdateSetting(nameof(Settings.IndexDirectory), value);
                     if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
                 });
 
@@ -201,6 +228,12 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _xmlBooksDirectory, value);
         }
 
+        public string IndexDirectory
+        {
+            get => _indexDirectory;
+            set => this.RaiseAndSetIfChanged(ref _indexDirectory, value);
+        }
+
         public bool ShowWelcomeOnStartup
         {
             get => _showWelcomeOnStartup;
@@ -215,6 +248,7 @@ namespace CST.Avalonia.ViewModels
 
         public ViewModelBase? Parent { get; set; }
         public ReactiveCommand<Unit, Unit> BrowseCommand { get; }
+        public ReactiveCommand<Unit, Unit> BrowseIndexCommand { get; }
     }
 
     public class AppearanceSettingsViewModel : ViewModelBase

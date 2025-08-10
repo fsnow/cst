@@ -11,7 +11,7 @@ src/CST.Avalonia/CST_CefGlue_*/
 src/CST.Avalonia/logs/
 src/CST.Avalonia/obj/
 src/CST.Avalonia/bin/Release/
-src/CST.Avalonia/CST.app/
+src/CST.Avalonia/CST Reader.app/
 src/CST.Avalonia/publish/
 
 *.log
@@ -26,3 +26,7 @@ screenshots/
 
 
 
+
+src/CST.Avalonia.Tests/obj/
+
+src/CST.Lucene/obj/

@@ -1,8 +1,12 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using Lucene.Net.Analysis;
+using Lucene.Net.Analysis.TokenAttributes;
+using Lucene.Net.Util;
 using CST.Conversion;
 
 namespace CST
@@ -10,87 +14,133 @@ namespace CST
     public class DevaXmlTokenizer : Tokenizer
     {
         private StringBuilder text;
+
+        // this is the index into the book string
         private int pos;
-        private Dictionary<char, int> wordChars;
 
-        public DevaXmlTokenizer(System.IO.TextReader reader): base(reader)
+        private ImmutableHashSet<char> wordChars;
+
+        // this tokenizer generates three attributes:
+        // term offset, positionIncrement and type
+        private ICharTermAttribute termAtt;
+        private IOffsetAttribute offsetAtt;
+        private IPositionIncrementAttribute posIncrAtt;
+        private ITypeAttribute typeAtt;
+
+        /// <summary>
+        /// Creates a new instance of the <see cref="DevaXmlTokenizer"/>.  Attaches
+        /// the <paramref name="input"/> to the newly created JFlex-generated (then ported to .NET) scanner.
+        /// </summary>
+        /// <param name="matchVersion"> Lucene compatibility version - See <see cref="DevaXmlTokenizer"/> </param>
+        /// <param name="input"> The input reader
+        public DevaXmlTokenizer(LuceneVersion matchVersion, TextReader input)
+            : base(input)
         {
-            text = new StringBuilder(reader.ReadToEnd());
+            //Init(input);
+            InitInstance(input);
+        }
 
-            wordChars = new Dictionary<char, int>();
+        /// <summary>
+        /// Creates a new <see cref="DevaXmlTokenizer"/> with a given <see cref="AttributeSource.AttributeFactory"/> 
+        /// </summary>
+        public DevaXmlTokenizer(LuceneVersion matchVersion, AttributeFactory factory, TextReader input)
+            : base(factory, input)
+        {
+            //Init(input);
+            InitInstance(input);
+        }
 
-            wordChars['\x0902'] = 1; // niggahita
+        private void InitInstance(TextReader input)
+        {
+            termAtt = AddAttribute<ICharTermAttribute>();
+            posIncrAtt = AddAttribute<IPositionIncrementAttribute>();
+            offsetAtt = AddAttribute<IOffsetAttribute>();
+            typeAtt = AddAttribute<ITypeAttribute>();
 
-            // independent vowels
-            wordChars['\x0905'] = 1; // a
-            wordChars['\x0906'] = 1; // aa
-            wordChars['\x0907'] = 1; // i
-            wordChars['\x0908'] = 1; // ii
-            wordChars['\x0909'] = 1; // u
-            wordChars['\x090A'] = 1; // uu
-            wordChars['\x090F'] = 1; // e
-            wordChars['\x0913'] = 1; // o
+            HashSet<char> tempHashSet = new HashSet<char>
+            {
+                '\x0902', // niggahita
 
-            // velar stops
-            wordChars['\x0915'] = 1; // ka
-            wordChars['\x0916'] = 1; // kha
-            wordChars['\x0917'] = 1; // ga
-            wordChars['\x0918'] = 1; // gha
-            wordChars['\x0919'] = 1; // n overdot a
+                // independent vowels
+                '\x0905', // a
+                '\x0906', // aa
+                '\x0907', // i
+                '\x0908', // ii
+                '\x0909', // u
+                '\x090A', // uu
+                '\x090F', // e
+                '\x0913', // o
 
-            // palatal stops
-            wordChars['\x091A'] = 1; // ca
-            wordChars['\x091B'] = 1; // cha
-            wordChars['\x091C'] = 1; // ja
-            wordChars['\x091D'] = 1; // jha
-            wordChars['\x091E'] = 1; // ña
+                // velar stops
+                '\x0915', // ka
+                '\x0916', // kha
+                '\x0917', // ga
+                '\x0918', // gha
+                '\x0919', // n overdot a
 
-            // retroflex stops
-            wordChars['\x091F'] = 1; // t underdot a
-            wordChars['\x0920'] = 1; // t underdot ha
-            wordChars['\x0921'] = 1; // d underdot a
-            wordChars['\x0922'] = 1; // d underdot ha
-            wordChars['\x0923'] = 1; // n underdot a
+                // palatal stops
+                '\x091A', // ca
+                '\x091B', // cha
+                '\x091C', // ja
+                '\x091D', // jha
+                '\x091E', // n(tilde)a
 
-            // dental stops
-            wordChars['\x0924'] = 1; // ta
-            wordChars['\x0925'] = 1; // tha
-            wordChars['\x0926'] = 1; // da
-            wordChars['\x0927'] = 1; // dha
-            wordChars['\x0928'] = 1; // na
+                // retroflex stops
+                '\x091F', // t underdot a
+                '\x0920', // t underdot ha
+                '\x0921', // d underdot a
+                '\x0922', // d underdot ha
+                '\x0923', // n underdot a
 
-            // labial stops
-            wordChars['\x092A'] = 1; // pa
-            wordChars['\x092B'] = 1; // pha
-            wordChars['\x092C'] = 1; // ba
-            wordChars['\x092D'] = 1; // bha
-            wordChars['\x092E'] = 1; // ma
+                // dental stops
+                '\x0924', // ta
+                '\x0925', // tha
+                '\x0926', // da
+                '\x0927', // dha
+                '\x0928', // na
 
-            // liquids, fricatives, etc.
-            wordChars['\x092F'] = 1; // ya
-            wordChars['\x0930'] = 1; // ra
-            wordChars['\x0932'] = 1; // la
-            wordChars['\x0935'] = 1; // va
-            wordChars['\x0938'] = 1; // sa
-            wordChars['\x0939'] = 1; // ha
-            wordChars['\x0933'] = 1; // l underdot a
+                // labial stops
+                '\x092A', // pa
+                '\x092B', // pha
+                '\x092C', // ba
+                '\x092D', // bha
+                '\x092E', // ma
 
-            // dependent vowel signs
-            wordChars['\x093E'] = 1; // aa
-            wordChars['\x093F'] = 1; // i
-            wordChars['\x0940'] = 1; // ii
-            wordChars['\x0941'] = 1; // u
-            wordChars['\x0942'] = 1; // uu
-            wordChars['\x0947'] = 1; // e
-            wordChars['\x094B'] = 1; // o
+                // liquids, fricatives, etc.
+                '\x092F', // ya
+                '\x0930', // ra
+                '\x0932', // la
+                '\x0935', // va
+                '\x0938', // sa
+                '\x0939', // ha
+                '\x0933', // l underdot a
 
-            wordChars['\x094D'] = 1; // virama
-            wordChars['\x200C'] = 1; // ZWNJ (ignore)
-            wordChars['\x200D'] = 1; // ZWJ (ignore)
+                // dependent vowel signs
+                '\x093E', // aa
+                '\x093F', // i
+                '\x0940', // ii
+                '\x0941', // u
+                '\x0942', // uu
+                '\x0947', // e
+                '\x094B', // o
 
-            wordChars['-'] = 1; // hyphen
-            wordChars['’'] = 1; // right single quote (in words ending in ’ti or ’nti
-			wordChars['_'] = 1; // placeholder for <hi rend="bold"> and </hi>, which can occur inside words
+                '\x094D', // virama
+                '\x200C', // ZWNJ (ignore)
+                '\x200D', // ZWJ (ignore)
+
+                '-', // hyphen
+                '\x2019', // right single quote (in words ending in (quote)ti or (quote)nti
+                '_' // placeholder for <hi rend="bold"> and </hi>, which can occur inside words
+            };
+            wordChars = tempHashSet.ToImmutableHashSet<char>();
+
+            InitPerBook(input);
+        }
+
+        public void InitPerBook(TextReader input)
+        {
+            text = new StringBuilder(input.ReadToEnd());
+
             FirstPass();
 
             pos = 0;
@@ -126,7 +176,7 @@ namespace CST
                 {
                     text[i] = ' ';
                 }
-                else if (wordChars.ContainsKey(text[i]) == false)
+                else if (wordChars.Contains(text[i]) == false)
                 {
                     text[i] = ' ';
                 }
@@ -134,47 +184,88 @@ namespace CST
         }
 
         /// <summary>
-        /// Returns the next token in the stream, or null at EOS.
+        /// Sets attributes of the next token in the stream and returns true, or false at EOS.
         /// </summary>
-        /// <returns>A Token</returns>
-        public override Token Next()
+        /// <returns>True if there was another token</returns>
+        public override sealed bool IncrementToken()
         {
-            if (pos >= text.Length)
-                return null;
+            ClearAttributes();
 
-            // advance to a deva char
-            while (pos < text.Length && wordChars.ContainsKey(text[pos]) == false)
-                pos++;
-
-            if (pos >= text.Length)
-                return null;
-
-            int startPos = pos;
-            string token = "";
-            while (pos < text.Length && wordChars.ContainsKey(text[pos]))
+            while (true)
             {
-                token += text[pos];
-                pos++;
+                if (pos >= text.Length)
+                {
+                    return false;
+                }
+
+                // advance to a deva char
+                while (pos < text.Length && wordChars.Contains(text[pos]) == false)
+                    pos++;
+
+                if (pos >= text.Length)
+                {
+                    return false;
+                }
+
+                int startPos = pos;
+                string token = "";
+                while (pos < text.Length && wordChars.Contains(text[pos]))
+                {
+                    token += text[pos];
+                    pos++;
+                }
+
+                string foo = token;
+
+                // chop off leading underscores and change the start offset
+                while (token.StartsWith("_"))
+                {
+                    token = token.Substring(1);
+                    startPos++;
+                }
+
+                int endPos = pos - 1;
+                // chop off any final hyphens, right single quotes or underscores
+                // and change the end offset
+                while (token.EndsWith("-") || token.EndsWith("\x2019") || token.EndsWith("_"))
+                {
+                    token = token.Substring(0, token.Length - 1);
+                    endPos--;
+                }
+
+                // remove quotes from within the token, but don't change the end offset
+                token = token.Replace("\x2019", "");
+
+                // remove underscores from within the token, but don't change the offsets
+                token = token.Replace("_", "");
+
+                token = token.Trim();
+
+                if (token.Length > 0)
+                {
+                    // We store the token in IPE, "Ideal Pali Encoding".
+                    // The offsets are of the original Devanagari word, because we
+                    // need those to be correct for search term highlighting
+                    string ipeToken = Deva2Ipe.Convert(token);
+
+                    termAtt.SetEmpty();
+                    termAtt.Append(ipeToken);
+                    termAtt.Length = ipeToken.Length;
+                    //termAtt.Length = endPos - startPos + 1;
+
+                    typeAtt.Type = "<ALPHANUM>";
+
+                    posIncrAtt.PositionIncrement = 1;
+
+                    offsetAtt.SetOffset(startPos, endPos);
+
+                    return true;
+                }
+                else
+                {
+                    int i = 0;
+                }
             }
-
-            int endPos = pos - 1;
-            // chop off any final hyphens or right single quotes and change the end offset
-            while (token.EndsWith("-") || token.EndsWith("’"))
-            {
-                token = token.Substring(0, token.Length - 1);
-                endPos--;
-            }
-
-            // remove quotes from within the token, but don't change the end offset
-            token = token.Replace("’", "");
-
-			// remove underscores from within the token, but don't change the offsets
-			token = token.Replace("_", "");
-
-			token = token.Trim();
-
-            string ipeToken = Deva2Ipe.Convert(token);
-            return new Token(ipeToken, startPos, endPos);
         }
     }
 }

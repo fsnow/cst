@@ -5,6 +5,7 @@ namespace CST.Avalonia.Models
     public class Settings
     {
         public string XmlBooksDirectory { get; set; } = "";
+        public string IndexDirectory { get; set; } = "";  // Empty means use default
         public SearchSettings SearchSettings { get; set; } = new();
         public int MaxRecentBooks { get; set; } = 10;
         public bool ShowWelcomeOnStartup { get; set; } = true;

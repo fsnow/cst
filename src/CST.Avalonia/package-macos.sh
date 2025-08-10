@@ -2,19 +2,46 @@
 
 # CST Avalonia macOS Packaging Script
 # This script builds and packages the CST Avalonia application for macOS
+# Usage: ./package-macos.sh [architecture]
+# Architecture options: arm64 (default), x64
 
 set -e  # Exit on error
 
+# Parse architecture argument
+ARCH=${1:-arm64}  # Default to arm64 if no argument provided
+
+# Validate architecture
+case $ARCH in
+    arm64)
+        RID="osx-arm64"
+        ARCH_NAME="Apple Silicon"
+        ;;
+    x64)
+        RID="osx-x64"
+        ARCH_NAME="Intel"
+        ;;
+    *)
+        echo "Error: Invalid architecture '$ARCH'"
+        echo "Usage: $0 [arm64|x64]"
+        echo "  arm64 - Build for Apple Silicon Macs (default)"
+        echo "  x64   - Build for Intel Macs"
+        exit 1
+        ;;
+esac
+
 echo "CST Avalonia macOS Packaging Script"
 echo "=================================="
+echo "Architecture: $ARCH_NAME ($ARCH)"
+echo ""
 
 # Configuration
-APP_NAME="CST"
-BUNDLE_NAME="CST.app"
+APP_NAME="CST Reader"
+BUNDLE_NAME="CST Reader.app"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="$PROJECT_DIR/bin/Release/net9.0/osx-arm64"
-PUBLISH_DIR="$PROJECT_DIR/bin/Release/net9.0/osx-arm64/publish"
-XSL_SOURCE_DIR="$PROJECT_DIR/../Cst4/Xsl"
+BUILD_DIR="$PROJECT_DIR/bin/Release/net9.0/$RID"
+PUBLISH_DIR="$PROJECT_DIR/bin/Release/net9.0/$RID/publish"
+XSL_SOURCE_DIR="$PROJECT_DIR/Xsl"
+DIST_DIR="$PROJECT_DIR/dist"
 
 # Clean previous builds
 echo "Cleaning previous builds..."
@@ -23,8 +50,8 @@ rm -rf "$BUILD_DIR"
 rm -rf "$PUBLISH_DIR"
 
 # Build the application
-echo "Building CST Avalonia for macOS ARM64..."
-dotnet publish -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=false
+echo "Building CST Avalonia for macOS $ARCH_NAME..."
+dotnet publish -c Release -r $RID --self-contained -p:PublishSingleFile=false
 
 # Create app bundle structure
 echo "Creating app bundle structure..."
@@ -101,15 +128,73 @@ find "$BUNDLE_NAME/Contents/MacOS" -name "*.dylib" -exec chmod +x {} \;
 echo ""
 echo "App bundle created successfully!"
 echo "================================"
+echo "Architecture: $ARCH_NAME ($ARCH)"
 echo "Bundle: $BUNDLE_NAME"
 echo "Size: $(du -sh "$BUNDLE_NAME" | cut -f1)"
 echo "XSL files: $(ls -1 "$BUNDLE_NAME/Contents/Resources/Xsl/"*.xsl 2>/dev/null | wc -l)"
+
+# Create DMG if create-dmg is available
+if command -v create-dmg &> /dev/null; then
+    echo ""
+    echo "Creating DMG installer..."
+    
+    # Create dist directory if it doesn't exist
+    mkdir -p "$DIST_DIR"
+    
+    DMG_NAME="CST-Reader-${ARCH}.dmg"
+    DMG_PATH="$DIST_DIR/$DMG_NAME"
+    
+    # Remove old DMG if it exists
+    rm -f "$DMG_PATH"
+    
+    # Create DMG with create-dmg
+    create-dmg \
+        --volname "CST Reader" \
+        --window-pos 200 120 \
+        --window-size 600 400 \
+        --icon-size 100 \
+        --icon "$BUNDLE_NAME" 175 120 \
+        --hide-extension "$BUNDLE_NAME" \
+        --app-drop-link 425 120 \
+        --no-internet-enable \
+        "$DMG_PATH" \
+        "$BUNDLE_NAME"
+    
+    if [ $? -eq 0 ]; then
+        echo ""
+        echo "DMG created successfully!"
+        echo "DMG file: $DMG_PATH"
+        echo "DMG size: $(du -sh "$DMG_PATH" | cut -f1)"
+        
+        # Clean up the .app bundle since we have the DMG
+        echo "Cleaning up temporary .app bundle..."
+        rm -rf "$BUNDLE_NAME"
+    else
+        echo ""
+        echo "Failed to create DMG. You can still distribute the .app bundle directly."
+    fi
+else
+    echo ""
+    echo "Note: create-dmg not found. Install with 'brew install create-dmg' to automatically create DMG."
+    echo "The .app bundle is available at: $BUNDLE_NAME"
+fi
+
 echo ""
-echo "To test the application, run:"
-echo "  open $BUNDLE_NAME"
+if [ -f "$DMG_PATH" ]; then
+    echo "Distribution file ready in: $DIST_DIR/"
+    echo "To test the application:"
+    echo "  open \"$DMG_PATH\""
+else
+    echo "To test the application:"
+    echo "  open \"$BUNDLE_NAME\""
+fi
 echo ""
-echo "To enable debug logging, edit the launch script:"
-echo "  Right-click $BUNDLE_NAME → Show Package Contents → Contents/MacOS/CST"
-echo "  Uncomment: export CST_LOG_LEVEL=debug"
+echo "To enable debug logging:"
+echo "  1. Install the app from the DMG"
+echo "  2. Right-click CST Reader in Applications → Show Package Contents"
+echo "  3. Navigate to Contents/MacOS/CST"
+echo "  4. Uncomment: export CST_LOG_LEVEL=debug"
 echo ""
-echo "To distribute, you can create a DMG or compress the .app bundle."
+echo "To build for other architectures:"
+echo "  ./package-macos.sh arm64  # Apple Silicon (M1/M2/M3)"
+echo "  ./package-macos.sh x64    # Intel Macs"

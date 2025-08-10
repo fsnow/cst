@@ -58,10 +58,10 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         );
         
         Directory.CreateDirectory(appDataPath);
-        Directory.CreateDirectory(Path.Combine(appDataPath, "backups"));
+        Directory.CreateDirectory(Path.Combine(appDataPath, "app-state-backups"));
         
         _stateFilePath = Path.Combine(appDataPath, "application-state.json");
-        _backupDirectory = Path.Combine(appDataPath, "backups");
+        _backupDirectory = Path.Combine(appDataPath, "app-state-backups");
 
         // Configure JSON serialization for readability
         _jsonOptions = new JsonSerializerOptions

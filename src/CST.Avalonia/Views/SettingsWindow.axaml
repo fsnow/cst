@@ -118,6 +118,21 @@
                                         <TextBlock Text="Location of the Tipitaka XML book files" 
                                                   Classes="SettingDescription"/>
                                         
+                                        <StackPanel Margin="0,15,0,0">
+                                            <TextBlock Text="Index Directory" Classes="SettingLabel"/>
+                                            <DockPanel>
+                                                <Button Content="Browse..." 
+                                                       Command="{Binding BrowseIndexCommand}"
+                                                       DockPanel.Dock="Right" 
+                                                       Margin="5,0,0,0"
+                                                       Width="80"/>
+                                                <TextBox Text="{Binding IndexDirectory}" 
+                                                        Watermark="Default location will be used if empty"/>
+                                            </DockPanel>
+                                            <TextBlock Text="Location where search index files are stored (leave empty for default location)" 
+                                                      Classes="SettingDescription"/>
+                                        </StackPanel>
+                                        
                                         <CheckBox Content="Show Welcome screen on startup" 
                                                  IsChecked="{Binding ShowWelcomeOnStartup}"
                                                  Margin="0,10,0,0"/>

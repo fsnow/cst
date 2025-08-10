@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>CST5</string>
+    <string>CST Reader</string>
     <key>CFBundleDisplayName</key>
-    <string>CST5 - Tipitaka Text Reader</string>
+    <string>CST Reader</string>
     <key>CFBundleIdentifier</key>
     <string>com.cst.avalonia</string>
     <key>CFBundleVersion</key>

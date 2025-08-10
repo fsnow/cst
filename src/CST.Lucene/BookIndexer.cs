@@ -6,6 +6,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
+using Lucene.Net.Store;
+using Lucene.Net.Util;
+using CST;
 
 namespace CST
 {
@@ -17,41 +20,35 @@ namespace CST
         {
         }
 
-        public string XmlDirectory
-        {
-            get { return xmlDirectory; }
-            set { xmlDirectory = value; }
-        }
-        private string xmlDirectory;
+        public string XmlDirectory { get; set; }
 
-        public string IndexDirectory
-        {
-            get { return indexDirectory; }
-            set { indexDirectory = value; }
-        }
-        private string indexDirectory;
+        public string IndexDirectory { get; set; }
 
-        public IndexModifier IndexModifier
+        public IndexWriter IndexWriter
         {
-            get { return indexModifier; }
+            get { return indexWriter; }
         }
-        private IndexModifier indexModifier;
+        private IndexWriter indexWriter;
 
-        /// <summary>
+        /// <summary>activ
         /// 
         /// </summary>
         /// <param name="deleteIndexFirst"></param>
         public void IndexAll(IndxMsgDelegate msgCallback, List<int> changedFiles)
         {
             // we need the doc ids to know if all the books are in the index
-            if (IndexReader.IndexExists(IndexDirectory))
+            // FSnow 2020-04-19 IndexExists method not in 4.8
+            //if (IndexReader.IndexExists(IndexDirectory))
+            //{
+
+            DirectoryInfo di = new DirectoryInfo(IndexDirectory);
+            if (di.Exists && di.GetFiles().Length > 0)
             {
                 msgCallback("Checking search index.");
                 GetAllDocIds(msgCallback);
             }
-
-            DirectoryInfo di = new DirectoryInfo(IndexDirectory);
-            OpenIndexModifier(!di.Exists);
+            
+            OpenIndexWriter(!di.Exists);
             Books books = Books.Inst;
 
             if (changedFiles.Count > 0)
@@ -61,6 +58,8 @@ namespace CST
                     DeleteBook(books[changedFile]);
                 }
             }
+
+            indexWriter.Flush(triggerMerge: true, applyAllDeletes: true);
 
             bool allIndexed = true;
             foreach (Book book in books)
@@ -76,20 +75,35 @@ namespace CST
             if (allIndexed)
                 return;
 
-            int i = 1;
-            foreach (Book book in books)
+            // Only index the changed files, not all books with DocId < 0
+            if (changedFiles.Count > 0)
             {
-                if (book.DocId < 0)
+                int i = 1;
+                foreach (int changedFileIndex in changedFiles)
                 {
-                    msgCallback("Building search index. (Book " + i + " of " + books.Count + ")");
+                    Book book = books[changedFileIndex];
+                    msgCallback("Building search index. (Book " + i + " of " + changedFiles.Count + ")");
                     IndexBook(book);
+                    i++;
                 }
-
-                i++;
+            }
+            else
+            {
+                // Initial indexing - process all books with no DocId
+                int i = 1;
+                foreach (Book book in books)
+                {
+                    if (book.DocId < 0)
+                    {
+                        msgCallback("Building search index. (Book " + i + " of " + books.Count + ")");
+                        IndexBook(book);
+                    }
+                    i++;
+                }
             }
 
             msgCallback("Optimizing search index.");
-            CloseIndexModifier();
+            CloseIndexWriter();
 
             msgCallback("Checking search index.");
             GetAllDocIds(msgCallback);
@@ -97,14 +111,21 @@ namespace CST
 
         private void GetAllDocIds(IndxMsgDelegate msgCallback)
         {
-            IndexReader indexReader = IndexReader.Open(IndexDirectory);
+            FSDirectory fSDirectory = FSDirectory.Open(IndexDirectory);
+            IndexReader indexReader = DirectoryReader.Open(fSDirectory);
+
+            IBits liveDocs = MultiFields.GetLiveDocs(indexReader);
+            if (liveDocs == null)
+            {
+                return;
+            }
 
             Books books = Books.Inst;
 
             int j = 0;
-            for (int i = 0; i < indexReader.MaxDoc(); i++)
+            for (int i = 0; i < indexReader.MaxDoc; i++)
             {
-                if (indexReader.IsDeleted(i))
+                if (liveDocs.Get(i))
                     continue;
 
                 Document doc = indexReader.Document(i);
@@ -114,56 +135,75 @@ namespace CST
 
                 j++;
             }
-
-            indexReader.Close();
+            indexReader.Dispose();
         }
 
-        private void OpenIndexModifier(bool create)
+        private void OpenIndexWriter(bool create)
         {
-            if (indexModifier == null)
+            if (indexWriter == null)
             {
-                indexModifier = new IndexModifier(IndexDirectory, new DevaXmlAnalyzer(), create);
-                indexModifier.SetUseCompoundFile(true);
-                indexModifier.SetMaxFieldLength(Int32.MaxValue);
+                
+                IndexWriterConfig config = new IndexWriterConfig(LuceneVersion.LUCENE_48,
+                    new DevaXmlAnalyzer(LuceneVersion.LUCENE_48));
+                config.UseCompoundFile = true;
+                config.OpenMode = OpenMode.CREATE_OR_APPEND;
+                indexWriter = new IndexWriter(FSDirectory.Open(IndexDirectory), config);
             }
         }
 
-        private void CloseIndexModifier()
+        private void CloseIndexWriter()
         {
-            indexModifier.Optimize();
-            indexModifier.Close();
+            indexWriter.Commit();
+            indexWriter.Dispose(true);
         }
 
         private void IndexBook(Book book)
         {
             // delete document from the search index if it's already in the index
             if (book.DocId >= 0)
-                indexModifier.DeleteDocument(book.DocId);
+            {
+                indexWriter.DeleteDocuments(new Term("id", book.DocId.ToString()));
+            }
 
             // read text of document
             StreamReader sr = new StreamReader(XmlDirectory + Path.DirectorySeparatorChar + book.FileName);
             string deva = sr.ReadToEnd();
             sr.Close();
 
+            FieldType ft = new FieldType(TextField.TYPE_NOT_STORED);
+            ft.IsIndexed = true;
+            ft.IsStored = false;
+            ft.IsTokenized = true;
+            ft.OmitNorms = false;
+            ft.StoreTermVectors = true;
+            ft.StoreTermVectorOffsets = true;
+            ft.StoreTermVectorPayloads = true;
+            ft.StoreTermVectorPositions = true;
+            ft.IndexOptions = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
+            ft.Freeze();
+
             // setup Document object, storing text and some additional fields
-            Document doc = new Document();
-            // changed this from Store.YES to Store.NO on 2 Sept 07. We'll see if it breaks anything.
-            doc.Add(new Field("text", deva, Field.Store.NO, Field.Index.TOKENIZED, Field.TermVector.WITH_POSITIONS_OFFSETS));
-            doc.Add(new Field("file", book.FileName, Field.Store.YES, Field.Index.NO));
-            doc.Add(new Field("matn", book.MatnField, Field.Store.YES, Field.Index.NO));
-            doc.Add(new Field("pitaka", book.PitakaField, Field.Store.YES, Field.Index.NO));
+            Document doc = new Document
+            {
+                new StoredField("file", book.FileName),
+                new StoredField("matn", book.MatnField),
+                new StoredField("pitaka", book.PitakaField),
+                new Field("text", deva, ft)
+            };
+
             // can you return results in numerically sorted order?
-            //doc.Add(new Field("index", book.Index.ToString(), Field.Store.YES, Field.Index.NO));
+            // new Field("index", book.Index.ToString(), Field.Store.YES, Field.Index.NO));
 
             // add document to index
-            indexModifier.AddDocument(doc);
+            indexWriter.AddDocument(doc);
+            indexWriter.Flush(triggerMerge: true, applyAllDeletes: true);
         }
 
         private void DeleteBook(Book book)
         {
             if (book != null && book.DocId >= 0)
             {
-                indexModifier.DeleteDocument(book.DocId);
+                indexWriter.DeleteDocuments(new Term("id", book.DocId.ToString()));
                 book.DocId = -1;
             }
         }
