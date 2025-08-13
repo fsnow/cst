@@ -1,15 +1,40 @@
 # CST Avalonia Project Status - August 2025
 
-## Current Status: **INDEXING & TESTING COMPLETE** ✅
+## Current Status: **SEARCH & HIGHLIGHTING IMPLEMENTATION** 🔍
 
-**Last Updated**: August 9, 2025
+**Last Updated**: August 12, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
-## Latest Session Update (2025-08-10)
+## Latest Session Update (2025-08-12)
+
+### ✅ **MAJOR MILESTONE: Search Result Highlighting Implemented**
+
+#### **Lucene Position-Based Highlighting System**
+- **Complete Implementation**: Full offset-based highlighting using Lucene term position vectors
+- **IPE Encoding Support**: Correctly handles Internal Phonetic Encoding for Devanagari search terms
+- **Raw XML Processing**: Highlights applied to raw XML before parsing to preserve offset accuracy
+- **Navigation Support**: Sequential ID generation (hit1, hit2, etc.) for hit navigation buttons
+- **Visual Distinction**: Red highlighting for current hit, blue for other hits
+- **CST4 Compatibility**: Exact implementation matching original CST4 highlighting behavior
+
+#### **Key Technical Achievements**
+1. **Offset Retrieval**: Direct access to Lucene index for term position vectors
+2. **Reverse Order Processing**: Offsets processed back-to-front to maintain position validity
+3. **Inclusive End Offsets**: Proper handling of Lucene's inclusive endOffset (end - start + 1)
+4. **DocId Integration**: Search results pass DocId to BookDisplayViewModel for offset lookup
+5. **Multi-Script Support**: Works with both Latin and Devanagari scripts via XSL templates
+
+#### **Known Limitations (Testing Required)**
+- **Single-Term Tested**: Only single search term highlighting has been fully tested
+- **Multi-Term Pending**: Multiple search terms require additional testing and debugging
+- **Performance**: Large result sets not yet optimized
+- **Edge Cases**: Complex XML structures may need additional handling
+
+## Previous Session Update (2025-08-10)
 
 ### 🚀 **Search Implementation Phase 1 & 2 Complete**
 
@@ -89,8 +114,8 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
   - The project file is now clean and only references active source code.
   - Placeholder and legacy files for features like the `SearchService` are no longer referenced and have been physically moved.
 - **Service Configuration (`App.axaml.cs`)**:
-  - **Active Services**: `IApplicationStateService`, `ISettingsService`, `IScriptService`, `ILocalizationService`, `IIndexingService`, `IXmlFileDatesService`.
-  - **Inactive Services**: `ISearchService` and `IBookService` remain unregistered, but the indexing foundation is now complete. The placeholder files for search services now reside in the `CST.Avalonia_inactive` directory.
+  - **Active Services**: `IApplicationStateService`, `ISettingsService`, `IScriptService`, `ILocalizationService`, `IIndexingService`, `IXmlFileDatesService`, `ISearchService`.
+  - **Search Integration**: SearchService fully integrated with DI and connected to the Lucene index.
 
 ## Current Functionality
 
@@ -102,18 +127,30 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 5.  **Settings Dialog**: Functional settings window.
 6.  **Advanced Logging**: Configurable Serilog implementation.
 7.  **Cross-Platform Build**: `.dmg` packages are being built for macOS.
-8.  **🆕 Full Indexing System**: Complete Lucene.NET search index for all 217 books with incremental updates.
-9.  **🆕 Multi-Script Support**: Devanagari and IPE analyzers with position-based search capabilities.
-10. **🆕 Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive tests.
+8.  **Full Indexing System**: Complete Lucene.NET search index for all 217 books with incremental updates.
+9.  **Multi-Script Support**: Devanagari and IPE analyzers with position-based search capabilities.
+10. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive tests.
+11. **🆕 Live Search UI**: Functional search panel with real-time results and book filtering.
+12. **🆕 Search Result Highlighting**: Position-based highlighting with navigation support (single-term tested).
 
 ## Outstanding Work (High Priority)
 
-1.  **Implement Live Search UI**: With the complete indexing foundation now in place, the remaining work is to build the search user interface.
-    - **Re-integrate `SearchService`**: Move `SearchService.cs` from `CST.Avalonia_inactive` back into the project and register it with DI.
-    - **Build Search UI**: Move the `SearchView` and `SearchViewModel` files back and integrate them into the `Dock.Avalonia` layout.
-    - **Connect to Index**: Wire the SearchService to use the existing Lucene index for fast, position-based searches.
-2.  **Search Results Integration**: Implement search result highlighting and navigation within the BookDisplayView.
-3.  **Advanced Search Features**: Add support for proximity searches, wildcards, and regex patterns (infrastructure is ready).
+1.  **Complete Multi-Term Highlighting Testing**: 
+    - Test and debug highlighting for multiple search terms
+    - Verify reverse-order offset processing for complex cases
+    - Test with various XML structures and edge cases
+2.  **Search Navigation Enhancement**:
+    - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
+    - Implement scroll-to-hit functionality
+    - Add hit counter display (e.g., "Hit 3 of 15")
+3.  **Advanced Search Features**: 
+    - Implement phrase searches with proximity operators
+    - Add wildcard and regex pattern support (infrastructure ready)
+    - Optimize performance for large result sets
+4.  **Search UI Refinements**:
+    - Add search history/recent searches
+    - Implement saved searches functionality
+    - Add export search results feature
 
 ## Technical Architecture
 
@@ -122,20 +159,23 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 CST.Avalonia/
 ├── ViewModels/
 │   ├── LayoutViewModel.cs             # Main VM for the docking layout
-│   ├── BookDisplayViewModel.cs        # VM for a single book tab/document
+│   ├── BookDisplayViewModel.cs        # VM for book tabs with search highlighting
 │   ├── OpenBookDialogViewModel.cs     # VM for the book selection tree
+│   ├── SearchViewModel.cs             # VM for search panel with live results
 │   └── SettingsViewModel.cs           # VM for the settings window
 ├── Views/
 │   ├── SimpleTabbedWindow.cs          # The main application window
-│   ├── BookDisplayView.axaml          # The view for a single book tab
+│   ├── BookDisplayView.axaml          # Book view with WebView rendering
 │   ├── OpenBookPanel.axaml            # The book selection tree view
+│   ├── SearchPanel.axaml              # Search UI with filters and results
 │   └── SettingsWindow.axaml           # The settings window
 ├── Services/
 │   ├── ApplicationStateService.cs     # Handles saving/loading session state
 │   ├── SettingsService.cs             # Handles saving/loading user settings
 │   ├── ScriptService.cs               # Manages script conversion
 │   ├── IndexingService.cs             # Manages Lucene index lifecycle
-│   └── XmlFileDatesService.cs         # Tracks file changes for incremental indexing
+│   ├── XmlFileDatesService.cs         # Tracks file changes for incremental indexing
+│   └── SearchService.cs               # Lucene search with position-based results
 └── App.axaml.cs                         # DI configuration, startup logic, state restoration
 
 CST.Avalonia_inactive/
@@ -186,10 +226,11 @@ All tests maintain a **100% pass rate** and validate production readiness.
 
 ## Next Steps
 
-With the complete indexing foundation now in place (including full test coverage), the path forward is clear:
+With search functionality and single-term highlighting now working, the immediate priorities are:
 
-1. **Search UI Implementation**: Move search components from `CST.Avalonia_inactive` and integrate them with the existing Lucene index.
-2. **Search Results Display**: Connect search results to the BookDisplayView with highlighting.
-3. **Advanced Search Features**: Leverage the position-based index for proximity, wildcard, and regex searches.
+1. **Multi-Term Highlighting**: Test and debug highlighting for multiple search terms simultaneously
+2. **Navigation Features**: Implement keyboard shortcuts and UI controls for search hit navigation
+3. **Performance Optimization**: Profile and optimize for large result sets and complex searches
+4. **Advanced Search**: Add phrase search, proximity operators, and pattern matching
 
-The heavy lifting of indexing, optimization, and testing is complete. The remaining work focuses on user interface integration with the robust search infrastructure that's now fully operational.
+The core search infrastructure is operational with basic highlighting working. Focus now shifts to robustness, performance, and advanced features.
