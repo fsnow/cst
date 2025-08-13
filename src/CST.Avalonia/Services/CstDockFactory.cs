@@ -321,9 +321,30 @@ namespace CST.Avalonia.Services
             OpenBook(book, anchor, bookScript, null);
         }
         
+        private static readonly object _searchOpenLock = new object();
+        private static DateTime _lastSearchOpenTime = DateTime.MinValue;
+        private static string? _lastSearchOpenedBook = null;
+        
         public void OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
         {
-            System.Console.WriteLine($"Opening book from search: {book.FileName} with {searchTerms.Count} search terms");
+            System.Console.WriteLine($"[SEARCH BOOK START] Opening book from search: {book.FileName} with {searchTerms.Count} search terms at {DateTime.UtcNow:HH:mm:ss.fff}");
+            
+            // Additional duplicate prevention for search book opening
+            lock (_searchOpenLock)
+            {
+                var now = DateTime.UtcNow;
+                var timeSinceLastSearchOpen = now - _lastSearchOpenTime;
+                
+                // Prevent duplicate search opens of the same book within 2 seconds
+                if (book.FileName == _lastSearchOpenedBook && timeSinceLastSearchOpen.TotalMilliseconds < 2000)
+                {
+                    System.Console.WriteLine($"[SEARCH BOOK] DUPLICATE SEARCH OPEN PREVENTED: {book.FileName} (last opened {timeSinceLastSearchOpen.TotalMilliseconds:F0}ms ago)");
+                    return;
+                }
+                
+                _lastSearchOpenTime = now;
+                _lastSearchOpenedBook = book.FileName;
+            }
             
             // Get required services from DI container
             var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
@@ -333,10 +354,11 @@ namespace CST.Avalonia.Services
             // Create BookDisplayViewModel with proper services and script
             var bookDisplayViewModel = new BookDisplayViewModel(
                 book, 
-                searchTerms,  // Pass search terms for highlighting
+                searchTerms,  // Pass search terms for highlighting (in IPE format)
                 null,         // anchor
                 chapterListsService,
-                settingsService
+                settingsService,
+                book.DocId    // Pass DocId for Lucene offset lookup
             );
             
             // Set the correct script after construction
@@ -346,8 +368,7 @@ namespace CST.Avalonia.Services
                 System.Console.WriteLine($"Set book script to: {scriptService.CurrentScript} for search result");
             }
             
-            // Set search terms for highlighting (this will be implemented in Phase 7)
-            // bookDisplayViewModel.SetSearchHighlighting(searchTerms, positions);
+            // Search terms are already passed to BookDisplayViewModel constructor for highlighting
             
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
             bookDisplayViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
@@ -357,17 +378,20 @@ namespace CST.Avalonia.Services
                 OpenBook(linkedBook, anchorForLinked);
             };
             
-            // Create a document for the book with search context
-            var displayTitle = book.LongNavPath ?? book.FileName ?? "Unknown Book";
+            // Create a document for the book with search context - use unique ID to avoid conflicts
+            var displayTitle = bookDisplayViewModel.DisplayTitle;
+            var searchGuid = Guid.NewGuid();
             var document = new Document
             {
-                Id = $"{book.FileName}-Search-{Guid.NewGuid():N}",
+                Id = $"Search_{book.FileName}_{searchGuid:N}",
                 Title = $"🔍 {displayTitle}",
                 Context = bookDisplayViewModel,
                 CanClose = true,
                 CanFloat = true,
                 CanPin = false
             };
+            
+            System.Console.WriteLine($"[SEARCH BOOK] Creating search document with unique ID: {document.Id} (GUID: {searchGuid})");
             
             // Add to the main document dock
             var documentDock = FindDocumentDock();
@@ -385,11 +409,38 @@ namespace CST.Avalonia.Services
                 Log.Error("*** NO DOCUMENT DOCK FOUND - Cannot add search document ***");
                 System.Console.WriteLine("Error: No document dock found");
             }
+            
+            System.Console.WriteLine($"[SEARCH BOOK END] OpenBookInNewTab completed at {DateTime.UtcNow:HH:mm:ss.fff}");
         }
+        
+        private static readonly object _regularOpenLock = new object();
+        private static DateTime _lastRegularOpenTime = DateTime.MinValue;
+        private static string? _lastRegularOpenedBook = null;
         
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId)
         {
-            System.Console.WriteLine($"Opening book: {book.FileName} - {book.LongNavPath} with anchor: {anchor ?? "null"}, windowId: {windowId ?? "auto-generated"}");
+            System.Console.WriteLine($"[OPENBOOK START] Opening book: {book.FileName} - {book.LongNavPath} with anchor: {anchor ?? "null"}, windowId: {windowId ?? "auto-generated"} at {DateTime.UtcNow:HH:mm:ss.fff}");
+            
+            // Prevent duplicate opens from rapid event firing while still allowing intentional multiple copies
+            // Only prevent if it's the exact same book with no specific windowId within a short timeframe
+            if (windowId == null) // Only apply duplicate prevention to new opens, not state restoration
+            {
+                lock (_regularOpenLock)
+                {
+                    var now = DateTime.UtcNow;
+                    var timeSinceLastOpen = now - _lastRegularOpenTime;
+                    
+                    // Prevent duplicate opens of the same book within 1 second (for rapid double-clicks/events)
+                    if (book.FileName == _lastRegularOpenedBook && timeSinceLastOpen.TotalMilliseconds < 1000)
+                    {
+                        System.Console.WriteLine($"[OPENBOOK] DUPLICATE REGULAR OPEN PREVENTED: {book.FileName} (last opened {timeSinceLastOpen.TotalMilliseconds:F0}ms ago)");
+                        return;
+                    }
+                    
+                    _lastRegularOpenTime = now;
+                    _lastRegularOpenedBook = book.FileName;
+                }
+            }
             
             // Allow multiple copies of the same book to be opened
             // This is useful for comparing the same text in different scripts
@@ -422,7 +473,9 @@ namespace CST.Avalonia.Services
 
             // Create a new document for the book
             // Use provided windowId for restoration, or generate new GUID for new instances
-            var documentId = windowId ?? $"Book_{book.FileName}_{Guid.NewGuid():N}";
+            var generatedGuid = Guid.NewGuid();
+            var documentId = windowId ?? $"Book_{book.FileName}_{generatedGuid:N}";
+            System.Console.WriteLine($"[OPENBOOK] Creating document with ID: {documentId} (GUID: {generatedGuid})");
             var document = new Document
             {
                 Id = documentId,
@@ -461,7 +514,7 @@ namespace CST.Avalonia.Services
                 }
             };
             
-            System.Console.WriteLine($"Created document: {document.Id} with title: {document.Title}");
+            System.Console.WriteLine($"[OPENBOOK END] Created document: {document.Id} with title: {document.Title} at {DateTime.UtcNow:HH:mm:ss.fff}");
         }
 
         private void SaveAllBookWindowStates()
@@ -649,6 +702,16 @@ namespace CST.Avalonia.Services
             if (documentDock != null)
             {
                 Log.Information("*** ADDING DOCUMENT TO LAYOUT: {DocumentId} ***", document.Id);
+                
+                // Debug: Check for duplicate IDs (this shouldn't happen but let's detect it)
+                var existingWithSameId = documentDock.VisibleDockables?.Where(d => d.Id == document.Id).ToList();
+                if (existingWithSameId?.Any() == true)
+                {
+                    Log.Error("*** ERROR: Document with ID {DocumentId} already exists {Count} times! ***", 
+                        document.Id, existingWithSameId.Count);
+                    System.Console.WriteLine($"ERROR: Document with ID {document.Id} already exists {existingWithSameId.Count} times!");
+                }
+                
                 documentDock.VisibleDockables?.Add(document);
                 documentDock.ActiveDockable = document;
                 SetFactory(document); // Ensure the document has the factory reference

@@ -4,6 +4,8 @@ using System.IO;
 using System.Threading.Tasks;
 using CST.Lucene;
 using Microsoft.Extensions.Logging;
+using Lucene.Net.Index;
+using Lucene.Net.Store;
 
 namespace CST.Avalonia.Services
 {
@@ -14,6 +16,8 @@ namespace CST.Avalonia.Services
         private readonly IXmlFileDatesService _xmlFileDatesService;
         private BookIndexerAsync? _bookIndexer;
         private string _indexDirectory = string.Empty;
+        private DirectoryReader? _indexReader;
+        private readonly object _readerLock = new object();
 
         public string IndexDirectory => _indexDirectory;
 
@@ -49,7 +53,7 @@ namespace CST.Avalonia.Services
                 _logger.LogInformation("Saved default index directory to settings");
             }
             
-            Directory.CreateDirectory(_indexDirectory);
+            System.IO.Directory.CreateDirectory(_indexDirectory);
             _logger.LogInformation("Index directory created/verified: {IndexDirectory}", _indexDirectory);
 
             // Initialize the XML file dates service
@@ -66,18 +70,18 @@ namespace CST.Avalonia.Services
             {
                 _logger.LogInformation("Checking index validity in directory: {IndexDirectory}", _indexDirectory);
                 
-                if (!Directory.Exists(_indexDirectory))
+                if (!System.IO.Directory.Exists(_indexDirectory))
                 {
                     _logger.LogInformation("Index directory does not exist, index is invalid");
                     return false;
                 }
 
-                var indexFiles = Directory.GetFiles(_indexDirectory, "*.cfs");
+                var indexFiles = System.IO.Directory.GetFiles(_indexDirectory, "*.cfs");
                 _logger.LogInformation("Found {Count} .cfs files", indexFiles.Length);
                 
                 if (indexFiles.Length == 0)
                 {
-                    indexFiles = Directory.GetFiles(_indexDirectory, "*.fdt");
+                    indexFiles = System.IO.Directory.GetFiles(_indexDirectory, "*.fdt");
                     _logger.LogInformation("Found {Count} .fdt files", indexFiles.Length);
                 }
 
@@ -163,7 +167,7 @@ namespace CST.Avalonia.Services
         {
             var xmlDirectory = _settingsService.Settings.XmlBooksDirectory;
 
-            if (string.IsNullOrEmpty(xmlDirectory) || !Directory.Exists(xmlDirectory))
+            if (string.IsNullOrEmpty(xmlDirectory) || !System.IO.Directory.Exists(xmlDirectory))
             {
                 throw new InvalidOperationException($"XML directory not found: {xmlDirectory}");
             }
@@ -216,6 +220,37 @@ namespace CST.Avalonia.Services
             }
 
             return indexPath;
+        }
+
+        public DirectoryReader? GetIndexReader()
+        {
+            lock (_readerLock)
+            {
+                try
+                {
+                    // If reader is null or closed, open a new one
+                    if (_indexReader == null || _indexReader.RefCount <= 0)
+                    {
+                        if (System.IO.Directory.Exists(_indexDirectory))
+                        {
+                            var directory = FSDirectory.Open(_indexDirectory);
+                            _indexReader = DirectoryReader.Open(directory);
+                            _logger.LogDebug("Opened new index reader for highlighting");
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Index directory does not exist: {IndexDirectory}", _indexDirectory);
+                            return null;
+                        }
+                    }
+                    return _indexReader;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to get index reader");
+                    return null;
+                }
+            }
         }
     }
 }

@@ -165,10 +165,13 @@ public partial class App : Application
             // Handle book open requests - now they open as documents in the dockable layout
             openBookViewModel.BookOpenRequested += book =>
             {
-                System.Console.WriteLine($"Book selected: {book.FileName} - {book.LongNavPath}");
+                var timestamp = DateTime.UtcNow;
+                System.Console.WriteLine($"*** [APP EVENT HANDLER] BookOpenRequested event received at {timestamp:HH:mm:ss.fff} for: {book.FileName} - {book.LongNavPath} ***");
                 
                 // Open book via LayoutViewModel
+                System.Console.WriteLine($"*** [APP EVENT HANDLER] Calling layoutViewModel.OpenBook for: {book.FileName} ***");
                 layoutViewModel.OpenBook(book);
+                System.Console.WriteLine($"*** [APP EVENT HANDLER] layoutViewModel.OpenBook call completed at {DateTime.UtcNow:HH:mm:ss.fff} ***");
             };
 
             openBookViewModel.CloseRequested += () =>
@@ -432,12 +435,11 @@ public partial class App : Application
 
     private void OnApplicationStateChanged(ApplicationState state)
     {
-        // Restore book windows from saved state - but only once during initial load
-        if (state.BookWindows.Any() && !_isRestoringBookWindows && !_hasRestoredInitialBooks)
-        {
-            _hasRestoredInitialBooks = true;
-            RestoreBookWindows(state.BookWindows);
-        }
+        // This method is called whenever application state changes during normal operation
+        // Book window restoration should only happen at startup, not during state changes
+        // Removing restoration logic to prevent duplicate book opening bug
+        
+        // Future: Could add other state change handling here if needed
     }
 
     private void RestoreBookWindows(List<BookWindowState> bookWindows)
@@ -494,6 +496,7 @@ public partial class App : Application
                                     // Validate the book filename matches (for extra safety)
                                     if (book.FileName == bookWindowState.BookFileName)
                                     {
+                                        Console.WriteLine($"*** [RESTORATION] Restoring book: {book.FileName} with WindowId: {bookWindowState.WindowId} ***");
                                         // Open the book through SimpleTabbedWindow with saved script and WindowId
                                         mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId);
                                         Console.WriteLine($"Restored book: {book.FileName} with script: {bookWindowState.BookScript} and WindowId: {bookWindowState.WindowId}");

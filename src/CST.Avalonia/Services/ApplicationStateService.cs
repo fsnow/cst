@@ -269,10 +269,10 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
 
     public void UpdateBookWindowState(BookWindowState bookWindowState)
     {
-        // Find by WindowId for unique instances, fallback to BookIndex for backward compatibility
+        // Find by WindowId for unique instances - each WindowId should be unique
+        // Remove the fallback to BookIndex to allow multiple copies of the same book
         var existing = Current.BookWindows.FirstOrDefault(w => 
-            !string.IsNullOrEmpty(w.WindowId) && w.WindowId == bookWindowState.WindowId) ??
-            Current.BookWindows.FirstOrDefault(w => w.BookIndex == bookWindowState.BookIndex);
+            !string.IsNullOrEmpty(w.WindowId) && w.WindowId == bookWindowState.WindowId);
             
         if (existing != null)
         {

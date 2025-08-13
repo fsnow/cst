@@ -17,6 +17,10 @@ using CST.Avalonia.Services;
 using CST.Avalonia.Models;
 using CST.Avalonia.Views;
 using Serilog;
+using Lucene.Net.Index;
+using Lucene.Net.Search;
+using Lucene.Net.Util;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CST.Avalonia.ViewModels
 {
@@ -28,6 +32,7 @@ namespace CST.Avalonia.ViewModels
         private readonly Book _book;
         private readonly List<string>? _searchTerms;
         private readonly string? _initialAnchor;
+        private readonly int? _docId;
         
         // Logger instance for BookDisplayViewModel
         private readonly ILogger _logger;
@@ -66,7 +71,7 @@ namespace CST.Avalonia.ViewModels
         private bool _updatingChapterFromScroll = false;
         private bool _isInitializing = true;
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, int? docId = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             // For now, create ScriptService without logger
@@ -76,7 +81,18 @@ namespace CST.Avalonia.ViewModels
             _book = book;
             _searchTerms = searchTerms;
             _initialAnchor = initialAnchor;
+            _docId = docId;
             _bookScript = _scriptService.CurrentScript;
+            
+            // Debug search terms
+            if (searchTerms != null && searchTerms.Any())
+            {
+                System.Console.WriteLine($"*** [BOOK DISPLAY VM] Created with {searchTerms.Count} search terms: [{string.Join(", ", searchTerms)}] ***");
+            }
+            else
+            {
+                System.Console.WriteLine($"*** [BOOK DISPLAY VM] Created with NO search terms ***");
+            }
             
             // Initialize collections - exclude Unknown and IPE from UI dropdown
             AvailableScripts = new ObservableCollection<Script>(
@@ -624,18 +640,22 @@ namespace CST.Avalonia.ViewModels
                         return "<html><body><h1>Book file not found</h1><p>File: " + xmlPath + "</p></body></html>";
                     }
 
+                    // Read raw XML content as string first
+                    _logger.Debug("Reading raw XML content as string");
+                    string xmlContent = File.ReadAllText(xmlPath, System.Text.Encoding.UTF8);
+                    
+                    // Apply search highlighting to raw XML string if needed
+                    if (_searchTerms?.Any() == true)
+                    {
+                        _logger.Debug("Applying search highlighting to raw XML - {TermCount} terms", _searchTerms.Count);
+                        xmlContent = ApplySearchHighlightingToRawXml(xmlContent);
+                    }
+
                     var xmlDoc = new XmlDocument();
                     
-                    // Use XmlReader with automatic encoding detection
-                    _logger.Debug("Loading XML with automatic encoding detection");
-                    using (var fileStream = File.OpenRead(xmlPath))
-                    {
-                        // Let XmlReader detect encoding automatically
-                        using (var xmlReader = XmlReader.Create(fileStream))
-                        {
-                            xmlDoc.Load(xmlReader);
-                        }
-                    }
+                    // Load the (potentially highlighted) XML content
+                    _logger.Debug("Parsing XML content into document");
+                    xmlDoc.LoadXml(xmlContent);
                     _logger.Debug("XML loaded successfully - root element: {RootElement}", xmlDoc.DocumentElement?.Name);
 
                     // Apply script conversion if needed - use ConvertBook for proper XML handling
@@ -654,13 +674,6 @@ namespace CST.Avalonia.ViewModels
                             chapter.BookScript = _bookScript;
                         }
                     });
-
-                    // Apply search highlighting if needed
-                    if (_searchTerms?.Any() == true)
-                    {
-                        _logger.Debug("Applying search highlighting - {TermCount} terms", _searchTerms.Count);
-                        ApplySearchHighlighting(xmlDoc);
-                    }
 
                     // Apply XSL transformation
                     var xslPath = GetXslPath(_bookScript);
@@ -691,105 +704,172 @@ namespace CST.Avalonia.ViewModels
             });
         }
 
-        private void ApplySearchHighlighting(XmlDocument xmlDoc)
+        private string ApplySearchHighlightingToRawXml(string xmlContent)
         {
-            if (_searchTerms == null || !_searchTerms.Any()) return;
-
-            var hitCount = 0;
-            
-            // Find all text nodes in the document
-            var textNodes = new List<XmlNode>();
-            CollectTextNodes(xmlDoc.DocumentElement, textNodes);
-            
-            foreach (var textNode in textNodes)
+            System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Called with {_searchTerms?.Count ?? 0} search terms (IPE format) ***");
+            if (_searchTerms != null && _searchTerms.Any())
             {
-                if (textNode.Value == null) continue;
-                
-                var originalText = textNode.Value;
-                var modifiedText = originalText;
-                var hitPositions = new List<(int start, int length, string term)>();
-                
-                // Find all search term matches in this text node
-                foreach (var term in _searchTerms)
-                {
-                    if (string.IsNullOrWhiteSpace(term)) continue;
-                    
-                    var index = 0;
-                    while ((index = modifiedText.IndexOf(term, index, StringComparison.OrdinalIgnoreCase)) >= 0)
-                    {
-                        hitPositions.Add((index, term.Length, term));
-                        index += term.Length;
-                    }
-                }
-                
-                if (hitPositions.Any())
-                {
-                    // Sort hits by position (reverse order for easier replacement)
-                    hitPositions.Sort((a, b) => b.start.CompareTo(a.start));
-                    
-                    // Replace the text node with a new structure containing highlighting
-                    var parentElement = textNode.ParentNode;
-                    if (parentElement != null)
-                    {
-                        // Create new content with highlighting
-                        var lastIndex = originalText.Length;
-                        var fragments = new List<XmlNode>();
-                        
-                        foreach (var hit in hitPositions)
-                        {
-                            hitCount++;
-                            
-                            // Add text after this hit
-                            if (lastIndex > hit.start + hit.length)
-                            {
-                                var afterText = originalText.Substring(hit.start + hit.length, lastIndex - hit.start - hit.length);
-                                if (!string.IsNullOrEmpty(afterText))
-                                {
-                                    fragments.Insert(0, xmlDoc.CreateTextNode(afterText));
-                                }
-                            }
-                            
-                            // Add the highlighted hit
-                            var hitElement = xmlDoc.CreateElement("hi");
-                            hitElement.SetAttribute("rend", "hit");
-                            hitElement.SetAttribute("id", $"hit_{hitCount}");
-                            hitElement.InnerText = originalText.Substring(hit.start, hit.length);
-                            fragments.Insert(0, hitElement);
-                            
-                            lastIndex = hit.start;
-                        }
-                        
-                        // Add any remaining text before the first hit
-                        if (lastIndex > 0)
-                        {
-                            var beforeText = originalText.Substring(0, lastIndex);
-                            if (!string.IsNullOrEmpty(beforeText))
-                            {
-                                fragments.Insert(0, xmlDoc.CreateTextNode(beforeText));
-                            }
-                        }
-                        
-                        // Replace the original text node with the fragments
-                        foreach (var fragment in fragments)
-                        {
-                            parentElement.InsertBefore(fragment, textNode);
-                        }
-                        parentElement.RemoveChild(textNode);
-                    }
-                }
+                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] IPE Search terms: [{string.Join(", ", _searchTerms)}] ***");
+                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] DocId: {_docId}, Book: {_book.FileName} ***");
             }
             
-            // Update the total hits count on UI thread since these are bound properties
-            Dispatcher.UIThread.Post(() =>
+            if (_searchTerms == null || !_searchTerms.Any() || _docId == null) 
             {
-                TotalHits = hitCount;
-                HasSearchHighlights = hitCount > 0;
-                if (hitCount > 0)
+                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Skipping - no terms or no DocId ***");
+                return xmlContent;
+            }
+
+            try
+            {
+                // Get the IndexingService to access the Lucene index
+                var indexingService = App.ServiceProvider?.GetService<IIndexingService>();
+                if (indexingService == null)
                 {
-                    CurrentHitIndex = 1;
-                    UpdateHitStatusText();
+                    _logger.Warning("IndexingService not available for highlighting");
+                    return xmlContent;
                 }
-            });
+
+                var indexReader = indexingService.GetIndexReader();
+                if (indexReader == null)
+                {
+                    _logger.Warning("Could not get index reader for highlighting");
+                    return xmlContent;
+                }
+
+                // Use the raw XML content directly (this matches what Lucene indexed)
+                var xmlString = xmlContent;
+                
+                // Get term vectors for this document
+                var termVectors = indexReader.GetTermVector(_docId.Value, "text");
+                if (termVectors == null)
+                {
+                    _logger.Warning("No term vectors found for document {DocId}", _docId.Value);
+                    return xmlContent;
+                }
+
+                // Collect all offset information for our search terms
+                var offsetList = new List<(int start, int end, string term)>();
+                
+                System.Console.WriteLine($"*** [HIGHLIGHTING] Processing {_searchTerms.Count} search terms ***");
+                
+                foreach (var searchTerm in _searchTerms)
+                {
+                    if (string.IsNullOrWhiteSpace(searchTerm)) continue;
+                    
+                    System.Console.WriteLine($"*** [HIGHLIGHTING] Looking for term: '{searchTerm}' ***");
+                    
+                    // Get the postings for this term
+                    var termsEnum = termVectors.GetIterator(null);
+                    var termBytes = new BytesRef(System.Text.Encoding.UTF8.GetBytes(searchTerm));
+                    
+                    if (termsEnum.SeekExact(termBytes))
+                    {
+                        System.Console.WriteLine($"*** [HIGHLIGHTING] Found term '{searchTerm}' in index ***");
+                        
+                        // Get positions and offsets for this term
+                        var postingsEnum = termsEnum.DocsAndPositions(null, null, DocsAndPositionsFlags.OFFSETS);
+                        if (postingsEnum != null)
+                        {
+                            while (postingsEnum.NextDoc() != DocIdSetIterator.NO_MORE_DOCS)
+                            {
+                                var freq = postingsEnum.Freq;
+                                System.Console.WriteLine($"*** [HIGHLIGHTING] Term '{searchTerm}' appears {freq} times in document ***");
+                                
+                                for (int i = 0; i < freq; i++)
+                                {
+                                    postingsEnum.NextPosition();
+                                    var startOffset = postingsEnum.StartOffset;
+                                    var endOffset = postingsEnum.EndOffset;
+                                    
+                                    if (startOffset >= 0 && endOffset > startOffset)
+                                    {
+                                        // Verify the offset points to the expected text
+                                        var actualText = xmlString.Substring(startOffset, endOffset - startOffset + 1);
+                                        offsetList.Add((startOffset, endOffset, searchTerm));
+                                        System.Console.WriteLine($"*** [HIGHLIGHTING] Offset {startOffset}-{endOffset} for '{searchTerm}': actual text '{actualText}' ***");
+                                    }
+                                    else
+                                    {
+                                        System.Console.WriteLine($"*** [HIGHLIGHTING] Invalid offset for '{searchTerm}': {startOffset}-{endOffset} ***");
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            System.Console.WriteLine($"*** [HIGHLIGHTING] No postings enum for term '{searchTerm}' ***");
+                        }
+                    }
+                    else
+                    {
+                        System.Console.WriteLine($"*** [HIGHLIGHTING] Term '{searchTerm}' not found in index ***");
+                    }
+                }
+
+                if (!offsetList.Any())
+                {
+                    System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] No offsets found for any search terms ***");
+                    return xmlContent;
+                }
+
+                // Sort offsets by position in REVERSE order (back to front)
+                // This is critical so that inserting tags doesn't invalidate later offsets
+                offsetList.Sort((a, b) => b.start.CompareTo(a.start));
+                
+                // Build the highlighted XML by inserting <hi> tags at the offsets
+                var sb = new StringBuilder(xmlString);
+                var hitCount = offsetList.Count;
+
+                // For single term search, use the same highlight style for all instances
+                // For multi-term search, each term would get different colors (not implemented yet)
+                var isSingleTerm = _searchTerms.Count == 1;
+                var hitIndex = hitCount - 1;
+                
+                System.Console.WriteLine($"*** [HIGHLIGHTING] Applying {hitCount} highlights (single-term: {isSingleTerm}) ***");
+                
+                foreach (var (start, end, term) in offsetList)
+                {
+                    // Get the actual text at this offset
+                    var highlightedText = xmlString.Substring(start, end - start + 1);
+                    
+                    // Create the highlight tags - always use unique IDs for navigation
+                    var openTag = $"<hi rend=\"hit\" id=\"hit{hitIndex + 1}\">";
+                    var closeTag = "</hi>";
+                    
+                    // Replace the text at this offset with highlighted version
+                    sb.Remove(start, end - start + 1);
+                    sb.Insert(start, openTag + highlightedText + closeTag);
+                    
+                    System.Console.WriteLine($"*** [HIGHLIGHTING] Applied highlight #{hitIndex + 1} at offset {start}-{end}: '{highlightedText}' (term: '{term}') ***");
+                    hitIndex--;
+                }
+                
+                // Return the highlighted XML string
+                var highlightedXml = sb.ToString();
+                
+                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Successfully applied {hitCount} highlights ***");
+                
+                // Update hit count and status
+                var totalHits = hitCount;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    TotalHits = totalHits;
+                    HasSearchHighlights = totalHits > 0;
+                    if (totalHits > 0)
+                    {
+                        CurrentHitIndex = 1;
+                        UpdateHitStatusText();
+                    }
+                });
+                
+                return highlightedXml;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to apply search highlighting");
+                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Error: {ex.Message} ***");
+                return xmlContent; // Return original content on error
+            }
         }
 
         private void CollectTextNodes(XmlNode? node, List<XmlNode> textNodes)

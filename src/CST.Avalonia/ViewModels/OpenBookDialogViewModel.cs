@@ -355,11 +355,19 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
 
     private void OpenBook(BookTreeNode? node)
     {
+        var timestamp = DateTime.UtcNow;
+        System.Console.WriteLine($"*** [OPEN BOOK COMMAND] OpenBook method called at {timestamp:HH:mm:ss.fff} for: {node?.CstBook?.FileName ?? "null"} ***");
+        
         if (!CanOpenBook(node) || node?.CstBook == null)
+        {
+            System.Console.WriteLine($"*** [OPEN BOOK COMMAND] Cannot open book - CanOpenBook: {CanOpenBook(node)}, CstBook: {node?.CstBook != null} ***");
             return;
+        }
 
         _logger.LogInformation("Opening book: {BookFileName}", node.CstBook.FileName);
+        System.Console.WriteLine($"*** [OPEN BOOK COMMAND] Invoking BookOpenRequested event for: {node.CstBook.FileName} at {DateTime.UtcNow:HH:mm:ss.fff} ***");
         BookOpenRequested?.Invoke(node.CstBook);
+        System.Console.WriteLine($"*** [OPEN BOOK COMMAND] BookOpenRequested event invocation completed at {DateTime.UtcNow:HH:mm:ss.fff} ***");
     }
 
     private void Close()

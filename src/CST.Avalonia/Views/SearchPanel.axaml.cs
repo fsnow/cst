@@ -58,46 +58,59 @@ public partial class SearchPanel : UserControl
         // No need to subscribe to OpenBookRequested event anymore
     }
     
-    private static bool _isOpening = false;
+    private static readonly object _openLock = new object();
+    private static DateTime _lastOpenTime = DateTime.MinValue;
+    private static string? _lastOpenedBook = null;
     
     private void OnOccurrenceDoubleClick(object? sender, TappedEventArgs e)
     {
-        // Prevent multiple rapid calls
-        if (_isOpening)
-        {
-            Console.WriteLine("*** Book opening already in progress - ignoring duplicate call ***");
-            e.Handled = true;
-            return;
-        }
-        
         if (sender is ListBox listBox && 
             listBox.SelectedItem is BookOccurrenceViewModel occurrence)
         {
-            _isOpening = true;
             e.Handled = true;
+            
+            lock (_openLock)
+            {
+                var now = DateTime.UtcNow;
+                var timeSinceLastOpen = now - _lastOpenTime;
+                
+                // Prevent duplicate opens of the same book within 1 second
+                if (occurrence.Book.FileName == _lastOpenedBook && timeSinceLastOpen.TotalMilliseconds < 1000)
+                {
+                    Console.WriteLine($"*** [SEARCH PANEL] DUPLICATE PREVENTED: {occurrence.Book.FileName} (last opened {timeSinceLastOpen.TotalMilliseconds:F0}ms ago) ***");
+                    return;
+                }
+                
+                _lastOpenTime = now;
+                _lastOpenedBook = occurrence.Book.FileName;
+            }
             
             try
             {
-                // Open book directly using the same method as Select a Book tree
+                // Open book with search terms for highlighting
                 var mainWindow = TopLevel.GetTopLevel(this) as Window;
                 var layoutViewModel = mainWindow?.DataContext as LayoutViewModel;
                 
-                if (layoutViewModel != null)
+                if (layoutViewModel != null && DataContext is SearchViewModel searchViewModel)
                 {
-                    Console.WriteLine($"*** [SEARCH PANEL] Opening book: {occurrence.Book.FileName} ***");
-                    Console.WriteLine($"*** [SEARCH PANEL] Before layoutViewModel.OpenBook call ***");
-                    layoutViewModel.OpenBook(occurrence.Book);
-                    Console.WriteLine($"*** [SEARCH PANEL] After layoutViewModel.OpenBook call ***");
+                    // Collect search terms from selected terms for highlighting
+                    var searchTerms = searchViewModel.SelectedTerms.Select(t => t.Term).ToList();
+                    
+                    Console.WriteLine($"*** [SEARCH PANEL] Opening book with search highlighting: {occurrence.Book.FileName} with {searchTerms.Count} search terms ***");
+                    
+                    // Use the search-specific method to open book with highlighting
+                    layoutViewModel.Factory.OpenBookInNewTab(occurrence.Book, searchTerms, occurrence.Positions);
+                    
+                    Console.WriteLine($"*** [SEARCH PANEL] OpenBookInNewTab call completed at {DateTime.UtcNow:HH:mm:ss.fff} ***");
                 }
                 else
                 {
-                    Console.WriteLine("*** [SEARCH PANEL] No layout view model found ***");
+                    Console.WriteLine("*** [SEARCH PANEL] No layout view model or search view model found ***");
                 }
             }
-            finally
+            catch (Exception ex)
             {
-                // Reset flag after a short delay to allow for legitimate double-clicks
-                Task.Delay(500).ContinueWith(_ => _isOpening = false);
+                Console.WriteLine($"*** [SEARCH PANEL] Error opening book: {ex.Message} ***");
             }
         }
     }

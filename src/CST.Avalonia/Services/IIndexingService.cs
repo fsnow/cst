@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CST.Lucene;
+using Lucene.Net.Index;
 
 namespace CST.Avalonia.Services
 {
@@ -13,5 +14,6 @@ namespace CST.Avalonia.Services
         Task OptimizeIndexAsync();
         string IndexDirectory { get; }
         Task InitializeAsync();
+        DirectoryReader? GetIndexReader();
     }
 }

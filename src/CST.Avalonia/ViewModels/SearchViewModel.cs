@@ -48,15 +48,14 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         Occurrences = new ObservableCollection<BookOccurrenceViewModel>();
         SelectedTerms = new ObservableCollection<MatchingTermViewModel>();
 
-        // Initialize search modes
+        // Initialize search modes - Exact match is automatic when no special chars are present
         SearchModes = new ObservableCollection<SearchModeItem>
         {
-            new(SearchMode.Exact, "Exact Match"),
             new(SearchMode.Wildcard, "Wildcard (*?)"),
             new(SearchMode.Regex, "Regex")
         };
 
-        // Set default values
+        // Set default to Wildcard mode
         SelectedSearchMode = SearchModes.First();
         
         // Initialize book filters to all true
@@ -265,10 +264,27 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
             });
 
             // Build search query
+            var searchText = SearchText ?? string.Empty;
+            
+            // Determine actual search mode:
+            // If user selected Wildcard mode but didn't use wildcards, treat as exact match
+            // If user selected Regex mode but didn't use regex chars, treat as exact match
+            var searchMode = SelectedSearchMode.Value;
+            if (searchMode == SearchMode.Wildcard && !ContainsWildcardChars(searchText))
+            {
+                searchMode = SearchMode.Exact;
+                _logger.LogInformation("No wildcard characters detected, using exact match");
+            }
+            else if (searchMode == SearchMode.Regex && !ContainsRegexChars(searchText))
+            {
+                searchMode = SearchMode.Exact;
+                _logger.LogInformation("No regex characters detected, using exact match");
+            }
+            
             var query = new SearchQuery
             {
-                QueryText = SearchText ?? string.Empty,
-                Mode = SelectedSearchMode.Value,
+                QueryText = searchText,
+                Mode = searchMode,
                 Filter = new BookFilter
                 {
                     IncludeVinaya = IncludeVinaya,
@@ -302,19 +318,8 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                     Terms.Add(termVm);
                 }
 
-                // Auto-select all terms if there are 10 or fewer
-                if (Terms.Count <= 10)
-                {
-                    foreach (var term in Terms)
-                    {
-                        SelectedTerms.Add(term);
-                    }
-                }
-                else if (Terms.Count > 0)
-                {
-                    // Select just the first term
-                    SelectedTerms.Add(Terms[0]);
-                }
+                // Auto-selection removed - let users manually select terms
+                // This ensures statistics show "Selected: 0" initially
 
                 StatusText = $"Search completed in {result.SearchDuration.TotalMilliseconds:F0}ms - Found {result.TotalTermCount} terms, {result.TotalOccurrenceCount} occurrences";
                 
@@ -474,6 +479,20 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         
         _logger.LogInformation("*** UpdateStatistics called - Terms: {TermCount}, Selected: {SelectedCount}, Occurrences: {OccurrenceCount}, Books: {BookCount} ***", 
             totalTerms, selectedCount, totalOccurrences, totalBooks);
+    }
+    
+    private static bool ContainsWildcardChars(string text)
+    {
+        // Check for wildcard characters (* and ?)
+        return text.Contains('*') || text.Contains('?');
+    }
+    
+    private static bool ContainsRegexChars(string text)
+    {
+        // Check for common regex metacharacters
+        // This is a simplified check - you might want to expand this based on your needs
+        var regexChars = new[] { '.', '^', '$', '[', ']', '(', ')', '{', '}', '|', '\\', '+' };
+        return regexChars.Any(text.Contains);
     }
 }
 
