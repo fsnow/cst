@@ -29,6 +29,30 @@
     <Style Selector="ToggleSwitch.filter-switch">
       <Setter Property="Margin" Value="4,2"/>
     </Style>
+    
+    <!-- Alternating row colors for better readability -->
+    <Style Selector="ListBoxItem:nth-child(2n)">
+      <Setter Property="Background">
+        <Setter.Value>
+          <SolidColorBrush Color="#08000000"/>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    
+    <!-- Hover effect for list items -->
+    <Style Selector="ListBoxItem:pointerover">
+      <Setter Property="Background">
+        <Setter.Value>
+          <SolidColorBrush Color="#15000000"/>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    
+    <!-- Selected item styling -->
+    <Style Selector="ListBoxItem:selected">
+      <Setter Property="Background" Value="{DynamicResource SystemAccentColorLight3}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+    </Style>
   </UserControl.Styles>
 
   <Grid RowDefinitions="Auto,*,Auto">
@@ -120,19 +144,20 @@
                    BorderThickness="0">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:MatchingTermViewModel">
-                <Grid ColumnDefinitions="*,Auto" MinHeight="32">
+                <Grid ColumnDefinitions="*,Auto" MinHeight="24" Margin="0,0,14,0">
                   <TextBlock Grid.Column="0" 
                             Text="{Binding DisplayTerm}" 
                             VerticalAlignment="Center"
                             TextWrapping="NoWrap"
-                            TextTrimming="CharacterEllipsis"/>
+                            TextTrimming="CharacterEllipsis"
+                            FontSize="11"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
-                         CornerRadius="12"
-                         Padding="8,4"
-                         Margin="8,0,0,0"
-                         MinWidth="24"
-                         MinHeight="24">
+                         CornerRadius="10"
+                         Padding="6,2"
+                         Margin="4,0,0,0"
+                         MinWidth="20"
+                         MinHeight="18">
                     <TextBlock Text="{Binding TotalCount}"
                               FontSize="10"
                               FontWeight="Medium"
@@ -143,6 +168,14 @@
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
+            
+            <!-- Compact item styling to match Books list -->
+            <ListBox.Styles>
+              <Style Selector="ListBoxItem">
+                <Setter Property="Padding" Value="4"/>
+                <Setter Property="MinHeight" Value="0"/>
+              </Style>
+            </ListBox.Styles>
           </ListBox>
         </Grid>
       </Border>
@@ -165,7 +198,7 @@
                    BorderThickness="0">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:BookOccurrenceViewModel">
-                <Grid ColumnDefinitions="*,Auto" MinHeight="32">
+                <Grid ColumnDefinitions="*,Auto" MinHeight="24" Margin="0,0,14,0">
                   <TextBlock Grid.Column="0" 
                             Text="{Binding DisplayName}" 
                             VerticalAlignment="Center"
@@ -174,11 +207,11 @@
                             FontSize="11"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
-                         CornerRadius="12"
-                         Padding="8,4"
-                         Margin="8,0,0,0"
-                         MinWidth="24"
-                         MinHeight="24">
+                         CornerRadius="10"
+                         Padding="6,2"
+                         Margin="4,0,0,0"
+                         MinWidth="20"
+                         MinHeight="18">
                     <TextBlock Text="{Binding Count}"
                               FontSize="10"
                               FontWeight="Medium"
@@ -194,6 +227,7 @@
             <ListBox.Styles>
               <Style Selector="ListBoxItem">
                 <Setter Property="Padding" Value="4"/>
+                <Setter Property="MinHeight" Value="0"/>
               </Style>
             </ListBox.Styles>
           </ListBox>

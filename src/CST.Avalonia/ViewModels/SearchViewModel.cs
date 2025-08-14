@@ -295,7 +295,7 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                     IncludeTika = IncludeTika,
                     IncludeOther = IncludeOther
                 },
-                PageSize = 1000  // Limit results for UI performance
+                PageSize = 10000  // Limit results for UI performance
             };
 
             _logger.LogInformation("Executing search: {Query}", query.QueryText);
