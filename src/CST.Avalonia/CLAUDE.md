@@ -2,37 +2,34 @@
 
 ## Current Status: **SEARCH & HIGHLIGHTING IMPLEMENTATION** 🔍
 
-**Last Updated**: August 12, 2025
+**Last Updated**: August 13, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
-## Latest Session Update (2025-08-12)
+## Latest Session Update (2025-08-13)
 
-### ✅ **MAJOR MILESTONE: Search Result Highlighting Implemented**
+### ✅ **Search Infrastructure & Basic Highlighting Complete**
+
+#### **Core Search System Operational**
+- **Basic Search**: Single and multi-term exact searches working with accurate occurrence counting
+- **Position-Based Highlighting**: Multi-term highlighting implemented and verified working correctly
+- **Index Integrity**: Fixed incremental indexing duplicate document issue - searches now return correct counts
+- **Infrastructure Ready**: Foundation established for advanced search features
 
 #### **Lucene Position-Based Highlighting System**
-- **Complete Implementation**: Full offset-based highlighting using Lucene term position vectors
-- **IPE Encoding Support**: Correctly handles Internal Phonetic Encoding for Devanagari search terms
+- **Core Implementation**: Offset-based highlighting using Lucene term position vectors
+- **IPE Encoding Support**: Correctly handles Ideal Pali Encoding to store terms in Lucene, along with Devanagari text offsets
 - **Raw XML Processing**: Highlights applied to raw XML before parsing to preserve offset accuracy
 - **Navigation Support**: Sequential ID generation (hit1, hit2, etc.) for hit navigation buttons
 - **Visual Distinction**: Red highlighting for current hit, blue for other hits
-- **CST4 Compatibility**: Exact implementation matching original CST4 highlighting behavior
+- **Multi-Term Support**: ✅ Multiple search terms highlight correctly with accurate counts
 
-#### **Key Technical Achievements**
-1. **Offset Retrieval**: Direct access to Lucene index for term position vectors
-2. **Reverse Order Processing**: Offsets processed back-to-front to maintain position validity
-3. **Inclusive End Offsets**: Proper handling of Lucene's inclusive endOffset (end - start + 1)
-4. **DocId Integration**: Search results pass DocId to BookDisplayViewModel for offset lookup
-5. **Multi-Script Support**: Works with both Latin and Devanagari scripts via XSL templates
-
-#### **Known Limitations (Testing Required)**
-- **Single-Term Tested**: Only single search term highlighting has been fully tested
-- **Multi-Term Pending**: Multiple search terms require additional testing and debugging
-- **Performance**: Large result sets not yet optimized
-- **Edge Cases**: Complex XML structures may need additional handling
+#### **Recent Bug Fixes**
+- **✅ Incremental Indexing**: Fixed duplicate document creation by ensuring `BookIndexer.IndexBook()` always deletes existing documents by filename before adding new versions
+- **✅ Search Accuracy**: Verified correct occurrence counting (s0101m.mulxml: 11 for 'bhikkhusaṅghañca', 20 for 'bhikkhusaṅghena')
 
 ## Previous Session Update (2025-08-10)
 
@@ -135,22 +132,14 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 
 ## Outstanding Work (High Priority)
 
-1.  **Complete Multi-Term Highlighting Testing**: 
-    - Test and debug highlighting for multiple search terms
-    - Verify reverse-order offset processing for complex cases
-    - Test with various XML structures and edge cases
-2.  **Search Navigation Enhancement**:
+1.  **Advanced Search Features**:
+    - **Phrase Search**: Implement position-based phrase searching with exact word order matching
+    - **Proximity Search**: Add proximity operators for terms within specified distances
+2.  **Search Filtering & Collections**:
+    - **Book Collection Filters**: Fix non-functional checkboxes for Pitaka/Commentary filtering (Vinaya, Sutta, Abhidhamma, etc.)
+    - **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
+3.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
-    - Implement scroll-to-hit functionality
-    - Add hit counter display (e.g., "Hit 3 of 15")
-3.  **Advanced Search Features**: 
-    - Implement phrase searches with proximity operators
-    - Add wildcard and regex pattern support (infrastructure ready)
-    - Optimize performance for large result sets
-4.  **Search UI Refinements**:
-    - Add search history/recent searches
-    - Implement saved searches functionality
-    - Add export search results feature
 
 ## Technical Architecture
 
@@ -176,7 +165,7 @@ CST.Avalonia/
 │   ├── IndexingService.cs             # Manages Lucene index lifecycle
 │   ├── XmlFileDatesService.cs         # Tracks file changes for incremental indexing
 │   └── SearchService.cs               # Lucene search with position-based results
-└── App.axaml.cs                         # DI configuration, startup logic, state restoration
+└── App.axaml.cs                       # DI configuration, startup logic, state restoration
 
 CST.Avalonia_inactive/
 └── ... (Contains placeholder/legacy files for Search, etc.)
@@ -190,8 +179,8 @@ CST.Avalonia_inactive/
 - **ReactiveUI**
 - **Microsoft.Extensions.DI**
 - **Serilog**
-- **🆕 Lucene.NET 4.8+**: Full-text search with position-based indexing
-- **🆕 xUnit + Moq**: Comprehensive test framework with 62 tests
+- **Lucene.NET 4.8+**: Full-text search with position-based indexing
+- **xUnit + Moq**: Comprehensive test framework with 62 tests
 
 ## Build & Run Instructions
 
@@ -226,11 +215,11 @@ All tests maintain a **100% pass rate** and validate production readiness.
 
 ## Next Steps
 
-With search functionality and single-term highlighting now working, the immediate priorities are:
+With basic search and highlighting infrastructure established, the immediate priorities are:
 
-1. **Multi-Term Highlighting**: Test and debug highlighting for multiple search terms simultaneously
-2. **Navigation Features**: Implement keyboard shortcuts and UI controls for search hit navigation
-3. **Performance Optimization**: Profile and optimize for large result sets and complex searches
-4. **Advanced Search**: Add phrase search, proximity operators, and pattern matching
+1. **Phrase & Proximity Search**: Implement position-based phrase and proximity searching using the existing term vector infrastructure
+2. **Search Filtering**: Fix book collection checkboxes and implement custom collection support for targeted searches
+3. **Advanced Search Modes**: Complete wildcard/regex support and optimize for complex search patterns
+4. **Navigation & UX**: Add keyboard shortcuts, hit navigation, and user experience improvements
 
-The core search infrastructure is operational with basic highlighting working. Focus now shifts to robustness, performance, and advanced features.
+The foundation is solid with accurate counting and multi-term highlighting working. Focus now shifts to advanced search features and collection filtering.
