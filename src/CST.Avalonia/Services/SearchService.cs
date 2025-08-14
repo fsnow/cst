@@ -240,36 +240,35 @@ public class SearchService : ISearchService
                 continue;
             }
 
-            var occurrence = new BookOccurrence
-            {
-                Book = book,
-                Count = dape.Freq
-            };
-
-            // Get positions (limited to first 100 for performance)
+            // Get positions for highlighting
             var positions = new List<TermPosition>();
-            int posCount = 0;
-            int maxPositions = Math.Min(dape.Freq, 100);
+            int count = dape.Freq;
             
-            while (posCount < maxPositions)
+            for (int i = 0; i < count; i++)
             {
                 int pos = dape.NextPosition();
                 int startOffset = dape.StartOffset;
                 int endOffset = dape.EndOffset;
-
-                positions.Add(new TermPosition
+                
+                if (startOffset >= 0 && endOffset > startOffset)
                 {
-                    Position = pos,
-                    StartOffset = startOffset,
-                    EndOffset = endOffset
-                });
-
-                posCount++;
+                    positions.Add(new TermPosition
+                    {
+                        Position = pos,
+                        StartOffset = startOffset,
+                        EndOffset = endOffset
+                    });
+                }
             }
 
-            occurrence.Positions = positions;
-            occurrences.Add(occurrence);
+            var occurrence = new BookOccurrence
+            {
+                Book = book,
+                Count = count,
+                Positions = positions
+            };
 
+            occurrences.Add(occurrence);
             docId = dape.NextDoc();
         }
 

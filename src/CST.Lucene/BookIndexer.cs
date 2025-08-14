@@ -51,14 +51,7 @@ namespace CST
             OpenIndexWriter(!di.Exists);
             Books books = Books.Inst;
 
-            if (changedFiles.Count > 0)
-            {
-                foreach (int changedFile in changedFiles)
-                {
-                    DeleteBook(books[changedFile]);
-                }
-            }
-
+            // IndexBook() will handle deletion of existing documents, so no need to delete here
             indexWriter.Flush(triggerMerge: true, applyAllDeletes: true);
 
             bool allIndexed = true;
@@ -159,11 +152,9 @@ namespace CST
 
         private void IndexBook(Book book)
         {
-            // delete document from the search index if it's already in the index
-            if (book.DocId >= 0)
-            {
-                indexWriter.DeleteDocuments(new Term("id", book.DocId.ToString()));
-            }
+            // Always delete any existing document with this filename before adding the new version
+            // This handles both initial indexing (where deletion finds nothing) and incremental updates
+            indexWriter.DeleteDocuments(new Term("file", book.FileName));
 
             // read text of document
             StreamReader sr = new StreamReader(XmlDirectory + Path.DirectorySeparatorChar + book.FileName);
@@ -185,7 +176,8 @@ namespace CST
             // setup Document object, storing text and some additional fields
             Document doc = new Document
             {
-                new StoredField("file", book.FileName),
+                // Use StringField for "file" so it's indexed and can be used for deletion
+                new StringField("file", book.FileName, Field.Store.YES),
                 new StoredField("matn", book.MatnField),
                 new StoredField("pitaka", book.PitakaField),
                 new Field("text", deva, ft)
@@ -199,13 +191,5 @@ namespace CST
             indexWriter.Flush(triggerMerge: true, applyAllDeletes: true);
         }
 
-        private void DeleteBook(Book book)
-        {
-            if (book != null && book.DocId >= 0)
-            {
-                indexWriter.DeleteDocuments(new Term("id", book.DocId.ToString()));
-                book.DocId = -1;
-            }
-        }
     }
 }
