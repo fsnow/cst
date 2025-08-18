@@ -30,13 +30,13 @@ namespace CST.Avalonia.Services
 
         public override RootDock CreateLayout()
         {
-            System.Console.WriteLine("CreateLayout called - starting dock layout creation");
+            _logger.Debug("Creating dock layout");
             
             // Get ViewModels from the service provider
             var openBookViewModel = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
             var searchViewModel = App.ServiceProvider?.GetRequiredService<SearchViewModel>();
-            System.Console.WriteLine($"OpenBookViewModel: {openBookViewModel?.GetType().Name ?? "null"}");
-            System.Console.WriteLine($"SearchViewModel: {searchViewModel?.GetType().Name ?? "null"}");
+            _logger.Debug("Retrieved view models - OpenBook: {OpenBookType}, Search: {SearchType}", 
+                openBookViewModel?.GetType().Name ?? "null", searchViewModel?.GetType().Name ?? "null");
             
             // Create the book selection tool
             var openBookTool = new Tool
@@ -58,11 +58,11 @@ namespace CST.Avalonia.Services
                 CanClose = false   // Prevent accidental closing
             };
             
-            System.Console.WriteLine($"Created OpenBookTool with Context: {openBookTool.Context?.GetType().Name ?? "null"}");
-            System.Console.WriteLine($"Created SearchTool with Context: {searchTool.Context?.GetType().Name ?? "null"}");
+            _logger.Debug("Created tools - OpenBook context: {OpenBookContext}, Search context: {SearchContext}", 
+                openBookTool.Context?.GetType().Name ?? "null", searchTool.Context?.GetType().Name ?? "null");
             if (openBookViewModel != null)
             {
-                System.Console.WriteLine($"OpenBookViewModel BookTree has {openBookViewModel.BookTree.Count} items");
+                _logger.Debug("OpenBookViewModel BookTree has {BookCount} items", openBookViewModel.BookTree.Count);
             }
 
             // Create the book selection tool dock (left side)
@@ -232,11 +232,9 @@ namespace CST.Avalonia.Services
             // Set the factory on all dockables
             SetFactory(rootDock);
 
-            System.Console.WriteLine($"Layout created successfully:");
-            System.Console.WriteLine($"  RootDock: {rootDock.Id} with {rootDock.VisibleDockables?.Count} dockables");
-            System.Console.WriteLine($"  MainDock: {mainDock.Id} with {mainDock.VisibleDockables?.Count} dockables");
-            System.Console.WriteLine($"  LeftToolDock: {leftToolDock.Id} with {leftToolDock.VisibleDockables?.Count} dockables");
-            System.Console.WriteLine($"  DocumentDock: {documentDock.Id} with {documentDock.VisibleDockables?.Count} dockables");
+            _logger.Debug("Layout created - Root: {RootCount} dockables, Main: {MainCount}, LeftTool: {LeftCount}, Document: {DocCount}",
+                rootDock.VisibleDockables?.Count ?? 0, mainDock.VisibleDockables?.Count ?? 0, 
+                leftToolDock.VisibleDockables?.Count ?? 0, documentDock.VisibleDockables?.Count ?? 0);
 
             return rootDock;
         }
@@ -285,7 +283,7 @@ namespace CST.Avalonia.Services
             // Enable drag and drop for this dock
             if (dock is DocumentDock documentDock)
             {
-                System.Console.WriteLine($"Enabling drag/drop for DocumentDock: {documentDock.Id}");
+                _logger.Debug("Enabling drag/drop for DocumentDock: {DockId}", documentDock.Id);
             }
             
             // Recursively enable for child docks
@@ -327,7 +325,7 @@ namespace CST.Avalonia.Services
         
         public void OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
         {
-            System.Console.WriteLine($"[SEARCH BOOK START] Opening book from search: {book.FileName} with {searchTerms.Count} search terms at {DateTime.UtcNow:HH:mm:ss.fff}");
+            _logger.Information("Opening book from search: {BookFile} with {SearchTermCount} search terms", book.FileName, searchTerms.Count);
             
             // Additional duplicate prevention for search book opening
             lock (_searchOpenLock)
@@ -338,7 +336,7 @@ namespace CST.Avalonia.Services
                 // Prevent duplicate search opens of the same book within 2 seconds
                 if (book.FileName == _lastSearchOpenedBook && timeSinceLastSearchOpen.TotalMilliseconds < 2000)
                 {
-                    System.Console.WriteLine($"[SEARCH BOOK] DUPLICATE SEARCH OPEN PREVENTED: {book.FileName} (last opened {timeSinceLastSearchOpen.TotalMilliseconds:F0}ms ago)");
+                    _logger.Debug("Duplicate search book open prevented: {BookFile} (opened {TimeAgo}ms ago)", book.FileName, timeSinceLastSearchOpen.TotalMilliseconds);
                     return;
                 }
                 
@@ -367,7 +365,7 @@ namespace CST.Avalonia.Services
             if (scriptService != null)
             {
                 bookDisplayViewModel.BookScript = scriptService.CurrentScript;
-                System.Console.WriteLine($"Set book script to: {scriptService.CurrentScript} for search result");
+                _logger.Debug("Set book script to: {Script} for search result", scriptService.CurrentScript);
             }
             
             // Search terms are already passed to BookDisplayViewModel constructor for highlighting
@@ -375,7 +373,7 @@ namespace CST.Avalonia.Services
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
             bookDisplayViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
             {
-                System.Console.WriteLine($"OpenBookRequested: {linkedBook.FileName} with anchor: {anchorForLinked ?? "null"}");
+                _logger.Debug("Opening linked book: {BookFile} with anchor: {Anchor}", linkedBook.FileName, anchorForLinked ?? "null");
                 // Open the linked book with anchor navigation for positioning
                 OpenBook(linkedBook, anchorForLinked);
             };
@@ -393,7 +391,7 @@ namespace CST.Avalonia.Services
                 CanPin = false
             };
             
-            System.Console.WriteLine($"[SEARCH BOOK] Creating search document with unique ID: {document.Id} (GUID: {searchGuid})");
+            _logger.Debug("Creating search document with ID: {DocumentId}", document.Id);
             
             // Add to the main document dock
             var documentDock = FindDocumentDock();
@@ -404,15 +402,15 @@ namespace CST.Avalonia.Services
                 documentDock.ActiveDockable = document;
                 SetFactory(document);
                 Log.Information("*** SEARCH DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
-                System.Console.WriteLine($"Added search document to layout: {document.Id}");
+                _logger.Debug("Added search document to layout: {DocumentId}", document.Id);
             }
             else
             {
                 Log.Error("*** NO DOCUMENT DOCK FOUND - Cannot add search document ***");
-                System.Console.WriteLine("Error: No document dock found");
+                _logger.Error("No document dock found for search document");
             }
             
-            System.Console.WriteLine($"[SEARCH BOOK END] OpenBookInNewTab completed at {DateTime.UtcNow:HH:mm:ss.fff}");
+            _logger.Debug("Search book opening completed");
         }
         
         private static readonly object _regularOpenLock = new object();
@@ -421,7 +419,7 @@ namespace CST.Avalonia.Services
         
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId)
         {
-            System.Console.WriteLine($"[OPENBOOK START] Opening book: {book.FileName} - {book.LongNavPath} with anchor: {anchor ?? "null"}, windowId: {windowId ?? "auto-generated"} at {DateTime.UtcNow:HH:mm:ss.fff}");
+            _logger.Information("Opening book: {BookFile} with anchor: {Anchor}", book.FileName, anchor ?? "null");
             
             // Prevent duplicate opens from rapid event firing while still allowing intentional multiple copies
             // Only prevent if it's the exact same book with no specific windowId within a short timeframe
@@ -435,7 +433,7 @@ namespace CST.Avalonia.Services
                     // Prevent duplicate opens of the same book within 1 second (for rapid double-clicks/events)
                     if (book.FileName == _lastRegularOpenedBook && timeSinceLastOpen.TotalMilliseconds < 1000)
                     {
-                        System.Console.WriteLine($"[OPENBOOK] DUPLICATE REGULAR OPEN PREVENTED: {book.FileName} (last opened {timeSinceLastOpen.TotalMilliseconds:F0}ms ago)");
+                        _logger.Debug("Duplicate book open prevented: {BookFile} (opened {TimeAgo}ms ago)", book.FileName, timeSinceLastOpen.TotalMilliseconds);
                         return;
                     }
                     
@@ -460,13 +458,13 @@ namespace CST.Avalonia.Services
                 // Use provided script or fall back to current application setting
                 Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
                 bookDisplayViewModel.BookScript = targetScript;
-                System.Console.WriteLine($"Set book script to: {targetScript} (requested: {bookScript?.ToString() ?? "null"})");
+                _logger.Debug("Set book script to: {ActualScript} (requested: {RequestedScript})", targetScript, bookScript?.ToString() ?? "null");
             }
             
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
             bookDisplayViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
             {
-                System.Console.WriteLine($"OpenBookRequested: {linkedBook.FileName} with anchor: {anchorForLinked ?? "null"}");
+                _logger.Debug("Opening linked book: {BookFile} with anchor: {Anchor}", linkedBook.FileName, anchorForLinked ?? "null");
                 // Open the linked book with anchor navigation for positioning
                 OpenBook(linkedBook, anchorForLinked);
             };
@@ -478,7 +476,7 @@ namespace CST.Avalonia.Services
             // Use provided windowId for restoration, or generate new GUID for new instances
             var generatedGuid = Guid.NewGuid();
             var documentId = windowId ?? $"Book_{book.FileName}_{generatedGuid:N}";
-            System.Console.WriteLine($"[OPENBOOK] Creating document with ID: {documentId} (GUID: {generatedGuid})");
+            _logger.Debug("Creating document with ID: {DocumentId}", documentId);
             var document = new Document
             {
                 Id = documentId,
@@ -517,7 +515,7 @@ namespace CST.Avalonia.Services
                 }
             };
             
-            System.Console.WriteLine($"[OPENBOOK END] Created document: {document.Id} with title: {document.Title} at {DateTime.UtcNow:HH:mm:ss.fff}");
+            _logger.Debug("Book document created: {DocumentId} with title: {Title}", document.Id, document.Title);
         }
 
         private void SaveAllBookWindowStates()
@@ -643,7 +641,7 @@ namespace CST.Avalonia.Services
                 RemoveBookWindowState(document);
                 
                 RemoveDocumentFromLayout(document);
-                System.Console.WriteLine($"Closed book: {bookId}");
+                _logger.Debug("Closed book: {BookId}", bookId);
             }
         }
 
@@ -695,7 +693,7 @@ namespace CST.Avalonia.Services
             if (documentDock != null)
             {
                 documentDock.ActiveDockable = document;
-                System.Console.WriteLine($"Activated existing document: {document.Id}");
+                _logger.Debug("Activated existing document: {DocumentId}", document.Id);
             }
         }
         
@@ -712,19 +710,19 @@ namespace CST.Avalonia.Services
                 {
                     Log.Error("*** ERROR: Document with ID {DocumentId} already exists {Count} times! ***", 
                         document.Id, existingWithSameId.Count);
-                    System.Console.WriteLine($"ERROR: Document with ID {document.Id} already exists {existingWithSameId.Count} times!");
+                    _logger.Error("Document with ID {DocumentId} already exists {Count} times", document.Id, existingWithSameId.Count);
                 }
                 
                 documentDock.VisibleDockables?.Add(document);
                 documentDock.ActiveDockable = document;
                 SetFactory(document); // Ensure the document has the factory reference
                 Log.Information("*** DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
-                System.Console.WriteLine($"Added document to layout: {document.Id}");
+                _logger.Debug("Added document to layout: {DocumentId}", document.Id);
             }
             else
             {
                 Log.Warning("*** WARNING: Could not find document dock to add book ***");
-                System.Console.WriteLine("Warning: Could not find document dock to add book");
+                _logger.Warning("Could not find document dock to add book");
             }
         }
         
@@ -1232,11 +1230,9 @@ namespace CST.Avalonia.Services
             }
             
             // Debug output
-            System.Console.WriteLine($"InitLayout called. Layout type: {layout?.GetType().Name}");
-            if (layout is RootDock rootDock)
-            {
-                System.Console.WriteLine($"RootDock has {rootDock.VisibleDockables?.Count ?? 0} visible dockables");
-            }
+            _logger.Debug("InitLayout called - Layout type: {LayoutType}, RootDock dockables: {Count}", 
+                layout?.GetType().Name ?? "null", 
+                (layout as RootDock)?.VisibleDockables?.Count ?? 0);
         }
         
         // CreateWindowFrom - called by host window locator when floating windows are needed
@@ -1318,7 +1314,7 @@ namespace CST.Avalonia.Services
         public void InitializeHostWindows()
         {
             // The framework will create host windows as needed when floating occurs
-            System.Console.WriteLine("Host windows initialized for multi-window support");
+            _logger.Debug("Host windows initialized for multi-window support");
         }
         
         

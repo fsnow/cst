@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Microsoft.Win32;
+using Serilog;
 
 namespace CST.Avalonia.Views;
 
@@ -22,6 +23,7 @@ public partial class SplashScreen : Window
 {
     private static SplashScreen? _instance;
     private static readonly object _lock = new object();
+    private static readonly Serilog.ILogger _logger = Log.ForContext<SplashScreen>();
     
     private readonly DispatcherTimer _timer;
     private double _opacityIncrement = 0.05;
@@ -60,7 +62,7 @@ public partial class SplashScreen : Window
         // Start fade-in animation
         _timer.Start();
         
-        Console.WriteLine("SplashScreen: Created and timer started");
+        _logger.Debug("Splash screen created and fade-in timer started");
     }
     
     /// <summary>
@@ -74,14 +76,14 @@ public partial class SplashScreen : Window
             
             try
             {
-                Console.WriteLine("SplashScreen: Creating splash screen");
+                _logger.Debug("Creating splash screen instance");
                 _instance = new SplashScreen();
                 _instance.Show();
-                Console.WriteLine("SplashScreen: Instance created and shown");
+                _logger.Information("Splash screen displayed");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"SplashScreen: Error creating instance: {ex.Message}");
+                _logger.Error(ex, "Failed to create splash screen instance");
             }
         }
     }
@@ -91,7 +93,7 @@ public partial class SplashScreen : Window
     /// </summary>
     public static void CloseForm()
     {
-        Console.WriteLine("SplashScreen: CloseForm called");
+        _logger.Debug("Closing splash screen requested");
         
         try
         {
@@ -110,7 +112,7 @@ public partial class SplashScreen : Window
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error closing form: {ex.Message}");
+            _logger.Error(ex, "Failed to close splash screen");
         }
     }
     
@@ -129,18 +131,18 @@ public partial class SplashScreen : Window
                     if (_instance?.StatusLabel != null)
                     {
                         _instance.StatusLabel.Text = status;
-                        Console.WriteLine($"SplashScreen: Status = {status}");
+                        _logger.Debug("Status updated: {Status}", status);
                     }
                 });
             }
             else
             {
-                Console.WriteLine($"SplashScreen: Status = {status} (no UI update)");
+                _logger.Debug("Status set to {Status} but no UI instance available", status);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error setting status: {ex.Message}");
+            _logger.Error(ex, "Failed to set splash screen status to {Status}", status);
         }
     }
     
@@ -161,7 +163,7 @@ public partial class SplashScreen : Window
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error setting reference point: {ex.Message}");
+            _logger.Error(ex, "Failed to set reference point for progress calibration");
         }
     }
     
@@ -180,7 +182,7 @@ public partial class SplashScreen : Window
             _targetProgress = Math.Min((_referencePoints.Count * 100.0) / 8.0, 95.0);
         }
         
-        Console.WriteLine($"SplashScreen: Reference point {_referencePoints.Count}, target progress = {_targetProgress:F1}%");
+        _logger.Debug("Progress reference point {PointNumber} set, target: {TargetProgress:F1}%", _referencePoints.Count, _targetProgress);
     }
     
     private void Timer_Tick(object? sender, EventArgs e)
@@ -227,7 +229,7 @@ public partial class SplashScreen : Window
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error in Timer_Tick: {ex.Message}");
+            _logger.Error(ex, "Error in splash screen timer tick");
         }
     }
     
@@ -253,7 +255,7 @@ public partial class SplashScreen : Window
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error updating time remaining: {ex.Message}");
+            _logger.Error(ex, "Failed to update time remaining display");
         }
     }
     
@@ -270,11 +272,11 @@ public partial class SplashScreen : Window
                 BackgroundImage.Source = bitmap;
             }
             
-            Console.WriteLine("SplashScreen: CST4 Dhamma wheel image loaded");
+            _logger.Debug("Background image loaded successfully");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error loading background image: {ex.Message}");
+            _logger.Warning(ex, "Failed to load background image, using fallback color");
             // Fallback to solid background
             var background = new SolidColorBrush(Color.FromRgb(240, 240, 240));
             Background = background;
@@ -311,14 +313,14 @@ public partial class SplashScreen : Window
                         _averageTickTime = tickTime;
                     }
                     
-                    Console.WriteLine($"SplashScreen: Loaded {_storedIncrements.Count} stored increments");
+                    _logger.Debug("Loaded {Count} stored progress increments for calibration", _storedIncrements.Count);
                 }
             }
             else
             {
                 // On non-Windows platforms, use default increments
                 // Could implement file-based storage in the future
-                Console.WriteLine("SplashScreen: Non-Windows platform, using default increments");
+                _logger.Debug("Non-Windows platform detected, using default progress increments");
                 
                 // Add some default increments for smoother progress
                 _storedIncrements.AddRange(new[] { 0.1, 0.2, 0.3, 0.5, 0.7, 0.85, 0.95, 1.0 });
@@ -326,7 +328,7 @@ public partial class SplashScreen : Window
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error reading stored increments: {ex.Message}");
+            _logger.Warning(ex, "Failed to read stored progress increments, using defaults");
         }
     }
     
@@ -355,12 +357,12 @@ public partial class SplashScreen : Window
                 key.SetValue("Increments", incrementsData);
                 key.SetValue("AverageTickTime", _averageTickTime.ToString());
                 
-                Console.WriteLine($"SplashScreen: Stored {increments.Count} increments for next launch");
+                _logger.Debug("Stored {Count} progress increments for next launch", increments.Count);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SplashScreen: Error storing increments: {ex.Message}");
+            _logger.Warning(ex, "Failed to store progress increments for next launch");
         }
     }
     
@@ -374,6 +376,6 @@ public partial class SplashScreen : Window
             _instance = null;
         }
         
-        Console.WriteLine("SplashScreen: Closed");
+        _logger.Debug("Splash screen closed and disposed");
     }
 }

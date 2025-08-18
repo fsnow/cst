@@ -135,22 +135,21 @@ namespace CST.Avalonia.Services
                     // Set up floating window monitoring when layout is assigned
                     if (Factory is CstDockFactory cstFactory)
                     {
-                        System.Console.WriteLine($"Host window layout set: {layout.GetType().Name} (ID: {layout.Id}) - Setting up monitoring");
+                        // Set up floating window monitoring
                         try
                         {
                             // Call the public method to set up monitoring
                             cstFactory.SetupFloatingWindowMonitoring(layout);
-                            System.Console.WriteLine("Floating window monitoring set up successfully");
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
-                            System.Console.WriteLine($"Failed to set up floating window monitoring: {ex.Message}");
+                            // Floating window monitoring setup failed, but window will still function
                         }
                     }
                 }
                 else
                 {
-                    System.Console.WriteLine($"Host window layout set: {layout.GetType().Name} (ID: {layout.Id})");
+                    // Layout set without floating window monitoring
                 }
             }
         }

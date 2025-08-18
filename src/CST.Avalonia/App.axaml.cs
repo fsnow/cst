@@ -165,13 +165,12 @@ public partial class App : Application
             // Handle book open requests - now they open as documents in the dockable layout
             openBookViewModel.BookOpenRequested += book =>
             {
-                var timestamp = DateTime.UtcNow;
-                System.Console.WriteLine($"*** [APP EVENT HANDLER] BookOpenRequested event received at {timestamp:HH:mm:ss.fff} for: {book.FileName} - {book.LongNavPath} ***");
+                Log.Information("BookOpenRequested event received for: {BookFile} - {NavPath}", book.FileName, book.LongNavPath);
                 
                 // Open book via LayoutViewModel
-                System.Console.WriteLine($"*** [APP EVENT HANDLER] Calling layoutViewModel.OpenBook for: {book.FileName} ***");
+                Log.Debug("Opening book via LayoutViewModel: {BookFile}", book.FileName);
                 layoutViewModel.OpenBook(book);
-                System.Console.WriteLine($"*** [APP EVENT HANDLER] layoutViewModel.OpenBook call completed at {DateTime.UtcNow:HH:mm:ss.fff} ***");
+                Log.Debug("LayoutViewModel.OpenBook completed for: {BookFile}", book.FileName);
             };
 
             openBookViewModel.CloseRequested += () =>
@@ -446,7 +445,7 @@ public partial class App : Application
     {
         try
         {
-            Console.WriteLine($"Restoring {bookWindows.Count} book windows from saved state");
+            Log.Information("Restoring {BookCount} book windows from saved state", bookWindows.Count);
             
             // Set flag to prevent re-entrant restoration
             _isRestoringBookWindows = true;
@@ -496,24 +495,24 @@ public partial class App : Application
                                     // Validate the book filename matches (for extra safety)
                                     if (book.FileName == bookWindowState.BookFileName)
                                     {
-                                        Console.WriteLine($"*** [RESTORATION] Restoring book: {book.FileName} with WindowId: {bookWindowState.WindowId} ***");
+                                        Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}", book.FileName, bookWindowState.WindowId);
                                         // Open the book through SimpleTabbedWindow with saved script and WindowId
                                         mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId);
-                                        Console.WriteLine($"Restored book: {book.FileName} with script: {bookWindowState.BookScript} and WindowId: {bookWindowState.WindowId}");
+                                        Log.Debug("Book restored: {BookFile} with script: {Script}", book.FileName, bookWindowState.BookScript);
                                     }
                                     else
                                     {
-                                        Console.WriteLine($"Book filename mismatch: expected {bookWindowState.BookFileName}, got {book.FileName}");
+                                        Log.Warning("Book filename mismatch: expected {ExpectedFile}, got {ActualFile}", bookWindowState.BookFileName, book.FileName);
                                     }
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"Invalid book index: {bookWindowState.BookIndex}");
+                                    Log.Warning("Invalid book index: {BookIndex}", bookWindowState.BookIndex);
                                 }
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Failed to restore book {bookWindowState.BookFileName}: {ex.Message}");
+                                Log.Error(ex, "Failed to restore book {BookFile}", bookWindowState.BookFileName);
                             }
                         }
                         
@@ -527,7 +526,7 @@ public partial class App : Application
                     }
                     else
                     {
-                        Console.WriteLine("Main window not available for book restoration");
+                        Log.Warning("Main window not available for book restoration");
                     }
                 }
                 finally
@@ -545,7 +544,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to restore book windows: {ex.Message}");
+            Log.Error(ex, "Failed to restore book windows");
             _isRestoringBookWindows = false;
         }
     }
@@ -554,7 +553,7 @@ public partial class App : Application
     {
         try
         {
-            Console.WriteLine($"Attempting to restore selection to WindowId: {selectedWindowId}");
+            Log.Debug("Attempting to restore selection to book with WindowId: {WindowId}", selectedWindowId);
             
             // Get the layout to access the document dock
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && 
@@ -566,14 +565,14 @@ public partial class App : Application
                 
                 if (documentDock != null)
                 {
-                    Console.WriteLine($"Found {documentDock.VisibleDockables?.Count ?? 0} visible dockables");
+                    Log.Debug("Found {DockableCount} visible dockables in document dock", documentDock.VisibleDockables?.Count ?? 0);
                     
                     // Log all document IDs for debugging
                     if (documentDock.VisibleDockables != null)
                     {
                         foreach (var doc in documentDock.VisibleDockables)
                         {
-                            Console.WriteLine($"  Document ID: {doc.Id}");
+                            Log.Debug("  Document ID: {DocumentId}", doc.Id);
                         }
                     }
                     
@@ -584,28 +583,28 @@ public partial class App : Application
                     if (targetDocument != null)
                     {
                         documentDock.ActiveDockable = targetDocument;
-                        Console.WriteLine($"Successfully restored selection to book with WindowId: {selectedWindowId}");
+                        Log.Information("Successfully restored selection to book with WindowId: {WindowId}", selectedWindowId);
                     }
                     else
                     {
-                        Console.WriteLine($"Could not find document with WindowId: {selectedWindowId}");
+                        Log.Warning("Could not find document with WindowId: {WindowId}", selectedWindowId);
                         // Fallback: select the last opened tab if no specific selection found
                         if (documentDock.VisibleDockables?.Count > 0)
                         {
                             documentDock.ActiveDockable = documentDock.VisibleDockables.Last();
-                            Console.WriteLine("Fallback: Selected last opened tab");
+                            Log.Debug("Fallback: Selected last opened tab");
                         }
                     }
                 }
                 else
                 {
-                    Console.WriteLine("Could not find document dock for tab selection restoration");
+                    Log.Warning("Could not find document dock for tab selection restoration");
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to restore selected tab: {ex.Message}");
+            Log.Error(ex, "Failed to restore selected tab");
         }
     }
     
@@ -816,25 +815,25 @@ public class ReactiveExceptionHandler : IObserver<Exception>
     public void OnNext(Exception ex)
     {
         // Log the exception but don't crash the app
-        Console.WriteLine($"ReactiveUI Exception (handled): {ex.Message}");
+        Log.Warning("ReactiveUI Exception (handled): {Message}", ex.Message);
         
         // If it's a threading exception, we can safely ignore it as we've implemented proper UI thread dispatching
         if (ex is InvalidOperationException && ex.Message.Contains("Call from invalid thread"))
         {
-            Console.WriteLine("Threading exception caught and ignored - UI updates are properly handled via Dispatcher");
+            Log.Debug("Threading exception caught and ignored - UI updates are properly handled via Dispatcher");
             return;
         }
         
         // For other exceptions, log more details
         if (ex.InnerException != null)
         {
-            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+            Log.Warning("Inner exception: {InnerMessage}", ex.InnerException.Message);
         }
     }
 
     public void OnError(Exception error)
     {
-        Console.WriteLine($"ReactiveUI Critical Error: {error.Message}");
+        Log.Error("ReactiveUI Critical Error: {Message}", error.Message);
     }
 
     public void OnCompleted()
@@ -862,7 +861,7 @@ public class AvaloniaUIThreadScheduler : IScheduler
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Scheduler exception: {ex.Message}");
+                Log.Error(ex, "ReactiveUI scheduler exception");
             }
         });
         
@@ -883,7 +882,7 @@ public class AvaloniaUIThreadScheduler : IScheduler
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Scheduler exception: {ex.Message}");
+                Log.Error(ex, "ReactiveUI scheduler exception");
             }
         };
         timer.Start();

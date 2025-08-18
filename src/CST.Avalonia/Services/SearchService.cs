@@ -484,7 +484,7 @@ public class SearchService : ISearchService
 
     private string ConvertToDisplayScript(string ipeTerm)
     {
-        _logger.LogInformation("ConvertToDisplayScript: ", ipeTerm);
+        _logger.LogDebug("Converting term to display script: {IpeTerm}", ipeTerm);
         var currentScript = _scriptService.CurrentScript;
         return ScriptConverter.Convert(ipeTerm, Script.Ipe, currentScript);
     }
@@ -553,16 +553,13 @@ internal class WildcardTermMatcher : ITermMatcher
         _regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(_pattern)
             .Replace("\\*", ".*")
             .Replace("\\?", ".") + "$";
-        System.Console.WriteLine($"[DEBUG] WildcardTermMatcher: pattern='{_pattern}' -> regex='{_regexPattern}'");
+        // Regex pattern created for wildcard search
     }
     
     public bool Matches(string term)
     {
         var matches = System.Text.RegularExpressions.Regex.IsMatch(term, _regexPattern);
-        if (matches && (term.Contains("ṭh") || term.Length < 3))
-        {
-            System.Console.WriteLine($"[DEBUG] Matched '{term}' with pattern '{_regexPattern}'");
-        }
+        // Debug logging removed for production use
         return matches;
     }
 }
