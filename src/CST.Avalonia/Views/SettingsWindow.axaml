@@ -219,7 +219,7 @@
                                                     <NumericUpDown Grid.Row="1" Grid.Column="1" 
                                                                   Value="{Binding SelectedScript.FontSize}"
                                                                   Minimum="8" Maximum="32" Increment="1"
-                                                                  Width="100" HorizontalAlignment="Left"
+                                                                  Width="120" HorizontalAlignment="Left"
                                                                   Margin="0,0,0,10"/>
                                                     
                                                     <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" 
@@ -266,7 +266,7 @@
                                             <NumericUpDown Grid.Row="1" Grid.Column="1" 
                                                           Value="{Binding LocalizationFontSize}"
                                                           Minimum="8" Maximum="24" Increment="1"
-                                                          Width="100" HorizontalAlignment="Left"/>
+                                                          Width="120" HorizontalAlignment="Left"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>

@@ -16,7 +16,7 @@
 
     <DockPanel>
         <!-- Toolbar -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="LightGray" Height="40">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="LightGray" MinHeight="40">
             <!-- Script Selector -->
             <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
                 <TextBlock Text="Script:" VerticalAlignment="Center" Margin="0,0,5,0"/>
@@ -98,7 +98,7 @@
         </StackPanel>
 
         <!-- Status Bar -->
-        <Grid DockPanel.Dock="Bottom" Background="LightGray" Height="26">
+        <Grid DockPanel.Dock="Bottom" Background="LightGray" MinHeight="26">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
