@@ -1,13 +1,77 @@
 # CST Avalonia Project Status - August 2025
 
-## Current Status: **SEARCH SYSTEM OPERATIONAL - BUG FIXES COMPLETE** ✅
+## Current Status: **FONT SYSTEM & SCRIPT SYNCHRONIZATION COMPLETE** ✅
 
-**Last Updated**: August 15, 2025
+**Last Updated**: August 18, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
+
+## Latest Session Update (2025-08-18)
+
+### ✅ **MAJOR MILESTONE: Complete Font System Implementation**
+
+#### **Font System Infrastructure**
+- **FontService**: Complete implementation for all 14 Pali scripts with caching fixes
+- **Settings UI**: Per-script font family and size configuration
+- **Settings Persistence**: Font settings save and restore correctly across sessions
+- **Real-time Updates**: Font changes apply immediately across all UI locations
+
+#### **DataTemplate Font Binding Solution**
+**Problem Solved**: Font family settings now work correctly in DataTemplates (search results, tree items, chapter lists)
+
+**Solution**: Custom attached properties implementation (`FontHelper.cs`)
+```csharp
+public static class FontHelper
+{
+    public static readonly AttachedProperty<string> DynamicFontFamilyProperty;
+    public static readonly AttachedProperty<int> DynamicFontSizeProperty;
+    // Handles property changes and applies fonts dynamically
+}
+```
+
+**Implementation**: Applied to all Pali text display locations:
+- Search results (Matching Terms and Books lists)
+- Select a Book tree view
+- Chapter dropdown in book tabs
+- Book path in status bar (bottom right)
+- Book tab titles (dynamic per-book script)
+
+#### **Script Change Synchronization**
+**New Feature**: Search results now automatically update script display when top-level script changes
+
+**Implementation**: 
+- `UpdateSearchResultDisplayText()` method in SearchViewModel
+- Converts IPE terms to new script using `ScriptConverter.Convert()`
+- Converts Devanagari book names to new script
+- Proper property change notifications via `RaiseAndSetIfChanged()`
+
+**Behavior**: When user changes script in top-level dropdown, both Select a Book tree AND search results update automatically
+
+#### **Event System Fixes**
+**Problem Solved**: SearchViewModel font events not triggering in real-time
+
+**Root Cause**: Font event handlers were inside `WhenActivated` lifecycle, only working when search panel was visible/active
+
+**Solution**: Moved font and script event handlers outside `WhenActivated` to ensure they always work
+```csharp
+// Setup font and script change handlers (outside of WhenActivated so they always work)
+SetupFontAndScriptHandlers();
+```
+
+#### **Complete Font System Status**
+✅ **Font Settings Applied Successfully to All UI Locations:**
+1. **Book tab titles** - Uses per-book script fonts dynamically
+2. **Book path in status bar** - Uses current script font settings  
+3. **Search results (Matching Terms and Books)** - Uses current script font settings with real-time updates
+4. **Select a Book tree** - Uses current script font settings
+5. **Chapter list dropdown** - Uses current script font settings
+
+✅ **Real-time Font Updates**: All locations update immediately when font settings change
+✅ **Multi-script Support**: Different book tabs can use different scripts simultaneously
+✅ **Script Change Updates**: Search results automatically convert script display like tree view
 
 ## Latest Session Update (2025-08-15)
 
@@ -134,6 +198,8 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 10. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive tests.
 11. **🆕 Live Search UI**: Functional search panel with real-time results and book filtering.
 12. **🆕 Search Result Highlighting**: Position-based highlighting with navigation support (single-term tested).
+13. **✅ Complete Font System**: Per-script font configuration with real-time updates across all UI locations.
+14. **✅ Script Synchronization**: Search results automatically update when top-level script changes.
 
 ## Outstanding Work (High Priority)
 
@@ -145,11 +211,10 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
     - **Cyrillic**: Cyrillic script → IPE converter (Cyrl2Ipe or Cyrl2Deva)
     - **Note**: Display works for all 14 scripts, but input (search/dictionary) only works for 9
     - **Implementation**: May use direct Script→IPE or indirect Script→Deva→IPE path
-2.  **Font Management System**:
-    - **Pali Font Settings**: Per-script font family and size controls for 14 Pali scripts
-    - **Localization Font Settings**: Separate font controls for ~20 UI languages
+2.  **UI Language Font System**: 
+    - **Localization Font Settings**: Separate font controls for ~20 UI languages (distinct from Pali script fonts)
     - **Font Discovery**: Detect available fonts suitable for each script
-    - **Dynamic Application**: Apply font changes throughout UI without restart
+    - **Note**: Pali script font system is now complete
 3.  **Advanced Search Features**:
     - **Phrase Search**: Implement position-based phrase searching with exact word order matching
     - **Proximity Search**: Add proximity operators for terms within specified distances
@@ -186,9 +251,12 @@ CST.Avalonia/
 │   ├── ApplicationStateService.cs     # Handles saving/loading session state
 │   ├── SettingsService.cs             # Handles saving/loading user settings
 │   ├── ScriptService.cs               # Manages script conversion
+│   ├── FontService.cs                 # Manages per-script font settings
 │   ├── IndexingService.cs             # Manages Lucene index lifecycle
 │   ├── XmlFileDatesService.cs         # Tracks file changes for incremental indexing
 │   └── SearchService.cs               # Lucene search with position-based results
+├── Converters/
+│   └── FontHelper.cs                  # Custom attached properties for DataTemplate font binding
 └── App.axaml.cs                       # DI configuration, startup logic, state restoration
 
 CST.Avalonia_inactive/
@@ -239,11 +307,11 @@ All tests maintain a **100% pass rate** and validate production readiness.
 
 ## Next Steps
 
-With basic search and highlighting infrastructure established, the immediate priorities are:
+With font system, script synchronization, and basic search functionality complete, the immediate priorities are:
 
-1. **Phrase & Proximity Search**: Implement position-based phrase and proximity searching using the existing term vector infrastructure
-2. **Search Filtering**: Fix book collection checkboxes and implement custom collection support for targeted searches
-3. **Advanced Search Modes**: Complete wildcard/regex support and optimize for complex search patterns
-4. **Navigation & UX**: Add keyboard shortcuts, hit navigation, and user experience improvements
+1. **Missing Script Input Support**: Implement converters for Thai, Telugu, Tibetan, Khmer, and Cyrillic scripts to enable search input in all 14 Pali scripts
+2. **Phrase & Proximity Search**: Implement position-based phrase and proximity searching using the existing term vector infrastructure  
+3. **Search Filtering**: Fix book collection checkboxes and implement custom collection support for targeted searches
+4. **Advanced Search Features**: Complete multi-term highlighting testing and add search navigation enhancements
 
-The foundation is solid with accurate counting and multi-term highlighting working. Focus now shifts to advanced search features and collection filtering.
+The core infrastructure is robust with font management, script conversion, accurate search counting, and real-time UI updates all working correctly. Focus now shifts to completing script input support and advanced search features.

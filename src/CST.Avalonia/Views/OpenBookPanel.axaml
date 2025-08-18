@@ -67,8 +67,8 @@
                                         <TextBlock Text="{Binding DisplayName}" 
                                                    VerticalAlignment="Center"
                                                    FontWeight="Normal"
-                                                   FontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
-                                                   FontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
+                                                   converters:FontHelper.DynamicFontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
+                                                   converters:FontHelper.DynamicFontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                                         <!-- Book count for categories -->
                                         <TextBlock Text="{Binding BookCount, StringFormat=(\\{0\\})}}" 
                                                    Margin="3,0,0,0"

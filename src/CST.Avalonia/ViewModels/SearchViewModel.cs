@@ -18,13 +18,15 @@ using ReactiveUI;
 
 namespace CST.Avalonia.ViewModels;
 
-public class SearchViewModel : ViewModelBase, IActivatableViewModel
+public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
 {
     private readonly ISearchService _searchService;
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
     private readonly ILogger<SearchViewModel> _logger;
     private CancellationTokenSource? _searchCancellation;
+    private Action<Script>? _scriptChangedHandler;
+    private EventHandler? _fontChangedHandler;
 
     public SearchViewModel() : this(
         App.ServiceProvider?.GetService(typeof(ISearchService)) as ISearchService ?? throw new InvalidOperationException("SearchService not available"),
@@ -98,6 +100,9 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         // Open book command
         OpenBookCommand = ReactiveCommand.Create<BookOccurrenceViewModel>(ExecuteOpenBook);
 
+        // Setup font and script change handlers (outside of WhenActivated so they always work)
+        SetupFontAndScriptHandlers();
+        
         // Setup live search with debouncing
         this.WhenActivated(disposables =>
         {
@@ -113,20 +118,6 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                 })
                 .Subscribe()
                 .DisposeWith(disposables);
-            
-            // Listen for script changes to update font properties
-            _scriptService.ScriptChanged += _ =>
-            {
-                this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
-                this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
-            };
-            
-            // Listen for font setting changes
-            _fontService.FontSettingsChanged += (_, _) =>
-            {
-                this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
-                this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
-            };
 
             // Update occurrences when term selection changes
             SelectedTerms.CollectionChanged += (_, e) => 
@@ -146,6 +137,44 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                 .Subscribe(_ => UpdateStatistics())
                 .DisposeWith(disposables);
         });
+    }
+
+    private void SetupFontAndScriptHandlers()
+    {
+        // Listen for script changes to update font properties and regenerate display text
+        _scriptChangedHandler = (newScript) =>
+        {
+            _logger.LogInformation("*** [SEARCH SCRIPT] Script changed to {Script}, updating font properties and search result display text ***", newScript);
+            Dispatcher.UIThread.Post(() =>
+            {
+                // Update font properties
+                this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+                
+                // Update search result display text to new script
+                UpdateSearchResultDisplayText(newScript);
+                
+                _logger.LogInformation("*** [SEARCH SCRIPT] Font properties and display text updated for script {Script} - Family: {FontFamily}, Size: {FontSize} ***", 
+                    newScript, CurrentScriptFontFamily, CurrentScriptFontSize);
+            });
+        };
+        
+        _scriptService.ScriptChanged += _scriptChangedHandler;
+        
+        // Listen for font setting changes
+        _fontChangedHandler = (sender, e) =>
+        {
+            _logger.LogInformation("*** [SEARCH FONT] Font settings changed event received, updating font properties ***");
+            Dispatcher.UIThread.Post(() =>
+            {
+                this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+                _logger.LogInformation("*** [SEARCH FONT] Font properties updated - Family: {FontFamily}, Size: {FontSize} ***", 
+                    CurrentScriptFontFamily, CurrentScriptFontSize);
+            });
+        };
+        
+        _fontService.FontSettingsChanged += _fontChangedHandler;
     }
 
     public ViewModelActivator Activator { get; }
@@ -526,13 +555,70 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
         var regexChars = new[] { '.', '^', '$', '[', ']', '(', ')', '{', '}', '|', '\\', '+' };
         return regexChars.Any(text.Contains);
     }
+    
+    /// <summary>
+    /// Update display text for all search results when script changes
+    /// </summary>
+    private void UpdateSearchResultDisplayText(Script newScript)
+    {
+        _logger.LogInformation("*** [SEARCH SCRIPT] Updating display text for {TermCount} terms and {BookCount} books to script {Script} ***", 
+            Terms.Count, Occurrences.Count, newScript);
+        
+        // Update terms display text (convert from IPE to new script)
+        foreach (var term in Terms)
+        {
+            var oldDisplayTerm = term.DisplayTerm;
+            term.DisplayTerm = ScriptConverter.Convert(term.Term, Script.Ipe, newScript);
+            _logger.LogInformation("*** [SEARCH SCRIPT] Updated term: '{OldDisplayTerm}' -> '{NewDisplayTerm}' ***", 
+                oldDisplayTerm, term.DisplayTerm);
+        }
+        
+        // Update book occurrence display names (convert from Devanagari to new script)  
+        foreach (var occurrence in Occurrences)
+        {
+            var originalName = occurrence.Book.ShortNavPath ?? occurrence.Book.FileName;
+            var oldDisplayName = occurrence.DisplayName;
+            occurrence.DisplayName = newScript == Script.Devanagari 
+                ? originalName 
+                : ScriptConverter.Convert(originalName, Script.Devanagari, newScript, true);
+            _logger.LogInformation("*** [SEARCH SCRIPT] Updated book: '{OldDisplayName}' -> '{NewDisplayName}' ***", 
+                oldDisplayName, occurrence.DisplayName);
+        }
+        
+        _logger.LogInformation("*** [SEARCH SCRIPT] Display text update completed for script {Script} ***", newScript);
+    }
+
+    public void Dispose()
+    {
+        // Unsubscribe from events to prevent memory leaks
+        if (_scriptChangedHandler != null)
+        {
+            _scriptService.ScriptChanged -= _scriptChangedHandler;
+        }
+        
+        if (_fontChangedHandler != null)
+        {
+            _fontService.FontSettingsChanged -= _fontChangedHandler;
+        }
+        
+        // Cancel any ongoing search
+        _searchCancellation?.Cancel();
+        _searchCancellation?.Dispose();
+    }
 }
 
 // View model for a matching term
 public class MatchingTermViewModel : ViewModelBase
 {
     public string Term { get; set; } = string.Empty;  // IPE encoded
-    public string DisplayTerm { get; set; } = string.Empty;  // Display script
+    
+    private string _displayTerm = string.Empty;
+    public string DisplayTerm
+    {
+        get => _displayTerm;
+        set => this.RaiseAndSetIfChanged(ref _displayTerm, value);
+    }
+    
     public int TotalCount { get; set; }
     public List<BookOccurrence> Occurrences { get; set; } = new();
 }
@@ -543,7 +629,13 @@ public class BookOccurrenceViewModel : ViewModelBase
     public Book Book { get; set; } = null!;
     public int Count { get; set; }
     public List<TermPosition> Positions { get; set; } = new();
-    public string DisplayName { get; set; } = string.Empty;
+    
+    private string _displayName = string.Empty;
+    public string DisplayName
+    {
+        get => _displayName;
+        set => this.RaiseAndSetIfChanged(ref _displayName, value);
+    }
 }
 
 // Event args for opening a book with search

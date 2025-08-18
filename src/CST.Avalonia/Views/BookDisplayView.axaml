@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:CST.Avalonia.ViewModels"
              xmlns:wv="using:WebViewControl"
+             xmlns:converters="using:CST.Avalonia.Converters"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="CST.Avalonia.Views.BookDisplayView"
              x:DataType="vm:BookDisplayViewModel"
@@ -46,8 +47,8 @@
                             <TextBlock Text="{Binding}" 
                                       TextTrimming="CharacterEllipsis" 
                                       MaxWidth="180"
-                                      FontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
-                                      FontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
+                                      converters:FontHelper.DynamicFontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
+                                      converters:FontHelper.DynamicFontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
@@ -112,8 +113,8 @@
             <!-- Book Info -->
             <TextBlock Grid.Column="1" Text="{Binding BookInfoText}" 
                        VerticalAlignment="Center" Margin="8,0"
-                       FontFamily="{Binding CurrentScriptFontFamily}"
-                       FontSize="{Binding CurrentScriptFontSize}"/>
+                       converters:FontHelper.DynamicFontFamily="{Binding CurrentScriptFontFamily}"
+                       converters:FontHelper.DynamicFontSize="{Binding CurrentScriptFontSize}"/>
             
             <!-- Loading Indicator -->
             <ProgressBar Grid.Column="2" IsIndeterminate="True" 

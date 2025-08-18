@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:CST.Avalonia.ViewModels"
              xmlns:models="using:CST.Avalonia.Models"
+             xmlns:converters="using:CST.Avalonia.Converters"
              x:Class="CST.Avalonia.Views.SearchPanel"
              x:DataType="vm:SearchViewModel"
              Name="SearchPanelControl">
@@ -150,8 +151,8 @@
                             VerticalAlignment="Center"
                             TextWrapping="NoWrap"
                             TextTrimming="CharacterEllipsis"
-                            FontFamily="Comic Sans MS"
-                            FontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
+                            converters:FontHelper.DynamicFontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
+                            converters:FontHelper.DynamicFontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
                          CornerRadius="10"
@@ -196,7 +197,9 @@
           <ListBox Grid.Row="1" Name="OccurrencesList"
                    ItemsSource="{Binding Occurrences}"
                    Background="Transparent"
-                   BorderThickness="0">
+                   BorderThickness="0"
+                   FontFamily="{Binding CurrentScriptFontFamily}"
+                   FontSize="{Binding CurrentScriptFontSize}">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:BookOccurrenceViewModel">
                 <Grid ColumnDefinitions="*,Auto" MinHeight="24" Margin="0,0,14,0">
@@ -205,8 +208,8 @@
                             VerticalAlignment="Center"
                             TextWrapping="NoWrap"
                             TextTrimming="CharacterEllipsis"
-                            FontFamily="Comic Sans MS"
-                            FontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
+                            converters:FontHelper.DynamicFontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
+                            converters:FontHelper.DynamicFontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
                          CornerRadius="10"
