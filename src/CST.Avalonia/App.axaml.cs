@@ -734,6 +734,7 @@ public partial class App : Application
         services.AddSingleton<ILocalizationService, LocalizationService>();
         services.AddSingleton<IScriptService, ScriptService>();
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<IApplicationStateService, ApplicationStateService>();
         services.AddSingleton<ChapterListsService>();
         // services.AddSingleton<IBookService, BookService>();

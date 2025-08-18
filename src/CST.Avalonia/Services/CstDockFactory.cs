@@ -350,6 +350,7 @@ namespace CST.Avalonia.Services
             var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
             var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
             var settingsService = App.ServiceProvider?.GetRequiredService<ISettingsService>();
+            var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
             
             // Create BookDisplayViewModel with proper services and script
             var bookDisplayViewModel = new BookDisplayViewModel(
@@ -358,6 +359,7 @@ namespace CST.Avalonia.Services
                 null,         // anchor
                 chapterListsService,
                 settingsService,
+                fontService,
                 book.DocId    // Pass DocId for Lucene offset lookup
             );
             
@@ -449,7 +451,8 @@ namespace CST.Avalonia.Services
             var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
             var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
             var settingsService = App.ServiceProvider?.GetRequiredService<ISettingsService>();
-            var bookDisplayViewModel = new BookDisplayViewModel(book, null, anchor, chapterListsService, settingsService);
+            var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
+            var bookDisplayViewModel = new BookDisplayViewModel(book, null, anchor, chapterListsService, settingsService, fontService);
             
             // Set the correct script after construction
             if (bookDisplayViewModel != null)

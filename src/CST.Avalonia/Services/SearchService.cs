@@ -141,18 +141,34 @@ public class SearchService : ISearchService
             SearchMode.Regex => new RegexTermMatcher(ipeTerm),
             _ => new ExactTermMatcher(ipeTerm)
         };
+        
+        _logger.LogInformation("Using {Mode} matcher for IPE term: '{IpeTerm}'", query.Mode, ipeTerm);
 
         // Get all matching terms
         var matchingTerms = await GetMatchingTermsAsync(reader, termMatcher, cancellationToken);
 
-        foreach (var term in matchingTerms.Take(query.PageSize))
+        var termsToProcess = matchingTerms.Take(query.PageSize).ToList();
+        _logger.LogInformation("Processing {Count} terms for display conversion", termsToProcess.Count);
+        
+        // Debug: Log first and last few terms to understand the order
+        if (termsToProcess.Count > 0)
+        {
+            var firstTerms = string.Join(", ", termsToProcess.Take(5));
+            var lastTerms = string.Join(", ", termsToProcess.TakeLast(5));
+            _logger.LogInformation("First 5 terms: {FirstTerms}", firstTerms);
+            _logger.LogInformation("Last 5 terms: {LastTerms}", lastTerms);
+        }
+        
+        var conversionStopwatch = Stopwatch.StartNew();
+        foreach (var term in termsToProcess)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            var convertedTerm = ConvertToDisplayScript(term);
             var matchingTerm = new MatchingTerm
             {
                 Term = term,
-                DisplayTerm = ConvertToDisplayScript(term)
+                DisplayTerm = convertedTerm
             };
 
             // Get occurrences for this term
@@ -163,6 +179,10 @@ public class SearchService : ISearchService
             result.Terms.Add(matchingTerm);
             result.TotalOccurrenceCount += matchingTerm.TotalCount;
         }
+        
+        conversionStopwatch.Stop();
+        _logger.LogInformation("Script conversion completed in {Elapsed}ms for {Count} terms", 
+            conversionStopwatch.ElapsedMilliseconds, termsToProcess.Count);
 
         result.TotalTermCount = result.Terms.Count;
         result.TotalBookCount = result.Terms.SelectMany(t => t.Occurrences).Select(o => o.Book).Distinct().Count();
@@ -464,6 +484,7 @@ public class SearchService : ISearchService
 
     private string ConvertToDisplayScript(string ipeTerm)
     {
+        _logger.LogInformation("ConvertToDisplayScript: ", ipeTerm);
         var currentScript = _scriptService.CurrentScript;
         return ScriptConverter.Convert(ipeTerm, Script.Ipe, currentScript);
     }
@@ -523,19 +544,26 @@ internal class ExactTermMatcher : ITermMatcher
 internal class WildcardTermMatcher : ITermMatcher
 {
     private readonly string _pattern;
+    private readonly string _regexPattern;
     
     public WildcardTermMatcher(string pattern)
     {
         _pattern = pattern;
+        // Convert wildcard pattern to regex
+        _regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(_pattern)
+            .Replace("\\*", ".*")
+            .Replace("\\?", ".") + "$";
+        System.Console.WriteLine($"[DEBUG] WildcardTermMatcher: pattern='{_pattern}' -> regex='{_regexPattern}'");
     }
     
     public bool Matches(string term)
     {
-        // Convert wildcard pattern to regex
-        var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(_pattern)
-            .Replace("\\*", ".*")
-            .Replace("\\?", ".") + "$";
-        return System.Text.RegularExpressions.Regex.IsMatch(term, regexPattern);
+        var matches = System.Text.RegularExpressions.Regex.IsMatch(term, _regexPattern);
+        if (matches && (term.Contains("ṭh") || term.Length < 3))
+        {
+            System.Console.WriteLine($"[DEBUG] Matched '{term}' with pattern '{_regexPattern}'");
+        }
+        return matches;
     }
 }
 

@@ -29,6 +29,7 @@ namespace CST.Avalonia.ViewModels
         private readonly ScriptService _scriptService;
         private readonly ChapterListsService? _chapterListsService;
         private readonly ISettingsService? _settingsService;
+        private readonly IFontService? _fontService;
         private readonly Book _book;
         private readonly List<string>? _searchTerms;
         private readonly string? _initialAnchor;
@@ -71,13 +72,14 @@ namespace CST.Avalonia.ViewModels
         private bool _updatingChapterFromScroll = false;
         private bool _isInitializing = true;
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, int? docId = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             // For now, create ScriptService without logger
             _scriptService = new ScriptService();
             _chapterListsService = chapterListsService;
             _settingsService = settingsService;
+            _fontService = fontService;
             _book = book;
             _searchTerms = searchTerms;
             _initialAnchor = initialAnchor;
@@ -124,6 +126,10 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(async script => 
                 {
                     _logger.Debug("Script changed - reloading from source files: {Script}", script.ToString());
+                    
+                    // Update font properties when script changes
+                    this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                    this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
                     
                     // Save current page anchor for position preservation
                     string savedPageAnchor = "";
@@ -191,6 +197,16 @@ namespace CST.Avalonia.ViewModels
                         });
                     }
                 });
+            
+            // Subscribe to font setting changes
+            if (_fontService != null)
+            {
+                _fontService.FontSettingsChanged += (_, _) =>
+                {
+                    this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                    this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+                };
+            }
                 
             this.WhenAnyValue(x => x.SelectedChapter)
                 .Where(chapter => chapter != null && !_isInitializing)
@@ -359,6 +375,10 @@ namespace CST.Avalonia.ViewModels
 
         public Book Book => _book;
         public string DisplayTitle => GetBookDisplayName(_book);
+        
+        // Font properties for tab title, chapter dropdown, and status bar
+        public string CurrentScriptFontFamily => _fontService?.GetScriptFontFamily(_scriptService.CurrentScript) ?? "Helvetica";
+        public int CurrentScriptFontSize => _fontService?.GetScriptFontSize(_scriptService.CurrentScript) ?? 12;
 
         private string GetBookDisplayName(Book book)
         {

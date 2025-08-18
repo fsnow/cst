@@ -255,6 +255,7 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private string _theme;
+        private ScriptFontSettingViewModel? _selectedScript;
 
         public AppearanceSettingsViewModel(ISettingsService settingsService)
         {
@@ -262,6 +263,51 @@ namespace CST.Avalonia.ViewModels
             _theme = _settingsService.Settings.Theme;
 
             Themes = new[] { "Light", "Dark", "Auto" };
+            
+            // Initialize script font settings
+            ScriptFontSettings = new ObservableCollection<ScriptFontSettingViewModel>();
+            var fontSettings = _settingsService.Settings.FontSettings;
+            
+            foreach (var kvp in fontSettings.ScriptFonts)
+            {
+                var vm = new ScriptFontSettingViewModel
+                {
+                    ScriptName = kvp.Key,
+                    FontFamily = kvp.Value.FontFamily,
+                    FontSize = kvp.Value.FontSize,
+                    Parent = this
+                };
+                ScriptFontSettings.Add(vm);
+            }
+            
+            // Select Devanagari by default since user mentioned wanting to adjust it
+            SelectedScript = ScriptFontSettings.FirstOrDefault(s => s.ScriptName == "Devanagari") 
+                           ?? ScriptFontSettings.FirstOrDefault();
+                           
+            // Initialize localization font settings
+            LocalizationFontFamily = fontSettings.LocalizationFontFamily;
+            LocalizationFontSize = fontSettings.LocalizationFontSize;
+            
+            // Watch for localization font changes
+            this.WhenAnyValue(x => x.LocalizationFontFamily)
+                .Skip(1)
+                .Subscribe(value => 
+                {
+                    _settingsService.Settings.FontSettings.LocalizationFontFamily = value;
+                    // Notify FontService about the change
+                    var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
+                    fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
+                });
+                
+            this.WhenAnyValue(x => x.LocalizationFontSize)
+                .Skip(1)
+                .Subscribe(value => 
+                {
+                    _settingsService.Settings.FontSettings.LocalizationFontSize = value;
+                    // Notify FontService about the change
+                    var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
+                    fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
+                });
         }
 
         public string Theme
@@ -275,6 +321,82 @@ namespace CST.Avalonia.ViewModels
         }
 
         public string[] Themes { get; }
+        
+        public ObservableCollection<ScriptFontSettingViewModel> ScriptFontSettings { get; }
+        
+        public ScriptFontSettingViewModel? SelectedScript
+        {
+            get => _selectedScript;
+            set => this.RaiseAndSetIfChanged(ref _selectedScript, value);
+        }
+        
+        private string _localizationFontFamily = "";
+        public string LocalizationFontFamily
+        {
+            get => _localizationFontFamily;
+            set => this.RaiseAndSetIfChanged(ref _localizationFontFamily, value);
+        }
+        
+        private int _localizationFontSize = 12;
+        public int LocalizationFontSize
+        {
+            get => _localizationFontSize;
+            set => this.RaiseAndSetIfChanged(ref _localizationFontSize, value);
+        }
+        
+        public void UpdateScriptFont(string scriptName, string fontFamily, int fontSize)
+        {
+            if (_settingsService.Settings.FontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
+            {
+                setting.FontFamily = fontFamily;
+                setting.FontSize = fontSize;
+                
+                // Notify FontService about the change so other components update
+                var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
+                fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
+            }
+        }
+    }
+    
+    public class ScriptFontSettingViewModel : ViewModelBase
+    {
+        private string _scriptName = "";
+        private string _fontFamily = "";
+        private int _fontSize = 12;
+        
+        public string ScriptName
+        {
+            get => _scriptName;
+            set => this.RaiseAndSetIfChanged(ref _scriptName, value);
+        }
+        
+        public string FontFamily
+        {
+            get => _fontFamily;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _fontFamily, value);
+                if (Parent != null)
+                {
+                    Parent.UpdateScriptFont(ScriptName, value, FontSize);
+                }
+            }
+        }
+        
+        public int FontSize
+        {
+            get => _fontSize;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _fontSize, value);
+                if (Parent != null)
+                {
+                    Parent.UpdateScriptFont(ScriptName, FontFamily, value);
+                }
+            }
+        }
+        
+        public AppearanceSettingsViewModel? Parent { get; set; }
     }
 
     public class SearchSettingsViewModel : ViewModelBase

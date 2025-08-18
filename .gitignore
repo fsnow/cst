@@ -30,3 +30,5 @@ screenshots/
 src/CST.Avalonia.Tests/obj/
 
 src/CST.Lucene/obj/
+
+src/CST.Avalonia/dist/

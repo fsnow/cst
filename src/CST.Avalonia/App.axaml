@@ -78,6 +78,10 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Dock.Avalonia/Themes/DockFluentTheme.axaml" />
+        
+        <!-- Tab font styling: Each tab should use its book's script font -->
+        <!-- This is complex due to the dock system structure - leaving for future enhancement -->
+        <!-- Current implementation covers: search results, book tree, chapter dropdown, status bar -->
     </Application.Styles>
     
     <!-- Native Menu for macOS -->

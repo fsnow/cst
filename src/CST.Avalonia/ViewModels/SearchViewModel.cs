@@ -22,12 +22,14 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
 {
     private readonly ISearchService _searchService;
     private readonly IScriptService _scriptService;
+    private readonly IFontService _fontService;
     private readonly ILogger<SearchViewModel> _logger;
     private CancellationTokenSource? _searchCancellation;
 
     public SearchViewModel() : this(
         App.ServiceProvider?.GetService(typeof(ISearchService)) as ISearchService ?? throw new InvalidOperationException("SearchService not available"),
         App.ServiceProvider?.GetService(typeof(IScriptService)) as IScriptService ?? throw new InvalidOperationException("ScriptService not available"),
+        App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService ?? throw new InvalidOperationException("FontService not available"),
         App.ServiceProvider?.GetService(typeof(ILogger<SearchViewModel>)) as ILogger<SearchViewModel> ?? throw new InvalidOperationException("Logger not available"))
     {
     }
@@ -35,10 +37,12 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
     public SearchViewModel(
         ISearchService searchService,
         IScriptService scriptService,
+        IFontService fontService,
         ILogger<SearchViewModel> logger)
     {
         _searchService = searchService;
         _scriptService = scriptService;
+        _fontService = fontService;
         _logger = logger;
 
         Activator = new ViewModelActivator();
@@ -109,6 +113,20 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                 })
                 .Subscribe()
                 .DisposeWith(disposables);
+            
+            // Listen for script changes to update font properties
+            _scriptService.ScriptChanged += _ =>
+            {
+                this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+            };
+            
+            // Listen for font setting changes
+            _fontService.FontSettingsChanged += (_, _) =>
+            {
+                this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+            };
 
             // Update occurrences when term selection changes
             SelectedTerms.CollectionChanged += (_, e) => 
@@ -240,6 +258,10 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
     public ReactiveCommand<Unit, Unit> SearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
     public ReactiveCommand<BookOccurrenceViewModel, Unit> OpenBookCommand { get; }
+    
+    // Font properties for search results
+    public string CurrentScriptFontFamily => _fontService.GetScriptFontFamily(_scriptService.CurrentScript) ?? "Helvetica";
+    public int CurrentScriptFontSize => _fontService.GetScriptFontSize(_scriptService.CurrentScript);
 
     // Event for opening a book with search terms
     public event EventHandler<OpenBookWithSearchEventArgs>? OpenBookRequested;
@@ -295,17 +317,23 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                     IncludeTika = IncludeTika,
                     IncludeOther = IncludeOther
                 },
-                PageSize = 10000  // Limit results for UI performance
+                PageSize = 500  // Reduced for better Devanagari performance
             };
 
             _logger.LogInformation("Executing search: {Query}", query.QueryText);
 
             // Execute search
             var result = await _searchService.SearchAsync(query, _searchCancellation.Token);
+            
+            _logger.LogInformation("Search returned {TermCount} terms, {OccurrenceCount} occurrences", 
+                result.Terms.Count, result.TotalOccurrenceCount);
 
             // Update UI with results
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                _logger.LogInformation("Starting UI update with script: {Script}", _scriptService.CurrentScript);
+                
                 foreach (var term in result.Terms)
                 {
                     var termVm = new MatchingTermViewModel
@@ -322,6 +350,10 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel
                 // This ensures statistics show "Selected: 0" initially
 
                 StatusText = $"Search completed in {result.SearchDuration.TotalMilliseconds:F0}ms - Found {result.TotalTermCount} terms, {result.TotalOccurrenceCount} occurrences";
+                
+                stopwatch.Stop();
+                _logger.LogInformation("UI update completed in {Elapsed}ms for {TermCount} terms", 
+                    stopwatch.ElapsedMilliseconds, Terms.Count);
                 
                 // Explicitly update statistics after terms are populated and selected
                 UpdateStatistics();

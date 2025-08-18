@@ -43,7 +43,11 @@
                           ToolTip.Tip="Navigate to chapter">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
+                            <TextBlock Text="{Binding}" 
+                                      TextTrimming="CharacterEllipsis" 
+                                      MaxWidth="180"
+                                      FontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
+                                      FontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
@@ -107,7 +111,9 @@
             
             <!-- Book Info -->
             <TextBlock Grid.Column="1" Text="{Binding BookInfoText}" 
-                       VerticalAlignment="Center" Margin="8,0"/>
+                       VerticalAlignment="Center" Margin="8,0"
+                       FontFamily="{Binding CurrentScriptFontFamily}"
+                       FontSize="{Binding CurrentScriptFontSize}"/>
             
             <!-- Loading Indicator -->
             <ProgressBar Grid.Column="2" IsIndeterminate="True" 

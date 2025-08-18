@@ -83,9 +83,9 @@ namespace CST.Conversion
             devConsonants["jh"] = "\u091D";
             devConsonants["\u00F1"] = "\u091E"; // n tilde
             devConsonants["\u1E6D"] = "\u091F"; // t underdot 
-            devConsonants["\u1E6D', 'h"] = "\u0920"; // t underdot h
+            devConsonants["\u1E6Dh"] = "\u0920"; // t underdot h
             devConsonants["\u1E0D"] = "\u0921"; // d underdot
-            devConsonants["\u1E0D', 'h"] = "\u0922"; // d underdot h
+            devConsonants["\u1E0Dh"] = "\u0922"; // d underdot h
             devConsonants["\u1E47"] = "\u0923"; // n underdot
             devConsonants["t"] = "\u0924";
             devConsonants["th"] = "\u0925";
@@ -166,7 +166,7 @@ namespace CST.Conversion
 			book = book.Replace("\u091C\u094D\u091C", "\u091C\u094D\u200D\u091C"); // ja + ja
 			book = book.Replace("\u091E\u094D\u091A", "\u091E\u094D\u200D\u091A"); // n(tilde)a + ca
 			book = book.Replace("\u091E\u094D\u091C", "\u091E\u094D\u200D\u091C"); // n(tilde)a + ja
-            book = book.Replace("\u091E\u094D\u091E", "\u091E\u094D\u200D\u091E"); // n(tilde)a + ña
+            book = book.Replace("\u091E\u094D\u091E", "\u091E\u094D\u200D\u091E"); // n(tilde)a + ï¿½a
             book = book.Replace("\u0928\u094D\u0928", "\u0928\u094D\u200D\u0928"); // na + na
 			book = book.Replace("\u092A\u094D\u0932", "\u092A\u094D\u200D\u0932"); // pa + la
 			book = book.Replace("\u0932\u094D\u0932", "\u0932\u094D\u200D\u0932"); // la + la

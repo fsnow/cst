@@ -1,35 +1,37 @@
 # CST Avalonia Project Status - August 2025
 
-## Current Status: **SEARCH & HIGHLIGHTING IMPLEMENTATION** 🔍
+## Current Status: **SEARCH SYSTEM OPERATIONAL - BUG FIXES COMPLETE** ✅
 
-**Last Updated**: August 13, 2025
+**Last Updated**: August 15, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
-## Latest Session Update (2025-08-13)
+## Latest Session Update (2025-08-15)
 
-### ✅ **Search Infrastructure & Basic Highlighting Complete**
+### ✅ **Major Bug Fixes: Search & Script Conversion Issues Resolved**
 
-#### **Core Search System Operational**
-- **Basic Search**: Single and multi-term exact searches working with accurate occurrence counting
-- **Position-Based Highlighting**: Multi-term highlighting implemented and verified working correctly
-- **Index Integrity**: Fixed incremental indexing duplicate document issue - searches now return correct counts
-- **Infrastructure Ready**: Foundation established for advanced search features
+#### **Fixed: Incremental Indexing Creating Duplicates**
+- **Problem**: Search showing inflated counts (55 instead of 11) due to duplicate documents in index
+- **Root Cause**: `BookIndexer.IndexBook` failed to delete old documents - "file" field was StoredField (not searchable)
+- **Solution**: Changed "file" from StoredField to StringField in BookIndexer.cs
+- **Result**: Search counts now accurate (11 for 'bhikkhusaṅghañca', 20 for 'bhikkhusaṅghena')
 
-#### **Lucene Position-Based Highlighting System**
-- **Core Implementation**: Offset-based highlighting using Lucene term position vectors
-- **IPE Encoding Support**: Correctly handles Ideal Pali Encoding to store terms in Lucene, along with Devanagari text offsets
-- **Raw XML Processing**: Highlights applied to raw XML before parsing to preserve offset accuracy
-- **Navigation Support**: Sequential ID generation (hit1, hit2, etc.) for hit navigation buttons
-- **Visual Distinction**: Red highlighting for current hit, blue for other hits
-- **Multi-Term Support**: ✅ Multiple search terms highlight correctly with accurate counts
+#### **Fixed: Devanagari Wildcard Search Failure**
+- **Problem**: Wildcard searches like "a*" failed with KeyNotFoundException when script set to Devanagari
+- **Root Cause**: Malformed dictionary entry in `Latn2Deva.cs` - had `"\u1E6D', 'h"` instead of `"\u1E6Dh"` for "ṭh"
+- **Solution**: Fixed the dictionary entry syntax in CST.Core/Conversion/Latn2Deva.cs
+- **Result**: All script conversions work correctly, wildcard searches function in all 14 scripts
+- **Test Suite**: Created comprehensive ScriptConverterTests.cs validating round-trip conversions
 
-#### **Recent Bug Fixes**
-- **✅ Incremental Indexing**: Fixed duplicate document creation by ensuring `BookIndexer.IndexBook()` always deletes existing documents by filename before adding new versions
-- **✅ Search Accuracy**: Verified correct occurrence counting (s0101m.mulxml: 11 for 'bhikkhusaṅghañca', 20 for 'bhikkhusaṅghena')
+#### **Search System Status**
+- **✅ Basic Search**: Single and multi-term exact searches with accurate counting
+- **✅ Wildcard Search**: Now works in all scripts including Devanagari
+- **✅ Position-Based Highlighting**: Multi-term highlighting with correct offsets
+- **✅ Script Conversion**: All 14 Pali scripts convert correctly
+- **✅ Index Integrity**: Incremental indexing properly replaces documents
 
 ## Previous Session Update (2025-08-10)
 
@@ -125,21 +127,43 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 6.  **Advanced Logging**: Configurable Serilog implementation.
 7.  **Cross-Platform Build**: `.dmg` packages are being built for macOS.
 8.  **Full Indexing System**: Complete Lucene.NET search index for all 217 books with incremental updates.
-9.  **Multi-Script Support**: Devanagari and IPE analyzers with position-based search capabilities.
+9.  **Multi-Script Support**: 
+    - **Display**: All 14 Pali scripts supported (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
+    - **Input**: 9 scripts supported for search/dictionary (missing: Thai, Telugu, Tibetan, Khmer, Cyrillic)
+    - **Indexing**: IPE (Internal Phonetic Encoding) with Devanagari analyzers
 10. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive tests.
 11. **🆕 Live Search UI**: Functional search panel with real-time results and book filtering.
 12. **🆕 Search Result Highlighting**: Position-based highlighting with navigation support (single-term tested).
 
 ## Outstanding Work (High Priority)
 
-1.  **Advanced Search Features**:
+1.  **Missing Pali Script Input Parsers** (5 scripts need converters to IPE):
+    - **Thai**: Thai script → IPE converter (Thai2Ipe or Thai2Deva)
+    - **Telugu**: Telugu script → IPE converter (Telu2Ipe or Telu2Deva)
+    - **Tibetan**: Tibetan script → IPE converter (Tibt2Ipe or Tibt2Deva)
+    - **Khmer**: Khmer script → IPE converter (Khmr2Ipe or Khmr2Deva)
+    - **Cyrillic**: Cyrillic script → IPE converter (Cyrl2Ipe or Cyrl2Deva)
+    - **Note**: Display works for all 14 scripts, but input (search/dictionary) only works for 9
+    - **Implementation**: May use direct Script→IPE or indirect Script→Deva→IPE path
+2.  **Font Management System**:
+    - **Pali Font Settings**: Per-script font family and size controls for 14 Pali scripts
+    - **Localization Font Settings**: Separate font controls for ~20 UI languages
+    - **Font Discovery**: Detect available fonts suitable for each script
+    - **Dynamic Application**: Apply font changes throughout UI without restart
+3.  **Advanced Search Features**:
     - **Phrase Search**: Implement position-based phrase searching with exact word order matching
     - **Proximity Search**: Add proximity operators for terms within specified distances
-2.  **Search Filtering & Collections**:
-    - **Book Collection Filters**: Fix non-functional checkboxes for Pitaka/Commentary filtering (Vinaya, Sutta, Abhidhamma, etc.)
-    - **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
-3.  **Search Navigation Enhancement**:
+4.  **Search Filtering & Collections**:
+    - **Book Collection Filters**: Fix non-functional checkboxes for Pitaka/Commentary filtering
+    - **Custom Book Collections**: Implement user-defined book collection feature
+5.  **UI Feedback During Operations**:
+    - **Indexing Progress**: Show progress bar/spinner during index building
+    - **Search State**: Indicate when index is incomplete or being rebuilt
+    - **Operation Notifications**: Alert user when long operations complete
+6.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
+    - Implement scroll-to-hit functionality
+    - Add hit counter display (e.g., "Hit 3 of 15")
 
 ## Technical Architecture
 

@@ -25,6 +25,7 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
 {
     private readonly ILocalizationService _localizationService;
     private readonly IScriptService _scriptService;
+    private readonly IFontService _fontService;
     private readonly IApplicationStateService _stateService;
     private readonly TreeStateService _treeStateService;
     private readonly ILogger<OpenBookDialogViewModel> _logger;
@@ -33,12 +34,14 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
     public OpenBookDialogViewModel(
         ILocalizationService localizationService,
         IScriptService scriptService,
+        IFontService fontService,
         IApplicationStateService stateService,
         TreeStateService treeStateService,
         ILogger<OpenBookDialogViewModel> logger)
     {
         _localizationService = localizationService;
         _scriptService = scriptService;
+        _fontService = fontService;
         _stateService = stateService;
         _treeStateService = treeStateService;
         _logger = logger;
@@ -55,6 +58,9 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
 
         // Subscribe to script changes
         _scriptService.ScriptChanged += OnScriptChanged;
+        
+        // Subscribe to font changes
+        _fontService.FontSettingsChanged += OnFontSettingsChanged;
 
         // Delay tree initialization to allow state to load first
         _ = Task.Run(async () =>
@@ -135,6 +141,10 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
             return "No selection";
         }
     }
+
+    // Font properties for tree display  
+    public string CurrentScriptFontFamily => _fontService.GetScriptFontFamily(_scriptService.CurrentScript) ?? "Helvetica";
+    public int CurrentScriptFontSize => _fontService.GetScriptFontSize(_scriptService.CurrentScript);
 
     // Commands
     public ICommand OpenBookCommand { get; }
@@ -564,6 +574,17 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
         {
             UpdateNodeDisplayNamesRecursive(BookTree);
             this.RaisePropertyChanged(nameof(CurrentScript));
+            this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+            this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+        });
+    }
+    
+    private void OnFontSettingsChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+            this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
         });
     }
 
@@ -588,6 +609,7 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _scriptService.ScriptChanged -= OnScriptChanged;
+        _fontService.FontSettingsChanged -= OnFontSettingsChanged;
     }
 }
 

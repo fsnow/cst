@@ -150,7 +150,8 @@
                             VerticalAlignment="Center"
                             TextWrapping="NoWrap"
                             TextTrimming="CharacterEllipsis"
-                            FontSize="11"/>
+                            FontFamily="Comic Sans MS"
+                            FontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
                          CornerRadius="10"
@@ -204,7 +205,8 @@
                             VerticalAlignment="Center"
                             TextWrapping="NoWrap"
                             TextTrimming="CharacterEllipsis"
-                            FontSize="11"/>
+                            FontFamily="Comic Sans MS"
+                            FontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                   <Border Grid.Column="1" 
                          Background="{DynamicResource SystemAccentColorLight2}"
                          CornerRadius="10"
