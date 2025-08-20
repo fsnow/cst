@@ -9,10 +9,7 @@
              x:DataType="vm:OpenBookDialogViewModel">
 
     <UserControl.Resources>
-        <!-- Define icons as text since we don't have image resources yet -->
-        <x:String x:Key="FolderClosedIcon">📁</x:String>
-        <x:String x:Key="FolderOpenIcon">📂</x:String>
-        <x:String x:Key="BookIcon">📖</x:String>
+        <!-- Mac-style SVG icons -->
     </UserControl.Resources>
 
     <DockPanel>
@@ -58,11 +55,34 @@
                             <TreeView.DataTemplates>
                                 <TreeDataTemplate DataType="vm:BookTreeNode" ItemsSource="{Binding Children}">
                                     <StackPanel Orientation="Horizontal" Margin="2">
-                                        <!-- Icon -->
-                                        <TextBlock Text="📖" Margin="0,0,3,0" VerticalAlignment="Center" FontSize="10"
-                                                   IsVisible="{Binding IsBook}"/>
-                                        <TextBlock Text="📁" Margin="0,0,3,0" VerticalAlignment="Center" FontSize="10"
-                                                   IsVisible="{Binding IsCategory}"/>
+                                        <!-- Icons using Unicode symbols for now (Mac-style icons coming later) -->
+                                        <!-- Book icon -->
+                                        <TextBlock Text="📄" FontSize="12" 
+                                               Margin="0,0,4,0" 
+                                               VerticalAlignment="Center"
+                                               IsVisible="{Binding IsBook}"/>
+                                        <!-- Closed folder icon -->
+                                        <TextBlock Text="📁" FontSize="12"
+                                               Margin="0,0,4,0" 
+                                               VerticalAlignment="Center">
+                                            <TextBlock.IsVisible>
+                                                <MultiBinding Converter="{x:Static converters:CategoryIconConverter.Instance}" ConverterParameter="closed">
+                                                    <Binding Path="IsCategory"/>
+                                                    <Binding Path="IsExpanded"/>
+                                                </MultiBinding>
+                                            </TextBlock.IsVisible>
+                                        </TextBlock>
+                                        <!-- Open folder icon -->
+                                        <TextBlock Text="📂" FontSize="12"
+                                               Margin="0,0,4,0" 
+                                               VerticalAlignment="Center">
+                                            <TextBlock.IsVisible>
+                                                <MultiBinding Converter="{x:Static converters:CategoryIconConverter.Instance}" ConverterParameter="open">
+                                                    <Binding Path="IsCategory"/>
+                                                    <Binding Path="IsExpanded"/>
+                                                </MultiBinding>
+                                            </TextBlock.IsVisible>
+                                        </TextBlock>
                                         <!-- Text -->
                                         <TextBlock Text="{Binding DisplayName}" 
                                                    VerticalAlignment="Center"

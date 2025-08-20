@@ -1,6 +1,6 @@
 # CST Avalonia Project Status - August 2025
 
-## Current Status: **FONT SYSTEM & SCRIPT SYNCHRONIZATION COMPLETE** ✅
+## Current Status: **UI ENHANCEMENTS & LOGGING CLEANUP** 🎨
 
 **Last Updated**: August 18, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
@@ -11,7 +11,38 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 
 ## Latest Session Update (2025-08-18)
 
-### ✅ **MAJOR MILESTONE: Complete Font System Implementation**
+### ✅ **COMPLETED: Mac-Style Book Tree Icons & Logging Cleanup**
+
+#### **Enhanced Book Tree Icons** 
+- **Dynamic Icon States**: Smart folder icons that change based on expand/collapse state
+  - 📁 Closed folder emoji for collapsed categories
+  - 📂 Open folder emoji for expanded categories  
+  - 📄 Document emoji for individual books
+- **Custom Converter**: `CategoryIconConverter` for proper icon visibility logic
+- **Improved UX**: Visual feedback when expanding/collapsing tree nodes
+
+**Technical Implementation**:
+- Custom multi-value converter handles folder open/closed logic
+- Unicode emojis provide consistent cross-platform icons
+- Future enhancement: Replace with proper Mac-style PNG/SVG icons when Avalonia SVG support improves
+
+**Files Added/Modified**:
+- `/Converters/CategoryIconConverter.cs` - Multi-value converter for icon state logic
+- `/Views/OpenBookPanel.axaml` - Updated to use dynamic folder icons
+
+#### **Production Logging Cleanup**
+- **Structured Logging**: Replaced all Console.WriteLine with proper Serilog logging
+- **Appropriate Log Levels**: Debug, Information, Warning, Error based on context
+- **Reduced Log Volume**: Removed excessive timestamp logging for production use
+- **Exception Handling**: Proper structured exception logging with context
+
+**Major Files Cleaned Up**:
+- ✅ `App.axaml.cs` (28+ console statements → structured logging)
+- ✅ `SplashScreen.axaml.cs` (22 console statements → structured logging)
+- ✅ `CstDockFactory.cs`, `SearchService.cs`, `CstHostWindow.cs` (previously completed)
+- **Remaining**: ViewModels still need logging cleanup (BookDisplayViewModel, SearchPanel, etc.)
+
+### ✅ **PREVIOUS MILESTONE: Complete Font System Implementation**
 
 #### **Font System Infrastructure**
 - **FontService**: Complete implementation for all 14 Pali scripts with caching fixes
