@@ -419,9 +419,9 @@ public class SearchService : ISearchService
     private BitArray CalculateBookBits(BookFilter filter, Books books)
     {
         int bookCount = books.Count;
-        BitArray bookBits = null;
-        BitArray clBits = null;
-        BitArray pitBits = null;
+        BitArray? bookBits = null;
+        BitArray? clBits = null;
+        BitArray? pitBits = null;
         bool clSelected = false;
         bool pitSelected = false;
 
@@ -452,20 +452,20 @@ public class SearchService : ISearchService
         }
 
         // Combine filters
-        if (clSelected && pitSelected)
+        if (clSelected && pitSelected && clBits != null && pitBits != null)
             bookBits = clBits.And(pitBits);
-        else if (clSelected)
+        else if (clSelected && clBits != null)
             bookBits = clBits;
-        else if (pitSelected)
+        else if (pitSelected && pitBits != null)
             bookBits = pitBits;
         else
             bookBits = new BitArray(bookCount, true); // Include all if no filters
 
         // Add other texts if selected
-        if (filter.IncludeOther)
+        if (filter.IncludeOther && bookBits != null)
             bookBits = bookBits.Or(books.OtherBits);
 
-        return bookBits;
+        return bookBits ?? new BitArray(bookCount, true); // Return all books if somehow null
     }
 
     private async Task EnsureDocIdsAsync(DirectoryReader reader, Books books)

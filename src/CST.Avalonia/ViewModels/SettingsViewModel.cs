@@ -277,11 +277,15 @@ namespace CST.Avalonia.ViewModels
                     FontSize = kvp.Value.FontSize,
                     Parent = this
                 };
+                // Initialize the preview text and font display name after setting all properties
+                vm.UpdatePreviewText();
+                vm.UpdateFontDisplayName();
                 ScriptFontSettings.Add(vm);
             }
             
-            // Select Devanagari by default since user mentioned wanting to adjust it
-            SelectedScript = ScriptFontSettings.FirstOrDefault(s => s.ScriptName == "Devanagari") 
+            // Select Latin (Roman) by default as it's the most commonly used script
+            SelectedScript = ScriptFontSettings.FirstOrDefault(s => s.ScriptName == "Roman") 
+                           ?? ScriptFontSettings.FirstOrDefault(s => s.ScriptName == "Latin")
                            ?? ScriptFontSettings.FirstOrDefault();
                            
             // Initialize localization font settings
@@ -363,11 +367,37 @@ namespace CST.Avalonia.ViewModels
         private string _scriptName = "";
         private string _fontFamily = "";
         private int _fontSize = 12;
+        private string _previewText = "";
+        private string _effectiveFontFamily = "";
+        private string _fontDisplayName = "";
         
         public string ScriptName
         {
             get => _scriptName;
-            set => this.RaiseAndSetIfChanged(ref _scriptName, value);
+            set 
+            {
+                this.RaiseAndSetIfChanged(ref _scriptName, value);
+                UpdatePreviewText();
+                UpdateFontDisplayName();
+            }
+        }
+        
+        public string PreviewText
+        {
+            get => _previewText;
+            private set => this.RaiseAndSetIfChanged(ref _previewText, value);
+        }
+        
+        public string EffectiveFontFamily
+        {
+            get => _effectiveFontFamily;
+            private set => this.RaiseAndSetIfChanged(ref _effectiveFontFamily, value);
+        }
+        
+        public string FontDisplayName
+        {
+            get => _fontDisplayName;
+            private set => this.RaiseAndSetIfChanged(ref _fontDisplayName, value);
         }
         
         public string FontFamily
@@ -376,6 +406,7 @@ namespace CST.Avalonia.ViewModels
             set
             {
                 this.RaiseAndSetIfChanged(ref _fontFamily, value);
+                UpdateFontDisplayName();
                 if (Parent != null)
                 {
                     Parent.UpdateScriptFont(ScriptName, value, FontSize);
@@ -397,6 +428,108 @@ namespace CST.Avalonia.ViewModels
         }
         
         public AppearanceSettingsViewModel? Parent { get; set; }
+        
+        public void UpdatePreviewText()
+        {
+            const string basePaliText = "sabbe satta bhavantu sukhitatta"; // Pali text in Latin script
+            
+            try
+            {
+                // Convert script name to Script enum
+                var fromScript = Script.Latin;
+                var toScript = GetScriptFromName(ScriptName);
+                
+                // Convert the text to the appropriate script and capitalize
+                PreviewText = ScriptConverter.Convert(basePaliText, fromScript, toScript, true);
+            }
+            catch (Exception)
+            {
+                // If conversion fails, use original text capitalized
+                PreviewText = basePaliText.ToUpper();
+            }
+        }
+        
+        private static Script GetScriptFromName(string scriptName)
+        {
+            return scriptName switch
+            {
+                "Bengali" => Script.Bengali,
+                "Cyrillic" => Script.Cyrillic,
+                "Devanagari" => Script.Devanagari,
+                "Gujarati" => Script.Gujarati,
+                "Gurmukhi" => Script.Gurmukhi,
+                "Kannada" => Script.Kannada,
+                "Khmer" => Script.Khmer,
+                "Malayalam" => Script.Malayalam,
+                "Myanmar" => Script.Myanmar,
+                "Roman" => Script.Latin, // CST4 uses "Roman" instead of "Latin"
+                "Latin" => Script.Latin,
+                "Sinhala" => Script.Sinhala,
+                "Telugu" => Script.Telugu,
+                "Thai" => Script.Thai,
+                "Tibetan" => Script.Tibetan,
+                _ => Script.Devanagari // Default fallback
+            };
+        }
+        
+        public void UpdateFontDisplayName()
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(FontFamily))
+                {
+                    // Try to get the actual system default font name for this script
+                    var systemFontName = GetSystemDefaultFontName();
+                    
+                    if (!string.IsNullOrEmpty(systemFontName) && systemFontName != "$Default")
+                    {
+                        FontDisplayName = $"System Default ({systemFontName})";
+                        EffectiveFontFamily = systemFontName;
+                    }
+                    else
+                    {
+                        FontDisplayName = "System Default";
+                        EffectiveFontFamily = ""; // Empty string will use system default in Avalonia
+                    }
+                }
+                else
+                {
+                    FontDisplayName = FontFamily;
+                    EffectiveFontFamily = FontFamily;
+                }
+            }
+            catch (Exception)
+            {
+                FontDisplayName = string.IsNullOrWhiteSpace(FontFamily) ? "System Default" : FontFamily;
+                EffectiveFontFamily = FontFamily;
+            }
+        }
+        
+        private static string GetSystemDefaultFontName()
+        {
+            try
+            {
+                // Try platform-specific approaches to get the actual system font
+                if (OperatingSystem.IsMacOS())
+                {
+                    return "SF Pro Text"; // macOS system font
+                }
+                else if (OperatingSystem.IsWindows())
+                {
+                    return "Segoe UI"; // Windows system font
+                }
+                else if (OperatingSystem.IsLinux())
+                {
+                    return "DejaVu Sans"; // Common Linux system font
+                }
+                
+                return "System Default";
+            }
+            catch
+            {
+                return "System Default";
+            }
+        }
     }
 
     public class SearchSettingsViewModel : ViewModelBase
@@ -516,6 +649,9 @@ namespace CST.Avalonia.ViewModels
 
             // Open logs folder command
             OpenLogsCommand = ReactiveCommand.Create(OpenLogsFolder);
+            
+            // Font detection POC command
+            TestFontDetectionCommand = ReactiveCommand.Create(TestFontDetection);
 
             // Update service when log level changes
             this.WhenAnyValue(x => x.LogLevel)
@@ -540,6 +676,7 @@ namespace CST.Avalonia.ViewModels
         public string[] LogLevels { get; }
         public ViewModelBase? Parent { get; set; }
         public ReactiveCommand<Unit, Unit> OpenLogsCommand { get; }
+        public ReactiveCommand<Unit, Unit> TestFontDetectionCommand { get; }
 
         private void OpenLogsFolder()
         {
@@ -570,6 +707,27 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
+        private void TestFontDetection()
+        {
+            try
+            {
+                _logger.Information("Starting Font Detection POC Test");
+                
+                // Create POC with a basic logger (we'll need DI to get proper logger)
+                var pocLogger = Log.ForContext<FontDetectionPOC>();
+                var poc = new FontDetectionPOC(pocLogger);
+                
+                // Run the tests
+                poc.RunTests();
+                
+                _logger.Information("Font Detection POC Test Complete - check logs for results");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to run font detection POC");
+            }
+        }
+        
         private void ReconfigureLogger(string logLevel)
         {
             try

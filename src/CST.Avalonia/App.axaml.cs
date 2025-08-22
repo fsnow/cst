@@ -34,7 +34,6 @@ public partial class App : Application
 {
     public static ServiceProvider? ServiceProvider { get; private set; }
     public static Window? MainWindow { get; private set; }
-    private bool _isRestoringBookWindows = false;
     private bool _hasRestoredInitialBooks = false;
 
     public override void Initialize()
@@ -447,9 +446,6 @@ public partial class App : Application
         {
             Log.Information("Restoring {BookCount} book windows from saved state", bookWindows.Count);
             
-            // Set flag to prevent re-entrant restoration
-            _isRestoringBookWindows = true;
-            
             // We need to delay restoration until the UI is fully loaded
             // Schedule the restoration on the UI thread after a delay
             Dispatcher.UIThread.Post(async () =>
@@ -536,16 +532,12 @@ public partial class App : Application
                     {
                         stateService.SetStateChangedEventsSuppression(false);
                     }
-                    
-                    // Clear flag when restoration is complete
-                    _isRestoringBookWindows = false;
                 }
             });
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to restore book windows");
-            _isRestoringBookWindows = false;
         }
     }
     

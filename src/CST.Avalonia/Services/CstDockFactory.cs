@@ -142,9 +142,10 @@ namespace CST.Avalonia.Services
                                     await System.Threading.Tasks.Task.Delay(50); // Small delay to let UI update
                                     await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                                     {
-                                        if (observableCollection.Contains(item as IDockable))
+                                        var dockableItem = item as IDockable;
+                                        if (dockableItem != null && observableCollection.Contains(dockableItem))
                                         {
-                                            observableCollection.Remove(item as IDockable);
+                                            observableCollection.Remove(dockableItem);
                                             // Float the tool instead of losing it
                                             if (item is IDockable dockable)
                                             {
@@ -371,7 +372,7 @@ namespace CST.Avalonia.Services
             // Search terms are already passed to BookDisplayViewModel constructor for highlighting
             
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
-            bookDisplayViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
+            bookDisplayViewModel!.OpenBookRequested += (linkedBook, anchorForLinked) =>
             {
                 _logger.Debug("Opening linked book: {BookFile} with anchor: {Anchor}", linkedBook.FileName, anchorForLinked ?? "null");
                 // Open the linked book with anchor navigation for positioning
@@ -462,7 +463,7 @@ namespace CST.Avalonia.Services
             }
             
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
-            bookDisplayViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
+            bookDisplayViewModel!.OpenBookRequested += (linkedBook, anchorForLinked) =>
             {
                 _logger.Debug("Opening linked book: {BookFile} with anchor: {Anchor}", linkedBook.FileName, anchorForLinked ?? "null");
                 // Open the linked book with anchor navigation for positioning
@@ -814,7 +815,15 @@ namespace CST.Avalonia.Services
             Log.Information("*** Using framework default split behavior ***");
             
             // Let the framework handle the split
-            base.SplitToDock(dock, dockable, operation);
+            if (dock != null && dockable != null)
+            {
+                base.SplitToDock(dock, dockable, operation);
+            }
+            else
+            {
+                Log.Warning("*** SplitToDock called with null parameters - dock: {Dock}, dockable: {Dockable} ***", dock != null, dockable != null);
+                return;
+            }
             
             // Immediately set 50/50 proportions for split operations
             var operationString = operation.ToString();
@@ -981,7 +990,7 @@ namespace CST.Avalonia.Services
                     dock?.GetType().Name, dock?.Id);
                 
                 // Find the parent that contains this dock
-                var parent = FindParentDock(dock);
+                var parent = dock != null ? FindParentDock(dock) : null;
                 if (parent is ProportionalDock proportionalParent && proportionalParent.VisibleDockables != null)
                 {
                     Log.Information("*** Found ProportionalDock parent: {ParentId} with {ChildCount} dockables ***", 
@@ -1097,7 +1106,15 @@ namespace CST.Avalonia.Services
             try 
             {
                 Log.Information("*** Calling base FloatDockable ***");
-                base.FloatDockable(dockable);
+                if (dockable != null)
+                {
+                    base.FloatDockable(dockable);
+                }
+                else
+                {
+                    Log.Warning("*** FloatDockable called with null dockable ***");
+                    return;
+                }
                 Log.Information("*** Base FloatDockable completed successfully ***");
                 
                 // Clean up any empty splits left behind after floating
@@ -1151,7 +1168,14 @@ namespace CST.Avalonia.Services
                 Log.Information("*** Closing document: {DocumentTitle} ***", document.Title);
             }
             
-            base.CloseDockable(dockable);
+            if (dockable != null)
+            {
+                base.CloseDockable(dockable);
+            }
+            else
+            {
+                Log.Warning("*** CloseDockable called with null dockable ***");
+            }
             
             // Clean up empty splits after closing a dockable
             Log.Information("*** Post-close cleanup - checking for empty splits ***");
@@ -1162,7 +1186,15 @@ namespace CST.Avalonia.Services
         public override void SwapDockable(IDock dock, IDockable sourceDockable, IDockable targetDockable)
         {
             Log.Information("*** SwapDockable called - Dock: {DockId}, Source: {SourceId}, Target: {TargetId} ***", dock?.Id, sourceDockable?.Id, targetDockable?.Id);
-            base.SwapDockable(dock, sourceDockable, targetDockable);
+            if (dock != null && sourceDockable != null && targetDockable != null)
+            {
+                base.SwapDockable(dock, sourceDockable, targetDockable);
+            }
+            else
+            {
+                Log.Warning("*** SwapDockable called with null parameters ***");
+                return;
+            }
             Log.Information("*** SwapDockable completed ***");
             
             // Trigger cleanup after swap operations as they can leave empty structures
@@ -1174,7 +1206,15 @@ namespace CST.Avalonia.Services
         public override void MoveDockable(IDock dock, IDockable sourceDockable, IDockable targetDockable)
         {
             Log.Information("*** MoveDockable called - Dock: {DockId}, Source: {SourceId}, Target: {TargetId} ***", dock?.Id, sourceDockable?.Id, targetDockable?.Id);
-            base.MoveDockable(dock, sourceDockable, targetDockable);
+            if (dock != null && sourceDockable != null && targetDockable != null)
+            {
+                base.MoveDockable(dock, sourceDockable, targetDockable);
+            }
+            else
+            {
+                Log.Warning("*** MoveDockable called with null parameters ***");
+                return;
+            }
             Log.Information("*** MoveDockable completed ***");
             
             // Trigger cleanup after move operations as they can leave empty structures
@@ -1186,7 +1226,15 @@ namespace CST.Avalonia.Services
         public override void AddDockable(IDock dock, IDockable dockable)
         {
             Log.Information("*** AddDockable called - Dock: {DockId}, Dockable: {DockableId} ***", dock?.Id, dockable?.Id);
-            base.AddDockable(dock, dockable);
+            if (dock != null && dockable != null)
+            {
+                base.AddDockable(dock, dockable);
+            }
+            else
+            {
+                Log.Warning("*** AddDockable called with null parameters ***");
+                return;
+            }
             Log.Information("*** AddDockable completed ***");
             
             // Trigger cleanup after add operations 
@@ -1198,7 +1246,15 @@ namespace CST.Avalonia.Services
         public override void RemoveDockable(IDockable dockable, bool collapse)
         {
             Log.Information("*** RemoveDockable called - Dockable: {DockableId}, Collapse: {Collapse} ***", dockable?.Id, collapse);
-            base.RemoveDockable(dockable, collapse);
+            if (dockable != null)
+            {
+                base.RemoveDockable(dockable, collapse);
+            }
+            else
+            {
+                Log.Warning("*** RemoveDockable called with null dockable ***");
+                return;
+            }
             Log.Information("*** RemoveDockable completed ***");
             
             // Trigger cleanup after remove operations
@@ -1568,9 +1624,9 @@ namespace CST.Avalonia.Services
                 if (dock is ProportionalDock proportionalDock)
                 {
                     // Count non-splitter dockables
-                    var nonSplitterDockables = proportionalDock.VisibleDockables
+                    var nonSplitterDockables = proportionalDock.VisibleDockables?
                         .Where(d => !(d is ProportionalDockSplitter))
-                        .ToList();
+                        .ToList() ?? new List<IDockable>();
                     
                     Log.Information("*** ProportionalDock {DockId} has {NonSplitterCount} non-splitter dockables ***", 
                         proportionalDock.Id ?? "null", nonSplitterDockables.Count);
@@ -1882,7 +1938,7 @@ namespace CST.Avalonia.Services
                 if (_context is IDock rootDock && rootDock.VisibleDockables != null)
                 {
                     Log.Information("*** Searching in main window hierarchy ***");
-                    var parent = FindParentDockRecursive(rootDock, targetDock);
+                    var parent = targetDock != null ? FindParentDockRecursive(rootDock, targetDock) : null;
                     if (parent != null)
                     {
                         Log.Information("*** Found parent in main window: {ParentType} (ID: {ParentId}) ***", 
@@ -1899,7 +1955,7 @@ namespace CST.Avalonia.Services
                     if (hostWindow is CstHostWindow cstHostWindow && cstHostWindow.Layout is IDock floatingDock)
                     {
                         Log.Information("*** Searching in floating window {Index} ({WindowId}) ***", i, cstHostWindow.Id);
-                        var parent = FindParentDockRecursive(floatingDock, targetDock);
+                        var parent = targetDock != null ? FindParentDockRecursive(floatingDock, targetDock) : null;
                         if (parent != null)
                         {
                             Log.Information("*** Found parent in floating window {Index}: {ParentType} (ID: {ParentId}) ***", 
