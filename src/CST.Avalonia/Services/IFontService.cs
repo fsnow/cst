@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Conversion;
 
@@ -35,5 +37,10 @@ namespace CST.Avalonia.Services
         /// Event raised when font settings change
         /// </summary>
         event EventHandler? FontSettingsChanged;
+
+        /// <summary>
+        /// Gets a list of available font family names for a specific script.
+        /// </summary>
+        Task<List<string>> GetAvailableFontsForScriptAsync(Script script);
     }
 }

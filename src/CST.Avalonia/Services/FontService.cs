@@ -1,5 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using Avalonia.Media;
 using CST.Avalonia.Models;
+#if MACOS
+using CST.Avalonia.Services.Platform.Mac;
+#endif
 using CST.Conversion;
 using Microsoft.Extensions.Logging;
 
@@ -9,11 +17,21 @@ namespace CST.Avalonia.Services
     {
         private readonly ISettingsService _settingsService;
         private readonly ILogger<FontService> _logger;
+#if MACOS
+        private readonly MacFontService? _macFontService;
+#endif
 
+#if MACOS
+        public FontService(ISettingsService settingsService, ILogger<FontService> logger, MacFontService? macFontService = null)
+#else
         public FontService(ISettingsService settingsService, ILogger<FontService> logger)
+#endif
         {
             _settingsService = settingsService;
             _logger = logger;
+#if MACOS
+            _macFontService = macFontService;
+#endif
         }
 
         // Helper property to always get current font settings
@@ -55,6 +73,7 @@ namespace CST.Avalonia.Services
             return CurrentFontSettings.LocalizationFontFamily ?? "";
         }
 
+
         public int GetLocalizationFontSize()
         {
             return CurrentFontSettings.LocalizationFontSize;
@@ -70,5 +89,21 @@ namespace CST.Avalonia.Services
         }
 
         public event EventHandler? FontSettingsChanged;
+        
+        public async Task<List<string>> GetAvailableFontsForScriptAsync(Script script)
+        {
+            _logger.LogInformation("Getting available fonts for script: {Script}", script);
+#if MACOS
+            if (_macFontService != null)
+            {
+                _logger.LogDebug("Using MacFontService to get fonts.");
+                return await _macFontService.GetAvailableFontsForScriptAsync(script);
+            }
+#endif
+        
+            // Fallback for non-Mac platforms
+            _logger.LogDebug("Using fallback method to get all system fonts.");
+            return await Task.FromResult(FontManager.Current.SystemFonts.Select(f => f.Name).ToList());
+        }
     }
 }

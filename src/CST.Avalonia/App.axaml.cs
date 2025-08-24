@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -26,7 +27,9 @@ using Serilog.Events;
 using ReactiveUI;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Reactive.Disposables;
+#if MACOS
+using CST.Avalonia.Services.Platform.Mac;
+#endif
 
 namespace CST.Avalonia;
 
@@ -720,6 +723,15 @@ public partial class App : Application
             .CreateLogger();
 
         services.AddLogging(builder => builder.AddSerilog());
+
+#if MACOS
+        // Conditionally register the Mac-specific font service
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            services.AddSingleton<MacFontService>();
+            services.AddTransient<Services.Platform.Mac.TiroDevanagariTest>();
+        }
+#endif
 
         // Register services
         services.AddSingleton<ILocalizationService, LocalizationService>();

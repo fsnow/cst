@@ -12,6 +12,11 @@
     <CFBundleIdentifier>com.cst.avalonia</CFBundleIdentifier>
     <CFBundleVersion>1.0.0</CFBundleVersion>
     <CFBundleShortVersionString>1.0.0</CFBundleShortVersionString>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <DefineConstants>MACOS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

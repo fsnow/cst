@@ -72,7 +72,9 @@ namespace CST.Conversion
                 if (outputScript == Script.Devanagari)
                     outStr = Latn2Deva.Convert(str);
                 else
-                    outStr = "";
+                {
+                    outStr = Convert(Any2Deva.Convert(str), Script.Devanagari, outputScript);
+                }
             }
             else if (inputScript == Script.Unknown)
             {

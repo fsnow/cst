@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
 using CST.Conversion;
+using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
 using Serilog;
 
@@ -26,6 +27,11 @@ namespace CST.Avalonia.ViewModels
         {
             _settingsService = settingsService;
             _logger = Log.ForContext<SettingsViewModel>();
+
+#if MACOS
+            // Quick test: Try font detection for different scripts
+            TestFontDetectionForMultipleScripts();
+#endif
 
             // Initialize categories
             var generalSettings = new GeneralSettingsViewModel(_settingsService) { Parent = this };
@@ -129,6 +135,65 @@ namespace CST.Avalonia.ViewModels
             _logger.Debug("Browse for Index directory requested from GeneralSettings");
             BrowseForIndexDirectory?.Invoke();
         }
+
+#if MACOS
+        private void RunTiroDevanagariTest()
+        {
+            try
+            {
+                var test = App.ServiceProvider?.GetService<Services.Platform.Mac.TiroDevanagariTest>();
+                if (test != null)
+                {
+                    _logger.Information("Running Tiro Devanagari font test...");
+                    test.TestTiroDevanagariFont();
+                }
+                else
+                {
+                    _logger.Warning("TiroDevanagariTest service not available");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to run Tiro Devanagari test");
+            }
+        }
+
+        private async void TestFontDetectionForMultipleScripts()
+        {
+            try
+            {
+                _logger.Information("Testing font detection for multiple scripts...");
+                
+                var fontService = App.ServiceProvider?.GetService<IFontService>();
+                if (fontService == null)
+                {
+                    _logger.Warning("Font service not available for testing");
+                    return;
+                }
+
+                // Test a few different scripts
+                var scriptsToTest = new[] 
+                { 
+                    Script.Bengali, 
+                    Script.Telugu, 
+                    Script.Gujarati,
+                    Script.Myanmar 
+                };
+
+                foreach (var script in scriptsToTest)
+                {
+                    _logger.Information("Testing font detection for {Script}", script);
+                    var fonts = await fontService.GetAvailableFontsForScriptAsync(script);
+                    _logger.Information("Found {Count} fonts for {Script}: {Fonts}", 
+                        fonts.Count, script, string.Join(", ", fonts.Take(5)));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error during font detection test");
+            }
+        }
+#endif
     }
 
     public class SettingsCategoryViewModel : ViewModelBase
@@ -254,12 +319,14 @@ namespace CST.Avalonia.ViewModels
     public class AppearanceSettingsViewModel : ViewModelBase
     {
         private readonly ISettingsService _settingsService;
+        private readonly IFontService _fontService;
         private string _theme;
         private ScriptFontSettingViewModel? _selectedScript;
 
         public AppearanceSettingsViewModel(ISettingsService settingsService)
         {
             _settingsService = settingsService;
+            _fontService = App.ServiceProvider.GetRequiredService<IFontService>();
             _theme = _settingsService.Settings.Theme;
 
             Themes = new[] { "Light", "Dark", "Auto" };
@@ -312,6 +379,10 @@ namespace CST.Avalonia.ViewModels
                     var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
                     fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
                 });
+            
+            this.WhenAnyValue(x => x.SelectedScript)
+                .Where(s => s != null)
+                .Subscribe(async s => await LoadAvailableFontsForScript(s!));
         }
 
         public string Theme
@@ -360,6 +431,19 @@ namespace CST.Avalonia.ViewModels
                 fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
             }
         }
+        
+        private async Task LoadAvailableFontsForScript(ScriptFontSettingViewModel scriptVm)
+        {
+            scriptVm.IsLoadingFonts = true;
+            var scriptEnum = ScriptFontSettingViewModel.GetScriptFromName(scriptVm.ScriptName);
+            var fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
+            
+            // Add a "System Default" option to the top of the list
+            fonts.Insert(0, "System Default");
+            
+            scriptVm.AvailableFonts = new ObservableCollection<string>(fonts);
+            scriptVm.IsLoadingFonts = false;
+        }
     }
     
     public class ScriptFontSettingViewModel : ViewModelBase
@@ -370,6 +454,8 @@ namespace CST.Avalonia.ViewModels
         private string _previewText = "";
         private string _effectiveFontFamily = "";
         private string _fontDisplayName = "";
+        private bool _isLoadingFonts;
+        private ObservableCollection<string> _availableFonts = new();
         
         public string ScriptName
         {
@@ -405,13 +491,20 @@ namespace CST.Avalonia.ViewModels
             get => _fontFamily;
             set
             {
-                this.RaiseAndSetIfChanged(ref _fontFamily, value);
-                UpdateFontDisplayName();
-                if (Parent != null)
+                var valueToSet = (value == "System Default") ? "" : value;
+                if (_fontFamily != valueToSet)
                 {
-                    Parent.UpdateScriptFont(ScriptName, value, FontSize);
+                    this.RaiseAndSetIfChanged(ref _fontFamily, valueToSet);
+                    UpdateFontDisplayName();
+                    Parent?.UpdateScriptFont(ScriptName, valueToSet, FontSize);
                 }
             }
+        }
+        
+        public string SelectedFontFamily
+        {
+            get => string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily;
+            set => FontFamily = value;
         }
         
         public int FontSize
@@ -420,11 +513,20 @@ namespace CST.Avalonia.ViewModels
             set
             {
                 this.RaiseAndSetIfChanged(ref _fontSize, value);
-                if (Parent != null)
-                {
-                    Parent.UpdateScriptFont(ScriptName, FontFamily, value);
-                }
+                Parent?.UpdateScriptFont(ScriptName, _fontFamily, value);
             }
+        }
+        
+        public bool IsLoadingFonts
+        {
+            get => _isLoadingFonts;
+            set => this.RaiseAndSetIfChanged(ref _isLoadingFonts, value);
+        }
+
+        public ObservableCollection<string> AvailableFonts
+        {
+            get => _availableFonts;
+            set => this.RaiseAndSetIfChanged(ref _availableFonts, value);
         }
         
         public AppearanceSettingsViewModel? Parent { get; set; }
@@ -449,7 +551,7 @@ namespace CST.Avalonia.ViewModels
             }
         }
         
-        private static Script GetScriptFromName(string scriptName)
+        public static Script GetScriptFromName(string scriptName)
         {
             return scriptName switch
             {
@@ -489,7 +591,7 @@ namespace CST.Avalonia.ViewModels
                     else
                     {
                         FontDisplayName = "System Default";
-                        EffectiveFontFamily = ""; // Empty string will use system default in Avalonia
+                        EffectiveFontFamily = "Helvetica"; // Use a specific fallback font instead of empty string
                     }
                 }
                 else
@@ -501,8 +603,11 @@ namespace CST.Avalonia.ViewModels
             catch (Exception)
             {
                 FontDisplayName = string.IsNullOrWhiteSpace(FontFamily) ? "System Default" : FontFamily;
-                EffectiveFontFamily = FontFamily;
+                EffectiveFontFamily = string.IsNullOrWhiteSpace(FontFamily) ? "Helvetica" : FontFamily;
             }
+            
+            // Force property change notification for EffectiveFontFamily to update the preview
+            this.RaisePropertyChanged(nameof(EffectiveFontFamily));
         }
         
         private static string GetSystemDefaultFontName()
