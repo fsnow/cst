@@ -190,6 +190,41 @@ namespace CST.Avalonia.Services.Platform.Mac
         [LibraryImport(CoreTextLibrary)]
         public static partial IntPtr CTFontDescriptorCopyAttribute(IntPtr descriptor, IntPtr attribute);
         
+        // System font creation and string-based font matching
+        [LibraryImport(CoreTextLibrary)]
+        public static partial IntPtr CTFontCreateUIFontForLanguage(CTFontUIFontType uiType, double size, IntPtr language);
+        
+        [LibraryImport(CoreTextLibrary)]
+        public static partial IntPtr CTFontCreateForStringWithLanguage(IntPtr font, IntPtr theString, CFRange range, IntPtr language);
+        
+        [LibraryImport(CoreTextLibrary)]
+        public static partial IntPtr CTFontCopyFamilyName(IntPtr font);
+        
+        // Font UI type enumeration
+        public enum CTFontUIFontType : uint
+        {
+            kCTFontUIFontSystem = 2
+        }
+        
+        // CFRange structure for string operations
+        public struct CFRange
+        {
+            public IntPtr location;
+            public IntPtr length;
+            
+            public CFRange(IntPtr location, IntPtr length)
+            {
+                this.location = location;
+                this.length = length;
+            }
+        }
+        
+        // Helper method to create CFRange
+        public static CFRange CFRangeMake(int location, int length)
+        {
+            return new CFRange((IntPtr)location, (IntPtr)length);
+        }
+        
         // Font Collection functions (for script-based matching)
         [LibraryImport(CoreTextLibrary)]
         public static partial IntPtr CTFontCollectionCreateWithFontDescriptors(IntPtr descriptors, IntPtr options);
@@ -241,6 +276,7 @@ namespace CST.Avalonia.Services.Platform.Mac
     public class MacFontService
     {
         private readonly ILogger<MacFontService> _logger;
+        private readonly Dictionary<Script, string?> _systemDefaultFontCache = new();
 
         public MacFontService(ILogger<MacFontService> logger)
         {
@@ -253,6 +289,28 @@ namespace CST.Avalonia.Services.Platform.Mac
             {
                 _logger.LogInformation("Querying fonts for script {Script} using character-set-based approach", script);
                 return GetFontsForScriptUsingCharacterSet(script);
+            });
+        }
+
+        public Task<string?> GetSystemDefaultFontForScriptAsync(Script script)
+        {
+            return Task.Run(() =>
+            {
+                // Check cache first
+                if (_systemDefaultFontCache.TryGetValue(script, out string? cachedFont))
+                {
+                    _logger.LogInformation("Returning cached system default font '{Font}' for script {Script}", cachedFont, script);
+                    return cachedFont;
+                }
+
+                // Get system default font for script
+                string? systemFont = GetSystemDefaultFontForScript(script);
+                
+                // Cache the result
+                _systemDefaultFontCache[script] = systemFont;
+                
+                _logger.LogInformation("Cached system default font '{Font}' for script {Script}", systemFont, script);
+                return systemFont;
             });
         }
 
@@ -389,6 +447,98 @@ namespace CST.Avalonia.Services.Platform.Mac
                     CoreFoundation.CFRelease(characterSetRef);
                 if (characterStringRef != IntPtr.Zero)
                     CoreFoundation.CFRelease(characterStringRef);
+            }
+        }
+
+        private string? GetSystemDefaultFontForScript(Script script)
+        {
+            _logger.LogInformation("Getting system default font for script {Script}", script);
+            
+            IntPtr sampleStringRef = IntPtr.Zero;
+            IntPtr systemFontRef = IntPtr.Zero;
+            IntPtr fontForScriptRef = IntPtr.Zero;
+            IntPtr familyNameRef = IntPtr.Zero;
+            
+            try
+            {
+                // Step 1: Get sample text for the target script - use same text as character set approach
+                string? sampleText = GetSampleCharactersForScript(script);
+                if (string.IsNullOrEmpty(sampleText))
+                {
+                    _logger.LogWarning("No sample characters available for script {Script}", script);
+                    return null;
+                }
+                
+                _logger.LogInformation("Using sample text '{Text}' for script {Script}", sampleText, script);
+                
+                // Step 2: Create CFString with sample text
+                sampleStringRef = CoreFoundation.CFStringCreateWithCString(
+                    IntPtr.Zero,
+                    sampleText,
+                    CoreFoundation.CFStringEncoding.kCFStringEncodingUTF8);
+                    
+                if (sampleStringRef == IntPtr.Zero)
+                {
+                    _logger.LogError("Failed to create CFString for sample text");
+                    return null;
+                }
+                
+                // Step 3: Create a default system font
+                systemFontRef = CoreText.CTFontCreateUIFontForLanguage(
+                    CoreText.CTFontUIFontType.kCTFontUIFontSystem, 
+                    18.0, 
+                    IntPtr.Zero);
+                    
+                if (systemFontRef == IntPtr.Zero)
+                {
+                    _logger.LogError("Failed to create system font");
+                    return null;
+                }
+                
+                // Step 4: Use CTFontCreateForStringWithLanguage to determine appropriate font
+                IntPtr stringLength = CoreFoundation.CFStringGetLength(sampleStringRef);
+                CoreText.CFRange range = CoreText.CFRangeMake(0, (int)(long)stringLength);
+                
+                fontForScriptRef = CoreText.CTFontCreateForStringWithLanguage(
+                    systemFontRef,
+                    sampleStringRef,
+                    range,
+                    IntPtr.Zero);
+                    
+                if (fontForScriptRef == IntPtr.Zero)
+                {
+                    _logger.LogError("Failed to create font for script");
+                    return null;
+                }
+                
+                // Step 5: Extract the font family name
+                familyNameRef = CoreText.CTFontCopyFamilyName(fontForScriptRef);
+                if (familyNameRef == IntPtr.Zero)
+                {
+                    _logger.LogError("Failed to get font family name");
+                    return null;
+                }
+                
+                string? familyName = CoreFoundation.CFStringToString(familyNameRef);
+                _logger.LogInformation("System will use font family '{FontFamily}' for script {Script}", familyName, script);
+                
+                return familyName;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception while getting system default font for script {Script}", script);
+                return null;
+            }
+            finally
+            {
+                if (familyNameRef != IntPtr.Zero)
+                    CoreFoundation.CFRelease(familyNameRef);
+                if (fontForScriptRef != IntPtr.Zero)
+                    CoreFoundation.CFRelease(fontForScriptRef);
+                if (systemFontRef != IntPtr.Zero)
+                    CoreFoundation.CFRelease(systemFontRef);
+                if (sampleStringRef != IntPtr.Zero)
+                    CoreFoundation.CFRelease(sampleStringRef);
             }
         }
 

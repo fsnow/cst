@@ -47,5 +47,10 @@ namespace CST.Avalonia.Services
         /// Gets a list of available font family names for a specific script.
         /// </summary>
         Task<List<string>> GetAvailableFontsForScriptAsync(Script script);
+        
+        /// <summary>
+        /// Gets the system default font family name for a specific script.
+        /// </summary>
+        Task<string?> GetSystemDefaultFontForScriptAsync(Script script);
     }
 }

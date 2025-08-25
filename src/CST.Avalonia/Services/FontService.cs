@@ -145,5 +145,22 @@ namespace CST.Avalonia.Services
             _cachedFonts[script] = fallbackFonts; // Cache the result
             return await Task.FromResult(fallbackFonts);
         }
+        
+        public async Task<string?> GetSystemDefaultFontForScriptAsync(Script script)
+        {
+            _logger.LogInformation("Getting system default font for script: {Script}", script);
+            
+#if MACOS
+            if (_macFontService != null)
+            {
+                _logger.LogDebug("Using MacFontService to get system default font.");
+                return await _macFontService.GetSystemDefaultFontForScriptAsync(script);
+            }
+#endif
+            
+            // Fallback for non-Mac platforms - return null to indicate system default
+            _logger.LogDebug("Using fallback method - returning null for system default");
+            return await Task.FromResult<string?>(null);
+        }
     }
 }

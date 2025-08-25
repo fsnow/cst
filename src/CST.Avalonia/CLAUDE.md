@@ -31,11 +31,19 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 - **Solution**: Comprehensive fixes to font loading pipeline and selection persistence
 - **Result**: Per-script font selection now works reliably for all script-specific UI elements
 
+#### **System Default Font Detection Implementation**
+- **Core Text API Usage**: Uses `CTFontCreateUIFontForLanguage` + `CTFontCreateForStringWithLanguage` to determine actual system font choices
+- **Script-Specific Detection**: Converts sample Pali text to each script, then queries system for optimal font
+- **Caching System**: Results cached per script to avoid repeated P/Invoke calls
+- **Informational Display**: Shows "System Default (Devanagari Sangam MN)" style information in Settings UI
+- **Non-Intrusive**: Completely separate from font selection logic - purely informational
+
 **Files Added/Modified**:
-- `/Services/Platform/Mac/MacFontService.cs` - Native macOS font detection service
-- `/ViewModels/SettingsViewModel.cs` - Fixed font selection persistence and loading issues
-- `/Services/FontService.cs` - Enhanced font selection state management
-- `/Services/IFontService.cs` - Updated interface for improved font handling
+- `/Services/Platform/Mac/MacFontService.cs` - Added system default font detection with P/Invoke calls
+- `/ViewModels/SettingsViewModel.cs` - Added SystemDefaultFontName property and async loading
+- `/Services/FontService.cs` - Added GetSystemDefaultFontForScriptAsync delegation
+- `/Services/IFontService.cs` - Added GetSystemDefaultFontForScriptAsync interface method
+- `/Views/SettingsWindow.axaml` - Added system default font information display below preview
 
 #### **Complete Per-Script Font Selection Status**
 ✅ **Font Detection**: Native macOS font detection working for all 14 Pali scripts
@@ -43,6 +51,7 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 ✅ **UI Synchronization**: Font dropdowns correctly show selected fonts when loading
 ✅ **Script-Specific Filtering**: Font lists show only fonts compatible with each specific script
 ✅ **Real-time Updates**: Font changes apply immediately to all relevant UI elements
+✅ **System Default Detection**: Displays actual system default font name (e.g., "System Default (.SF Pro Text)") for informational purposes
 
 ## Latest Session Update (2025-08-18)
 

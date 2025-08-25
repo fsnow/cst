@@ -200,6 +200,7 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="80"/>
@@ -238,6 +239,16 @@
                                                                   VerticalAlignment="Center"
                                                                   Foreground="Black"/>
                                                     </Border>
+                                                    
+                                                    <!-- System Default Font Information -->
+                                                    <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                                                              Margin="0,8,0,0"
+                                                              FontSize="12"
+                                                              Foreground="Gray"
+                                                              IsVisible="{Binding SelectedScript.SystemDefaultFontName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                        <Run Text="System Default font is "/>
+                                                        <Run Text="{Binding SelectedScript.SystemDefaultFontName}" FontWeight="Medium"/>
+                                                    </TextBlock>
                                                 </Grid>
                                             </StackPanel>
                                         </Grid>

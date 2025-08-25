@@ -469,6 +469,19 @@ namespace CST.Avalonia.ViewModels
                 // Set the fonts collection
                 scriptVm.AvailableFonts = new ObservableCollection<string>(fontsCopy);
                 
+                // Load system default font information (fire and forget - purely for display)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await scriptVm.LoadSystemDefaultFontAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: Failed to load system default font info - {ex.Message}");
+                    }
+                });
+                
                 // Force a small delay to ensure UI has time to process the collection change
                 await Task.Delay(50);
                 
@@ -523,6 +536,7 @@ namespace CST.Avalonia.ViewModels
         private string _fontDisplayName = "";
         private bool _isLoadingFonts;
         private ObservableCollection<string> _availableFonts = new();
+        private string? _systemDefaultFontName;
         
         public string ScriptName
         {
@@ -656,7 +670,29 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _availableFonts, value);
         }
         
+        public string? SystemDefaultFontName
+        {
+            get => _systemDefaultFontName;
+            private set => this.RaiseAndSetIfChanged(ref _systemDefaultFontName, value);
+        }
+        
         public AppearanceSettingsViewModel? Parent { get; set; }
+        
+        public async Task LoadSystemDefaultFontAsync()
+        {
+            try
+            {
+                var scriptEnum = GetScriptFromName(ScriptName);
+                var fontService = App.ServiceProvider.GetRequiredService<IFontService>();
+                SystemDefaultFontName = await fontService.GetSystemDefaultFontForScriptAsync(scriptEnum);
+                UpdateFontDisplayName(); // Refresh display name with system default info
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to load system default font for script {Script}", ScriptName);
+                SystemDefaultFontName = null;
+            }
+        }
         
         public void UpdatePreviewText()
         {
@@ -707,19 +743,18 @@ namespace CST.Avalonia.ViewModels
             {
                 if (string.IsNullOrWhiteSpace(FontFamily))
                 {
-                    // Try to get the actual system default font name for this script
-                    var systemFontName = GetSystemDefaultFontName();
-                    
-                    if (!string.IsNullOrEmpty(systemFontName) && systemFontName != "$Default")
+                    // Use cached system default font name if available
+                    if (!string.IsNullOrEmpty(SystemDefaultFontName))
                     {
-                        FontDisplayName = $"System Default ({systemFontName})";
-                        EffectiveFontFamily = systemFontName;
-                        Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to system default: {systemFontName}");
+                        FontDisplayName = $"System Default ({SystemDefaultFontName})";
+                        EffectiveFontFamily = SystemDefaultFontName;
+                        Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to cached system default: {SystemDefaultFontName}");
                     }
                     else
                     {
+                        // No cached system default font available yet, use generic fallback
                         FontDisplayName = "System Default";
-                        EffectiveFontFamily = "Helvetica"; // Use a specific fallback font instead of empty string
+                        EffectiveFontFamily = "Helvetica"; // Use a specific fallback font for preview
                         Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to fallback: Helvetica");
                     }
                 }
@@ -742,31 +777,6 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(EffectiveFontFamily));
         }
         
-        private static string GetSystemDefaultFontName()
-        {
-            try
-            {
-                // Try platform-specific approaches to get the actual system font
-                if (OperatingSystem.IsMacOS())
-                {
-                    return "SF Pro Text"; // macOS system font
-                }
-                else if (OperatingSystem.IsWindows())
-                {
-                    return "Segoe UI"; // Windows system font
-                }
-                else if (OperatingSystem.IsLinux())
-                {
-                    return "DejaVu Sans"; // Common Linux system font
-                }
-                
-                return "System Default";
-            }
-            catch
-            {
-                return "System Default";
-            }
-        }
     }
 
     public class SearchSettingsViewModel : ViewModelBase
