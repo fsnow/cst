@@ -118,6 +118,20 @@ public partial class App : Application
             
             if (showSplash)
             {
+                SplashScreen.SetStatus("Pre-loading fonts...");
+                SplashScreen.SetReferencePoint();
+            }
+            
+            // Pre-load fonts for all scripts to avoid UI delays in settings
+            _ = Task.Run(async () =>
+            {
+                // Give settings time to load
+                await Task.Delay(500);
+                await InitializeFontsAsync();
+            });
+            
+            if (showSplash)
+            {
                 SplashScreen.SetStatus("Checking search index...");
                 SplashScreen.SetReferencePoint();
             }
@@ -281,6 +295,33 @@ public partial class App : Application
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to load settings: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Pre-load fonts for all scripts to avoid UI delays in settings
+    /// </summary>
+    private async Task InitializeFontsAsync()
+    {
+        try
+        {
+            Log.Information("InitializeFontsAsync() started");
+            
+            var fontService = ServiceProvider?.GetRequiredService<IFontService>();
+            if (fontService != null)
+            {
+                Log.Information("Pre-loading fonts for all scripts...");
+                await fontService.PreloadFontsForAllScriptsAsync();
+                Log.Information("Font pre-loading completed successfully");
+            }
+            else
+            {
+                Log.Error("Could not get FontService from DI container");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error pre-loading fonts");
         }
     }
 

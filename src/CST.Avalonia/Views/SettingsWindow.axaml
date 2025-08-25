@@ -41,7 +41,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="50"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="60"/>
         </Grid.RowDefinitions>
         
         <!-- Header with Search -->
@@ -234,9 +233,10 @@
                                                            BorderBrush="#E0E0E0" BorderThickness="1"
                                                            Background="White" Padding="10" Height="60">
                                                         <TextBlock Text="{Binding SelectedScript.PreviewText}"
-                                                                  FontFamily="{Binding SelectedScript.EffectiveFontFamily}"
+                                                                  FontFamily="{Binding SelectedScript.EffectiveFontFamilyObject}"
                                                                   FontSize="{Binding SelectedScript.FontSize}"
-                                                                  VerticalAlignment="Center"/>
+                                                                  VerticalAlignment="Center"
+                                                                  Foreground="Black"/>
                                                     </Border>
                                                 </Grid>
                                             </StackPanel>
@@ -377,25 +377,5 @@
                 </ContentControl>
             </ScrollViewer>
         </Grid>
-        
-        <!-- Footer with Save/Cancel -->
-        <Border Grid.Row="2" Background="#F0F0F0" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,0">
-                <TextBlock Text="* Unsaved changes" 
-                          IsVisible="{Binding HasUnsavedChanges}"
-                          Foreground="Orange"
-                          VerticalAlignment="Center"
-                          Margin="0,0,20,0"/>
-                
-                <Button Content="Cancel" 
-                       Command="{Binding CancelCommand}"
-                       Width="80" Margin="0,0,10,0"/>
-                
-                <Button Content="Save" 
-                       Command="{Binding SaveCommand}"
-                       Width="80"
-                       Classes="accent"/>
-            </StackPanel>
-        </Border>
     </Grid>
 </Window>

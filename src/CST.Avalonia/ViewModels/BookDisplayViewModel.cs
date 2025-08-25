@@ -104,7 +104,7 @@ namespace CST.Avalonia.ViewModels
             // Initialize properties
             _totalHits = searchTerms?.Count ?? 0;
             _hasSearchHighlights = _totalHits > 0;
-            _bookInfoText = $"{GetBookInfoDisplayName(book)} ({book.Matn})";
+            _bookInfoText = GetBookInfoDisplayName(book);
             
             // Initialize commands with simple setup to avoid threading issues
             FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit);
@@ -150,7 +150,7 @@ namespace CST.Avalonia.ViewModels
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         // Update book info text with new script
-                        BookInfoText = $"{GetBookInfoDisplayName(_book)} ({_book.Matn})";
+                        BookInfoText = GetBookInfoDisplayName(_book);
                         // Notify that DisplayTitle has changed (for tab updates)
                         this.RaisePropertyChanged(nameof(DisplayTitle));
                         
@@ -377,8 +377,8 @@ namespace CST.Avalonia.ViewModels
         public string DisplayTitle => GetBookDisplayName(_book);
         
         // Font properties for tab title, chapter dropdown, and status bar
-        public string CurrentScriptFontFamily => _fontService?.GetScriptFontFamily(_scriptService.CurrentScript) ?? "Helvetica";
-        public int CurrentScriptFontSize => _fontService?.GetScriptFontSize(_scriptService.CurrentScript) ?? 12;
+        public string CurrentScriptFontFamily => _fontService?.GetScriptFontFamily(BookScript) ?? "Helvetica";
+        public int CurrentScriptFontSize => _fontService?.GetScriptFontSize(BookScript) ?? 12;
 
         private string GetBookDisplayName(Book book)
         {

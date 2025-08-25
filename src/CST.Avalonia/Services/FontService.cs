@@ -90,20 +90,60 @@ namespace CST.Avalonia.Services
 
         public event EventHandler? FontSettingsChanged;
         
+        private readonly Dictionary<Script, List<string>> _cachedFonts = new Dictionary<Script, List<string>>();
+        
+        public async Task PreloadFontsForAllScriptsAsync()
+        {
+            _logger.LogInformation("Pre-loading fonts for all scripts...");
+            
+            var allScripts = Enum.GetValues<Script>();
+            var tasks = allScripts.Select(async script =>
+            {
+                try
+                {
+                    var fonts = await GetAvailableFontsForScriptAsync(script);
+                    _cachedFonts[script] = fonts;
+                    _logger.LogDebug("Pre-loaded {Count} fonts for {Script}", fonts.Count, script);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to pre-load fonts for {Script}", script);
+                    _cachedFonts[script] = new List<string>();
+                }
+            }).ToArray();
+            
+            await Task.WhenAll(tasks);
+            _logger.LogInformation("Font pre-loading completed for {ScriptCount} scripts", allScripts.Length);
+        }
+        
         public async Task<List<string>> GetAvailableFontsForScriptAsync(Script script)
         {
             _logger.LogInformation("Getting available fonts for script: {Script}", script);
+            
+            // Return cached fonts if available
+            if (_cachedFonts.TryGetValue(script, out var cachedFonts))
+            {
+                _logger.LogDebug("Returning {Count} cached fonts for {Script}", cachedFonts.Count, script);
+                return cachedFonts;
+            }
+            
+            // Load fonts on-demand if not cached yet
+            _logger.LogDebug("Loading fonts on-demand for {Script}", script);
 #if MACOS
             if (_macFontService != null)
             {
                 _logger.LogDebug("Using MacFontService to get fonts.");
-                return await _macFontService.GetAvailableFontsForScriptAsync(script);
+                var fonts = await _macFontService.GetAvailableFontsForScriptAsync(script);
+                _cachedFonts[script] = fonts; // Cache the result
+                return fonts;
             }
 #endif
         
             // Fallback for non-Mac platforms
             _logger.LogDebug("Using fallback method to get all system fonts.");
-            return await Task.FromResult(FontManager.Current.SystemFonts.Select(f => f.Name).ToList());
+            var fallbackFonts = FontManager.Current.SystemFonts.Select(f => f.Name).ToList();
+            _cachedFonts[script] = fallbackFonts; // Cache the result
+            return await Task.FromResult(fallbackFonts);
         }
     }
 }

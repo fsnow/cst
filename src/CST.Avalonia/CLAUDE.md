@@ -9,6 +9,41 @@
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
+## Latest Session Update (2025-08-25)
+
+### ✅ **COMPLETED: Per-Script Font Detection & Selection System**
+
+#### **Platform-Specific Font Detection (MacFontService)**
+- **Native macOS Implementation**: Created `MacFontService.cs` using Core Text APIs to detect fonts that support each Pali script
+- **Character-Set Based Approach**: Uses sample Pali characters for each script to find compatible fonts
+- **P/Invoke Integration**: Direct calls to Core Foundation and Core Text frameworks for native font enumeration
+- **Dynamic Font Lists**: Font dropdowns in settings now populate with only fonts that can display each specific script
+
+**Technical Implementation**:
+- Uses `CTFontDescriptorCreateMatchingFontDescriptors` with character set attributes
+- Converts sample text "mahāsatipaṭṭhānasuttaṃ" to each script for font testing
+- Returns unique font family names sorted alphabetically
+- Falls back to standard fonts if no script-specific fonts found
+
+#### **Font Selection System Debugging & Fixes**
+- **Problem Solved**: Font selection persistence and UI update issues resolved through extensive debugging
+- **Root Cause**: Multiple issues with font loading, selection state management, and UI synchronization
+- **Solution**: Comprehensive fixes to font loading pipeline and selection persistence
+- **Result**: Per-script font selection now works reliably for all script-specific UI elements
+
+**Files Added/Modified**:
+- `/Services/Platform/Mac/MacFontService.cs` - Native macOS font detection service
+- `/ViewModels/SettingsViewModel.cs` - Fixed font selection persistence and loading issues
+- `/Services/FontService.cs` - Enhanced font selection state management
+- `/Services/IFontService.cs` - Updated interface for improved font handling
+
+#### **Complete Per-Script Font Selection Status**
+✅ **Font Detection**: Native macOS font detection working for all 14 Pali scripts
+✅ **Font Persistence**: Font settings save and restore correctly across application sessions
+✅ **UI Synchronization**: Font dropdowns correctly show selected fonts when loading
+✅ **Script-Specific Filtering**: Font lists show only fonts compatible with each specific script
+✅ **Real-time Updates**: Font changes apply immediately to all relevant UI elements
+
 ## Latest Session Update (2025-08-18)
 
 ### ✅ **COMPLETED: Mac-Style Book Tree Icons & Logging Cleanup**
@@ -230,7 +265,8 @@ SetupFontAndScriptHandlers();
 11. **🆕 Live Search UI**: Functional search panel with real-time results and book filtering.
 12. **🆕 Search Result Highlighting**: Position-based highlighting with navigation support (single-term tested).
 13. **✅ Complete Font System**: Per-script font configuration with real-time updates across all UI locations.
-14. **✅ Script Synchronization**: Search results automatically update when top-level script changes.
+14. **✅ Per-Script Font Selection**: Native macOS font detection and selection working for all 14 Pali scripts with full persistence.
+15. **✅ Script Synchronization**: Search results automatically update when top-level script changes.
 
 ## Outstanding Work (High Priority)
 
@@ -245,7 +281,7 @@ SetupFontAndScriptHandlers();
 2.  **UI Language Font System**: 
     - **Localization Font Settings**: Separate font controls for ~20 UI languages (distinct from Pali script fonts)
     - **Font Discovery**: Detect available fonts suitable for each script
-    - **Note**: Pali script font system is now complete
+    - **Note**: Pali script font system is now ✅ **COMPLETE** with full detection and selection working
 3.  **Advanced Search Features**:
     - **Phrase Search**: Implement position-based phrase searching with exact word order matching
     - **Proximity Search**: Add proximity operators for terms within specified distances

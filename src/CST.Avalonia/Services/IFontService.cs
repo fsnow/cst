@@ -39,6 +39,11 @@ namespace CST.Avalonia.Services
         event EventHandler? FontSettingsChanged;
 
         /// <summary>
+        /// Pre-loads fonts for all scripts at application startup
+        /// </summary>
+        Task PreloadFontsForAllScriptsAsync();
+
+        /// <summary>
         /// Gets a list of available font family names for a specific script.
         /// </summary>
         Task<List<string>> GetAvailableFontsForScriptAsync(Script script);

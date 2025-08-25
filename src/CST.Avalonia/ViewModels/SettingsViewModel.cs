@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
@@ -52,9 +54,6 @@ namespace CST.Avalonia.ViewModels
             // Select first category by default
             SelectedCategory = Categories.FirstOrDefault();
 
-            // Commands
-            SaveCommand = ReactiveCommand.CreateFromTask(SaveSettingsAsync);
-            CancelCommand = ReactiveCommand.Create(Close);
 
             // Watch for changes to mark as dirty
             this.WhenAnyValue(x => x.SearchQuery)
@@ -82,8 +81,6 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _hasUnsavedChanges, value);
         }
 
-        public ReactiveCommand<Unit, Unit> SaveCommand { get; }
-        public ReactiveCommand<Unit, Unit> CancelCommand { get; }
 
         // Property to close the window
         public Action? CloseWindow { get; set; }
@@ -98,30 +95,12 @@ namespace CST.Avalonia.ViewModels
             _logger.Debug("Filtering settings with query: {Query}", SearchQuery);
         }
 
-        private async Task SaveSettingsAsync()
-        {
-            try
-            {
-                await _settingsService.SaveSettingsAsync();
-                HasUnsavedChanges = false;
-                _logger.Information("Settings saved successfully");
-                Close();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to save settings");
-            }
-        }
 
         private void Close()
         {
             CloseWindow?.Invoke();
         }
 
-        public void MarkAsChanged()
-        {
-            HasUnsavedChanges = true;
-        }
 
 
         public void RequestBrowseForXmlDirectory()
@@ -251,7 +230,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.UpdateSetting(nameof(Settings.XmlBooksDirectory), value);
-                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
+                    _ = _settingsService.SaveSettingsAsync();
                 });
                 
             this.WhenAnyValue(x => x.IndexDirectory)
@@ -259,7 +238,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.UpdateSetting(nameof(Settings.IndexDirectory), value);
-                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
+                    _ = _settingsService.SaveSettingsAsync();
                 });
 
             this.WhenAnyValue(x => x.ShowWelcomeOnStartup)
@@ -267,15 +246,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.UpdateSetting(nameof(Settings.ShowWelcomeOnStartup), value);
-                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
-                });
-
-            this.WhenAnyValue(x => x.XmlBooksDirectory)
-                .Skip(1)
-                .Subscribe(value => 
-                {
-                    _settingsService.UpdateSetting(nameof(Settings.XmlBooksDirectory), value);
-                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
+                    _ = _settingsService.SaveSettingsAsync();
                 });
 
             this.WhenAnyValue(x => x.MaxRecentBooks)
@@ -283,7 +254,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.UpdateSetting(nameof(Settings.MaxRecentBooks), value);
-                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
+                    _ = _settingsService.SaveSettingsAsync();
                 });
         }
 
@@ -320,8 +291,9 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private readonly IFontService _fontService;
-        private string _theme;
+        private string _theme = "";
         private ScriptFontSettingViewModel? _selectedScript;
+        internal bool _isChangingScript = false;
 
         public AppearanceSettingsViewModel(ISettingsService settingsService)
         {
@@ -347,6 +319,7 @@ namespace CST.Avalonia.ViewModels
                 // Initialize the preview text and font display name after setting all properties
                 vm.UpdatePreviewText();
                 vm.UpdateFontDisplayName();
+                vm.UpdateEffectiveFontFamilyObject(); // Initialize the FontFamily object
                 ScriptFontSettings.Add(vm);
             }
             
@@ -359,30 +332,21 @@ namespace CST.Avalonia.ViewModels
             LocalizationFontFamily = fontSettings.LocalizationFontFamily;
             LocalizationFontSize = fontSettings.LocalizationFontSize;
             
-            // Watch for localization font changes
-            this.WhenAnyValue(x => x.LocalizationFontFamily)
-                .Skip(1)
-                .Subscribe(value => 
-                {
-                    _settingsService.Settings.FontSettings.LocalizationFontFamily = value;
-                    // Notify FontService about the change
-                    var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
-                    fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
-                });
-                
-            this.WhenAnyValue(x => x.LocalizationFontSize)
-                .Skip(1)
-                .Subscribe(value => 
-                {
-                    _settingsService.Settings.FontSettings.LocalizationFontSize = value;
-                    // Notify FontService about the change
-                    var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
-                    fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
-                });
             
             this.WhenAnyValue(x => x.SelectedScript)
                 .Where(s => s != null)
-                .Subscribe(async s => await LoadAvailableFontsForScript(s!));
+                .Subscribe(s => LoadAvailableFontsForScript(s!));
+                
+            // Pre-load fonts for all scripts to prevent empty dropdown on first click
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100); // Small delay to let UI initialize first
+                foreach (var script in ScriptFontSettings)
+                {
+                    LoadAvailableFontsForScript(script); // Fire and forget - runs async internally
+                    await Task.Delay(10); // Small delay between scripts to avoid overwhelming the UI
+                }
+            });
         }
 
         public string Theme
@@ -392,6 +356,9 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _theme, value);
                 _settingsService.UpdateSetting(nameof(Settings.Theme), value);
+                
+                // Immediate save
+                _ = _settingsService.SaveSettingsAsync();
             }
         }
 
@@ -402,24 +369,52 @@ namespace CST.Avalonia.ViewModels
         public ScriptFontSettingViewModel? SelectedScript
         {
             get => _selectedScript;
-            set => this.RaiseAndSetIfChanged(ref _selectedScript, value);
+            set 
+            {
+                Console.WriteLine($"*** [FONT SELECTION DEBUG] SelectedScript setter called: {value?.ScriptName ?? "null"}");
+                
+                // Set flag to prevent font changes during script switching
+                _isChangingScript = true;
+                this.RaiseAndSetIfChanged(ref _selectedScript, value);
+                _isChangingScript = false;
+            }
         }
         
         private string _localizationFontFamily = "";
         public string LocalizationFontFamily
         {
             get => _localizationFontFamily;
-            set => this.RaiseAndSetIfChanged(ref _localizationFontFamily, value);
+            set 
+            {
+                this.RaiseAndSetIfChanged(ref _localizationFontFamily, value);
+                _settingsService.Settings.FontSettings.LocalizationFontFamily = value;
+                // Notify FontService about the change
+                var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
+                fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
+                
+                // Immediate save
+                _ = _settingsService.SaveSettingsAsync();
+            }
         }
         
         private int _localizationFontSize = 12;
         public int LocalizationFontSize
         {
             get => _localizationFontSize;
-            set => this.RaiseAndSetIfChanged(ref _localizationFontSize, value);
+            set 
+            {
+                this.RaiseAndSetIfChanged(ref _localizationFontSize, value);
+                _settingsService.Settings.FontSettings.LocalizationFontSize = value;
+                // Notify FontService about the change
+                var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
+                fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
+                
+                // Immediate save
+                _ = _settingsService.SaveSettingsAsync();
+            }
         }
         
-        public void UpdateScriptFont(string scriptName, string fontFamily, int fontSize)
+        public void UpdateScriptFont(string scriptName, string? fontFamily, int fontSize)
         {
             if (_settingsService.Settings.FontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
             {
@@ -432,24 +427,96 @@ namespace CST.Avalonia.ViewModels
             }
         }
         
-        private async Task LoadAvailableFontsForScript(ScriptFontSettingViewModel scriptVm)
+        public async Task SaveSettingsAsync()
         {
-            scriptVm.IsLoadingFonts = true;
+            await _settingsService.SaveSettingsAsync();
+        }
+        
+        private async void LoadAvailableFontsForScript(ScriptFontSettingViewModel scriptVm)
+        {
+            // No loading state needed since fonts are pre-cached
             var scriptEnum = ScriptFontSettingViewModel.GetScriptFromName(scriptVm.ScriptName);
-            var fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
             
-            // Add a "System Default" option to the top of the list
-            fonts.Insert(0, "System Default");
+            Console.WriteLine($"[FONT DEBUG] Loading {scriptVm.ScriptName}");
             
-            scriptVm.AvailableFonts = new ObservableCollection<string>(fonts);
-            scriptVm.IsLoadingFonts = false;
+            try
+            {
+                // Always use await to ensure we get the cached or fresh fonts properly
+                var fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
+                Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: {fonts?.Count ?? 0} fonts");
+                
+                if (fonts == null || fonts.Count == 0)
+                {
+                    Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: EMPTY - retrying...");
+                    // Retry once after a small delay
+                    await Task.Delay(100);
+                    fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
+                    Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: Retry got {fonts?.Count ?? 0}");
+                }
+                
+                // Create a copy to avoid modifying the cached list
+                var fontsCopy = new List<string>(fonts ?? new List<string>());
+                
+                // Add a "System Default" option to the top of the list (safe since we have a copy)
+                fontsCopy.Insert(0, "System Default");
+                
+                // Get the saved font from settings
+                var savedFontFamily = scriptVm.FontFamily; // This comes from the saved settings
+                
+                // Log for debugging
+                Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: {fontsCopy.Count} total (saved: {savedFontFamily ?? "null"})");
+                
+                // Set the fonts collection
+                scriptVm.AvailableFonts = new ObservableCollection<string>(fontsCopy);
+                
+                // Force a small delay to ensure UI has time to process the collection change
+                await Task.Delay(50);
+                
+                // Set the selected font based on what's saved in settings
+                // Handle both null and empty string as "unset" (for backward compatibility)
+                if (!string.IsNullOrWhiteSpace(savedFontFamily))
+                {
+                    // Look for the saved font in the list (case-insensitive and trimmed comparison)
+                    var matchingFont = fontsCopy.FirstOrDefault(f => 
+                        string.Equals(f?.Trim(), savedFontFamily.Trim(), StringComparison.OrdinalIgnoreCase));
+                        
+                    if (matchingFont != null)
+                    {
+                        // Set the selection to the matching font (use the exact string from the list)
+                        Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: Selected {matchingFont}");
+                        scriptVm.SelectedFontFamily = matchingFont;
+                    }
+                    else
+                    {
+                        // Saved font not found in list, default to System Default
+                        Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: '{savedFontFamily}' not found, using System Default");
+                        scriptVm.SelectedFontFamily = "System Default";
+                    }
+                }
+                else
+                {
+                    // No font saved (null or empty), select "System Default"
+                    Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: No saved font, using System Default");
+                    scriptVm.SelectedFontFamily = "System Default";
+                }
+                
+                // Another small delay to ensure selection is applied
+                await Task.Delay(25);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: ERROR - {ex.Message}");
+                // Fallback: provide at least "System Default" 
+                scriptVm.AvailableFonts = new ObservableCollection<string> { "System Default" };
+                scriptVm.SelectedFontFamily = "System Default";
+            }
         }
     }
     
     public class ScriptFontSettingViewModel : ViewModelBase
     {
         private string _scriptName = "";
-        private string _fontFamily = "";
+        private string? _fontFamily = null;
         private int _fontSize = 12;
         private string _previewText = "";
         private string _effectiveFontFamily = "";
@@ -476,8 +543,45 @@ namespace CST.Avalonia.ViewModels
         
         public string EffectiveFontFamily
         {
-            get => _effectiveFontFamily;
-            private set => this.RaiseAndSetIfChanged(ref _effectiveFontFamily, value);
+            get {
+                Console.WriteLine($"*** [FONT PREVIEW DEBUG] EffectiveFontFamily getter: Script={ScriptName}, Returning='{_effectiveFontFamily}'");
+                return _effectiveFontFamily;
+            }
+            private set {
+                Console.WriteLine($"*** [FONT PREVIEW DEBUG] EffectiveFontFamily setter: Script={ScriptName}, OldValue='{_effectiveFontFamily}', NewValue='{value}'");
+                this.RaiseAndSetIfChanged(ref _effectiveFontFamily, value);
+                // Update the FontFamily object when the string changes
+                UpdateEffectiveFontFamilyObject();
+            }
+        }
+        
+        private global::Avalonia.Media.FontFamily? _effectiveFontFamilyObject;
+        public global::Avalonia.Media.FontFamily EffectiveFontFamilyObject
+        {
+            get => _effectiveFontFamilyObject ?? global::Avalonia.Media.FontFamily.Default;
+            private set => this.RaiseAndSetIfChanged(ref _effectiveFontFamilyObject, value);
+        }
+        
+        public void UpdateEffectiveFontFamilyObject()
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_effectiveFontFamily))
+                {
+                    EffectiveFontFamilyObject = new global::Avalonia.Media.FontFamily(_effectiveFontFamily);
+                    Console.WriteLine($"*** [FONT PREVIEW DEBUG] Created FontFamily object for: {_effectiveFontFamily}");
+                }
+                else
+                {
+                    EffectiveFontFamilyObject = global::Avalonia.Media.FontFamily.Default;
+                    Console.WriteLine($"*** [FONT PREVIEW DEBUG] Using default FontFamily object");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"*** [FONT PREVIEW DEBUG] Error creating FontFamily object: {ex.Message}");
+                EffectiveFontFamilyObject = global::Avalonia.Media.FontFamily.Default;
+            }
         }
         
         public string FontDisplayName
@@ -486,25 +590,45 @@ namespace CST.Avalonia.ViewModels
             private set => this.RaiseAndSetIfChanged(ref _fontDisplayName, value);
         }
         
-        public string FontFamily
+        public string? FontFamily
         {
             get => _fontFamily;
             set
             {
-                var valueToSet = (value == "System Default") ? "" : value;
+                var valueToSet = (value == "System Default") ? null : value;
+                Console.WriteLine($"*** [FONT SELECTION DEBUG] FontFamily setter: Script={ScriptName}, Input='{value}', Storing='{valueToSet ?? "(null)"}', Old='{_fontFamily ?? "(null)"}'");
                 if (_fontFamily != valueToSet)
                 {
                     this.RaiseAndSetIfChanged(ref _fontFamily, valueToSet);
                     UpdateFontDisplayName();
                     Parent?.UpdateScriptFont(ScriptName, valueToSet, FontSize);
+                    
+                    // Immediate save
+                    _ = Parent?.SaveSettingsAsync();
                 }
             }
         }
         
         public string SelectedFontFamily
         {
-            get => string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily;
-            set => FontFamily = value;
+            get {
+                var result = string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily;
+                Console.WriteLine($"*** [FONT SELECTION DEBUG] SelectedFontFamily getter: Script={ScriptName}, Returning='{result}'");
+                return result;
+            }
+            set 
+            {
+                Console.WriteLine($"*** [FONT SELECTION DEBUG] SelectedFontFamily setter: Script={ScriptName}, Input='{value}', CurrentGet='{(string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily)}'");
+                
+                // Ignore font changes during script switching to prevent overwriting other scripts' fonts
+                if (Parent is AppearanceSettingsViewModel parent && parent._isChangingScript)
+                {
+                    Console.WriteLine($"*** [FONT SELECTION DEBUG] Ignoring font change for {ScriptName} during script switching");
+                    return;
+                }
+                
+                FontFamily = value;
+            }
         }
         
         public int FontSize
@@ -514,6 +638,9 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _fontSize, value);
                 Parent?.UpdateScriptFont(ScriptName, _fontFamily, value);
+                
+                // Immediate save
+                _ = Parent?.SaveSettingsAsync();
             }
         }
         
@@ -587,26 +714,31 @@ namespace CST.Avalonia.ViewModels
                     {
                         FontDisplayName = $"System Default ({systemFontName})";
                         EffectiveFontFamily = systemFontName;
+                        Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to system default: {systemFontName}");
                     }
                     else
                     {
                         FontDisplayName = "System Default";
                         EffectiveFontFamily = "Helvetica"; // Use a specific fallback font instead of empty string
+                        Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to fallback: Helvetica");
                     }
                 }
                 else
                 {
                     FontDisplayName = FontFamily;
                     EffectiveFontFamily = FontFamily;
+                    Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to: {FontFamily}");
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Console.WriteLine($"*** [FONT PREVIEW DEBUG] Exception in UpdateFontDisplayName: {ex.Message}");
                 FontDisplayName = string.IsNullOrWhiteSpace(FontFamily) ? "System Default" : FontFamily;
                 EffectiveFontFamily = string.IsNullOrWhiteSpace(FontFamily) ? "Helvetica" : FontFamily;
             }
             
             // Force property change notification for EffectiveFontFamily to update the preview
+            Console.WriteLine($"*** [FONT PREVIEW DEBUG] Forcing property change for EffectiveFontFamily: {EffectiveFontFamily}");
             this.RaisePropertyChanged(nameof(EffectiveFontFamily));
         }
         
@@ -764,7 +896,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.Settings.DeveloperSettings.LogLevel = value;
-                    if (Parent is SettingsViewModel parent) parent.MarkAsChanged();
+                    _ = _settingsService.SaveSettingsAsync();
                     
                     // Reconfigure logger immediately
                     ReconfigureLogger(value);
