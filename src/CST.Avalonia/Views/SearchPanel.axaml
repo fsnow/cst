@@ -14,6 +14,15 @@
       <Setter Property="FontSize" Value="12"/>
     </Style>
     
+    <Style Selector="Border.search-input-container">
+      <Setter Property="Background" Value="{DynamicResource TextControlBackgroundBrush}"/>
+      <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+    
+    <Style Selector="Button.clear-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+    </Style>
+    
     <Style Selector="TextBlock.count-badge">
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="Foreground" Value="{DynamicResource SystemAccentColor}"/>
@@ -63,15 +72,64 @@
       <StackPanel>
         <!-- Search Field -->
         <TextBlock Classes="section-header" Text="Search Terms"/>
-        <TextBox Name="SearchInput" 
-                 Text="{Binding SearchText}"
-                 Watermark="Enter search terms..."
-                 Margin="0,4,0,8">
-          <TextBox.KeyBindings>
-            <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
-            <KeyBinding Gesture="Escape" Command="{Binding ClearCommand}"/>
-          </TextBox.KeyBindings>
-        </TextBox>
+        <Border Margin="0,4,0,8" Classes="search-input-container">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <!-- Search Icon -->
+            <PathIcon Grid.Column="0" 
+                    Data="M11.5,2.75 C16.3324916,2.75 20.25,6.66750844 20.25,11.5 C20.25,13.6461673 19.5328634,15.6290602 18.3348847,17.2094862 L23.0303301,21.9052023 C23.3232233,22.1980955 23.3232233,22.6730712 23.0303301,22.9659645 L22.9696699,23.0266246 C22.6767767,23.3195179 22.2018011,23.3195179 21.9089078,23.0266246 L17.2094862,18.3348847 C15.6290602,19.5328634 13.6461673,20.25 11.5,20.25 C6.66750844,20.25 2.75,16.3324916 2.75,11.5 C2.75,6.66750844 6.66750844,2.75 11.5,2.75 Z M11.5,4.25 C7.49593645,4.25 4.25,7.49593645 4.25,11.5 C4.25,15.5040635 7.49593645,18.75 11.5,18.75 C15.5040635,18.75 18.75,15.5040635 18.75,11.5 C18.75,7.49593645 15.5040635,4.25 11.5,4.25 Z"
+                    Height="14" 
+                    Width="14"
+                    Margin="8,0,4,0"
+                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                    VerticalAlignment="Center"/>
+          
+          <!-- Search Input -->
+          <TextBox Grid.Column="1" 
+                   Name="SearchInput" 
+                   Text="{Binding SearchText}"
+                   Watermark="Enter search terms..."
+                   BorderThickness="0"
+                   Background="Transparent">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
+              <KeyBinding Gesture="Escape" Command="{Binding ClearCommand}"/>
+            </TextBox.KeyBindings>
+          </TextBox>
+          
+            <!-- Clear Button / Progress Indicator -->
+            <Panel Grid.Column="2" Margin="4,0,8,0">
+              <!-- Progress Indicator -->
+              <ProgressBar IsIndeterminate="{Binding IsSearching}"
+                          IsVisible="{Binding IsSearching}"
+                          Height="16" 
+                          Width="16"
+                          MinHeight="16"
+                          MinWidth="16"
+                          VerticalAlignment="Center"/>
+              
+              <!-- Clear Button -->
+              <Button Command="{Binding ClearCommand}"
+                      IsVisible="{Binding !IsSearching}"
+                      Classes="clear-button"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Padding="4"
+                      CornerRadius="3"
+                      VerticalAlignment="Center">
+                <Button.IsVisible>
+                  <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="!IsSearching"/>
+                    <Binding Path="SearchText" Converter="{x:Static StringConverters.IsNotNullOrEmpty}"/>
+                  </MultiBinding>
+                </Button.IsVisible>
+                <PathIcon Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                         Height="12" 
+                         Width="12"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+              </Button>
+            </Panel>
+          </Grid>
+        </Border>
         
         <!-- Search Mode Selector -->
         <TextBlock Classes="section-header" Text="Search Mode"/>
@@ -84,15 +142,6 @@
               <TextBlock Text="{Binding DisplayName}"/>
             </DataTemplate>
           </ComboBox.ItemTemplate>
-        </ComboBox>
-        
-        <!-- Collection Filter (Placeholder) -->
-        <TextBlock Classes="section-header" Text="Book Collection"/>
-        <ComboBox Name="CollectionFilter" 
-                  SelectedIndex="0"
-                  Margin="0,4,0,8">
-          <ComboBoxItem Content="All Books"/>
-          <ComboBoxItem Content="Custom Collections..." IsEnabled="False"/>
         </ComboBox>
         
         <!-- Book Type Filters -->
