@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -99,9 +100,16 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
 
         // Open book command
         OpenBookCommand = ReactiveCommand.Create<BookOccurrenceViewModel>(ExecuteOpenBook);
+        
+        // Filter commands
+        SelectAllFiltersCommand = ReactiveCommand.Create(ExecuteSelectAllFilters);
+        SelectNoneFiltersCommand = ReactiveCommand.Create(ExecuteSelectNoneFilters);
 
         // Setup font and script change handlers (outside of WhenActivated so they always work)
         SetupFontAndScriptHandlers();
+        
+        // Setup filter change notifications
+        SetupFilterChangeNotifications();
         
         // Setup live search with debouncing
         this.WhenActivated(disposables =>
@@ -287,6 +295,126 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
     public ReactiveCommand<Unit, Unit> SearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
     public ReactiveCommand<BookOccurrenceViewModel, Unit> OpenBookCommand { get; }
+    public ReactiveCommand<Unit, Unit> SelectAllFiltersCommand { get; }
+    public ReactiveCommand<Unit, Unit> SelectNoneFiltersCommand { get; }
+    
+    // Filter summary properties
+    public string FilterSummary
+    {
+        get
+        {
+            var activeFilters = GetActiveFilterCount();
+            if (activeFilters == 7)
+                return "All text types";
+            else if (activeFilters == 0)
+                return "No text types selected";
+            else
+            {
+                var filters = new List<string>();
+                if (IncludeVinaya) filters.Add("Vinaya");
+                if (IncludeSutta) filters.Add("Sutta");
+                if (IncludeAbhidhamma) filters.Add("Abhidhamma");
+                if (IncludeMula) filters.Add("Mūla");
+                if (IncludeAttha) filters.Add("Aṭṭhakathā");
+                if (IncludeTika) filters.Add("Ṭīkā");
+                if (IncludeOther) filters.Add("Other");
+                
+                if (filters.Count <= 3)
+                    return string.Join(", ", filters);
+                else
+                    return $"{activeFilters} of 7 types";
+            }
+        }
+    }
+    
+    public string BookCountLabel => $"{GetIncludedBookCount()} of 217 books";
+    
+    private int GetActiveFilterCount()
+    {
+        var count = 0;
+        if (IncludeVinaya) count++;
+        if (IncludeSutta) count++;
+        if (IncludeAbhidhamma) count++;
+        if (IncludeMula) count++;
+        if (IncludeAttha) count++;
+        if (IncludeTika) count++;
+        if (IncludeOther) count++;
+        return count;
+    }
+    
+    private int GetIncludedBookCount()
+    {
+        var bookBits = CalculateBookBits();
+        
+        // Count the number of true bits in the BitArray
+        int count = 0;
+        for (int i = 0; i < bookBits.Count; i++)
+        {
+            if (bookBits[i])
+                count++;
+        }
+        
+        return count;
+    }
+    
+    // This method determines which books to search based on the filter checkboxes
+    // Returns a BitArray where true = include book in search, false = exclude
+    public BitArray CalculateBookBits()
+    {
+        var books = CST.Books.Inst;
+        int bookCount = books.Count;
+        BitArray bookBits = null;
+        BitArray clBits = null;
+        BitArray pitBits = null;
+        bool clSelected = false;
+        bool pitSelected = false;
+        
+        // Handle Commentary Level filters (OR logic within group)
+        if (IncludeMula || IncludeAttha || IncludeTika)
+        {
+            clBits = new BitArray(bookCount);
+            
+            if (IncludeMula)
+                clBits = clBits.Or(books.MulaBits);
+            if (IncludeAttha)
+                clBits = clBits.Or(books.AtthaBits);
+            if (IncludeTika)
+                clBits = clBits.Or(books.TikaBits);
+            
+            clSelected = true;
+        }
+        
+        // Handle Pitaka filters (OR logic within group)
+        if (IncludeVinaya || IncludeSutta || IncludeAbhidhamma)
+        {
+            pitBits = new BitArray(bookCount);
+            
+            if (IncludeVinaya)
+                pitBits = pitBits.Or(books.VinayaBits);
+            if (IncludeSutta)
+                pitBits = pitBits.Or(books.SuttaBits);
+            if (IncludeAbhidhamma)
+                pitBits = pitBits.Or(books.AbhiBits);
+            
+            pitSelected = true;
+        }
+        
+        // Combine Commentary and Pitaka filters (AND logic between groups)
+        if (clSelected && pitSelected)
+            bookBits = clBits.And(pitBits);
+        else if (clSelected)
+            bookBits = clBits;
+        else if (pitSelected)
+            bookBits = pitBits;
+        else
+            bookBits = new BitArray(bookCount);
+        
+        // Add Other texts (OR logic - these are always included if checked)
+        if (IncludeOther)
+            bookBits = bookBits.Or(books.OtherBits);
+        
+        return bookBits;
+    }
     
     // Font properties for search results
     public string CurrentScriptFontFamily => _fontService.GetScriptFontFamily(_scriptService.CurrentScript) ?? "Helvetica";
@@ -429,6 +557,46 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
             SearchTerms = searchTerms,
             Positions = occurrence.Positions
         });
+    }
+    
+    private void ExecuteSelectAllFilters()
+    {
+        IncludeVinaya = true;
+        IncludeSutta = true;
+        IncludeAbhidhamma = true;
+        IncludeMula = true;
+        IncludeAttha = true;
+        IncludeTika = true;
+        IncludeOther = true;
+    }
+    
+    private void ExecuteSelectNoneFilters()
+    {
+        IncludeVinaya = false;
+        IncludeSutta = false;
+        IncludeAbhidhamma = false;
+        IncludeMula = false;
+        IncludeAttha = false;
+        IncludeTika = false;
+        IncludeOther = false;
+    }
+    
+    private void SetupFilterChangeNotifications()
+    {
+        // When any filter changes, raise property changed for summary properties
+        this.WhenAnyValue(
+            x => x.IncludeVinaya,
+            x => x.IncludeSutta,
+            x => x.IncludeAbhidhamma,
+            x => x.IncludeMula,
+            x => x.IncludeAttha,
+            x => x.IncludeTika,
+            x => x.IncludeOther)
+            .Subscribe(_ =>
+            {
+                this.RaisePropertyChanged(nameof(FilterSummary));
+                this.RaisePropertyChanged(nameof(BookCountLabel));
+            });
     }
 
     private void UpdateOccurrences()

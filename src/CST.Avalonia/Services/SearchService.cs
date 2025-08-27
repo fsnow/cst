@@ -173,10 +173,18 @@ public class SearchService : ISearchService
 
             // Get occurrences for this term
             var occurrences = await GetTermOccurrencesAsync(reader, term, bookBits, books, cancellationToken);
-            matchingTerm.Occurrences = occurrences;
-            matchingTerm.TotalCount = occurrences.Sum(o => o.Count);
-
-            result.Terms.Add(matchingTerm);
+            
+            // Only add the term if it has occurrences in the selected books
+            if (occurrences.Any())
+            {
+                matchingTerm.Occurrences = occurrences;
+                matchingTerm.TotalCount = occurrences.Sum(o => o.Count);
+                result.Terms.Add(matchingTerm);
+            }
+            else
+            {
+                _logger.LogDebug("Skipping term '{Term}' - no occurrences in selected books", term);
+            }
             result.TotalOccurrenceCount += matchingTerm.TotalCount;
         }
         
@@ -253,7 +261,19 @@ public class SearchService : ISearchService
             }
             lastDocId = docId;
 
-            var book = books.FromDocId(docId);
+            CST.Book book = null;
+            try
+            {
+                book = books.FromDocId(docId);
+            }
+            catch (KeyNotFoundException)
+            {
+                // DocId not in dictionary - skip this document
+                _logger.LogDebug("DocId {DocId} not found in books dictionary", docId);
+                docId = dape.NextDoc();
+                continue;
+            }
+            
             if (book == null || !bookBits[book.Index])
             {
                 docId = dape.NextDoc();
@@ -459,13 +479,13 @@ public class SearchService : ISearchService
         else if (pitSelected && pitBits != null)
             bookBits = pitBits;
         else
-            bookBits = new BitArray(bookCount, true); // Include all if no filters
+            bookBits = new BitArray(bookCount, false); // Exclude all if no filters
 
         // Add other texts if selected
         if (filter.IncludeOther && bookBits != null)
             bookBits = bookBits.Or(books.OtherBits);
 
-        return bookBits ?? new BitArray(bookCount, true); // Return all books if somehow null
+        return bookBits ?? new BitArray(bookCount, false); // Return empty if somehow null
     }
 
     private async Task EnsureDocIdsAsync(DirectoryReader reader, Books books)

@@ -36,8 +36,9 @@
       <Setter Property="Margin" Value="8"/>
     </Style>
     
-    <Style Selector="ToggleSwitch.filter-switch">
-      <Setter Property="Margin" Value="4,2"/>
+    <Style Selector="CheckBox.filter-checkbox">
+      <Setter Property="Margin" Value="8,2"/>
+      <Setter Property="FontSize" Value="12"/>
     </Style>
     
     <!-- Alternating row colors for better readability -->
@@ -145,33 +146,59 @@
         </ComboBox>
         
         <!-- Book Type Filters -->
-        <Expander Header="Filter by Collection" IsExpanded="False" Margin="0,4,0,0">
+        <Expander Name="FilterExpander" IsExpanded="False" Margin="0,4,0,0">
+          <Expander.Header>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Grid.Column="0" Text="Include Text Types" FontWeight="Medium"/>
+              <TextBlock Grid.Column="1" Text="{Binding FilterSummary}" 
+                        FontSize="11" 
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Margin="8,0,0,0"
+                        IsVisible="{Binding !#FilterExpander.IsExpanded}"/>
+              <TextBlock Grid.Column="2" Text="{Binding BookCountLabel}" 
+                        FontSize="11" 
+                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                        Margin="8,0,0,0"/>
+            </Grid>
+          </Expander.Header>
           <StackPanel Margin="8,8,0,0">
+            <!-- Quick select buttons -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+              <Button Command="{Binding SelectAllFiltersCommand}" 
+                      Content="Select All" 
+                      FontSize="11"
+                      Padding="8,4"
+                      Margin="0,0,4,0"/>
+              <Button Command="{Binding SelectNoneFiltersCommand}" 
+                      Content="Select None" 
+                      FontSize="11"
+                      Padding="8,4"/>
+            </StackPanel>
             <!-- Pitaka Filters -->
             <TextBlock Text="Pitaka:" FontWeight="Medium" FontSize="11" Margin="0,0,0,4"/>
             <WrapPanel Margin="0,0,0,8">
-              <ToggleSwitch Classes="filter-switch" Content="Vinaya" 
-                           IsChecked="{Binding IncludeVinaya}" FontSize="11"/>
-              <ToggleSwitch Classes="filter-switch" Content="Sutta" 
-                           IsChecked="{Binding IncludeSutta}" FontSize="11"/>
-              <ToggleSwitch Classes="filter-switch" Content="Abhidhamma" 
-                           IsChecked="{Binding IncludeAbhidhamma}" FontSize="11"/>
+              <CheckBox Classes="filter-checkbox" Content="Vinaya" 
+                       IsChecked="{Binding IncludeVinaya}"/>
+              <CheckBox Classes="filter-checkbox" Content="Sutta" 
+                       IsChecked="{Binding IncludeSutta}"/>
+              <CheckBox Classes="filter-checkbox" Content="Abhidhamma" 
+                       IsChecked="{Binding IncludeAbhidhamma}"/>
             </WrapPanel>
             
             <!-- Commentary Level Filters -->
             <TextBlock Text="Commentary Level:" FontWeight="Medium" FontSize="11" Margin="0,4,0,4"/>
             <WrapPanel Margin="0,0,0,8">
-              <ToggleSwitch Classes="filter-switch" Content="Mūla" 
-                           IsChecked="{Binding IncludeMula}" FontSize="11"/>
-              <ToggleSwitch Classes="filter-switch" Content="Aṭṭhakathā" 
-                           IsChecked="{Binding IncludeAttha}" FontSize="11"/>
-              <ToggleSwitch Classes="filter-switch" Content="Ṭīkā" 
-                           IsChecked="{Binding IncludeTika}" FontSize="11"/>
+              <CheckBox Classes="filter-checkbox" Content="Mūla" 
+                       IsChecked="{Binding IncludeMula}"/>
+              <CheckBox Classes="filter-checkbox" Content="Aṭṭhakathā" 
+                       IsChecked="{Binding IncludeAttha}"/>
+              <CheckBox Classes="filter-checkbox" Content="Ṭīkā" 
+                       IsChecked="{Binding IncludeTika}"/>
             </WrapPanel>
             
             <!-- Other Texts -->
-            <ToggleSwitch Classes="filter-switch" Content="Other Texts" 
-                         IsChecked="{Binding IncludeOther}" FontSize="11"/>
+            <CheckBox Classes="filter-checkbox" Content="Other Texts" 
+                     IsChecked="{Binding IncludeOther}"/>
           </StackPanel>
         </Expander>
       </StackPanel>
