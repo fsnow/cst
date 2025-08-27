@@ -7,7 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="700"
         x:Class="CST.Avalonia.Views.OpenBookDialog"
         x:DataType="vm:OpenBookDialogViewModel"
-        Title="Select a Book - Chaṭṭha Saṅgāyana Tipiṭaka"
+        Title="Select a Book - CST Reader"
         WindowStartupLocation="CenterOwner"
         Width="900" Height="700"
         MinWidth="600" MinHeight="400">
