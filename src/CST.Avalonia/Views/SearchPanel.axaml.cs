@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 
 namespace CST.Avalonia.Views;
 
@@ -77,7 +78,8 @@ public partial class SearchPanel : UserControl
                 // Prevent duplicate opens of the same book within 1 second
                 if (occurrence.Book.FileName == _lastOpenedBook && timeSinceLastOpen.TotalMilliseconds < 1000)
                 {
-                    Console.WriteLine($"*** [SEARCH PANEL] DUPLICATE PREVENTED: {occurrence.Book.FileName} (last opened {timeSinceLastOpen.TotalMilliseconds:F0}ms ago) ***");
+                    Log.Debug("[SearchPanel] Duplicate open prevented for {FileName} (last opened {Milliseconds:F0}ms ago)", 
+                        occurrence.Book.FileName, timeSinceLastOpen.TotalMilliseconds);
                     return;
                 }
                 
@@ -96,21 +98,22 @@ public partial class SearchPanel : UserControl
                     // Collect search terms from selected terms for highlighting
                     var searchTerms = searchViewModel.SelectedTerms.Select(t => t.Term).ToList();
                     
-                    Console.WriteLine($"*** [SEARCH PANEL] Opening book with search highlighting: {occurrence.Book.FileName} with {searchTerms.Count} search terms ***");
+                    Log.Information("[SearchPanel] Opening book {FileName} with {TermCount} search terms for highlighting", 
+                        occurrence.Book.FileName, searchTerms.Count);
                     
                     // Use the search-specific method to open book with highlighting
                     layoutViewModel.Factory.OpenBookInNewTab(occurrence.Book, searchTerms, occurrence.Positions);
                     
-                    Console.WriteLine($"*** [SEARCH PANEL] OpenBookInNewTab call completed at {DateTime.UtcNow:HH:mm:ss.fff} ***");
+                    Log.Debug("[SearchPanel] OpenBookInNewTab call completed");
                 }
                 else
                 {
-                    Console.WriteLine("*** [SEARCH PANEL] No layout view model or search view model found ***");
+                    Log.Warning("[SearchPanel] Cannot open book - layout or search view model not found");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"*** [SEARCH PANEL] Error opening book: {ex.Message} ***");
+                Log.Error(ex, "[SearchPanel] Error opening book from search results");
             }
         }
     }
@@ -139,7 +142,8 @@ public partial class SearchPanel : UserControl
     {
         if (sender is ListBox listBox)
         {
-            Console.WriteLine($"*** Terms ListBox Selection Changed: {listBox.SelectedItems?.Count ?? 0} items selected ***");
+            Log.Debug("[SearchPanel] Terms list selection changed: {Count} items selected", 
+                listBox.SelectedItems?.Count ?? 0);
             SyncSelection(listBox);
         }
     }
@@ -148,12 +152,14 @@ public partial class SearchPanel : UserControl
     {
         if (sender is ListBox listBox)
         {
-            Console.WriteLine($"*** Terms ListBox Tapped: {listBox.SelectedItems?.Count ?? 0} items selected ***");
+            Log.Debug("[SearchPanel] Terms list tapped: {Count} items selected", 
+                listBox.SelectedItems?.Count ?? 0);
             
             // Force a selection update after tap
             Dispatcher.UIThread.Post(() => 
             {
-                Console.WriteLine($"*** After tap dispatch: {listBox.SelectedItems?.Count ?? 0} items selected ***");
+                Log.Debug("[SearchPanel] Post-tap dispatch: {Count} items selected", 
+                    listBox.SelectedItems?.Count ?? 0);
                 SyncSelection(listBox);
             }, DispatcherPriority.Background);
         }
@@ -163,47 +169,48 @@ public partial class SearchPanel : UserControl
     {
         if (DataContext is SearchViewModel viewModel)
         {
-            Console.WriteLine($"*** ViewModel SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
-            Console.WriteLine($"*** ViewModel Occurrences count: {viewModel.Occurrences.Count} ***");
+            Log.Debug("[SearchPanel] ViewModel state - SelectedTerms: {SelectedCount}, Occurrences: {OccurrenceCount}", 
+                viewModel.SelectedTerms.Count, viewModel.Occurrences.Count);
             
             // Manually sync the selection since binding might not be working
-            Console.WriteLine($"*** Before sync - SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
+            Log.Debug("[SearchPanel] Before sync - SelectedTerms count: {Count}", viewModel.SelectedTerms.Count);
             viewModel.SelectedTerms.Clear();
-            Console.WriteLine($"*** After clear - SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
+            Log.Debug("[SearchPanel] After clear - SelectedTerms count: {Count}", viewModel.SelectedTerms.Count);
             
             if (listBox.SelectedItems != null)
             {
-                Console.WriteLine($"*** ListBox has {listBox.SelectedItems.Count} selected items ***");
+                Log.Debug("[SearchPanel] ListBox has {Count} selected items", listBox.SelectedItems.Count);
                 foreach (var item in listBox.SelectedItems.OfType<MatchingTermViewModel>())
                 {
-                    Console.WriteLine($"*** Adding selected term: {item.DisplayTerm} with {item.Occurrences?.Count ?? 0} occurrences ***");
+                    Log.Debug("[SearchPanel] Adding selected term: {Term} with {Count} occurrences", 
+                        item.DisplayTerm, item.Occurrences?.Count ?? 0);
                     viewModel.SelectedTerms.Add(item);
                 }
             }
             else
             {
-                Console.WriteLine("*** ListBox.SelectedItems is null ***");
+                Log.Debug("[SearchPanel] ListBox.SelectedItems is null");
             }
-            Console.WriteLine($"*** After manual sync - SelectedTerms count: {viewModel.SelectedTerms.Count} ***");
+            Log.Debug("[SearchPanel] After manual sync - SelectedTerms count: {Count}", viewModel.SelectedTerms.Count);
             
             // Explicitly trigger UpdateOccurrences since manual sync might not fire CollectionChanged
-            Console.WriteLine("*** Explicitly calling UpdateOccurrences ***");
+            Log.Debug("[SearchPanel] Explicitly calling UpdateOccurrences");
             try 
             {
                 var updateOccurrencesMethod = typeof(SearchViewModel).GetMethod("UpdateOccurrences", 
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 updateOccurrencesMethod?.Invoke(viewModel, null);
-                Console.WriteLine("*** UpdateOccurrences called successfully ***");
+                Log.Debug("[SearchPanel] UpdateOccurrences called successfully");
                 
                 // Also explicitly call UpdateStatistics
                 var updateStatisticsMethod = typeof(SearchViewModel).GetMethod("UpdateStatistics", 
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 updateStatisticsMethod?.Invoke(viewModel, null);
-                Console.WriteLine("*** UpdateStatistics called successfully ***");
+                Log.Debug("[SearchPanel] UpdateStatistics called successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"*** Error calling update methods: {ex.Message} ***");
+                Log.Error(ex, "[SearchPanel] Error calling update methods");
             }
         }
     }

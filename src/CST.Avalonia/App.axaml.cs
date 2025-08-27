@@ -272,8 +272,8 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            // Use basic console logging since Serilog isn't configured yet
-            Console.WriteLine($"Warning: Failed to read splash screen setting, defaulting to show splash: {ex.Message}");
+            // Log.Warning not available yet since Serilog isn't configured, but that's OK
+            // This happens very early in startup, before DI is configured
             // Default to showing splash screen on error
             return true;
         }
@@ -294,7 +294,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to load settings: {ex.Message}");
+            Log.Warning(ex, "Failed to load settings");
         }
     }
 
@@ -428,7 +428,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to load application state: {ex.Message}");
+            Log.Warning(ex, "Failed to load application state");
         }
     }
     

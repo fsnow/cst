@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using CST.Conversion;
 using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace CST.Avalonia.Services.Platform.Mac
 {
@@ -242,7 +243,7 @@ namespace CST.Avalonia.Services.Platform.Mac
         {
             var ptr = CoreFoundation.GetSymbolFromImage(CoreTextLibrary, symbolName);
             System.Diagnostics.Debug.WriteLine($"Core Text symbol lookup for {symbolName}: {ptr} (0x{ptr:X})");
-            Console.WriteLine($"Core Text symbol lookup for {symbolName}: {ptr} (0x{ptr:X})");
+            Log.Debug("[MacFontService] Core Text symbol lookup for {SymbolName}: {Pointer:X}", symbolName, ptr);
             
             // If symbol lookup fails, the symbol should be dereferenced as it points to a CFString
             if (ptr != IntPtr.Zero)
@@ -252,19 +253,19 @@ namespace CST.Avalonia.Services.Platform.Mac
                     // The symbol is a pointer to a pointer to the actual CFString constant
                     var actualPtr = Marshal.ReadIntPtr(ptr);
                     System.Diagnostics.Debug.WriteLine($"Core Text symbol {symbolName} dereferenced: {actualPtr} (0x{actualPtr:X})");
-                    Console.WriteLine($"Core Text symbol {symbolName} dereferenced: {actualPtr} (0x{actualPtr:X})");
+                    Log.Debug("[MacFontService] Core Text symbol {SymbolName} dereferenced: {Pointer:X}", symbolName, actualPtr);
                     return actualPtr;
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"ERROR: Failed to dereference symbol {symbolName}: {ex.Message}");
-                    Console.WriteLine($"ERROR: Failed to dereference symbol {symbolName}: {ex.Message}");
+                    Log.Error(ex, "[MacFontService] Failed to dereference symbol {SymbolName}", symbolName);
                     return IntPtr.Zero;
                 }
             }
             
             System.Diagnostics.Debug.WriteLine($"WARNING: Symbol lookup failed for {symbolName}");
-            Console.WriteLine($"WARNING: Symbol lookup failed for {symbolName}");
+            Log.Warning("[MacFontService] Symbol lookup failed for {SymbolName}", symbolName);
             return IntPtr.Zero;
         }
     }

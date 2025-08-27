@@ -1,15 +1,53 @@
 # CST Avalonia Project Status - August 2025
 
-## Current Status: **UI ENHANCEMENTS & LOGGING CLEANUP** 🎨
+## Current Status: **SEARCH PANEL ENHANCEMENTS & UX IMPROVEMENTS** 🔍
 
-**Last Updated**: August 18, 2025
+**Last Updated**: August 27, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
-## Latest Session Update (2025-08-25)
+## Latest Session Update (2025-08-27)
+
+### ✅ **COMPLETED: Major Search Panel UX Improvements & Bug Fixes**
+
+#### **Enhanced Search Input Experience**
+- **Visual Search Elements**: Added magnifying glass icon and clear button (X) to search input
+- **Progress Feedback**: Progress indicator shows during search operations, replacing clear button temporarily
+- **Better Visual Hierarchy**: Clean, intuitive search interface with proper iconography
+
+#### **Redesigned Book Filtering System**
+- **Compact Filter UI**: Replaced toggle switches with checkboxes for more space-efficient layout
+- **Quick Actions**: Added "Select All" and "Select None" buttons for rapid filter management
+- **Smart Filter Display**: Shows filter summary when collapsed (e.g., "3 of 7 types selected")
+- **Live Book Counter**: Displays book count indicator (e.g., "52 of 217 books") based on current filters
+- **Removed Placeholder**: Eliminated non-functional "Book Collection" dropdown
+
+#### **Critical Search Logic Bug Fixes**
+- **Fixed Empty Filter Bug**: When no books are selected via filters, search now correctly returns no results (previously showed all results)
+- **Fixed Zero-Count Terms**: Terms with 0 occurrences are no longer displayed in search results
+- **Fixed BitArray Logic**: Implemented proper BitArray matching logic consistent with CST4 for accurate book filtering
+- **Enhanced Search Service**: Updated SearchService.cs with proper book filtering validation
+
+#### **UI Polish & Accessibility**
+- **Dynamic Layout**: Book toolbar and status bar now have dynamic height for better space utilization
+- **Icon Improvements**: Enhanced book tree icons for better visual feedback
+- **Progress States**: Clear visual indication during search operations
+
+#### **macOS Application Branding Fix**
+- **Fixed "Avalonia Application" Issue**: macOS menu bar now correctly shows "CST Reader"
+- **Unified Bundle Configuration**: Resolved conflicts between Info.plist and .csproj - both now use "CST Reader"
+- **Consistent Window Titles**: Updated all window titles (main window, splash screen, dialogs) to "CST Reader"
+- **Works Both Ways**: Application name appears correctly whether running via `dotnet run` or as installed .app bundle
+
+**Files Added/Modified**:
+- `/Services/SearchService.cs` - Enhanced book filtering logic and validation
+- `/ViewModels/SearchViewModel.cs` - Added filter management, book counting, and UX improvements
+- `/Views/SearchPanel.axaml` - Complete UI redesign with new filter layout and search input enhancements
+
+## Previous Session Update (2025-08-25)
 
 ### ✅ **COMPLETED: Per-Script Font Detection & Selection System**
 
@@ -148,7 +186,7 @@ SetupFontAndScriptHandlers();
 ✅ **Multi-script Support**: Different book tabs can use different scripts simultaneously
 ✅ **Script Change Updates**: Search results automatically convert script display like tree view
 
-## Latest Session Update (2025-08-15)
+## Previous Session Update (2025-08-15)
 
 ### ✅ **Major Bug Fixes: Search & Script Conversion Issues Resolved**
 
@@ -271,11 +309,12 @@ SetupFontAndScriptHandlers();
     - **Input**: 9 scripts supported for search/dictionary (missing: Thai, Telugu, Tibetan, Khmer, Cyrillic)
     - **Indexing**: IPE (Internal Phonetic Encoding) with Devanagari analyzers
 10. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive tests.
-11. **🆕 Live Search UI**: Functional search panel with real-time results and book filtering.
-12. **🆕 Search Result Highlighting**: Position-based highlighting with navigation support (single-term tested).
-13. **✅ Complete Font System**: Per-script font configuration with real-time updates across all UI locations.
-14. **✅ Per-Script Font Selection**: Native macOS font detection and selection working for all 14 Pali scripts with full persistence.
-15. **✅ Script Synchronization**: Search results automatically update when top-level script changes.
+11. **✅ Enhanced Search UI**: Production-ready search panel with visual search elements, progress feedback, and redesigned filtering system.
+12. **✅ Smart Book Filtering**: Checkbox-based filter UI with "Select All/None" actions, filter summaries, and live book counts.
+13. **🆕 Search Result Highlighting**: Position-based highlighting with navigation support (single-term tested).
+14. **✅ Complete Font System**: Per-script font configuration with real-time updates across all UI locations.
+15. **✅ Per-Script Font Selection**: Native macOS font detection and selection working for all 14 Pali scripts with full persistence.
+16. **✅ Script Synchronization**: Search results automatically update when top-level script changes.
 
 ## Outstanding Work (High Priority)
 
@@ -289,22 +328,47 @@ SetupFontAndScriptHandlers();
     - **Implementation**: May use direct Script→IPE or indirect Script→Deva→IPE path
 2.  **UI Language Font System**: 
     - **Localization Font Settings**: Separate font controls for ~20 UI languages (distinct from Pali script fonts)
-    - **Font Discovery**: Detect available fonts suitable for each script
-    - **Note**: Pali script font system is now ✅ **COMPLETE** with full detection and selection working
+    - **Font Discovery**: Detect available fonts suitable for each UI language script
+    - **Note**: This is separate from Pali script fonts - refers to UI language localization fonts
 3.  **Advanced Search Features**:
     - **Phrase Search**: Implement position-based phrase searching with exact word order matching
     - **Proximity Search**: Add proximity operators for terms within specified distances
 4.  **Search Filtering & Collections**:
-    - **Book Collection Filters**: Fix non-functional checkboxes for Pitaka/Commentary filtering
     - **Custom Book Collections**: Implement user-defined book collection feature
 5.  **UI Feedback During Operations**:
     - **Indexing Progress**: Show progress bar/spinner during index building
     - **Search State**: Indicate when index is incomplete or being rebuilt
     - **Operation Notifications**: Alert user when long operations complete
-6.  **Search Navigation Enhancement**:
+6.  **Automatic XML File Updates System**:
+    - **Git-Based Update Mechanism**: Implement automatic Tipitaka XML file updates using GitHub REST API
+    - **Core Components**:
+      - `XmlUpdateService` with Octokit.net integration for GitHub API communication
+      - Enhanced `file-dates.json` structure with commit hashes for change detection
+      - Settings UI for update control (`EnableAutomaticUpdates`, repository configuration)
+    - **Update Workflow**:
+      - Check repository commit hash to detect changes (fast path)
+      - Compare individual file hashes to identify changed files
+      - Download only modified files to minimize bandwidth usage
+      - Trigger automatic re-indexing after successful updates
+    - **User Experience**: Background updates with progress notifications and user control
+    - **Benefits**: No local git dependency, atomic updates, bandwidth-efficient (avoids 1GB+ full repository clones)
+7.  **Book Display Features**:
+    - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
+    - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
+    - **Search Hit Restoration**: Fix bug where highlighted search hits are not restored when reopening books at startup
+    - **Tab Overflow Bug**: Fix scrollbar covering tabs when too many books are open and tabs don't fit horizontally
+8.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
-    - Implement scroll-to-hit functionality
-    - Add hit counter display (e.g., "Hit 3 of 15")
+
+## Outstanding Work for Beta 1 Release
+
+The following items are prioritized for the upcoming Beta 1 release to ensure production readiness:
+
+1.  **Book Display Bug Fixes** (from item #7 above):
+    - Fix tab overflow scrollbar covering tabs issue
+    - Implement search hit restoration on startup
+2.  **Search Navigation Polish**:
+    - Add keyboard shortcuts for search hit navigation
 
 ## Technical Architecture
 

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using CST.Avalonia.ViewModels;
 using CST.Conversion;
+using Serilog;
 
 namespace CST.Avalonia.Views;
 
@@ -16,10 +17,10 @@ public partial class OpenBookPanel : UserControl
         this.DataContextChanged += (s, e) =>
         {
             var vm = DataContext as OpenBookDialogViewModel;
-            System.Console.WriteLine($"OpenBookPanel DataContext changed to: {vm?.GetType().Name ?? "null"}");
+            Log.Debug("[OpenBookPanel] DataContext changed to: {ViewModelType}", vm?.GetType().Name ?? "null");
             if (vm != null)
             {
-                System.Console.WriteLine($"ViewModel has {vm.BookTree.Count} root nodes");
+                Log.Debug("[OpenBookPanel] ViewModel has {Count} root nodes", vm.BookTree.Count);
             }
         };
     }
@@ -37,39 +38,41 @@ public partial class OpenBookPanel : UserControl
 
     private void TreeView_DoubleTapped(object? sender, RoutedEventArgs e)
     {
-        var timestamp = DateTime.UtcNow;
-        System.Console.WriteLine($"*** [TREE DOUBLE-TAP] TreeView_DoubleTapped fired at {timestamp:HH:mm:ss.fff} ***");
+        Log.Debug("[OpenBookPanel] TreeView double-tapped");
         
         // Get the DataContext (OpenBookDialogViewModel)
         if (DataContext is OpenBookDialogViewModel viewModel && viewModel.SelectedNode != null)
         {
-            System.Console.WriteLine($"*** [TREE DOUBLE-TAP] Selected node: {viewModel.SelectedNode.DisplayName} (Type: {viewModel.SelectedNode.NodeType}) ***");
+            Log.Debug("[OpenBookPanel] Selected node: {NodeName} (Type: {NodeType})", 
+                viewModel.SelectedNode.DisplayName, viewModel.SelectedNode.NodeType);
             
             // Only open if it's a book node (leaf node)
             if (viewModel.SelectedNode.NodeType == BookTreeNodeType.Book)
             {
-                System.Console.WriteLine($"*** [TREE DOUBLE-TAP] Checking if command can execute for book: {viewModel.SelectedNode.CstBook?.FileName ?? "null"} ***");
+                Log.Debug("[OpenBookPanel] Checking if command can execute for book: {FileName}", 
+                    viewModel.SelectedNode.CstBook?.FileName ?? "null");
                 
                 // Execute the open book command
                 if (viewModel.OpenBookCommand.CanExecute(viewModel.SelectedNode))
                 {
-                    System.Console.WriteLine($"*** [TREE DOUBLE-TAP] Executing OpenBookCommand for: {viewModel.SelectedNode.CstBook?.FileName ?? "null"} ***");
+                    Log.Information("[OpenBookPanel] Opening book from tree: {FileName}", 
+                        viewModel.SelectedNode.CstBook?.FileName ?? "null");
                     viewModel.OpenBookCommand.Execute(viewModel.SelectedNode);
-                    System.Console.WriteLine($"*** [TREE DOUBLE-TAP] OpenBookCommand.Execute completed at {DateTime.UtcNow:HH:mm:ss.fff} ***");
+                    Log.Debug("[OpenBookPanel] OpenBookCommand.Execute completed");
                 }
                 else
                 {
-                    System.Console.WriteLine($"*** [TREE DOUBLE-TAP] Command cannot execute ***");
+                    Log.Debug("[OpenBookPanel] Command cannot execute");
                 }
             }
             else
             {
-                System.Console.WriteLine($"*** [TREE DOUBLE-TAP] Not a book node, ignoring double-tap ***");
+                Log.Debug("[OpenBookPanel] Not a book node, ignoring double-tap");
             }
         }
         else
         {
-            System.Console.WriteLine($"*** [TREE DOUBLE-TAP] No valid DataContext or SelectedNode ***");
+            Log.Debug("[OpenBookPanel] No valid DataContext or SelectedNode");
         }
     }
 }

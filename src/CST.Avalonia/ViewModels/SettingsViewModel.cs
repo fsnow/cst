@@ -371,7 +371,7 @@ namespace CST.Avalonia.ViewModels
             get => _selectedScript;
             set 
             {
-                Console.WriteLine($"*** [FONT SELECTION DEBUG] SelectedScript setter called: {value?.ScriptName ?? "null"}");
+                Log.Debug("[Settings] SelectedScript setter called: {ScriptName}", value?.ScriptName ?? "null");
                 
                 // Set flag to prevent font changes during script switching
                 _isChangingScript = true;
@@ -437,21 +437,21 @@ namespace CST.Avalonia.ViewModels
             // No loading state needed since fonts are pre-cached
             var scriptEnum = ScriptFontSettingViewModel.GetScriptFromName(scriptVm.ScriptName);
             
-            Console.WriteLine($"[FONT DEBUG] Loading {scriptVm.ScriptName}");
+            Log.Debug("[Settings] Loading fonts for {ScriptName}", scriptVm.ScriptName);
             
             try
             {
                 // Always use await to ensure we get the cached or fresh fonts properly
                 var fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
-                Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: {fonts?.Count ?? 0} fonts");
+                Log.Debug("[Settings] {ScriptName}: {FontCount} fonts found", scriptVm.ScriptName, fonts?.Count ?? 0);
                 
                 if (fonts == null || fonts.Count == 0)
                 {
-                    Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: EMPTY - retrying...");
+                    Log.Debug("[Settings] {ScriptName}: No fonts found - retrying...", scriptVm.ScriptName);
                     // Retry once after a small delay
                     await Task.Delay(100);
                     fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
-                    Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: Retry got {fonts?.Count ?? 0}");
+                    Log.Debug("[Settings] {ScriptName}: Retry got {FontCount} fonts", scriptVm.ScriptName, fonts?.Count ?? 0);
                 }
                 
                 // Create a copy to avoid modifying the cached list
@@ -464,7 +464,8 @@ namespace CST.Avalonia.ViewModels
                 var savedFontFamily = scriptVm.FontFamily; // This comes from the saved settings
                 
                 // Log for debugging
-                Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: {fontsCopy.Count} total (saved: {savedFontFamily ?? "null"})");
+                Log.Debug("[Settings] {ScriptName}: {TotalFonts} fonts total (saved: {SavedFont})", 
+                    scriptVm.ScriptName, fontsCopy.Count, savedFontFamily ?? "null");
                 
                 // Set the fonts collection
                 scriptVm.AvailableFonts = new ObservableCollection<string>(fontsCopy);
@@ -478,7 +479,8 @@ namespace CST.Avalonia.ViewModels
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: Failed to load system default font info - {ex.Message}");
+                        Log.Debug("[Settings] {ScriptName}: Failed to load system default font info - {Message}", 
+                            scriptVm.ScriptName, ex.Message);
                     }
                 });
                 
@@ -496,20 +498,21 @@ namespace CST.Avalonia.ViewModels
                     if (matchingFont != null)
                     {
                         // Set the selection to the matching font (use the exact string from the list)
-                        Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: Selected {matchingFont}");
+                        Log.Debug("[Settings] {ScriptName}: Selected font {Font}", scriptVm.ScriptName, matchingFont);
                         scriptVm.SelectedFontFamily = matchingFont;
                     }
                     else
                     {
                         // Saved font not found in list, default to System Default
-                        Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: '{savedFontFamily}' not found, using System Default");
+                        Log.Debug("[Settings] {ScriptName}: Font '{SavedFont}' not found, using System Default", 
+                            scriptVm.ScriptName, savedFontFamily);
                         scriptVm.SelectedFontFamily = "System Default";
                     }
                 }
                 else
                 {
                     // No font saved (null or empty), select "System Default"
-                    Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: No saved font, using System Default");
+                    Log.Debug("[Settings] {ScriptName}: No saved font, using System Default", scriptVm.ScriptName);
                     scriptVm.SelectedFontFamily = "System Default";
                 }
                 
@@ -518,7 +521,7 @@ namespace CST.Avalonia.ViewModels
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FONT DEBUG] {scriptVm.ScriptName}: ERROR - {ex.Message}");
+                Log.Error(ex, "[Settings] {ScriptName}: Error loading fonts", scriptVm.ScriptName);
                 // Fallback: provide at least "System Default" 
                 scriptVm.AvailableFonts = new ObservableCollection<string> { "System Default" };
                 scriptVm.SelectedFontFamily = "System Default";
@@ -558,11 +561,13 @@ namespace CST.Avalonia.ViewModels
         public string EffectiveFontFamily
         {
             get {
-                Console.WriteLine($"*** [FONT PREVIEW DEBUG] EffectiveFontFamily getter: Script={ScriptName}, Returning='{_effectiveFontFamily}'");
+                Log.Debug("[Settings] EffectiveFontFamily getter: Script={ScriptName}, Returning={FontFamily}", 
+                    ScriptName, _effectiveFontFamily);
                 return _effectiveFontFamily;
             }
             private set {
-                Console.WriteLine($"*** [FONT PREVIEW DEBUG] EffectiveFontFamily setter: Script={ScriptName}, OldValue='{_effectiveFontFamily}', NewValue='{value}'");
+                Log.Debug("[Settings] EffectiveFontFamily setter: Script={ScriptName}, OldValue={OldValue}, NewValue={NewValue}", 
+                    ScriptName, _effectiveFontFamily, value);
                 this.RaiseAndSetIfChanged(ref _effectiveFontFamily, value);
                 // Update the FontFamily object when the string changes
                 UpdateEffectiveFontFamilyObject();
@@ -583,17 +588,17 @@ namespace CST.Avalonia.ViewModels
                 if (!string.IsNullOrWhiteSpace(_effectiveFontFamily))
                 {
                     EffectiveFontFamilyObject = new global::Avalonia.Media.FontFamily(_effectiveFontFamily);
-                    Console.WriteLine($"*** [FONT PREVIEW DEBUG] Created FontFamily object for: {_effectiveFontFamily}");
+                    Log.Debug("[Settings] Created FontFamily object for: {FontFamily}", _effectiveFontFamily);
                 }
                 else
                 {
                     EffectiveFontFamilyObject = global::Avalonia.Media.FontFamily.Default;
-                    Console.WriteLine($"*** [FONT PREVIEW DEBUG] Using default FontFamily object");
+                    Log.Debug("[Settings] Using default FontFamily object");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"*** [FONT PREVIEW DEBUG] Error creating FontFamily object: {ex.Message}");
+                Log.Debug("[Settings] Error creating FontFamily object: {Message}", ex.Message);
                 EffectiveFontFamilyObject = global::Avalonia.Media.FontFamily.Default;
             }
         }
@@ -610,7 +615,8 @@ namespace CST.Avalonia.ViewModels
             set
             {
                 var valueToSet = (value == "System Default") ? null : value;
-                Console.WriteLine($"*** [FONT SELECTION DEBUG] FontFamily setter: Script={ScriptName}, Input='{value}', Storing='{valueToSet ?? "(null)"}', Old='{_fontFamily ?? "(null)"}'");
+                Log.Debug("[Settings] FontFamily setter: Script={ScriptName}, Input={Input}, Storing={Storing}, Old={Old}", 
+                    ScriptName, value, valueToSet ?? "(null)", _fontFamily ?? "(null)");
                 if (_fontFamily != valueToSet)
                 {
                     this.RaiseAndSetIfChanged(ref _fontFamily, valueToSet);
@@ -627,17 +633,18 @@ namespace CST.Avalonia.ViewModels
         {
             get {
                 var result = string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily;
-                Console.WriteLine($"*** [FONT SELECTION DEBUG] SelectedFontFamily getter: Script={ScriptName}, Returning='{result}'");
+                Log.Debug("[Settings] SelectedFontFamily getter: Script={ScriptName}, Returning={Result}", ScriptName, result);
                 return result;
             }
             set 
             {
-                Console.WriteLine($"*** [FONT SELECTION DEBUG] SelectedFontFamily setter: Script={ScriptName}, Input='{value}', CurrentGet='{(string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily)}'");
+                Log.Debug("[Settings] SelectedFontFamily setter: Script={ScriptName}, Input={Input}, CurrentGet={Current}", 
+                    ScriptName, value, string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily);
                 
                 // Ignore font changes during script switching to prevent overwriting other scripts' fonts
                 if (Parent is AppearanceSettingsViewModel parent && parent._isChangingScript)
                 {
-                    Console.WriteLine($"*** [FONT SELECTION DEBUG] Ignoring font change for {ScriptName} during script switching");
+                    Log.Debug("[Settings] Ignoring font change for {ScriptName} during script switching", ScriptName);
                     return;
                 }
                 
@@ -748,32 +755,33 @@ namespace CST.Avalonia.ViewModels
                     {
                         FontDisplayName = $"System Default ({SystemDefaultFontName})";
                         EffectiveFontFamily = SystemDefaultFontName;
-                        Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to cached system default: {SystemDefaultFontName}");
+                        Log.Debug("[Settings] Script={ScriptName}, Setting EffectiveFontFamily to cached system default: {SystemDefault}", 
+                            ScriptName, SystemDefaultFontName);
                     }
                     else
                     {
                         // No cached system default font available yet, use generic fallback
                         FontDisplayName = "System Default";
                         EffectiveFontFamily = "Helvetica"; // Use a specific fallback font for preview
-                        Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to fallback: Helvetica");
+                        Log.Debug("[Settings] Script={ScriptName}, Setting EffectiveFontFamily to fallback: Helvetica", ScriptName);
                     }
                 }
                 else
                 {
                     FontDisplayName = FontFamily;
                     EffectiveFontFamily = FontFamily;
-                    Console.WriteLine($"*** [FONT PREVIEW DEBUG] Script={ScriptName}, Setting EffectiveFontFamily to: {FontFamily}");
+                    Log.Debug("[Settings] Script={ScriptName}, Setting EffectiveFontFamily to: {FontFamily}", ScriptName, FontFamily);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"*** [FONT PREVIEW DEBUG] Exception in UpdateFontDisplayName: {ex.Message}");
+                Log.Error(ex, "[Settings] Exception in UpdateFontDisplayName");
                 FontDisplayName = string.IsNullOrWhiteSpace(FontFamily) ? "System Default" : FontFamily;
                 EffectiveFontFamily = string.IsNullOrWhiteSpace(FontFamily) ? "Helvetica" : FontFamily;
             }
             
             // Force property change notification for EffectiveFontFamily to update the preview
-            Console.WriteLine($"*** [FONT PREVIEW DEBUG] Forcing property change for EffectiveFontFamily: {EffectiveFontFamily}");
+            Log.Debug("[Settings] Forcing property change for EffectiveFontFamily: {FontFamily}", EffectiveFontFamily);
             this.RaisePropertyChanged(nameof(EffectiveFontFamily));
         }
         

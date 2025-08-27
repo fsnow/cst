@@ -89,11 +89,12 @@ namespace CST.Avalonia.ViewModels
             // Debug search terms
             if (searchTerms != null && searchTerms.Any())
             {
-                System.Console.WriteLine($"*** [BOOK DISPLAY VM] Created with {searchTerms.Count} search terms: [{string.Join(", ", searchTerms)}] ***");
+                Log.Information("[BookDisplay] Created with {Count} search terms: [{Terms}]", 
+                    searchTerms.Count, string.Join(", ", searchTerms));
             }
             else
             {
-                System.Console.WriteLine($"*** [BOOK DISPLAY VM] Created with NO search terms ***");
+                Log.Debug("[BookDisplay] Created with no search terms");
             }
             
             // Initialize collections - exclude Unknown and IPE from UI dropdown
@@ -726,16 +727,16 @@ namespace CST.Avalonia.ViewModels
 
         private string ApplySearchHighlightingToRawXml(string xmlContent)
         {
-            System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Called with {_searchTerms?.Count ?? 0} search terms (IPE format) ***");
+            Log.Debug("[BookDisplay] ApplyHighlighting called with {Count} search terms (IPE format)", _searchTerms?.Count ?? 0);
             if (_searchTerms != null && _searchTerms.Any())
             {
-                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] IPE Search terms: [{string.Join(", ", _searchTerms)}] ***");
-                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] DocId: {_docId}, Book: {_book.FileName} ***");
+                Log.Debug("[BookDisplay] IPE Search terms: [{Terms}]", string.Join(", ", _searchTerms));
+                Log.Debug("[BookDisplay] DocId: {DocId}, Book: {FileName}", _docId, _book.FileName);
             }
             
             if (_searchTerms == null || !_searchTerms.Any() || _docId == null) 
             {
-                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Skipping - no terms or no DocId ***");
+                Log.Debug("[BookDisplay] Skipping highlighting - no terms or no DocId");
                 return xmlContent;
             }
 
@@ -770,13 +771,13 @@ namespace CST.Avalonia.ViewModels
                 // Collect all offset information for our search terms
                 var offsetList = new List<(int start, int end, string term)>();
                 
-                System.Console.WriteLine($"*** [HIGHLIGHTING] Processing {_searchTerms.Count} search terms ***");
+                Log.Debug("[BookDisplay] Processing {Count} search terms for highlighting", _searchTerms.Count);
                 
                 foreach (var searchTerm in _searchTerms)
                 {
                     if (string.IsNullOrWhiteSpace(searchTerm)) continue;
                     
-                    System.Console.WriteLine($"*** [HIGHLIGHTING] Looking for term: '{searchTerm}' ***");
+                    Log.Debug("[BookDisplay] Looking for term: '{Term}'", searchTerm);
                     
                     // Get the postings for this term
                     var termsEnum = termVectors.GetIterator(null);
@@ -784,7 +785,7 @@ namespace CST.Avalonia.ViewModels
                     
                     if (termsEnum.SeekExact(termBytes))
                     {
-                        System.Console.WriteLine($"*** [HIGHLIGHTING] Found term '{searchTerm}' in index ***");
+                        Log.Debug("[BookDisplay] Found term '{Term}' in index", searchTerm);
                         
                         // Get positions and offsets for this term
                         var postingsEnum = termsEnum.DocsAndPositions(null, null, DocsAndPositionsFlags.OFFSETS);
@@ -793,7 +794,7 @@ namespace CST.Avalonia.ViewModels
                             while (postingsEnum.NextDoc() != DocIdSetIterator.NO_MORE_DOCS)
                             {
                                 var freq = postingsEnum.Freq;
-                                System.Console.WriteLine($"*** [HIGHLIGHTING] Term '{searchTerm}' appears {freq} times in document ***");
+                                Log.Debug("[BookDisplay] Term '{Term}' appears {Count} times in document", searchTerm, freq);
                                 
                                 for (int i = 0; i < freq; i++)
                                 {
@@ -806,29 +807,31 @@ namespace CST.Avalonia.ViewModels
                                         // Verify the offset points to the expected text
                                         var actualText = xmlString.Substring(startOffset, endOffset - startOffset + 1);
                                         offsetList.Add((startOffset, endOffset, searchTerm));
-                                        System.Console.WriteLine($"*** [HIGHLIGHTING] Offset {startOffset}-{endOffset} for '{searchTerm}': actual text '{actualText}' ***");
+                                        Log.Debug("[BookDisplay] Offset {Start}-{End} for '{Term}': actual text '{Text}'", 
+                                            startOffset, endOffset, searchTerm, actualText);
                                     }
                                     else
                                     {
-                                        System.Console.WriteLine($"*** [HIGHLIGHTING] Invalid offset for '{searchTerm}': {startOffset}-{endOffset} ***");
+                                        Log.Warning("[BookDisplay] Invalid offset for '{Term}': {Start}-{End}", 
+                                            searchTerm, startOffset, endOffset);
                                     }
                                 }
                             }
                         }
                         else
                         {
-                            System.Console.WriteLine($"*** [HIGHLIGHTING] No postings enum for term '{searchTerm}' ***");
+                            Log.Debug("[BookDisplay] No postings enum for term '{Term}'", searchTerm);
                         }
                     }
                     else
                     {
-                        System.Console.WriteLine($"*** [HIGHLIGHTING] Term '{searchTerm}' not found in index ***");
+                        Log.Debug("[BookDisplay] Term '{Term}' not found in index", searchTerm);
                     }
                 }
 
                 if (!offsetList.Any())
                 {
-                    System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] No offsets found for any search terms ***");
+                    Log.Debug("[BookDisplay] No offsets found for any search terms");
                     return xmlContent;
                 }
 
@@ -845,7 +848,7 @@ namespace CST.Avalonia.ViewModels
                 var isSingleTerm = _searchTerms.Count == 1;
                 var hitIndex = hitCount - 1;
                 
-                System.Console.WriteLine($"*** [HIGHLIGHTING] Applying {hitCount} highlights (single-term: {isSingleTerm}) ***");
+                Log.Debug("[BookDisplay] Applying {Count} highlights (single-term: {IsSingle})", hitCount, isSingleTerm);
                 
                 foreach (var (start, end, term) in offsetList)
                 {
@@ -860,14 +863,15 @@ namespace CST.Avalonia.ViewModels
                     sb.Remove(start, end - start + 1);
                     sb.Insert(start, openTag + highlightedText + closeTag);
                     
-                    System.Console.WriteLine($"*** [HIGHLIGHTING] Applied highlight #{hitIndex + 1} at offset {start}-{end}: '{highlightedText}' (term: '{term}') ***");
+                    Log.Debug("[BookDisplay] Applied highlight #{Number} at offset {Start}-{End}: '{Text}' (term: '{Term}')", 
+                        hitIndex + 1, start, end, highlightedText, term);
                     hitIndex--;
                 }
                 
                 // Return the highlighted XML string
                 var highlightedXml = sb.ToString();
                 
-                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Successfully applied {hitCount} highlights ***");
+                Log.Information("[BookDisplay] Successfully applied {Count} highlights", hitCount);
                 
                 // Update hit count and status
                 var totalHits = hitCount;
@@ -887,7 +891,7 @@ namespace CST.Avalonia.ViewModels
             catch (Exception ex)
             {
                 _logger.Error(ex, "Failed to apply search highlighting");
-                System.Console.WriteLine($"*** [APPLY HIGHLIGHTING] Error: {ex.Message} ***");
+                Log.Error(ex, "[BookDisplay] Error applying highlights");
                 return xmlContent; // Return original content on error
             }
         }

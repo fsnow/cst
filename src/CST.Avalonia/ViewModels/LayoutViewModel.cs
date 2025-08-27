@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 
 namespace CST.Avalonia.ViewModels
 {
@@ -32,8 +33,9 @@ namespace CST.Avalonia.ViewModels
             AboutCommand = ReactiveCommand.Create(ShowAbout);
             
             // Debug output
-            System.Console.WriteLine($"LayoutViewModel created. Layout has {Layout?.VisibleDockables?.Count ?? 0} visible dockables");
-            System.Console.WriteLine($"Factory initialized with CreateHostWindow support");
+            Log.Debug("[Layout] LayoutViewModel created. Layout has {Count} visible dockables", 
+                Layout?.VisibleDockables?.Count ?? 0);
+            Log.Debug("[Layout] Factory initialized with CreateHostWindow support");
         }
 
         public RootDock? Layout
@@ -91,12 +93,12 @@ namespace CST.Avalonia.ViewModels
                         // Hide the panel
                         mainDock.VisibleDockables?.Remove(leftToolDock);
                         IsBookPanelVisible = false;
-                        System.Console.WriteLine("Book panel hidden");
+                        Log.Debug("[Layout] Book panel hidden");
                     }
                     else
                     {
                         // Panel is hidden, but we need to recreate it or find it
-                        System.Console.WriteLine("Book panel show requested - panel was already removed");
+                        Log.Debug("[Layout] Book panel show requested - panel was already removed");
                         // We'll need to recreate or restore the panel
                     }
                 }
@@ -138,7 +140,7 @@ namespace CST.Avalonia.ViewModels
                 // Insert at the beginning (left side)
                 mainDock.VisibleDockables?.Insert(0, leftToolDock);
                 IsBookPanelVisible = true;
-                System.Console.WriteLine("Book panel restored");
+                Log.Debug("[Layout] Book panel restored");
             }
         }
 
@@ -148,7 +150,7 @@ namespace CST.Avalonia.ViewModels
             Layout = _factory.CreateLayout();
             _factory.InitLayout(Layout);
             IsBookPanelVisible = true;
-            System.Console.WriteLine("Layout reset to default");
+            Log.Information("[Layout] Layout reset to default");
         }
 
         private void ExitApplication()
@@ -162,7 +164,7 @@ namespace CST.Avalonia.ViewModels
         private void ShowAbout()
         {
             // TODO: Implement About dialog
-            System.Console.WriteLine("About CST - Tipitaka text reader application");
+            Log.Debug("[Layout] About dialog requested");
         }
     }
 }
