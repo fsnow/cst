@@ -2,14 +2,42 @@
 
 ## Current Status: **SEARCH PANEL ENHANCEMENTS & UX IMPROVEMENTS** 🔍
 
-**Last Updated**: August 27, 2025
+**Last Updated**: August 30, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
 
 This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
-## Latest Session Update (2025-08-27)
+CST stands for "Chaṭṭha Saṅgāyana Tipiṭaka".
+
+## Latest Session Update (2025-08-29)
+
+### ✅ **COMPLETED: Tab Overflow Bug Fix & UI Polish**
+
+#### **Fixed: Tab Scrollbar Covering Issue**
+- **Problem Solved**: Horizontal scrollbar no longer covers tabs when too many books are open
+- **Solution**: Custom Avalonia styling with `RenderTransform` to position scrollbar below tabs
+- **Visual Enhancement**: Thin VS Code-style scrollbar (3px height) with transparent background
+- **Technical Implementation**: 
+  - Created `/Styles/DockStyles.axaml` with `translate(0px, 12px)` transform
+  - 12px offset ensures clearance for tall Devanagari ligatures
+  - Hidden arrow buttons for cleaner appearance
+- **Beta 1 Priority**: Resolved critical UI issue affecting usability with multiple open books
+
+#### **Removed Non-Functional "+" Button**
+- **Problem Solved**: Non-functional "+" button removed from document tab bar
+- **Solution**: Set `CanCreateDocument = false` in `CstDockFactory.cs` at two locations
+- **Implementation**: Used proper Dock.Avalonia API instead of CSS workarounds
+- **Result**: Clean tab bar without confusing non-functional elements
+
+**Files Added/Modified**:
+- `/Styles/DockStyles.axaml` - Custom scrollbar styling with positioning
+- `/App.axaml` - Added StyleInclude for DockStyles
+- `/CST.Avalonia.csproj` - Added AvaloniaResource for style file
+- `/Services/CstDockFactory.cs` - Disabled document creation button
+
+## Previous Session Update (2025-08-27)
 
 ### ✅ **COMPLETED: Major Search Panel UX Improvements & Bug Fixes**
 
@@ -356,7 +384,6 @@ SetupFontAndScriptHandlers();
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
     - **Search Hit Restoration**: Fix bug where highlighted search hits are not restored when reopening books at startup
-    - **Tab Overflow Bug**: Fix scrollbar covering tabs when too many books are open and tabs don't fit horizontally
 8.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
@@ -365,10 +392,9 @@ SetupFontAndScriptHandlers();
 The following items are prioritized for the upcoming Beta 1 release to ensure production readiness:
 
 1.  **Book Display Bug Fixes** (from item #7 above):
-    - Fix tab overflow scrollbar covering tabs issue
     - Implement search hit restoration on startup
-2.  **Search Navigation Polish**:
-    - Add keyboard shortcuts for search hit navigation
+2.  **Automatic XML File Updates System** (from item #6 above):
+    - Git-Based update mechanism with GitHub REST API integration
 
 ## Technical Architecture
 

@@ -97,7 +97,7 @@ namespace CST.Avalonia.Services
                 Proportion = 0.75, // 75% of width
                 ActiveDockable = welcomeDocument,
                 VisibleDockables = CreateList<IDockable>(welcomeDocument),
-                CanCreateDocument = true, // Allow creating documents through drag operations
+                CanCreateDocument = false, // Disable "+" button - books opened via "Select a Book" panel
                 CanFloat = true, // Allow floating for multi-window support
                 CanPin = false, // Prevent pinning
                 CanClose = false, // Prevent closing the entire dock
@@ -1152,7 +1152,7 @@ namespace CST.Avalonia.Services
         public override DocumentDock CreateDocumentDock()
         {
             var documentDock = new DocumentDock();
-            documentDock.CanCreateDocument = true;
+            documentDock.CanCreateDocument = false;
             documentDock.IsCollapsable = false;
             return documentDock;
         }

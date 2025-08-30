@@ -79,6 +79,7 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Dock.Avalonia/Themes/DockFluentTheme.axaml" />
+        <StyleInclude Source="avares://CST.Avalonia/Styles/DockStyles.axaml" />
         
         <!-- Tab font styling: Each tab should use its book's script font -->
         <!-- This is complex due to the dock system structure - leaving for future enhancement -->

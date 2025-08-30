@@ -1,0 +1,54 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dock="using:Dock.Avalonia.Controls">
+
+    <!-- Position scrollbar below tabs using transform -->
+    <Style Selector="dock|DockControl ScrollBar:horizontal">
+        <Setter Property="Height" Value="3"/>
+        <Setter Property="VerticalAlignment" Value="Bottom"/>
+        <Setter Property="RenderTransform" Value="translate(0px, 12px)"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Margin" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+
+    <!-- Style the scrollbar track to use full width -->
+    <Style Selector="dock|DockControl ScrollBar:horizontal /template/ Track">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+
+    <!-- Style the custom scrollbar thumb -->
+    <Style Selector="ScrollBar:horizontal /template/ Thumb">
+        <Setter Property="Background" Value="#40808080"/>
+        <Setter Property="CornerRadius" Value="1.5"/>
+        <Setter Property="Margin" Value="0,0.5"/>
+    </Style>
+
+    <!-- ScrollBar thumb hover state -->
+    <Style Selector="ScrollBar:horizontal /template/ Thumb:pointerover">
+        <Setter Property="Background" Value="#60909090"/>
+    </Style>
+
+    <!-- ScrollBar thumb pressed state -->
+    <Style Selector="ScrollBar:horizontal /template/ Thumb:pressed">
+        <Setter Property="Background" Value="#80A0A0A0"/>
+    </Style>
+
+    <!-- Hide scrollbar buttons (arrows) and remove their space -->
+    <Style Selector="dock|DockControl ScrollBar:horizontal /template/ Button">
+        <Setter Property="IsVisible" Value="False"/>
+        <Setter Property="Width" Value="0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+    
+    <!-- Specifically target repeat buttons if they exist -->
+    <Style Selector="dock|DockControl ScrollBar:horizontal /template/ RepeatButton">
+        <Setter Property="IsVisible" Value="False"/>
+        <Setter Property="Width" Value="0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+    
+</Styles>

@@ -4,7 +4,7 @@
 
 ## 1. Executive Summary
 
-This document outlines a strategy for integrating an automatic update mechanism for the Tipitaka XML files directly into the CST.Avalonia application. The proposed solution avoids requiring a local `git` installation and minimizes bandwidth by using the GitHub REST API to track and download file changes.
+This document outlines a strategy for integrating an automatic download and update mechanism for the Tipitaka XML files directly into the CST.Avalonia application. The application will not ship with XML data - all files will be downloaded on first run. The proposed solution avoids requiring a local `git` installation and minimizes bandwidth by using the GitHub REST API to track and download file changes.
 
 The core idea is to leverage commit hashes to determine if updates are needed, both at the repository level and for individual files. This approach is efficient, robust, and provides a seamless experience for the end-user.
 
@@ -17,6 +17,8 @@ To provide user control and flexibility, the following settings will be added to
 -   `EnableAutomaticUpdates` (boolean): A master switch to enable or disable the entire update-checking feature. Defaults to `true`.
 -   `XmlRepositoryOwner` (string): The owner of the GitHub repository. Defaults to `VipassanaTech`.
 -   `XmlRepositoryName` (string): The name of the GitHub repository. Defaults to `tipitaka-xml`.
+-   `XmlRepositoryPath` (string): The directory path within the repository containing the Devanagari XML files. Defaults to `"deva master"`. When blank/empty, assumes files are in the repository root.
+-   `XmlRepositoryBranch` (string): The branch to check for updates. Defaults to `"main"`.
 
 The `XmlUpdateService` will depend on `ISettingsService` to access these values.
 
@@ -88,47 +90,62 @@ This plan details the creation of a new service, `XmlUpdateService`, responsible
 
 ### Step 3: The Update Workflow (Inside `XmlUpdateService`)
 
-1.  **Initialization & Pre-check**:
+1.  **Initialization & Data Availability Check**:
     - On application startup, the `XmlUpdateService` is initialized.
-    - It first checks the `EnableAutomaticUpdates` setting. If `false`, it does nothing further.
-    - It reads `file-dates.json` to load the `LastKnownRepositoryCommitHash` and file hashes into memory.
+    - **Check XML Directory**: Verify if the configured XML directory contains data by checking for the existence of book 0 (e.g., `dhp.xml` or similar).
+    - **If No Data Found**: Prompt user with dialog offering two options:
+      - "I already have the XML data" → Open file browser to select existing directory, update XML directory setting
+      - "Download the data" → Proceed with initial download from GitHub repository
+    - **If Data Found**: Continue to update checking process.
 
 2.  **Check for Updates (`CheckForUpdatesAsync`)**:
-    - This method will be called from the main application logic (e.g., on startup).
+    - This method will be called after ensuring XML data exists locally.
+    - First checks the `EnableAutomaticUpdates` setting. If `false`, skip update checking.
+    - Reads `file-dates.json` to load the `LastKnownRepositoryCommitHash` and file hashes into memory (may not exist on first download).
 
 3.  **Phase 1: Check the Top-Level Commit (Fast Path)**
-    - Use `Octokit.net` to fetch the latest commit for the path `deva` on the `main` branch, using the repository owner and name from `ISettingsService`.
+    - Use `Octokit.net` to fetch the latest commit for the configured directory path on the configured branch, using the repository settings from `ISettingsService`.
       ```csharp
       var settings = _settingsService.LoadSettings();
       var owner = settings.XmlRepositoryOwner;
       var repo = settings.XmlRepositoryName;
+      var path = string.IsNullOrEmpty(settings.XmlRepositoryPath) ? null : settings.XmlRepositoryPath;
+      var branch = string.IsNullOrEmpty(settings.XmlRepositoryBranch) ? "main" : settings.XmlRepositoryBranch;
 
       var client = new GitHubClient(new ProductHeaderValue("CST.Avalonia"));
-      var commits = await client.Repository.Commit.GetAll(owner, repo, new CommitRequest { Path = "deva", Sha = "main" });
+      var commitRequest = new CommitRequest { Sha = branch };
+      if (!string.IsNullOrEmpty(path))
+          commitRequest.Path = path;
+      var commits = await client.Repository.Commit.GetAll(owner, repo, commitRequest);
       var latestRemoteCommitHash = commits.FirstOrDefault()?.Sha;
       ```
     - **Compare Hashes**: If `latestRemoteCommitHash` matches the locally stored `LastKnownRepositoryCommitHash`, the process stops. No updates needed.
+    - **First Download**: If no `file-dates.json` exists (first download), proceed to download all files.
 
 4.  **Phase 2: Check Individual File Hashes (Deeper Check)**
-    - If the top-level hash has changed, get the contents of the `deva` directory from the repository.
+    - If the top-level hash has changed or this is a first download, get the contents of the configured directory from the repository.
       ```csharp
-      var contents = await client.Repository.Content.GetAllContents(owner, repo, "deva");
+      var contents = string.IsNullOrEmpty(path)
+          ? await client.Repository.Content.GetAllContents(owner, repo)
+          : await client.Repository.Content.GetAllContents(owner, repo, path);
       ```
-    - Iterate through the remote `contents` and compare their `Sha` with the locally stored `CommitHash` for each file to build a list of files that need to be downloaded.
+    - **For Updates**: Iterate through the remote `contents` and compare their `Sha` with the locally stored `CommitHash` for each file to build a list of files that need to be downloaded.
+    - **For First Download**: Download all XML files found in the directory.
 
-5.  **Phase 3: Download and Save Updated Files**
-    - If files need downloading, notify the user.
+5.  **Phase 3: Download and Save Files**
+    - **For Updates**: If files need downloading, notify the user of pending updates.
+    - **For First Download**: Display progress dialog showing initial data download.
     - Download each file's raw content to a temporary directory.
       ```csharp
       var fileContent = await client.Repository.Content.GetRawContent(owner, repo, file.Path);
       ```
-    - After all downloads are successful, move the files to the final user data directory.
+    - After all downloads are successful, move the files to the configured XML directory.
 
-6.  **Phase 4: Finalize and Re-index**
+6.  **Phase 4: Finalize and Index**
     - After files are saved:
-      - Update `file-dates.json`: update the `CommitHash` for each changed file and set `LastKnownRepositoryCommitHash` to the new top-level hash. **Do not modify `LastIndexedTimestamp` here.**
-      - **Crucially, trigger the incremental indexing process** via `IIndexingService`. The indexing service itself is responsible for updating the `LastIndexedTimestamp` after it successfully processes a file.
-      - Notify the user that the update is complete.
+      - **Create/Update `file-dates.json`**: Set `CommitHash` for each file and `LastKnownRepositoryCommitHash` to the current top-level hash. **Do not modify `LastIndexedTimestamp` here.**
+      - **Trigger indexing process**: For first download, trigger full indexing. For updates, trigger incremental indexing via `IIndexingService`.
+      - Notify the user that the download/update is complete.
 
 ### Step 4: UI and Service Integration
 
