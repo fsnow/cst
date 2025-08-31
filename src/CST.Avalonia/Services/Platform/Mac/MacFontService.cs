@@ -317,7 +317,7 @@ namespace CST.Avalonia.Services.Platform.Mac
 
         private List<string> GetFontsForScriptUsingCharacterSet(Script script)
         {
-            _logger.LogInformation("CHARACTER-SET APPROACH: Getting fonts for script {Script}", script);
+            _logger.LogDebug("CHARACTER-SET APPROACH: Getting fonts for script {Script}", script);
             
             IntPtr characterStringRef = IntPtr.Zero;
             IntPtr characterSetRef = IntPtr.Zero;
@@ -333,7 +333,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                     return new List<string> { "Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana" };
                 }
                 
-                _logger.LogInformation("CHARACTER-SET APPROACH: Using sample characters '{Chars}' for script {Script}", sampleChars, script);
+                _logger.LogDebug("CHARACTER-SET APPROACH: Using sample characters '{Chars}' for script {Script}", sampleChars, script);
                 
                 // Step 2: Create CFString with sample characters
                 characterStringRef = CoreFoundation.CFStringCreateWithCString(
@@ -347,7 +347,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                     return new List<string> { "Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana" };
                 }
                 
-                _logger.LogInformation("CHARACTER-SET APPROACH: Step 1 SUCCESS - Created CFString with sample characters");
+                _logger.LogDebug("CHARACTER-SET APPROACH: Step 1 SUCCESS - Created CFString with sample characters");
                 
                 // Step 3: Create CFCharacterSet from the string
                 characterSetRef = CoreFoundation.CFCharacterSetCreateWithCharactersInString(IntPtr.Zero, characterStringRef);
@@ -357,7 +357,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                     return new List<string> { "Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana" };
                 }
                 
-                _logger.LogInformation("CHARACTER-SET APPROACH: Step 2 SUCCESS - Created CFCharacterSet");
+                _logger.LogDebug("CHARACTER-SET APPROACH: Step 2 SUCCESS - Created CFCharacterSet");
                 
                 // Step 4: Create font descriptor with character set attribute
                 unsafe
@@ -383,7 +383,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                     return new List<string> { "Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana" };
                 }
                 
-                _logger.LogInformation("CHARACTER-SET APPROACH: Step 3 SUCCESS - Created attributes dictionary");
+                _logger.LogDebug("CHARACTER-SET APPROACH: Step 3 SUCCESS - Created attributes dictionary");
                 
                 // Step 5: Create template descriptor
                 IntPtr templateDescriptorRef = CoreText.CTFontDescriptorCreateWithAttributes(attributesDictRef);
@@ -393,7 +393,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                     return new List<string> { "Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana" };
                 }
                 
-                _logger.LogInformation("CHARACTER-SET APPROACH: Step 4 SUCCESS - Created template descriptor");
+                _logger.LogDebug("CHARACTER-SET APPROACH: Step 4 SUCCESS - Created template descriptor");
                 
                 // Step 6: Find matching font descriptors using Swift approach
                 IntPtr matchingDescriptorsRef = CoreText.CTFontDescriptorCreateMatchingFontDescriptors(templateDescriptorRef, IntPtr.Zero);
@@ -406,7 +406,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                 }
                 
                 IntPtr count = CoreFoundation.CFArrayGetCount(matchingDescriptorsRef);
-                _logger.LogInformation("CHARACTER-SET APPROACH: Step 5 SUCCESS - Found {Count} matching font descriptors for script {Script}", (long)count, script);
+                _logger.LogDebug("CHARACTER-SET APPROACH: Step 5 SUCCESS - Found {Count} matching font descriptors for script {Script}", (long)count, script);
                 
                 // Step 7: Extract unique family names (following Swift approach)
                 var uniqueFamilies = new HashSet<string>();
@@ -422,7 +422,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                         if (!string.IsNullOrEmpty(familyName))
                         {
                             uniqueFamilies.Add(familyName);
-                            _logger.LogInformation("CHARACTER-SET APPROACH: Found font family: '{FamilyName}'", familyName);
+                            _logger.LogDebug("CHARACTER-SET APPROACH: Found font family: '{FamilyName}'", familyName);
                         }
                         CoreFoundation.CFRelease(familyNameRef);
                     }
@@ -431,7 +431,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                 CoreFoundation.CFRelease(matchingDescriptorsRef);
                 
                 var sortedFonts = uniqueFamilies.OrderBy(f => f).ToList();
-                _logger.LogInformation("CHARACTER-SET APPROACH: Step 6 SUCCESS - Found {Count} unique font families for script {Script}", sortedFonts.Count, script);
+                _logger.LogDebug("CHARACTER-SET APPROACH: Step 6 SUCCESS - Found {Count} unique font families for script {Script}", sortedFonts.Count, script);
                 
                 return sortedFonts.Count > 0 ? sortedFonts : new List<string> { "Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana" };
             }

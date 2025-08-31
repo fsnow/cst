@@ -141,10 +141,12 @@ public partial class App : Application
             {
                 // Give settings time to load
                 await Task.Delay(1000);
-                await InitializeIndexingAsync(showSplash);
                 
-                // Check for XML updates after indexing is initialized
+                // Check for XML updates first to ensure we have latest files
                 await CheckForXmlUpdatesAsync();
+                
+                // Then initialize indexing with the updated files
+                await InitializeIndexingAsync(showSplash);
             });
             
             if (showSplash)

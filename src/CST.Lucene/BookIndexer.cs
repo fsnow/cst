@@ -105,6 +105,22 @@ namespace CST
         private void GetAllDocIds(IndxMsgDelegate msgCallback)
         {
             FSDirectory fSDirectory = FSDirectory.Open(IndexDirectory);
+            
+            // Check if a valid index exists before trying to open it
+            try
+            {
+                if (!DirectoryReader.IndexExists(fSDirectory))
+                {
+                    // No index exists yet, nothing to get
+                    return;
+                }
+            }
+            catch
+            {
+                // Directory might exist but contain no valid index
+                return;
+            }
+            
             IndexReader indexReader = DirectoryReader.Open(fSDirectory);
 
             IBits liveDocs = MultiFields.GetLiveDocs(indexReader);

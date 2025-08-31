@@ -330,7 +330,7 @@ namespace CST.Avalonia.Services
                             
                             downloadedFiles[fileName] = new FileCommitInfo
                             {
-                                LastIndexedTimestamp = DateTime.UtcNow,
+                                LastIndexedTimestamp = null,  // null = needs indexing after download
                                 CommitHash = file.Sha
                             };
                             
@@ -432,6 +432,9 @@ namespace CST.Avalonia.Services
                 // Check only the book files we need from the Books collection
                 var filesToUpdate = new List<TreeItem>();
                 var xmlDir = _settingsService.Settings.XmlBooksDirectory;
+                _logger.LogInformation("XML directory for comparison: {XmlDir}", xmlDir);
+                var xmlFileCount = Directory.Exists(xmlDir) ? Directory.GetFiles(xmlDir, "*.xml").Length : 0;
+                _logger.LogInformation("Found {Count} XML files in directory", xmlFileCount);
                 
                 // Check if we need to do hash comparison for missing commit hash tracking data
                 // IndexingService may have created file-dates.json with timestamps but no commit hashes
@@ -445,36 +448,59 @@ namespace CST.Avalonia.Services
                     UpdateStatusChanged?.Invoke("Checking existing files...");
                 }
                 
+                // Track files that are already up-to-date (for saving to file-dates.json)
+                var upToDateFiles = new Dictionary<string, FileCommitInfo>();
+                int filesChecked = 0, filesFound = 0, shaMatches = 0;
+                
+                _logger.LogInformation("Processing {Count} books from Books.Inst", Books.Inst.Count());
+                
+                int booksProcessed = 0, booksNotFound = 0;
                 foreach (var book in Books.Inst)
                 {
+                    booksProcessed++;
                     if (!repoFilesByName.TryGetValue(book.FileName, out var repoFile))
                     {
-                        _logger.LogWarning("Book file {FileName} not found in repository", book.FileName);
+                        booksNotFound++;
+                        if (booksNotFound <= 5) // Only log first 5 to avoid spam
+                        {
+                            _logger.LogWarning("Book file {FileName} not found in repository", book.FileName);
+                        }
                         continue;
                     }
                     
                     bool needsUpdate = false;
                     
-                    if (fileDatesData?.Files != null && fileDatesData.Files.TryGetValue(book.FileName, out var localFile))
+                    if (!needsHashComparison && fileDatesData?.Files != null && fileDatesData.Files.TryGetValue(book.FileName, out var localFile))
                     {
-                        // We have tracking data - use stored SHA
+                        // We have tracking data with valid commit hashes - use stored SHA
                         needsUpdate = localFile.CommitHash != repoFile.Sha;
                         if (needsUpdate)
                         {
                             _logger.LogDebug("File {Name} needs update (tracked SHA: {LocalSha} vs remote: {RemoteSha})", 
                                 book.FileName, localFile.CommitHash, repoFile.Sha.Substring(0, 7));
                         }
+                        else
+                        {
+                            // File is up-to-date, keep it in tracking with existing timestamp
+                            upToDateFiles[book.FileName] = localFile;
+                        }
                     }
                     else
                     {
                         // No tracking data - check if local file exists
                         var localPath = Path.Combine(xmlDir, book.FileName);
+                        filesChecked++;
                         if (File.Exists(localPath))
                         {
+                            filesFound++;
                             // Hash-compare existing file against remote SHA
                             _logger.LogDebug("Hash-comparing existing file: {FileName}", book.FileName);
                             var localSha = CalculateGitBlobSha(localPath);
                             needsUpdate = localSha != repoFile.Sha;
+                            if (!needsUpdate) shaMatches++;
+                            
+                            _logger.LogDebug("SHA comparison for {FileName}: Local={LocalSha}, Remote={RemoteSha}, NeedsUpdate={NeedsUpdate}", 
+                                book.FileName, localSha.Substring(0, 7), repoFile.Sha.Substring(0, 7), needsUpdate);
                             
                             if (needsUpdate)
                             {
@@ -485,13 +511,20 @@ namespace CST.Avalonia.Services
                             {
                                 _logger.LogDebug("File {Name} is up to date (SHA: {Sha})", 
                                     book.FileName, localSha.Substring(0, 7));
+                                // File matches - save it as up-to-date
+                                // Set CommitHash, leave LastIndexedTimestamp as null for indexer to manage
+                                upToDateFiles[book.FileName] = new FileCommitInfo
+                                {
+                                    LastIndexedTimestamp = null,  // null = not indexed yet, indexer will set when it runs
+                                    CommitHash = repoFile.Sha
+                                };
                             }
                         }
                         else
                         {
                             // File doesn't exist locally - needs download
                             needsUpdate = true;
-                            _logger.LogDebug("File {Name} missing locally, needs download", book.FileName);
+                            _logger.LogWarning("File {Name} not found at {Path}, needs download", book.FileName, localPath);
                         }
                     }
                     
@@ -519,7 +552,7 @@ namespace CST.Avalonia.Services
                             {
                                 rebuiltFiles[book.FileName] = new FileCommitInfo
                                 {
-                                    LastIndexedTimestamp = DateTime.UtcNow,
+                                    LastIndexedTimestamp = null,  // Let indexer determine if these need indexing
                                     CommitHash = repoFile.Sha
                                 };
                             }
@@ -535,10 +568,13 @@ namespace CST.Avalonia.Services
                     return;
                 }
                 
+                _logger.LogInformation("Book processing: Processed={Processed}, NotFoundInRepo={NotFound}", booksProcessed, booksNotFound);
+                _logger.LogInformation("Hash comparison results: Checked={Checked}, Found={Found}, Matches={Matches}", filesChecked, filesFound, shaMatches);
                 _logger.LogInformation("Files needing update: {UpdateCount}/{TotalBooks}", filesToUpdate.Count, Books.Inst.Count());
+                _logger.LogInformation("Files already up-to-date: {UpToDateCount}/{TotalBooks}", upToDateFiles.Count, Books.Inst.Count());
                 
                 // STEP 3: Download updated files via direct HTTPS (no API calls)
-                await DownloadUpdatedFilesDirectAsync(filesToUpdate, commitSha, owner, repo, branch);
+                await DownloadUpdatedFilesDirectAsync(filesToUpdate, upToDateFiles, commitSha, owner, repo, branch);
             }
             catch (Exception ex)
             {
@@ -547,7 +583,7 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private async Task DownloadUpdatedFilesDirectAsync(List<TreeItem> filesToUpdate, string latestCommitHash, string owner, string repo, string branch)
+        private async Task DownloadUpdatedFilesDirectAsync(List<TreeItem> filesToUpdate, Dictionary<string, FileCommitInfo> upToDateFiles, string latestCommitHash, string owner, string repo, string branch)
         {
             try
             {
@@ -562,8 +598,8 @@ namespace CST.Avalonia.Services
                 
                 try
                 {
-                    var fileDatesData = await _xmlFileDatesService.GetFileDatesDataAsync();
-                    var updatedFiles = fileDatesData?.Files ?? new Dictionary<string, FileCommitInfo>();
+                    // Start with the files that are already up-to-date
+                    var allFiles = new Dictionary<string, FileCommitInfo>(upToDateFiles);
                     
                     for (int i = 0; i < filesToUpdate.Count; i++)
                     {
@@ -583,12 +619,11 @@ namespace CST.Avalonia.Services
                             var tempPath = Path.Combine(tempDir, fileName);
                             await File.WriteAllBytesAsync(tempPath, content);
                             
-                            // Update commit hash for this file
-                            updatedFiles[fileName] = new FileCommitInfo
+                            // Add/update this file in our tracking
+                            // Set LastIndexedTimestamp to null since file was updated and needs re-indexing
+                            allFiles[fileName] = new FileCommitInfo
                             {
-                                LastIndexedTimestamp = updatedFiles.ContainsKey(fileName) 
-                                    ? updatedFiles[fileName].LastIndexedTimestamp 
-                                    : DateTime.UtcNow,
+                                LastIndexedTimestamp = null,  // null = needs indexing after update
                                 CommitHash = file.Sha
                             };
                             
@@ -611,8 +646,8 @@ namespace CST.Avalonia.Services
                         File.Move(file, destPath, overwrite: true);
                     }
                     
-                    // Save updated file dates with commit hashes
-                    await _xmlFileDatesService.SaveFileDatesDataAsync(updatedFiles, latestCommitHash);
+                    // Save all file dates with commit hashes (both up-to-date and newly downloaded)
+                    await _xmlFileDatesService.SaveFileDatesDataAsync(allFiles, latestCommitHash);
                     
                     // Trigger incremental indexing
                     UpdateStatusChanged?.Invoke("Re-indexing updated files...");

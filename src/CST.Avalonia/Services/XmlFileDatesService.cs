@@ -47,10 +47,12 @@ namespace CST.Avalonia.Services
                         if (_fileDatesData?.Files != null)
                         {
                             // Convert to legacy format for compatibility
-                            _fileDates = _fileDatesData.Files.ToDictionary(
-                                kvp => kvp.Key, 
-                                kvp => kvp.Value.LastIndexedTimestamp
-                            );
+                            _fileDates = _fileDatesData.Files
+                                .Where(kvp => kvp.Value.LastIndexedTimestamp.HasValue)
+                                .ToDictionary(
+                                    kvp => kvp.Key, 
+                                    kvp => kvp.Value.LastIndexedTimestamp!.Value
+                                );
                             _logger.LogInformation("Loaded {Count} file dates from enhanced cache format", _fileDates.Count);
                         }
                         else
@@ -236,11 +238,13 @@ namespace CST.Avalonia.Services
                     Files = files
                 };
                 
-                // Update legacy format for compatibility
-                _fileDates = files.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => kvp.Value.LastIndexedTimestamp
-                );
+                // Update legacy format for compatibility (only include files with timestamps)
+                _fileDates = files
+                    .Where(kvp => kvp.Value.LastIndexedTimestamp.HasValue)
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => kvp.Value.LastIndexedTimestamp!.Value
+                    );
                 
                 var json = JsonSerializer.Serialize(_fileDatesData, new JsonSerializerOptions
                 {
@@ -292,7 +296,7 @@ namespace CST.Avalonia.Services
 
     public class FileCommitInfo
     {
-        public DateTime LastIndexedTimestamp { get; set; }
+        public DateTime? LastIndexedTimestamp { get; set; }
         public string CommitHash { get; set; } = string.Empty;
     }
 }
