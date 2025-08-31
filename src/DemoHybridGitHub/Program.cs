@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Octokit;
@@ -70,9 +72,11 @@ class Program
             Console.WriteLine($"✓ Found {targetFiles.Count} XML files in '{TARGET_PATH}'");
             Console.WriteLine();
             
-            // Step 2: Simulate local file comparison
-            Console.WriteLine("STEP 2: SHA Comparison (simulated)");
-            Console.WriteLine("-----------------------------------");
+            // Step 2: Compare with actual local files
+            Console.WriteLine("STEP 2: SHA Comparison with Local Files");
+            Console.WriteLine("----------------------------------------");
+            Console.WriteLine("Checking local files in /Users/fsnow/Xml/");
+            Console.WriteLine();
             
             // Load or create local file-dates.json equivalent
             var localFileDates = LoadLocalFileDates();
@@ -84,20 +88,37 @@ class Program
                 var remoteFile = targetFiles.FirstOrDefault(f => f.Path.EndsWith(book));
                 if (remoteFile != null)
                 {
-                    if (!localFileDates.ContainsKey(book) || localFileDates[book] != remoteFile.Sha)
+                    var localPath = $"/Users/fsnow/Xml/{book}";
+                    Console.WriteLine($"Checking {book}:");
+                    Console.WriteLine($"  Remote SHA: {remoteFile.Sha.Substring(0, 7)}...");
+                    
+                    if (File.Exists(localPath))
                     {
-                        filesToUpdate.Add(remoteFile);
-                        Console.WriteLine($"✓ {book}: Needs update (SHA: {remoteFile.Sha.Substring(0, 7)})");
+                        // Calculate Git blob SHA for local file
+                        var localSha = CalculateGitBlobSha(localPath);
+                        Console.WriteLine($"  Local SHA:  {localSha.Substring(0, 7)}...");
+                        
+                        if (localSha != remoteFile.Sha)
+                        {
+                            filesToUpdate.Add(remoteFile);
+                            Console.WriteLine($"  ✓ Needs update (SHAs differ)");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"  ✓ Up to date (SHAs match!)");
+                        }
                     }
                     else
                     {
-                        Console.WriteLine($"  {book}: Up to date");
+                        Console.WriteLine($"  ✗ Local file not found");
+                        filesToUpdate.Add(remoteFile);
                     }
                 }
                 else
                 {
                     Console.WriteLine($"✗ {book}: Not found in repository");
                 }
+                Console.WriteLine();
             }
             
             Console.WriteLine($"\nFiles needing update: {filesToUpdate.Count}/{SAMPLE_BOOKS.Length}");
@@ -187,5 +208,23 @@ class Program
     {
         var json = JsonSerializer.Serialize(fileDates, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText("local-file-dates.json", json);
+    }
+    
+    /// <summary>
+    /// Calculates the Git blob SHA for a file, which matches the SHA returned by GitHub's Tree API.
+    /// Git blob SHA = SHA1("blob " + filesize + "\0" + content)
+    /// </summary>
+    static string CalculateGitBlobSha(string filePath)
+    {
+        var content = File.ReadAllBytes(filePath);
+        var header = Encoding.UTF8.GetBytes($"blob {content.Length}\0");
+        var combined = new byte[header.Length + content.Length];
+        
+        Array.Copy(header, 0, combined, 0, header.Length);
+        Array.Copy(content, 0, combined, header.Length, content.Length);
+        
+        using var sha1 = SHA1.Create();
+        var hash = sha1.ComputeHash(combined);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }
