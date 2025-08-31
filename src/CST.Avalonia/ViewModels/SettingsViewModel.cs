@@ -850,6 +850,11 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private readonly ILogger _logger;
+        private bool _enableAutomaticUpdates;
+        private string _xmlRepositoryOwner;
+        private string _xmlRepositoryName;
+        private string _xmlRepositoryPath;
+        private string _xmlRepositoryBranch;
 
         public AdvancedSettingsViewModel(ISettingsService settingsService)
         {
@@ -858,11 +863,74 @@ namespace CST.Avalonia.ViewModels
             
             SettingsFilePath = _settingsService.GetSettingsFilePath();
             OpenSettingsFileCommand = ReactiveCommand.Create(OpenSettingsFile);
+            
+            // Initialize XML update settings
+            var xmlSettings = _settingsService.Settings.XmlUpdateSettings;
+            _enableAutomaticUpdates = xmlSettings.EnableAutomaticUpdates;
+            _xmlRepositoryOwner = xmlSettings.XmlRepositoryOwner;
+            _xmlRepositoryName = xmlSettings.XmlRepositoryName;
+            _xmlRepositoryPath = xmlSettings.XmlRepositoryPath;
+            _xmlRepositoryBranch = xmlSettings.XmlRepositoryBranch;
         }
 
         public string SettingsFilePath { get; }
         
         public ReactiveCommand<Unit, Unit> OpenSettingsFileCommand { get; }
+        
+        public bool EnableAutomaticUpdates
+        {
+            get => _enableAutomaticUpdates;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _enableAutomaticUpdates, value);
+                _settingsService.Settings.XmlUpdateSettings.EnableAutomaticUpdates = value;
+                _ = _settingsService.SaveSettingsAsync();
+            }
+        }
+        
+        public string XmlRepositoryOwner
+        {
+            get => _xmlRepositoryOwner;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _xmlRepositoryOwner, value);
+                _settingsService.Settings.XmlUpdateSettings.XmlRepositoryOwner = value;
+                _ = _settingsService.SaveSettingsAsync();
+            }
+        }
+        
+        public string XmlRepositoryName
+        {
+            get => _xmlRepositoryName;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _xmlRepositoryName, value);
+                _settingsService.Settings.XmlUpdateSettings.XmlRepositoryName = value;
+                _ = _settingsService.SaveSettingsAsync();
+            }
+        }
+        
+        public string XmlRepositoryPath
+        {
+            get => _xmlRepositoryPath;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _xmlRepositoryPath, value);
+                _settingsService.Settings.XmlUpdateSettings.XmlRepositoryPath = value;
+                _ = _settingsService.SaveSettingsAsync();
+            }
+        }
+        
+        public string XmlRepositoryBranch
+        {
+            get => _xmlRepositoryBranch;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _xmlRepositoryBranch, value);
+                _settingsService.Settings.XmlUpdateSettings.XmlRepositoryBranch = value;
+                _ = _settingsService.SaveSettingsAsync();
+            }
+        }
 
         private void OpenSettingsFile()
         {

@@ -14,6 +14,7 @@ namespace CST.Avalonia.Services
         private readonly ILogger<XmlFileDatesService> _logger;
         private readonly ISettingsService _settingsService;
         private Dictionary<string, DateTime> _fileDates = new();
+        private FileDatesWithCommits? _fileDatesData;
         private string _fileDatesPath = string.Empty;
 
         public XmlFileDatesService(ILogger<XmlFileDatesService> logger, ISettingsService settingsService)
@@ -38,19 +39,57 @@ namespace CST.Avalonia.Services
                 {
                     _logger.LogInformation("Loading existing file dates cache...");
                     var json = await File.ReadAllTextAsync(_fileDatesPath);
-                    _fileDates = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(json) ?? new();
-                    _logger.LogInformation("Loaded {Count} file dates from cache", _fileDates.Count);
+                    
+                    // Try to deserialize as new format first
+                    try
+                    {
+                        _fileDatesData = JsonSerializer.Deserialize<FileDatesWithCommits>(json);
+                        if (_fileDatesData?.Files != null)
+                        {
+                            // Convert to legacy format for compatibility
+                            _fileDates = _fileDatesData.Files.ToDictionary(
+                                kvp => kvp.Key, 
+                                kvp => kvp.Value.LastIndexedTimestamp
+                            );
+                            _logger.LogInformation("Loaded {Count} file dates from enhanced cache format", _fileDates.Count);
+                        }
+                        else
+                        {
+                            throw new JsonException("Invalid enhanced format");
+                        }
+                    }
+                    catch
+                    {
+                        // Fall back to legacy format
+                        _fileDates = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(json) ?? new();
+                        _logger.LogInformation("Loaded {Count} file dates from legacy cache format", _fileDates.Count);
+                        
+                        // Convert legacy format to new format
+                        _fileDatesData = new FileDatesWithCommits
+                        {
+                            Files = _fileDates.ToDictionary(
+                                kvp => kvp.Key,
+                                kvp => new FileCommitInfo
+                                {
+                                    LastIndexedTimestamp = kvp.Value,
+                                    CommitHash = "" // No commit hash available from legacy format
+                                }
+                            )
+                        };
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to load file dates cache");
                     _fileDates = new();
+                    _fileDatesData = new FileDatesWithCommits();
                 }
             }
             else
             {
                 _logger.LogInformation("No existing file dates cache found - will create new one");
                 _fileDates = new();
+                _fileDatesData = new FileDatesWithCommits();
             }
             
             _logger.LogInformation("XmlFileDatesService.InitializeAsync() completed");
@@ -117,13 +156,50 @@ namespace CST.Avalonia.Services
                 var appDataDir = GetAppDataDirectory();
                 Directory.CreateDirectory(appDataDir); // Ensure directory exists
 
-                var json = JsonSerializer.Serialize(_fileDates, new JsonSerializerOptions 
+                // Update the enhanced format with current file dates
+                if (_fileDatesData != null)
+                {
+                    foreach (var kvp in _fileDates)
+                    {
+                        if (_fileDatesData.Files.TryGetValue(kvp.Key, out var fileInfo))
+                        {
+                            // Update existing entry's timestamp
+                            fileInfo.LastIndexedTimestamp = kvp.Value;
+                        }
+                        else
+                        {
+                            // Add new entry with empty commit hash
+                            _fileDatesData.Files[kvp.Key] = new FileCommitInfo
+                            {
+                                LastIndexedTimestamp = kvp.Value,
+                                CommitHash = ""
+                            };
+                        }
+                    }
+                }
+                else
+                {
+                    // Create new enhanced format
+                    _fileDatesData = new FileDatesWithCommits
+                    {
+                        Files = _fileDates.ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => new FileCommitInfo
+                            {
+                                LastIndexedTimestamp = kvp.Value,
+                                CommitHash = ""
+                            }
+                        )
+                    };
+                }
+
+                var json = JsonSerializer.Serialize(_fileDatesData, new JsonSerializerOptions 
                 { 
                     WriteIndented = true 
                 });
                 
                 await File.WriteAllTextAsync(_fileDatesPath, json);
-                _logger.LogInformation($"Saved {_fileDates.Count} file dates to cache");
+                _logger.LogInformation($"Saved {_fileDates.Count} file dates to enhanced cache format");
             }
             catch (Exception ex)
             {
@@ -138,6 +214,45 @@ namespace CST.Avalonia.Services
             {
                 var book = books[bookIndex];
                 _fileDates[book.FileName] = lastWriteTime;
+            }
+        }
+        
+        // Enhanced format methods for XmlUpdateService
+        public async Task<FileDatesWithCommits?> GetFileDatesDataAsync()
+        {
+            return _fileDatesData;
+        }
+        
+        public async Task SaveFileDatesDataAsync(Dictionary<string, FileCommitInfo> files, string? repositoryCommitHash)
+        {
+            try
+            {
+                var appDataDir = GetAppDataDirectory();
+                Directory.CreateDirectory(appDataDir);
+                
+                _fileDatesData = new FileDatesWithCommits
+                {
+                    LastKnownRepositoryCommitHash = repositoryCommitHash,
+                    Files = files
+                };
+                
+                // Update legacy format for compatibility
+                _fileDates = files.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value.LastIndexedTimestamp
+                );
+                
+                var json = JsonSerializer.Serialize(_fileDatesData, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                
+                await File.WriteAllTextAsync(_fileDatesPath, json);
+                _logger.LogInformation("Saved {Count} file dates with commit hashes", files.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save file dates data");
             }
         }
 
@@ -166,5 +281,18 @@ namespace CST.Avalonia.Services
 
             return appDataPath;
         }
+    }
+    
+    // Data models for enhanced file-dates.json format
+    public class FileDatesWithCommits
+    {
+        public string? LastKnownRepositoryCommitHash { get; set; }
+        public Dictionary<string, FileCommitInfo> Files { get; set; } = new();
+    }
+
+    public class FileCommitInfo
+    {
+        public DateTime LastIndexedTimestamp { get; set; }
+        public string CommitHash { get; set; } = string.Empty;
     }
 }

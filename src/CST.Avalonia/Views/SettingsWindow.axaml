@@ -344,6 +344,48 @@
                                                Width="150" HorizontalAlignment="Left"/>
                                     </StackPanel>
                                 </Border>
+                                
+                                <!-- XML Updates Settings -->
+                                <Border Classes="SettingGroup">
+                                    <StackPanel>
+                                        <TextBlock Text="XML Data Updates" Classes="SettingLabel"/>
+                                        <TextBlock Text="Configure automatic updates for Tipitaka XML files from GitHub" 
+                                                  Classes="SettingDescription"/>
+                                        
+                                        <CheckBox IsChecked="{Binding EnableAutomaticUpdates}" 
+                                                 Content="Enable automatic updates" 
+                                                 Margin="0,10,0,15"/>
+                                        
+                                        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Repository Owner:" 
+                                                      VerticalAlignment="Center" Margin="0,0,10,10"/>
+                                            <TextBox Grid.Row="0" Grid.Column="1" 
+                                                    Text="{Binding XmlRepositoryOwner}" 
+                                                    Watermark="e.g., VipassanaTech"
+                                                    Margin="0,0,0,10"/>
+                                            
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Repository Name:" 
+                                                      VerticalAlignment="Center" Margin="0,0,10,10"/>
+                                            <TextBox Grid.Row="1" Grid.Column="1" 
+                                                    Text="{Binding XmlRepositoryName}" 
+                                                    Watermark="e.g., tipitaka-xml"
+                                                    Margin="0,0,0,10"/>
+                                            
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Repository Path:" 
+                                                      VerticalAlignment="Center" Margin="0,0,10,10"/>
+                                            <TextBox Grid.Row="2" Grid.Column="1" 
+                                                    Text="{Binding XmlRepositoryPath}" 
+                                                    Watermark="e.g., deva master (leave empty for root)"
+                                                    Margin="0,0,0,10"/>
+                                            
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Branch:" 
+                                                      VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <TextBox Grid.Row="3" Grid.Column="1" 
+                                                    Text="{Binding XmlRepositoryBranch}" 
+                                                    Watermark="e.g., main"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </DataTemplate>
                         

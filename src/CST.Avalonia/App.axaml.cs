@@ -142,6 +142,9 @@ public partial class App : Application
                 // Give settings time to load
                 await Task.Delay(1000);
                 await InitializeIndexingAsync(showSplash);
+                
+                // Check for XML updates after indexing is initialized
+                await CheckForXmlUpdatesAsync();
             });
             
             if (showSplash)
@@ -404,6 +407,40 @@ public partial class App : Application
         {
             Log.Error(ex, "Failed to initialize indexing: {ErrorMessage}", ex.Message);
             // Don't fail the app startup if indexing fails
+        }
+    }
+    
+    /// <summary>
+    /// Check for XML data updates from GitHub repository
+    /// </summary>
+    private async Task CheckForXmlUpdatesAsync()
+    {
+        try
+        {
+            Log.Information("CheckForXmlUpdatesAsync() started");
+            
+            var xmlUpdateService = ServiceProvider?.GetRequiredService<IXmlUpdateService>();
+            if (xmlUpdateService == null)
+            {
+                Log.Warning("XmlUpdateService not available in DI container");
+                return;
+            }
+            
+            // Subscribe to status updates for logging
+            xmlUpdateService.UpdateStatusChanged += message =>
+            {
+                Log.Information("XML Update Status: {Message}", message);
+            };
+            
+            // Check for updates (this will handle first-time download if needed)
+            await xmlUpdateService.CheckForUpdatesAsync();
+            
+            Log.Information("CheckForXmlUpdatesAsync() completed");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error checking for XML updates");
+            // Don't propagate the error - allow the app to continue even if update check fails
         }
     }
 
@@ -788,6 +825,9 @@ public partial class App : Application
         // Indexing services
         services.AddSingleton<IXmlFileDatesService, XmlFileDatesService>();
         services.AddSingleton<IIndexingService, IndexingService>();
+        
+        // XML Update service
+        services.AddSingleton<IXmlUpdateService, XmlUpdateService>();
 
         // Register ViewModels
         services.AddSingleton<OpenBookDialogViewModel>();

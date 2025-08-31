@@ -12,6 +12,7 @@ namespace CST.Avalonia.Models
         public string Theme { get; set; } = "Light";
         public FontSettings FontSettings { get; set; } = new();
         public DeveloperSettings DeveloperSettings { get; set; } = new();
+        public XmlUpdateSettings XmlUpdateSettings { get; set; } = new();
     }
 
     public class SearchSettings
@@ -25,6 +26,15 @@ namespace CST.Avalonia.Models
     public class DeveloperSettings
     {
         public string LogLevel { get; set; } = "Information";
+    }
+    
+    public class XmlUpdateSettings
+    {
+        public bool EnableAutomaticUpdates { get; set; } = true;
+        public string XmlRepositoryOwner { get; set; } = "VipassanaTech";
+        public string XmlRepositoryName { get; set; } = "tipitaka-xml";
+        public string XmlRepositoryPath { get; set; } = "deva master";
+        public string XmlRepositoryBranch { get; set; } = "main";
     }
     
     public class FontSettings
