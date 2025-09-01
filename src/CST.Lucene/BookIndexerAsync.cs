@@ -1,16 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace CST.Lucene
 {
     public class BookIndexerAsync
     {
         private readonly BookIndexer _bookIndexer;
+        private readonly ILogger _logger;
 
         public BookIndexerAsync()
         {
             _bookIndexer = new BookIndexer();
+            _logger = Log.ForContext<BookIndexerAsync>();
         }
 
         public string XmlDirectory
@@ -29,18 +32,18 @@ namespace CST.Lucene
         {
             return Task.Run(() =>
             {
-                Console.WriteLine($"BookIndexerAsync.IndexAllAsync() starting with {changedFiles.Count} changed files");
-                Console.WriteLine($"XmlDirectory: {XmlDirectory}");
-                Console.WriteLine($"IndexDirectory: {IndexDirectory}");
+                _logger.Information("BookIndexerAsync.IndexAllAsync() starting with {ChangedFiles} changed files", changedFiles.Count);
+                _logger.Information("XmlDirectory: {XmlDirectory}", XmlDirectory);
+                _logger.Information("IndexDirectory: {IndexDirectory}", IndexDirectory);
                 
                 _bookIndexer.IndexAll(message =>
                 {
-                    Console.WriteLine($"BookIndexer progress: {message}");
+                    _logger.Information("BookIndexer progress: {Message}", message);
                     var indexingProgress = ParseProgressMessage(message);
                     progress?.Report(indexingProgress);
                 }, changedFiles);
                 
-                Console.WriteLine("BookIndexerAsync.IndexAllAsync() completed");
+                _logger.Information("BookIndexerAsync.IndexAllAsync() completed");
             });
         }
 
