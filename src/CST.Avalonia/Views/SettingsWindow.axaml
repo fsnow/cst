@@ -43,19 +43,10 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         
-        <!-- Header with Search -->
+        <!-- Header -->
         <Border Grid.Row="0" Background="#F0F0F0" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
-            <DockPanel Margin="20,10">
-                <TextBlock Text="Settings" FontSize="18" FontWeight="Bold" 
-                          VerticalAlignment="Center" DockPanel.Dock="Left"/>
-                
-                <TextBox Text="{Binding SearchQuery}" 
-                        Watermark="Search settings..."
-                        Width="300"
-                        VerticalAlignment="Center"
-                        HorizontalAlignment="Right"
-                        DockPanel.Dock="Right"/>
-            </DockPanel>
+            <TextBlock Text="Settings" FontSize="18" FontWeight="Bold" 
+                      VerticalAlignment="Center" Margin="20,10"/>
         </Border>
         
         <!-- Main Content -->
@@ -132,18 +123,6 @@
                                                       Classes="SettingDescription"/>
                                         </StackPanel>
                                         
-                                        <CheckBox Content="Show Welcome screen on startup" 
-                                                 IsChecked="{Binding ShowWelcomeOnStartup}"
-                                                 Margin="0,10,0,0"/>
-                                        
-                                        <StackPanel Margin="0,15,0,0">
-                                            <TextBlock Text="Maximum recent books" Classes="SettingLabel"/>
-                                            <NumericUpDown Value="{Binding MaxRecentBooks}" 
-                                                          Minimum="5" Maximum="50" Increment="5"
-                                                          Width="100" HorizontalAlignment="Left"/>
-                                            <TextBlock Text="Number of recent books to remember" 
-                                                      Classes="SettingDescription"/>
-                                        </StackPanel>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -153,17 +132,6 @@
                         <DataTemplate DataType="vm:AppearanceSettingsViewModel">
                             <StackPanel>
                                 <TextBlock Text="Appearance" Classes="SectionTitle"/>
-                                
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Theme" Classes="SettingLabel"/>
-                                        <ComboBox ItemsSource="{Binding Themes}" 
-                                                 SelectedItem="{Binding Theme}"
-                                                 Width="200" HorizontalAlignment="Left"/>
-                                        <TextBlock Text="Choose between light, dark, or automatic theme" 
-                                                  Classes="SettingDescription"/>
-                                    </StackPanel>
-                                </Border>
                                 
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
@@ -290,35 +258,6 @@
                             </StackPanel>
                         </DataTemplate>
                         
-                        <!-- Search Settings Template -->
-                        <DataTemplate DataType="vm:SearchSettingsViewModel">
-                            <StackPanel>
-                                <TextBlock Text="Search" Classes="SectionTitle"/>
-                                
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <CheckBox Content="Case sensitive search" 
-                                                 IsChecked="{Binding CaseSensitive}"
-                                                 Margin="0,0,0,10"/>
-                                        
-                                        <CheckBox Content="Match whole words only" 
-                                                 IsChecked="{Binding WholeWords}"
-                                                 Margin="0,0,0,10"/>
-                                        
-                                        <CheckBox Content="Use regular expressions" 
-                                                 IsChecked="{Binding UseRegex}"
-                                                 Margin="0,0,0,15"/>
-                                        
-                                        <TextBlock Text="Maximum search results" Classes="SettingLabel"/>
-                                        <NumericUpDown Value="{Binding MaxSearchResults}" 
-                                                      Minimum="100" Maximum="10000" Increment="100"
-                                                      Width="150" HorizontalAlignment="Left"/>
-                                        <TextBlock Text="Limit the number of search results to improve performance" 
-                                                  Classes="SettingDescription"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </DataTemplate>
                         
                         <!-- Advanced Settings Template -->
                         <DataTemplate DataType="vm:AdvancedSettingsViewModel">
@@ -341,7 +280,7 @@
                                         <Button Content="Open Settings Folder" 
                                                Command="{Binding OpenSettingsFileCommand}"
                                                Margin="0,10,0,0"
-                                               Width="150" HorizontalAlignment="Left"/>
+                                               HorizontalAlignment="Left"/>
                                     </StackPanel>
                                 </Border>
                                 
@@ -415,12 +354,6 @@
                                         <TextBlock Text="Opens the folder containing application log files" 
                                                   Classes="SettingDescription"/>
                                         
-                                        <Button Content="Test Font Detection" 
-                                               Command="{Binding TestFontDetectionCommand}"
-                                               Width="150" HorizontalAlignment="Left"
-                                               Margin="0,10,0,0"/>
-                                        <TextBlock Text="POC: Test detection of actual fonts used for Pali scripts" 
-                                                  Classes="SettingDescription"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

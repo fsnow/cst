@@ -421,6 +421,18 @@ public partial class App : Application
         {
             Log.Information("CheckForXmlUpdatesAsync() started");
             
+            // Initialize XmlFileDatesService first since XmlUpdateService depends on it
+            var xmlFileDatesService = ServiceProvider?.GetRequiredService<IXmlFileDatesService>();
+            if (xmlFileDatesService == null)
+            {
+                Log.Warning("XmlFileDatesService not available in DI container");
+                return;
+            }
+            
+            Log.Information("Initializing XmlFileDatesService...");
+            await xmlFileDatesService.InitializeAsync();
+            Log.Information("XmlFileDatesService initialized");
+            
             var xmlUpdateService = ServiceProvider?.GetRequiredService<IXmlUpdateService>();
             if (xmlUpdateService == null)
             {
@@ -809,7 +821,6 @@ public partial class App : Application
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             services.AddSingleton<MacFontService>();
-            services.AddTransient<Services.Platform.Mac.TiroDevanagariTest>();
         }
 #endif
 

@@ -29,6 +29,13 @@ namespace CST.Avalonia.Services
             
             // Get the application data directory
             var appDataDir = GetAppDataDirectory();
+            
+            if (string.IsNullOrEmpty(appDataDir))
+            {
+                _logger.LogError("Failed to determine application data directory during initialization");
+                throw new InvalidOperationException("Could not determine application data directory");
+            }
+            
             _fileDatesPath = Path.Combine(appDataDir, "file-dates.json");
             _logger.LogInformation("File dates cache path: {FileDatesPath}", _fileDatesPath);
 
@@ -229,7 +236,22 @@ namespace CST.Avalonia.Services
         {
             try
             {
+                // Validate that we have a valid file path
+                if (string.IsNullOrEmpty(_fileDatesPath))
+                {
+                    _logger.LogError("File dates path is empty or null. Cannot save file dates data.");
+                    throw new InvalidOperationException("File dates path is not properly initialized");
+                }
+
                 var appDataDir = GetAppDataDirectory();
+                
+                // Validate app data directory
+                if (string.IsNullOrEmpty(appDataDir))
+                {
+                    _logger.LogError("Application data directory path is empty or null");
+                    throw new InvalidOperationException("Application data directory path could not be determined");
+                }
+
                 Directory.CreateDirectory(appDataDir);
                 
                 _fileDatesData = new FileDatesWithCommits
@@ -252,7 +274,7 @@ namespace CST.Avalonia.Services
                 });
                 
                 await File.WriteAllTextAsync(_fileDatesPath, json);
-                _logger.LogInformation("Saved {Count} file dates with commit hashes", files.Count);
+                _logger.LogInformation("Saved {Count} file dates with commit hashes to {Path}", files.Count, _fileDatesPath);
             }
             catch (Exception ex)
             {

@@ -21,7 +21,6 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private readonly ILogger _logger;
-        private string _searchQuery = "";
         private SettingsCategoryViewModel? _selectedCategory;
         private bool _hasUnsavedChanges;
 
@@ -30,44 +29,26 @@ namespace CST.Avalonia.ViewModels
             _settingsService = settingsService;
             _logger = Log.ForContext<SettingsViewModel>();
 
-#if MACOS
-            // Quick test: Try font detection for different scripts
-            TestFontDetectionForMultipleScripts();
-#endif
 
             // Initialize categories
             var generalSettings = new GeneralSettingsViewModel(_settingsService) { Parent = this };
             var appearanceSettings = new AppearanceSettingsViewModel(_settingsService);
-            var searchSettings = new SearchSettingsViewModel(_settingsService);
             var advancedSettings = new AdvancedSettingsViewModel(_settingsService);
             var developerSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
             
             Categories = new ObservableCollection<SettingsCategoryViewModel>
             {
                 new SettingsCategoryViewModel("General", "General application settings", generalSettings),
-                new SettingsCategoryViewModel("Appearance", "Theme and display settings", appearanceSettings),
-                new SettingsCategoryViewModel("Search", "Search behavior and options", searchSettings),
+                new SettingsCategoryViewModel("Appearance", "Font settings", appearanceSettings),
                 new SettingsCategoryViewModel("Advanced", "Advanced configuration options", advancedSettings),
                 new SettingsCategoryViewModel("Developer", "Debugging and diagnostic tools", developerSettings)
             };
 
             // Select first category by default
             SelectedCategory = Categories.FirstOrDefault();
-
-
-            // Watch for changes to mark as dirty
-            this.WhenAnyValue(x => x.SearchQuery)
-                .Throttle(TimeSpan.FromMilliseconds(300))
-                .Subscribe(_ => FilterSettings());
         }
 
         public ObservableCollection<SettingsCategoryViewModel> Categories { get; }
-
-        public string SearchQuery
-        {
-            get => _searchQuery;
-            set => this.RaiseAndSetIfChanged(ref _searchQuery, value);
-        }
 
         public SettingsCategoryViewModel? SelectedCategory
         {
@@ -89,13 +70,6 @@ namespace CST.Avalonia.ViewModels
         public Action? BrowseForXmlDirectory { get; set; }
         public Action? BrowseForIndexDirectory { get; set; }
 
-        private void FilterSettings()
-        {
-            // TODO: Implement search filtering across all categories
-            _logger.Debug("Filtering settings with query: {Query}", SearchQuery);
-        }
-
-
         private void Close()
         {
             CloseWindow?.Invoke();
@@ -115,64 +89,7 @@ namespace CST.Avalonia.ViewModels
             BrowseForIndexDirectory?.Invoke();
         }
 
-#if MACOS
-        private void RunTiroDevanagariTest()
-        {
-            try
-            {
-                var test = App.ServiceProvider?.GetService<Services.Platform.Mac.TiroDevanagariTest>();
-                if (test != null)
-                {
-                    _logger.Information("Running Tiro Devanagari font test...");
-                    test.TestTiroDevanagariFont();
-                }
-                else
-                {
-                    _logger.Warning("TiroDevanagariTest service not available");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to run Tiro Devanagari test");
-            }
-        }
 
-        private async void TestFontDetectionForMultipleScripts()
-        {
-            try
-            {
-                _logger.Information("Testing font detection for multiple scripts...");
-                
-                var fontService = App.ServiceProvider?.GetService<IFontService>();
-                if (fontService == null)
-                {
-                    _logger.Warning("Font service not available for testing");
-                    return;
-                }
-
-                // Test a few different scripts
-                var scriptsToTest = new[] 
-                { 
-                    Script.Bengali, 
-                    Script.Telugu, 
-                    Script.Gujarati,
-                    Script.Myanmar 
-                };
-
-                foreach (var script in scriptsToTest)
-                {
-                    _logger.Information("Testing font detection for {Script}", script);
-                    var fonts = await fontService.GetAvailableFontsForScriptAsync(script);
-                    _logger.Information("Found {Count} fonts for {Script}: {Fonts}", 
-                        fonts.Count, script, string.Join(", ", fonts.Take(5)));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Error during font detection test");
-            }
-        }
-#endif
     }
 
     public class SettingsCategoryViewModel : ViewModelBase
@@ -194,16 +111,12 @@ namespace CST.Avalonia.ViewModels
         private readonly ISettingsService _settingsService;
         private string _xmlBooksDirectory;
         private string _indexDirectory;
-        private bool _showWelcomeOnStartup;
-        private int _maxRecentBooks;
 
         public GeneralSettingsViewModel(ISettingsService settingsService)
         {
             _settingsService = settingsService;
             _xmlBooksDirectory = _settingsService.Settings.XmlBooksDirectory;
             _indexDirectory = _settingsService.Settings.IndexDirectory;
-            _showWelcomeOnStartup = _settingsService.Settings.ShowWelcomeOnStartup;
-            _maxRecentBooks = _settingsService.Settings.MaxRecentBooks;
 
             // Create browse commands
             BrowseCommand = ReactiveCommand.Create(() => 
@@ -241,21 +154,6 @@ namespace CST.Avalonia.ViewModels
                     _ = _settingsService.SaveSettingsAsync();
                 });
 
-            this.WhenAnyValue(x => x.ShowWelcomeOnStartup)
-                .Skip(1)
-                .Subscribe(value => 
-                {
-                    _settingsService.UpdateSetting(nameof(Settings.ShowWelcomeOnStartup), value);
-                    _ = _settingsService.SaveSettingsAsync();
-                });
-
-            this.WhenAnyValue(x => x.MaxRecentBooks)
-                .Skip(1)
-                .Subscribe(value => 
-                {
-                    _settingsService.UpdateSetting(nameof(Settings.MaxRecentBooks), value);
-                    _ = _settingsService.SaveSettingsAsync();
-                });
         }
 
         public string XmlBooksDirectory
@@ -270,17 +168,6 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _indexDirectory, value);
         }
 
-        public bool ShowWelcomeOnStartup
-        {
-            get => _showWelcomeOnStartup;
-            set => this.RaiseAndSetIfChanged(ref _showWelcomeOnStartup, value);
-        }
-
-        public int MaxRecentBooks
-        {
-            get => _maxRecentBooks;
-            set => this.RaiseAndSetIfChanged(ref _maxRecentBooks, value);
-        }
 
         public ViewModelBase? Parent { get; set; }
         public ReactiveCommand<Unit, Unit> BrowseCommand { get; }
@@ -291,7 +178,6 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private readonly IFontService _fontService;
-        private string _theme = "";
         private ScriptFontSettingViewModel? _selectedScript;
         internal bool _isChangingScript = false;
 
@@ -299,9 +185,6 @@ namespace CST.Avalonia.ViewModels
         {
             _settingsService = settingsService;
             _fontService = App.ServiceProvider.GetRequiredService<IFontService>();
-            _theme = _settingsService.Settings.Theme;
-
-            Themes = new[] { "Light", "Dark", "Auto" };
             
             // Initialize script font settings
             ScriptFontSettings = new ObservableCollection<ScriptFontSettingViewModel>();
@@ -349,21 +232,6 @@ namespace CST.Avalonia.ViewModels
             });
         }
 
-        public string Theme
-        {
-            get => _theme;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _theme, value);
-                _settingsService.UpdateSetting(nameof(Settings.Theme), value);
-                
-                // Immediate save
-                _ = _settingsService.SaveSettingsAsync();
-            }
-        }
-
-        public string[] Themes { get; }
-        
         public ObservableCollection<ScriptFontSettingViewModel> ScriptFontSettings { get; }
         
         public ScriptFontSettingViewModel? SelectedScript
@@ -787,65 +655,6 @@ namespace CST.Avalonia.ViewModels
         
     }
 
-    public class SearchSettingsViewModel : ViewModelBase
-    {
-        private readonly ISettingsService _settingsService;
-        private bool _caseSensitive;
-        private bool _wholeWords;
-        private bool _useRegex;
-        private int _maxSearchResults;
-
-        public SearchSettingsViewModel(ISettingsService settingsService)
-        {
-            _settingsService = settingsService;
-            var settings = _settingsService.Settings.SearchSettings;
-            _caseSensitive = settings.CaseSensitive;
-            _wholeWords = settings.WholeWords;
-            _useRegex = settings.UseRegex;
-            _maxSearchResults = settings.MaxSearchResults;
-        }
-
-        public bool CaseSensitive
-        {
-            get => _caseSensitive;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _caseSensitive, value);
-                _settingsService.Settings.SearchSettings.CaseSensitive = value;
-            }
-        }
-
-        public bool WholeWords
-        {
-            get => _wholeWords;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _wholeWords, value);
-                _settingsService.Settings.SearchSettings.WholeWords = value;
-            }
-        }
-
-        public bool UseRegex
-        {
-            get => _useRegex;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _useRegex, value);
-                _settingsService.Settings.SearchSettings.UseRegex = value;
-            }
-        }
-
-        public int MaxSearchResults
-        {
-            get => _maxSearchResults;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _maxSearchResults, value);
-                _settingsService.Settings.SearchSettings.MaxSearchResults = value;
-            }
-        }
-    }
-
     public class AdvancedSettingsViewModel : ViewModelBase
     {
         private readonly ISettingsService _settingsService;
@@ -973,8 +782,6 @@ namespace CST.Avalonia.ViewModels
             // Open logs folder command
             OpenLogsCommand = ReactiveCommand.Create(OpenLogsFolder);
             
-            // Font detection POC command
-            TestFontDetectionCommand = ReactiveCommand.Create(TestFontDetection);
 
             // Update service when log level changes
             this.WhenAnyValue(x => x.LogLevel)
@@ -999,7 +806,6 @@ namespace CST.Avalonia.ViewModels
         public string[] LogLevels { get; }
         public ViewModelBase? Parent { get; set; }
         public ReactiveCommand<Unit, Unit> OpenLogsCommand { get; }
-        public ReactiveCommand<Unit, Unit> TestFontDetectionCommand { get; }
 
         private void OpenLogsFolder()
         {
@@ -1030,26 +836,6 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        private void TestFontDetection()
-        {
-            try
-            {
-                _logger.Information("Starting Font Detection POC Test");
-                
-                // Create POC with a basic logger (we'll need DI to get proper logger)
-                var pocLogger = Log.ForContext<FontDetectionPOC>();
-                var poc = new FontDetectionPOC(pocLogger);
-                
-                // Run the tests
-                poc.RunTests();
-                
-                _logger.Information("Font Detection POC Test Complete - check logs for results");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to run font detection POC");
-            }
-        }
         
         private void ReconfigureLogger(string logLevel)
         {

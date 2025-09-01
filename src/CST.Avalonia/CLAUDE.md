@@ -1,8 +1,8 @@
 # CST Avalonia Project Status - August 2025
 
-## Current Status: **SEARCH PANEL ENHANCEMENTS & UX IMPROVEMENTS** 🔍
+## Current Status: **XML UPDATE SYSTEM BUG FIXES & OPTIMIZATION** 🔧
 
-**Last Updated**: August 30, 2025
+**Last Updated**: September 1, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
@@ -11,7 +11,99 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 
 CST stands for "Chaṭṭha Saṅgāyana Tipiṭaka".
 
-## Latest Session Update (2025-08-29)
+## Latest Session Update (2025-09-01)
+
+### ✅ **COMPLETED: Settings Cleanup & Validation**
+
+#### **Removed Non-Functional Placeholder Settings**
+- **Problem Solved**: Settings window contained multiple non-functional placeholder settings from initial development
+- **Search Settings Section**: Completely removed CaseSensitive, WholeWords, UseRegex, and MaxSearchResults settings that were never implemented
+- **Search Box Header**: Removed non-functional search filter from Settings window header (contained only TODO comment)
+- **Show Welcome Screen Checkbox**: Removed setting that referenced non-existent welcome screen functionality
+- **Theme Selection Dropdown**: Removed Light/Dark/Auto theme setting that wasn't actually applied to the UI
+- **Result**: Settings window now only displays functional, working settings
+
+#### **Settings Model Cleanup**
+- **SearchSettings Class**: Completely removed from Settings.cs model
+- **SearchSettingsViewModel**: Removed entire class and category from SettingsViewModel.cs
+- **Settings Properties**: Removed ShowWelcomeOnStartup and Theme properties from Settings model
+- **UI Template Cleanup**: Removed Search Settings DataTemplate from SettingsWindow.axaml
+- **Category Simplification**: Updated Appearance category description from "Theme and display settings" to "Font settings"
+
+#### **Settings Persistence Cleanup**
+- **JSON File Updated**: Cleaned settings.json to remove SearchSettings, ShowWelcomeOnStartup, and Theme entries
+- **Maintained User Data**: Preserved all functional settings including XML directories, font configurations, and developer settings
+- **Build Validation**: Project builds successfully with no compilation errors after cleanup
+
+**Files Modified**:
+- `/Views/SettingsWindow.axaml` - Removed non-functional UI elements and search box
+- `/Models/Settings.cs` - Removed SearchSettings class and unused properties
+- `/ViewModels/SettingsViewModel.cs` - Removed SearchSettingsViewModel and related code
+- `/Library/Application Support/CST.Avalonia/settings.json` - Cleaned up obsolete settings
+
+### ✅ **COMPLETED: XML Update System Critical Bug Fix & Startup Optimization**
+
+#### **Fixed: All 217 Files Downloading Instead of Only Changed Ones**
+- **Problem Solved**: XML update system was downloading all 217 files from GitHub instead of only files that had actually changed since the circa-2020 test files
+- **Root Cause**: Improper tracking logic where files with existing timestamps but empty commit hashes were using the wrong code path
+- **Solution**: Fixed SHA comparison condition in `CheckGitHubForUpdatesAsync` method:
+  ```csharp
+  if (!needsHashComparison && fileDatesData?.Files != null && fileDatesData.Files.TryGetValue(book.FileName, out var localFile))
+  ```
+- **Impact**: More than half the files haven't changed in 18 years and now correctly skip download
+- **Test Validation**: Used DemoHybridGitHub program to validate SHA comparison logic works correctly
+
+#### **Fixed: Startup Order Optimization**
+- **Problem Solved**: Application was checking index first, then updating files, causing potential double work
+- **Solution**: Reordered startup sequence in `App.axaml.cs` to update files before indexing:
+  ```csharp
+  // Check for XML updates first to ensure we have latest files
+  await CheckForXmlUpdatesAsync();
+  
+  // Then initialize indexing with the updated files
+  await InitializeIndexingAsync(showSplash);
+  ```
+- **Benefit**: Eliminates redundant indexing work when files are updated during startup
+
+#### **Enhanced File Tracking System**
+- **Nullable Timestamp Support**: Modified `FileCommitInfo.LastIndexedTimestamp` to be nullable (`DateTime?`)
+- **Separation of Concerns**: Downloader only sets `CommitHash`, indexer only sets `LastIndexedTimestamp`
+- **Proper State Management**: Files downloaded but not yet indexed have null `LastIndexedTimestamp`
+- **Legacy Compatibility**: Maintained backward compatibility with old file-dates.json format
+
+#### **Reduced Startup Logging Noise**
+- **Problem Solved**: Startup logging was over 300KB with excessive SHA comparison and font service messages
+- **Solution**: Changed inappropriate Information-level logging to Debug level:
+  - SHA comparison logging in `XmlUpdateService.cs`
+  - CHARACTER-SET APPROACH logging in `MacFontService.cs`
+- **Result**: Startup logging reduced from 300KB+ to 14KB (95% reduction)
+- **Benefit**: Much cleaner production logs while maintaining debug information when needed
+
+#### **Fixed: Empty Index Directory Handling**
+- **Problem**: IndexNotFoundException when trying to read from empty index directory
+- **Solution**: Added proper existence check in `BookIndexer.GetAllDocIds()`:
+  ```csharp
+  if (!DirectoryReader.IndexExists(fSDirectory))
+  {
+      // No index exists yet, nothing to get
+      return;
+  }
+  ```
+- **Result**: Clean startup handling when index doesn't exist yet
+
+**Files Modified**:
+- `/Services/XmlUpdateService.cs` - Fixed SHA comparison logic and reduced logging noise
+- `/Services/XmlFileDatesService.cs` - Made LastIndexedTimestamp nullable for proper state management
+- `/App.axaml.cs` - Optimized startup order (files before indexing)
+- `/Services/Platform/Mac/MacFontService.cs` - Reduced CHARACTER-SET logging to Debug level
+- `/../CST.Lucene/BookIndexer.cs` - Fixed empty index directory handling
+- `/../DemoHybridGitHub/Program.cs` - Enhanced test program for SHA validation
+
+**Commits**:
+- **561bd2c**: "Fix XML update system SHA comparison and reduce logging noise"
+- **81b2d2f**: "Enhance DemoHybridGitHub test program with actual SHA comparison"
+
+## Previous Session Update (2025-08-29)
 
 ### ✅ **COMPLETED: Tab Overflow Bug Fix & UI Polish**
 
@@ -343,10 +435,24 @@ SetupFontAndScriptHandlers();
 14. **✅ Complete Font System**: Per-script font configuration with real-time updates across all UI locations.
 15. **✅ Per-Script Font Selection**: Native macOS font detection and selection working for all 14 Pali scripts with full persistence.
 16. **✅ Script Synchronization**: Search results automatically update when top-level script changes.
+17. **✅ Complete XML Update System**: 
+    - GitHub API integration with Octokit.net for automatic file updates
+    - SHA-based change detection - only downloads modified files (not all 217)
+    - Enhanced file-dates.json with commit hash tracking
+    - Settings UI with repository configuration controls
+    - Automatic re-indexing triggered after successful updates
+    - Efficient bandwidth usage - avoids 1GB+ full repository clones
 
-## Outstanding Work (High Priority)
+## Outstanding Work
 
-1.  **Missing Pali Script Input Parsers** (5 scripts need converters to IPE):
+1.  **Full UI Localization System**:
+    - **Multi-Language Support**: Implement complete localization for 20+ spoken languages (matching CST4 functionality)
+    - **Runtime Language Switching**: Allow users to change UI language without restart
+    - **String Tables**: Port existing string tables from CST4 for all supported languages
+    - **Settings Integration**: Add language selection to Settings window
+    - **Resource Management**: Implement proper resource loading system for localized strings
+    - **Note**: This is separate from Pali script selection but often related in user preferences
+2.  **Missing Pali Script Input Parsers** (5 scripts need converters to IPE):
     - **Thai**: Thai script → IPE converter (Thai2Ipe or Thai2Deva)
     - **Telugu**: Telugu script → IPE converter (Telu2Ipe or Telu2Deva)
     - **Tibetan**: Tibetan script → IPE converter (Tibt2Ipe or Tibt2Deva)
@@ -354,47 +460,57 @@ SetupFontAndScriptHandlers();
     - **Cyrillic**: Cyrillic script → IPE converter (Cyrl2Ipe or Cyrl2Deva)
     - **Note**: Display works for all 14 scripts, but input (search/dictionary) only works for 9
     - **Implementation**: May use direct Script→IPE or indirect Script→Deva→IPE path
-2.  **UI Language Font System**: 
+3.  **UI Language Font System**: 
     - **Localization Font Settings**: Separate font controls for ~20 UI languages (distinct from Pali script fonts)
     - **Font Discovery**: Detect available fonts suitable for each UI language script
     - **Note**: This is separate from Pali script fonts - refers to UI language localization fonts
-3.  **Advanced Search Features**:
+4.  **Advanced Search Features**:
     - **Phrase Search**: Implement position-based phrase searching with exact word order matching
     - **Proximity Search**: Add proximity operators for terms within specified distances
-4.  **Search Filtering & Collections**:
+5.  **Search Filtering & Collections**:
     - **Custom Book Collections**: Implement user-defined book collection feature
-5.  **UI Feedback During Operations**:
+6.  **UI Feedback During Operations**:
     - **Indexing Progress**: Show progress bar/spinner during index building
     - **Search State**: Indicate when index is incomplete or being rebuilt
     - **Operation Notifications**: Alert user when long operations complete
-6.  **Automatic XML File Updates System**:
-    - **Git-Based Update Mechanism**: Implement automatic Tipitaka XML file updates using GitHub REST API
-    - **Core Components**:
-      - `XmlUpdateService` with Octokit.net integration for GitHub API communication
-      - Enhanced `file-dates.json` structure with commit hashes for change detection
-      - Settings UI for update control (`EnableAutomaticUpdates`, repository configuration)
-    - **Update Workflow**:
-      - Check repository commit hash to detect changes (fast path)
-      - Compare individual file hashes to identify changed files
-      - Download only modified files to minimize bandwidth usage
-      - Trigger automatic re-indexing after successful updates
-    - **User Experience**: Background updates with progress notifications and user control
-    - **Benefits**: No local git dependency, atomic updates, bandwidth-efficient (avoids 1GB+ full repository clones)
+    - **XML Download Progress**: Show progress bar/notifications during file downloads
+    - **Update History**: Track and display XML update history for transparency
 7.  **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
     - **Search Hit Restoration**: Fix bug where highlighted search hits are not restored when reopening books at startup
 8.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
+9.  **Recent Books Feature**:
+    - **File Menu Integration**: Add "Recent Books" submenu to File menu or main UI
+    - **MRU List Display**: Show recently opened books with titles and last-opened dates
+    - **Smart Tracking**: Automatically add books to recent list when opened
+    - **Settings Integration**: Re-implement MaxRecentBooks setting to control list size
+    - **Persistence**: Leverage existing ApplicationState.RecentBooks infrastructure
+    - **User Experience**: Quick access to frequently used texts
+    - **Note**: Partial backend exists - ApplicationState.Preferences.RecentBooks list, RecentBookItem model, AddRecentBook() method, but no UI integration and book tracking not implemented
+10. **Enable Splash Screen on macOS**:
+    - **Retry Implementation**: Previously attempted and abandoned, needs fresh approach
+    - **Platform-Specific Issues**: Investigate and resolve macOS-specific window display issues
+    - **Startup Feedback**: Important for showing progress during file checking and indexing
 
 ## Outstanding Work for Beta 1 Release
 
 The following items are prioritized for the upcoming Beta 1 release to ensure production readiness:
 
-1.  **Book Display Bug Fixes** (from item #7 above):
+1.  **Settings Cleanup & Validation** (from item #8 above):
+    - Audit and clean up all settings to ensure only functional settings are shown
+    - Remove placeholder/demo settings from UI and settings files
+2.  **Startup Progress Feedback** (from items #5 and #9 above):
+    - Enable splash screen on macOS (retry previously abandoned implementation)
+    - Show progress during the complete startup workflow:
+      - Checking file versions against GitHub
+      - Downloading updated XML files
+      - Building/updating Lucene index
+    - Notify user when operations complete
+    - Indicate if index is incomplete or being rebuilt
+3.  **Book Display Bug Fixes** (from item #6 above):
     - Implement search hit restoration on startup
-2.  **Automatic XML File Updates System** (from item #6 above):
-    - Git-Based update mechanism with GitHub REST API integration
 
 ## Technical Architecture
 
@@ -420,6 +536,7 @@ CST.Avalonia/
 │   ├── FontService.cs                 # Manages per-script font settings
 │   ├── IndexingService.cs             # Manages Lucene index lifecycle
 │   ├── XmlFileDatesService.cs         # Tracks file changes for incremental indexing
+│   ├── XmlUpdateService.cs            # GitHub API integration for XML file updates
 │   └── SearchService.cs               # Lucene search with position-based results
 ├── Converters/
 │   └── FontHelper.cs                  # Custom attached properties for DataTemplate font binding
@@ -438,6 +555,7 @@ CST.Avalonia_inactive/
 - **Microsoft.Extensions.DI**
 - **Serilog**
 - **Lucene.NET 4.8+**: Full-text search with position-based indexing
+- **Octokit.NET**: GitHub API integration for XML file updates
 - **xUnit + Moq**: Comprehensive test framework with 62 tests
 
 ## Build & Run Instructions

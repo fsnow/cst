@@ -56,10 +56,8 @@ namespace CST.Avalonia.Services
             System.IO.Directory.CreateDirectory(_indexDirectory);
             _logger.LogInformation("Index directory created/verified: {IndexDirectory}", _indexDirectory);
 
-            // Initialize the XML file dates service
-            _logger.LogInformation("Initializing XmlFileDatesService...");
-            await _xmlFileDatesService.InitializeAsync();
-            _logger.LogInformation("XmlFileDatesService initialized");
+            // Note: XmlFileDatesService is now initialized earlier in CheckForXmlUpdatesAsync()
+            // to ensure it's available before XmlUpdateService tries to use it
 
             _logger.LogInformation("IndexingService.InitializeAsync() completed successfully");
         }

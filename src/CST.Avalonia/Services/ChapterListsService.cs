@@ -27,7 +27,7 @@ public class ChapterListsService
         _logger = logger;
         _settingsService = settingsService;
         _dataFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
-                                    "CST", "chapter_lists.json");
+                                    "CST.Avalonia", "chapter_lists.json");
         _chapterLists = new Dictionary<int, List<DivTag>>();
         
         LoadFromFile();
