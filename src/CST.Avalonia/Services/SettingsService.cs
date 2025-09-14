@@ -65,17 +65,18 @@ namespace CST.Avalonia.Services
                     // Set default XML directory if not exists
                     if (string.IsNullOrEmpty(_settings.XmlBooksDirectory))
                     {
-                        // Try to find the default XML directory
-                        var possiblePath = Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                            "Cloud-Drive", "Projects", "CST_UnitTestData", "Xml"
-                        );
-                        
-                        if (Directory.Exists(possiblePath))
+                        // Set the default XML directory in the app data folder
+                        var xmlPath = Path.Combine(_settingsDirectory, "Xml");
+
+                        // Create the directory if it doesn't exist
+                        if (!Directory.Exists(xmlPath))
                         {
-                            _settings.XmlBooksDirectory = possiblePath;
-                            _logger.Information("Found default XML directory: {Path}", possiblePath);
+                            Directory.CreateDirectory(xmlPath);
+                            _logger.Information("Created default XML directory: {Path}", xmlPath);
                         }
+
+                        _settings.XmlBooksDirectory = xmlPath;
+                        _logger.Information("Set default XML directory: {Path}", xmlPath);
                     }
                 }
             }

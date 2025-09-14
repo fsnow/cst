@@ -974,24 +974,18 @@ namespace CST.Avalonia.ViewModels
             // Ensure XSL files are set up in user directory
             EnsureXslFilesInUserDirectory();
             
-            // Try user's Application Support directory first (editable location)
+            // Use user's Application Support directory (editable location)
             var userXslPath = GetUserXslPath(xslFileName);
             if (File.Exists(userXslPath))
             {
                 _logger.Debug("Using user XSL file: {Path}", userXslPath);
                 return userXslPath;
             }
-            
-            // Fall back to hard-coded path for development
-            var devPath = Path.Combine("/Users/fsnow/github/fsnow/cst/src/Cst4/Xsl", xslFileName);
-            if (File.Exists(devPath))
-            {
-                _logger.Debug("Using development XSL file: {Path}", devPath);
-                return devPath;
-            }
-            
-            _logger.Error("XSL file not found: {FileName}", xslFileName);
-            return devPath; // Return dev path as last resort
+
+            // If XSL file doesn't exist, log error but return the expected path
+            // The application should have already copied the XSL files during initialization
+            _logger.Error("XSL file not found: {Path}", userXslPath);
+            return userXslPath;
         }
         
         private string GetUserXslPath(string xslFileName)

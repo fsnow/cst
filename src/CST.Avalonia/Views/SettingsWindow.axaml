@@ -225,7 +225,7 @@
                                 
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
-                                        <TextBlock Text="UI Localization Font" Classes="SettingLabel"/>
+                                        <TextBlock Text="UI Localization Font (TODO, not implemented)" Classes="SettingLabel"/>
                                         <TextBlock Text="Font for user interface elements (menus, buttons, etc.)" 
                                                   Classes="SettingDescription"/>
                                         
