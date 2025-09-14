@@ -3,7 +3,7 @@
 ## Current Status: **XML UPDATE SYSTEM BUG FIXES & OPTIMIZATION** 🔧
 
 **Last Updated**: September 13, 2025
-**Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
+**Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
 
@@ -189,7 +189,7 @@ CST.Avalonia_inactive/
 
 ```bash
 # Navigate to project directory
-cd /Users/fsnow/github/fsnow/cst/src/CST.Avalonia
+cd [project-root]/src/CST.Avalonia
 
 # Build project
 dotnet build

@@ -10,8 +10,14 @@ namespace CST.Avalonia.Tests
         [Fact]
         public void TestManualTermCounting_s0101m()
         {
-            // Skip if real book file doesn't exist
-            string realBookPath = "/Users/fsnow/github/fsnow/cst/tipitaka-latn/s0101m.mul.xml";
+            // Use the default CSTReader XML directory or environment variable override
+            string xmlPath = Environment.GetEnvironmentVariable("TEST_XML_PATH") ??
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "CSTReader", "Xml");
+
+            string realBookPath = Path.Combine(xmlPath, "s0101m.mul.xml");
+
             if (!File.Exists(realBookPath))
             {
                 // Skip test if file doesn't exist - this is expected in CI
