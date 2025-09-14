@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using CST;
 using CST.Avalonia.Models;
 using CST.Avalonia.Constants;
+using CST.Avalonia.Views;
 using CST.Lucene;
 using Microsoft.Extensions.Logging;
 using Octokit;
@@ -79,11 +80,21 @@ namespace CST.Avalonia.Services
                 if (!hasLocalData)
                 {
                     _logger.LogInformation("No local XML data found");
-                    UpdateStatusChanged?.Invoke("No local XML data found. Initial download required.");
-                    
-                    // Prompt user for initial setup
+                    UpdateStatusChanged?.Invoke("No XML data found - please add XML files to continue");
+
+                    // During startup, we can't show dialogs, so just log and continue
+                    // The user will need to download or copy XML files manually
+                    if (App.MainWindow == null)
+                    {
+                        _logger.LogInformation("Skipping initial download during startup - user needs to add XML files manually");
+                        SplashScreen.SetStatus("No XML files found - continuing without data...");
+                        await Task.Delay(2000); // Give user time to see the message
+                        return;
+                    }
+
+                    // If main window is available, prompt user for initial setup
                     bool shouldDownload = await PromptForInitialDataAsync();
-                    
+
                     if (shouldDownload)
                     {
                         await PerformInitialDownloadAsync();
@@ -133,9 +144,16 @@ namespace CST.Avalonia.Services
 
         private async Task<bool> PromptForInitialDataAsync()
         {
+            // Check if main window is available (not during startup)
+            if (App.MainWindow == null)
+            {
+                _logger.LogInformation("Skipping initial download prompt - main window not ready");
+                return false;
+            }
+
             // This will be called on the UI thread
             var result = false;
-            
+
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 var window = App.MainWindow;
