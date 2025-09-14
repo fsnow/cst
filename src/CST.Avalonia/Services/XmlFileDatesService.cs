@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CST;
+using CST.Avalonia.Constants;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services
@@ -290,19 +291,19 @@ namespace CST.Avalonia.Services
             {
                 appDataPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "CST.Avalonia");
+                    AppConstants.AppDataDirectoryName);
             }
             else if (OperatingSystem.IsMacOS())
             {
                 appDataPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    "Library", "Application Support", "CST.Avalonia");
+                    "Library", "Application Support", AppConstants.AppDataDirectoryName);
             }
             else // Linux and others
             {
                 appDataPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".config", "CST.Avalonia");
+                    ".config", AppConstants.AppDataDirectoryName);
             }
 
             return appDataPath;

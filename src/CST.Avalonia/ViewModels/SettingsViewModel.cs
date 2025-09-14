@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
+using CST.Avalonia.Constants;
 using CST.Conversion;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
@@ -813,7 +814,7 @@ namespace CST.Avalonia.ViewModels
             {
                 var appSupportDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "CST.Avalonia");
+                    AppConstants.AppDataDirectoryName);
                 var logsDir = Path.Combine(appSupportDir, "logs");
                 
                 if (Directory.Exists(logsDir))
@@ -855,7 +856,7 @@ namespace CST.Avalonia.ViewModels
                 // Get the logs directory
                 var appSupportDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "CST.Avalonia");
+                    AppConstants.AppDataDirectoryName);
                 var logsDir = Path.Combine(appSupportDir, "logs");
                 
                 // Ensure logs directory exists

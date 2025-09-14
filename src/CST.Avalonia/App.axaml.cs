@@ -16,6 +16,7 @@ using CST.Avalonia.ViewModels;
 using CST.Avalonia.Views;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
+using CST.Avalonia.Constants;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using CST;
@@ -58,9 +59,8 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        // Note: Splash screen has been disabled on macOS due to threading issues
-        // The splash screen must be shown after Avalonia is initialized, which defeats its purpose
-        bool showSplash = !OperatingSystem.IsMacOS();
+        // Enable splash screen for all platforms with improved implementation
+        bool showSplash = true;
         
         // Check the "Show Welcome screen on startup" setting if platform supports splash screen
         if (showSplash)
@@ -70,10 +70,26 @@ public partial class App : Application
         
         if (showSplash)
         {
-            // Show splash screen as early as possible in the Avalonia lifecycle
-            SplashScreen.ShowSplashScreen();
-            SplashScreen.SetStatus("Starting CST Avalonia...");
-            SplashScreen.SetReferencePoint();
+            // Show splash screen with platform-safe implementation
+            // On macOS, we need to ensure the splash screen is shown on the UI thread
+            // after Avalonia is properly initialized
+            if (OperatingSystem.IsMacOS())
+            {
+                // Defer splash screen display to ensure proper initialization on macOS
+                Dispatcher.UIThread.Post(() => 
+                {
+                    SplashScreen.ShowSplashScreen();
+                    SplashScreen.SetStatus("Starting CST Avalonia...");
+                    SplashScreen.SetReferencePoint();
+                }, DispatcherPriority.Send);
+            }
+            else
+            {
+                // Windows/Linux can show immediately
+                SplashScreen.ShowSplashScreen();
+                SplashScreen.SetStatus("Starting CST Avalonia...");
+                SplashScreen.SetReferencePoint();
+            }
         }
 
         // WebView initialization is handled automatically by OutSystems WebView package
@@ -137,7 +153,7 @@ public partial class App : Application
             }
             
             // Initialize indexing service and build index if needed (with delay to ensure settings are loaded)
-            _ = Task.Run(async () =>
+            var indexingTask = Task.Run(async () =>
             {
                 // Give settings time to load
                 await Task.Delay(1000);
@@ -175,11 +191,36 @@ public partial class App : Application
             
             if (showSplash)
             {
-                SplashScreen.SetStatus("Ready");
-                SplashScreen.SetReferencePoint();
-                
-                // Close splash screen after initialization is complete
-                SplashScreen.CloseForm();
+                // Don't close splash screen yet - wait for indexing to complete
+                // Schedule splash screen closure after indexing completes
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Wait for indexing to complete
+                        await indexingTask;
+                        
+                        // Give a brief moment to show completion
+                        await Task.Delay(500);
+                        
+                        // Update status and close on UI thread
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            SplashScreen.SetStatus("Ready");
+                            SplashScreen.SetReferencePoint();
+                            SplashScreen.CloseForm();
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Error waiting for indexing to complete");
+                        // Close splash screen anyway on error
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            SplashScreen.CloseForm();
+                        });
+                    }
+                });
             }
 
 
@@ -242,7 +283,7 @@ public partial class App : Application
     {
         try
         {
-            var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CST.Avalonia", "settings.json");
+            var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppConstants.AppDataDirectoryName, "settings.json");
             
             if (!File.Exists(settingsPath))
             {
@@ -365,7 +406,7 @@ public partial class App : Application
                 
                 if (showProgress)
                 {
-                    SplashScreen.SetStatus("Checking for index updates...");
+                    SplashScreen.SetStatus("Checking search index...");
                 }
                 
                 // Create progress reporter for splash screen
@@ -440,10 +481,15 @@ public partial class App : Application
                 return;
             }
             
-            // Subscribe to status updates for logging
+            // Subscribe to status updates for logging and splash screen
             xmlUpdateService.UpdateStatusChanged += message =>
             {
                 Log.Information("XML Update Status: {Message}", message);
+                // Also update splash screen if it's showing
+                Dispatcher.UIThread.Post(() =>
+                {
+                    SplashScreen.SetStatus(message);
+                });
             };
             
             // Check for updates (this will handle first-time download if needed)
@@ -794,7 +840,7 @@ public partial class App : Application
         // Get the logs directory in user's Application Support
         var appSupportDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "CST.Avalonia");
+            AppConstants.AppDataDirectoryName);
         var logsDir = Path.Combine(appSupportDir, "logs");
         
         // Ensure logs directory exists

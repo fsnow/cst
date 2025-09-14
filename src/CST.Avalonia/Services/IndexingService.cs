@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using CST.Lucene;
 using Microsoft.Extensions.Logging;
+using CST.Avalonia.Constants;
 using Lucene.Net.Index;
 using Lucene.Net.Store;
 
@@ -202,19 +203,19 @@ namespace CST.Avalonia.Services
             {
                 indexPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "CST.Avalonia", "Index");
+                    AppConstants.AppDataDirectoryName, "Index");
             }
             else if (OperatingSystem.IsMacOS())
             {
                 indexPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    "Library", "Application Support", "CST.Avalonia", "Index");
+                    "Library", "Application Support", AppConstants.AppDataDirectoryName, "Index");
             }
             else // Linux and others
             {
                 indexPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".config", "CST.Avalonia", "Index");
+                    ".config", AppConstants.AppDataDirectoryName, "Index");
             }
 
             return indexPath;

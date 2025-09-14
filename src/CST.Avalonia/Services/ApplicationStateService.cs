@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Timers;
+using CST.Avalonia.Constants;
 using CST.Avalonia.Models;
 using CST.Conversion;
 using Microsoft.Extensions.Logging;
@@ -54,7 +55,7 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         // Use application data directory for state files
         var appDataPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "CST.Avalonia"
+            AppConstants.AppDataDirectoryName
         );
         
         Directory.CreateDirectory(appDataPath);

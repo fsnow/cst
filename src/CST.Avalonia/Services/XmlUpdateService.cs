@@ -14,6 +14,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CST;
 using CST.Avalonia.Models;
+using CST.Avalonia.Constants;
 using CST.Lucene;
 using Microsoft.Extensions.Logging;
 using Octokit;
@@ -50,11 +51,11 @@ namespace CST.Avalonia.Services
             _xmlFileDatesService = xmlFileDatesService;
             
             // Initialize GitHub client
-            _gitHubClient = new GitHubClient(new ProductHeaderValue("CST.Avalonia"));
+            _gitHubClient = new GitHubClient(new ProductHeaderValue(AppConstants.UserAgent));
             
             // Initialize HTTP client for direct downloads
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "CST.Avalonia");
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", AppConstants.UserAgent);
         }
 
         public async Task CheckForUpdatesAsync()
@@ -680,7 +681,7 @@ namespace CST.Avalonia.Services
         private string GetAppDataDirectory()
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            return Path.Combine(appDataPath, "CST.Avalonia");
+            return Path.Combine(appDataPath, AppConstants.AppDataDirectoryName);
         }
 
         /// <summary>

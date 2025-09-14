@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using CST.Avalonia.Constants;
 using CST.Avalonia.Models;
 using Serilog;
 
@@ -25,7 +26,7 @@ namespace CST.Avalonia.Services
             // Determine settings directory based on platform
             _settingsDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "CST.Avalonia"
+                AppConstants.AppDataDirectoryName
             );
 
             _settingsFilePath = Path.Combine(_settingsDirectory, "settings.json");

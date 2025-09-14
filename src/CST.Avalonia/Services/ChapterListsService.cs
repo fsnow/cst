@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
 using CST.Avalonia.Models;
+using CST.Avalonia.Constants;
 using CST;
 using Microsoft.Extensions.Logging;
 
@@ -26,8 +27,8 @@ public class ChapterListsService
     {
         _logger = logger;
         _settingsService = settingsService;
-        _dataFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
-                                    "CST.Avalonia", "chapter_lists.json");
+        _dataFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                    AppConstants.AppDataDirectoryName, "chapter_lists.json");
         _chapterLists = new Dictionary<int, List<DivTag>>();
         
         LoadFromFile();

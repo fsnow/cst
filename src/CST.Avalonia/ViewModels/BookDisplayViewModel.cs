@@ -15,6 +15,7 @@ using CST;
 using CST.Conversion;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
+using CST.Avalonia.Constants;
 using CST.Avalonia.Views;
 using Serilog;
 using Lucene.Net.Index;
@@ -997,7 +998,7 @@ namespace CST.Avalonia.ViewModels
         {
             var appSupportDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "CST.Avalonia",
+                AppConstants.AppDataDirectoryName,
                 "Xsl");
             return Path.Combine(appSupportDir, xslFileName);
         }
@@ -1008,7 +1009,7 @@ namespace CST.Avalonia.ViewModels
             {
                 var userXslDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "CST.Avalonia",
+                    AppConstants.AppDataDirectoryName,
                     "Xsl");
                 
                 // Create directory if it doesn't exist

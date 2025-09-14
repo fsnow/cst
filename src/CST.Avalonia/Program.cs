@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Threading;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using CST.Avalonia.Views;
 using Serilog;
 
@@ -21,7 +23,11 @@ sealed class Program
             // Handle library conflicts on macOS by suppressing duplicate class warnings
             Environment.SetEnvironmentVariable("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES");
             
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            // Build the Avalonia app without starting it yet
+            var app = BuildAvaloniaApp();
+            
+            // Start the application with special handling for splash screen
+            app.StartWithClassicDesktopLifetime(args);
         }
         finally
         {
@@ -33,29 +39,12 @@ sealed class Program
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
     {
-        bool showSplash = !OperatingSystem.IsMacOS();
-        
-        if (showSplash)
-        {
-            SplashScreen.SetStatus("Initializing application...");
-            SplashScreen.SetReferencePoint();
-
-            SplashScreen.SetStatus("Configuring UI framework...");
-            SplashScreen.SetReferencePoint();
-        }
-        
         return AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace()
             .AfterSetup(_ => 
             {
-                if (showSplash)
-                {
-                    SplashScreen.SetStatus("Loading main application...");
-                    SplashScreen.SetReferencePoint();
-                }
-                
                 _logger.Information("WebView-based CST application starting");
             });
     }

@@ -12,6 +12,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Microsoft.Win32;
 using Serilog;
+using CST.Avalonia.Constants;
 
 namespace CST.Avalonia.Views;
 
@@ -34,9 +35,10 @@ public partial class SplashScreen : Window
     private DateTime _startTime;
     private bool _isClosing = false;
     private double _averageTickTime = 50.0; // milliseconds per progress increment
+    private DispatcherTimer? _safetyTimer; // Auto-close timer for safety
     
     // Registry key for self-calibration data (similar to CST4)
-    private const string RegistryKeyPath = @"SOFTWARE\CST\Avalonia\SplashScreen";
+    private static readonly string RegistryKeyPath = AppConstants.RegistryBasePath + "\\SplashScreen";
     
     public SplashScreen()
     {
@@ -59,14 +61,30 @@ public partial class SplashScreen : Window
         _startTime = DateTime.Now;
         ReadStoredIncrements();
         
-        // Start fade-in animation
-        _timer.Start();
+        // On macOS, we need to handle the timer start more carefully
+        if (OperatingSystem.IsMacOS())
+        {
+            // Delay timer start to ensure window is fully initialized
+            Dispatcher.UIThread.Post(() => 
+            {
+                _timer.Start();
+                _logger.Debug("Splash screen timer started (macOS delayed start)");
+            }, DispatcherPriority.Background);
+        }
+        else
+        {
+            // Start fade-in animation immediately on other platforms
+            _timer.Start();
+            _logger.Debug("Splash screen created and fade-in timer started");
+        }
         
-        _logger.Debug("Splash screen created and fade-in timer started");
+        // Safety timer removed - splash screen stays open until explicitly closed
+        // This allows for full downloads and indexing operations to complete
+        _safetyTimer = null;
     }
     
     /// <summary>
-    /// Shows the splash screen (simplified for Avalonia)
+    /// Shows the splash screen with platform-safe implementation
     /// </summary>
     public static void ShowSplashScreen()
     {
@@ -77,14 +95,52 @@ public partial class SplashScreen : Window
             try
             {
                 _logger.Debug("Creating splash screen instance");
-                _instance = new SplashScreen();
-                _instance.Show();
-                _logger.Information("Splash screen displayed");
+                
+                // Ensure we're on the UI thread
+                if (Dispatcher.UIThread.CheckAccess())
+                {
+                    CreateAndShowSplashScreen();
+                }
+                else
+                {
+                    // Post to UI thread if we're not already on it
+                    Dispatcher.UIThread.Post(CreateAndShowSplashScreen, DispatcherPriority.Send);
+                }
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Failed to create splash screen instance");
             }
+        }
+    }
+    
+    private static void CreateAndShowSplashScreen()
+    {
+        try
+        {
+            _instance = new SplashScreen();
+            
+            // On macOS, we need to ensure the window is properly configured
+            if (OperatingSystem.IsMacOS())
+            {
+                // Set window level to ensure it appears on top
+                _instance.Topmost = true;
+                
+                // Ensure the window is activated
+                _instance.Show();
+                _instance.Activate();
+                _instance.Focus();
+            }
+            else
+            {
+                _instance.Show();
+            }
+            
+            _logger.Information("Splash screen displayed");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed in CreateAndShowSplashScreen");
         }
     }
     
@@ -216,16 +272,7 @@ public partial class SplashScreen : Window
                 }
             }
             
-            // Smooth progress bar animation
-            if (_currentProgress < _targetProgress)
-            {
-                var increment = Math.Min((_targetProgress - _currentProgress) * 0.1, 2.0);
-                _currentProgress += increment;
-                ProgressBar.Value = _currentProgress;
-            }
-            
-            // Update time remaining estimate
-            UpdateTimeRemaining();
+            // Progress bar and time remaining removed - no longer needed
         }
         catch (Exception ex)
         {
@@ -233,31 +280,7 @@ public partial class SplashScreen : Window
         }
     }
     
-    private void UpdateTimeRemaining()
-    {
-        if (_currentProgress < 5.0 || _isClosing) return;
-        
-        try
-        {
-            var elapsed = DateTime.Now - _startTime;
-            var estimatedTotal = elapsed.TotalMilliseconds / (_currentProgress / 100.0);
-            var remaining = estimatedTotal - elapsed.TotalMilliseconds;
-            
-            if (remaining > 0 && remaining < 60000) // Less than 1 minute
-            {
-                var seconds = (int)(remaining / 1000);
-                TimeRemainingLabel.Text = $"Time remaining: {seconds} seconds";
-            }
-            else
-            {
-                TimeRemainingLabel.Text = "";
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Failed to update time remaining display");
-        }
-    }
+    // UpdateTimeRemaining method removed - no longer needed without progress bar
     
     private void LoadBackgroundImage()
     {
@@ -369,6 +392,7 @@ public partial class SplashScreen : Window
     protected override void OnClosed(EventArgs e)
     {
         _timer?.Stop();
+        _safetyTimer?.Stop();
         base.OnClosed(e);
         
         lock (_lock)

@@ -2,7 +2,7 @@
 
 ## Current Status: **XML UPDATE SYSTEM BUG FIXES & OPTIMIZATION** 🔧
 
-**Last Updated**: September 1, 2025
+**Last Updated**: September 7, 2025
 **Working Directory**: `/Users/fsnow/github/fsnow/cst/src/CST.Avalonia`
 
 ## Project Overview
@@ -11,437 +11,79 @@ This project is a ground-up rewrite of the original WinForms-based CST4, built o
 
 CST stands for "Chaṭṭha Saṅgāyana Tipiṭaka".
 
-## Latest Session Update (2025-09-01)
-
-### ✅ **COMPLETED: Settings Cleanup & Validation**
-
-#### **Removed Non-Functional Placeholder Settings**
-- **Problem Solved**: Settings window contained multiple non-functional placeholder settings from initial development
-- **Search Settings Section**: Completely removed CaseSensitive, WholeWords, UseRegex, and MaxSearchResults settings that were never implemented
-- **Search Box Header**: Removed non-functional search filter from Settings window header (contained only TODO comment)
-- **Show Welcome Screen Checkbox**: Removed setting that referenced non-existent welcome screen functionality
-- **Theme Selection Dropdown**: Removed Light/Dark/Auto theme setting that wasn't actually applied to the UI
-- **Result**: Settings window now only displays functional, working settings
-
-#### **Settings Model Cleanup**
-- **SearchSettings Class**: Completely removed from Settings.cs model
-- **SearchSettingsViewModel**: Removed entire class and category from SettingsViewModel.cs
-- **Settings Properties**: Removed ShowWelcomeOnStartup and Theme properties from Settings model
-- **UI Template Cleanup**: Removed Search Settings DataTemplate from SettingsWindow.axaml
-- **Category Simplification**: Updated Appearance category description from "Theme and display settings" to "Font settings"
-
-#### **Settings Persistence Cleanup**
-- **JSON File Updated**: Cleaned settings.json to remove SearchSettings, ShowWelcomeOnStartup, and Theme entries
-- **Maintained User Data**: Preserved all functional settings including XML directories, font configurations, and developer settings
-- **Build Validation**: Project builds successfully with no compilation errors after cleanup
-
-**Files Modified**:
-- `/Views/SettingsWindow.axaml` - Removed non-functional UI elements and search box
-- `/Models/Settings.cs` - Removed SearchSettings class and unused properties
-- `/ViewModels/SettingsViewModel.cs` - Removed SearchSettingsViewModel and related code
-- `/Library/Application Support/CST.Avalonia/settings.json` - Cleaned up obsolete settings
-
-### ✅ **COMPLETED: XML Update System Critical Bug Fix & Startup Optimization**
-
-#### **Fixed: All 217 Files Downloading Instead of Only Changed Ones**
-- **Problem Solved**: XML update system was downloading all 217 files from GitHub instead of only files that had actually changed since the circa-2020 test files
-- **Root Cause**: Improper tracking logic where files with existing timestamps but empty commit hashes were using the wrong code path
-- **Solution**: Fixed SHA comparison condition in `CheckGitHubForUpdatesAsync` method:
-  ```csharp
-  if (!needsHashComparison && fileDatesData?.Files != null && fileDatesData.Files.TryGetValue(book.FileName, out var localFile))
-  ```
-- **Impact**: More than half the files haven't changed in 18 years and now correctly skip download
-- **Test Validation**: Used DemoHybridGitHub program to validate SHA comparison logic works correctly
-
-#### **Fixed: Startup Order Optimization**
-- **Problem Solved**: Application was checking index first, then updating files, causing potential double work
-- **Solution**: Reordered startup sequence in `App.axaml.cs` to update files before indexing:
-  ```csharp
-  // Check for XML updates first to ensure we have latest files
-  await CheckForXmlUpdatesAsync();
-  
-  // Then initialize indexing with the updated files
-  await InitializeIndexingAsync(showSplash);
-  ```
-- **Benefit**: Eliminates redundant indexing work when files are updated during startup
-
-#### **Enhanced File Tracking System**
-- **Nullable Timestamp Support**: Modified `FileCommitInfo.LastIndexedTimestamp` to be nullable (`DateTime?`)
-- **Separation of Concerns**: Downloader only sets `CommitHash`, indexer only sets `LastIndexedTimestamp`
-- **Proper State Management**: Files downloaded but not yet indexed have null `LastIndexedTimestamp`
-- **Legacy Compatibility**: Maintained backward compatibility with old file-dates.json format
-
-#### **Reduced Startup Logging Noise**
-- **Problem Solved**: Startup logging was over 300KB with excessive SHA comparison and font service messages
-- **Solution**: Changed inappropriate Information-level logging to Debug level:
-  - SHA comparison logging in `XmlUpdateService.cs`
-  - CHARACTER-SET APPROACH logging in `MacFontService.cs`
-- **Result**: Startup logging reduced from 300KB+ to 14KB (95% reduction)
-- **Benefit**: Much cleaner production logs while maintaining debug information when needed
-
-#### **Fixed: Empty Index Directory Handling**
-- **Problem**: IndexNotFoundException when trying to read from empty index directory
-- **Solution**: Added proper existence check in `BookIndexer.GetAllDocIds()`:
-  ```csharp
-  if (!DirectoryReader.IndexExists(fSDirectory))
-  {
-      // No index exists yet, nothing to get
-      return;
-  }
-  ```
-- **Result**: Clean startup handling when index doesn't exist yet
-
-**Files Modified**:
-- `/Services/XmlUpdateService.cs` - Fixed SHA comparison logic and reduced logging noise
-- `/Services/XmlFileDatesService.cs` - Made LastIndexedTimestamp nullable for proper state management
-- `/App.axaml.cs` - Optimized startup order (files before indexing)
-- `/Services/Platform/Mac/MacFontService.cs` - Reduced CHARACTER-SET logging to Debug level
-- `/../CST.Lucene/BookIndexer.cs` - Fixed empty index directory handling
-- `/../DemoHybridGitHub/Program.cs` - Enhanced test program for SHA validation
-
-**Commits**:
-- **561bd2c**: "Fix XML update system SHA comparison and reduce logging noise"
-- **81b2d2f**: "Enhance DemoHybridGitHub test program with actual SHA comparison"
-
-## Previous Session Update (2025-08-29)
-
-### ✅ **COMPLETED: Tab Overflow Bug Fix & UI Polish**
-
-#### **Fixed: Tab Scrollbar Covering Issue**
-- **Problem Solved**: Horizontal scrollbar no longer covers tabs when too many books are open
-- **Solution**: Custom Avalonia styling with `RenderTransform` to position scrollbar below tabs
-- **Visual Enhancement**: Thin VS Code-style scrollbar (3px height) with transparent background
-- **Technical Implementation**: 
-  - Created `/Styles/DockStyles.axaml` with `translate(0px, 12px)` transform
-  - 12px offset ensures clearance for tall Devanagari ligatures
-  - Hidden arrow buttons for cleaner appearance
-- **Beta 1 Priority**: Resolved critical UI issue affecting usability with multiple open books
-
-#### **Removed Non-Functional "+" Button**
-- **Problem Solved**: Non-functional "+" button removed from document tab bar
-- **Solution**: Set `CanCreateDocument = false` in `CstDockFactory.cs` at two locations
-- **Implementation**: Used proper Dock.Avalonia API instead of CSS workarounds
-- **Result**: Clean tab bar without confusing non-functional elements
-
-**Files Added/Modified**:
-- `/Styles/DockStyles.axaml` - Custom scrollbar styling with positioning
-- `/App.axaml` - Added StyleInclude for DockStyles
-- `/CST.Avalonia.csproj` - Added AvaloniaResource for style file
-- `/Services/CstDockFactory.cs` - Disabled document creation button
-
-## Previous Session Update (2025-08-27)
-
-### ✅ **COMPLETED: Major Search Panel UX Improvements & Bug Fixes**
-
-#### **Enhanced Search Input Experience**
-- **Visual Search Elements**: Added magnifying glass icon and clear button (X) to search input
-- **Progress Feedback**: Progress indicator shows during search operations, replacing clear button temporarily
-- **Better Visual Hierarchy**: Clean, intuitive search interface with proper iconography
-
-#### **Redesigned Book Filtering System**
-- **Compact Filter UI**: Replaced toggle switches with checkboxes for more space-efficient layout
-- **Quick Actions**: Added "Select All" and "Select None" buttons for rapid filter management
-- **Smart Filter Display**: Shows filter summary when collapsed (e.g., "3 of 7 types selected")
-- **Live Book Counter**: Displays book count indicator (e.g., "52 of 217 books") based on current filters
-- **Removed Placeholder**: Eliminated non-functional "Book Collection" dropdown
-
-#### **Critical Search Logic Bug Fixes**
-- **Fixed Empty Filter Bug**: When no books are selected via filters, search now correctly returns no results (previously showed all results)
-- **Fixed Zero-Count Terms**: Terms with 0 occurrences are no longer displayed in search results
-- **Fixed BitArray Logic**: Implemented proper BitArray matching logic consistent with CST4 for accurate book filtering
-- **Enhanced Search Service**: Updated SearchService.cs with proper book filtering validation
-
-#### **UI Polish & Accessibility**
-- **Dynamic Layout**: Book toolbar and status bar now have dynamic height for better space utilization
-- **Icon Improvements**: Enhanced book tree icons for better visual feedback
-- **Progress States**: Clear visual indication during search operations
-
-#### **macOS Application Branding Fix**
-- **Fixed "Avalonia Application" Issue**: macOS menu bar now correctly shows "CST Reader"
-- **Unified Bundle Configuration**: Resolved conflicts between Info.plist and .csproj - both now use "CST Reader"
-- **Consistent Window Titles**: Updated all window titles (main window, splash screen, dialogs) to "CST Reader"
-- **Works Both Ways**: Application name appears correctly whether running via `dotnet run` or as installed .app bundle
-
-**Files Added/Modified**:
-- `/Services/SearchService.cs` - Enhanced book filtering logic and validation
-- `/ViewModels/SearchViewModel.cs` - Added filter management, book counting, and UX improvements
-- `/Views/SearchPanel.axaml` - Complete UI redesign with new filter layout and search input enhancements
-
-## Previous Session Update (2025-08-25)
-
-### ✅ **COMPLETED: Per-Script Font Detection & Selection System**
-
-#### **Platform-Specific Font Detection (MacFontService)**
-- **Native macOS Implementation**: Created `MacFontService.cs` using Core Text APIs to detect fonts that support each Pali script
-- **Character-Set Based Approach**: Uses sample Pali characters for each script to find compatible fonts
-- **P/Invoke Integration**: Direct calls to Core Foundation and Core Text frameworks for native font enumeration
-- **Dynamic Font Lists**: Font dropdowns in settings now populate with only fonts that can display each specific script
-
-**Technical Implementation**:
-- Uses `CTFontDescriptorCreateMatchingFontDescriptors` with character set attributes
-- Converts sample text "mahāsatipaṭṭhānasuttaṃ" to each script for font testing
-- Returns unique font family names sorted alphabetically
-- Falls back to standard fonts if no script-specific fonts found
-
-#### **Font Selection System Debugging & Fixes**
-- **Problem Solved**: Font selection persistence and UI update issues resolved through extensive debugging
-- **Root Cause**: Multiple issues with font loading, selection state management, and UI synchronization
-- **Solution**: Comprehensive fixes to font loading pipeline and selection persistence
-- **Result**: Per-script font selection now works reliably for all script-specific UI elements
-
-#### **System Default Font Detection Implementation**
-- **Core Text API Usage**: Uses `CTFontCreateUIFontForLanguage` + `CTFontCreateForStringWithLanguage` to determine actual system font choices
-- **Script-Specific Detection**: Converts sample Pali text to each script, then queries system for optimal font
-- **Caching System**: Results cached per script to avoid repeated P/Invoke calls
-- **Informational Display**: Shows "System Default (Devanagari Sangam MN)" style information in Settings UI
-- **Non-Intrusive**: Completely separate from font selection logic - purely informational
-
-**Files Added/Modified**:
-- `/Services/Platform/Mac/MacFontService.cs` - Added system default font detection with P/Invoke calls
-- `/ViewModels/SettingsViewModel.cs` - Added SystemDefaultFontName property and async loading
-- `/Services/FontService.cs` - Added GetSystemDefaultFontForScriptAsync delegation
-- `/Services/IFontService.cs` - Added GetSystemDefaultFontForScriptAsync interface method
-- `/Views/SettingsWindow.axaml` - Added system default font information display below preview
-
-#### **Complete Per-Script Font Selection Status**
-✅ **Font Detection**: Native macOS font detection working for all 14 Pali scripts
-✅ **Font Persistence**: Font settings save and restore correctly across application sessions
-✅ **UI Synchronization**: Font dropdowns correctly show selected fonts when loading
-✅ **Script-Specific Filtering**: Font lists show only fonts compatible with each specific script
-✅ **Real-time Updates**: Font changes apply immediately to all relevant UI elements
-✅ **System Default Detection**: Displays actual system default font name (e.g., "System Default (.SF Pro Text)") for informational purposes
-
-## Latest Session Update (2025-08-18)
-
-### ✅ **COMPLETED: Mac-Style Book Tree Icons & Logging Cleanup**
-
-#### **Enhanced Book Tree Icons** 
-- **Dynamic Icon States**: Smart folder icons that change based on expand/collapse state
-  - 📁 Closed folder emoji for collapsed categories
-  - 📂 Open folder emoji for expanded categories  
-  - 📄 Document emoji for individual books
-- **Custom Converter**: `CategoryIconConverter` for proper icon visibility logic
-- **Improved UX**: Visual feedback when expanding/collapsing tree nodes
-
-**Technical Implementation**:
-- Custom multi-value converter handles folder open/closed logic
-- Unicode emojis provide consistent cross-platform icons
-- Future enhancement: Replace with proper Mac-style PNG/SVG icons when Avalonia SVG support improves
-
-**Files Added/Modified**:
-- `/Converters/CategoryIconConverter.cs` - Multi-value converter for icon state logic
-- `/Views/OpenBookPanel.axaml` - Updated to use dynamic folder icons
-
-#### **Production Logging Cleanup**
-- **Structured Logging**: Replaced all Console.WriteLine with proper Serilog logging
-- **Appropriate Log Levels**: Debug, Information, Warning, Error based on context
-- **Reduced Log Volume**: Removed excessive timestamp logging for production use
-- **Exception Handling**: Proper structured exception logging with context
-
-**Major Files Cleaned Up**:
-- ✅ `App.axaml.cs` (28+ console statements → structured logging)
-- ✅ `SplashScreen.axaml.cs` (22 console statements → structured logging)
-- ✅ `CstDockFactory.cs`, `SearchService.cs`, `CstHostWindow.cs` (previously completed)
-- **Remaining**: ViewModels still need logging cleanup (BookDisplayViewModel, SearchPanel, etc.)
-
-### ✅ **PREVIOUS MILESTONE: Complete Font System Implementation**
-
-#### **Font System Infrastructure**
-- **FontService**: Complete implementation for all 14 Pali scripts with caching fixes
-- **Settings UI**: Per-script font family and size configuration
-- **Settings Persistence**: Font settings save and restore correctly across sessions
-- **Real-time Updates**: Font changes apply immediately across all UI locations
-
-#### **DataTemplate Font Binding Solution**
-**Problem Solved**: Font family settings now work correctly in DataTemplates (search results, tree items, chapter lists)
-
-**Solution**: Custom attached properties implementation (`FontHelper.cs`)
-```csharp
-public static class FontHelper
-{
-    public static readonly AttachedProperty<string> DynamicFontFamilyProperty;
-    public static readonly AttachedProperty<int> DynamicFontSizeProperty;
-    // Handles property changes and applies fonts dynamically
-}
-```
-
-**Implementation**: Applied to all Pali text display locations:
-- Search results (Matching Terms and Books lists)
-- Select a Book tree view
-- Chapter dropdown in book tabs
-- Book path in status bar (bottom right)
-- Book tab titles (dynamic per-book script)
-
-#### **Script Change Synchronization**
-**New Feature**: Search results now automatically update script display when top-level script changes
-
-**Implementation**: 
-- `UpdateSearchResultDisplayText()` method in SearchViewModel
-- Converts IPE terms to new script using `ScriptConverter.Convert()`
-- Converts Devanagari book names to new script
-- Proper property change notifications via `RaiseAndSetIfChanged()`
-
-**Behavior**: When user changes script in top-level dropdown, both Select a Book tree AND search results update automatically
-
-#### **Event System Fixes**
-**Problem Solved**: SearchViewModel font events not triggering in real-time
-
-**Root Cause**: Font event handlers were inside `WhenActivated` lifecycle, only working when search panel was visible/active
-
-**Solution**: Moved font and script event handlers outside `WhenActivated` to ensure they always work
-```csharp
-// Setup font and script change handlers (outside of WhenActivated so they always work)
-SetupFontAndScriptHandlers();
-```
-
-#### **Complete Font System Status**
-✅ **Font Settings Applied Successfully to All UI Locations:**
-1. **Book tab titles** - Uses per-book script fonts dynamically
-2. **Book path in status bar** - Uses current script font settings  
-3. **Search results (Matching Terms and Books)** - Uses current script font settings with real-time updates
-4. **Select a Book tree** - Uses current script font settings
-5. **Chapter list dropdown** - Uses current script font settings
-
-✅ **Real-time Font Updates**: All locations update immediately when font settings change
-✅ **Multi-script Support**: Different book tabs can use different scripts simultaneously
-✅ **Script Change Updates**: Search results automatically convert script display like tree view
-
-## Previous Session Update (2025-08-15)
-
-### ✅ **Major Bug Fixes: Search & Script Conversion Issues Resolved**
-
-#### **Fixed: Incremental Indexing Creating Duplicates**
-- **Problem**: Search showing inflated counts (55 instead of 11) due to duplicate documents in index
-- **Root Cause**: `BookIndexer.IndexBook` failed to delete old documents - "file" field was StoredField (not searchable)
-- **Solution**: Changed "file" from StoredField to StringField in BookIndexer.cs
-- **Result**: Search counts now accurate (11 for 'bhikkhusaṅghañca', 20 for 'bhikkhusaṅghena')
-
-#### **Fixed: Devanagari Wildcard Search Failure**
-- **Problem**: Wildcard searches like "a*" failed with KeyNotFoundException when script set to Devanagari
-- **Root Cause**: Malformed dictionary entry in `Latn2Deva.cs` - had `"\u1E6D', 'h"` instead of `"\u1E6Dh"` for "ṭh"
-- **Solution**: Fixed the dictionary entry syntax in CST.Core/Conversion/Latn2Deva.cs
-- **Result**: All script conversions work correctly, wildcard searches function in all 14 scripts
-- **Test Suite**: Created comprehensive ScriptConverterTests.cs validating round-trip conversions
-
-#### **Search System Status**
-- **✅ Basic Search**: Single and multi-term exact searches with accurate counting
-- **✅ Wildcard Search**: Now works in all scripts including Devanagari
-- **✅ Position-Based Highlighting**: Multi-term highlighting with correct offsets
-- **✅ Script Conversion**: All 14 Pali scripts convert correctly
-- **✅ Index Integrity**: Incremental indexing properly replaces documents
-
-## Previous Session Update (2025-08-10)
-
-### 🚀 **Search Implementation Phase 1 & 2 Complete**
-
-#### Phase 1: Core SearchService ✅
-- **SearchService Created**: Full Lucene.NET integration with position-based search
-- **Search Models Defined**: SearchQuery, SearchResult, MatchingTerm, BookOccurrence, TermPosition
-- **ISearchService Interface**: Clean async API for search operations
-- **Core Features Implemented**:
-  - Single-term exact/wildcard/regex search
-  - Multi-term search (basic, phrase/proximity TODO)
-  - Book filtering by collection (Vinaya, Sutta, etc.)
-  - Position and offset retrieval for highlighting
-  - Search result caching
-  - Script conversion for display
-- **DI Registration**: SearchService registered in App.axaml.cs
-
-#### Phase 2: SearchViewModel ✅
-- **MVVM Implementation**: Full ReactiveUI-based view model with IActivatableViewModel
-- **Live Search**: Debounced search-as-you-type with 500ms throttle
-- **Reactive Commands**: Search, Clear, and OpenBook commands
-- **Collections Management**: Terms and Occurrences with automatic merging
-- **Statistics Tracking**: Real-time word/occurrence counts
-- **Event System**: OpenBookRequested event for book navigation with search terms
-
-#### Phase 3: SearchPanel UI ✅
-- **Mac-Native Design**: Dockable panel with modern Avalonia styling
-- **Two-Column Layout**: Terms list and book occurrences with splitter
-- **Search Controls**: Text input, mode selector (Exact/Wildcard/Regex), collection filters
-- **Book Filters**: Expandable section with toggle switches for Pitaka/Commentary levels
-- **Interactive Features**: Double-click to open book, keyboard shortcuts (Enter/Escape)
-- **Status Display**: Real-time search statistics and loading indicator
-- **Responsive UI**: Proper data binding and event handling
-- **Build Status**: ✅ Compiles successfully
-
-## Previous Session Updates (2025-08-09)
-
-### ✅ **MAJOR MILESTONE: Incremental Indexing Bug Fixes Complete**
-- **Bug Fix #1 - Incremental Detection**: Fixed issue where file changes weren't being detected for indexing by removing conditional check in `App.axaml.cs:line 86`
-- **Bug Fix #2 - Settings Enhancement**: Added logic to save default index directory to settings when created for first time in `IndexingService.cs:lines 46-49`
-- **Bug Fix #3 - Critical Performance Fix**: Fixed major bug where incremental indexing processed all 217 books instead of only changed files
-  - **Root Cause**: `BookIndexer.cs:lines 79-88` was indexing all books with `DocId < 0`, not just the changed ones
-  - **Solution**: Modified `IndexAll` method to only process books in the `changedFiles` list during incremental updates
-  - **Impact**: Incremental indexing now properly handles single file changes without reprocessing entire corpus
-  - **Test Validation**: Created `IncrementalIndexingOnlyChangedBooksTest` confirming fix works correctly
-
-### ✅ **PREVIOUS MILESTONE: Complete Indexing System Implementation**
-- **Full Index Implementation**: Successfully implemented all phases 1-3 of the indexing plan, with all 217 books indexed.
-- **CST.Lucene Integration**: Modern Lucene.NET 4.8+ implementation with async support, progress reporting, and cross-platform compatibility.
-- **Production Services**: `IndexingService` and `XmlFileDatesService` fully implemented with dependency injection integration.
-- **Index Created**: Successfully created search index for all 217 Buddhist texts with position-based search support.
-
-### ✅ **PREVIOUS MILESTONE: Comprehensive Testing & Optimization (Phase 4)**
-- **62 Tests Implemented**: Complete test coverage with 100% pass rate including unit, integration, and performance tests.
-- **Test Categories**:
-  - **Unit Tests**: XmlFileDatesService, IndexingService, corruption recovery, multi-script support
-  - **Integration Tests**: Full service integration, cross-service communication, lifecycle management
-  - **Performance Tests**: Speed benchmarking, memory optimization, consistency validation
-  - **Structure Tests**: Position-based search verification, index integrity, multi-document handling
-- **Performance Validated**: All services meet performance targets (< 1s initialization, < 100ms validation, < 10MB memory)
-
-### ✅ **PREVIOUS MILESTONE: Project Cleanup & Refactoring**
-- **Dead Code Identified**: Analyzed the `.csproj` file to identify numerous files from a previous architectural approach that were excluded from the build.
-- **Inactive Code Archived**: Created a new `CST.Avalonia_inactive` directory to house all legacy and placeholder files, clarifying the current state of the active project.
-  - **Moved Files**: `BookService.cs`, `SearchService.cs`, the legacy `MainWindow.axaml` and its code-behind, and other unused View and ViewModel files were relocated.
-- **Project File Cleanup**: Removed all obsolete `<Compile Remove>` and `<AvaloniaResource Remove>` tags from `CST.Avalonia.csproj`, making the project file clean and consistent with the active source tree.
-
-### **Previously Completed Milestones**
-- **Docking UI**: Migrated to `Dock.Avalonia` for a flexible, multi-pane IDE-style layout.
-- **Full State Restoration**: The application saves and restores its complete state (open books, scripts, window size, etc.).
-- **Settings Window**: A complete settings dialog is implemented and functional.
-- **WebView Confirmed**: The project uses `WebViewControl-Avalonia` for rendering.
-
-### **Key Code Analysis Findings:**
-
-#### 1. **Architecture & Dependencies**
-- **`CST.Avalonia.csproj` Analysis**:
-  - The project file is now clean and only references active source code.
-  - Placeholder and legacy files for features like the `SearchService` are no longer referenced and have been physically moved.
-- **Service Configuration (`App.axaml.cs`)**:
-  - **Active Services**: `IApplicationStateService`, `ISettingsService`, `IScriptService`, `ILocalizationService`, `IIndexingService`, `IXmlFileDatesService`, `ISearchService`.
-  - **Search Integration**: SearchService fully integrated with DI and connected to the Lucene index.
-
 ## Current Functionality
 
-### **Working Features**
-1.  **Dock-Based UI**: Fully functional IDE-style interface.
-2.  **Session Restore**: Application correctly reopens all previously opened books.
-3.  **Per-Tab Script Selection**: Each book tab remembers its script setting.
-4.  **Persistent Highlighting**: Search terms are saved per-tab and reapplied on restore.
-5.  **Settings Dialog**: Functional settings window.
-6.  **Advanced Logging**: Configurable Serilog implementation.
-7.  **Cross-Platform Build**: `.dmg` packages are being built for macOS.
-8.  **Full Indexing System**: Complete Lucene.NET search index for all 217 books with incremental updates.
-9.  **Multi-Script Support**: 
-    - **Display**: All 14 Pali scripts supported (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
-    - **Input**: 9 scripts supported for search/dictionary (missing: Thai, Telugu, Tibetan, Khmer, Cyrillic)
-    - **Indexing**: IPE (Internal Phonetic Encoding) with Devanagari analyzers
-10. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive tests.
-11. **✅ Enhanced Search UI**: Production-ready search panel with visual search elements, progress feedback, and redesigned filtering system.
-12. **✅ Smart Book Filtering**: Checkbox-based filter UI with "Select All/None" actions, filter summaries, and live book counts.
-13. **🆕 Search Result Highlighting**: Position-based highlighting with navigation support (single-term tested).
-14. **✅ Complete Font System**: Per-script font configuration with real-time updates across all UI locations.
-15. **✅ Per-Script Font Selection**: Native macOS font detection and selection working for all 14 Pali scripts with full persistence.
-16. **✅ Script Synchronization**: Search results automatically update when top-level script changes.
-17. **✅ Complete XML Update System**: 
-    - GitHub API integration with Octokit.net for automatic file updates
-    - SHA-based change detection - only downloads modified files (not all 217)
-    - Enhanced file-dates.json with commit hash tracking
-    - Settings UI with repository configuration controls
-    - Automatic re-indexing triggered after successful updates
-    - Efficient bandwidth usage - avoids 1GB+ full repository clones
+CST Reader is a modern, cross-platform Buddhist text reader featuring a complete implementation of the following systems:
+
+### **Core Application Features**
+1. **Dock-Based IDE Interface**: Fully functional docking system with resizable panels, tab management, and persistent layout state
+2. **Complete Session Restoration**: Application saves and restores all open books, scripts, window positions, and search highlights across sessions
+3. **Cross-Platform Build System**: Native macOS `.dmg` packages with proper application branding and menu integration
+4. **Advanced Logging System**: Structured Serilog logging with configurable levels, unified across all components including CST.Lucene
+5. **Clean Codebase Architecture**: Removed all placeholder/POC code, archived legacy files, streamlined project structure
+
+### **Text Display & Script System**
+6. **Multi-Script Support**: 
+   - **Display**: All 14 Pali scripts supported (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
+   - **Input**: 9 scripts supported for search/dictionary (missing: Thai, Telugu, Tibetan, Khmer, Cyrillic)
+   - **Indexing**: IPE (Internal Phonetic Encoding) with Devanagari analyzers for accurate search
+7. **Per-Tab Script Selection**: Each book tab independently remembers and applies its script setting
+8. **Script Synchronization**: Search results and book tree automatically update display when global script changes
+
+### **Font Management System** 
+9. **Per-Script Font Configuration**: Complete font system for all 14 Pali scripts with individual font family and size settings
+10. **Native Font Detection**: macOS Core Text APIs detect and filter fonts compatible with each specific script
+11. **System Default Detection**: Shows actual system-chosen default fonts for each script (informational)
+12. **Real-Time Font Updates**: Font changes apply immediately across all UI locations without restart
+13. **DataTemplate Font Binding**: Custom FontHelper attached properties enable font settings in search results, tree views, and dropdowns
+14. **Font Settings Persistence**: All font preferences save and restore correctly across application sessions
+
+### **Search System**
+15. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Buddhist texts
+16. **Advanced Search Features**: 
+    - Single and multi-term exact searches with accurate counting
+    - Wildcard search working in all 14 scripts 
+    - Regular expression search support
+    - Position-based highlighting with correct character offsets
+17. **Smart Book Filtering**: 
+    - Checkbox-based filter UI for Pitaka/Commentary categories
+    - "Select All/None" quick actions for filter management
+    - Live book count display based on current filter selection
+    - Filter summary display when collapsed
+18. **Enhanced Search UI**: 
+    - Visual search elements (magnifying glass, clear button, progress indicator)
+    - Two-column layout with terms list and book occurrences
+    - Real-time search statistics and loading feedback
+    - Keyboard shortcuts (Enter/Escape) and double-click navigation
+19. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
+
+### **Indexing & File Management** 
+20. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
+21. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive unit/integration/performance tests
+22. **Empty Index Handling**: Proper startup behavior when no search index exists yet
+23. **Index Integrity**: Fixed duplicate document issues, accurate search counts, proper document replacement
+
+### **XML Update System**
+24. **GitHub API Integration**: Automatic file updates using Octokit.NET with repository configuration in Settings
+25. **SHA-Based Change Detection**: Only downloads files that have actually changed since local copies (avoids 1GB+ full downloads)
+26. **Enhanced File Tracking**: Nullable timestamps, proper state management, separation between download and indexing states 
+27. **Optimized Startup Sequence**: Files updated before indexing to eliminate redundant work
+28. **Reduced Logging Noise**: 95% reduction in startup logging (300KB+ → 14KB) while preserving debug information
+
+### **User Interface Polish**
+29. **Mac-Style Book Tree Icons**: Dynamic folder icons (open/closed states) with document icons for individual books
+30. **Tab Overflow Fix**: Custom scrollbar styling prevents tab coverage when many books are open
+31. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
+32. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
+33. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
+34. **Splash Screen with Progress**: Beautiful Buddha teaching image shown at startup with status updates during XML checking, downloading, and indexing operations (fully working on macOS)
+
+### **Technical Architecture**
+35. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
+36. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
+37. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
+38. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
+39. **Comprehensive Testing**: 62 tests covering unit, integration, and performance scenarios with 100% pass rate
 
 ## Outstanding Work
 
@@ -489,27 +131,12 @@ SetupFontAndScriptHandlers();
     - **Persistence**: Leverage existing ApplicationState.RecentBooks infrastructure
     - **User Experience**: Quick access to frequently used texts
     - **Note**: Partial backend exists - ApplicationState.Preferences.RecentBooks list, RecentBookItem model, AddRecentBook() method, but no UI integration and book tracking not implemented
-10. **Enable Splash Screen on macOS**:
-    - **Retry Implementation**: Previously attempted and abandoned, needs fresh approach
-    - **Platform-Specific Issues**: Investigate and resolve macOS-specific window display issues
-    - **Startup Feedback**: Important for showing progress during file checking and indexing
 
 ## Outstanding Work for Beta 1 Release
 
 The following items are prioritized for the upcoming Beta 1 release to ensure production readiness:
 
-1.  **Settings Cleanup & Validation** (from item #8 above):
-    - Audit and clean up all settings to ensure only functional settings are shown
-    - Remove placeholder/demo settings from UI and settings files
-2.  **Startup Progress Feedback** (from items #5 and #9 above):
-    - Enable splash screen on macOS (retry previously abandoned implementation)
-    - Show progress during the complete startup workflow:
-      - Checking file versions against GitHub
-      - Downloading updated XML files
-      - Building/updating Lucene index
-    - Notify user when operations complete
-    - Indicate if index is incomplete or being rebuilt
-3.  **Book Display Bug Fixes** (from item #6 above):
+1.  **Book Display Bug Fixes** (from item #7 above):
     - Implement search hit restoration on startup
 
 ## Technical Architecture
