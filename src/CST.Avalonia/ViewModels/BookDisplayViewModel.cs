@@ -1031,15 +1031,37 @@ namespace CST.Avalonia.ViewModels
         {
             try
             {
-                // Get the path to the app bundle's Resources/Xsl directory
+                string? sourceXslDir = null;
+
+                // First, try to find XSL files in development environment
                 var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
-                var bundleResourcesPath = Path.Combine(
+                var projectXslPath = Path.Combine(
                     Path.GetDirectoryName(assemblyLocation) ?? "",
-                    "..", "Resources", "Xsl");
-                
-                if (Directory.Exists(bundleResourcesPath))
+                    "..", "..", "..", "Xsl");
+
+                if (Directory.Exists(projectXslPath))
                 {
-                    var xslFiles = Directory.GetFiles(bundleResourcesPath, "*.xsl");
+                    sourceXslDir = projectXslPath;
+                    _logger.Information("Found XSL files in development directory: {Path}", projectXslPath);
+                }
+                else
+                {
+                    // Try app bundle location for production
+                    var bundleResourcesPath = Path.Combine(
+                        Path.GetDirectoryName(assemblyLocation) ?? "",
+                        "..", "Resources", "Xsl");
+
+                    if (Directory.Exists(bundleResourcesPath))
+                    {
+                        sourceXslDir = bundleResourcesPath;
+                        _logger.Information("Found XSL files in app bundle: {Path}", bundleResourcesPath);
+                    }
+                }
+
+                if (sourceXslDir != null)
+                {
+                    var xslFiles = Directory.GetFiles(sourceXslDir, "*.xsl");
+                    int copiedCount = 0;
                     foreach (var xslFile in xslFiles)
                     {
                         var fileName = Path.GetFileName(xslFile);
@@ -1047,19 +1069,23 @@ namespace CST.Avalonia.ViewModels
                         if (!File.Exists(targetPath))
                         {
                             File.Copy(xslFile, targetPath);
-                            _logger.Information("Copied XSL file to user directory: {FileName}", fileName);
+                            copiedCount++;
+                            _logger.Debug("Copied XSL file to user directory: {FileName}", fileName);
                         }
                     }
-                    _logger.Information("Copied {Count} XSL files from app bundle", xslFiles.Length);
+                    if (copiedCount > 0)
+                    {
+                        _logger.Information("Copied {Count} XSL files to user directory", copiedCount);
+                    }
                 }
                 else
                 {
-                    _logger.Warning("App bundle XSL directory not found at: {Path}", bundleResourcesPath);
+                    _logger.Warning("XSL directory not found in development or bundle locations");
                 }
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to copy XSL files from app bundle");
+                _logger.Error(ex, "Failed to copy XSL files");
             }
         }
 

@@ -2,7 +2,7 @@
 
 ## Current Status: **XML UPDATE SYSTEM BUG FIXES & OPTIMIZATION** 🔧
 
-**Last Updated**: September 13, 2025
+**Last Updated**: September 14, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -20,70 +20,70 @@ CST Reader is a modern, cross-platform Buddhist text reader featuring a complete
 2. **Complete Session Restoration**: Application saves and restores all open books, scripts, window positions, and search highlights across sessions
 3. **Cross-Platform Build System**: Native macOS `.dmg` packages with proper application branding and menu integration
 4. **Advanced Logging System**: Structured Serilog logging with configurable levels, unified across all components including CST.Lucene
-5. **Clean Codebase Architecture**: Removed all placeholder/POC code, archived legacy files, streamlined project structure
 
 ### **Text Display & Script System**
-6. **Multi-Script Support**: 
+5. **Multi-Script Support**: 
    - **Display**: All 14 Pali scripts supported (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
    - **Input**: 9 scripts supported for search/dictionary (missing: Thai, Telugu, Tibetan, Khmer, Cyrillic)
    - **Indexing**: IPE (Internal Phonetic Encoding) with Devanagari analyzers for accurate search
-7. **Per-Tab Script Selection**: Each book tab independently remembers and applies its script setting
-8. **Script Synchronization**: Search results and book tree automatically update display when global script changes
+6. **Per-Tab Script Selection**: Each book tab independently remembers and applies its script setting
+7. **Script Synchronization**: Search results and book tree automatically update display when global script changes
 
-### **Font Management System** 
-9. **Per-Script Font Configuration**: Complete font system for all 14 Pali scripts with individual font family and size settings
-10. **Native Font Detection**: macOS Core Text APIs detect and filter fonts compatible with each specific script
-11. **System Default Detection**: Shows actual system-chosen default fonts for each script (informational)
-12. **Real-Time Font Updates**: Font changes apply immediately across all UI locations without restart
-13. **DataTemplate Font Binding**: Custom FontHelper attached properties enable font settings in search results, tree views, and dropdowns
-14. **Font Settings Persistence**: All font preferences save and restore correctly across application sessions
+### **UI Font Management System**
+8. **Per-Script UI Font Configuration**: Complete font system for all 14 Pali scripts used in UI elements (search results, tree views, dropdowns) with individual font family and size settings
+9. **Native Font Detection**: macOS Core Text APIs detect and filter fonts compatible with each specific script
+10. **System Default Detection**: Shows actual system-chosen default fonts for each script (informational)
+11. **Real-Time Font Updates**: Font changes apply immediately across all UI locations without restart
+12. **DataTemplate Font Binding**: Custom FontHelper attached properties enable font settings in search results, tree views, and dropdowns
+13. **Font Settings Persistence**: All UI font preferences save and restore correctly across application sessions
+    - **Note**: This system covers Pali script fonts in UI elements only; book content fonts and UI localization fonts are separate systems (see Outstanding Work)
 
 ### **Search System**
-15. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Buddhist texts
-16. **Advanced Search Features**: 
+14. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Buddhist texts
+15. **Advanced Search Features**: 
     - Single and multi-term exact searches with accurate counting
     - Wildcard search working in all 14 scripts 
     - Regular expression search support
     - Position-based highlighting with correct character offsets
-17. **Smart Book Filtering**: 
+16. **Smart Book Filtering**: 
     - Checkbox-based filter UI for Pitaka/Commentary categories
     - "Select All/None" quick actions for filter management
     - Live book count display based on current filter selection
     - Filter summary display when collapsed
-18. **Enhanced Search UI**: 
+17. **Enhanced Search UI**: 
     - Visual search elements (magnifying glass, clear button, progress indicator)
     - Two-column layout with terms list and book occurrences
     - Real-time search statistics and loading feedback
     - Keyboard shortcuts (Enter/Escape) and double-click navigation
-19. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
+18. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
 
 ### **Indexing & File Management** 
-20. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
-21. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive unit/integration/performance tests
-22. **Empty Index Handling**: Proper startup behavior when no search index exists yet
-23. **Index Integrity**: Fixed duplicate document issues, accurate search counts, proper document replacement
+19. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
+20. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive unit/integration/performance tests
+21. **Empty Index Handling**: Proper startup behavior when no search index exists yet
+22. **Index Integrity**: Fixed duplicate document issues, accurate search counts, proper document replacement
 
 ### **XML Update System**
-24. **GitHub API Integration**: Automatic file updates using Octokit.NET with repository configuration in Settings
-25. **SHA-Based Change Detection**: Only downloads files that have actually changed since local copies (avoids 1GB+ full downloads)
-26. **Enhanced File Tracking**: Nullable timestamps, proper state management, separation between download and indexing states 
-27. **Optimized Startup Sequence**: Files updated before indexing to eliminate redundant work
-28. **Reduced Logging Noise**: 95% reduction in startup logging (300KB+ → 14KB) while preserving debug information
+23. **GitHub API Integration**: Automatic file updates using Octokit.NET with repository configuration in Settings
+24. **SHA-Based Change Detection**: Only downloads files that have actually changed since local copies (avoids 1GB+ full downloads)
+25. **Enhanced File Tracking**: Nullable timestamps, proper state management, separation between download and indexing states 
+26. **Optimized Startup Sequence**: Files updated before indexing to eliminate redundant work
+27. **Reduced Logging Noise**: 95% reduction in startup logging (300KB+ → 14KB) while preserving debug information
 
 ### **User Interface Polish**
-29. **Mac-Style Book Tree Icons**: Dynamic folder icons (open/closed states) with document icons for individual books
-30. **Tab Overflow Fix**: Custom scrollbar styling prevents tab coverage when many books are open
-31. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
-32. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
-33. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
-34. **Splash Screen with Progress**: Beautiful Buddha teaching image shown at startup with status updates during XML checking, downloading, and indexing operations (fully working on macOS)
+28. **Mac-Style Book Tree Icons**: Dynamic folder icons (open/closed states) with document icons for individual books
+29. **Tab Overflow Fix**: Custom scrollbar styling prevents tab coverage when many books are open
+30. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
+31. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
+32. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
+33. **Splash Screen with Progress**: Beautiful Buddha teaching image shown at startup with status updates during XML checking, downloading, and indexing operations (fully working on macOS)
 
 ### **Technical Architecture**
-35. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
-36. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
-37. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
-38. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
-39. **Comprehensive Testing**: 62 tests covering unit, integration, and performance scenarios with 100% pass rate
+34. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
+35. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
+36. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
+37. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
+38. **Comprehensive Testing**: 62 tests covering unit, integration, and performance scenarios with 100% pass rate
 
 ## Outstanding Work
 
@@ -102,28 +102,37 @@ CST Reader is a modern, cross-platform Buddhist text reader featuring a complete
     - **Cyrillic**: Cyrillic script → IPE converter (Cyrl2Ipe or Cyrl2Deva)
     - **Note**: Display works for all 14 scripts, but input (search/dictionary) only works for 9
     - **Implementation**: May use direct Script→IPE or indirect Script→Deva→IPE path
-3.  **UI Language Font System**: 
+3.  **UI Language Font System**:
     - **Localization Font Settings**: Separate font controls for ~20 UI languages (distinct from Pali script fonts)
     - **Font Discovery**: Detect available fonts suitable for each UI language script
     - **Note**: This is separate from Pali script fonts - refers to UI language localization fonts
-4.  **Advanced Search Features**:
+4.  **Book Content Font Management System**:
+    - **Current Limitation**: Book fonts are hardcoded in XSL stylesheets (e.g., `.book { font-size: 21pt; }`), requiring manual XSL editing for customization (as in CST4)
+    - **Per-Script Book Fonts**: Implement user-configurable font families for book content display, separate from UI fonts
+    - **Book Font Sizing**: Add font size controls for different book content elements (titles, paragraphs, footnotes, etc.)
+    - **XSL Integration**: Dynamic XSL generation or CSS injection to apply user font preferences to WebView book content
+    - **Style Customization**: Support for different paragraph styles tagged in TEI XML (matching CST4's XSL customization capabilities)
+    - **Preview System**: Live preview of font changes in book display
+    - **Import/Export**: Allow users to share book font configurations
+    - **Note**: This is the third distinct font system - separate from both UI Pali script fonts (#9-14) and UI localization fonts (#3)
+5.  **Advanced Search Features**:
     - **Phrase Search**: Implement position-based phrase searching with exact word order matching
     - **Proximity Search**: Add proximity operators for terms within specified distances
-5.  **Search Filtering & Collections**:
+6.  **Search Filtering & Collections**:
     - **Custom Book Collections**: Implement user-defined book collection feature
-6.  **UI Feedback During Operations**:
+7.  **UI Feedback During Operations**:
     - **Indexing Progress**: Show progress bar/spinner during index building
     - **Search State**: Indicate when index is incomplete or being rebuilt
     - **Operation Notifications**: Alert user when long operations complete
     - **XML Download Progress**: Show progress bar/notifications during file downloads
     - **Update History**: Track and display XML update history for transparency
-7.  **Book Display Features**:
+8.  **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
     - **Search Hit Restoration**: Fix bug where highlighted search hits are not restored when reopening books at startup
-8.  **Search Navigation Enhancement**:
+9.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
-9.  **Recent Books Feature**:
+10.  **Recent Books Feature**:
     - **File Menu Integration**: Add "Recent Books" submenu to File menu or main UI
     - **MRU List Display**: Show recently opened books with titles and last-opened dates
     - **Smart Tracking**: Automatically add books to recent list when opened
@@ -132,9 +141,9 @@ CST Reader is a modern, cross-platform Buddhist text reader featuring a complete
     - **User Experience**: Quick access to frequently used texts
     - **Note**: Partial backend exists - ApplicationState.Preferences.RecentBooks list, RecentBookItem model, AddRecentBook() method, but no UI integration and book tracking not implemented
 
-## Outstanding Work for Beta 1 Release
+## Outstanding Work for Beta 2 Release
 
-The following items are prioritized for the upcoming Beta 1 release to ensure production readiness:
+The following items are prioritized for the Beta 2 release to ensure production readiness:
 
 1.  **Book Display Bug Fixes** (from item #7 above):
     - Implement search hit restoration on startup
@@ -187,6 +196,7 @@ CST.Avalonia_inactive/
 
 ## Build & Run Instructions
 
+### **Development Build & Run**
 ```bash
 # Navigate to project directory
 cd [project-root]/src/CST.Avalonia
@@ -205,6 +215,32 @@ dotnet test --filter "IndexingServiceTests"
 dotnet test --filter "Performance"
 dotnet test --filter "Integration"
 ```
+
+### **macOS Production Packaging**
+The `package-macos.sh` script creates production-ready macOS app bundles and DMG installers:
+
+```bash
+# Create Apple Silicon (M1/M2/M3) package
+./package-macos.sh arm64
+
+# Create Intel Mac package
+./package-macos.sh x64
+
+# Default (Apple Silicon)
+./package-macos.sh
+```
+
+**Features:**
+- Builds self-contained .NET 9 app bundles with all dependencies
+- Creates proper macOS application structure with Info.plist and app icon
+- Includes XSL stylesheets in app bundle Resources
+- Generates launch script with environment configuration
+- Automatically creates DMG installer if `create-dmg` is available (`brew install create-dmg`)
+- Supports both Apple Silicon and Intel architectures
+
+**Output:**
+- Creates `CST Reader.app` bundle for direct distribution
+- Optionally creates `CST-Reader-{arch}.dmg` installer in `dist/` directory
 
 ## Test Coverage
 

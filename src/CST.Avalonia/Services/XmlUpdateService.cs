@@ -79,26 +79,12 @@ namespace CST.Avalonia.Services
                 
                 if (!hasLocalData)
                 {
-                    _logger.LogInformation("No local XML data found");
-                    UpdateStatusChanged?.Invoke("No XML data found - please add XML files to continue");
+                    _logger.LogInformation("No local XML data found - starting initial download");
+                    UpdateStatusChanged?.Invoke("No XML data found - downloading Tipitaka files...");
+                    SplashScreen.SetStatus("Downloading Tipitaka XML files for first time setup...");
 
-                    // During startup, we can't show dialogs, so just log and continue
-                    // The user will need to download or copy XML files manually
-                    if (App.MainWindow == null)
-                    {
-                        _logger.LogInformation("Skipping initial download during startup - user needs to add XML files manually");
-                        SplashScreen.SetStatus("No XML files found - continuing without data...");
-                        await Task.Delay(2000); // Give user time to see the message
-                        return;
-                    }
-
-                    // If main window is available, prompt user for initial setup
-                    bool shouldDownload = await PromptForInitialDataAsync();
-
-                    if (shouldDownload)
-                    {
-                        await PerformInitialDownloadAsync();
-                    }
+                    // Automatically download the XML files on first run
+                    await PerformInitialDownloadAsync();
                     return;
                 }
                 

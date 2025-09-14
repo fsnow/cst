@@ -485,11 +485,8 @@ public partial class App : Application
             xmlUpdateService.UpdateStatusChanged += message =>
             {
                 Log.Information("XML Update Status: {Message}", message);
-                // Also update splash screen if it's showing
-                Dispatcher.UIThread.Post(() =>
-                {
-                    SplashScreen.SetStatus(message);
-                });
+                // Update splash screen if it's showing
+                SplashScreen.SetStatus(message);
             };
             
             // Check for updates (this will handle first-time download if needed)
