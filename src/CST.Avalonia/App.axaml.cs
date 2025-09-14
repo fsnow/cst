@@ -28,6 +28,7 @@ using Serilog.Events;
 using ReactiveUI;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using WebViewControl;
 #if MACOS
 using CST.Avalonia.Services.Platform.Mac;
 #endif
@@ -59,6 +60,19 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // FIX: Prevent "Chromium Safe Storage" keychain prompt on macOS
+        // Use mock keychain to avoid system keychain access prompts
+        if (OperatingSystem.IsMacOS())
+        {
+            WebView.Settings.AddCommandLineSwitch("use-mock-keychain", "");
+            WebView.Settings.AddCommandLineSwitch("disable-password-generation", "");
+        }
+
+        // Disable persistent cache to use in-memory storage only
+        // We still need to provide a path (WebViewLoader expects it), but PersistCache=false ensures it's temporary
+        WebView.Settings.PersistCache = false;
+        // Leave CachePath as default (temp directory) to avoid ArgumentNullException on cleanup
+
         // Enable splash screen for all platforms with improved implementation
         bool showSplash = true;
         
