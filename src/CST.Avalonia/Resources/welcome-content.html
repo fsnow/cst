@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f8f9fa;
+            color: #2e3440;
+            line-height: 1.6;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid #e5e9f0;
+        }
+
+        .logo {
+            font-size: 72px;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 8px 0;
+            color: #2e3440;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #5e81ac;
+            margin: 8px 0;
+        }
+
+        .version {
+            font-size: 14px;
+            color: #4c566a;
+            margin-top: 8px;
+        }
+
+        h2 {
+            color: #2e3440;
+            font-size: 24px;
+            margin-top: 32px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #d8dee9;
+        }
+
+        h3 {
+            color: #434c5e;
+            font-size: 18px;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }
+
+        .welcome-box {
+            background: white;
+            border: 1px solid #d8dee9;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+
+        .beta-notice {
+            background: #ebcb8b20;
+            border: 1px solid #ebcb8b;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 24px 0;
+        }
+
+        .beta-notice strong {
+            color: #d08770;
+        }
+
+        ul {
+            padding-left: 24px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        .feedback-section {
+            background: #88c0d020;
+            border: 1px solid #88c0d0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 32px 0;
+        }
+
+        .feedback-options {
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .feedback-option {
+            flex: 1;
+            min-width: 250px;
+            background: white;
+            padding: 16px;
+            border-radius: 6px;
+            border: 1px solid #d8dee9;
+        }
+
+        .feedback-option h4 {
+            margin: 0 0 8px 0;
+            color: #2e3440;
+            font-size: 16px;
+        }
+
+        .feedback-option p {
+            margin: 4px 0;
+            font-size: 14px;
+            color: #4c566a;
+        }
+
+        a {
+            color: #5e81ac;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .quick-start {
+            background: #a3be8c20;
+            border: 1px solid #a3be8c;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .feature {
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e5e9f0;
+        }
+
+        .feature strong {
+            color: #2e3440;
+        }
+
+        code {
+            background: #e5e9f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .update-note {
+            font-size: 12px;
+            color: #4c566a;
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e9f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🏛️</div>
+        <h1>Chaṭṭha Saṅgāyana Tipiṭaka Reader</h1>
+        <p class="subtitle">Modern Pāli Text Reader</p>
+        <p class="version">Version 5.0.0-beta.1 - September 2025</p>
+    </div>
+
+    <div class="beta-notice">
+        <strong>🚧 Beta Software Notice</strong>
+        <p>Welcome to the CST Reader Beta! This is pre-release software under active development. Your feedback is invaluable in helping us improve the application for the official release.</p>
+    </div>
+
+    <div class="welcome-box">
+        <h2>Welcome to CST Reader</h2>
+        <p>Thank you for participating in the beta testing of CST Reader, a modern cross-platform reader for the Chaṭṭha Saṅgāyana Tipiṭaka - the complete Pāli Canon as established by the Sixth Council.</p>
+
+        <p>This application provides access to 217 authentic Pāli texts in 14 different scripts, with powerful search capabilities and a clean, modern interface designed for serious study and research. The texts are provided by the Vipassana Research Institute.</p>
+    </div>
+
+    <div class="quick-start">
+        <h3>🚀 Quick Start Guide</h3>
+        <ul>
+            <li><strong>Open a Book:</strong> Double-click any text in the book tree on the left</li>
+            <li><strong>Change Script:</strong> Use the dropdown menu at the top to switch between 14 Pāli scripts</li>
+            <li><strong>Search Texts:</strong> Click the search icon to find words across all 217 texts</li>
+            <li><strong>Navigate Tabs:</strong> Open multiple books in tabs for easy reference</li>
+            <li><strong>Adjust Fonts:</strong> Go to Settings to customize fonts for each script</li>
+        </ul>
+    </div>
+
+    <h2>What's New in This Beta</h2>
+
+    <div class="feature-grid">
+        <div class="feature">
+            <strong>✨ Modern Interface</strong>
+            <p>Clean, dock-based layout with resizable panels and tabbed reading</p>
+        </div>
+        <div class="feature">
+            <strong>🔍 Advanced Search</strong>
+            <p>Full-text search across 217 texts with highlighting and filters</p>
+        </div>
+        <div class="feature">
+            <strong>🌍 14 Script Support</strong>
+            <p>Display texts in Devanagari, Myanmar, Thai, Sinhala, and 10 more scripts</p>
+        </div>
+        <div class="feature">
+            <strong>💾 Session Restore</strong>
+            <p>Automatically saves and restores your open books and settings</p>
+        </div>
+        <div class="feature">
+            <strong>🎨 Custom Fonts</strong>
+            <p>Configure fonts individually for each Pāli script</p>
+        </div>
+        <div class="feature">
+            <strong>🖥️ Cross-Platform</strong>
+            <p>Native support for macOS, Windows, and Linux</p>
+        </div>
+    </div>
+
+    <h2>Known Beta Limitations</h2>
+    <ul>
+        <li>Search input not yet available for Thai, Telugu, Tibetan, Khmer, and Cyrillic scripts (display works)</li>
+        <li>Book content fonts are not yet customizable (UI fonts are)</li>
+        <li>Phrase and proximity search features are still in development</li>
+        <li>UI language localization is coming in the next beta</li>
+        <li>Some keyboard shortcuts may not work on all platforms</li>
+    </ul>
+
+    <div class="feedback-section">
+        <h2>📬 We Need Your Feedback!</h2>
+        <p>Your experience and suggestions are crucial for improving CST Reader. Please report any issues you encounter or features you'd like to see.</p>
+
+        <div class="feedback-options">
+            <div class="feedback-option">
+                <h4>GitHub Issues (Preferred)</h4>
+                <p>For bug reports and feature requests:</p>
+                <p><a href="https://github.com/fsnow/cst/issues" target="_blank">github.com/fsnow/cst/issues</a></p>
+                <p style="font-size: 12px; color: #4c566a;">No GitHub account? Create one free at github.com</p>
+            </div>
+            <div class="feedback-option">
+                <h4>Email Support</h4>
+                <p>For general feedback and questions:</p>
+                <p><a href="mailto:help@tipitaka.org">help@tipitaka.org</a></p>
+                <p style="font-size: 12px; color: #4c566a;">Please include your OS and any error messages</p>
+            </div>
+        </div>
+    </div>
+
+    <h2>Helpful Information for Beta Testers</h2>
+
+    <h3>When Reporting Issues</h3>
+    <p>To help us fix problems quickly, please include:</p>
+    <ul>
+        <li>Your operating system (e.g., macOS 14.5, Windows 11, Ubuntu 22.04)</li>
+        <li>Steps to reproduce the issue</li>
+        <li>Any error messages you see</li>
+        <li>Screenshots if relevant (you can paste them directly into GitHub issues)</li>
+    </ul>
+
+    <h3>Log Files</h3>
+    <p>If you encounter crashes or errors, log files can be found at:</p>
+    <ul>
+        <li><strong>macOS:</strong> <code>~/Library/Application Support/CST.Avalonia/logs/</code></li>
+        <li><strong>Windows:</strong> <code>%APPDATA%\CST.Avalonia\logs\</code></li>
+        <li><strong>Linux:</strong> <code>~/.config/CST.Avalonia/logs/</code></li>
+    </ul>
+
+    <h3>Feature Requests</h3>
+    <p>We welcome suggestions for new features! When proposing ideas, please describe:</p>
+    <ul>
+        <li>What you want to accomplish</li>
+        <li>How the feature would help your study or research</li>
+        <li>Any similar features you've seen in other applications</li>
+    </ul>
+
+    <h2>About the Chaṭṭha Saṅgāyana Tipiṭaka</h2>
+    <p>The texts in this application come from the Sixth Council (Chaṭṭha Saṅgāyana) held in Myanmar from 1954-1956. This council, commemorating 2,500 years since the Buddha's Parinibbāna, produced the most authoritative edition of the Pāli Canon through careful comparison of manuscripts from Myanmar, Sri Lanka, Thailand, and Cambodia.</p>
+
+    <p>CST Reader provides digital access to all 217 texts from this edition, maintaining the authentic Pāli while offering modern tools for study and research.</p>
+
+    <h2>Thank You!</h2>
+    <p>We deeply appreciate your participation in this beta program. Your feedback will help ensure CST Reader becomes an invaluable tool for Pāli text studies worldwide.</p>
+
+    <p>May your study of the Dhamma bring wisdom and peace. 🙏</p>
+
+    <div class="update-note">
+        <p>This welcome page updates automatically with new releases. Last updated: September 2025</p>
+        <p>CST Reader 5.0.0-beta.1 - Built with ❤️ for the Pāli text community</p>
+    </div>
+</body>
+</html>

@@ -7,13 +7,15 @@
 
 ## Project Overview
 
-This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Buddhist text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
+This project is a ground-up rewrite of the original WinForms-based CST4, built on Avalonia UI and .NET 9. The application is a cross-platform Pali text reader featuring a modern, dock-based IDE-style interface. The active codebase is now focused solely on the current architecture, with legacy and placeholder files moved to a separate directory for clarity.
 
-CST stands for "Chaṭṭha Saṅgāyana Tipiṭaka".
+CST stands for "Chaṭṭha Saṅgāyana Tipiṭaka". The texts we use are provided by the Vipassana Research Institute. 
+
+Claude, do not use the word "Buddhist" in the application or any supporting documentation.
 
 ## Current Functionality
 
-CST Reader is a modern, cross-platform Buddhist text reader featuring a complete implementation of the following systems:
+CST Reader is a modern, cross-platform Pali text reader featuring a complete implementation of the following systems:
 
 ### **Core Application Features**
 1. **Dock-Based IDE Interface**: Fully functional docking system with resizable panels, tab management, and persistent layout state
@@ -39,7 +41,7 @@ CST Reader is a modern, cross-platform Buddhist text reader featuring a complete
     - **Note**: This system covers Pali script fonts in UI elements only; book content fonts and UI localization fonts are separate systems (see Outstanding Work)
 
 ### **Search System**
-14. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Buddhist texts
+14. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Pali texts
 15. **Advanced Search Features**: 
     - Single and multi-term exact searches with accurate counting
     - Wildcard search working in all 14 scripts 

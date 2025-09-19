@@ -26,6 +26,11 @@
     <None Include="Info.plist" Condition="'$(OS)' == 'macOS'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Welcome page resources for both development and deployment -->
+    <None Include="Resources\welcome-content.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <EmbeddedResource Include="Resources\welcome-content.html" />
   </ItemGroup>
 
   <ItemGroup>

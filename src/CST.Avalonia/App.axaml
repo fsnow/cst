@@ -36,42 +36,9 @@
             <views:BookDisplayView />
         </DataTemplate>
         
-        <!-- DataTemplate for WelcomeViewModel -> Welcome screen -->
+        <!-- DataTemplate for WelcomeViewModel -> Welcome screen with WebView -->
         <DataTemplate DataType="{x:Type vm:WelcomeViewModel}">
-            <Border Background="#F8F9FA" Padding="40">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24" MaxWidth="600">
-                    <!-- Logo/Icon -->
-                    <TextBlock Text="🏛️" FontSize="64" HorizontalAlignment="Center" Opacity="0.8"/>
-                    
-                    <!-- Title -->
-                    <StackPanel Spacing="8" HorizontalAlignment="Center">
-                        <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="Bold" 
-                                  HorizontalAlignment="Center" Foreground="#2E3440"/>
-                        <TextBlock Text="{Binding Subtitle}" FontSize="16" 
-                                  HorizontalAlignment="Center" Foreground="#5E81AC" Opacity="0.8"/>
-                    </StackPanel>
-                    
-                    <!-- Instructions -->
-                    <TextBlock Text="{Binding Instructions}" FontSize="14" 
-                              HorizontalAlignment="Center" TextWrapping="Wrap" 
-                              Foreground="#4C566A" Margin="0,16,0,24"/>
-                    
-                    <!-- Quick Actions -->
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Quick Actions:" FontSize="16" FontWeight="SemiBold" 
-                                  Foreground="#2E3440" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                        <ItemsControl ItemsSource="{Binding QuickActions}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}" FontSize="14" 
-                                              Margin="0,4" Foreground="#434C5E"
-                                              HorizontalAlignment="Center"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+            <views:WelcomeView />
         </DataTemplate>
         
     </Application.DataTemplates>
