@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "lastUpdated": "2025-09-20T12:00:00Z",
+  "currentVersion": {
+    "stable": "4.5.0",
+    "beta": "5.0.0-beta.2"
+  },
+  "messages": {
+    "5.0.0-beta.1": {
+      "type": "upgrade",
+      "title": "New Beta Available - 5.0.0-beta.2",
+      "content": "Version 5.0.0-beta.2 is now available with important bug fixes including the macOS keychain prompt issue. This update also improves startup performance and reduces logging noise.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.2"
+    },
+    "5.0.0-beta.2": {
+      "type": "info",
+      "title": "Thank you for testing!",
+      "content": "You're running the latest beta version. Your feedback helps make CST Reader better. Please report any issues you encounter."
+    },
+    "4.5.0": {
+      "type": "info",
+      "title": "Beta Version Available",
+      "content": "A new beta version (5.0.0-beta.2) is available for testing. It includes a complete rewrite with Avalonia UI for cross-platform support.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.2"
+    },
+    "default": {
+      "type": "warning",
+      "title": "Outdated Version",
+      "content": "A newer version is available with bug fixes and performance improvements. Please consider updating to the latest release.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/latest"
+    }
+  },
+  "announcements": [
+    {
+      "id": "2025-09-keychain-fix",
+      "date": "2025-09-20T00:00:00Z",
+      "title": "macOS Keychain Issue Resolved",
+      "content": "The persistent keychain access prompt on macOS has been fixed in beta.2. The application no longer triggers keychain requests during normal operation.",
+      "showUntil": "2025-10-20T00:00:00Z",
+      "targetVersions": ["5.0.0-beta.1"]
+    },
+    {
+      "id": "2025-09-xml-updates",
+      "date": "2025-09-15T00:00:00Z",
+      "title": "Automatic XML Updates Now Available",
+      "content": "CST Reader now automatically checks for and downloads updated Pali texts from GitHub. Files are only downloaded when changes are detected, saving bandwidth and time.",
+      "showUntil": "2025-10-15T00:00:00Z",
+      "targetVersions": []
+    },
+    {
+      "id": "2025-09-search-improvements",
+      "date": "2025-09-10T00:00:00Z",
+      "title": "Enhanced Search Functionality",
+      "content": "Search now supports wildcards and regular expressions across all 14 Pali scripts. The new incremental indexing system significantly improves startup performance.",
+      "showUntil": "2025-10-10T00:00:00Z",
+      "targetVersions": []
+    }
+  ],
+  "criticalNotices": [
+    {
+      "id": "2025-09-alpha-warning",
+      "severity": "critical",
+      "affectedVersions": ["5.0.0-alpha.*"],
+      "message": "Critical: Alpha versions have a known data corruption issue. Please upgrade immediately to beta.2 or later to avoid potential data loss."
+    }
+  ]
+}
