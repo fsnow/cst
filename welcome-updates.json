@@ -17,12 +17,6 @@
       "title": "Thank you for testing!",
       "content": "You're running the latest beta version. Your feedback helps make CST Reader better. Please report any issues you encounter."
     },
-    "4.5.0": {
-      "type": "info",
-      "title": "Beta Version Available",
-      "content": "A new beta version (5.0.0-beta.2) is available for testing. It includes a complete rewrite with Avalonia UI for cross-platform support.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.2"
-    },
     "default": {
       "type": "warning",
       "title": "Outdated Version",
@@ -44,7 +38,7 @@
       "date": "2025-09-15T00:00:00Z",
       "title": "Automatic XML Updates Now Available",
       "content": "CST Reader now automatically checks for and downloads updated Pali texts from GitHub. Files are only downloaded when changes are detected, saving bandwidth and time.",
-      "showUntil": "2025-10-15T00:00:00Z",
+      "showUntil": "2025-09-20T00:00:00Z",
       "targetVersions": []
     },
     {
@@ -52,7 +46,7 @@
       "date": "2025-09-10T00:00:00Z",
       "title": "Enhanced Search Functionality",
       "content": "Search now supports wildcards and regular expressions across all 14 Pali scripts. The new incremental indexing system significantly improves startup performance.",
-      "showUntil": "2025-10-10T00:00:00Z",
+      "showUntil": "2025-09-20T00:00:00Z",
       "targetVersions": []
     }
   ],
