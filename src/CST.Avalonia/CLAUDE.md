@@ -1,8 +1,8 @@
-# CST Avalonia Project Status - August 2025
+# CST Avalonia Project Status - September 2025
 
-## Current Status: **XML UPDATE SYSTEM BUG FIXES & OPTIMIZATION** 🔧
+## Current Status: **BETA 2 PREP - CODE SIGNING COMPLETE** 🔐
 
-**Last Updated**: September 14, 2025
+**Last Updated**: September 20, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -21,71 +21,128 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 1. **Dock-Based IDE Interface**: Fully functional docking system with resizable panels, tab management, and persistent layout state
 2. **Complete Session Restoration**: Application saves and restores all open books, scripts, window positions, and search highlights across sessions
 3. **Cross-Platform Build System**: Native macOS `.dmg` packages with proper application branding and menu integration
-4. **Advanced Logging System**: Structured Serilog logging with configurable levels, unified across all components including CST.Lucene
+4. **Code Signing & Security**: Developer ID signed applications and DMG installers for macOS without "damaged" application errors on first launch
+5. **Advanced Logging System**: Structured Serilog logging with configurable levels, unified across all components including CST.Lucene
 
 ### **Text Display & Script System**
-5. **Multi-Script Support**: 
+6. **Multi-Script Support**:
    - **Display**: All 14 Pali scripts supported (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
    - **Input**: 9 scripts supported for search/dictionary (missing: Thai, Telugu, Tibetan, Khmer, Cyrillic)
    - **Indexing**: IPE (Internal Phonetic Encoding) with Devanagari analyzers for accurate search
-6. **Per-Tab Script Selection**: Each book tab independently remembers and applies its script setting
-7. **Script Synchronization**: Search results and book tree automatically update display when global script changes
+7. **Per-Tab Script Selection**: Each book tab independently remembers and applies its script setting
+8. **Script Synchronization**: Search results and book tree automatically update display when global script changes
 
 ### **UI Font Management System**
-8. **Per-Script UI Font Configuration**: Complete font system for all 14 Pali scripts used in UI elements (search results, tree views, dropdowns) with individual font family and size settings
-9. **Native Font Detection**: macOS Core Text APIs detect and filter fonts compatible with each specific script
-10. **System Default Detection**: Shows actual system-chosen default fonts for each script (informational)
-11. **Real-Time Font Updates**: Font changes apply immediately across all UI locations without restart
-12. **DataTemplate Font Binding**: Custom FontHelper attached properties enable font settings in search results, tree views, and dropdowns
-13. **Font Settings Persistence**: All UI font preferences save and restore correctly across application sessions
+9. **Per-Script UI Font Configuration**: Complete font system for all 14 Pali scripts used in UI elements (search results, tree views, dropdowns) with individual font family and size settings
+10. **Native Font Detection**: macOS Core Text APIs detect and filter fonts compatible with each specific script
+11. **System Default Detection**: Shows actual system-chosen default fonts for each script (informational)
+12. **Real-Time Font Updates**: Font changes apply immediately across all UI locations without restart
+13. **DataTemplate Font Binding**: Custom FontHelper attached properties enable font settings in search results, tree views, and dropdowns
+14. **Font Settings Persistence**: All UI font preferences save and restore correctly across application sessions
     - **Note**: This system covers Pali script fonts in UI elements only; book content fonts and UI localization fonts are separate systems (see Outstanding Work)
 
 ### **Search System**
-14. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Pali texts
-15. **Advanced Search Features**: 
+15. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Pali texts
+16. **Advanced Search Features**:
     - Single and multi-term exact searches with accurate counting
-    - Wildcard search working in all 14 scripts 
+    - Wildcard search working in all 14 scripts
     - Regular expression search support
     - Position-based highlighting with correct character offsets
-16. **Smart Book Filtering**: 
+17. **Smart Book Filtering**:
     - Checkbox-based filter UI for Pitaka/Commentary categories
     - "Select All/None" quick actions for filter management
     - Live book count display based on current filter selection
     - Filter summary display when collapsed
-17. **Enhanced Search UI**: 
+18. **Enhanced Search UI**:
     - Visual search elements (magnifying glass, clear button, progress indicator)
     - Two-column layout with terms list and book occurrences
     - Real-time search statistics and loading feedback
     - Keyboard shortcuts (Enter/Escape) and double-click navigation
-18. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
+19. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
 
-### **Indexing & File Management** 
-19. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
-20. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive unit/integration/performance tests
-21. **Empty Index Handling**: Proper startup behavior when no search index exists yet
-22. **Index Integrity**: Fixed duplicate document issues, accurate search counts, proper document replacement
+### **Indexing & File Management**
+20. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
+21. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive unit/integration/performance tests
+22. **Empty Index Handling**: Proper startup behavior when no search index exists yet
+23. **Index Integrity**: Fixed duplicate document issues, accurate search counts, proper document replacement
 
 ### **XML Update System**
-23. **GitHub API Integration**: Automatic file updates using Octokit.NET with repository configuration in Settings
-24. **SHA-Based Change Detection**: Only downloads files that have actually changed since local copies (avoids 1GB+ full downloads)
-25. **Enhanced File Tracking**: Nullable timestamps, proper state management, separation between download and indexing states 
-26. **Optimized Startup Sequence**: Files updated before indexing to eliminate redundant work
-27. **Reduced Logging Noise**: 95% reduction in startup logging (300KB+ → 14KB) while preserving debug information
+24. **GitHub API Integration**: Automatic file updates using Octokit.NET with repository configuration in Settings
+25. **SHA-Based Change Detection**: Only downloads files that have actually changed since local copies (avoids 1GB+ full downloads)
+26. **Enhanced File Tracking**: Nullable timestamps, proper state management, separation between download and indexing states
+27. **Optimized Startup Sequence**: Files updated before indexing to eliminate redundant work
+28. **Reduced Logging Noise**: 95% reduction in startup logging (300KB+ → 14KB) while preserving debug information
+
+### **Dynamic Welcome Page System**
+29. **Version-Aware Messaging**: Displays version-specific messages (beta feedback, stable notifications, outdated warnings) based on user's current version
+30. **Automatic Announcements**: Shows targeted announcements and critical notices filtered by version and expiration dates
+31. **GitHub Integration**: Fetches update configuration from GitHub main branch with 24-hour local caching and offline fallback
+32. **Semantic Version Comparison**: Robust version parsing with support for pre-release identifiers and build metadata
+33. **External Link Handling**: Welcome page links (GitHub releases, documentation) open in system browser instead of internal navigation
+34. **Smart Caching**: Local cache with TTL management, graceful degradation when offline, and automatic refresh for stale data
 
 ### **User Interface Polish**
-28. **Mac-Style Book Tree Icons**: Dynamic folder icons (open/closed states) with document icons for individual books
-29. **Tab Overflow Fix**: Custom scrollbar styling prevents tab coverage when many books are open
-30. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
-31. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
-32. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
-33. **Splash Screen with Progress**: Beautiful Buddha teaching image shown at startup with status updates during XML checking, downloading, and indexing operations (fully working on macOS)
+35. **Mac-Style Book Tree Icons**: Dynamic folder icons (open/closed states) with document icons for individual books
+36. **Tab Overflow Fix**: Custom scrollbar styling prevents tab coverage when many books are open
+37. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
+38. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
+39. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
+40. **Splash Screen with Progress**: Beautiful Buddha teaching image shown at startup with status updates during XML checking, downloading, and indexing operations (fully working on macOS)
 
 ### **Technical Architecture**
-34. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
-35. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
-36. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
-37. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
-38. **Comprehensive Testing**: 62 tests covering unit, integration, and performance scenarios with 100% pass rate
+41. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
+42. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
+43. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
+44. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
+45. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
+
+## Beta 1 Release (September 20, 2025)
+
+**CST Reader 5.0.0-beta.1** has been officially released with the complete dynamic welcome page system implementation. This beta release represents a major milestone in the project:
+
+### **Release Highlights**
+- **Cross-Platform DMG Packages**: Both Apple Silicon (M1/M2/M3/M4) and Intel Mac builds available
+- **Dynamic Welcome System**: Version-aware messaging with GitHub integration for updates and announcements
+- **Production-Ready Features**: All core functionality working including search, indexing, session restoration, and multi-script support
+- **Comprehensive Testing**: 65+ automated tests ensure stability and reliability
+
+### **Download & Installation**
+- **GitHub Release**: https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.1
+- **Apple Silicon**: `CST-Reader-arm64.dmg` (178MB)
+- **Intel Mac**: `CST-Reader-x64.dmg` (186MB)
+- **Installation Note**: Due to unsigned application, users may encounter "damaged" errors on first launch and need to run `sudo xattr -rd com.apple.quarantine /Applications/CST\ Reader.app` (resolved in Beta 2)
+
+### **Beta Testing Goals**
+- Validate cross-platform compatibility and performance
+- Gather user feedback on new dynamic welcome page system
+- Test external link handling and update notification system
+- Identify any remaining UI/UX issues before stable release
+
+The beta release marks the completion of Phase 2 of the project roadmap, with all major systems now functional and ready for real-world testing.
+
+## Beta 2 Development (September 2025)
+
+**In Progress**: Preparing Beta 2 release with complete code signing implementation to resolve the "damaged" application warnings reported by Beta 1 users.
+
+### **Code Signing Implementation (Completed)**
+- **Developer ID Certificate**: Applications now signed with Apple Developer ID Application certificate
+- **Certificate Chain Resolution**: Resolved certificate chain validation issues that were preventing signing
+- **Native Library Signing**: All .dylib files properly signed with runtime hardening flags
+- **DMG Installer Signing**: Distribution packages signed and verified for secure installation
+- **Automated Build Process**: Enhanced `package-macos.sh` script with integrated code signing workflow
+- **Security Compliance**: Applications now pass macOS Gatekeeper validation without security warnings
+
+### **Technical Resolution Details**
+- **Root Cause**: Apple Root CA certificate in user keychain with "Always Trust" setting was interfering with certificate chain validation
+- **Solution**: Removed conflicting certificate from user keychain to allow system certificate chain validation
+- **Verification**: All native components (.dylib files) properly signed and verified
+- **Testing**: Applications now launch without quarantine attribute removal or "damaged" errors
+
+### **Beta 2 Release Goals**
+- Eliminate "damaged" application errors on first launch
+- Provide professional, signed DMG installers for seamless user experience
+- Maintain all existing functionality from Beta 1
+- Enable distribution through standard channels without security workarounds
 
 ## Outstanding Work
 
