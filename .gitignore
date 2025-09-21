@@ -13,22 +13,16 @@ src/CST.Avalonia/obj/
 src/CST.Avalonia/bin/Release/
 src/CST.Avalonia/CST Reader.app/
 src/CST.Avalonia/publish/
+src/CST.Avalonia/dist/
 
-*.log
+src/CST.Avalonia.Tests/obj/
 
 src/CST.Core/obj/
 src/CST.Core/bin/
 
+src/CST.Lucene/obj/
+src/CST.Lucene/bin/
+
+*.log
 
 screenshots/
-
-
-
-
-
-src/CST.Avalonia.Tests/obj/
-
-src/CST.Lucene/obj/
-
-src/CST.Avalonia/dist/
-
