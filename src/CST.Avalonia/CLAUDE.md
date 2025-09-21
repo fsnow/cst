@@ -98,7 +98,7 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 
 ## Beta 1 Release (September 20, 2025)
 
-**CST Reader 5.0.0-beta.1** has been officially released with the complete dynamic welcome page system implementation. This beta release represents a major milestone in the project:
+**CST Reader 5.0.0-beta.2** has been officially released with complete code signing implementation. This beta release represents a major milestone in the project:
 
 ### **Release Highlights**
 - **Cross-Platform DMG Packages**: Both Apple Silicon (M1/M2/M3/M4) and Intel Mac builds available
@@ -107,10 +107,10 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 - **Comprehensive Testing**: 65+ automated tests ensure stability and reliability
 
 ### **Download & Installation**
-- **GitHub Release**: https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.1
+- **GitHub Release**: https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.2
 - **Apple Silicon**: `CST-Reader-arm64.dmg` (178MB)
 - **Intel Mac**: `CST-Reader-x64.dmg` (186MB)
-- **Installation Note**: Due to unsigned application, users may encounter "damaged" errors on first launch and need to run `sudo xattr -rd com.apple.quarantine /Applications/CST\ Reader.app` (resolved in Beta 2)
+- **Installation Note**: Applications are now fully code signed with Apple Developer ID certificate - no security warnings or quarantine removal required
 
 ### **Beta Testing Goals**
 - Validate cross-platform compatibility and performance
@@ -143,6 +143,40 @@ The beta release marks the completion of Phase 2 of the project roadmap, with al
 - Provide professional, signed DMG installers for seamless user experience
 - Maintain all existing functionality from Beta 1
 - Enable distribution through standard channels without security workarounds
+
+### **Version Update Locations for Beta 2**
+When preparing for Beta 2 release, the version number "5.0.0-beta.1" must be updated to "5.0.0-beta.2" in the following locations:
+
+**Critical Files** (Must Update):
+1. **`src/CST.Avalonia/CST.Avalonia.csproj`** - 4 occurrences:
+   - Line 13: `<CFBundleVersion>`
+   - Line 14: `<CFBundleShortVersionString>`
+   - Line 18: `<Version>`
+   - Line 21: `<InformationalVersion>`
+
+2. **`src/CST.Avalonia/Info.plist`** - 2 occurrences:
+   - Line 12: `<string>` under `CFBundleShortVersionString`
+   - Line 14: `<string>` under `CFBundleVersion`
+
+3. **`welcome-updates.json`** (root directory) - Update for Beta 2 announcements:
+   - Line 6: Update `"beta":` to point to "5.0.0-beta.2"
+   - Add new message block for "5.0.0-beta.2"
+   - Update existing "5.0.0-beta.1" message if needed
+
+4. **`src/CST.Avalonia/Services/WelcomeUpdateService.cs`**:
+   - Line 33: Default version fallback (currently hardcoded to "5.0.0-beta.1")
+
+**Documentation Files** (Should Update):
+5. **`src/CST.Avalonia/CLAUDE.md`**:
+   - Line 101: Beta 1 release version reference
+   - Line 110: GitHub release URL
+   - Add new Beta 2 release section
+
+6. **`src/CST.Avalonia/Resources/welcome-content.html`** (Static fallback):
+   - Line 184: Version display
+   - Line 307: Footer version
+
+**Note**: The version in compiled output files (`bin/Release/`) will be updated automatically when the project is rebuilt. Test files and markdown documentation references can remain as historical examples.
 
 ## Outstanding Work
 

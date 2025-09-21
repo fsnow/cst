@@ -33,9 +33,12 @@ namespace CST.Avalonia.ViewModels
 
             // Set current app version from assembly
             var assembly = Assembly.GetExecutingAssembly();
-            var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-                       ?? assembly.GetName().Version?.ToString()
-                       ?? "5.0.0-beta.1";
+            var rawVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                          ?? assembly.GetName().Version?.ToString()
+                          ?? "5.0.0-beta.2";
+
+            // Strip the git hash (everything after '+') for display
+            var version = rawVersion.Contains('+') ? rawVersion.Substring(0, rawVersion.IndexOf('+')) : rawVersion;
             _updateService.CurrentAppVersion = version;
 
             // Load HTML content on initialization

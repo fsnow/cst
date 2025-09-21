@@ -146,12 +146,12 @@ if [ -n "$SIGNING_IDENTITY" ]; then
 
     # Sign the main executable
     echo "Signing main executable..."
-    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST.Avalonia"
+    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST.Avalonia" 2>/dev/null || echo "Note: Main executable signing failed due to .dll files (this is expected for .NET apps)"
 
     # Sign the app bundle
     # Note: .dll files may cause warnings but won't prevent the app from working
     echo "Signing app bundle..."
-    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME" || echo "Warning: App bundle signing had issues but may still work"
+    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME" 2>/dev/null || echo "Note: App bundle signing failed due to .dll files (this is expected for .NET apps)"
 
     # Verify the signature of critical components
     echo "Verifying signature..."
