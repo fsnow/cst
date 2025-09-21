@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -93,6 +95,74 @@ namespace CST.Avalonia.Views
         private void OnNavigated(string url, string frameName)
         {
             Log.Information("WelcomeView: WebView navigated to: {Url} in frame: {Frame}", url, frameName);
+
+            // Check if this is an external URL that we need to redirect
+            if (IsExternalUrl(url))
+            {
+                Log.Information("WelcomeView: Detected external URL navigation, opening in system browser: {Url}", url);
+
+                // Open in system browser
+                OpenUrlInSystemBrowser(url);
+
+                // Immediately reload the welcome content to avoid showing the external page
+                if (_webView != null && !string.IsNullOrEmpty(_viewModel?.HtmlContent))
+                {
+                    try
+                    {
+                        _webView.LoadHtml(_viewModel.HtmlContent);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Failed to reload welcome page after external navigation");
+                    }
+                }
+            }
+        }
+
+        private static bool IsExternalUrl(string url)
+        {
+            // Allow local content and about:blank
+            if (string.IsNullOrEmpty(url) ||
+                url.StartsWith("local://", StringComparison.OrdinalIgnoreCase) ||
+                url.StartsWith("about:", StringComparison.OrdinalIgnoreCase) ||
+                url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // External URLs typically start with http:// or https://
+            return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                   url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void OpenUrlInSystemBrowser(string url)
+        {
+            try
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    Process.Start("open", url);
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    Process.Start("xdg-open", url);
+                }
+                else
+                {
+                    // Fallback for other platforms
+                    Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                }
+
+                Log.Information("WelcomeView: Successfully opened URL in system browser: {Url}", url);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "WelcomeView: Failed to open URL in system browser: {Url}", url);
+            }
         }
 
         private async Task TryLoadHtmlContent()

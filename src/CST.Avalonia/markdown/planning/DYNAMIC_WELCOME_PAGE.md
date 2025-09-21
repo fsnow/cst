@@ -265,17 +265,25 @@ public async Task<string> BuildWelcomeContent()
 
 ## Implementation Phases
 
-### Phase 1: Static Enhancement (Current)
+### Phase 1: Static Enhancement (Completed)
 - ✅ HTML-based Welcome page
 - ✅ WebView display
 - ✅ Embedded content only
 - ✅ Version-specific content
 
-### Phase 2: Basic Dynamic Content
-- [ ] Fetch updates.json from GitHub
-- [ ] Simple version comparison
-- [ ] Basic upgrade prompt
-- [ ] 24-hour cache
+### Phase 2: Basic Dynamic Content (Completed - December 2024)
+- ✅ Fetch updates.json from GitHub
+- ✅ Simple version comparison
+- ✅ Basic upgrade prompt
+- ✅ 24-hour cache
+
+**What was implemented:**
+- `Services/WelcomeUpdateService.cs` - Fetches and caches updates from GitHub with 24-hour TTL
+- `Services/VersionComparer.cs` - Semantic version parsing and comparison logic
+- `Models/WelcomeUpdates.cs` - Data models for JSON structure
+- `ViewModels/WelcomeViewModel.cs` - Updated to inject dynamic content into base HTML
+- `resources/welcome-updates.json` - Sample update configuration file
+- `CST.Avalonia.Tests/Services/VersionComparerTests.cs` - Comprehensive test suite (34 tests)
 
 ### Phase 3: Advanced Features
 - [ ] Announcement system
@@ -284,11 +292,30 @@ public async Task<string> BuildWelcomeContent()
 - [ ] Analytics (optional)
 - [ ] A/B testing messages
 
-### Phase 4: GitHub Pages Integration
-- [ ] Setup gh-pages branch
-- [ ] Automated JSON publishing
-- [ ] CDN distribution
-- [ ] Versioned endpoints
+### Phase 4: Simple Main Branch Deployment (Implemented)
+- [x] JSON file in repository root
+- [x] Service uses raw GitHub URL from main branch
+- [x] Simple maintenance workflow
+- [ ] Consider CDN/caching solution if rate limits become an issue
+
+**Current Implementation:**
+- `welcome-updates.json` lives in the repository root (main branch)
+- URL: `https://raw.githubusercontent.com/fsnow/cst/main/welcome-updates.json`
+- Simple to maintain: edit the file directly in the main branch
+- No additional setup required
+
+**Maintenance:**
+1. Edit `welcome-updates.json` in the repository root
+2. Commit and push to main branch
+3. Changes are immediately available to all users
+
+**Note on Rate Limits:**
+- GitHub raw content has a 60 requests/hour limit for unauthenticated requests
+- The 24-hour cache in the app mitigates this for most users
+- If rate limits become an issue, consider:
+  - GitHub Pages deployment
+  - CDN service (e.g., jsDelivr)
+  - Authenticated requests with GitHub token
 
 ## Security Considerations
 
