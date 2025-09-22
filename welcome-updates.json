@@ -6,13 +6,13 @@
     "beta": "5.0.0-beta.2"
   },
   "messages": {
-    "5.0.0-beta.1": {
+    "5.0.0-beta.0": {
       "type": "upgrade",
       "title": "New Beta Available - 5.0.0-beta.2",
       "content": "Version 5.0.0-beta.2 is now available with code signing! No more 'damaged application' errors - the app is now signed with an Apple Developer ID certificate for seamless installation. Also includes a refreshed application icon with better visibility.",
       "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.2"
     },
-    "5.0.0-beta.2": {
+    "5.0.0-beta.1": {
       "type": "info",
       "title": "Thank you for testing!",
       "content": "You're running the latest beta version. Your feedback helps make CST Reader better. Please report any issues you encounter."
