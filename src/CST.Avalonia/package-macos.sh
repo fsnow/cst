@@ -75,15 +75,10 @@ else
     echo "  WARNING: Icon file not found at $PROJECT_DIR/Assets/cst.icns"
 fi
 
-# Copy all published files to MacOS directory
+# Copy all published files to MacOS directory first
 echo "Copying application files..."
 cp -R "$PUBLISH_DIR/"* "$BUNDLE_NAME/Contents/MacOS/"
 
-# Pre-sign the main executable before the bundle context interferes
-if [ -n "${SIGNING_IDENTITY:-}" ]; then
-    echo "Pre-signing main executable..."
-    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST.Avalonia" || echo "Pre-signing failed, will try again later"
-fi
 
 # Copy XSL files to Resources
 echo "Copying XSL files..."
@@ -140,32 +135,67 @@ echo "Code signing the application..."
 if [ -n "$SIGNING_IDENTITY" ]; then
     echo "Found signing identity: $SIGNING_IDENTITY"
 
-    # Sign all dynamic libraries first
-    echo "Signing dynamic libraries..."
-    find "$BUNDLE_NAME/Contents/MacOS" -name "*.dylib" -exec codesign --force --options runtime --sign "$SIGNING_IDENTITY" {} \;
+    # Create entitlements file for .NET runtime (with all required keys)
+    ENTITLEMENTS_FILE="/tmp/cst-entitlements.plist"
+    cat > "$ENTITLEMENTS_FILE" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
+EOF
 
-    # Sign the main executable
-    echo "Signing main executable..."
-    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST.Avalonia" 2>/dev/null || echo "Note: Main executable signing failed due to .dll files (this is expected for .NET apps)"
 
-    # Sign the app bundle
-    # Note: .dll files may cause warnings but won't prevent the app from working
+    # First pass: Sign all files EXCEPT CST.Avalonia to satisfy deep verification
+    echo "Signing all components except main executable..."
+    find "$BUNDLE_NAME/Contents/MacOS" -type f ! -name "CST.Avalonia" -exec codesign --force --sign "$SIGNING_IDENTITY" {} \;
+
+    # Second pass: Re-sign true executables WITH the hardened runtime option (still excluding CST.Avalonia)
+    echo "Applying Hardened Runtime to executables..."
+    find "$BUNDLE_NAME/Contents/MacOS" -name "*.dylib" -o -name "*.dll" | xargs -I {} codesign --force --options runtime --sign "$SIGNING_IDENTITY" "{}"
+    find "$BUNDLE_NAME/Contents/MacOS/CefGlueBrowserProcess" -type f -perm +111 -exec codesign --force --options runtime --sign "$SIGNING_IDENTITY" {} \; 2>/dev/null || true
+    # Sign createdump and any other executable files with hardened runtime
+    find "$BUNDLE_NAME/Contents/MacOS" -type f -perm +111 -name "createdump" -exec codesign --force --options runtime --sign "$SIGNING_IDENTITY" {} \;
+    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST"
+
+    # Sign the main executable with entitlements and the runtime option
+    echo "Signing main executable with entitlements..."
+    codesign --force --options runtime --entitlements "$ENTITLEMENTS_FILE" --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST.Avalonia"
+
+    # Sign the entire app bundle to seal it (with entitlements to preserve them)
     echo "Signing app bundle..."
-    codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME" 2>/dev/null || echo "Note: App bundle signing failed due to .dll files (this is expected for .NET apps)"
+    codesign --force --options runtime --entitlements "$ENTITLEMENTS_FILE" --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME"
 
-    # Verify the signature of critical components
-    echo "Verifying signature..."
-    # Check if at least one dylib is properly signed to confirm signing worked
-    SAMPLE_DYLIB=$(find "$BUNDLE_NAME/Contents/MacOS" -name "*.dylib" | head -1)
-    if [ -n "$SAMPLE_DYLIB" ] && codesign --verify --verbose "$SAMPLE_DYLIB" 2>/dev/null; then
-        echo "✅ Dynamic libraries signed successfully!"
-        echo "✅ Code signing completed!"
-        echo "   Note: .NET assemblies (.dll files) don't require signing and may show warnings"
-        echo "   Note: The app will launch correctly despite .dll signing warnings"
+    # Clean up entitlements file
+    rm -f "$ENTITLEMENTS_FILE"
+
+    # Verify the entire app bundle with strict deep verification
+    echo "Verifying app bundle signatures..."
+    if codesign --verify --deep --strict --verbose=2 "$BUNDLE_NAME" 2>/dev/null; then
+        echo "✅ App bundle signature verification passed!"
     else
-        echo "❌ Signature verification failed!"
+        echo "❌ App bundle signature verification failed"
         exit 1
     fi
+
+    # Test with Gatekeeper simulation
+    echo "Testing with Gatekeeper simulation..."
+    if spctl --assess --type execute --verbose "$BUNDLE_NAME" 2>/dev/null; then
+        echo "✅ Gatekeeper simulation passed!"
+    else
+        echo "⚠️  Gatekeeper simulation failed (may require notarization for full acceptance)"
+    fi
+
+    echo "✅ Code signing completed successfully!"
+    echo "   Note: App bundle is properly signed and sealed"
+    echo "   Note: All components including main executable are signed"
 else
     echo "⚠️  No Developer ID Application certificate found in keychain."
     echo "   The app will be unsigned and users will see security warnings."
