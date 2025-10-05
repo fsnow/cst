@@ -203,19 +203,19 @@ namespace CST.Avalonia.Services
             {
                 indexPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    AppConstants.AppDataDirectoryName, "Index");
+                    AppConstants.AppDataDirectoryName, "index");
             }
             else if (OperatingSystem.IsMacOS())
             {
                 indexPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    "Library", "Application Support", AppConstants.AppDataDirectoryName, "Index");
+                    "Library", "Application Support", AppConstants.AppDataDirectoryName, "index");
             }
             else // Linux and others
             {
                 indexPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".config", AppConstants.AppDataDirectoryName, "Index");
+                    ".config", AppConstants.AppDataDirectoryName, "index");
             }
 
             return indexPath;

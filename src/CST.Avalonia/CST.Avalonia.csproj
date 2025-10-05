@@ -36,7 +36,11 @@
     <None Include="Resources\welcome-content.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Resources\buddha-transparent.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <EmbeddedResource Include="Resources\welcome-content.html" />
+    <EmbeddedResource Include="Resources\buddha-transparent.png" />
   </ItemGroup>
 
   <ItemGroup>

@@ -28,7 +28,7 @@ public class ChapterListsService
         _logger = logger;
         _settingsService = settingsService;
         _dataFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                                    AppConstants.AppDataDirectoryName, "chapter_lists.json");
+                                    AppConstants.AppDataDirectoryName, "chapter-lists.json");
         _chapterLists = new Dictionary<int, List<DivTag>>();
         
         LoadFromFile();

@@ -16,11 +16,25 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly WelcomeUpdateService _updateService;
         private string _htmlContent = "";
+        private bool _isStartupInProgress = false;
+        private string _startupStatusMessage = "";
 
         public string HtmlContent
         {
             get => _htmlContent;
             set => this.RaiseAndSetIfChanged(ref _htmlContent, value);
+        }
+
+        public bool IsStartupInProgress
+        {
+            get => _isStartupInProgress;
+            set => this.RaiseAndSetIfChanged(ref _isStartupInProgress, value);
+        }
+
+        public string StartupStatusMessage
+        {
+            get => _startupStatusMessage;
+            set => this.RaiseAndSetIfChanged(ref _startupStatusMessage, value);
         }
 
         public WelcomeViewModel() : this(new WelcomeUpdateService())
@@ -41,7 +55,13 @@ namespace CST.Avalonia.ViewModels
             var version = rawVersion.Contains('+') ? rawVersion.Substring(0, rawVersion.IndexOf('+')) : rawVersion;
             _updateService.CurrentAppVersion = version;
 
-            // Load HTML content on initialization
+            // DON'T load HTML content in constructor - it will be loaded when the view is attached
+            // This prevents "Call from invalid thread" errors in packaged apps
+        }
+
+        public void Initialize()
+        {
+            // Load HTML content when explicitly initialized from UI thread
             _ = LoadWelcomeContentAsync();
         }
 
@@ -53,6 +73,9 @@ namespace CST.Avalonia.ViewModels
 
                 // Load base HTML content
                 var baseHtml = await LoadBaseHtmlAsync();
+
+                // Inject Buddha image as base64
+                baseHtml = await InjectBuddhaImageAsync(baseHtml);
 
                 // Check for updates and inject dynamic content
                 var versionCheck = await _updateService.CheckForUpdatesAsync();
@@ -119,6 +142,42 @@ namespace CST.Avalonia.ViewModels
             // Fallback to simple HTML if nothing found
             Log.Warning("Welcome page resource not found in any location, using fallback HTML");
             return GetFallbackHtml();
+        }
+
+        private async Task<string> InjectBuddhaImageAsync(string html)
+        {
+            try
+            {
+                // Try to load the Buddha image and convert to base64
+                var imagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "buddha-transparent.png");
+
+                if (!File.Exists(imagePath))
+                {
+                    // Try Assets directory
+                    imagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "buddha-transparent.png");
+                }
+
+                if (File.Exists(imagePath))
+                {
+                    var imageBytes = await File.ReadAllBytesAsync(imagePath);
+                    var base64 = Convert.ToBase64String(imageBytes);
+                    var dataUri = $"data:image/png;base64,{base64}";
+
+                    // Replace the placeholder src with the data URI
+                    html = html.Replace("buddha-transparent.png", dataUri);
+                    Log.Debug("Buddha image injected as base64 data URI");
+                }
+                else
+                {
+                    Log.Warning("Buddha image not found at {Path}", imagePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to inject Buddha image");
+            }
+
+            return html;
         }
 
         private string MergeHtmlWithUpdates(string baseHtml, VersionCheckResult versionCheck)
@@ -326,6 +385,26 @@ namespace CST.Avalonia.ViewModels
     <p>Select a book from the tree on the left to begin reading.</p>
 </body>
 </html>";
+        }
+
+        /// <summary>
+        /// Updates the startup status message
+        /// </summary>
+        public void SetStartupStatus(string message)
+        {
+            StartupStatusMessage = message;
+            IsStartupInProgress = !string.IsNullOrEmpty(message);
+            Log.Debug("Welcome page startup status: {Status}", message);
+        }
+
+        /// <summary>
+        /// Clears the startup status and hides the banner
+        /// </summary>
+        public void CompleteStartup()
+        {
+            IsStartupInProgress = false;
+            StartupStatusMessage = "";
+            Log.Information("Welcome page startup completed");
         }
     }
 }

@@ -646,16 +646,32 @@ namespace CST.Avalonia.Services
             }
         }
 
+        public WelcomeViewModel? GetWelcomeViewModel()
+        {
+            var welcomeDoc = FindDocument("WelcomeDocument");
+            return welcomeDoc?.Context as WelcomeViewModel;
+        }
+
         public void ShowWelcomeScreen()
         {
-            // TODO: Implement a separate welcome screen dialog or window
-            // The "Show Welcome screen on startup" setting should show a separate welcome dialog,
-            // not related to the Welcome document tab which prevents collapse
+            // Show the Welcome document tab as active
+            var welcomeDoc = FindDocument("WelcomeDocument");
+            if (welcomeDoc != null)
+            {
+                var documentDock = FindDocumentDock();
+                if (documentDock != null)
+                {
+                    documentDock.ActiveDockable = welcomeDoc;
+                    _logger.Debug("Welcome screen activated");
+                }
+            }
         }
 
         public void HideWelcomeScreen()
         {
-            // TODO: Implement hiding of the separate welcome screen dialog
+            // Welcome document is always present but can be deactivated
+            // by switching to another document tab
+            _logger.Debug("HideWelcomeScreen called (no action needed - switch to book tab instead)");
         }
         
         private Document? FindDocument(string documentId)

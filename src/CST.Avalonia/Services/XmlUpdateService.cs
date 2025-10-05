@@ -53,9 +53,10 @@ namespace CST.Avalonia.Services
             
             // Initialize GitHub client
             _gitHubClient = new GitHubClient(new ProductHeaderValue(AppConstants.UserAgent));
-            
-            // Initialize HTTP client for direct downloads
+
+            // Initialize HTTP client for direct downloads with timeout
             _httpClient = new HttpClient();
+            _httpClient.Timeout = TimeSpan.FromSeconds(30); // 30 second timeout for network requests
             _httpClient.DefaultRequestHeaders.Add("User-Agent", AppConstants.UserAgent);
         }
 
@@ -256,15 +257,39 @@ namespace CST.Avalonia.Services
                 
                 _logger.LogInformation("Using hybrid approach for initial download");
                 
-                // STEP 1: Get latest commit SHA (1 API call)
+                // STEP 1: Get latest commit SHA (1 API call) with timeout
                 UpdateStatusChanged?.Invoke("Getting repository information...");
-                var branchInfo = await _gitHubClient!.Repository.Branch.Get(owner, repo, branch);
+
+                var branchTask = _gitHubClient!.Repository.Branch.Get(owner, repo, branch);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15));
+                var completedTask = await Task.WhenAny(branchTask, timeoutTask);
+
+                if (completedTask == timeoutTask)
+                {
+                    _logger.LogWarning("GitHub API call timed out after 15 seconds");
+                    UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
+                    return;
+                }
+
+                var branchInfo = await branchTask;
                 var commitSha = branchInfo.Commit.Sha;
                 _logger.LogInformation("Latest commit SHA: {CommitSha}", commitSha.Substring(0, 7));
                 
-                // STEP 2: Get complete repository tree (1 API call)
+                // STEP 2: Get complete repository tree (1 API call) with timeout
                 UpdateStatusChanged?.Invoke("Fetching repository tree...");
-                var tree = await _gitHubClient!.Git.Tree.GetRecursive(owner, repo, commitSha);
+
+                var treeTask = _gitHubClient!.Git.Tree.GetRecursive(owner, repo, commitSha);
+                var treeTimeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
+                var treeCompletedTask = await Task.WhenAny(treeTask, treeTimeoutTask);
+
+                if (treeCompletedTask == treeTimeoutTask)
+                {
+                    _logger.LogWarning("GitHub tree API call timed out after 30 seconds");
+                    UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
+                    return;
+                }
+
+                var tree = await treeTask;
                 _logger.LogInformation("Tree retrieved with {TotalItems} total items", tree.Tree.Count);
                 
                 // Filter to target path XML files
@@ -400,9 +425,21 @@ namespace CST.Avalonia.Services
                 
                 _logger.LogInformation("Using hybrid approach: minimal API calls + direct downloads");
                 
-                // STEP 1: Get latest commit SHA (1 API call)
+                // STEP 1: Get latest commit SHA (1 API call) with timeout
                 UpdateStatusChanged?.Invoke("Getting repository information...");
-                var branchInfo = await _gitHubClient!.Repository.Branch.Get(owner, repo, branch);
+
+                var branchTask = _gitHubClient!.Repository.Branch.Get(owner, repo, branch);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15));
+                var completedTask = await Task.WhenAny(branchTask, timeoutTask);
+
+                if (completedTask == timeoutTask)
+                {
+                    _logger.LogWarning("GitHub API call timed out after 15 seconds");
+                    UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
+                    return;
+                }
+
+                var branchInfo = await branchTask;
                 var commitSha = branchInfo.Commit.Sha;
                 _logger.LogInformation("Latest commit SHA: {CommitSha}", commitSha.Substring(0, 7));
                 
@@ -417,9 +454,21 @@ namespace CST.Avalonia.Services
                     return;
                 }
                 
-                // STEP 2: Get complete repository tree (1 API call)
+                // STEP 2: Get complete repository tree (1 API call) with timeout
                 UpdateStatusChanged?.Invoke("Fetching repository tree...");
-                var tree = await _gitHubClient!.Git.Tree.GetRecursive(owner, repo, commitSha);
+
+                var treeTask = _gitHubClient!.Git.Tree.GetRecursive(owner, repo, commitSha);
+                var treeTimeoutTask = Task.Delay(TimeSpan.FromSeconds(30));
+                var treeCompletedTask = await Task.WhenAny(treeTask, treeTimeoutTask);
+
+                if (treeCompletedTask == treeTimeoutTask)
+                {
+                    _logger.LogWarning("GitHub tree API call timed out after 30 seconds");
+                    UpdateStatusChanged?.Invoke("Network request timed out - skipping updates");
+                    return;
+                }
+
+                var tree = await treeTask;
                 _logger.LogInformation("Tree retrieved with {TotalItems} total items", tree.Tree.Count);
                 
                 // Filter to target path XML files

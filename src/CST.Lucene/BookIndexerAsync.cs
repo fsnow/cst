@@ -28,21 +28,34 @@ namespace CST.Lucene
             set => _bookIndexer.IndexDirectory = value;
         }
 
-        public Task IndexAllAsync(IProgress<IndexingProgress> progress, List<int> changedFiles)
+        public async Task IndexAllAsync(IProgress<IndexingProgress> progress, List<int> changedFiles)
         {
-            return Task.Run(() =>
+            await Task.Run(async () =>
             {
                 _logger.Information("BookIndexerAsync.IndexAllAsync() starting with {ChangedFiles} changed files", changedFiles.Count);
                 _logger.Information("XmlDirectory: {XmlDirectory}", XmlDirectory);
                 _logger.Information("IndexDirectory: {IndexDirectory}", IndexDirectory);
-                
+
+                var lastProgressReport = DateTime.MinValue;
+                const int progressThrottleMs = 100; // Only report progress every 100ms to avoid UI thread flooding
+
                 _bookIndexer.IndexAll(message =>
                 {
                     _logger.Information("BookIndexer progress: {Message}", message);
-                    var indexingProgress = ParseProgressMessage(message);
-                    progress?.Report(indexingProgress);
+
+                    // Throttle progress reports to prevent UI thread flooding
+                    var now = DateTime.UtcNow;
+                    if ((now - lastProgressReport).TotalMilliseconds >= progressThrottleMs)
+                    {
+                        var indexingProgress = ParseProgressMessage(message);
+                        progress?.Report(indexingProgress);
+                        lastProgressReport = now;
+
+                        // Yield control to prevent system lockup
+                        Task.Delay(1).Wait();
+                    }
                 }, changedFiles);
-                
+
                 _logger.Information("BookIndexerAsync.IndexAllAsync() completed");
             });
         }

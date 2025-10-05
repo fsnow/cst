@@ -67,7 +67,7 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
         {
             // Give the application state time to load
             await Task.Delay(100);
-            await Dispatcher.UIThread.InvokeAsync(async () => await InitializeAsync());
+            Dispatcher.UIThread.Post(async () => await InitializeAsync());
         });
     }
 
@@ -251,7 +251,7 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
             return nodes;
         });
 
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             BookTree.Clear();
             

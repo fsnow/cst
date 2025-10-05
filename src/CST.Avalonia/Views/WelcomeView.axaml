@@ -3,13 +3,38 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:wv="using:WebViewControl"
+             xmlns:vm="using:CST.Avalonia.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
-             x:Class="CST.Avalonia.Views.WelcomeView">
+             x:Class="CST.Avalonia.Views.WelcomeView"
+             x:DataType="vm:WelcomeViewModel">
 
     <Border Background="#F8F9FA" Padding="0">
-        <wv:WebView x:Name="WelcomeWebView"
-                    Focusable="True"
-                    IsTabStop="True" />
+        <Grid RowDefinitions="Auto,*">
+            <!-- Startup Status Banner -->
+            <Border Grid.Row="0"
+                    Background="#E3F2FD"
+                    BorderBrush="#2196F3"
+                    BorderThickness="0,0,0,1"
+                    Padding="15,10"
+                    IsVisible="{Binding IsStartupInProgress}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <!-- Animated spinner -->
+                    <TextBlock Text="⏳" FontSize="18" VerticalAlignment="Center"/>
+
+                    <!-- Status text -->
+                    <TextBlock Text="{Binding StartupStatusMessage}"
+                              FontSize="14"
+                              VerticalAlignment="Center"
+                              Foreground="#1976D2"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Welcome content -->
+            <wv:WebView Grid.Row="1"
+                        x:Name="WelcomeWebView"
+                        Focusable="True"
+                        IsTabStop="True" />
+        </Grid>
     </Border>
 
 </UserControl>

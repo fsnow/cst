@@ -74,12 +74,18 @@ namespace CST.Avalonia.Views
                     Log.Information("WelcomeView: HtmlContent property changed, length: {Length}",
                         _viewModel.HtmlContent?.Length ?? 0);
 
+                    // Reset loaded flag so we can load the new content
+                    _hasLoadedContent = false;
+
                     // Try loading content when it changes
                     _ = TryLoadHtmlContent();
                 }
             };
 
-            // Try to load content immediately
+            // Initialize the view model NOW that we're on the UI thread
+            _viewModel.Initialize();
+
+            // Try to load content immediately (after initialization)
             _ = TryLoadHtmlContent();
         }
 

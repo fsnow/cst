@@ -66,7 +66,7 @@ namespace CST.Avalonia.Services
                     if (string.IsNullOrEmpty(_settings.XmlBooksDirectory))
                     {
                         // Set the default XML directory in the app data folder
-                        var xmlPath = Path.Combine(_settingsDirectory, "Xml");
+                        var xmlPath = Path.Combine(_settingsDirectory, "xml");
 
                         // Create the directory if it doesn't exist
                         if (!Directory.Exists(xmlPath))

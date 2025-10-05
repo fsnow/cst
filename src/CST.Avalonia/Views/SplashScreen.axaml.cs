@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -25,62 +26,72 @@ public partial class SplashScreen : Window
     private static SplashScreen? _instance;
     private static readonly object _lock = new object();
     private static readonly Serilog.ILogger _logger = Log.ForContext<SplashScreen>();
+    private static readonly Queue<string> _pendingStatusMessages = new Queue<string>();
+    private static string? _lastStatus = null;
+
+    // Simple debug logging that works before Serilog is initialized
+    private static void DebugLog(string message)
+    {
+        try
+        {
+            var debugLogPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "CSTReader",
+                "debug-splash.log"
+            );
+            var directory = Path.GetDirectoryName(debugLogPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            File.AppendAllText(debugLogPath, $"{timestamp} {message}\n");
+        }
+        catch
+        {
+            // Silently fail if we can't write to the debug log
+        }
+    }
     
-    private readonly DispatcherTimer _timer;
-    private double _opacityIncrement = 0.05;
-    private double _targetProgress = 0.0;
-    private double _currentProgress = 0.0;
     private readonly List<DateTime> _referencePoints = new();
     private readonly List<double> _storedIncrements = new();
     private DateTime _startTime;
     private bool _isClosing = false;
     private double _averageTickTime = 50.0; // milliseconds per progress increment
-    private DispatcherTimer? _safetyTimer; // Auto-close timer for safety
     
     // Registry key for self-calibration data (similar to CST4)
     private static readonly string RegistryKeyPath = AppConstants.RegistryBasePath + "\\SplashScreen";
     
     public SplashScreen()
     {
-        InitializeComponent();
-        
-        // Start transparent for fade-in effect
-        Opacity = 0.0;
-        
+        DebugLog("SplashScreen constructor - Entry");
+        try
+        {
+            _logger.Information("SplashScreen constructor started");
+            DebugLog("SplashScreen constructor - About to call InitializeComponent");
+            InitializeComponent();
+            DebugLog("SplashScreen constructor - InitializeComponent completed");
+            _logger.Information("SplashScreen InitializeComponent completed");
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"SplashScreen constructor - Exception during InitializeComponent: {ex.GetType().Name} - {ex.Message}");
+            DebugLog($"SplashScreen constructor - Stack trace: {ex.StackTrace}");
+            throw;
+        }
+
+        // Start with full opacity - no fade-in animation needed
+        Opacity = 1.0;
+        DebugLog("SplashScreen constructor - Opacity set to 1.0");
+
         // Load background image
         LoadBackgroundImage();
-        
-        // Initialize timer for animations
-        _timer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(50) // 20 FPS
-        };
-        _timer.Tick += Timer_Tick;
-        
+
         // Initialize calibration data
         _startTime = DateTime.Now;
         ReadStoredIncrements();
-        
-        // On macOS, we need to handle the timer start more carefully
-        if (OperatingSystem.IsMacOS())
-        {
-            // Delay timer start to ensure window is fully initialized
-            Dispatcher.UIThread.Post(() => 
-            {
-                _timer.Start();
-                _logger.Debug("Splash screen timer started (macOS delayed start)");
-            }, DispatcherPriority.Background);
-        }
-        else
-        {
-            // Start fade-in animation immediately on other platforms
-            _timer.Start();
-            _logger.Debug("Splash screen created and fade-in timer started");
-        }
-        
-        // Safety timer removed - splash screen stays open until explicitly closed
-        // This allows for full downloads and indexing operations to complete
-        _safetyTimer = null;
+
+        DebugLog("SplashScreen constructor - Initialization complete");
     }
     
     /// <summary>
@@ -88,86 +99,353 @@ public partial class SplashScreen : Window
     /// </summary>
     public static void ShowSplashScreen()
     {
+        DebugLog("ShowSplashScreen() - Entry point");
+        try
+        {
+            if (_logger != null)
+            {
+                _logger.Information("ShowSplashScreen() called");
+                DebugLog("ShowSplashScreen() - Logger available, logged to Serilog");
+            }
+            else
+            {
+                DebugLog("ShowSplashScreen() called - logger is null");
+                Console.WriteLine("ShowSplashScreen() called - logger is null");
+            }
+        }
+        catch (Exception logEx)
+        {
+            DebugLog($"ShowSplashScreen() - Logging failed: {logEx.Message}");
+            Console.WriteLine($"ShowSplashScreen() - Logging failed: {logEx.Message}");
+        }
+
+        DebugLog("ShowSplashScreen() - About to acquire lock");
         lock (_lock)
         {
-            if (_instance != null) return;
-            
+            DebugLog("ShowSplashScreen() - Lock acquired");
             try
             {
-                _logger.Debug("Creating splash screen instance");
-                
-                // Ensure we're on the UI thread
-                if (Dispatcher.UIThread.CheckAccess())
+                if (_logger != null)
+                    _logger.Information("ShowSplashScreen() acquired lock");
+                else
+                    Console.WriteLine("ShowSplashScreen() acquired lock - logger is null");
+            }
+            catch (Exception logEx)
+            {
+                DebugLog($"ShowSplashScreen() - Lock logging failed: {logEx.Message}");
+                Console.WriteLine($"ShowSplashScreen() - Lock logging failed: {logEx.Message}");
+            }
+
+            if (_instance != null)
+            {
+                try
                 {
+                    DebugLog("ShowSplashScreen() - _instance is not null, returning early");
+                    _logger?.Warning("ShowSplashScreen() - _instance is not null, returning early");
+                }
+                catch { }
+                return;
+            }
+
+            try
+            {
+                if (_logger != null)
+                    _logger.Information("ShowSplashScreen() - _instance is null, proceeding");
+                else
+                    Console.WriteLine("ShowSplashScreen() - _instance is null, proceeding");
+            }
+            catch { }
+
+            try
+            {
+                DebugLog("ShowSplashScreen() - About to create splash screen");
+                if (_logger != null)
+                    _logger.Debug("Creating splash screen instance");
+                else
+                    Console.WriteLine("Creating splash screen instance");
+
+                // Ensure we're on the UI thread
+                DebugLog("ShowSplashScreen() - Checking UI thread");
+                bool onUiThread = Dispatcher.UIThread.CheckAccess();
+                DebugLog($"ShowSplashScreen() - On UI thread: {onUiThread}");
+
+                if (_logger != null)
+                    _logger.Information("ShowSplashScreen() - On UI thread: {OnUiThread}", onUiThread);
+                else
+                    Console.WriteLine($"ShowSplashScreen() - On UI thread: {onUiThread}");
+
+                if (onUiThread)
+                {
+                    DebugLog("ShowSplashScreen() - Calling CreateAndShowSplashScreen directly");
+                    if (_logger != null)
+                        _logger.Information("ShowSplashScreen() - Calling CreateAndShowSplashScreen directly");
+                    else
+                        Console.WriteLine("ShowSplashScreen() - Calling CreateAndShowSplashScreen directly");
                     CreateAndShowSplashScreen();
+                    DebugLog("ShowSplashScreen() - CreateAndShowSplashScreen returned");
                 }
                 else
                 {
+                    DebugLog("ShowSplashScreen() - Posting CreateAndShowSplashScreen to UI thread");
+                    if (_logger != null)
+                        _logger.Information("ShowSplashScreen() - Posting CreateAndShowSplashScreen to UI thread");
+                    else
+                        Console.WriteLine("ShowSplashScreen() - Posting CreateAndShowSplashScreen to UI thread");
                     // Post to UI thread if we're not already on it
                     Dispatcher.UIThread.Post(CreateAndShowSplashScreen, DispatcherPriority.Send);
+                    DebugLog("ShowSplashScreen() - Posted to UI thread");
                 }
+
+                DebugLog("ShowSplashScreen() - Completed without exceptions");
+                if (_logger != null)
+                    _logger.Information("ShowSplashScreen() - Completed without exceptions");
+                else
+                    Console.WriteLine("ShowSplashScreen() - Completed without exceptions");
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to create splash screen instance");
+                DebugLog($"ShowSplashScreen() - Exception: {ex.GetType().Name} - {ex.Message}");
+                DebugLog($"ShowSplashScreen() - Stack trace: {ex.StackTrace}");
+                try
+                {
+                    _logger?.Error(ex, "Failed to create splash screen instance - Exception details: {Message}", ex.Message);
+                }
+                catch { }
+                Console.WriteLine($"Failed to create splash screen instance: {ex.GetType().Name} - {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
             }
         }
+
+        try
+        {
+            if (_logger != null)
+                _logger.Information("ShowSplashScreen() - Exiting method");
+            else
+                Console.WriteLine("ShowSplashScreen() - Exiting method");
+        }
+        catch { }
     }
     
     private static void CreateAndShowSplashScreen()
     {
+        DebugLog("CreateAndShowSplashScreen() - Entry");
         try
         {
+            DebugLog("CreateAndShowSplashScreen: About to create SplashScreen instance");
+            _logger.Information("CreateAndShowSplashScreen: Creating new SplashScreen instance");
             _instance = new SplashScreen();
-            
+            DebugLog("CreateAndShowSplashScreen: SplashScreen instance created successfully");
+            _logger.Information("CreateAndShowSplashScreen: SplashScreen instance created successfully");
+
             // On macOS, we need to ensure the window is properly configured
             if (OperatingSystem.IsMacOS())
             {
-                // Set window level to ensure it appears on top
+                DebugLog("CreateAndShowSplashScreen: Configuring for macOS");
+                _logger.Information("CreateAndShowSplashScreen: Configuring for macOS");
+
+                // Make it stay above the main app window, but allow other apps to come forward
                 _instance.Topmost = true;
-                
+                DebugLog("CreateAndShowSplashScreen: Topmost set to true for app-level priority");
+
+                // Show in taskbar so it's a normal window
+                _instance.ShowInTaskbar = true;
+                _instance.WindowState = WindowState.Normal;
+
                 // Ensure the window is activated
+                DebugLog("CreateAndShowSplashScreen: About to call Show()");
                 _instance.Show();
+                DebugLog("CreateAndShowSplashScreen: macOS Show() called");
+                _logger.Information("CreateAndShowSplashScreen: macOS Show() called");
+
+                DebugLog("CreateAndShowSplashScreen: About to call Activate()");
                 _instance.Activate();
-                _instance.Focus();
+                DebugLog("CreateAndShowSplashScreen: macOS Activate() called");
+                _logger.Information("CreateAndShowSplashScreen: macOS Activate() called");
+
+                // Don't force focus - let user switch windows if needed
+                // _instance.Focus();
+                // _instance.BringIntoView();
+                DebugLog("CreateAndShowSplashScreen: Window shown without forcing topmost");
             }
             else
             {
+                DebugLog("CreateAndShowSplashScreen: Showing for non-macOS platform");
+                _logger.Information("CreateAndShowSplashScreen: Showing for non-macOS platform");
                 _instance.Show();
             }
-            
-            _logger.Information("Splash screen displayed");
+
+            DebugLog("CreateAndShowSplashScreen: Splash screen displayed successfully");
+            _logger.Information("Splash screen displayed successfully");
+
+            // Process any queued status messages
+            ProcessQueuedStatusMessages();
         }
         catch (Exception ex)
         {
+            DebugLog($"CreateAndShowSplashScreen: Exception: {ex.GetType().Name} - {ex.Message}");
+            DebugLog($"CreateAndShowSplashScreen: Stack trace: {ex.StackTrace}");
             _logger.Error(ex, "Failed in CreateAndShowSplashScreen");
+        }
+        DebugLog("CreateAndShowSplashScreen() - Exit");
+    }
+
+    private static void ProcessQueuedStatusMessages()
+    {
+        try
+        {
+            lock (_lock)
+            {
+                // Process any messages that were queued before the splash screen was ready
+                if (_pendingStatusMessages.Count > 0)
+                {
+                    DebugLog($"Processing {_pendingStatusMessages.Count} queued status messages");
+                    while (_pendingStatusMessages.Count > 0)
+                    {
+                        var status = _pendingStatusMessages.Dequeue();
+                        DebugLog($"Processing queued status: '{status}'");
+                    }
+                }
+
+                // Set the last status message
+                if (_lastStatus != null && _instance?.StatusLabel != null)
+                {
+                    _instance.StatusLabel.Text = _lastStatus;
+                    DebugLog($"Set status to last queued message: '{_lastStatus}'");
+                    _logger.Debug("Applied last queued status: {Status}", _lastStatus);
+
+                    // Force UI update
+                    _instance.StatusLabel.InvalidateVisual();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ProcessQueuedStatusMessages: Exception - {ex.Message}");
+            _logger.Error(ex, "Failed to process queued status messages");
         }
     }
     
     /// <summary>
-    /// Closes the splash screen with fade-out effect
+    /// Force closes the splash screen - must be called from UI thread
     /// </summary>
-    public static void CloseForm()
+    public static void ForceClose()
     {
-        _logger.Debug("Closing splash screen requested");
-        
+        DebugLog("ForceClose() called");
         try
         {
-            if (_instance != null && Application.Current != null)
+            lock (_lock)
             {
-                Dispatcher.UIThread.Post(() =>
+                if (_instance != null)
                 {
-                    if (_instance != null && !_instance._isClosing)
+                    DebugLog("ForceClose: Closing window on UI thread");
+
+                    // Must be on UI thread to close window
+                    if (Dispatcher.UIThread.CheckAccess())
                     {
-                        _instance._isClosing = true;
-                        _instance._opacityIncrement = -0.05; // Start fade-out
-                        _instance.StoreIncrements(); // Save calibration data
+                        try
+                        {
+                            _instance.Close();
+                            DebugLog("ForceClose: Window closed successfully");
+                        }
+                        catch (Exception closeEx)
+                        {
+                            DebugLog($"ForceClose: Close() exception - {closeEx.Message}");
+                        }
                     }
-                });
+                    else
+                    {
+                        DebugLog("ForceClose: Not on UI thread - posting to UI thread");
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            try
+                            {
+                                _instance?.Close();
+                                DebugLog("ForceClose: Window closed via UI thread post");
+                            }
+                            catch (Exception ex)
+                            {
+                                DebugLog($"ForceClose: UI thread close exception - {ex.Message}");
+                            }
+                        });
+                    }
+
+                    _instance = null;
+                    DebugLog("ForceClose: Instance cleared");
+                }
+                else
+                {
+                    DebugLog("ForceClose: No instance to close");
+                }
             }
         }
         catch (Exception ex)
         {
+            DebugLog($"ForceClose: Exception - {ex.Message}");
+            _logger.Error(ex, "Failed to force close splash screen");
+        }
+    }
+
+    public static void CloseForm()
+    {
+        DebugLog("CloseForm() called");
+        _logger.Debug("Closing splash screen requested");
+
+        try
+        {
+            lock (_lock)
+            {
+                if (_instance != null && !_instance._isClosing)
+                {
+                    DebugLog("CloseForm: Starting close sequence");
+                    _instance._isClosing = true;
+                    _instance.StoreIncrements(); // Save calibration data
+
+                    // Close immediately - no fade animation
+                    // Must be on UI thread
+                    if (Dispatcher.UIThread.CheckAccess())
+                    {
+                        DebugLog("CloseForm: On UI thread, closing directly");
+                        try
+                        {
+                            _instance.Close();
+                            DebugLog("CloseForm: Window closed successfully");
+                        }
+                        catch (Exception closeEx)
+                        {
+                            DebugLog($"CloseForm: Close() exception - {closeEx.Message}");
+                        }
+                        _instance = null;
+                    }
+                    else
+                    {
+                        DebugLog("CloseForm: Not on UI thread - posting close");
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            try
+                            {
+                                if (_instance != null)
+                                {
+                                    _instance.Close();
+                                    DebugLog("CloseForm: Window closed via UI thread post");
+                                    _instance = null;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                DebugLog($"CloseForm: UI thread close exception - {ex.Message}");
+                            }
+                        });
+                    }
+                }
+                else
+                {
+                    DebugLog($"CloseForm: Already closing or no instance - _isClosing={_instance?._isClosing}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"CloseForm: Exception - {ex.Message}");
             _logger.Error(ex, "Failed to close splash screen");
         }
     }
@@ -179,26 +457,62 @@ public partial class SplashScreen : Window
     {
         try
         {
-            // Only use dispatcher if we have an instance and Avalonia is initialized
-            if (_instance != null && Application.Current != null)
+            lock (_lock)
             {
-                Dispatcher.UIThread.Post(() =>
+                _lastStatus = status;
+
+                // Only update if we have an instance and Avalonia is initialized
+                if (_instance != null && Application.Current != null)
                 {
-                    if (_instance?.StatusLabel != null)
+                    // Update synchronously if on UI thread, otherwise use InvokeAsync with wait
+                    if (Dispatcher.UIThread.CheckAccess())
                     {
-                        _instance.StatusLabel.Text = status;
-                        _logger.Debug("Status updated: {Status}", status);
+                        // On UI thread - update directly
+                        if (_instance.StatusLabel != null)
+                        {
+                            _instance.StatusLabel.Text = status;
+                            DebugLog($"SetStatus: Updated directly to '{status}'");
+                            _logger.Debug("Status updated: {Status}", status);
+                        }
                     }
-                });
-            }
-            else
-            {
-                _logger.Debug("Status set to {Status} but no UI instance available", status);
+                    else
+                    {
+                        // Not on UI thread - use InvokeAsync and WAIT for it to complete
+                        // This ensures the update actually happens in packaged apps
+                        try
+                        {
+                            var updateTask = Dispatcher.UIThread.InvokeAsync(() =>
+                            {
+                                if (_instance?.StatusLabel != null)
+                                {
+                                    _instance.StatusLabel.Text = status;
+                                    DebugLog($"SetStatus: Updated via InvokeAsync to '{status}'");
+                                    _logger.Debug("Status updated: {Status}", status);
+                                }
+                            }, DispatcherPriority.Send);
+
+                            // Wait for the update to complete (with timeout)
+                            updateTask.Wait(TimeSpan.FromMilliseconds(100));
+                        }
+                        catch (Exception ex)
+                        {
+                            DebugLog($"SetStatus: InvokeAsync failed - {ex.Message}");
+                        }
+                    }
+                }
+                else
+                {
+                    // Queue the message for later
+                    _pendingStatusMessages.Enqueue(status);
+                    _logger.Debug("Status queued (no UI instance yet): {Status}", status);
+                    DebugLog($"SetStatus: Queued '{status}' (instance not ready)");
+                }
             }
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to set splash screen status to {Status}", status);
+            DebugLog($"SetStatus: Exception - {ex.Message}");
         }
     }
     
@@ -226,83 +540,55 @@ public partial class SplashScreen : Window
     private void SetReferenceInternal()
     {
         _referencePoints.Add(DateTime.Now);
-        
-        // Calculate target progress based on stored increments or estimate
-        if (_storedIncrements.Count > 0 && _referencePoints.Count <= _storedIncrements.Count)
-        {
-            _targetProgress = _storedIncrements[_referencePoints.Count - 1] * 100.0;
-        }
-        else
-        {
-            // Fallback: estimate based on reference point count
-            _targetProgress = Math.Min((_referencePoints.Count * 100.0) / 8.0, 95.0);
-        }
-        
-        _logger.Debug("Progress reference point {PointNumber} set, target: {TargetProgress:F1}%", _referencePoints.Count, _targetProgress);
+        _logger.Debug("Progress reference point {PointNumber} set", _referencePoints.Count);
     }
-    
-    private void Timer_Tick(object? sender, EventArgs e)
-    {
-        try
-        {
-            // Handle fade in/out
-            var newOpacity = Opacity + _opacityIncrement;
-            
-            if (_isClosing)
-            {
-                // Fade out
-                if (newOpacity <= 0.0)
-                {
-                    _timer.Stop();
-                    Close();
-                    return;
-                }
-                Opacity = newOpacity;
-            }
-            else
-            {
-                // Fade in
-                if (newOpacity >= 1.0)
-                {
-                    Opacity = 1.0;
-                }
-                else
-                {
-                    Opacity = newOpacity;
-                }
-            }
-            
-            // Progress bar and time remaining removed - no longer needed
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Error in splash screen timer tick");
-        }
-    }
-    
-    // UpdateTimeRemaining method removed - no longer needed without progress bar
     
     private void LoadBackgroundImage()
     {
         try
         {
+            DebugLog("LoadBackgroundImage: Starting");
             // Load the CST4 Dhamma wheel splash screen image
             var imagePath = "avares://CST.Avalonia/Assets/cst-splash.png";
+            _logger.Information("Loading splash screen background image: {ImagePath}", imagePath);
+            DebugLog($"LoadBackgroundImage: Attempting to load {imagePath}");
+
             var bitmap = new Bitmap(AssetLoader.Open(new Uri(imagePath)));
-            
+            _logger.Information("Background image bitmap created successfully - Size: {Width}x{Height}",
+                bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+            DebugLog($"LoadBackgroundImage: Bitmap created - Size: {bitmap.PixelSize.Width}x{bitmap.PixelSize.Height}");
+
             if (BackgroundImage != null)
             {
                 BackgroundImage.Source = bitmap;
+                _logger.Information("Background image assigned to BackgroundImage control");
+                DebugLog("LoadBackgroundImage: Image assigned to control");
             }
-            
-            _logger.Debug("Background image loaded successfully");
+            else
+            {
+                _logger.Warning("BackgroundImage control is null - cannot assign bitmap");
+                DebugLog("LoadBackgroundImage: WARNING - BackgroundImage control is null");
+            }
+
+            _logger.Information("Background image loaded successfully");
+            DebugLog("LoadBackgroundImage: Completed successfully");
         }
         catch (Exception ex)
         {
-            _logger.Warning(ex, "Failed to load background image, using fallback color");
-            // Fallback to solid background
-            var background = new SolidColorBrush(Color.FromRgb(240, 240, 240));
-            Background = background;
+            DebugLog($"LoadBackgroundImage: Exception - {ex.GetType().Name}: {ex.Message}");
+            _logger.Error(ex, "Failed to load background image from avares://CST.Avalonia/Assets/cst-splash.png, using fallback color");
+
+            // Fallback to solid background - make it visible!
+            DebugLog("LoadBackgroundImage: Setting fallback solid color background");
+            var fallbackBrush = new SolidColorBrush(Color.FromRgb(100, 150, 200)); // Blue color for visibility
+            Background = fallbackBrush;
+
+            // Also make the window opaque so we can see it
+            if (this.TransparencyLevelHint != null && this.TransparencyLevelHint.Any(t => t == WindowTransparencyLevel.Transparent))
+            {
+                DebugLog("LoadBackgroundImage: Disabling transparency for visibility");
+                this.TransparencyLevelHint = new[] { WindowTransparencyLevel.None };
+            }
         }
     }
     
@@ -391,15 +677,14 @@ public partial class SplashScreen : Window
     
     protected override void OnClosed(EventArgs e)
     {
-        _timer?.Stop();
-        _safetyTimer?.Stop();
         base.OnClosed(e);
-        
+
         lock (_lock)
         {
             _instance = null;
         }
-        
+
         _logger.Debug("Splash screen closed and disposed");
+        DebugLog("Splash screen OnClosed - instance cleared");
     }
 }

@@ -69,6 +69,11 @@ namespace CST.Avalonia.ViewModels
             _factory.CloseBook(bookId);
         }
 
+        public WelcomeViewModel? GetWelcomeViewModel()
+        {
+            return _factory.GetWelcomeViewModel();
+        }
+
         public void ShowWelcomeScreen()
         {
             _factory.ShowWelcomeScreen();

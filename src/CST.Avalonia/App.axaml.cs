@@ -41,6 +41,30 @@ public partial class App : Application
     public static Window? MainWindow { get; private set; }
     private bool _hasRestoredInitialBooks = false;
 
+    // Simple debug logging that works before Serilog is initialized
+    private static void DebugLog(string message)
+    {
+        try
+        {
+            var debugLogPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "CSTReader",
+                "debug-splash.log"
+            );
+            var directory = Path.GetDirectoryName(debugLogPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            File.AppendAllText(debugLogPath, $"{timestamp} {message}\n");
+        }
+        catch
+        {
+            // Silently fail if we can't write to the debug log
+        }
+    }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -66,6 +90,35 @@ public partial class App : Application
         {
             WebView.Settings.AddCommandLineSwitch("use-mock-keychain", "");
             WebView.Settings.AddCommandLineSwitch("disable-password-generation", "");
+
+            // CRITICAL: Set CEF subprocess path to helper bundle in packaged app
+            // CEF needs to find the helper processes in the correct location
+            // Use command line switch since WebViewControl doesn't expose CefSettings directly
+
+            // Detect if we're running from an app bundle by checking executable path
+            var exePath = Environment.ProcessPath;
+            if (exePath != null && exePath.Contains(".app/Contents/MacOS/"))
+            {
+                // Extract bundle path from executable path
+                // Executable: /path/to/CST Reader.app/Contents/MacOS/CST.Avalonia
+                var macosIndex = exePath.IndexOf(".app/Contents/MacOS/");
+                if (macosIndex > 0)
+                {
+                    var bundlePath = exePath.Substring(0, macosIndex + 4); // Include ".app"
+                    var helperPath = Path.Combine(bundlePath,
+                        "Contents/Frameworks/CST Reader Helper.app/Contents/MacOS/CST Reader Helper");
+
+                    if (File.Exists(helperPath))
+                    {
+                        WebView.Settings.AddCommandLineSwitch("browser-subprocess-path", helperPath);
+                        Log.Information("CEF Helper path set to: {HelperPath}", helperPath);
+                    }
+                    else
+                    {
+                        Log.Warning("CEF Helper not found at expected path: {HelperPath}", helperPath);
+                    }
+                }
+            }
         }
 
         // Disable persistent cache to use in-memory storage only
@@ -73,46 +126,8 @@ public partial class App : Application
         WebView.Settings.PersistCache = false;
         // Leave CachePath as default (temp directory) to avoid ArgumentNullException on cleanup
 
-        // Enable splash screen for all platforms with improved implementation
-        bool showSplash = true;
-        
-        // Check the "Show Welcome screen on startup" setting if platform supports splash screen
-        if (showSplash)
-        {
-            showSplash = ShouldShowSplashScreen();
-        }
-        
-        if (showSplash)
-        {
-            // Show splash screen with platform-safe implementation
-            // On macOS, we need to ensure the splash screen is shown on the UI thread
-            // after Avalonia is properly initialized
-            if (OperatingSystem.IsMacOS())
-            {
-                // Defer splash screen display to ensure proper initialization on macOS
-                Dispatcher.UIThread.Post(() => 
-                {
-                    SplashScreen.ShowSplashScreen();
-                    SplashScreen.SetStatus("Starting CST Avalonia...");
-                    SplashScreen.SetReferencePoint();
-                }, DispatcherPriority.Send);
-            }
-            else
-            {
-                // Windows/Linux can show immediately
-                SplashScreen.ShowSplashScreen();
-                SplashScreen.SetStatus("Starting CST Avalonia...");
-                SplashScreen.SetReferencePoint();
-            }
-        }
-
-        // WebView initialization is handled automatically by OutSystems WebView package
-
-        if (showSplash)
-        {
-            SplashScreen.SetStatus("Configuring services...");
-            SplashScreen.SetReferencePoint();
-        }
+        // Welcome page will show startup status instead of separate splash screen
+        Log.Information("Starting application with Welcome page status display");
 
         // Configure services
         var services = new ServiceCollection();
@@ -121,121 +136,82 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
+            // Avoid duplicate validations from both Avalonia and the CommunityToolkit.
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
-            
-            if (showSplash)
-            {
-                SplashScreen.SetStatus("Loading settings...");
-                SplashScreen.SetReferencePoint();
-            }
 
-            // Load settings before application state
-            _ = LoadSettingsAsync();
-            
-            if (showSplash)
-            {
-                SplashScreen.SetStatus("Loading application state...");
-                SplashScreen.SetReferencePoint();
-            }
-            
-            // Load application state before creating UI
-            _ = LoadApplicationStateAsync();
-            
-            // Initialize script service from loaded state (will be called after state loads)
-            // State service will notify ScriptService via event when state is ready
-            
-            if (showSplash)
-            {
-                SplashScreen.SetStatus("Pre-loading fonts...");
-                SplashScreen.SetReferencePoint();
-            }
-            
-            // Pre-load fonts for all scripts to avoid UI delays in settings
-            _ = Task.Run(async () =>
-            {
-                // Give settings time to load
-                await Task.Delay(500);
-                await InitializeFontsAsync();
-            });
-            
-            if (showSplash)
-            {
-                SplashScreen.SetStatus("Checking search index...");
-                SplashScreen.SetReferencePoint();
-            }
-            
-            // Initialize indexing service and build index if needed (with delay to ensure settings are loaded)
-            var indexingTask = Task.Run(async () =>
-            {
-                // Give settings time to load
-                await Task.Delay(1000);
-                
-                // Check for XML updates first to ensure we have latest files
-                await CheckForXmlUpdatesAsync();
-                
-                // Then initialize indexing with the updated files
-                await InitializeIndexingAsync(showSplash);
-            });
-            
-            if (showSplash)
-            {
-                SplashScreen.SetStatus("Loading books...");
-                SplashScreen.SetReferencePoint();
-            }
-            
             // Get and initialize the OpenBookDialogViewModel BEFORE creating the layout
             var openBookViewModel = ServiceProvider.GetRequiredService<OpenBookDialogViewModel>();
-            
-            if (showSplash)
-            {
-                SplashScreen.SetStatus("Creating main window...");
-                SplashScreen.SetReferencePoint();
-            }
-            
-            // Create the main window with dockable layout (this will now get the initialized ViewModel)
+
+            // Create the main window with dockable layout first so Welcome page can display status
             var layoutViewModel = new LayoutViewModel();
             MainWindow = new SimpleTabbedWindow
             {
                 DataContext = layoutViewModel
             };
-            
+
             desktop.MainWindow = MainWindow;
-            
-            if (showSplash)
+
+            // Get the WelcomeViewModel to update startup status
+            var welcomeViewModel = layoutViewModel.GetWelcomeViewModel();
+
+            // Show the window BEFORE starting initialization
+            MainWindow.Show();
+
+            // Start background initialization tasks that depend on settings
+            var initTask = Task.Run(async () =>
             {
-                // Don't close splash screen yet - wait for indexing to complete
-                // Schedule splash screen closure after indexing completes
-                _ = Task.Run(async () =>
+                // Load settings first - MUST complete before indexing
+                Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading settings..."));
+                await LoadSettingsAsync();
+
+                // Load application state
+                Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading application state..."));
+                await LoadApplicationStateAsync();
+
+                // Initialize script service from loaded state (will be called after state loads)
+                // State service will notify ScriptService via event when state is ready
+
+                // Pre-load fonts for all scripts to avoid UI delays in settings
+                Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Pre-loading fonts..."));
+                await InitializeFontsAsync();
+
+                // Check for XML updates first to ensure we have latest files
+                Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Checking for XML updates..."));
+                await CheckForXmlUpdatesAsync(welcomeViewModel);
+
+                // Then initialize indexing with the updated files
+                Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Checking search index..."));
+                await InitializeIndexingAsync(welcomeViewModel);
+            });
+
+            // Wait for initialization to complete and hide status banner
+            _ = Task.Run(async () =>
+            {
+                try
                 {
-                    try
+                    await initTask;
+                    Log.Information("Initialization completed - hiding welcome status banner");
+
+                    // Hide the startup status banner on UI thread
+                    Dispatcher.UIThread.Post(() =>
                     {
-                        // Wait for indexing to complete
-                        await indexingTask;
-                        
-                        // Give a brief moment to show completion
-                        await Task.Delay(500);
-                        
-                        // Update status and close on UI thread
-                        await Dispatcher.UIThread.InvokeAsync(() =>
-                        {
-                            SplashScreen.SetStatus("Ready");
-                            SplashScreen.SetReferencePoint();
-                            SplashScreen.CloseForm();
-                        });
-                    }
-                    catch (Exception ex)
+                        Log.Information("Calling CompleteStartup() to hide banner");
+                        welcomeViewModel?.CompleteStartup();
+                        Log.Information("CompleteStartup() called");
+                    }, DispatcherPriority.Send);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error during initialization");
+                    // Hide status anyway on error
+                    Dispatcher.UIThread.Post(() =>
                     {
-                        Log.Error(ex, "Error waiting for indexing to complete");
-                        // Close splash screen anyway on error
-                        await Dispatcher.UIThread.InvokeAsync(() =>
-                        {
-                            SplashScreen.CloseForm();
-                        });
-                    }
-                });
-            }
+                        Log.Warning("Hiding banner due to initialization error");
+                        welcomeViewModel?.CompleteStartup();
+                    }, DispatcherPriority.Send);
+                }
+            });
 
 
             // Handle book open requests - now they open as documents in the dockable layout
@@ -388,12 +364,12 @@ public partial class App : Application
     /// <summary>
     /// Initialize the indexing service and build index if needed
     /// </summary>
-    private async Task InitializeIndexingAsync(bool showProgress)
+    private async Task InitializeIndexingAsync(WelcomeViewModel? welcomeViewModel)
     {
         try
         {
             Log.Information("InitializeIndexingAsync() started");
-            
+
             // Debug: Check if settings are available
             var settingsService = ServiceProvider?.GetRequiredService<ISettingsService>();
             if (settingsService != null)
@@ -405,54 +381,42 @@ public partial class App : Application
             {
                 Log.Error("Could not get SettingsService from DI container");
             }
-            
+
             var indexingService = ServiceProvider?.GetRequiredService<IIndexingService>();
             if (indexingService != null)
             {
                 Log.Information("IndexingService obtained from DI container");
-                
+
                 Log.Information("Calling indexingService.InitializeAsync()...");
                 await indexingService.InitializeAsync();
                 Log.Information("indexingService.InitializeAsync() completed");
-                
+
                 // Always call BuildIndexAsync - it will handle both initial indexing and incremental updates
                 Log.Information("Calling BuildIndexAsync to check for updates or build if needed...");
-                
-                if (showProgress)
-                {
-                    SplashScreen.SetStatus("Checking search index...");
-                }
-                
-                // Create progress reporter for splash screen
+
+                // Create progress reporter for welcome page
                 var progress = new Progress<CST.Lucene.IndexingProgress>(p =>
                 {
-                    if (showProgress && p != null)
+                    if (p != null && !p.IsComplete)
                     {
                         Dispatcher.UIThread.Post(() =>
                         {
                             if (p.TotalBooks > 0)
                             {
-                                SplashScreen.SetStatus($"Indexing book {p.CurrentBook} of {p.TotalBooks}...");
-                                // Update progress bar (0-100)
-                                var progressValue = p.ProgressPercentage;
-                                if (progressValue > 0)
-                                {
-                                    // Set target progress for smooth animation
-                                    SplashScreen.SetReferencePoint();
-                                }
+                                welcomeViewModel?.SetStartupStatus($"Indexing book {p.CurrentBook} of {p.TotalBooks}...");
                             }
-                            else
+                            else if (!string.IsNullOrEmpty(p.StatusMessage))
                             {
-                                SplashScreen.SetStatus(p.StatusMessage);
+                                welcomeViewModel?.SetStartupStatus(p.StatusMessage);
                             }
                         });
                     }
                 });
-                
+
                 Log.Information("Calling indexingService.BuildIndexAsync()...");
                 await indexingService.BuildIndexAsync(progress);
                 Log.Information("indexingService.BuildIndexAsync() completed");
-                
+
                 Log.Information("Indexing service initialized successfully");
             }
             else
@@ -470,12 +434,12 @@ public partial class App : Application
     /// <summary>
     /// Check for XML data updates from GitHub repository
     /// </summary>
-    private async Task CheckForXmlUpdatesAsync()
+    private async Task CheckForXmlUpdatesAsync(WelcomeViewModel? welcomeViewModel)
     {
         try
         {
             Log.Information("CheckForXmlUpdatesAsync() started");
-            
+
             // Initialize XmlFileDatesService first since XmlUpdateService depends on it
             var xmlFileDatesService = ServiceProvider?.GetRequiredService<IXmlFileDatesService>();
             if (xmlFileDatesService == null)
@@ -483,29 +447,40 @@ public partial class App : Application
                 Log.Warning("XmlFileDatesService not available in DI container");
                 return;
             }
-            
+
             Log.Information("Initializing XmlFileDatesService...");
             await xmlFileDatesService.InitializeAsync();
             Log.Information("XmlFileDatesService initialized");
-            
+
             var xmlUpdateService = ServiceProvider?.GetRequiredService<IXmlUpdateService>();
             if (xmlUpdateService == null)
             {
                 Log.Warning("XmlUpdateService not available in DI container");
                 return;
             }
-            
-            // Subscribe to status updates for logging and splash screen
+
+            // Subscribe to status updates for logging and welcome page
             xmlUpdateService.UpdateStatusChanged += message =>
             {
                 Log.Information("XML Update Status: {Message}", message);
-                // Update splash screen if it's showing
-                SplashScreen.SetStatus(message);
+
+                // Skip completion messages to avoid race condition with banner hiding
+                if (message.Contains("up to date", StringComparison.OrdinalIgnoreCase) ||
+                    message.Contains("complete", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                // Update welcome page status
+                Dispatcher.UIThread.Post(() =>
+                {
+                    welcomeViewModel?.SetStartupStatus(message);
+                });
             };
-            
+
             // Check for updates (this will handle first-time download if needed)
             await xmlUpdateService.CheckForUpdatesAsync();
-            
+
             Log.Information("CheckForXmlUpdatesAsync() completed");
         }
         catch (Exception ex)
@@ -549,11 +524,11 @@ public partial class App : Application
             scriptService.InitializeFromState();
         }
         
-        // Restore main window state (dimensions, position, etc.)
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && 
+        // Restore main window state (dimensions, position, etc.) - MUST be on UI thread
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&
             desktop.MainWindow is SimpleTabbedWindow mainWindow)
         {
-            mainWindow.RestoreWindowState();
+            await Dispatcher.UIThread.InvokeAsync(() => mainWindow.RestoreWindowState());
         }
         
         // Restore book windows if any exist

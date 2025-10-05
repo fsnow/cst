@@ -993,7 +993,7 @@ namespace CST.Avalonia.ViewModels
             var appSupportDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 AppConstants.AppDataDirectoryName,
-                "Xsl");
+                "xsl");
             return Path.Combine(appSupportDir, xslFileName);
         }
         
@@ -1004,7 +1004,7 @@ namespace CST.Avalonia.ViewModels
                 var userXslDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     AppConstants.AppDataDirectoryName,
-                    "Xsl");
+                    "xsl");
                 
                 // Create directory if it doesn't exist
                 if (!Directory.Exists(userXslDir))
@@ -1046,10 +1046,10 @@ namespace CST.Avalonia.ViewModels
                 }
                 else
                 {
-                    // Try app bundle location for production
+                    // Try app bundle location for production (lowercase)
                     var bundleResourcesPath = Path.Combine(
                         Path.GetDirectoryName(assemblyLocation) ?? "",
-                        "..", "Resources", "Xsl");
+                        "..", "Resources", "xsl");
 
                     if (Directory.Exists(bundleResourcesPath))
                     {
