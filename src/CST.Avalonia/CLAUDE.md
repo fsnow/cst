@@ -1,8 +1,8 @@
-# CST Avalonia Project Status - September 2025
+# CST Avalonia Project Status - October 2025
 
-## Current Status: **BETA 2 PREP - CODE SIGNING COMPLETE** 🔐
+## Current Status: **BETA 2 RELEASE READY** 🚀
 
-**Last Updated**: September 20, 2025
+**Last Updated**: October 4, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -98,7 +98,11 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 
 ## Beta 1 Release (September 20, 2025)
 
-**CST Reader 5.0.0-beta.2** has been officially released with complete code signing implementation. This beta release represents a major milestone in the project:
+**CST Reader 5.0.0-beta.1** was released with core functionality but had code signing issues causing "damaged application" errors on launch.
+
+## Beta 2 Release (October 4, 2025)
+
+**CST Reader 5.0.0-beta.2** resolves all packaging and code signing issues. This release is fully functional and ready for distribution:
 
 ### **Release Highlights**
 - **Cross-Platform DMG Packages**: Both Apple Silicon (M1/M2/M3/M4) and Intel Mac builds available
@@ -120,23 +124,28 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 
 The beta release marks the completion of Phase 2 of the project roadmap, with all major systems now functional and ready for real-world testing.
 
-## Beta 2 Development (September 2025)
+## Beta 2 Development (October 2025)
 
-**In Progress**: Preparing Beta 2 release with complete code signing implementation to resolve the "damaged" application warnings reported by Beta 1 users.
+**Status**: Complete and released
 
-### **Code Signing Implementation (Completed)**
-- **Developer ID Certificate**: Applications now signed with Apple Developer ID Application certificate
-- **Certificate Chain Resolution**: Resolved certificate chain validation issues that were preventing signing
-- **Native Library Signing**: All .dylib files properly signed with runtime hardening flags
-- **DMG Installer Signing**: Distribution packages signed and verified for secure installation
-- **Automated Build Process**: Enhanced `package-macos.sh` script with integrated code signing workflow
-- **Security Compliance**: Applications now pass macOS Gatekeeper validation without security warnings
+### **Critical Issues Resolved**
 
-### **Technical Resolution Details**
-- **Root Cause**: Apple Root CA certificate in user keychain with "Always Trust" setting was interfering with certificate chain validation
-- **Solution**: Removed conflicting certificate from user keychain to allow system certificate chain validation
-- **Verification**: All native components (.dylib files) properly signed and verified
-- **Testing**: Applications now launch without quarantine attribute removal or "damaged" errors
+#### **1. CEF WebView Packaging (Completed)**
+- **Problem**: Packaged app crashed on startup with "Unable to find SubProcess" error
+- **Root Cause**: CEF requires 4 helper app bundles in `Contents/Frameworks/` on macOS, but we had the subprocess in `Contents/MacOS/CefGlueBrowserProcess/`
+- **Solution**:
+  - Created 4 CEF Helper bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files
+  - Each helper contains a shell script launcher that calls the actual .NET subprocess
+  - Shell scripts change to `CefGlueBrowserProcess/` directory before executing to ensure runtime dependencies are found
+- **Documentation**: See `markdown/notes/CEF_HELPER_PACKAGING.md`
+
+#### **2. Code Signing & Notarization (Completed)**
+- **Developer ID Signing**: All components signed with Apple Developer ID Application certificate
+- **Hardened Runtime**: Applied to all executables and dylibs, including `CefGlueBrowserProcess/Xilium.CefGlue.BrowserProcess`
+- **Entitlements**: JIT and unsigned memory entitlements for .NET runtime
+- **DMG Signing**: Distribution packages fully signed and notarized
+- **Automated Build**: Enhanced `package-macos.sh` script with integrated signing workflow
+- **Result**: Apps launch without quarantine warnings or "damaged" errors
 
 ### **Beta 2 Release Goals**
 - Eliminate "damaged" application errors on first launch
@@ -177,6 +186,30 @@ When preparing for Beta 2 release, the version number "5.0.0-beta.1" must be upd
    - Line 307: Footer version
 
 **Note**: The version in compiled output files (`bin/Release/`) will be updated automatically when the project is rebuilt. Test files and markdown documentation references can remain as historical examples.
+
+## Known Limitations
+
+### **macOS CPU Usage**
+
+CST Reader exhibits elevated CPU usage on macOS compared to typical desktop applications:
+
+- **~30% CPU** with only the welcome page open (single WebView)
+- **~60% CPU** with 3 books open (3 WebView instances)
+- Main process typically uses **27-30%** when idle
+
+**Root Cause**: This is a known limitation of Avalonia's macOS native backend (`libAvaloniaNative.dylib`). The framework's `Signaler` class creates a CFRunLoop observer that fires on every run loop iteration, causing continuous background processing. CEF (Chromium Embedded Framework) amplifies this effect by performing process monitoring and rendering checks on each callback.
+
+**Comparison with Other Platforms**:
+- macOS (M1): 6-10% idle (Avalonia baseline) vs Windows: 0.48% idle
+- CST Reader's usage is proportional to the number of open WebView instances
+
+**User Mitigation**:
+- Close book tabs when not in use (each tab adds ~10% CPU)
+- Keep welcome page open when idle (lowest CPU state)
+
+**Technical Details**: See `markdown/notes/AVALONIA_HIGH_CPU.md` for complete analysis including CPU profiling data, stack traces, and references to Avalonia GitHub issues (#11070, #15894).
+
+**Note**: This is an Avalonia framework limitation, not a CST Reader bug. Future improvements depend on Avalonia framework optimizations or alternative rendering approaches.
 
 ## Outstanding Work
 
@@ -222,7 +255,8 @@ When preparing for Beta 2 release, the version number "5.0.0-beta.1" must be upd
 8.  **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
-    - **Search Hit Restoration**: Fix bug where highlighted search hits are not restored when reopening books at startup
+    - **Search Hit Restoration** ⭐ **BETA 3 PRIORITY**: Fix bug where highlighted search hits are not restored when reopening books at startup
+    - **Splash Screen Issues**: Deferred post-Beta 2 - status text updates and automatic closing don't work in packaged apps (works fine in development)
 9.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 10.  **Recent Books Feature**:
@@ -234,12 +268,6 @@ When preparing for Beta 2 release, the version number "5.0.0-beta.1" must be upd
     - **User Experience**: Quick access to frequently used texts
     - **Note**: Partial backend exists - ApplicationState.Preferences.RecentBooks list, RecentBookItem model, AddRecentBook() method, but no UI integration and book tracking not implemented
 
-## Outstanding Work for Beta 2 Release
-
-The following items are prioritized for the Beta 2 release to ensure production readiness:
-
-1.  **Book Display Bug Fixes** (from item #7 above):
-    - Implement search hit restoration on startup
 
 ## Technical Architecture
 
@@ -344,6 +372,77 @@ The project now includes comprehensive testing with **62 tests** covering:
 - **Performance Tests (6)**: Speed benchmarks, memory optimization, consistency
 
 All tests maintain a **100% pass rate** and validate production readiness.
+
+## Development Guidelines for Claude
+
+### TodoWrite Usage - IMPORTANT
+
+**ALWAYS use TodoWrite when:**
+- Diagnosing issues with **multiple potential causes** (e.g., "this could be A, B, or C")
+- Implementing features requiring **3+ distinct steps**
+- Working through **any systematic checklist** (testing, deployment, debugging)
+- The user provides **a list of tasks** to complete
+- Starting work on **non-trivial, multi-step tasks**
+
+**How to use TodoWrite effectively:**
+1. **Create the list IMMEDIATELY** when you identify multiple steps/causes
+2. **Work through ALL items systematically** - don't stop after the first fix
+3. **Mark tasks complete as you finish them** - keep the user informed of progress
+4. **Verify assumptions** - check for existing solutions before adding new ones
+
+**Example - Multi-Cause Debugging:**
+```
+When I identify: "This hang is likely due to: 1) Network entitlements 2) Infinite timeout 3) DNS issues"
+I should IMMEDIATELY create:
+- [ ] Check if network entitlements exist
+- [ ] Add network entitlements if missing
+- [ ] Add timeouts to prevent infinite hangs
+- [ ] Verify DNS resolution in packaged app
+
+Then work through ALL items, not just the first one that seems to help.
+```
+
+**Why this matters:**
+- Prevents incomplete fixes that leave users stuck
+- Ensures systematic coverage of all potential issues
+- Keeps both Claude and user aligned on progress
+- Critical for release-blocking bugs where partial fixes waste time
+
+### macOS Code Signing & Entitlements
+
+**Required Entitlements** (in `package-macos.sh`):
+
+```xml
+<key>com.apple.security.cs.allow-jit</key>
+<true/>  <!-- Required for .NET JIT compilation -->
+
+<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+<true/>  <!-- Required for .NET runtime -->
+
+<key>com.apple.security.cs.disable-library-validation</key>
+<true/>  <!-- Required to load .NET assemblies -->
+
+<key>com.apple.security.network.client</key>
+<true/>  <!-- Required for outgoing network connections (GitHub API, downloads) -->
+```
+
+**When Adding New Features:**
+1. **Check if new entitlements are needed** - consult [Apple's Entitlement Key Reference](https://developer.apple.com/documentation/bundleresources/entitlements)
+2. **Common additional entitlements you might need:**
+   - `com.apple.security.network.server` - Incoming network connections
+   - `com.apple.security.device.camera` - Camera access
+   - `com.apple.security.device.microphone` - Microphone access
+   - `com.apple.security.files.downloads.read-write` - Downloads folder access
+   - `com.apple.security.print` - Printing capabilities
+   - `com.apple.security.app-sandbox` - Enable App Sandbox (currently disabled)
+
+3. **Test entitlements after packaging:**
+   ```bash
+   # Verify entitlements are embedded
+   codesign -d --entitlements - "/Applications/CST Reader.app"
+   ```
+
+**Critical:** Notarized apps **WILL FAIL SILENTLY** without proper entitlements. Network calls will hang indefinitely (causing high CPU from retry loops) rather than showing clear errors.
 
 ## Next Steps
 
