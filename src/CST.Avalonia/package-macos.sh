@@ -40,7 +40,7 @@ BUNDLE_NAME="CST Reader.app"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$PROJECT_DIR/bin/Release/net9.0/$RID"
 PUBLISH_DIR="$PROJECT_DIR/bin/Release/net9.0/$RID/publish"
-XSL_SOURCE_DIR="$PROJECT_DIR/Xsl"
+XSL_SOURCE_DIR="$PROJECT_DIR/xsl"
 DIST_DIR="$PROJECT_DIR/dist"
 
 # Check for available signing identities early
@@ -60,7 +60,7 @@ dotnet publish -c Release -r $RID --self-contained -p:PublishSingleFile=false
 echo "Creating app bundle structure..."
 mkdir -p "$BUNDLE_NAME/Contents/MacOS"
 mkdir -p "$BUNDLE_NAME/Contents/Resources"
-mkdir -p "$BUNDLE_NAME/Contents/Resources/Xsl"
+mkdir -p "$BUNDLE_NAME/Contents/Resources/xsl"
 
 # Copy Info.plist
 echo "Copying Info.plist..."
@@ -79,12 +79,88 @@ fi
 echo "Copying application files..."
 cp -R "$PUBLISH_DIR/"* "$BUNDLE_NAME/Contents/MacOS/"
 
+# Create CEF Helper App Bundles (CRITICAL for CEF to work in packaged apps)
+echo "Creating CEF Helper app bundles..."
+
+# Define the 4 required helper variants
+HELPER_NAMES=("CST Reader Helper" "CST Reader Helper (GPU)" "CST Reader Helper (Plugin)" "CST Reader Helper (Renderer)")
+
+for HELPER_NAME in "${HELPER_NAMES[@]}"; do
+    HELPER_PATH="$BUNDLE_NAME/Contents/Frameworks/$HELPER_NAME.app/Contents"
+
+    # Create helper bundle structure
+    mkdir -p "$HELPER_PATH/MacOS"
+    mkdir -p "$HELPER_PATH/Frameworks"
+
+    # Create shell script launcher that calls the actual .NET subprocess
+    # This is necessary because CefGlueBrowserProcess is a .NET app that needs its
+    # runtime configuration files (deps.json, runtimeconfig.json) to run correctly
+    cat > "$HELPER_PATH/MacOS/$HELPER_NAME" << 'HELPER_EOF'
+#!/bin/bash
+# CEF Helper launcher script
+# This script launches the actual CefGlueBrowserProcess .NET application
+# with the correct working directory so it can find its runtime dependencies
+
+# Get the app bundle root (go up from Contents/Frameworks/Helper.app/Contents/MacOS)
+BUNDLE_ROOT="$(cd "$(dirname "$0")/../../../../.." && pwd)"
+
+# Change to the CefGlueBrowserProcess directory where all .NET deps are located
+cd "$BUNDLE_ROOT/Contents/MacOS/CefGlueBrowserProcess"
+
+# Execute the actual CEF subprocess with all arguments passed through
+exec ./Xilium.CefGlue.BrowserProcess "$@"
+HELPER_EOF
+
+    # Make the launcher script executable
+    chmod +x "$HELPER_PATH/MacOS/$HELPER_NAME"
+
+    # Generate unique bundle identifier based on helper type
+    HELPER_SUFFIX=$(echo "$HELPER_NAME" | sed 's/CST Reader Helper//' | tr -d ' ()' | tr '[:upper:]' '[:lower:]')
+    if [ -z "$HELPER_SUFFIX" ]; then
+        HELPER_ID="com.cst.avalonia.helper"
+    else
+        HELPER_ID="com.cst.avalonia.helper.$HELPER_SUFFIX"
+    fi
+
+    # Create Info.plist for this helper
+    cat > "$HELPER_PATH/Info.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>$HELPER_NAME</string>
+    <key>CFBundleIdentifier</key>
+    <string>$HELPER_ID</string>
+    <key>CFBundleName</key>
+    <string>$HELPER_NAME</string>
+    <key>CFBundleDisplayName</key>
+    <string>$HELPER_NAME</string>
+    <key>CFBundleVersion</key>
+    <string>5.0.0-beta.2</string>
+    <key>CFBundleShortVersionString</key>
+    <string>5.0.0-beta.2</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSBackgroundOnly</key>
+    <true/>
+</dict>
+</plist>
+EOF
+
+    echo "  ✅ Created $HELPER_NAME.app"
+done
+
+# Keep CefGlueBrowserProcess directory with the original Xilium.CefGlue.BrowserProcess executable
+# The helper bundle launchers will call this executable with the correct working directory
+# No symlink needed - the helpers are shell scripts that invoke this directly
+echo "  - CefGlueBrowserProcess directory preserved for helper bundles to use"
 
 # Copy XSL files to Resources
 echo "Copying XSL files..."
 if [ -d "$XSL_SOURCE_DIR" ]; then
-    cp "$XSL_SOURCE_DIR"/*.xsl "$BUNDLE_NAME/Contents/Resources/Xsl/" 2>/dev/null || true
-    echo "  - Copied $(ls -1 "$BUNDLE_NAME/Contents/Resources/Xsl/"*.xsl 2>/dev/null | wc -l) XSL files"
+    cp "$XSL_SOURCE_DIR"/*.xsl "$BUNDLE_NAME/Contents/Resources/xsl/" 2>/dev/null || true
+    echo "  - Copied $(ls -1 "$BUNDLE_NAME/Contents/Resources/xsl/"*.xsl 2>/dev/null | wc -l) XSL files"
 else
     echo "  WARNING: XSL source directory not found at $XSL_SOURCE_DIR"
 fi
@@ -104,9 +180,8 @@ cd "$DIR"
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 
 # CST Application Settings
-# Uncomment and modify the line below to change log level:
-# export CST_LOG_LEVEL=debug
-# Options: debug, information, warning, error, fatal
+# Log level can be configured in the application Settings under Developer Settings
+# Or by editing ~/Library/Application Support/CSTReader/settings.json
 
 # Launch the CST.Avalonia application
 exec ./CST.Avalonia "$@"
@@ -148,28 +223,46 @@ if [ -n "$SIGNING_IDENTITY" ]; then
     <true/>
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
 </dict>
 </plist>
 EOF
 
 
-    # First pass: Sign all files EXCEPT CST.Avalonia to satisfy deep verification
-    echo "Signing all components except main executable..."
+    # STEP 1: Sign CEF Helper bundles (inside-out: deepest components first)
+    echo "Signing CEF Helper bundles..."
+    for HELPER_NAME in "${HELPER_NAMES[@]}"; do
+        HELPER_BUNDLE="$BUNDLE_NAME/Contents/Frameworks/$HELPER_NAME.app"
+
+        # Helper bundles now contain only a shell script launcher (no binaries to sign inside)
+        # Just sign the helper app bundle itself with entitlements
+        # Note: Shell scripts don't need code signing, but the bundle does
+        codesign --force --options runtime --entitlements "$ENTITLEMENTS_FILE" --sign "$SIGNING_IDENTITY" "$HELPER_BUNDLE"
+        echo "  ✅ Signed $HELPER_NAME.app"
+    done
+
+    # STEP 2: Sign all main app components EXCEPT CST.Avalonia
+    echo "Signing main app components..."
     find "$BUNDLE_NAME/Contents/MacOS" -type f ! -name "CST.Avalonia" -exec codesign --force --sign "$SIGNING_IDENTITY" {} \;
 
-    # Second pass: Re-sign true executables WITH the hardened runtime option (still excluding CST.Avalonia)
+    # STEP 3: Re-sign executables with hardened runtime
     echo "Applying Hardened Runtime to executables..."
     find "$BUNDLE_NAME/Contents/MacOS" -name "*.dylib" -o -name "*.dll" | xargs -I {} codesign --force --options runtime --sign "$SIGNING_IDENTITY" "{}"
-    find "$BUNDLE_NAME/Contents/MacOS/CefGlueBrowserProcess" -type f -perm +111 -exec codesign --force --options runtime --sign "$SIGNING_IDENTITY" {} \; 2>/dev/null || true
     # Sign createdump and any other executable files with hardened runtime
     find "$BUNDLE_NAME/Contents/MacOS" -type f -perm +111 -name "createdump" -exec codesign --force --options runtime --sign "$SIGNING_IDENTITY" {} \;
     codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST"
 
-    # Sign the main executable with entitlements and the runtime option
+    # CRITICAL: Sign the CefGlueBrowserProcess executable with hardened runtime and entitlements
+    # This is the actual .NET subprocess that the helper shell scripts invoke
+    echo "Signing CefGlueBrowserProcess with hardened runtime..."
+    codesign --force --options runtime --entitlements "$ENTITLEMENTS_FILE" --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CefGlueBrowserProcess/Xilium.CefGlue.BrowserProcess"
+
+    # STEP 4: Sign the main executable with entitlements and the runtime option
     echo "Signing main executable with entitlements..."
     codesign --force --options runtime --entitlements "$ENTITLEMENTS_FILE" --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME/Contents/MacOS/CST.Avalonia"
 
-    # Sign the entire app bundle to seal it (with entitlements to preserve them)
+    # STEP 5: Sign the entire app bundle to seal it (with entitlements to preserve them)
     echo "Signing app bundle..."
     codesign --force --options runtime --entitlements "$ENTITLEMENTS_FILE" --sign "$SIGNING_IDENTITY" "$BUNDLE_NAME"
 
@@ -212,7 +305,7 @@ echo "================================"
 echo "Architecture: $ARCH_NAME ($ARCH)"
 echo "Bundle: $BUNDLE_NAME"
 echo "Size: $(du -sh "$BUNDLE_NAME" | cut -f1)"
-echo "XSL files: $(ls -1 "$BUNDLE_NAME/Contents/Resources/Xsl/"*.xsl 2>/dev/null | wc -l)"
+echo "XSL files: $(ls -1 "$BUNDLE_NAME/Contents/Resources/xsl/"*.xsl 2>/dev/null | wc -l)"
 
 # Create DMG if create-dmg is available
 if command -v create-dmg &> /dev/null; then
@@ -281,12 +374,6 @@ else
     echo "To test the application:"
     echo "  open \"$BUNDLE_NAME\""
 fi
-echo ""
-echo "To enable debug logging:"
-echo "  1. Install the app from the DMG"
-echo "  2. Right-click CST Reader in Applications → Show Package Contents"
-echo "  3. Navigate to Contents/MacOS/CST"
-echo "  4. Uncomment: export CST_LOG_LEVEL=debug"
 echo ""
 echo "To build for other architectures:"
 echo "  ./package-macos.sh arm64  # Apple Silicon (M1 - M4)"
