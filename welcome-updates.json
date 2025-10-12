@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2025-09-20T12:00:00Z",
+  "lastUpdated": "2025-10-12T12:00:00Z",
   "currentVersion": {
     "stable": "4.5.0-this-version-is-not-real",
     "beta": "5.0.0-beta.2"
   },
   "messages": {
-    "5.0.0-beta.0": {
+    "5.0.0-beta.1": {
       "type": "upgrade",
       "title": "New Beta Available - 5.0.0-beta.2",
-      "content": "Version 5.0.0-beta.2 is now available with code signing! No more 'damaged application' errors - the app is now signed with an Apple Developer ID certificate for seamless installation. Also includes a refreshed application icon with better visibility.",
+      "content": "Version 5.0.0-beta.2 is now available - the first version with full Apple Developer ID code signing and notarization! No more security warnings on macOS. Also includes performance improvements and startup optimizations. Before you install beta 2, please delete the contents of your settings directory. (~/Library/Application Support/CSTReader on Mac) The subdirectories and some settings files have been renamed for consistency.",
       "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.2"
     },
-    "5.0.0-beta.1": {
+    "5.0.0-beta.2": {
       "type": "info",
-      "title": "Thank you for testing!",
-      "content": "You're running the latest beta version. Your feedback helps make CST Reader better. Please report any issues you encounter."
+      "title": "First Apple Code Signed Release! 🎉",
+      "content": "You're running the first version of CST Reader with full Apple Developer ID code signing and notarization. This is a major milestone! Your feedback helps make CST Reader better. Please report any issues you encounter."
     },
     "default": {
       "type": "warning",
