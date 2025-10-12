@@ -300,71 +300,94 @@ log show --predicate 'process == "syspolicyd"' --last 5m
 xattr -l DMG
 ```
 
-## Resolution: macOS Sequoia 15.6.1 Bug on Apple Silicon
+## Update: October 12, 2025 - Issue Persists on Kestrel After Tahoe Upgrade
 
 **Date:** October 12, 2025
 
-After extensive testing on multiple machines, the notarization ticket parsing issue is **a macOS Sequoia 15.6.1 bug specific to Apple Silicon**.
+After upgrading Kestrel to macOS Tahoe 26.0.1, the ticket parsing issue **still occurs**.
 
-### Test Results
+### Current Test Results
 
 **Machines Tested:**
-1. **Caracara** (Sequoia 15.6.1, Intel x64): ✅ **WORKS** - DMG validates and installs successfully
-2. **Egret** (Tahoe 26.0, M4 Apple Silicon): ✅ **WORKS** - DMG validates and installs successfully
-3. **Kestrel** (Sequoia 15.6.1, M2 Apple Silicon): ❌ **FAILS** - Unable to parse ticket
+1. **Caracara** (Sequoia 15.6.1, Intel x64, with dev tools):
+   - ✅ Can build, sign, notarize, and **staple** DMGs successfully
+   - ✅ Can validate and run its own stapled DMGs after download
 
-### Root Cause
+2. **Egret** (Tahoe 26.0.1, M4 Apple Silicon, **no dev tools**):
+   - ✅ Can **validate** and run Caracara-built stapled DMGs
+   - ⚠️ Cannot staple (no dev tools installed to test)
 
-**macOS Sequoia 15.6.1 has a ticket parsing bug in syspolicyd that only affects Apple Silicon Macs.**
+3. **Kestrel** (Tahoe 26.0.1, M4 Apple Silicon, **with dev tools**):
+   - ❌ Cannot **staple** - Error 65: "Could not validate ticket"
+   - ❌ Cannot **validate** Caracara-built stapled DMGs - "Unable to parse ticket"
 
-The pattern is clear:
-- ✅ Sequoia 15.6.1 + **Intel** = Works (Caracara)
-- ❌ Sequoia 15.6.1 + **Apple Silicon** = Fails (Kestrel)
-- ✅ Tahoe 26.0 + **Apple Silicon** = Works (Egret)
+### Current System Logs from Kestrel (Tahoe 26.0.1)
 
-**This is an Apple bug, not an issue with CST Reader's code signing or notarization.**
-
-### Technical Details
-
-**Error from syspolicyd logs:**
 ```
-[com.apple.syspolicy:default] Unable to parse ticket.
-[com.apple.syspolicy:default] error registering ticket: -1
-Error Domain=NSOSStatusErrorDomain Code=-1 "kCFStreamErrorHTTPParseFailure"
+2025-10-12 15:13:31.316 E  syspolicyd[654:2ebcb] [com.apple.syspolicy:default] Unable to parse ticket.
+2025-10-12 15:13:31.374 E  syspolicyd[654:2ebcb] [com.apple.syspolicy:default] Unable to parse ticket.
+2025-10-12 15:14:19.616 E  syspolicyd[654:2e97f] [com.apple.syspolicy:default] Unable to parse ticket.
+2025-10-12 15:14:19.621 E  syspolicyd[654:2e97f] [com.apple.syspolicy:default] error registering ticket: -1
 ```
 
-The ticket parser in syspolicyd on Sequoia 15.6.1 Apple Silicon incorrectly treats the ticket as HTTP data and fails to parse it. This bug was fixed in macOS Tahoe 26.0.
+**The same "Unable to parse ticket" error persists even after upgrading to Tahoe 26.0.1.**
 
-### Actions Taken on Kestrel (All Failed to Fix Bug)
+### Analysis
+
+The issue is **NOT resolved** by upgrading to Tahoe. Two possible explanations remain:
+
+**Hypothesis 1: Apple Silicon + Tahoe + Dev Tools Issue**
+- Dev tools (Xcode Command Line Tools) may interfere with ticket validation on Apple Silicon
+- Egret (without dev tools) can validate, but Kestrel (with dev tools) cannot
+- Would affect any Apple Silicon Mac with CLT installed running Tahoe
+
+**Hypothesis 2: Kestrel-Specific Corruption**
+- Kestrel may have corrupted system state from Sequoia 15.6.1 that persists after Tahoe upgrade
+- System caches, Gatekeeper database, or syspolicyd state may need manual cleanup
+- Other Apple Silicon + Tahoe + Dev Tools machines might work fine
+
+### Actions Taken on Kestrel (All Failed)
+- Upgraded from Sequoia 15.6.1 to Tahoe 26.0.1
 - Cleared Gatekeeper cache (`sudo rm -rf /var/db/SystemPolicy*`)
 - Restarted syspolicyd (`sudo killall -9 syspolicyd`)
 - Removed Apple Root CA certificate from login keychain
-- Reinstalled Command Line Tools (16.4.0 → 26.0.0)
-- Multiple rebuilds and re-notarizations
+- Reinstalled Command Line Tools (16.4.0 → 26.0.0 → 26.0.0.0.1.1757719676)
+- Multiple fresh builds and re-notarizations
 
-### Release Decision
+**None of these actions resolved the ticket parsing error.**
 
-**Beta 2 release can proceed.** The stapled DMGs work correctly on Intel Macs and Apple Silicon Macs running Tahoe 26.0+. The issue only affects validation on Sequoia 15.6.1 Apple Silicon, which is a temporary OS bug.
+### What We Don't Know Yet
+
+- Whether other Apple Silicon Macs with dev tools can staple successfully
+- Whether installing dev tools on Egret would break validation there too
+- Whether real-world beta testers can install the Caracara-built DMGs
+- Whether this affects only stapling or also end-user validation
+
+### Release Strategy
+
+**Beta 2/Beta 3 releases can proceed** using Caracara for all packaging operations.
 
 **Build/Release Strategy:**
-- Use Caracara (Intel + Sequoia) for building, notarizing, and stapling DMGs
-- DMGs work correctly for end users on all macOS versions
-- Users on Sequoia 15.6.1 Apple Silicon should upgrade to Tahoe 26.0 for proper validation
+- Use **Caracara (Intel + Sequoia)** for building, notarizing, and stapling all release DMGs
+- Caracara-built DMGs validate successfully on:
+  - Intel Macs (verified on Caracara itself)
+  - Apple Silicon Macs without dev tools (verified on Egret)
+- Unknown: Whether they validate on Apple Silicon Macs with dev tools (awaiting beta tester feedback)
 
-### Solution
+**Kestrel Development:**
+- Kestrel remains unable to staple or validate DMGs
+- This is a development environment limitation, not a release blocker
+- For testing on Kestrel, use locally-built apps without quarantine attribute
 
-**Upgrade Kestrel to macOS Tahoe 26.0** to fix the ticket parsing bug. This is not a workaround but the proper solution, as Apple fixed the bug in Tahoe.
+## Status: UNRESOLVED - But Release Not Blocked
 
-**Status as of October 12, 2025:**
-- Kestrel is downloading Tahoe 26.0 update
-- Will verify fix after upgrade and reboot
-- Expected result: Ticket validation will work after Tahoe upgrade
+The ticket parsing issue on Kestrel remains **unresolved** even after upgrading to Tahoe 26.0.1. However, this does not block releases since:
 
-## Status: RESOLVED - Release Unblocked
+1. **Caracara can build and staple successfully** - Release builds work
+2. **Egret can validate the stapled DMGs** - End users should be able to install
+3. **The issue appears isolated to Kestrel** - Likely machine-specific or dev-tools-related
 
-Beta 2 release is **unblocked**. The notarization and stapling process works correctly. The issue is a known macOS Sequoia 15.6.1 bug on Apple Silicon that Apple fixed in Tahoe 26.0.
-
-**Severity:** Low - Affects only Sequoia 15.6.1 Apple Silicon validation (not end users)
-**Impact:** Development environment only; end users can install successfully
-**Workaround Available:** Yes (use Intel Mac for validation, or upgrade to Tahoe)
-**Fix Available:** Upgrade to macOS Tahoe 26.0 or later
+**Severity:** Medium - Affects development workflow on Kestrel
+**Impact:** Cannot use Kestrel for release builds or validation testing
+**Workaround:** Use Caracara for all release packaging and stapling
+**Root Cause:** Unknown - Either Kestrel-specific corruption or Apple Silicon + Tahoe + Dev Tools incompatibility

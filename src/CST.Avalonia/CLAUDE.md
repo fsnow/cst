@@ -1,8 +1,8 @@
 # CST Avalonia Project Status - October 2025
 
-## Current Status: **BETA 2 RELEASE READY** 🚀
+## Current Status: **BETA 3 IN DEVELOPMENT** 🚧
 
-**Last Updated**: October 4, 2025
+**Last Updated**: October 12, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -87,7 +87,7 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 37. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
 38. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
 39. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
-40. **Splash Screen with Progress**: Beautiful Buddha teaching image shown at startup with status updates during XML checking, downloading, and indexing operations (fully working on macOS)
+40. **Welcome Page with Startup Progress**: Persistent welcome page displays status updates during startup for XML checking, downloading, and indexing operations (fully working on macOS)
 
 ### **Technical Architecture**
 41. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
@@ -100,7 +100,7 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 
 **CST Reader 5.0.0-beta.1** was released with core functionality but had code signing issues causing "damaged application" errors on launch.
 
-## Beta 2 Release (October 4, 2025)
+## Beta 2 Release (October 12, 2025)
 
 **CST Reader 5.0.0-beta.2** resolves all packaging and code signing issues. This release is fully functional and ready for distribution:
 
@@ -153,8 +153,8 @@ The beta release marks the completion of Phase 2 of the project roadmap, with al
 - Maintain all existing functionality from Beta 1
 - Enable distribution through standard channels without security workarounds
 
-### **Version Update Locations for Beta 2**
-When preparing for Beta 2 release, the version number "5.0.0-beta.1" must be updated to "5.0.0-beta.2" in the following locations:
+### **Version Update Locations**
+When preparing for a new release, version numbers must be updated in the following locations:
 
 **Critical Files** (Must Update):
 1. **`src/CST.Avalonia/CST.Avalonia.csproj`** - 4 occurrences:
@@ -167,23 +167,26 @@ When preparing for Beta 2 release, the version number "5.0.0-beta.1" must be upd
    - Line 12: `<string>` under `CFBundleShortVersionString`
    - Line 14: `<string>` under `CFBundleVersion`
 
-3. **`welcome-updates.json`** (root directory) - Update for Beta 2 announcements:
-   - Line 6: Update `"beta":` to point to "5.0.0-beta.2"
-   - Add new message block for "5.0.0-beta.2"
-   - Update existing "5.0.0-beta.1" message if needed
+3. **`welcome-updates.json`** (root directory) - Update for new release announcements:
+   - Update `"beta":` or `"stable":` to point to new version
+   - Add new message block for the new version
+   - Update or remove outdated version messages
 
 4. **`src/CST.Avalonia/Services/WelcomeUpdateService.cs`**:
-   - Line 33: Default version fallback (currently hardcoded to "5.0.0-beta.1")
+   - Line 33: Default version fallback (currently hardcoded to current version)
+
+5. **`package-macos.sh`** - 2 occurrences in CEF Helper Info.plist:
+   - Lines 140-142: CFBundleVersion and CFBundleShortVersionString
 
 **Documentation Files** (Should Update):
-5. **`src/CST.Avalonia/CLAUDE.md`**:
-   - Line 101: Beta 1 release version reference
-   - Line 110: GitHub release URL
-   - Add new Beta 2 release section
+6. **`src/CST.Avalonia/CLAUDE.md`**:
+   - Update "Current Status" and "Last Updated" at top
+   - Update release sections and version references
+   - Update GitHub release URLs
 
-6. **`src/CST.Avalonia/Resources/welcome-content.html`** (Static fallback):
-   - Line 184: Version display
-   - Line 307: Footer version
+7. **`src/CST.Avalonia/Resources/welcome-content.html`** (Static fallback):
+   - Update version display references
+   - Update footer version
 
 **Note**: The version in compiled output files (`bin/Release/`) will be updated automatically when the project is rebuilt. Test files and markdown documentation references can remain as historical examples.
 
@@ -239,24 +242,18 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
     - **XSL Integration**: Dynamic XSL generation or CSS injection to apply user font preferences to WebView book content
     - **Style Customization**: Support for different paragraph styles tagged in TEI XML (matching CST4's XSL customization capabilities)
     - **Preview System**: Live preview of font changes in book display
-    - **Import/Export**: Allow users to share book font configurations
     - **Note**: This is the third distinct font system - separate from both UI Pali script fonts (#9-14) and UI localization fonts (#3)
 5.  **Advanced Search Features**:
     - **Phrase Search**: Implement position-based phrase searching with exact word order matching
     - **Proximity Search**: Add proximity operators for terms within specified distances
-6.  **Search Filtering & Collections**:
     - **Custom Book Collections**: Implement user-defined book collection feature
-7.  **UI Feedback During Operations**:
-    - **Indexing Progress**: Show progress bar/spinner during index building
-    - **Search State**: Indicate when index is incomplete or being rebuilt
-    - **Operation Notifications**: Alert user when long operations complete
-    - **XML Download Progress**: Show progress bar/notifications during file downloads
+6.  **UI Feedback During Operations**:
     - **Update History**: Track and display XML update history for transparency
 8.  **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
     - **Search Hit Restoration** ⭐ **BETA 3 PRIORITY**: Fix bug where highlighted search hits are not restored when reopening books at startup
-    - **Splash Screen Issues**: Deferred post-Beta 2 - status text updates and automatic closing don't work in packaged apps (works fine in development)
+    - **App Icon Transparency** ⭐ **BETA 3 PRIORITY**: Fix app icon to work properly with macOS Tahoe Glass interface - current icon shows grey background instead of transparent/adaptive background
 9.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 10.  **Recent Books Feature**:

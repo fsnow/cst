@@ -137,9 +137,9 @@ HELPER_EOF
     <key>CFBundleDisplayName</key>
     <string>$HELPER_NAME</string>
     <key>CFBundleVersion</key>
-    <string>5.0.0-beta.2</string>
+    <string>5.0.0-beta.3</string>
     <key>CFBundleShortVersionString</key>
-    <string>5.0.0-beta.2</string>
+    <string>5.0.0-beta.3</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSBackgroundOnly</key>
@@ -340,9 +340,17 @@ if command -v create-dmg &> /dev/null; then
         echo "DMG file: $DMG_PATH"
         echo "DMG size: $(du -sh "$DMG_PATH" | cut -f1)"
 
-        # Note: DMG signing removed - it was causing notarization ticket parsing issues
-        # The app bundle inside is already properly signed, which is sufficient
-        # See: markdown/notes/NOTARIZATION_TICKET_ISSUE.md
+        # Sign the DMG if we have a signing identity
+        if [ -n "$SIGNING_IDENTITY" ]; then
+            echo ""
+            echo "Signing DMG..."
+            codesign --force --sign "$SIGNING_IDENTITY" "$DMG_PATH"
+            if [ $? -eq 0 ]; then
+                echo "✅ DMG signed successfully!"
+            else
+                echo "⚠️  DMG signing failed"
+            fi
+        fi
 
         # Clean up the .app bundle since we have the DMG
         echo "Cleaning up temporary .app bundle..."
