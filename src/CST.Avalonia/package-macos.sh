@@ -340,17 +340,9 @@ if command -v create-dmg &> /dev/null; then
         echo "DMG file: $DMG_PATH"
         echo "DMG size: $(du -sh "$DMG_PATH" | cut -f1)"
 
-        # Sign the DMG if we have a signing identity
-        if [ -n "$SIGNING_IDENTITY" ]; then
-            echo ""
-            echo "Signing DMG..."
-            codesign --force --sign "$SIGNING_IDENTITY" "$DMG_PATH"
-            if codesign --verify --verbose "$DMG_PATH"; then
-                echo "✅ DMG signed successfully!"
-            else
-                echo "❌ DMG signature verification failed!"
-            fi
-        fi
+        # Note: DMG signing removed - it was causing notarization ticket parsing issues
+        # The app bundle inside is already properly signed, which is sufficient
+        # See: markdown/notes/NOTARIZATION_TICKET_ISSUE.md
 
         # Clean up the .app bundle since we have the DMG
         echo "Cleaning up temporary .app bundle..."
