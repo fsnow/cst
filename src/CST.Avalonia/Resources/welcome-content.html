@@ -200,6 +200,138 @@
             padding-top: 24px;
             border-top: 1px solid #e5e9f0;
         }
+
+        /* Dark Mode Support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #1e1e1e;
+                color: #e0e0e0;
+            }
+
+            .header {
+                border-bottom-color: #3d3d3d;
+            }
+
+            h1, h2, h3 {
+                color: #e0e0e0;
+            }
+
+            .subtitle {
+                color: #7aa2f7;
+            }
+
+            .version {
+                color: #9aa5ce;
+            }
+
+            h2 {
+                border-bottom-color: #3d3d3d;
+            }
+
+            h3 {
+                color: #ffffff;
+            }
+
+            /* Increase contrast for h3 inside focus-areas - use bright light color */
+            .focus-areas h3 {
+                color: #f0e68c;
+                font-weight: 600;
+            }
+
+            .beta-notice {
+                background: #3a2f1f;
+                border-color: #d5a43b;
+            }
+
+            .beta-notice strong {
+                color: #f0b95f;
+            }
+
+            .focus-areas {
+                background: #1f2d1f;
+                border-color: #5a7a5a;
+            }
+
+            .focus-areas h2 {
+                color: #e0e0e0;
+            }
+
+            .focus-item {
+                background: #2a2a2a;
+                border-left-color: #5a7a5a;
+            }
+
+            .focus-item strong {
+                color: #e0e0e0;
+            }
+
+            .feedback-section {
+                background: #1f2d3a;
+                border-color: #4a7a8a;
+            }
+
+            .feedback-option {
+                background: #2a2a2a;
+                border-color: #3d3d3d;
+            }
+
+            .feedback-option h4 {
+                color: #e0e0e0;
+            }
+
+            .feedback-option p {
+                color: #9aa5ce;
+            }
+
+            a {
+                color: #7aa2f7;
+            }
+
+            .quick-start {
+                background: #2a2a2a;
+                border-color: #3d3d3d;
+            }
+
+            code {
+                background: #3d3d3d;
+                color: #e0e0e0;
+            }
+
+            .collapsible {
+                background: #2a2a2a;
+                border-color: #3d3d3d;
+            }
+
+            .update-note {
+                color: #9aa5ce;
+                border-top-color: #3d3d3d;
+            }
+
+            /* Fix dynamically injected notification banners */
+            .version-badge.success {
+                background: #1f3a1f !important;
+                border-color: #2d5a2d !important;
+                color: #88d088 !important;
+            }
+
+            .version-banner {
+                background: #2a2a2a !important;
+                border-color: #3d3d3d !important;
+                color: #e0e0e0 !important;
+            }
+
+            .version-banner.warning {
+                background: #3a2f1f !important;
+                border-color: #d5a43b !important;
+                color: #f0b95f !important;
+            }
+
+            .version-banner.critical {
+                background: #3a1f1f !important;
+                border-color: #c53030 !important;
+                color: #f56565 !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -219,7 +351,7 @@
         <h2>🧪 Beta Testing</h2>
         <p>Thank you for testing CST Reader! Your feedback will help shape the final release.</p>
 
-        <h3 style="margin-top: 24px; margin-bottom: 16px; color: #2e3440;">Focus Areas</h3>
+        <h3 style="margin-top: 24px; margin-bottom: 16px;">Focus Areas</h3>
         <p>We especially need feedback on these features:</p>
 
         <div class="focus-item">

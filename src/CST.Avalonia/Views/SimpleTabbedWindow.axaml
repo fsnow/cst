@@ -31,12 +31,18 @@
                 </ComboBox>
                 
                 <!-- Pali Script -->
-                <TextBlock Text="Pali Script:" 
-                          VerticalAlignment="Center" 
+                <TextBlock Text="Pali Script:"
+                          VerticalAlignment="Center"
                           Margin="0,0,5,0"/>
                 <ComboBox MinWidth="120"
                           x:Name="PaliScriptCombo"
-                          ToolTip.Tip="Default script for Select a Book tree and new book windows"/>
+                          ToolTip.Tip="Default script for Select a Book tree and new book windows">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </StackPanel>
         </Border>
         

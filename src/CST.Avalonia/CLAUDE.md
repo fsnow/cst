@@ -2,7 +2,7 @@
 
 ## Current Status: **BETA 3 IN DEVELOPMENT** 🚧
 
-**Last Updated**: October 13, 2025
+**Last Updated**: October 16, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -92,20 +92,22 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 38. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
 39. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
 40. **Welcome Page with Startup Progress**: Persistent welcome page displays status updates during startup for XML checking, downloading, and indexing operations (fully working on macOS)
+41. **Dark Mode Support**: Complete Dark Mode support for all UI panels (main window toolbar, book view toolbar/status bar, search panel, settings window) with proper FluentTheme integration
+    - **Note**: Book content area (WebView) currently displays with white background in both Light and Dark modes; user preference for black background/white text in Dark Mode will be implemented in Beta 3
 
 ### **Technical Architecture**
-41. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
-42. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
-43. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
-44. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
-45. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
+42. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
+43. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
+44. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
+45. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
+46. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
 
 ### **macOS Packaging & Distribution**
-46. **CEF WebView Packaging**: Four helper app bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files and shell script launchers that ensure runtime dependencies are found
-47. **Developer ID Signing**: All components signed with Apple Developer ID Application certificate, including executables and dylibs
-48. **Hardened Runtime**: Applied with JIT and unsigned memory entitlements for .NET runtime compatibility
-49. **Notarization**: DMG packages fully notarized with automated build workflow
-50. **Production-Ready Distribution**: Apps launch without quarantine warnings or "damaged" errors on first launch
+47. **CEF WebView Packaging**: Four helper app bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files and shell script launchers that ensure runtime dependencies are found
+48. **Developer ID Signing**: All components signed with Apple Developer ID Application certificate, including executables and dylibs
+49. **Hardened Runtime**: Applied with JIT and unsigned memory entitlements for .NET runtime compatibility
+50. **Notarization**: DMG packages fully notarized with automated build workflow
+51. **Production-Ready Distribution**: Apps launch without quarantine warnings or "damaged" errors on first launch
 
 ## Known Limitations
 
@@ -164,6 +166,7 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
 6.  **UI Feedback During Operations**:
     - **Update History**: Track and display XML update history for transparency
 8.  **Book Display Features**:
+    - **Dark Mode Book Content** ⭐ **BETA 3 PRIORITY**: Implement Dark Mode support for book content area (WebView) with black background and white text when system is in Dark Mode (user preference)
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
     - **Search Hit Restoration** ⭐ **BETA 3 PRIORITY**: Fix bug where highlighted search hits are not restored when reopening books at startup
@@ -357,13 +360,14 @@ Then work through ALL items, not just the first one that seems to help.
 
 ## Next Steps
 
-With font system, script synchronization, phrase/proximity search, and two-color highlighting complete, the immediate priorities are:
+With font system, script synchronization, phrase/proximity search, two-color highlighting, and UI Dark Mode support complete, the immediate priorities are:
 
-1. **Missing Script Input Support**: Implement converters for Thai, Telugu, Tibetan, Khmer, and Cyrillic scripts to enable search input in all 14 Pali scripts
-2. **Beta 3 Priority Items**:
+1. **Beta 3 Priority Items**:
+   - Implement Dark Mode support for book content area (WebView) with black background and white text
    - Fix search hit restoration bug (highlighted search hits not restored when reopening books at startup)
    - Fix app icon transparency for macOS Tahoe Glass interface
+2. **Missing Script Input Support**: Implement converters for Thai, Telugu, Tibetan, Khmer, and Cyrillic scripts to enable search input in all 14 Pali scripts
 3. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
 4. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
-The core infrastructure is robust with font management, script conversion, accurate search counting, phrase/proximity search with two-color highlighting, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation and completing script input support.
+The core infrastructure is robust with font management, script conversion, accurate search counting, phrase/proximity search with two-color highlighting, complete UI Dark Mode support, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation with book content Dark Mode support and search hit restoration fixes.

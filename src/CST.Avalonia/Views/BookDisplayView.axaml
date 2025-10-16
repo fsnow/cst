@@ -134,17 +134,26 @@
                            IsHitTestVisible="True"/>
                 
                 <!-- Fallback Text Display -->
-                <ScrollViewer x:Name="fallbackBrowser" 
-                              Background="White"
+                <ScrollViewer x:Name="fallbackBrowser"
+                              Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                               IsVisible="{Binding !IsWebViewAvailable}">
                     <StackPanel Margin="10">
-                        <TextBlock Text="=== FALLBACK TEXT DISPLAY ===" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <TextBlock Text="{Binding BookInfoText}" FontWeight="Bold" Margin="0,0,0,5"/>
-                        <TextBlock Text="{Binding PageStatusText}" Margin="0,0,0,10"/>
-                        <TextBlock Text="{Binding HtmlContent}" 
-                                   TextWrapping="Wrap" 
+                        <TextBlock Text="=== FALLBACK TEXT DISPLAY ==="
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,10"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{Binding BookInfoText}"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,5"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{Binding PageStatusText}"
+                                   Margin="0,0,0,10"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{Binding HtmlContent}"
+                                   TextWrapping="Wrap"
                                    FontFamily="Times New Roman"
-                                   FontSize="14"/>
+                                   FontSize="14"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                     </StackPanel>
                 </ScrollViewer>
             </Panel>

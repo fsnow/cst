@@ -109,6 +109,28 @@ p {
 
 /* Gatha last line */
 .gathalast { font-size: 12pt; margin-bottom: 0.5cm; margin-left: 4em;}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: black;
+    color: white;
+  }
+
+  .note {
+    color: #7aa2f7;
+  }
+
+  .hit {
+    background-color: #0066cc;
+    color: white;
+  }
+
+  .context {
+    background-color: #2d7a2d;
+    color: white;
+  }
+}
 </style>
 </head>
 <body>

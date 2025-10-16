@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
@@ -64,15 +65,22 @@ public partial class SimpleTabbedWindow : Window
 
     private void InitializePaliScriptCombo()
     {
-        if (_paliScriptCombo == null) return;
-        
+        _logger.Information("SCRIPT_DROPDOWN: InitializePaliScriptCombo called, _paliScriptCombo is {Status}", _paliScriptCombo == null ? "NULL" : "FOUND");
+
+        if (_paliScriptCombo == null)
+        {
+            _logger.Error("SCRIPT_DROPDOWN: PaliScriptCombo control not found!");
+            return;
+        }
+
         // Add available scripts (excluding Unknown and IPE)
         var availableScripts = Enum.GetValues<Script>().Where(s => s != Script.Unknown && s != Script.Ipe);
         foreach (var script in availableScripts)
         {
             _paliScriptCombo.Items.Add(script);
         }
-        
+        _logger.Information("SCRIPT_DROPDOWN: Added {Count} scripts to ComboBox", _paliScriptCombo.Items.Count);
+
         // Set initial script from ScriptService, falling back to default
         try
         {
@@ -81,7 +89,7 @@ public partial class SimpleTabbedWindow : Window
             {
                 _defaultScript = scriptService.CurrentScript;
                 _logger.Information("Initialized script from ScriptService: {Script}", _defaultScript);
-                
+
                 // Listen for script changes from ScriptService (e.g., when state is loaded)
                 scriptService.ScriptChanged += OnScriptServiceScriptChanged;
             }
@@ -94,15 +102,23 @@ public partial class SimpleTabbedWindow : Window
         {
             _logger.Error(ex, "Failed to get current script from ScriptService - using default: {Script}", _defaultScript);
         }
-        
+
         _paliScriptCombo.SelectedItem = _defaultScript;
+        _logger.Information("SCRIPT_DROPDOWN: Set initial SelectedItem to {Script}", _defaultScript);
+
         _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
+        _logger.Information("SCRIPT_DROPDOWN: Attached SelectionChanged event handler");
     }
 
     public Script DefaultScript => _defaultScript;
     
     private void OnDefaultScriptChanged(object? sender, SelectionChangedEventArgs e)
     {
+        _logger.Information("SCRIPT_DROPDOWN: OnDefaultScriptChanged called! Sender: {Sender}, SelectedItem: {Item}, SelectedItem Type: {Type}",
+            sender?.GetType().Name,
+            _paliScriptCombo?.SelectedItem,
+            _paliScriptCombo?.SelectedItem?.GetType().Name);
+
         if (_paliScriptCombo?.SelectedItem is Script selectedScript)
         {
             _defaultScript = selectedScript;
@@ -146,16 +162,20 @@ public partial class SimpleTabbedWindow : Window
     {
         // Update the combo box when the ScriptService changes the script
         // This happens when application state is loaded on startup
-        if (_paliScriptCombo != null && _paliScriptCombo.SelectedItem is Script currentSelection && currentSelection != newScript)
+        // Must run on UI thread since we're updating UI controls
+        Dispatcher.UIThread.Post(() =>
         {
-            _logger.Information("ScriptService changed script to {Script}, updating UI", newScript);
-            _defaultScript = newScript;
-            
-            // Temporarily disable the selection changed handler to avoid feedback loop
-            _paliScriptCombo.SelectionChanged -= OnDefaultScriptChanged;
-            _paliScriptCombo.SelectedItem = newScript;
-            _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
-        }
+            if (_paliScriptCombo != null && _paliScriptCombo.SelectedItem is Script currentSelection && currentSelection != newScript)
+            {
+                _logger.Information("ScriptService changed script to {Script}, updating UI", newScript);
+                _defaultScript = newScript;
+
+                // Temporarily disable the selection changed handler to avoid feedback loop
+                _paliScriptCombo.SelectionChanged -= OnDefaultScriptChanged;
+                _paliScriptCombo.SelectedItem = newScript;
+                _paliScriptCombo.SelectionChanged += OnDefaultScriptChanged;
+            }
+        });
     }
 
     private void InitializeWindowStateManagement()
