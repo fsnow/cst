@@ -12,9 +12,9 @@
     <!-- Main Layout with Toolbar and DockControl -->
     <DockPanel>
         <!-- Top Toolbar -->
-        <Border Background="LightGray" 
-                BorderBrush="Gray" 
-                BorderThickness="0,0,0,1" 
+        <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1"
                 Height="40"
                 DockPanel.Dock="Top">
             <StackPanel Orientation="Horizontal" 

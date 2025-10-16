@@ -326,40 +326,42 @@ namespace CST.Avalonia.Services
         
         public void OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
         {
-            _logger.Information("Opening book from search: {BookFile} with {SearchTermCount} search terms", book.FileName, searchTerms.Count);
-            
+            _logger.Information("Opening book from search: {BookFile} with {SearchTermCount} search terms and {PositionCount} positions",
+                book.FileName, searchTerms.Count, positions.Count);
+
             // Additional duplicate prevention for search book opening
             lock (_searchOpenLock)
             {
                 var now = DateTime.UtcNow;
                 var timeSinceLastSearchOpen = now - _lastSearchOpenTime;
-                
+
                 // Prevent duplicate search opens of the same book within 2 seconds
                 if (book.FileName == _lastSearchOpenedBook && timeSinceLastSearchOpen.TotalMilliseconds < 2000)
                 {
                     _logger.Debug("Duplicate search book open prevented: {BookFile} (opened {TimeAgo}ms ago)", book.FileName, timeSinceLastSearchOpen.TotalMilliseconds);
                     return;
                 }
-                
+
                 _lastSearchOpenTime = now;
                 _lastSearchOpenedBook = book.FileName;
             }
-            
+
             // Get required services from DI container
             var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
             var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
             var settingsService = App.ServiceProvider?.GetRequiredService<ISettingsService>();
             var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
-            
+
             // Create BookDisplayViewModel with proper services and script
             var bookDisplayViewModel = new BookDisplayViewModel(
-                book, 
+                book,
                 searchTerms,  // Pass search terms for highlighting (in IPE format)
                 null,         // anchor
                 chapterListsService,
                 settingsService,
                 fontService,
-                book.DocId    // Pass DocId for Lucene offset lookup
+                book.DocId,   // Pass DocId for Lucene offset lookup
+                positions     // NEW: Pass positions with IsFirstTerm flags for two-color highlighting
             );
             
             // Set the correct script after construction

@@ -192,7 +192,14 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
     public string? SearchText
     {
         get => _searchText;
-        set => this.RaiseAndSetIfChanged(ref _searchText, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _searchText, value);
+            // Update quote and multi-word detection properties
+            this.RaisePropertyChanged(nameof(IsPhraseSearch));
+            this.RaisePropertyChanged(nameof(IsMultiWord));
+            this.RaisePropertyChanged(nameof(IsProximitySearchEnabled));
+        }
     }
 
     // Search modes collection
@@ -255,6 +262,19 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
         get => _includeOther;
         set => this.RaiseAndSetIfChanged(ref _includeOther, value);
     }
+
+    // Proximity distance
+    private int _proximityDistance = 10;
+    public int ProximityDistance
+    {
+        get => _proximityDistance;
+        set => this.RaiseAndSetIfChanged(ref _proximityDistance, value);
+    }
+
+    // Phrase and proximity search UI properties
+    public bool IsPhraseSearch => SearchText?.Contains("\"") ?? false;
+    public bool IsMultiWord => (SearchText?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ?? 0) > 1;
+    public bool IsProximitySearchEnabled => !IsPhraseSearch && IsMultiWord;
 
     // Search state
     private bool _isSearching;
@@ -474,7 +494,10 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
                     IncludeTika = IncludeTika,
                     IncludeOther = IncludeOther
                 },
-                PageSize = 500  // Reduced for better Devanagari performance
+                PageSize = 500,  // Reduced for better Devanagari performance
+                ProximityDistance = ProximityDistance,
+                IsPhrase = IsPhraseSearch,
+                IsMultiWord = IsMultiWord
             };
 
             _logger.LogInformation("Executing search: {Query}", query.QueryText);
@@ -549,7 +572,15 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
 
         // Collect all selected terms for highlighting
         var searchTerms = SelectedTerms.Select(t => t.Term).ToList();
-        
+
+        // Debug: Log position details
+        _logger.LogInformation("Passing {PositionCount} positions to book display", occurrence.Positions.Count);
+        foreach (var pos in occurrence.Positions.Take(5))
+        {
+            _logger.LogInformation("  Position: {Pos}, StartOffset: {Start}, EndOffset: {End}, IsFirstTerm: {IsFirst}, Word: {Word}",
+                pos.Position, pos.StartOffset, pos.EndOffset, pos.IsFirstTerm, pos.Word ?? "null");
+        }
+
         // Raise event to open the book
         OpenBookRequested?.Invoke(this, new OpenBookWithSearchEventArgs
         {

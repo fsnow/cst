@@ -2,7 +2,7 @@
 
 ## Current Status: **BETA 3 IN DEVELOPMENT** 🚧
 
-**Last Updated**: October 12, 2025
+**Last Updated**: October 13, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -45,7 +45,11 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 15. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Pali texts
 16. **Advanced Search Features**:
     - Single and multi-term exact searches with accurate counting
-    - Wildcard search working in all 14 scripts
+    - **Phrase Search**: Quoted terms (e.g., `"evaṃ me"`) find exact adjacent word sequences
+    - **Proximity Search**: Unquoted multi-word searches find terms within adjustable word distance (default: 10 words)
+    - **Two-Color Highlighting**: Blue background for primary search terms, green background for context words in proximity matches
+    - **Tag Crossing Detection**: Proper XML structure preservation when highlights span CST's partial word bolding and quotation markup
+    - Wildcard search (`*` and `?`) working in all 14 scripts, with expansion support in multi-word searches
     - Regular expression search support
     - Position-based highlighting with correct character offsets
 17. **Smart Book Filtering**:
@@ -96,99 +100,12 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 44. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
 45. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
 
-## Beta 1 Release (September 20, 2025)
-
-**CST Reader 5.0.0-beta.1** was released with core functionality but had code signing issues causing "damaged application" errors on launch.
-
-## Beta 2 Release (October 12, 2025)
-
-**CST Reader 5.0.0-beta.2** resolves all packaging and code signing issues. This release is fully functional and ready for distribution:
-
-### **Release Highlights**
-- **Cross-Platform DMG Packages**: Both Apple Silicon (M1/M2/M3/M4) and Intel Mac builds available
-- **Dynamic Welcome System**: Version-aware messaging with GitHub integration for updates and announcements
-- **Production-Ready Features**: All core functionality working including search, indexing, session restoration, and multi-script support
-- **Comprehensive Testing**: 65+ automated tests ensure stability and reliability
-
-### **Download & Installation**
-- **GitHub Release**: https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.2
-- **Apple Silicon**: `CST-Reader-arm64.dmg` (178MB)
-- **Intel Mac**: `CST-Reader-x64.dmg` (186MB)
-- **Installation Note**: Applications are now fully code signed with Apple Developer ID certificate - no security warnings or quarantine removal required
-
-### **Beta Testing Goals**
-- Validate cross-platform compatibility and performance
-- Gather user feedback on new dynamic welcome page system
-- Test external link handling and update notification system
-- Identify any remaining UI/UX issues before stable release
-
-The beta release marks the completion of Phase 2 of the project roadmap, with all major systems now functional and ready for real-world testing.
-
-## Beta 2 Development (October 2025)
-
-**Status**: Complete and released
-
-### **Critical Issues Resolved**
-
-#### **1. CEF WebView Packaging (Completed)**
-- **Problem**: Packaged app crashed on startup with "Unable to find SubProcess" error
-- **Root Cause**: CEF requires 4 helper app bundles in `Contents/Frameworks/` on macOS, but we had the subprocess in `Contents/MacOS/CefGlueBrowserProcess/`
-- **Solution**:
-  - Created 4 CEF Helper bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files
-  - Each helper contains a shell script launcher that calls the actual .NET subprocess
-  - Shell scripts change to `CefGlueBrowserProcess/` directory before executing to ensure runtime dependencies are found
-- **Documentation**: See `markdown/notes/CEF_HELPER_PACKAGING.md`
-
-#### **2. Code Signing & Notarization (Completed)**
-- **Developer ID Signing**: All components signed with Apple Developer ID Application certificate
-- **Hardened Runtime**: Applied to all executables and dylibs, including `CefGlueBrowserProcess/Xilium.CefGlue.BrowserProcess`
-- **Entitlements**: JIT and unsigned memory entitlements for .NET runtime
-- **DMG Signing**: Distribution packages fully signed and notarized
-- **Automated Build**: Enhanced `package-macos.sh` script with integrated signing workflow
-- **Result**: Apps launch without quarantine warnings or "damaged" errors
-
-### **Beta 2 Release Goals**
-- Eliminate "damaged" application errors on first launch
-- Provide professional, signed DMG installers for seamless user experience
-- Maintain all existing functionality from Beta 1
-- Enable distribution through standard channels without security workarounds
-
-### **Version Update Locations**
-When preparing for a new release, version numbers must be updated in the following locations:
-
-**Critical Files** (Must Update):
-1. **`src/CST.Avalonia/CST.Avalonia.csproj`** - 4 occurrences:
-   - Line 13: `<CFBundleVersion>`
-   - Line 14: `<CFBundleShortVersionString>`
-   - Line 18: `<Version>`
-   - Line 21: `<InformationalVersion>`
-
-2. **`src/CST.Avalonia/Info.plist`** - 2 occurrences:
-   - Line 12: `<string>` under `CFBundleShortVersionString`
-   - Line 14: `<string>` under `CFBundleVersion`
-
-3. **`welcome-updates.json`** (root directory) - Update for new release announcements:
-   - Update `"beta":` or `"stable":` to point to new version
-   - Add new message block for the new version
-   - Update or remove outdated version messages
-
-4. **`src/CST.Avalonia/Services/WelcomeUpdateService.cs`**:
-   - Line 33: Default version fallback (currently hardcoded to current version)
-
-5. **`package-macos.sh`** - 2 occurrences in CEF Helper Info.plist:
-   - Lines 140-142: CFBundleVersion and CFBundleShortVersionString
-
-**Documentation Files** (Should Update):
-6. **`src/CST.Avalonia/CLAUDE.md`**:
-   - Update "Current Status" and "Last Updated" at top
-   - Update release sections and version references
-   - Update GitHub release URLs
-
-7. **`src/CST.Avalonia/Resources/welcome-content.html`** (Static fallback):
-   - Update version display references
-   - Update footer version
-
-**Note**: The version in compiled output files (`bin/Release/`) will be updated automatically when the project is rebuilt. Test files and markdown documentation references can remain as historical examples.
+### **macOS Packaging & Distribution**
+46. **CEF WebView Packaging**: Four helper app bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files and shell script launchers that ensure runtime dependencies are found
+47. **Developer ID Signing**: All components signed with Apple Developer ID Application certificate, including executables and dylibs
+48. **Hardened Runtime**: Applied with JIT and unsigned memory entitlements for .NET runtime compatibility
+49. **Notarization**: DMG packages fully notarized with automated build workflow
+50. **Production-Ready Distribution**: Apps launch without quarantine warnings or "damaged" errors on first launch
 
 ## Known Limitations
 
@@ -243,10 +160,7 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
     - **Style Customization**: Support for different paragraph styles tagged in TEI XML (matching CST4's XSL customization capabilities)
     - **Preview System**: Live preview of font changes in book display
     - **Note**: This is the third distinct font system - separate from both UI Pali script fonts (#9-14) and UI localization fonts (#3)
-5.  **Advanced Search Features**:
-    - **Phrase Search**: Implement position-based phrase searching with exact word order matching
-    - **Proximity Search**: Add proximity operators for terms within specified distances
-    - **Custom Book Collections**: Implement user-defined book collection feature
+5.  **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
 6.  **UI Feedback During Operations**:
     - **Update History**: Track and display XML update history for transparency
 8.  **Book Display Features**:
@@ -443,11 +357,13 @@ Then work through ALL items, not just the first one that seems to help.
 
 ## Next Steps
 
-With font system, script synchronization, and basic search functionality complete, the immediate priorities are:
+With font system, script synchronization, phrase/proximity search, and two-color highlighting complete, the immediate priorities are:
 
 1. **Missing Script Input Support**: Implement converters for Thai, Telugu, Tibetan, Khmer, and Cyrillic scripts to enable search input in all 14 Pali scripts
-2. **Phrase & Proximity Search**: Implement position-based phrase and proximity searching using the existing term vector infrastructure  
-3. **Search Filtering**: Fix book collection checkboxes and implement custom collection support for targeted searches
-4. **Advanced Search Features**: Complete multi-term highlighting testing and add search navigation enhancements
+2. **Beta 3 Priority Items**:
+   - Fix search hit restoration bug (highlighted search hits not restored when reopening books at startup)
+   - Fix app icon transparency for macOS Tahoe Glass interface
+3. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
+4. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
-The core infrastructure is robust with font management, script conversion, accurate search counting, and real-time UI updates all working correctly. Focus now shifts to completing script input support and advanced search features.
+The core infrastructure is robust with font management, script conversion, accurate search counting, phrase/proximity search with two-color highlighting, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation and completing script input support.

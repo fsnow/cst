@@ -33,9 +33,10 @@ namespace CST.Avalonia.ViewModels
         private readonly IFontService? _fontService;
         private readonly Book _book;
         private readonly List<string>? _searchTerms;
+        private readonly List<TermPosition>? _searchPositions;  // NEW: Store positions with IsFirstTerm flags
         private readonly string? _initialAnchor;
         private readonly int? _docId;
-        
+
         // Logger instance for BookDisplayViewModel
         private readonly ILogger _logger;
         
@@ -73,7 +74,7 @@ namespace CST.Avalonia.ViewModels
         private bool _updatingChapterFromScroll = false;
         private bool _isInitializing = true;
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             // For now, create ScriptService without logger
@@ -83,15 +84,26 @@ namespace CST.Avalonia.ViewModels
             _fontService = fontService;
             _book = book;
             _searchTerms = searchTerms;
+            _searchPositions = searchPositions;  // NEW: Store positions for two-color highlighting
             _initialAnchor = initialAnchor;
             _docId = docId;
             _bookScript = _scriptService.CurrentScript;
-            
-            // Debug search terms
+
+            // Debug search terms and positions
             if (searchTerms != null && searchTerms.Any())
             {
-                Log.Information("[BookDisplay] Created with {Count} search terms: [{Terms}]", 
+                Log.Information("[BookDisplay] Created with {Count} search terms: [{Terms}]",
                     searchTerms.Count, string.Join(", ", searchTerms));
+                if (searchPositions != null && searchPositions.Any())
+                {
+                    Log.Information("[BookDisplay] Created with {Count} search positions (with IsFirstTerm flags)",
+                        searchPositions.Count);
+                    foreach (var pos in searchPositions.Take(5))
+                    {
+                        Log.Information("[BookDisplay]   Position: {Pos}, StartOffset: {Start}, EndOffset: {End}, IsFirstTerm: {IsFirst}, Word: {Word}",
+                            pos.Position, pos.StartOffset, pos.EndOffset, pos.IsFirstTerm, pos.Word ?? "null");
+                    }
+                }
             }
             else
             {
@@ -733,9 +745,14 @@ namespace CST.Avalonia.ViewModels
             {
                 Log.Debug("[BookDisplay] IPE Search terms: [{Terms}]", string.Join(", ", _searchTerms));
                 Log.Debug("[BookDisplay] DocId: {DocId}, Book: {FileName}", _docId, _book.FileName);
+                if (_searchPositions != null && _searchPositions.Any())
+                {
+                    Log.Information("[BookDisplay] Using {Count} pre-computed positions with IsFirstTerm flags for two-color highlighting",
+                        _searchPositions.Count);
+                }
             }
-            
-            if (_searchTerms == null || !_searchTerms.Any() || _docId == null) 
+
+            if (_searchTerms == null || !_searchTerms.Any() || _docId == null)
             {
                 Log.Debug("[BookDisplay] Skipping highlighting - no terms or no DocId");
                 return xmlContent;
@@ -743,6 +760,11 @@ namespace CST.Avalonia.ViewModels
 
             try
             {
+                // NEW: If we have pre-computed positions (from phrase/proximity search), use them directly
+                if (_searchPositions != null && _searchPositions.Any())
+                {
+                    return ApplyHighlightingFromPositions(xmlContent);
+                }
                 // Get the IndexingService to access the Lucene index
                 var indexingService = App.ServiceProvider?.GetService<IIndexingService>();
                 if (indexingService == null)
@@ -806,9 +828,10 @@ namespace CST.Avalonia.ViewModels
                                     if (startOffset >= 0 && endOffset > startOffset)
                                     {
                                         // Verify the offset points to the expected text
-                                        var actualText = xmlString.Substring(startOffset, endOffset - startOffset + 1);
+                                        // NOTE: Lucene offsets are inclusive-exclusive, so no +1
+                                        var actualText = xmlString.Substring(startOffset, endOffset - startOffset);
                                         offsetList.Add((startOffset, endOffset, searchTerm));
-                                        Log.Debug("[BookDisplay] Offset {Start}-{End} for '{Term}': actual text '{Text}'", 
+                                        Log.Debug("[BookDisplay] Offset {Start}-{End} for '{Term}': actual text '{Text}'",
                                             startOffset, endOffset, searchTerm, actualText);
                                     }
                                     else
@@ -897,17 +920,114 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
+        /// <summary>
+        /// Apply highlighting using pre-computed TermPosition objects with IsFirstTerm flags (for phrase/proximity search)
+        /// </summary>
+        private string ApplyHighlightingFromPositions(string xmlContent)
+        {
+            try
+            {
+                Log.Information("[BookDisplay] ApplyHighlightingFromPositions: Using {Count} pre-computed positions", _searchPositions!.Count);
+
+                // Sort positions by offset in REVERSE order (back to front) to avoid invalidating offsets
+                var sortedPositions = _searchPositions.OrderByDescending(p => p.StartOffset).ToList();
+
+                var sb = new StringBuilder(xmlContent);
+                var hitIndex = sortedPositions.Count;
+
+                foreach (var position in sortedPositions)
+                {
+                    // Get the actual text at this offset
+                    var startOffset = position.StartOffset;
+                    var endOffset = position.EndOffset;
+
+                    if (startOffset < 0 || endOffset < startOffset || endOffset >= xmlContent.Length)
+                    {
+                        Log.Warning("[BookDisplay] Invalid offset range: {Start}-{End} (xml length: {Length})",
+                            startOffset, endOffset, xmlContent.Length);
+                        continue;
+                    }
+
+                    // NOTE: CST4 uses +1 for Lucene offsets (see Search.cs:595, 676)
+                    var highlightedText = xmlContent.Substring(startOffset, endOffset - startOffset + 1);
+
+                    // Check for existing <hi> tags in the highlighted text (tag crossing detection from CST4)
+                    bool hasHiOpen = highlightedText.Contains("<hi");
+                    bool hasHiClose = highlightedText.Contains("</hi");
+
+                    // Determine highlight style based on IsFirstTerm flag
+                    var rendValue = position.IsFirstTerm ? "hit" : "context";
+                    var hiBoldOpen = "<hi rend=\"bold\">";
+                    var hiHitOpen = position.IsFirstTerm
+                        ? $"<hi rend=\"hit\" id=\"hit{hitIndex}\">"
+                        : $"<hi rend=\"context\">";
+                    var hiClose = "</hi>";
+
+                    // Build the highlighted text based on tag crossing cases (from CST4 Search.cs:605-626)
+                    string finalText;
+                    if ((hasHiOpen && hasHiClose) || (!hasHiOpen && !hasHiClose))
+                    {
+                        // Normal case: no tag crossing or both tags present
+                        finalText = hiHitOpen + highlightedText + hiClose;
+                    }
+                    else if (hasHiOpen)
+                    {
+                        // Word contains opening <hi> tag - close and reopen properly
+                        finalText = hiHitOpen + highlightedText + hiClose + hiClose + hiBoldOpen;
+                    }
+                    else // hasHiClose
+                    {
+                        // Word contains closing </hi> tag - close first, then apply highlight
+                        finalText = hiClose + hiHitOpen + hiBoldOpen + highlightedText + hiClose;
+                    }
+
+                    // Replace the text at this offset with highlighted version
+                    sb.Remove(startOffset, endOffset - startOffset + 1);
+                    sb.Insert(startOffset, finalText);
+
+                    Log.Debug("[BookDisplay] Applied {RendValue} highlight #{HitNum} at offset {Start}-{End}: '{Text}' (IsFirstTerm={IsFirst}, Word={Word})",
+                        rendValue, hitIndex, startOffset, endOffset, highlightedText, position.IsFirstTerm, position.Word ?? "null");
+
+                    hitIndex--;
+                }
+
+                var highlightedXml = sb.ToString();
+                Log.Information("[BookDisplay] Successfully applied {Count} two-color highlights from positions", _searchPositions.Count);
+
+                // Update hit count and status (count only first terms for navigation)
+                var totalHits = _searchPositions.Count(p => p.IsFirstTerm);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    TotalHits = totalHits;
+                    HasSearchHighlights = totalHits > 0;
+                    if (totalHits > 0)
+                    {
+                        CurrentHitIndex = 1;
+                        UpdateHitStatusText();
+                    }
+                });
+
+                return highlightedXml;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[BookDisplay] Error applying highlighting from positions");
+                _logger.Error(ex, "Failed to apply highlighting from positions");
+                return xmlContent;
+            }
+        }
+
         private void CollectTextNodes(XmlNode? node, List<XmlNode> textNodes)
         {
             if (node == null) return;
-            
+
             if (node.NodeType == XmlNodeType.Text)
             {
                 // Skip text nodes that are already inside highlighting elements
                 var parent = node.ParentNode;
                 if (parent?.Name == "hi" && parent.Attributes?["rend"]?.Value == "hit")
                     return;
-                    
+
                 textNodes.Add(node);
             }
             else if (node.HasChildNodes)

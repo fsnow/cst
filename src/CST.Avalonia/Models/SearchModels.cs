@@ -73,12 +73,24 @@ public class BookOccurrence
     public List<TermPosition> Positions { get; set; } = new();
 }
 
-public class TermPosition
+public class TermPosition : IComparable<TermPosition>
 {
     public int Position { get; set; }
     public int StartOffset { get; set; }
     public int EndOffset { get; set; }
     public string? Context { get; set; }  // Optional surrounding text
+
+    // For multi-word searches
+    public int WordIndex { get; set; }  // Which word in a multi-word search (0-based)
+    public int PositionIndex { get; set; }  // Which occurrence of this term at this position
+    public bool IsFirstTerm { get; set; }  // True for main search term, false for context words (enables two-color highlighting)
+    public string? Word { get; set; }  // The actual word (IPE encoded) - needed when WordPosition outlives the word array
+
+    public int CompareTo(TermPosition? other)
+    {
+        if (other == null) return 1;
+        return Position.CompareTo(other.Position);
+    }
 }
 
 // For multi-word searches

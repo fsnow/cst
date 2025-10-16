@@ -17,12 +17,12 @@
         <!-- Main Content -->
         <Grid DockPanel.Dock="Top">
             <!-- Book Tree -->
-            <Border BorderBrush="Gray" BorderThickness="1">
+            <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <DockPanel>
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                         <TreeView ItemsSource="{Binding BookTree}"
                                   SelectedItem="{Binding SelectedNode}"
-                                  Background="White"
+                                  Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
                                   DoubleTapped="TreeView_DoubleTapped">
                             <TreeView.Styles>
                                 <!-- Style for TreeViewItem -->
@@ -90,11 +90,11 @@
                                                    converters:FontHelper.DynamicFontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
                                                    converters:FontHelper.DynamicFontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                                         <!-- Book count for categories -->
-                                        <TextBlock Text="{Binding BookCount, StringFormat=(\\{0\\})}}" 
+                                        <TextBlock Text="{Binding BookCount, StringFormat=(\\{0\\})}}"
                                                    Margin="3,0,0,0"
                                                    VerticalAlignment="Center"
                                                    FontSize="9"
-                                                   Foreground="Gray"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                    IsVisible="{Binding IsCategory}"/>
                                     </StackPanel>
                                 </TreeDataTemplate>
