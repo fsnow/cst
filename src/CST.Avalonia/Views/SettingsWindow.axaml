@@ -14,22 +14,21 @@
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
-        
+
         <Style Selector="TextBlock.SettingLabel">
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Margin" Value="0,0,0,5"/>
         </Style>
-        
+
         <Style Selector="TextBlock.SettingDescription">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="Gray"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,0,0,15"/>
         </Style>
-        
+
         <Style Selector="Border.SettingGroup">
-            <Setter Property="Background" Value="#F5F5F5"/>
-            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="4"/>
             <Setter Property="Padding" Value="15"/>
@@ -44,8 +43,8 @@
         </Grid.RowDefinitions>
         
         <!-- Header -->
-        <Border Grid.Row="0" Background="#F0F0F0" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
-            <TextBlock Text="Settings" FontSize="18" FontWeight="Bold" 
+        <Border Grid.Row="0" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <TextBlock Text="Settings" FontSize="18" FontWeight="Bold"
                       VerticalAlignment="Center" Margin="20,10"/>
         </Border>
         
@@ -57,8 +56,8 @@
             </Grid.ColumnDefinitions>
             
             <!-- Category List -->
-            <Border Grid.Column="0" Background="#F8F8F8" BorderBrush="#E0E0E0" BorderThickness="0,0,1,0">
-                <ListBox ItemsSource="{Binding Categories}" 
+            <Border Grid.Column="0" Background="{DynamicResource LayerFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
+                <ListBox ItemsSource="{Binding Categories}"
                          SelectedItem="{Binding SelectedCategory}"
                          Background="Transparent"
                          BorderThickness="0">
@@ -67,9 +66,8 @@
                             <Border Padding="15,10" Background="Transparent">
                                 <StackPanel>
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding Description}" 
-                                              FontSize="11" 
-                                              Foreground="Gray"
+                                    <TextBlock Text="{Binding Description}"
+                                              FontSize="11"
                                               TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
@@ -77,7 +75,7 @@
                     </ListBox.ItemTemplate>
                     <ListBox.Styles>
                         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-                            <Setter Property="Background" Value="#E0E0E0"/>
+                            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
                         </Style>
                     </ListBox.Styles>
                 </ListBox>
@@ -146,7 +144,7 @@
                                             </Grid.ColumnDefinitions>
                                             
                                             <!-- Script List -->
-                                            <ListBox Grid.Column="0" 
+                                            <ListBox Grid.Column="0"
                                                     ItemsSource="{Binding ScriptFontSettings}"
                                                     SelectedItem="{Binding SelectedScript}"
                                                     Height="200">
@@ -156,10 +154,10 @@
                                                     </DataTemplate>
                                                 </ListBox.ItemTemplate>
                                             </ListBox>
-                                            
+
                                             <!-- Font Settings for Selected Script -->
                                             <StackPanel Grid.Column="1" Margin="15,0,0,0">
-                                                <TextBlock Text="{Binding SelectedScript.ScriptName, StringFormat='Font settings for {0}'}" 
+                                                <TextBlock Text="{Binding SelectedScript.ScriptName, StringFormat='Font settings for {0}'}"
                                                           FontWeight="SemiBold" Margin="0,0,0,10"/>
                                                 
                                                 <Grid>
@@ -175,7 +173,7 @@
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
                                                     
-                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:" 
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
                                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <DockPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,10">
                                                         <ProgressBar IsIndeterminate="True"
@@ -187,8 +185,8 @@
                                                                   SelectedItem="{Binding SelectedScript.SelectedFontFamily}"
                                                                   IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"/>
                                                     </DockPanel>
-                                                    
-                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:" 
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:"
                                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <NumericUpDown Grid.Row="1" Grid.Column="1" 
                                                                   Value="{Binding SelectedScript.FontSize}"
@@ -196,23 +194,21 @@
                                                                   Width="120" HorizontalAlignment="Left"
                                                                   Margin="0,0,0,10"/>
                                                     
-                                                    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" 
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
                                                               Text="Preview:" Margin="0,10,0,5"/>
                                                     <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
-                                                           BorderBrush="#E0E0E0" BorderThickness="1"
-                                                           Background="White" Padding="10" Height="60">
+                                                           BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                                           Background="{DynamicResource ControlFillColorDefaultBrush}" Padding="10" Height="60">
                                                         <TextBlock Text="{Binding SelectedScript.PreviewText}"
                                                                   FontFamily="{Binding SelectedScript.EffectiveFontFamilyObject}"
                                                                   FontSize="{Binding SelectedScript.FontSize}"
-                                                                  VerticalAlignment="Center"
-                                                                  Foreground="Black"/>
+                                                                  VerticalAlignment="Center"/>
                                                     </Border>
-                                                    
+
                                                     <!-- System Default Font Information -->
                                                     <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
                                                               Margin="0,8,0,0"
                                                               FontSize="12"
-                                                              Foreground="Gray"
                                                               IsVisible="{Binding SelectedScript.SystemDefaultFontName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                                                         <Run Text="System Default font is "/>
                                                         <Run Text="{Binding SelectedScript.SystemDefaultFontName}" FontWeight="Medium"/>
@@ -239,14 +235,14 @@
                                                 <RowDefinition Height="Auto"/>
                                             </Grid.RowDefinitions>
                                             
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:" 
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
                                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <TextBox Grid.Row="0" Grid.Column="1" 
-                                                    Text="{Binding LocalizationFontFamily}" 
+                                            <TextBox Grid.Row="0" Grid.Column="1"
+                                                    Text="{Binding LocalizationFontFamily}"
                                                     Watermark="System default"
                                                     Margin="0,0,0,10"/>
-                                            
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:" 
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:"
                                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
                                             <NumericUpDown Grid.Row="1" Grid.Column="1" 
                                                           Value="{Binding LocalizationFontSize}"
@@ -272,7 +268,7 @@
                                         
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <TextBlock Text="Settings file: " VerticalAlignment="Center"/>
-                                            <TextBlock Text="{Binding SettingsFilePath}" 
+                                            <TextBlock Text="{Binding SettingsFilePath}"
                                                       FontFamily="Consolas,Courier New,monospace"
                                                       VerticalAlignment="Center"/>
                                         </StackPanel>
@@ -296,31 +292,31 @@
                                                  Margin="0,10,0,15"/>
                                         
                                         <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto">
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Repository Owner:" 
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Repository Owner:"
                                                       VerticalAlignment="Center" Margin="0,0,10,10"/>
-                                            <TextBox Grid.Row="0" Grid.Column="1" 
-                                                    Text="{Binding XmlRepositoryOwner}" 
+                                            <TextBox Grid.Row="0" Grid.Column="1"
+                                                    Text="{Binding XmlRepositoryOwner}"
                                                     Watermark="e.g., VipassanaTech"
                                                     Margin="0,0,0,10"/>
-                                            
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Repository Name:" 
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Repository Name:"
                                                       VerticalAlignment="Center" Margin="0,0,10,10"/>
-                                            <TextBox Grid.Row="1" Grid.Column="1" 
-                                                    Text="{Binding XmlRepositoryName}" 
+                                            <TextBox Grid.Row="1" Grid.Column="1"
+                                                    Text="{Binding XmlRepositoryName}"
                                                     Watermark="e.g., tipitaka-xml"
                                                     Margin="0,0,0,10"/>
-                                            
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Repository Path:" 
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Repository Path:"
                                                       VerticalAlignment="Center" Margin="0,0,10,10"/>
-                                            <TextBox Grid.Row="2" Grid.Column="1" 
-                                                    Text="{Binding XmlRepositoryPath}" 
+                                            <TextBox Grid.Row="2" Grid.Column="1"
+                                                    Text="{Binding XmlRepositoryPath}"
                                                     Watermark="e.g., deva master (leave empty for root)"
                                                     Margin="0,0,0,10"/>
-                                            
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Branch:" 
+
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Branch:"
                                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <TextBox Grid.Row="3" Grid.Column="1" 
-                                                    Text="{Binding XmlRepositoryBranch}" 
+                                            <TextBox Grid.Row="3" Grid.Column="1"
+                                                    Text="{Binding XmlRepositoryBranch}"
                                                     Watermark="e.g., main"/>
                                         </Grid>
                                     </StackPanel>
