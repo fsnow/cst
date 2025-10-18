@@ -10,18 +10,21 @@ src/CST.Avalonia/GPUCache/
 src/CST.Avalonia/CST_CefGlue_*/
 src/CST.Avalonia/logs/
 src/CST.Avalonia/obj/
-src/CST.Avalonia/bin/Release/
+src/CST.Avalonia/bin/
 src/CST.Avalonia/CST Reader.app/
 src/CST.Avalonia/publish/
 src/CST.Avalonia/dist/
 
 src/CST.Avalonia.Tests/obj/
 
-src/CST.Core/obj/
-src/CST.Core/bin/
+src/CST.CharacterAnalysis/bin/
+src/CST.CharacterAnalysis/obj/
 
-src/CST.Lucene/obj/
+src/CST.Core/bin/
+src/CST.Core/obj/
+
 src/CST.Lucene/bin/
+src/CST.Lucene/obj/
 
 *.log
 
