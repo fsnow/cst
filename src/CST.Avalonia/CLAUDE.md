@@ -2,7 +2,7 @@
 
 ## Current Status: **BETA 3 IN DEVELOPMENT** 🚧
 
-**Last Updated**: October 16, 2025
+**Last Updated**: October 18, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -92,22 +92,23 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 38. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
 39. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
 40. **Welcome Page with Startup Progress**: Persistent welcome page displays status updates during startup for XML checking, downloading, and indexing operations (fully working on macOS)
-41. **Dark Mode Support**: Complete Dark Mode support for all UI panels (main window toolbar, book view toolbar/status bar, search panel, settings window) with proper FluentTheme integration
-    - **Note**: Book content area (WebView) currently displays with white background in both Light and Dark modes; user preference for black background/white text in Dark Mode will be implemented in Beta 3
+41. **Dark Mode Support**: Complete Dark Mode support for all UI panels (main window toolbar, book view toolbar/status bar, search panel, settings window) and book content area with proper FluentTheme integration
+42. **Dark Mode Book Content**: WebView book content displays with black background and white text when system is in Dark Mode, with proper color-inverted search highlighting
+43. **macOS Tahoe Glass Icon**: Application icon with proper transparency support for macOS Tahoe Glass interface, eliminating grey background artifacts
 
 ### **Technical Architecture**
-42. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
-43. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
-44. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
-45. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
-46. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
+44. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
+45. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
+46. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
+47. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
+48. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
 
 ### **macOS Packaging & Distribution**
-47. **CEF WebView Packaging**: Four helper app bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files and shell script launchers that ensure runtime dependencies are found
-48. **Developer ID Signing**: All components signed with Apple Developer ID Application certificate, including executables and dylibs
-49. **Hardened Runtime**: Applied with JIT and unsigned memory entitlements for .NET runtime compatibility
-50. **Notarization**: DMG packages fully notarized with automated build workflow
-51. **Production-Ready Distribution**: Apps launch without quarantine warnings or "damaged" errors on first launch
+49. **CEF WebView Packaging**: Four helper app bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files and shell script launchers that ensure runtime dependencies are found
+50. **Developer ID Signing**: All components signed with Apple Developer ID Application certificate, including executables and dylibs
+51. **Hardened Runtime**: Applied with JIT and unsigned memory entitlements for .NET runtime compatibility
+52. **Notarization**: DMG packages fully notarized with automated build workflow
+53. **Production-Ready Distribution**: Apps launch without quarantine warnings or "damaged" errors on first launch
 
 ## Known Limitations
 
@@ -166,11 +167,9 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
 6.  **UI Feedback During Operations**:
     - **Update History**: Track and display XML update history for transparency
 8.  **Book Display Features**:
-    - **Dark Mode Book Content** ⭐ **BETA 3 PRIORITY**: Implement Dark Mode support for book content area (WebView) with black background and white text when system is in Dark Mode (user preference)
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
     - **Search Hit Restoration** ⭐ **BETA 3 PRIORITY**: Fix bug where highlighted search hits are not restored when reopening books at startup
-    - **App Icon Transparency** ⭐ **BETA 3 PRIORITY**: Fix app icon to work properly with macOS Tahoe Glass interface - current icon shows grey background instead of transparent/adaptive background
 9.  **Search Navigation Enhancement**:
     - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 10.  **Recent Books Feature**:
@@ -360,14 +359,12 @@ Then work through ALL items, not just the first one that seems to help.
 
 ## Next Steps
 
-With font system, script synchronization, phrase/proximity search, two-color highlighting, and UI Dark Mode support complete, the immediate priorities are:
+With font system, script synchronization, phrase/proximity search, two-color highlighting, complete Dark Mode support (UI and book content), and macOS Tahoe Glass icon transparency complete, the immediate priorities are:
 
 1. **Beta 3 Priority Items**:
-   - Implement Dark Mode support for book content area (WebView) with black background and white text
    - Fix search hit restoration bug (highlighted search hits not restored when reopening books at startup)
-   - Fix app icon transparency for macOS Tahoe Glass interface
 2. **Missing Script Input Support**: Implement converters for Thai, Telugu, Tibetan, Khmer, and Cyrillic scripts to enable search input in all 14 Pali scripts
 3. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
 4. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
-The core infrastructure is robust with font management, script conversion, accurate search counting, phrase/proximity search with two-color highlighting, complete UI Dark Mode support, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation with book content Dark Mode support and search hit restoration fixes.
+The core infrastructure is robust with font management, script conversion, accurate search counting, phrase/proximity search with two-color highlighting, complete Dark Mode support for all UI and book content, macOS Tahoe Glass icon transparency, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation with the search hit restoration fix as the remaining priority item.
