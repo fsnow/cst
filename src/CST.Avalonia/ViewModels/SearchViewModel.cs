@@ -526,8 +526,13 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
                     Terms.Add(termVm);
                 }
 
-                // Auto-selection removed - let users manually select terms
-                // This ensures statistics show "Selected: 0" initially
+                // Auto-select if there's only one term (common case for single-term searches)
+                // For multi-term searches, let users manually select which terms they want
+                if (Terms.Count == 1)
+                {
+                    SelectedTerms.Add(Terms[0]);
+                    _logger.LogInformation("Auto-selected single search term: {Term}", Terms[0].DisplayTerm);
+                }
 
                 StatusText = $"Search completed in {result.SearchDuration.TotalMilliseconds:F0}ms - Found {result.TotalTermCount} terms, {result.TotalOccurrenceCount} occurrences";
                 

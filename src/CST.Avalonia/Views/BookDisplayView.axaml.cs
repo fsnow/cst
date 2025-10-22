@@ -759,9 +759,19 @@ public partial class BookDisplayView : UserControl
                 });
 
                 // Navigate to current highlight if we have search results
+                // Add delay to allow JavaScript initializeHighlights() to complete (runs with 100ms delay)
                 if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
                 {
-                    NavigateToHighlight(_viewModel.CurrentHitIndex);
+                    _logger.Debug("Scheduling navigation to first search hit after JS initialization");
+                    Task.Run(async () =>
+                    {
+                        await Task.Delay(300); // Wait for JS initialization (100ms) + buffer
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            _logger.Debug("Navigating to first search hit: {HitIndex}", _viewModel.CurrentHitIndex);
+                            NavigateToHighlight(_viewModel.CurrentHitIndex);
+                        });
+                    });
                 }
             });
         }

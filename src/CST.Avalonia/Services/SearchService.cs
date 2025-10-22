@@ -480,7 +480,9 @@ public class SearchService : ISearchService
                 {
                     Position = pos,
                     StartOffset = startOffset,
-                    EndOffset = endOffset
+                    EndOffset = endOffset,
+                    IsFirstTerm = true,  // Single-term helper: all positions are "first term"
+                    Word = term
                 });
             }
         }
@@ -552,7 +554,9 @@ public class SearchService : ISearchService
                     {
                         Position = pos,
                         StartOffset = startOffset,
-                        EndOffset = endOffset
+                        EndOffset = endOffset,
+                        IsFirstTerm = true,  // Single-term search: all positions are "first term"
+                        Word = term
                     });
                 }
             }
