@@ -173,9 +173,19 @@ public class BookWindowState
     public bool ShowSearchTerms { get; set; }
 
     /// <summary>
-    /// Search terms for highlighting (if any)
+    /// Search terms for highlighting (if any) - IPE encoded
     /// </summary>
     public List<string> SearchTerms { get; set; } = new();
+
+    /// <summary>
+    /// Document ID in Lucene index for this book (needed for search highlighting)
+    /// </summary>
+    public int? DocId { get; set; }
+
+    /// <summary>
+    /// Precomputed search term positions with IsFirstTerm flags (for two-color highlighting)
+    /// </summary>
+    public List<TermPosition> SearchPositions { get; set; } = new();
 
     /// <summary>
     /// Tab order index

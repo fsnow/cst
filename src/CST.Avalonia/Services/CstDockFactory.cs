@@ -420,9 +420,11 @@ namespace CST.Avalonia.Services
         private static DateTime _lastRegularOpenTime = DateTime.MinValue;
         private static string? _lastRegularOpenedBook = null;
         
-        public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId)
+        public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
+            List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null)
         {
-            _logger.Information("Opening book: {BookFile} with anchor: {Anchor}", book.FileName, anchor ?? "null");
+            _logger.Information("Opening book: {BookFile} with anchor: {Anchor}, SearchTerms: {TermCount}, Positions: {PosCount}",
+                book.FileName, anchor ?? "null", searchTerms?.Count ?? 0, searchPositions?.Count ?? 0);
             
             // Prevent duplicate opens from rapid event firing while still allowing intentional multiple copies
             // Only prevent if it's the exact same book with no specific windowId within a short timeframe
@@ -453,7 +455,9 @@ namespace CST.Avalonia.Services
             var chapterListsService = App.ServiceProvider?.GetRequiredService<ChapterListsService>();
             var settingsService = App.ServiceProvider?.GetRequiredService<ISettingsService>();
             var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
-            var bookDisplayViewModel = new BookDisplayViewModel(book, null, anchor, chapterListsService, settingsService, fontService);
+
+            // Pass search data if available (for state restoration with highlighting)
+            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions);
             
             // Set the correct script after construction
             if (bookDisplayViewModel != null)
@@ -583,11 +587,13 @@ namespace CST.Avalonia.Services
                     BookIndex = bookIndex,
                     BookFileName = book.FileName,
                     BookScript = bookDisplayViewModel.BookScript,
-                    SearchTerms = new List<string>(), // TODO: Get search terms from BookDisplayViewModel
+                    SearchTerms = bookDisplayViewModel.SearchTerms ?? new List<string>(),
+                    DocId = bookDisplayViewModel.DocId,
+                    SearchPositions = bookDisplayViewModel.SearchPositions ?? new List<TermPosition>(),
                     TabIndex = 0, // TODO: Get actual tab index from dock
                     IsSelected = isSelectedValue,
                     ShowFootnotes = true, // Default for now
-                    ShowSearchTerms = false // TODO: Get search terms status from BookDisplayViewModel
+                    ShowSearchTerms = bookDisplayViewModel.HasSearchHighlights
                 };
                 
                 // Update the state

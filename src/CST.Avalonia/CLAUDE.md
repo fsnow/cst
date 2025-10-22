@@ -79,7 +79,11 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
     - Two-column layout with terms list and book occurrences
     - Real-time search statistics and loading feedback
     - Keyboard shortcuts (Enter/Escape) and double-click navigation
-20. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
+20. **Search Result Integration & Restoration**:
+    - Persistent highlighting saved per-tab with search terms and positions
+    - Full session restoration: search highlights, navigation UI, and hit counter restored on app restart
+    - Single-term and multi-term searches both restore correctly with IsFirstTerm flags
+    - Auto-navigation to first hit after restoration (CurrentHitIndex restoration planned for post-Beta 3)
 
 ### **Indexing & File Management**
 21. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
@@ -178,12 +182,13 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
 6.  **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
-    - **Search Hit Restoration** ⭐ **BETA 3 PRIORITY**: Fix bug where highlighted search hits are not restored when reopening books at startup
-7.  **Search Hit Navigation** ⚠️ **BROKEN**:
-    - **Current Status**: Navigation between highlighted search hits is not working (broken during recent development)
-    - **Required Fix**: Restore functionality for navigating between search hits in book content
-    - **Enhancement**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
-    - **Note**: This was working previously but has been broken, needs investigation and repair
+7.  **Comprehensive Application State Restoration**:
+    - **Current Status**: Basic book restoration works (search highlights, script, window positions), but CST4 had much more comprehensive state
+    - **Search Navigation State**: Save and restore CurrentHitIndex (which hit user was viewing, e.g., "50 of 53")
+    - **Scroll Position**: Save and restore exact scroll position within each book
+    - **CST4 Comparison Review**: Conduct post-Beta 3 review of CST4's state restoration features to identify missing functionality
+    - **Full Parity Goal**: Match CST4's comprehensive session restoration for professional user experience
+    - **Note**: Beta 3 successfully restores search highlights and navigation UI, but starts at hit 1 and top of document
 8.  **Recent Books Feature**:
     - **File Menu Integration**: Add "Recent Books" submenu to File menu or main UI
     - **MRU List Display**: Show recently opened books with titles and last-opened dates

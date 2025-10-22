@@ -389,7 +389,12 @@ namespace CST.Avalonia.ViewModels
 
         public Book Book => _book;
         public string DisplayTitle => GetBookDisplayName(_book);
-        
+
+        // Search data properties (for state restoration)
+        public List<string>? SearchTerms => _searchTerms;
+        public int? DocId => _docId;
+        public List<TermPosition>? SearchPositions => _searchPositions;
+
         // Font properties for tab title, chapter dropdown, and status bar
         public string CurrentScriptFontFamily => _fontService?.GetScriptFontFamily(BookScript) ?? "Helvetica";
         public int CurrentScriptFontSize => _fontService?.GetScriptFontSize(BookScript) ?? 12;

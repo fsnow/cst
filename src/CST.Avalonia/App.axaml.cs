@@ -618,9 +618,11 @@ public partial class App : Application
                                     // Validate the book filename matches (for extra safety)
                                     if (book.FileName == bookWindowState.BookFileName)
                                     {
-                                        Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}", book.FileName, bookWindowState.WindowId);
-                                        // Open the book through SimpleTabbedWindow with saved script and WindowId
-                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId);
+                                        Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}, SearchTerms: {TermCount}, Positions: {PosCount}",
+                                            book.FileName, bookWindowState.WindowId, bookWindowState.SearchTerms.Count, bookWindowState.SearchPositions.Count);
+                                        // Open the book through SimpleTabbedWindow with saved script, search data, and WindowId
+                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId,
+                                            bookWindowState.DocId, bookWindowState.SearchPositions);
                                         Log.Debug("Book restored: {BookFile} with script: {Script}", book.FileName, bookWindowState.BookScript);
                                     }
                                     else
