@@ -26,6 +26,9 @@ src/CST.Core/obj/
 src/CST.Lucene/bin/
 src/CST.Lucene/obj/
 
+src/CST.ScriptValidation/bin/
+src/CST.ScriptValidation/obj/
+
 *.log
 
 screenshots/

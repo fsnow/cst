@@ -2,7 +2,7 @@
 
 ## Current Status: **BETA 3 IN DEVELOPMENT** 🚧
 
-**Last Updated**: October 18, 2025
+**Last Updated**: October 19, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 
 ## Project Overview
@@ -27,23 +27,40 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 ### **Text Display & Script System**
 6. **Multi-Script Support**:
    - **Display**: All 14 Pali scripts supported (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
-   - **Input**: 9 scripts supported for search/dictionary (missing: Thai, Telugu, Tibetan, Khmer, Cyrillic)
-   - **Indexing**: IPE (Internal Phonetic Encoding) with Devanagari analyzers for accurate search
+   - **Input**: All 14 scripts supported for search/dictionary input
+   - **Indexing**: IPE (Ideal Pali Encoding) with Devanagari analyzers for accurate search
 7. **Per-Tab Script Selection**: Each book tab independently remembers and applies its script setting
 8. **Script Synchronization**: Search results and book tree automatically update display when global script changes
+9. **Script Conversion Validation & Quality Assurance**:
+   - **Comprehensive Round-Trip Testing**: Automated validation tool tests Deva → IPE → Script → IPE → Script conversions for all 14 Pali scripts
+   - **Corpus-Based Test Coverage**: 2,248 carefully selected words covering all unique syllable patterns and 140 medial independent vowel patterns found in the 217-book Pali corpus
+   - **Multiple Testing Modes**:
+     - `validate`: Round-trip conversion accuracy testing with HTML reports
+     - `compare`: Compare CST converters against external converters (pnfo, Aksharamukha)
+     - `analyze`: Deep analysis of individual problematic words
+     - `extract`: Generate minimal test sets from full corpus
+   - **Production Impact**: This validation framework enabled:
+     - Rapid development of 5 missing input parsers (Bengali, Gujarati, Gurmukhi, Kannada, Malayalam)
+     - Rapid development of 5 missing script converters (Khmer, Myanmar, Sinhala, Telugu, Tibetan)
+     - Discovery and fix of longstanding bugs in converters/parsers
+     - **99.96% success rate** across all 13 scripts (Thai, Myanmar, Latin, Bengali, Gujarati, Gurmukhi, Kannada, Malayalam, Tibetan, Sinhala, Khmer, Telugu, Cyrillic)
+   - **Known Limitations**:
+     - **Cyrillic**: ~15 failures (0.67%) due to inherent encoding ambiguity for consonant + аа patterns
+     - **All Scripts**: 1 shared failure due to Latin transliteration ambiguity (`ग्ग्ह` vs `ग्घ` - "g+g+h" vs "g+gh") in likely erroneous source word
+   - **Documentation**: See `src/CST.ScriptValidation/README.md` for complete usage guide and technical details
 
 ### **UI Font Management System**
-9. **Per-Script UI Font Configuration**: Complete font system for all 14 Pali scripts used in UI elements (search results, tree views, dropdowns) with individual font family and size settings
-10. **Native Font Detection**: macOS Core Text APIs detect and filter fonts compatible with each specific script
-11. **System Default Detection**: Shows actual system-chosen default fonts for each script (informational)
-12. **Real-Time Font Updates**: Font changes apply immediately across all UI locations without restart
-13. **DataTemplate Font Binding**: Custom FontHelper attached properties enable font settings in search results, tree views, and dropdowns
-14. **Font Settings Persistence**: All UI font preferences save and restore correctly across application sessions
+10. **Per-Script UI Font Configuration**: Complete font system for all 14 Pali scripts used in UI elements (search results, tree views, dropdowns) with individual font family and size settings
+11. **Native Font Detection**: macOS Core Text APIs detect and filter fonts compatible with each specific script
+12. **System Default Detection**: Shows actual system-chosen default fonts for each script (informational)
+13. **Real-Time Font Updates**: Font changes apply immediately across all UI locations without restart
+14. **DataTemplate Font Binding**: Custom FontHelper attached properties enable font settings in search results, tree views, and dropdowns
+15. **Font Settings Persistence**: All UI font preferences save and restore correctly across application sessions
     - **Note**: This system covers Pali script fonts in UI elements only; book content fonts and UI localization fonts are separate systems (see Outstanding Work)
 
 ### **Search System**
-15. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Pali texts
-16. **Advanced Search Features**:
+16. **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Pali texts
+17. **Advanced Search Features**:
     - Single and multi-term exact searches with accurate counting
     - **Phrase Search**: Quoted terms (e.g., `"evaṃ me"`) find exact adjacent word sequences
     - **Proximity Search**: Unquoted multi-word searches find terms within adjustable word distance (default: 10 words)
@@ -52,63 +69,63 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
     - Wildcard search (`*` and `?`) working in all 14 scripts, with expansion support in multi-word searches
     - Regular expression search support
     - Position-based highlighting with correct character offsets
-17. **Smart Book Filtering**:
+18. **Smart Book Filtering**:
     - Checkbox-based filter UI for Pitaka/Commentary categories
     - "Select All/None" quick actions for filter management
     - Live book count display based on current filter selection
     - Filter summary display when collapsed
-18. **Enhanced Search UI**:
+19. **Enhanced Search UI**:
     - Visual search elements (magnifying glass, clear button, progress indicator)
     - Two-column layout with terms list and book occurrences
     - Real-time search statistics and loading feedback
     - Keyboard shortcuts (Enter/Escape) and double-click navigation
-19. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
+20. **Search Result Integration**: Persistent highlighting saved per-tab, search terms passed to book display
 
 ### **Indexing & File Management**
-20. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
-21. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive unit/integration/performance tests
-22. **Empty Index Handling**: Proper startup behavior when no search index exists yet
-23. **Index Integrity**: Fixed duplicate document issues, accurate search counts, proper document replacement
+21. **Incremental Indexing System**: Smart indexing that only processes changed files, not entire 217-book corpus
+22. **Production-Ready Services**: Fully tested IndexingService and XmlFileDatesService with 62 comprehensive unit/integration/performance tests
+23. **Empty Index Handling**: Proper startup behavior when no search index exists yet
+24. **Index Integrity**: Fixed duplicate document issues, accurate search counts, proper document replacement
 
 ### **XML Update System**
-24. **GitHub API Integration**: Automatic file updates using Octokit.NET with repository configuration in Settings
-25. **SHA-Based Change Detection**: Only downloads files that have actually changed since local copies (avoids 1GB+ full downloads)
-26. **Enhanced File Tracking**: Nullable timestamps, proper state management, separation between download and indexing states
-27. **Optimized Startup Sequence**: Files updated before indexing to eliminate redundant work
-28. **Reduced Logging Noise**: 95% reduction in startup logging (300KB+ → 14KB) while preserving debug information
+25. **GitHub API Integration**: Automatic file updates using Octokit.NET with repository configuration in Settings
+26. **SHA-Based Change Detection**: Only downloads files that have actually changed since local copies (avoids 1GB+ full downloads)
+27. **Enhanced File Tracking**: Nullable timestamps, proper state management, separation between download and indexing states
+28. **Optimized Startup Sequence**: Files updated before indexing to eliminate redundant work
+29. **Reduced Logging Noise**: 95% reduction in startup logging (300KB+ → 14KB) while preserving debug information
 
 ### **Dynamic Welcome Page System**
-29. **Version-Aware Messaging**: Displays version-specific messages (beta feedback, stable notifications, outdated warnings) based on user's current version
-30. **Automatic Announcements**: Shows targeted announcements and critical notices filtered by version and expiration dates
-31. **GitHub Integration**: Fetches update configuration from GitHub main branch with 24-hour local caching and offline fallback
-32. **Semantic Version Comparison**: Robust version parsing with support for pre-release identifiers and build metadata
-33. **External Link Handling**: Welcome page links (GitHub releases, documentation) open in system browser instead of internal navigation
-34. **Smart Caching**: Local cache with TTL management, graceful degradation when offline, and automatic refresh for stale data
+30. **Version-Aware Messaging**: Displays version-specific messages (beta feedback, stable notifications, outdated warnings) based on user's current version
+31. **Automatic Announcements**: Shows targeted announcements and critical notices filtered by version and expiration dates
+32. **GitHub Integration**: Fetches update configuration from GitHub main branch with 24-hour local caching and offline fallback
+33. **Semantic Version Comparison**: Robust version parsing with support for pre-release identifiers and build metadata
+34. **External Link Handling**: Welcome page links (GitHub releases, documentation) open in system browser instead of internal navigation
+35. **Smart Caching**: Local cache with TTL management, graceful degradation when offline, and automatic refresh for stale data
 
 ### **User Interface Polish**
-35. **Mac-Style Book Tree Icons**: Dynamic folder icons (open/closed states) with document icons for individual books
-36. **Tab Overflow Fix**: Custom scrollbar styling prevents tab coverage when many books are open
-37. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
-38. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
-39. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
-40. **Welcome Page with Startup Progress**: Persistent welcome page displays status updates during startup for XML checking, downloading, and indexing operations (fully working on macOS)
-41. **Dark Mode Support**: Complete Dark Mode support for all UI panels (main window toolbar, book view toolbar/status bar, search panel, settings window) and book content area with proper FluentTheme integration
-42. **Dark Mode Book Content**: WebView book content displays with black background and white text when system is in Dark Mode, with proper color-inverted search highlighting
-43. **macOS Tahoe Glass Icon**: Application icon with proper transparency support for macOS Tahoe Glass interface, eliminating grey background artifacts
+36. **Mac-Style Book Tree Icons**: Dynamic folder icons (open/closed states) with document icons for individual books
+37. **Tab Overflow Fix**: Custom scrollbar styling prevents tab coverage when many books are open
+38. **Clean Settings Window**: Removed all non-functional placeholder settings, only displays working functionality
+39. **Application Branding**: Proper "CST Reader" branding in macOS menu bar, window titles, and bundle configuration
+40. **Visual Feedback**: Progress indicators, loading states, dynamic layouts, and proper iconography throughout UI
+41. **Welcome Page with Startup Progress**: Persistent welcome page displays status updates during startup for XML checking, downloading, and indexing operations (fully working on macOS)
+42. **Dark Mode Support**: Complete Dark Mode support for all UI panels (main window toolbar, book view toolbar/status bar, search panel, settings window) and book content area with proper FluentTheme integration
+43. **Dark Mode Book Content**: WebView book content displays with black background and white text when system is in Dark Mode, with proper color-inverted search highlighting
+44. **macOS Tahoe Glass Icon**: Application icon with proper transparency support for macOS Tahoe Glass interface, eliminating grey background artifacts
 
 ### **Technical Architecture**
-44. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
-45. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
-46. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
-47. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
-48. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
+45. **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
+46. **Reactive MVVM**: ReactiveUI-based ViewModels with proper lifecycle management and event handling
+47. **Dependency Injection**: Clean service architecture with Microsoft.Extensions.DI container
+48. **WebView Rendering**: Uses WebViewControl-Avalonia for book content display with search highlighting
+49. **Comprehensive Testing**: 65+ tests covering unit, integration, and performance scenarios with 100% pass rate
 
 ### **macOS Packaging & Distribution**
-49. **CEF WebView Packaging**: Four helper app bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files and shell script launchers that ensure runtime dependencies are found
-50. **Developer ID Signing**: All components signed with Apple Developer ID Application certificate, including executables and dylibs
-51. **Hardened Runtime**: Applied with JIT and unsigned memory entitlements for .NET runtime compatibility
-52. **Notarization**: DMG packages fully notarized with automated build workflow
-53. **Production-Ready Distribution**: Apps launch without quarantine warnings or "damaged" errors on first launch
+50. **CEF WebView Packaging**: Four helper app bundles (Main, GPU, Plugin, Renderer) with proper Info.plist files and shell script launchers that ensure runtime dependencies are found
+51. **Developer ID Signing**: All components signed with Apple Developer ID Application certificate, including executables and dylibs
+52. **Hardened Runtime**: Applied with JIT and unsigned memory entitlements for .NET runtime compatibility
+53. **Notarization**: DMG packages fully notarized with automated build workflow
+54. **Production-Ready Distribution**: Apps launch without quarantine warnings or "damaged" errors on first launch
 
 ## Known Limitations
 
@@ -143,36 +160,31 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
     - **Settings Integration**: Add language selection to Settings window
     - **Resource Management**: Implement proper resource loading system for localized strings
     - **Note**: This is separate from Pali script selection but often related in user preferences
-2.  **Missing Pali Script Input Parsers** (5 scripts need converters to IPE):
-    - **Thai**: Thai script → IPE converter (Thai2Ipe or Thai2Deva)
-    - **Telugu**: Telugu script → IPE converter (Telu2Ipe or Telu2Deva)
-    - **Tibetan**: Tibetan script → IPE converter (Tibt2Ipe or Tibt2Deva)
-    - **Khmer**: Khmer script → IPE converter (Khmr2Ipe or Khmr2Deva)
-    - **Cyrillic**: Cyrillic script → IPE converter (Cyrl2Ipe or Cyrl2Deva)
-    - **Note**: Display works for all 14 scripts, but input (search/dictionary) only works for 9
-    - **Implementation**: May use direct Script→IPE or indirect Script→Deva→IPE path
-3.  **UI Language Font System**:
+2.  **UI Language Font System**:
     - **Localization Font Settings**: Separate font controls for ~20 UI languages (distinct from Pali script fonts)
     - **Font Discovery**: Detect available fonts suitable for each UI language script
     - **Note**: This is separate from Pali script fonts - refers to UI language localization fonts
-4.  **Book Content Font Management System**:
+3.  **Book Content Font Management System**:
     - **Current Limitation**: Book fonts are hardcoded in XSL stylesheets (e.g., `.book { font-size: 21pt; }`), requiring manual XSL editing for customization (as in CST4)
     - **Per-Script Book Fonts**: Implement user-configurable font families for book content display, separate from UI fonts
     - **Book Font Sizing**: Add font size controls for different book content elements (titles, paragraphs, footnotes, etc.)
     - **XSL Integration**: Dynamic XSL generation or CSS injection to apply user font preferences to WebView book content
     - **Style Customization**: Support for different paragraph styles tagged in TEI XML (matching CST4's XSL customization capabilities)
     - **Preview System**: Live preview of font changes in book display
-    - **Note**: This is the third distinct font system - separate from both UI Pali script fonts (#9-14) and UI localization fonts (#3)
-5.  **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
-6.  **UI Feedback During Operations**:
+    - **Note**: This is the third distinct font system - separate from both UI Pali script fonts (#9-14) and UI localization fonts (#2)
+4.  **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
+5.  **UI Feedback During Operations**:
     - **Update History**: Track and display XML update history for transparency
-8.  **Book Display Features**:
+6.  **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
     - **Search Hit Restoration** ⭐ **BETA 3 PRIORITY**: Fix bug where highlighted search hits are not restored when reopening books at startup
-9.  **Search Navigation Enhancement**:
-    - Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
-10.  **Recent Books Feature**:
+7.  **Search Hit Navigation** ⚠️ **BROKEN**:
+    - **Current Status**: Navigation between highlighted search hits is not working (broken during recent development)
+    - **Required Fix**: Restore functionality for navigating between search hits in book content
+    - **Enhancement**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
+    - **Note**: This was working previously but has been broken, needs investigation and repair
+8.  **Recent Books Feature**:
     - **File Menu Integration**: Add "Recent Books" submenu to File menu or main UI
     - **MRU List Display**: Show recently opened books with titles and last-opened dates
     - **Smart Tracking**: Automatically add books to recent list when opened
@@ -180,6 +192,27 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
     - **Persistence**: Leverage existing ApplicationState.RecentBooks infrastructure
     - **User Experience**: Quick access to frequently used texts
     - **Note**: Partial backend exists - ApplicationState.Preferences.RecentBooks list, RecentBookItem model, AddRecentBook() method, but no UI integration and book tracking not implemented
+9.  **Dictionary Feature**:
+    - **English Dictionary**: Implement Pali-English dictionary lookup (matching CST4 functionality)
+    - **Hindi Dictionary**: Implement Pali-Hindi dictionary lookup (matching CST4 functionality)
+    - **Multi-Script Support**: Dictionary lookups should work with all 14 Pali scripts for input
+    - **UI Integration**: Add dictionary panel or popup for word lookups
+    - **Dictionary Data**: Port dictionary data files from CST4
+    - **Context Menu**: Right-click word lookup integration
+    - **Keyboard Shortcuts**: Quick dictionary access hotkeys
+10. **GoTo Feature**:
+    - **Book Navigation**: Implement "Go To" dialog for jumping to specific book locations
+    - **Page/Section Navigation**: Support navigation by page number, section, verse, or other CST reference systems
+    - **UI Integration**: Add GoTo menu item and keyboard shortcut (matching CST4 functionality)
+    - **Validation**: Validate user input and provide feedback for invalid references
+    - **History**: Track recently visited locations for quick navigation
+11. **View Source Feature**:
+    - **PDF Display**: Display Burmese CST PDFs in system browser
+    - **Context-Aware Navigation**: Jump to correct PDF page based on current book location in open window
+    - **Page Mapping**: Implement mapping between book locations and corresponding PDF pages
+    - **UI Integration**: Add "View Source" menu item or button (matching CST4 functionality)
+    - **PDF Resources**: Ensure Burmese CST PDF files are accessible to the application
+    - **Error Handling**: Handle missing PDFs or invalid page references gracefully
 
 
 ## Technical Architecture
@@ -359,12 +392,11 @@ Then work through ALL items, not just the first one that seems to help.
 
 ## Next Steps
 
-With font system, script synchronization, phrase/proximity search, two-color highlighting, complete Dark Mode support (UI and book content), and macOS Tahoe Glass icon transparency complete, the immediate priorities are:
+With font system, script synchronization, phrase/proximity search, two-color highlighting, complete Dark Mode support (UI and book content), macOS Tahoe Glass icon transparency, and all 14 Pali script input parsers complete, the immediate priorities are:
 
 1. **Beta 3 Priority Items**:
    - Fix search hit restoration bug (highlighted search hits not restored when reopening books at startup)
-2. **Missing Script Input Support**: Implement converters for Thai, Telugu, Tibetan, Khmer, and Cyrillic scripts to enable search input in all 14 Pali scripts
-3. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
-4. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
+2. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
+3. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
-The core infrastructure is robust with font management, script conversion, accurate search counting, phrase/proximity search with two-color highlighting, complete Dark Mode support for all UI and book content, macOS Tahoe Glass icon transparency, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation with the search hit restoration fix as the remaining priority item.
+The core infrastructure is robust with font management, full script conversion support (all 14 scripts for both display and input), accurate search counting, phrase/proximity search with two-color highlighting, complete Dark Mode support for all UI and book content, macOS Tahoe Glass icon transparency, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation with the search hit restoration fix as the remaining priority item.
