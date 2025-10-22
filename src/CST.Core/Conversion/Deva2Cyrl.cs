@@ -129,10 +129,11 @@ namespace CST.Conversion
         // no stylesheet modifications, capitalization, etc.
         public static string Convert(string devStr)
         {
-            // Insert Cyrillic 'a' after all consonants that are not followed by virama, dependent vowel or cyrillic a
+            // Insert Cyrillic 'a' after all consonants that are not followed by virama, dependent vowel, combining marks, or cyrillic a
             // (This still works after we inserted ZWJ in the Devanagari. The ZWJ goes after virama.)
-            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
-            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
+            // Exclude U+0900-U+0903 (combining marks: inverted breve, candrabindu, anusvara/niggahita, visarga)
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u0900-\u0903\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
+            devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u0900-\u0903\u093E-\u094D\u0430])", "$1\u0430$2", RegexOptions.Compiled);
             // TODO: figure out how to backtrack so this replace doesn't have to be done twice
 
             StringBuilder sb = new StringBuilder();

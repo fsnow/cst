@@ -26,7 +26,7 @@ namespace CST.Conversion
             mymr2Deva['\u1007'] = '\u091C'; // ja
             mymr2Deva['\u1008'] = '\u091D'; // jha
             mymr2Deva['\u1009'] = '\u091E'; // n tilde a
-            mymr2Deva['\u100A'] = "\u1009\u1039\u1009"; // double n tilde a
+            mymr2Deva['\u100A'] = "\u091E\u094D\u091E"; // double n tilde a
 
             // retroflex stops
             mymr2Deva['\u100B'] = '\u091F'; // t underdot a
@@ -81,13 +81,13 @@ namespace CST.Conversion
             mymr2Deva['\u103A'] = "";
 
             // replace the dependent consonant signs ya, ra, wa and ha (with no preceding virama) with virama + deva letter
-            mymr2Deva['\u103B'] = "\u1039\u101A";
-            mymr2Deva['\u103C'] = "\u1039\u101B";
-            mymr2Deva['\u103D'] = "\u1039\u101D";
-            mymr2Deva['\u103E'] = "\u1039\u101F";
+            mymr2Deva['\u103B'] = "\u094D\u092F";
+            mymr2Deva['\u103C'] = "\u094D\u0930";
+            mymr2Deva['\u103D'] = "\u094D\u0935";
+            mymr2Deva['\u103E'] = "\u094D\u0939";
 
             // Myanmar great sa becomes Deva sa + virama + sa
-            mymr2Deva['\u103F'] = "\u101E\u1039\u101E";
+            mymr2Deva['\u103F'] = "\u0938\u094D\u0938";
 
             // numerals
             mymr2Deva['\u1040'] = '\u0966';
@@ -139,9 +139,9 @@ namespace CST.Conversion
 			str = str.Replace("\u0915\u094D\u0935", "\u0915\u094D\u200D\u0935"); // ka + va
 			str = str.Replace("\u091A\u094D\u091A", "\u091A\u094D\u200D\u091A"); // ca + ca
 			str = str.Replace("\u091C\u094D\u091C", "\u091C\u094D\u200D\u091C"); // ja + ja
-			str = str.Replace("\u091E\u094D\u091A", "\u091E\u094D\u200D\u091A"); // ña + ca
-			str = str.Replace("\u091E\u094D\u091C", "\u091E\u094D\u200D\u091C"); // ña + ja
-			str = str.Replace("\u091E\u094D\u091E", "\u091E\u094D\u200D\u091E"); // ña + ña
+			str = str.Replace("\u091E\u094D\u091A", "\u091E\u094D\u200D\u091A"); // ï¿½a + ca
+			str = str.Replace("\u091E\u094D\u091C", "\u091E\u094D\u200D\u091C"); // ï¿½a + ja
+			str = str.Replace("\u091E\u094D\u091E", "\u091E\u094D\u200D\u091E"); // ï¿½a + ï¿½a
 			str = str.Replace("\u0928\u094D\u0928", "\u0928\u094D\u200D\u0928"); // na + na
 			str = str.Replace("\u092A\u094D\u0932", "\u092A\u094D\u200D\u0932"); // pa + la
 			str = str.Replace("\u0932\u094D\u0932", "\u0932\u094D\u200D\u0932"); // la + la

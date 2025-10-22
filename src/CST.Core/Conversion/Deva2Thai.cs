@@ -117,16 +117,14 @@ namespace CST.Conversion
             // first remove all the ZWJs
             devStr = devStr.Replace("\u200D", "");
 
-            // pre-processing step for Thai: put the e vowel before its consonants
-            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u0947", "\u0E40$1");
-            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u0947", "\u0E40$1");
-            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939])\u0947", "\u0E40$1");
+            // pre-processing step for Thai: put the e vowel before its consonant
+            // Note: The vowel only applies to the consonant immediately before it,
+            // not to an entire consonant cluster
             devStr = Regex.Replace(devStr, "([\u0915-\u0939])\u0947", "\u0E40$1");
 
-            // pre-processing step for Thai: put the o vowel before its consonants
-            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u094B", "\u0E42$1");
-            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939]\u094D[\u0915-\u0939])\u094B", "\u0E42$1");
-            //devStr = Regex.Replace(devStr, "([\u0915-\u0939]\u094D[\u0915-\u0939])\u094B", "\u0E42$1");
+            // pre-processing step for Thai: put the o vowel before its consonant
+            // Note: The vowel only applies to the consonant immediately before it,
+            // not to an entire consonant cluster
             devStr = Regex.Replace(devStr, "([\u0915-\u0939])\u094B", "\u0E42$1");
 
             StringBuilder sb = new StringBuilder();
@@ -138,7 +136,13 @@ namespace CST.Conversion
                     sb.Append(c);
             }
 
-            return sb.ToString();
+            string thai = sb.ToString();
+
+            // Post-processing: combine i + niggahita into single character
+            // In Thai Pali, iṃ has a special single Unicode character
+            thai = thai.Replace("\u0E34\u0E4D", "\u0E36");
+
+            return thai;
         }
 
         public static string ConvertDandas(string str)

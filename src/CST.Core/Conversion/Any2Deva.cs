@@ -47,11 +47,20 @@ namespace CST.Conversion
                 return Mymr2Deva.Convert(str);
             else if (script == Script.Sinhala)
                 return Sinh2Deva.Convert(str);
+            else if (script == Script.Thai)
+                return Thai2Deva.Convert(str);
+            else if (script == Script.Khmer)
+                return Khmr2Deva.Convert(str);
+            else if (script == Script.Tibetan)
+                return Tibt2Deva.Convert(str);
+            else if (script == Script.Telugu)
+                return Telu2Deva.Convert(str);
+            else if (script == Script.Cyrillic)
+                return Cyrl2Deva.Convert(str);
             else
                 return str;
         }
 
-        // TODO: add Cyrillic, Tamil(?)
         public static Script GetScript(char c)
         {
             int ccode = System.Convert.ToInt32(c);

@@ -51,6 +51,16 @@ namespace CST.Conversion
                 return Deva2Ipe.Convert(Mymr2Deva.Convert(str));
             else if (script == Script.Sinhala)
                 return Deva2Ipe.Convert(Sinh2Deva.Convert(str));
+            else if (script == Script.Thai)
+                return Deva2Ipe.Convert(Thai2Deva.Convert(str));
+            else if (script == Script.Khmer)
+                return Deva2Ipe.Convert(Khmr2Deva.Convert(str));
+            else if (script == Script.Tibetan)
+                return Deva2Ipe.Convert(Tibt2Deva.Convert(str));
+            else if (script == Script.Telugu)
+                return Deva2Ipe.Convert(Telu2Deva.Convert(str));
+            else if (script == Script.Cyrillic)
+                return Deva2Ipe.Convert(Cyrl2Deva.Convert(str));
             else
                 return str;
         }

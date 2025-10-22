@@ -221,7 +221,8 @@ namespace CST.Conversion
 
 				if (IsPaliVowel(c))
 				{
-					if (last == LetterType.Vowel)
+					// Vowels after another vowel OR after niggahita should be independent vowels
+					if (last == LetterType.Vowel || last == LetterType.Nasal)
 					{
 						dev = String.Concat(dev, devInitialVowels[c]);
 					}
