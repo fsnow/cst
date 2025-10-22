@@ -368,11 +368,12 @@
         <div class="focus-item">
             <strong>Multi-Script Search</strong>
             <ul>
-                <li>Search in different Pāli scripts (Devanagari, Myanmar, Sinhala, etc.)</li>
+                <li>Search in all 14 Pāli scripts (Devanagari, Myanmar, Sinhala, Thai, Telugu, Tibetan, etc.)</li>
+                <li>Try phrase search with quotes (e.g., "evaṃ me sutaṃ")</li>
+                <li>Test multi-word proximity search (adjust word distance with slider - 1 to 50 words)</li>
                 <li>Test wildcard search with asterisks (*)</li>
                 <li>Try book filtering before searching</li>
             </ul>
-            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">Search currently supports 9 of 14 scripts - missing Thai, Telugu, Tibetan, Khmer, Cyrillic input.</p>
         </div>
 
         <div class="focus-item">
@@ -382,6 +383,17 @@
                 <li>Quit and restart - does everything restore correctly?</li>
                 <li>Are window positions and sizes remembered?</li>
             </ul>
+        </div>
+
+        <div class="focus-item">
+            <strong>Dark Mode Support</strong>
+            <ul>
+                <li>Toggle Dark Mode in your system settings</li>
+                <li>Verify all UI panels (toolbar, search, settings) adapt correctly</li>
+                <li>Check that book content displays with dark background and inverted colors</li>
+                <li>Test search highlighting in both light and dark modes</li>
+            </ul>
+            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">Does everything remain readable? Any contrast or color issues?</p>
         </div>
     </div>
 
@@ -425,10 +437,9 @@
     <div class="collapsible">
         <h2>Known Limitations</h2>
         <ul>
-            <li>Search input only works for 9 of 14 scripts (Thai, Telugu, Tibetan, Khmer, Cyrillic display only)</li>
-            <li>Book content fonts not yet customizable (UI fonts are)</li>
-            <li>Phrase search and proximity search in development</li>
-            <li>UI currently English-only (localization planned)</li>
+            <li>Book content fonts not yet customizable (UI fonts for each script are customizable in Settings)</li>
+            <li>UI currently English-only (multi-language localization planned)</li>
+            <li>macOS: Elevated CPU usage (~30% idle) is an Avalonia framework limitation, not specific to CST Reader</li>
         </ul>
     </div>
 
