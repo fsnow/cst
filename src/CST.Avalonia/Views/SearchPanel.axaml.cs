@@ -90,9 +90,9 @@ public partial class SearchPanel : UserControl
             try
             {
                 // Open book with search terms for highlighting
-                var mainWindow = TopLevel.GetTopLevel(this) as Window;
-                var layoutViewModel = mainWindow?.DataContext as LayoutViewModel;
-                
+                // Use App.MainWindow to handle both docked and floating search panel scenarios
+                var layoutViewModel = App.MainWindow?.DataContext as LayoutViewModel;
+
                 if (layoutViewModel != null && DataContext is SearchViewModel searchViewModel)
                 {
                     // Collect search terms from selected terms for highlighting
