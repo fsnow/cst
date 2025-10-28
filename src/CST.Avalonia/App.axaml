@@ -53,10 +53,11 @@
         <!-- Current implementation covers: search results, book tree, chapter dropdown, status bar -->
     </Application.Styles>
     
-    <!-- Native Menu for macOS -->
+    <!-- Native Menu for macOS - Application level (goes into CST Reader app menu) -->
     <NativeMenu.Menu>
         <NativeMenu>
-            <NativeMenuItem Header="Settings..." Gesture="Cmd+OemComma" />
+            <!-- Preferences in app menu following macOS convention -->
+            <NativeMenuItem Header="Preferences..." Gesture="Cmd+OemComma" />
         </NativeMenu>
     </NativeMenu.Menu>
 </Application>

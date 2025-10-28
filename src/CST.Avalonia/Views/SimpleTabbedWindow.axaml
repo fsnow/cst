@@ -8,7 +8,20 @@
         Width="1400" Height="900"
         MinWidth="800" MinHeight="600"
         WindowStartupLocation="CenterScreen">
-    
+
+    <!-- Native Menu for macOS - Window level (creates top-level menus in menu bar) -->
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <!-- View Menu as top-level menu -->
+            <NativeMenuItem Header="View">
+                <NativeMenu>
+                    <NativeMenuItem Header="Select a Book" />
+                    <NativeMenuItem Header="Search" />
+                </NativeMenu>
+            </NativeMenuItem>
+        </NativeMenu>
+    </NativeMenu.Menu>
+
     <!-- Main Layout with Toolbar and DockControl -->
     <DockPanel>
         <!-- Top Toolbar -->
@@ -47,7 +60,8 @@
         </Border>
         
         <!-- Main DockControl -->
-        <dock:DockControl Layout="{Binding Layout}" 
+        <dock:DockControl x:Name="DockControl"
+                          Layout="{Binding Layout}"
                           Factory="{Binding Factory}" />
     </DockPanel>
 </Window>

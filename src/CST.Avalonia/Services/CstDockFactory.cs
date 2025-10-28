@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using Avalonia;
 using Avalonia.Threading;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
@@ -45,17 +46,21 @@ namespace CST.Avalonia.Services
                 Title = "Select a Book",
                 Context = openBookViewModel,
                 CanPin = false,    // Prevent pinning to avoid vertical text issues
-                CanClose = false   // Prevent accidental closing
+                CanClose = false,  // Prevent accidental closing
+                CanFloat = true,   // Allow floating out
+                CanDrag = true     // Allow dragging
             };
-            
+
             // Create the search tool
             var searchTool = new Tool
             {
-                Id = "SearchTool", 
+                Id = "SearchTool",
                 Title = "Search",
                 Context = searchViewModel,
                 CanPin = false,    // Prevent pinning to avoid vertical text issues
-                CanClose = false   // Prevent accidental closing
+                CanClose = false,  // Prevent accidental closing
+                CanFloat = true,   // Allow floating out
+                CanDrag = true     // Allow dragging
             };
             
             _logger.Debug("Created tools - OpenBook context: {OpenBookContext}, Search context: {SearchContext}", 
@@ -70,12 +75,23 @@ namespace CST.Avalonia.Services
             {
                 Id = "LeftToolDock",
                 Title = "Tools",
-                Proportion = 0.25, // 25% of width
                 ActiveDockable = openBookTool,
                 VisibleDockables = CreateList<IDockable>(openBookTool, searchTool),
-                CanFloat = false, // Prevent floating
-                CanPin = false, // Prevent pinning
-                CanClose = false // Prevent closing
+                Alignment = Alignment.Left,
+                GripMode = GripMode.Visible,
+                CanDrag = true,
+                CanDrop = true
+            };
+
+            // Wrap ToolDock in ProportionalDock to enable docking indicators
+            var leftTools = new ProportionalDock
+            {
+                Id = "LeftTools",
+                Proportion = 0.25, // 25% of width
+                Orientation = Orientation.Vertical,
+                IsCollapsable = false,  // Like Notepad sample
+                CanDrop = true,
+                VisibleDockables = CreateList<IDockable>(leftToolDock)
             };
 
             // Create a permanent welcome document that prevents tab area collapse
@@ -101,6 +117,7 @@ namespace CST.Avalonia.Services
                 CanFloat = true, // Allow floating for multi-window support
                 CanPin = false, // Prevent pinning
                 CanClose = false, // Prevent closing the entire dock
+                CanDrop = true,  // Allow dropping dockables here
                 IsCollapsable = false // Prevent dock from collapsing
             };
             
@@ -217,18 +234,27 @@ namespace CST.Avalonia.Services
                 Id = "MainDock",
                 Title = "Main",
                 Orientation = Orientation.Horizontal,
-                VisibleDockables = CreateList<IDockable>(leftToolDock, splitter, documentDock)
+                IsCollapsable = false,  // Like Notepad sample
+                CanDrop = true,  // Allow dropping dockables here
+                VisibleDockables = CreateList<IDockable>(leftTools, splitter, documentDock)
             };
 
-            // Create root dock
-            var rootDock = new RootDock
-            {
-                Id = "Root",
-                Title = "Root",
-                ActiveDockable = mainDock,
-                DefaultDockable = mainDock,
-                VisibleDockables = CreateList<IDockable>(mainDock)
-            };
+            // Create inner root dock (window layout) with pinned dockables for edge drop indicators
+            var windowLayout = (RootDock)CreateRootDock();
+            windowLayout.Id = "WindowLayout";
+            windowLayout.Title = "Window";
+            windowLayout.IsCollapsable = false;
+            windowLayout.ActiveDockable = mainDock;
+            windowLayout.VisibleDockables = CreateList<IDockable>(mainDock);
+
+            // Create outer root dock (like Notepad sample structure)
+            var rootDock = (RootDock)CreateRootDock();
+            rootDock.Id = "Root";
+            rootDock.Title = "Root";
+            rootDock.IsCollapsable = false;
+            rootDock.ActiveDockable = windowLayout;
+            rootDock.DefaultDockable = windowLayout;
+            rootDock.VisibleDockables = CreateList<IDockable>(windowLayout);
 
             // Set the factory on all dockables
             SetFactory(rootDock);
@@ -279,7 +305,7 @@ namespace CST.Avalonia.Services
         public override ObservableCollection<IHostWindow> HostWindows { get; } = new ObservableCollection<IHostWindow>();
 
 
-        private void EnableDragAndDropForDock(IDock dock)
+        public void EnableDragAndDropForDock(IDock dock)
         {
             // Enable drag and drop for this dock
             if (dock is DocumentDock documentDock)
@@ -1291,7 +1317,7 @@ namespace CST.Avalonia.Services
         public override void InitLayout(IDockable layout)
         {
             _context = layout;
-            
+
             // Set up the context locator for proper view resolution
             ContextLocator = new Dictionary<string, Func<object?>>
             {
@@ -1300,18 +1326,18 @@ namespace CST.Avalonia.Services
 
             // Set up the default host window locator for floating windows
             DefaultHostWindowLocator = () => CreateCstHostWindow();
-            
+
             base.InitLayout(layout);
-            
+
             // Enable drag and drop operations
             if (layout is IDock dock)
             {
                 EnableDragAndDropForDock(dock);
             }
-            
+
             // Debug output
-            _logger.Debug("InitLayout called - Layout type: {LayoutType}, RootDock dockables: {Count}", 
-                layout?.GetType().Name ?? "null", 
+            _logger.Debug("InitLayout called - Layout type: {LayoutType}, RootDock dockables: {Count}",
+                layout?.GetType().Name ?? "null",
                 (layout as RootDock)?.VisibleDockables?.Count ?? 0);
         }
         
@@ -1374,12 +1400,22 @@ namespace CST.Avalonia.Services
                 var hostWindow = new CstHostWindow();
                 hostWindow.Factory = this;
                 HostWindows.Add(hostWindow);
-                
+
+                // Set up View menu for this floating window (macOS only)
+                if (OperatingSystem.IsMacOS())
+                {
+                    if (Application.Current is App app)
+                    {
+                        app.SetupFloatingWindowMenu(hostWindow);
+                        Log.Information("*** View menu setup completed for floating window ***");
+                    }
+                }
+
                 Log.Information("*** Host window created successfully ***");
-                Log.Information("*** Host window properties: Id={Id}, Factory={HasFactory} ***", 
+                Log.Information("*** Host window properties: Id={Id}, Factory={HasFactory} ***",
                     hostWindow.Id, hostWindow.Factory != null);
                 Log.Information("*** Total host windows: {HostWindowCount} ***", HostWindows.Count);
-                
+
                 return hostWindow;
             }
             catch (Exception ex)
@@ -2094,6 +2130,14 @@ namespace CST.Avalonia.Services
             
             HostWindows.Remove(hostWindow);
             Log.Information("*** Host window removed from tracking. Remaining host windows: {Count} ***", HostWindows.Count);
+
+            // Update panel visibility state after removing window
+            // This ensures menu checkmarks update correctly when panels were in the closed window
+            if (App.MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+            {
+                layoutViewModel.UpdatePanelVisibility();
+                Log.Information("*** Panel visibility updated after window close ***");
+            }
         }
         
     }

@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Dock.Model.Core;
 using Dock.Avalonia.Controls;
 using CST.Avalonia.Views;
@@ -39,8 +40,42 @@ namespace CST.Avalonia.Services
             MinHeight = 400;
             WindowStartupLocation = WindowStartupLocation.Manual;
 
+            // Add View menu to floating window (same as main window)
+            SetupViewMenu();
+
             // Initialize the window layout
             InitializeWindow();
+        }
+
+        private void SetupViewMenu()
+        {
+            // Create View menu for this floating window
+            var viewMenu = new NativeMenu();
+            var viewMenuItem = new NativeMenuItem
+            {
+                Header = "View",
+                Menu = new NativeMenu()
+            };
+
+            var selectBookItem = new NativeMenuItem
+            {
+                Header = "Select a Book",
+                ToggleType = NativeMenuItemToggleType.CheckBox
+            };
+
+            var searchItem = new NativeMenuItem
+            {
+                Header = "Search",
+                ToggleType = NativeMenuItemToggleType.CheckBox
+            };
+
+            viewMenuItem.Menu.Add(selectBookItem);
+            viewMenuItem.Menu.Add(searchItem);
+            viewMenu.Add(viewMenuItem);
+
+            NativeMenu.SetMenu(this, viewMenu);
+
+            // Menu event handlers will be set up by App when this window is shown
         }
 
         private void InitializeWindow()

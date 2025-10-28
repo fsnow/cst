@@ -41,6 +41,10 @@ public partial class App : Application
     public static Window? MainWindow { get; private set; }
     private bool _hasRestoredInitialBooks = false;
 
+    // Menu items for updating checkmarks across all windows
+    private List<NativeMenuItem> _selectBookMenuItems = new List<NativeMenuItem>();
+    private List<NativeMenuItem> _searchMenuItems = new List<NativeMenuItem>();
+
     // Simple debug logging that works before Serilog is initialized
     private static void DebugLog(string message)
     {
@@ -151,6 +155,17 @@ public partial class App : Application
             };
 
             desktop.MainWindow = MainWindow;
+
+            // Close application when main window is closed
+            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+            // Set up window-level native menu events (View menu) on macOS
+            if (OperatingSystem.IsMacOS())
+            {
+                SetupWindowMenuEvents();
+                // Update panel visibility to sync initial checkmark state
+                layoutViewModel.UpdatePanelVisibility();
+            }
 
             // Get the WelcomeViewModel to update startup status
             var welcomeViewModel = layoutViewModel.GetWelcomeViewModel();
@@ -884,22 +899,164 @@ public partial class App : Application
 
     private void SetupNativeMenuEvents()
     {
-        var menu = NativeMenu.GetMenu(this);
-        if (menu != null && menu.Count() > 0)
+        // Set up application-level menu (Preferences in app menu)
+        var appMenu = NativeMenu.GetMenu(this);
+        if (appMenu != null && appMenu.Count() > 0)
         {
-            // Find the Settings menu item
-            foreach (var item in menu)
+            foreach (var item in appMenu)
             {
-                if (item is NativeMenuItem menuItem && menuItem.Header?.ToString() == "Settings...")
+                if (item is NativeMenuItem menuItem && menuItem.Header?.ToString() == "Preferences...")
                 {
                     menuItem.Click += async (s, e) =>
                     {
-                        Log.Information("Settings menu clicked via native menu");
+                        Log.Information("Preferences menu clicked via native menu");
                         await ShowSettingsWindow();
                     };
-                    break;
                 }
             }
+        }
+    }
+
+    private void SetupWindowMenuEvents()
+    {
+        // Set up window-level menu (View menu as top-level menu)
+        if (MainWindow != null)
+        {
+            var windowMenu = NativeMenu.GetMenu(MainWindow);
+            if (windowMenu != null && windowMenu.Count() > 0)
+            {
+                foreach (var item in windowMenu)
+                {
+                    // Handle View menu
+                    if (item is NativeMenuItem viewMenuItem && viewMenuItem.Header?.ToString() == "View")
+                    {
+                        var viewMenu = viewMenuItem.Menu;
+                        if (viewMenu != null)
+                        {
+                            foreach (var viewItem in viewMenu)
+                            {
+                                if (viewItem is NativeMenuItem viewSubItem)
+                                {
+                                    if (viewSubItem.Header?.ToString() == "Select a Book")
+                                    {
+                                        _selectBookMenuItems.Add(viewSubItem);
+                                        viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
+                                        viewSubItem.IsChecked = true; // Start checked since panels are visible by default
+                                        viewSubItem.Click += (s, e) =>
+                                        {
+                                            Log.Information("Toggle Select a Book panel clicked via View menu (main window)");
+                                            ToggleSelectBookPanel();
+                                        };
+                                    }
+                                    else if (viewSubItem.Header?.ToString() == "Search")
+                                    {
+                                        _searchMenuItems.Add(viewSubItem);
+                                        viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
+                                        viewSubItem.IsChecked = true; // Start checked since panels are visible by default
+                                        viewSubItem.Click += (s, e) =>
+                                        {
+                                            Log.Information("Toggle Search panel clicked via View menu (main window)");
+                                            ToggleSearchPanel();
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Subscribe to panel visibility changes to update menu checkmarks
+            if (MainWindow.DataContext is LayoutViewModel layoutViewModel)
+            {
+                layoutViewModel.PanelVisibilityChanged += OnPanelVisibilityChanged;
+            }
+        }
+    }
+
+    private void OnPanelVisibilityChanged(object? sender, EventArgs e)
+    {
+        if (sender is LayoutViewModel layoutViewModel)
+        {
+            // Update all menu checkmarks across all windows
+            foreach (var menuItem in _selectBookMenuItems)
+            {
+                menuItem.IsChecked = layoutViewModel.IsSelectBookPanelVisible;
+            }
+
+            foreach (var menuItem in _searchMenuItems)
+            {
+                menuItem.IsChecked = layoutViewModel.IsSearchPanelVisible;
+            }
+
+            Log.Debug("Updated menu checkmarks across {SelectBookCount} + {SearchCount} menu items - SelectBook: {SelectBook}, Search: {Search}",
+                _selectBookMenuItems.Count, _searchMenuItems.Count,
+                layoutViewModel.IsSelectBookPanelVisible, layoutViewModel.IsSearchPanelVisible);
+        }
+    }
+
+    // Public method to set up menu events for floating windows
+    public void SetupFloatingWindowMenu(Window window)
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+
+        try
+        {
+            var windowMenu = NativeMenu.GetMenu(window);
+            if (windowMenu != null && windowMenu.Count() > 0)
+            {
+                foreach (var item in windowMenu)
+                {
+                    if (item is NativeMenuItem viewMenuItem && viewMenuItem.Header?.ToString() == "View")
+                    {
+                        var viewMenu = viewMenuItem.Menu;
+                        if (viewMenu != null)
+                        {
+                            foreach (var viewItem in viewMenu)
+                            {
+                                if (viewItem is NativeMenuItem viewSubItem)
+                                {
+                                    if (viewSubItem.Header?.ToString() == "Select a Book")
+                                    {
+                                        _selectBookMenuItems.Add(viewSubItem);
+                                        // Sync initial state
+                                        if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+                                        {
+                                            viewSubItem.IsChecked = layoutViewModel.IsSelectBookPanelVisible;
+                                        }
+                                        viewSubItem.Click += (s, e) =>
+                                        {
+                                            Log.Information("Toggle Select a Book panel clicked via View menu (floating window)");
+                                            ToggleSelectBookPanel();
+                                        };
+                                    }
+                                    else if (viewSubItem.Header?.ToString() == "Search")
+                                    {
+                                        _searchMenuItems.Add(viewSubItem);
+                                        // Sync initial state
+                                        if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+                                        {
+                                            viewSubItem.IsChecked = layoutViewModel.IsSearchPanelVisible;
+                                        }
+                                        viewSubItem.Click += (s, e) =>
+                                        {
+                                            Log.Information("Toggle Search panel clicked via View menu (floating window)");
+                                            ToggleSearchPanel();
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Log.Information("Floating window menu setup complete - Total menu items tracked: {SelectBookCount} + {SearchCount}",
+                    _selectBookMenuItems.Count, _searchMenuItems.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to set up floating window menu");
         }
     }
     
@@ -915,13 +1072,51 @@ public partial class App : Application
                 {
                     DataContext = settingsViewModel
                 };
-                
+
                 await settingsWindow.ShowDialog(MainWindow);
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open settings window from native menu");
+        }
+    }
+
+    private void ToggleSelectBookPanel()
+    {
+        try
+        {
+            if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+            {
+                layoutViewModel.ToggleSelectBookPanel();
+            }
+            else
+            {
+                Log.Warning("Cannot toggle Select a Book panel - LayoutViewModel not available");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to toggle Select a Book panel");
+        }
+    }
+
+    private void ToggleSearchPanel()
+    {
+        try
+        {
+            if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+            {
+                layoutViewModel.ToggleSearchPanel();
+            }
+            else
+            {
+                Log.Warning("Cannot toggle Search panel - LayoutViewModel not available");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to toggle Search panel");
         }
     }
 
