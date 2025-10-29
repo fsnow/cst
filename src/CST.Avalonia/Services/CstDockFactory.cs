@@ -24,6 +24,11 @@ namespace CST.Avalonia.Services
         private object? _context;
         private readonly ILogger _logger;
 
+        // Store the user's desired main dock proportions (LeftTools / MainDocumentDock)
+        // These start at 0.25/0.75 but can be adjusted by the user dragging the splitter
+        private double _mainDockLeftProportion = 0.25;
+        private double _mainDockRightProportion = 0.75;
+
         public CstDockFactory()
         {
             _logger = Log.ForContext<CstDockFactory>();
@@ -427,11 +432,18 @@ namespace CST.Avalonia.Services
             if (documentDock != null)
             {
                 Log.Information("*** ADDING SEARCH DOCUMENT TO LAYOUT: {DocumentId} ***", document.Id);
+
+                // Capture current proportions before adding document (preserves user adjustments)
+                CaptureMainDockProportions();
+
                 documentDock.VisibleDockables?.Add(document);
                 documentDock.ActiveDockable = document;
                 SetFactory(document);
                 Log.Information("*** SEARCH DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
                 _logger.Debug("Added search document to layout: {DocumentId}", document.Id);
+
+                // Restore user's proportions (framework may have recalculated them)
+                RestoreMainDockProportions();
             }
             else
             {
@@ -754,21 +766,27 @@ namespace CST.Avalonia.Services
             if (documentDock != null)
             {
                 Log.Information("*** ADDING DOCUMENT TO LAYOUT: {DocumentId} ***", document.Id);
-                
+
+                // Capture current proportions before adding document (preserves user adjustments)
+                CaptureMainDockProportions();
+
                 // Debug: Check for duplicate IDs (this shouldn't happen but let's detect it)
                 var existingWithSameId = documentDock.VisibleDockables?.Where(d => d.Id == document.Id).ToList();
                 if (existingWithSameId?.Any() == true)
                 {
-                    Log.Error("*** ERROR: Document with ID {DocumentId} already exists {Count} times! ***", 
+                    Log.Error("*** ERROR: Document with ID {DocumentId} already exists {Count} times! ***",
                         document.Id, existingWithSameId.Count);
                     _logger.Error("Document with ID {DocumentId} already exists {Count} times", document.Id, existingWithSameId.Count);
                 }
-                
+
                 documentDock.VisibleDockables?.Add(document);
                 documentDock.ActiveDockable = document;
                 SetFactory(document); // Ensure the document has the factory reference
                 Log.Information("*** DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
                 _logger.Debug("Added document to layout: {DocumentId}", document.Id);
+
+                // Restore user's proportions (framework may have recalculated them)
+                RestoreMainDockProportions();
             }
             else
             {
@@ -1043,9 +1061,16 @@ namespace CST.Avalonia.Services
                 var parent = dock != null ? FindParentDock(dock) : null;
                 if (parent is ProportionalDock proportionalParent && proportionalParent.VisibleDockables != null)
                 {
-                    Log.Information("*** Found ProportionalDock parent: {ParentId} with {ChildCount} dockables ***", 
+                    Log.Information("*** Found ProportionalDock parent: {ParentId} with {ChildCount} dockables ***",
                         proportionalParent.Id, proportionalParent.VisibleDockables.Count);
-                    
+
+                    // IMPORTANT: Don't adjust MainDock proportions - it should maintain 25% LeftTools / 75% DocumentDock
+                    if (proportionalParent.Id == "MainDock")
+                    {
+                        Log.Information("*** Skipping SetEqualProportions for MainDock - preserving LeftTools (25%) / DocumentDock (75%) split ***");
+                        return;
+                    }
+
                     var nonSplitters = proportionalParent.VisibleDockables
                         .Where(d => !(d is ProportionalDockSplitter))
                         .ToList();
@@ -1824,11 +1849,20 @@ namespace CST.Avalonia.Services
                     }
                     
                     // Check if this is a redundant single-child ProportionalDock (unnecessary nesting)
+                    // IMPORTANT: Skip LeftTools - it's intentional for controlling main dock proportions
                     if (nonSplitterChildren.Count == 1 && nonSplitterChildren[0] is IDock)
                     {
-                        Log.Information("*** ProportionalDock {DockId} is redundant - has only one child dock (unnecessary nesting) ***", 
-                            proportionalDock.Id ?? "null");
-                        return true;
+                        if (proportionalDock.Id != "LeftTools")
+                        {
+                            Log.Information("*** ProportionalDock {DockId} is redundant - has only one child dock (unnecessary nesting) ***",
+                                proportionalDock.Id ?? "null");
+                            return true;
+                        }
+                        else
+                        {
+                            Log.Debug("*** Skipping redundancy check for LeftTools - it's intentional for proportion control ***");
+                            return false; // LeftTools is NOT redundant
+                        }
                     }
                     
                     // Note: Duplicate DocumentDock IDs after splits are normal behavior from the framework
@@ -2075,19 +2109,182 @@ namespace CST.Avalonia.Services
             }
         }
 
+        /// <summary>
+        /// Capture the current main dock proportions before adding documents
+        /// This preserves any user adjustments to the splitter position
+        /// </summary>
+        private void CaptureMainDockProportions()
+        {
+            try
+            {
+                if (_context is RootDock rootDock)
+                {
+                    // Find MainDock
+                    var mainDock = FindDockByIdRecursive(rootDock, "MainDock") as ProportionalDock;
+                    if (mainDock?.VisibleDockables == null)
+                    {
+                        Log.Information("*** CaptureMainDockProportions: MainDock not found ***");
+                        return;
+                    }
+
+                    // Find left dock - try both LeftTools (ProportionalDock wrapper) and LeftToolDock (direct ToolDock)
+                    // The structure changes during app lifecycle
+                    var leftDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
+                                   ?? mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
+                    var documentDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
+
+                    if (leftDock != null && documentDock != null)
+                    {
+                        var oldLeft = _mainDockLeftProportion;
+                        var oldRight = _mainDockRightProportion;
+
+                        _mainDockLeftProportion = leftDock.Proportion;
+                        _mainDockRightProportion = documentDock.Proportion;
+
+                        Log.Information("*** CaptureMainDockProportions: Captured Left={Left:F3} (ID: {LeftId}), Right={Right:F3} (was Left={OldLeft:F3}, Right={OldRight:F3}) ***",
+                            _mainDockLeftProportion, leftDock.Id, _mainDockRightProportion, oldLeft, oldRight);
+                    }
+                    else
+                    {
+                        Log.Warning("*** CaptureMainDockProportions: Could not find left dock or MainDocumentDock (leftDock={LeftFound}, docDock={DocFound}) ***",
+                            leftDock != null, documentDock != null);
+
+                        // Debug: Log all visible dockables in MainDock to diagnose
+                        Log.Information("*** CaptureMainDockProportions: MainDock has {Count} visible dockables ***",
+                            mainDock.VisibleDockables.Count);
+                        foreach (var dockable in mainDock.VisibleDockables)
+                        {
+                            Log.Information("***   - {Type} (ID: {Id}, Proportion: {Prop:F3}) ***",
+                                dockable.GetType().Name, dockable.Id ?? "null", dockable.Proportion);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "*** ERROR in CaptureMainDockProportions ***");
+            }
+        }
+
+        /// <summary>
+        /// Restore the main dock proportions after adding documents
+        /// This reverts any framework recalculation back to the user's chosen proportions
+        /// Uses Dispatcher to delay restoration until after UI updates complete
+        /// </summary>
+        private void RestoreMainDockProportions()
+        {
+            // Schedule restoration with multiple priorities to ensure it happens after framework recalculation
+            Dispatcher.UIThread.Post(() => RestoreMainDockProportionsImpl(), DispatcherPriority.Render);
+            Dispatcher.UIThread.Post(() => RestoreMainDockProportionsImpl(), DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(() => RestoreMainDockProportionsImpl(), DispatcherPriority.Loaded);
+        }
+
+        /// <summary>
+        /// Implementation of proportion restoration
+        /// </summary>
+        private void RestoreMainDockProportionsImpl()
+        {
+            try
+            {
+                if (_context is RootDock rootDock)
+                {
+                    // Find MainDock
+                    var mainDock = FindDockByIdRecursive(rootDock, "MainDock") as ProportionalDock;
+                    if (mainDock?.VisibleDockables == null)
+                    {
+                        Log.Debug("*** RestoreMainDockProportions: MainDock not found ***");
+                        return;
+                    }
+
+                    // Find left dock - try both LeftTools (ProportionalDock wrapper) and LeftToolDock (direct ToolDock)
+                    // The structure changes during app lifecycle
+                    var leftDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
+                                   ?? mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
+                    var documentDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
+
+                    if (leftDock != null && documentDock != null)
+                    {
+                        var currentLeft = leftDock.Proportion;
+                        var currentRight = documentDock.Proportion;
+
+                        // Only restore if proportions have changed significantly (framework recalculated)
+                        if (Math.Abs(currentLeft - _mainDockLeftProportion) > 0.01 ||
+                            Math.Abs(currentRight - _mainDockRightProportion) > 0.01)
+                        {
+                            leftDock.Proportion = _mainDockLeftProportion;
+                            documentDock.Proportion = _mainDockRightProportion;
+
+                            Log.Information("*** RestoreMainDockProportions: Restored proportions from Left={CurrentLeft:F3} (ID: {LeftId}), Right={CurrentRight:F3} to Left={TargetLeft:F3}, Right={TargetRight:F3} ***",
+                                currentLeft, leftDock.Id, currentRight, _mainDockLeftProportion, _mainDockRightProportion);
+                        }
+                        else
+                        {
+                            Log.Debug("*** RestoreMainDockProportions: Proportions unchanged (Left={CurrentLeft:F3}, Right={CurrentRight:F3}), no restore needed ***",
+                                currentLeft, currentRight);
+                        }
+                    }
+                    else
+                    {
+                        Log.Warning("*** RestoreMainDockProportions: Could not find left dock or MainDocumentDock (leftDock={LeftFound}, docDock={DocFound}) ***",
+                            leftDock != null, documentDock != null);
+
+                        // Debug: Log all visible dockables in MainDock to diagnose
+                        Log.Information("*** RestoreMainDockProportions: MainDock has {Count} visible dockables ***",
+                            mainDock.VisibleDockables.Count);
+                        foreach (var dockable in mainDock.VisibleDockables)
+                        {
+                            Log.Information("***   - {Type} (ID: {Id}, Proportion: {Prop:F3}) ***",
+                                dockable.GetType().Name, dockable.Id ?? "null", dockable.Proportion);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "*** ERROR in RestoreMainDockProportions ***");
+            }
+        }
+
+        /// <summary>
+        /// Find a dock by ID recursively in the dock hierarchy
+        /// </summary>
+        private IDockable? FindDockByIdRecursive(IDock dock, string dockId)
+        {
+            if (dock.Id == dockId)
+                return dock;
+
+            if (dock.VisibleDockables != null)
+            {
+                foreach (var dockable in dock.VisibleDockables)
+                {
+                    if (dockable.Id == dockId)
+                        return dockable;
+
+                    if (dockable is IDock childDock)
+                    {
+                        var found = FindDockByIdRecursive(childDock, dockId);
+                        if (found != null)
+                            return found;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         // Close an empty host window without moving documents (since it's already empty)
         private void CloseEmptyHostWindow(CstHostWindow hostWindow)
         {
             try
             {
                 Log.Information("*** Closing empty host window: {WindowId} ***", hostWindow.Id);
-                
+
                 // Remove from our tracking first
                 HostWindows.Remove(hostWindow);
-                
+
                 // Close the actual window
                 hostWindow.Close();
-                
+
                 Log.Information("*** Empty host window closed successfully ***");
             }
             catch (Exception ex)

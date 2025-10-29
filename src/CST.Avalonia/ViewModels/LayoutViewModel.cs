@@ -32,7 +32,6 @@ namespace CST.Avalonia.ViewModels
             _factory.InitializeHostWindows();
             
             // Initialize commands
-            ToggleBookPanelCommand = ReactiveCommand.Create(ToggleBookPanel);
             ResetLayoutCommand = ReactiveCommand.Create(ResetLayout);
             ExitCommand = ReactiveCommand.Create(ExitApplication);
             AboutCommand = ReactiveCommand.Create(ShowAbout);
@@ -52,7 +51,6 @@ namespace CST.Avalonia.ViewModels
         public CstDockFactory Factory => _factory;
 
         // Commands for menu items
-        public ReactiveCommand<Unit, Unit> ToggleBookPanelCommand { get; }
         public ReactiveCommand<Unit, Unit> ResetLayoutCommand { get; }
         public ReactiveCommand<Unit, Unit> ExitCommand { get; }
         public ReactiveCommand<Unit, Unit> AboutCommand { get; }
@@ -106,71 +104,6 @@ namespace CST.Avalonia.ViewModels
             _factory.HideWelcomeScreen();
         }
 
-        private void ToggleBookPanel()
-        {
-            // Find the LeftToolDock and toggle its visibility
-            var mainDock = Layout?.VisibleDockables?.FirstOrDefault(d => d.Id == "MainDock") as ProportionalDock;
-            if (mainDock != null)
-            {
-                var leftToolDock = mainDock.VisibleDockables?.FirstOrDefault(d => d.Id == "LeftToolDock");
-                if (leftToolDock != null)
-                {
-                    if (IsBookPanelVisible)
-                    {
-                        // Hide the panel
-                        mainDock.VisibleDockables?.Remove(leftToolDock);
-                        IsBookPanelVisible = false;
-                        Log.Debug("[Layout] Book panel hidden");
-                    }
-                    else
-                    {
-                        // Panel is hidden, but we need to recreate it or find it
-                        Log.Debug("[Layout] Book panel show requested - panel was already removed");
-                        // We'll need to recreate or restore the panel
-                    }
-                }
-                else if (!IsBookPanelVisible)
-                {
-                    // Panel is hidden, need to restore it
-                    RestoreBookPanel(mainDock);
-                }
-            }
-        }
-
-        private void RestoreBookPanel(ProportionalDock mainDock)
-        {
-            // Recreate the book panel
-            var openBookViewModel = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
-            if (openBookViewModel != null)
-            {
-                var openBookTool = new Tool
-                {
-                    Id = "OpenBookTool",
-                    Title = "Select a Book",
-                    Context = openBookViewModel,
-                    CanPin = false,
-                    CanClose = false
-                };
-
-                var leftToolDock = new ToolDock
-                {
-                    Id = "LeftToolDock",
-                    Title = "Select a Book",
-                    Proportion = 0.25,
-                    ActiveDockable = openBookTool,
-                    VisibleDockables = _factory.CreateList<IDockable>(openBookTool),
-                    CanFloat = false,
-                    CanPin = false,
-                    CanClose = false
-                };
-
-                // Insert at the beginning (left side)
-                mainDock.VisibleDockables?.Insert(0, leftToolDock);
-                IsBookPanelVisible = true;
-                Log.Debug("[Layout] Book panel restored");
-            }
-        }
-
         private void ResetLayout()
         {
             // Recreate the entire layout
@@ -210,20 +143,20 @@ namespace CST.Avalonia.ViewModels
         {
             Log.Information("[Layout] ShowSelectBookPanel requested");
 
-            // Check if panel already exists in the layout
+            // Check if panel already exists in the layout (might be in a floating window)
             if (FindTool("OpenBookTool") != null)
             {
-                Log.Information("[Layout] Select a Book panel already exists");
+                Log.Information("[Layout] Select a Book panel already exists (possibly in floating window)");
                 IsSelectBookPanelVisible = true;
                 PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
-            // Panel doesn't exist, create and add it
+            // Panel doesn't exist, create and add it to the existing ToolDock
             var openBookViewModel = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
             if (openBookViewModel == null)
             {
-                Log.Error("[Layout] Cannot restore Select a Book panel - OpenBookDialogViewModel not available");
+                Log.Error("[Layout] Cannot add Select a Book panel - OpenBookDialogViewModel not available");
                 return;
             }
 
@@ -234,94 +167,27 @@ namespace CST.Avalonia.ViewModels
                 Context = openBookViewModel,
                 CanPin = false,
                 CanClose = false,
-                CanFloat = true,   // Explicitly allow floating
+                CanFloat = true,
+                CanDrag = true,
                 Factory = _factory
             };
 
-            // Find the left tool dock and add the tool
+            // Find the existing LeftToolDock (created by CstDockFactory at initialization)
             var mainDock = Layout?.VisibleDockables?.FirstOrDefault(d => d.Id == "MainDock") as ProportionalDock;
             var leftToolDock = FindToolDock(mainDock, "LeftToolDock");
 
-            if (leftToolDock != null)
+            if (leftToolDock == null)
             {
-                // Add to existing tool dock using Factory method for proper initialization
-                _factory.AddDockable(leftToolDock, openBookTool);
-                _factory.SetActiveDockable(openBookTool);
-                _factory.SetFocusedDockable(leftToolDock, openBookTool);
-                Log.Information("[Layout] Select a Book panel added to existing LeftToolDock");
+                Log.Error("[Layout] LeftToolDock not found - cannot add Select a Book panel. Layout may be corrupted.");
+                return;
             }
-            else
-            {
-                // No left tool dock exists, recreate it with just the requested panel
-                // Don't try to add other panels - they might be in floating windows
-                var toolsToAdd = new System.Collections.Generic.List<IDockable> { openBookTool };
 
-                var newLeftToolDock = new ToolDock
-                {
-                    Id = "LeftToolDock",
-                    Title = "Tools",
-                    ActiveDockable = openBookTool,
-                    VisibleDockables = _factory.CreateList<IDockable>(toolsToAdd.ToArray()),
-                    Alignment = Alignment.Left,
-                    GripMode = GripMode.Visible,
-                    Factory = _factory
-                };
+            // Add tool to the existing ToolDock
+            _factory.AddDockable(leftToolDock, openBookTool);
+            _factory.SetActiveDockable(openBookTool);
+            _factory.SetFocusedDockable(leftToolDock, openBookTool);
 
-                // Set factory on all tools in the dock
-                foreach (var tool in toolsToAdd)
-                {
-                    if (tool is Tool t)
-                    {
-                        t.Factory = _factory;
-                    }
-                }
-
-                // Wrap ToolDock in ProportionalDock to enable docking indicators (like Notepad sample)
-                var newLeftTools = new ProportionalDock
-                {
-                    Id = "LeftTools",
-                    Proportion = 0.25,
-                    Orientation = Orientation.Vertical,
-                    VisibleDockables = _factory.CreateList<IDockable>(newLeftToolDock),
-                    Factory = _factory
-                };
-
-                // Add wrapper to main dock using Factory method for proper initialization
-                if (mainDock != null)
-                {
-                    // Use Factory.AddDockable for proper initialization
-                    _factory.AddDockable(mainDock, newLeftTools);
-
-                    // Move it to the beginning (left side) and add splitter
-                    if (mainDock.VisibleDockables != null && mainDock.VisibleDockables.Contains(newLeftTools))
-                    {
-                        mainDock.VisibleDockables.Remove(newLeftTools);
-                        mainDock.VisibleDockables.Insert(0, newLeftTools);
-
-                        // Add splitter after wrapper if not already present
-                        if (mainDock.VisibleDockables.Count > 1 &&
-                            mainDock.VisibleDockables[1] is not ProportionalDockSplitter)
-                        {
-                            var splitter = new ProportionalDockSplitter
-                            {
-                                Id = "MainSplitter",
-                                Title = "MainSplitter"
-                            };
-                            mainDock.VisibleDockables.Insert(1, splitter);
-                            Log.Information("[Layout] Added splitter after LeftTools wrapper");
-                        }
-                    }
-
-                    // Enable drag and drop for the new ToolDock
-                    _factory.EnableDragAndDropForDock(newLeftToolDock);
-
-                    // Set the newly added tool as active
-                    _factory.SetActiveDockable(openBookTool);
-                    _factory.SetFocusedDockable(newLeftToolDock, openBookTool);
-                }
-
-                Log.Information("[Layout] Created new LeftTools wrapper with Select a Book panel");
-            }
+            Log.Information("[Layout] Select a Book panel added to existing LeftToolDock");
 
             IsSelectBookPanelVisible = true;
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
@@ -343,20 +209,20 @@ namespace CST.Avalonia.ViewModels
         {
             Log.Information("[Layout] ShowSearchPanel requested");
 
-            // Check if panel already exists in the layout
+            // Check if panel already exists in the layout (might be in a floating window)
             if (FindTool("SearchTool") != null)
             {
-                Log.Information("[Layout] Search panel already exists");
+                Log.Information("[Layout] Search panel already exists (possibly in floating window)");
                 IsSearchPanelVisible = true;
                 PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
-            // Panel doesn't exist, create and add it
+            // Panel doesn't exist, create and add it to the existing ToolDock
             var searchViewModel = App.ServiceProvider?.GetRequiredService<SearchViewModel>();
             if (searchViewModel == null)
             {
-                Log.Error("[Layout] Cannot restore Search panel - SearchViewModel not available");
+                Log.Error("[Layout] Cannot add Search panel - SearchViewModel not available");
                 return;
             }
 
@@ -367,94 +233,27 @@ namespace CST.Avalonia.ViewModels
                 Context = searchViewModel,
                 CanPin = false,
                 CanClose = false,
-                CanFloat = true,   // Explicitly allow floating
+                CanFloat = true,
+                CanDrag = true,
                 Factory = _factory
             };
 
-            // Find the left tool dock and add the tool
+            // Find the existing LeftToolDock (created by CstDockFactory at initialization)
             var mainDock = Layout?.VisibleDockables?.FirstOrDefault(d => d.Id == "MainDock") as ProportionalDock;
             var leftToolDock = FindToolDock(mainDock, "LeftToolDock");
 
-            if (leftToolDock != null)
+            if (leftToolDock == null)
             {
-                // Add to existing tool dock using Factory method for proper initialization
-                _factory.AddDockable(leftToolDock, searchTool);
-                _factory.SetActiveDockable(searchTool);
-                _factory.SetFocusedDockable(leftToolDock, searchTool);
-                Log.Information("[Layout] Search panel added to existing LeftToolDock");
+                Log.Error("[Layout] LeftToolDock not found - cannot add Search panel. Layout may be corrupted.");
+                return;
             }
-            else
-            {
-                // No left tool dock exists, recreate it with just the requested panel
-                // Don't try to add other panels - they might be in floating windows
-                var toolsToAdd = new System.Collections.Generic.List<IDockable> { searchTool };
 
-                var newLeftToolDock = new ToolDock
-                {
-                    Id = "LeftToolDock",
-                    Title = "Tools",
-                    ActiveDockable = searchTool,
-                    VisibleDockables = _factory.CreateList<IDockable>(toolsToAdd.ToArray()),
-                    Alignment = Alignment.Left,
-                    GripMode = GripMode.Visible,
-                    Factory = _factory
-                };
+            // Add tool to the existing ToolDock
+            _factory.AddDockable(leftToolDock, searchTool);
+            _factory.SetActiveDockable(searchTool);
+            _factory.SetFocusedDockable(leftToolDock, searchTool);
 
-                // Set factory on all tools in the dock
-                foreach (var tool in toolsToAdd)
-                {
-                    if (tool is Tool t)
-                    {
-                        t.Factory = _factory;
-                    }
-                }
-
-                // Wrap ToolDock in ProportionalDock to enable docking indicators (like Notepad sample)
-                var newLeftTools = new ProportionalDock
-                {
-                    Id = "LeftTools",
-                    Proportion = 0.25,
-                    Orientation = Orientation.Vertical,
-                    VisibleDockables = _factory.CreateList<IDockable>(newLeftToolDock),
-                    Factory = _factory
-                };
-
-                // Add wrapper to main dock using Factory method for proper initialization
-                if (mainDock != null)
-                {
-                    // Use Factory.AddDockable for proper initialization
-                    _factory.AddDockable(mainDock, newLeftTools);
-
-                    // Move it to the beginning (left side) and add splitter
-                    if (mainDock.VisibleDockables != null && mainDock.VisibleDockables.Contains(newLeftTools))
-                    {
-                        mainDock.VisibleDockables.Remove(newLeftTools);
-                        mainDock.VisibleDockables.Insert(0, newLeftTools);
-
-                        // Add splitter after wrapper if not already present
-                        if (mainDock.VisibleDockables.Count > 1 &&
-                            mainDock.VisibleDockables[1] is not ProportionalDockSplitter)
-                        {
-                            var splitter = new ProportionalDockSplitter
-                            {
-                                Id = "MainSplitter",
-                                Title = "MainSplitter"
-                            };
-                            mainDock.VisibleDockables.Insert(1, splitter);
-                            Log.Information("[Layout] Added splitter after LeftTools wrapper");
-                        }
-                    }
-
-                    // Enable drag and drop for the new ToolDock
-                    _factory.EnableDragAndDropForDock(newLeftToolDock);
-
-                    // Set the newly added tool as active
-                    _factory.SetActiveDockable(searchTool);
-                    _factory.SetFocusedDockable(newLeftToolDock, searchTool);
-                }
-
-                Log.Information("[Layout] Created new LeftTools wrapper with Search panel");
-            }
+            Log.Information("[Layout] Search panel added to existing LeftToolDock");
 
             IsSearchPanelVisible = true;
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
