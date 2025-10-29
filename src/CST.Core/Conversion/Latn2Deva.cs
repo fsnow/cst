@@ -9,7 +9,8 @@ namespace CST.Conversion
         static Latn2Deva()
         {
             paliChars = new HashSet<char>();
-            paliChars.Add('\u1E43');  // m underdot
+            paliChars.Add('\u1E43');  // m underdot (m with dot below)
+            paliChars.Add('\u1E41');  // m overdot (m with dot above)
             paliChars.Add('a');
             paliChars.Add('\u0101');  // a macron
             paliChars.Add('i');
@@ -233,7 +234,7 @@ namespace CST.Conversion
 
 					last = LetterType.Vowel;
 				}
-				else if (c.Equals('\u1E43'))  // m underdot
+				else if (c.Equals('\u1E43') || c.Equals('\u1E41'))  // m underdot or m overdot (niggahita)
 				{
 					last = LetterType.Nasal;
 					dev = String.Concat(dev, '\u0902');  // anusvara

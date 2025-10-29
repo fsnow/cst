@@ -13,7 +13,8 @@ namespace CST.Conversion
         {
             latn2Ipe = new Dictionary<string, string>();
 
-            latn2Ipe["\u1E43"] = "\u00C0"; // niggahita
+            latn2Ipe["\u1E43"] = "\u00C0"; // niggahita (m with dot below)
+            latn2Ipe["\u1E41"] = "\u00C0"; // niggahita (m with dot above)
 
             // vowels
             latn2Ipe["a"] = "\u00C1"; // a
