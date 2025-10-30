@@ -218,6 +218,16 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
     - **UI Integration**: Add "View Source" menu item or button (matching CST4 functionality)
     - **PDF Resources**: Ensure Burmese CST PDF files are accessible to the application
     - **Error Handling**: Handle missing PDFs or invalid page references gracefully
+- **Semantic Search with Vector Embeddings (Research)**:
+    - **Phase 1 - Semantic Search**: Natural language question search with pre-calculated vector embeddings
+    - **Zero-Cost Requirement**: All AI processing on user's local machine, no API costs
+    - **Pre-Processing**: Convert 217 books to Latin script, extract paragraphs, generate embeddings
+    - **Local Vector Database**: Bundle FAISS index with application for offline search
+    - **Sentence Transformers**: Use multilingual model for query and document embeddings
+    - **Rich Metadata**: Store book, chapter, paragraph, and page numbers with each chunk
+    - **Phase 2 - Optional RAG**: For power users with GPU, optional local LLM download
+    - **Research Status**: Feasibility study complete, requires proof-of-concept validation
+    - **Note**: This is an exploratory feature from brainstorming sessions, not a CST4 port
 
 
 ## Technical Architecture
