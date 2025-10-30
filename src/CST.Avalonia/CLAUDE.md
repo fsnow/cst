@@ -155,6 +155,25 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
 
 **Note**: This is an Avalonia framework limitation, not a CST Reader bug. Future improvements depend on Avalonia framework optimizations or alternative rendering approaches.
 
+### **Multi-Word Search Limitation**
+
+Multi-word and phrase search currently only work with 2 words. Searches with 3 or more words return no results.
+
+**What Works**:
+- Single word searches
+- Two-word proximity search (e.g., `dhamma vinaya`)
+- Two-word phrase search (e.g., `"evaṃ me"`)
+
+**What Doesn't Work**:
+- Three or more word proximity searches (e.g., `dhamma vinaya sangha`)
+- Three or more word phrase searches (e.g., `"evaṃ me sutaṃ"`)
+
+**Impact**: Users cannot search for common longer phrases like "evaṃ me sutaṃ" (Thus have I heard) or perform proximity searches with multiple concepts.
+
+**Issue Tracking**: See issue #30 for technical details and debugging investigation.
+
+**Priority**: High - This is a bug in core search functionality that significantly impacts usability.
+
 ## Outstanding Work
 
 - **Full UI Localization System**:
