@@ -198,6 +198,10 @@ Multi-word and phrase search currently only work with 2 words. Searches with 3 o
 - **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
 - **UI Feedback During Operations**:
     - **Update History**: Track and display XML update history for transparency
+- **Logging Cleanup**:
+    - **Issue**: Application produces debug-splash.log file with excessive debug logging
+    - **Goal**: Clean up and reduce verbose logging output during normal operation
+    - **Impact**: Improves startup performance and reduces disk I/O
 - **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
