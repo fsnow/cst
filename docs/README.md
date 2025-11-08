@@ -16,6 +16,9 @@ Core technical documentation about how the system works:
 - [Project Overview](architecture/OVERVIEW.md) - High-level project structure
 - [Ideal Pali Encoding (IPE)](architecture/IDEAL_PALI_ENCODING.md) - Script-independent encoding system
 - [Character Set Analysis](architecture/CHARACTER_SET_ANALYSIS.md) - Unicode character analysis
+- [Reactive Dock ViewModels](architecture/REACTIVE_DOCK_VIEWMODELS.md) - ReactiveUI + Dock base classes
+- [Dock Notepad Patterns](architecture/DOCK_NOTEPAD_PATTERNS.md) - ControlRecycling, StaticViewLocator & DockFluentTheme analysis
+- [Reactive Dock Refactoring Plan](architecture/REACTIVE_DOCK_REFACTORING_PLAN.md) - Migration strategy for ViewModel refactoring
 
 ### 🔧 **implementation/** - Implementation Notes & Postmortems
 Lessons learned, known issues, and technical challenges:
