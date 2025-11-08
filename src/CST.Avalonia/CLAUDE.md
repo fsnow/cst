@@ -4,6 +4,7 @@
 
 **Last Updated**: October 24, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
+**XML Books Location**: `/Users/fsnow/Library/Application Support/CSTReader/xml` (217 TEI XML book files)
 
 ## Project Overview
 
