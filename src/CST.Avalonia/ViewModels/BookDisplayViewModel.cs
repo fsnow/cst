@@ -17,6 +17,7 @@ using CST.Avalonia.Services;
 using CST.Avalonia.Models;
 using CST.Avalonia.Constants;
 using CST.Avalonia.Views;
+using CST.Avalonia.ViewModels.Dock;
 using Serilog;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
@@ -25,7 +26,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CST.Avalonia.ViewModels
 {
-    public class BookDisplayViewModel : ViewModelBase
+    public class BookDisplayViewModel : ReactiveDocument
     {
         private readonly ScriptService _scriptService;
         private readonly ChapterListsService? _chapterListsService;
@@ -74,7 +75,7 @@ namespace CST.Avalonia.ViewModels
         private bool _updatingChapterFromScroll = false;
         private bool _isInitializing = true;
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             // For now, create ScriptService without logger
@@ -88,6 +89,24 @@ namespace CST.Avalonia.ViewModels
             _initialAnchor = initialAnchor;
             _docId = docId;
             _bookScript = _scriptService.CurrentScript;
+
+            // Configure Dock properties - CRITICAL: Unique GUID per instance to prevent ControlRecycling cache conflicts
+            // This ensures each book window instance gets a unique ID, preventing CEF crashes when floating/unfloating
+            if (windowId != null)
+            {
+                Id = windowId;  // Use restored ID from saved state
+            }
+            else
+            {
+                // Generate unique GUID-based ID for each book instance (like search results do)
+                // This prevents ControlRecycling from reusing cached WebViews across different window contexts
+                var bookGuid = Guid.NewGuid();
+                Id = $"Book_{book.Index}_{book.FileName}_{bookGuid:N}";
+            }
+            Title = DisplayTitle;  // Initialize with book display name
+            CanClose = true;    // Books can be closed
+            CanFloat = true;    // Books can float to separate windows
+            CanPin = false;     // Disable pinning
 
             // Debug search terms and positions
             if (searchTerms != null && searchTerms.Any())

@@ -7,12 +7,13 @@ using System.Text;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
+using CST.Avalonia.ViewModels.Dock;
 using ReactiveUI;
 using Serilog;
 
 namespace CST.Avalonia.ViewModels
 {
-    public class WelcomeViewModel : ViewModelBase
+    public class WelcomeViewModel : ReactiveDocument
     {
         private readonly WelcomeUpdateService _updateService;
         private string _htmlContent = "";
@@ -44,6 +45,13 @@ namespace CST.Avalonia.ViewModels
         public WelcomeViewModel(WelcomeUpdateService updateService)
         {
             _updateService = updateService;
+
+            // Configure Dock properties
+            Id = "WelcomeDocument";
+            Title = "Welcome";
+            CanClose = false;   // Prevent closing the welcome tab
+            CanFloat = false;   // Prevent floating the welcome tab
+            CanPin = false;     // Prevent pinning
 
             // Set current app version from assembly
             var assembly = Assembly.GetExecutingAssembly();

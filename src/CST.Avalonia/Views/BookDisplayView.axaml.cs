@@ -57,6 +57,10 @@ public partial class BookDisplayView : UserControl
     private const double DRAG_THRESHOLD = 5.0; // pixels
     private const int DRAG_TIMER_INTERVAL = 50; // milliseconds
     private const int MIN_WEBVIEW_HIDE_DURATION = 500; // milliseconds - minimum time WebView stays hidden
+    private const int DRAG_TIME_THRESHOLD = 150; // milliseconds - wait before treating pointer movement as drag (filters out tab clicks)
+
+    // Window context tracking for CEF handle invalidation detection
+    private Window? _currentWindow = null;
 
     public BookDisplayView()
     {
@@ -77,6 +81,10 @@ public partial class BookDisplayView : UserControl
         
         // Add keyboard event handler with highest priority to intercept before WebView
         this.AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+        // Monitor visual tree attachment to detect window context changes (float/unfloat)
+        this.AttachedToVisualTree += OnAttachedToVisualTree;
+        this.DetachedFromVisualTree += OnDetachedFromVisualTree;
 
         // Try to create WebView browser
         TryCreateWebView();
@@ -145,16 +153,101 @@ public partial class BookDisplayView : UserControl
         }
     }
 
+    private void DisposeWebView()
+    {
+        if (_webView != null)
+        {
+            try
+            {
+                _logger.Information("Disposing WebView to release CEF native handle");
+
+                // Unsubscribe from events
+                _webView.Navigated -= OnNavigationCompleted;
+                _webView.TitleChanged -= OnTitleChanged;
+
+                // Dispose the WebView to release native resources
+                _webView.Dispose();
+
+                _webView = null;
+                _isBrowserInitialized = false;
+
+                _logger.Information("WebView disposed successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error while disposing WebView");
+                _webView = null;
+            }
+        }
+    }
+
     protected override void OnLoaded(RoutedEventArgs e)
     {
         base.OnLoaded(e);
         this.PropertyChanged += OnIsVisibleChanged;
         _logger.Information("BookDisplayView OnLoaded called");
         SetupCSharpScrollTracking();
-        
+
         // Monitor drag operations to temporarily hide WebView for drop indicators
         _logger.Information("Calling SetupDragMonitoring from OnLoaded");
         SetupDragMonitoring();
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        // Get the new window this view is attached to
+        var newWindow = this.GetVisualRoot() as Window;
+
+        if (newWindow != null)
+        {
+            // Compare by reference equality, not by title
+            // This ensures we detect actual window instance changes (float/unfloat)
+            if (_currentWindow != null && !ReferenceEquals(_currentWindow, newWindow))
+            {
+                // Window changed! This happens during float/unfloat operations
+                // CEF native handles are window-specific and become invalid
+                _logger.Warning("*** WINDOW CONTEXT CHANGED - Disposing and recreating WebView ***");
+                _logger.Warning("    Old window: {OldTitle} (Hash: {OldHash}), New window: {NewTitle} (Hash: {NewHash})",
+                    _currentWindow.Title ?? "null", _currentWindow.GetHashCode(),
+                    newWindow.Title ?? "null", newWindow.GetHashCode());
+
+                // Dispose old WebView to release invalid CEF native handle
+                DisposeWebView();
+
+                // Update window reference
+                _currentWindow = newWindow;
+
+                // Recreate WebView with fresh native handle for new window
+                TryCreateWebView();
+
+                // Reload content if ViewModel has HTML
+                if (_viewModel != null && !string.IsNullOrEmpty(_viewModel.HtmlContent))
+                {
+                    _logger.Information("Reloading HTML content after WebView recreation");
+                    Dispatcher.UIThread.Post(() => LoadHtmlContent());
+                }
+            }
+            else if (_currentWindow == null)
+            {
+                // First attachment - just track the window
+                _currentWindow = newWindow;
+                _logger.Information("*** BookDisplayView attached to window for first time: {WindowTitle} (Hash: {Hash}) ***",
+                    newWindow.Title ?? "null", newWindow.GetHashCode());
+            }
+            else
+            {
+                // Same window instance - normal ControlRecycling show/hide
+                _logger.Debug("BookDisplayView re-attached to same window: {WindowTitle} (Hash: {Hash})",
+                    newWindow.Title ?? "null", newWindow.GetHashCode());
+            }
+        }
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        _logger.Debug("BookDisplayView detached from visual tree (window: {WindowTitle})",
+            _currentWindow?.Title ?? "null");
+        // Don't clear _currentWindow here - we need to detect window changes on next attach
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -1890,26 +1983,12 @@ public partial class BookDisplayView : UserControl
 
     private void SetupDragMonitoring()
     {
-        _logger.Information("Setting up timer-based drag monitoring to handle WebView interference");
-        
-        // Create timer for monitoring drag operations
-        _dragMonitoringTimer = new System.Timers.Timer(DRAG_TIMER_INTERVAL);
-        _dragMonitoringTimer.Elapsed += OnDragMonitoringTimer;
-        _dragMonitoringTimer.AutoReset = true;
-        
-        var window = TopLevel.GetTopLevel(this) as Window;
-        if (window != null)
-        {
-            // Monitor pointer events to detect potential drag operations
-            window.AddHandler(InputElement.PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel);
-            window.AddHandler(InputElement.PointerReleasedEvent, OnWindowPointerReleased, RoutingStrategies.Tunnel);
-            window.AddHandler(InputElement.PointerMovedEvent, OnWindowPointerMoved, RoutingStrategies.Tunnel);
-            _logger.Information("Timer-based drag monitoring setup on parent window");
-        }
-        
-        // Start the monitoring timer
-        _dragMonitoringTimer.Start();
-        _logger.Information("Drag monitoring timer started");
+        _logger.Information("Drag monitoring disabled in BookDisplayView - SimpleTabbedWindow handles all drag detection");
+        // BookDisplayView's local drag monitoring is DISABLED because:
+        // 1. SimpleTabbedWindow already has comprehensive drag detection for ALL windows
+        // 2. Duplicate monitoring causes CEF crashes when WebViews are hidden/shown during tab switches
+        // 3. ControlRecycling + repeated WebView hide/show operations invalidate CEF native handles
+        // 4. The crash: AvnNativeControlHostTopLevelAttachment::InitializeWithChildHandle null pointer dereference
     }
 
     private void OnDragMonitoringTimer(object? sender, System.Timers.ElapsedEventArgs e)
@@ -2088,15 +2167,25 @@ public partial class BookDisplayView : UserControl
     {
         if (_isPointerPressed && !_isDragInProgress)
         {
+            // Check if pointer has been pressed long enough to be a drag (not just a tab click)
+            var timeSincePress = DateTime.Now - _lastPointerPressedTime;
+            if (timeSincePress.TotalMilliseconds < DRAG_TIME_THRESHOLD)
+            {
+                _logger.Debug("Pointer movement ignored - too soon after press ({Duration}ms < {Threshold}ms)",
+                    timeSincePress.TotalMilliseconds, DRAG_TIME_THRESHOLD);
+                return;
+            }
+
             var currentPosition = e.GetPosition(this);
             var distance = Math.Sqrt(
                 Math.Pow(currentPosition.X - _lastPointerPressedPosition.X, 2) +
                 Math.Pow(currentPosition.Y - _lastPointerPressedPosition.Y, 2)
             );
-            
+
             if (distance > DRAG_THRESHOLD)
             {
-                _logger.Information("*** POINTER MOVEMENT DETECTED DRAG - HIDING WebView ***");
+                _logger.Information("*** POINTER MOVEMENT DETECTED DRAG - HIDING WebView (after {Duration}ms) ***",
+                    timeSincePress.TotalMilliseconds);
                 _isDragInProgress = true;
                 HideWebViewForDrag();
             }

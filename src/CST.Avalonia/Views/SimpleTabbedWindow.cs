@@ -33,8 +33,10 @@ public partial class SimpleTabbedWindow : Window
     private bool _isDragInProgress = false;
     private DateTime _lastPointerPressedTime = DateTime.MinValue;
     private DateTime _webViewHiddenTime = DateTime.MinValue;
+    private DateTime _dockDragDetectedTime = DateTime.MinValue;  // Track when IsDraggingDock first became true
     private const int DRAG_TIMER_INTERVAL = 50; // Check every 50ms
     private const int MIN_WEBVIEW_HIDE_DURATION = 100; // Minimum 100ms hide duration
+    private const int DRAG_DETECTION_THRESHOLD = 150; // Wait 150ms to distinguish tab clicks from real drags
 
     public SimpleTabbedWindow()
     {
@@ -417,18 +419,38 @@ public partial class SimpleTabbedWindow : Window
                 }
             }
 
-            bool isDockDragging = anyWindowDragging;
+            // Track when IsDraggingDock first becomes true
+            if (anyWindowDragging && _dockDragDetectedTime == DateTime.MinValue)
+            {
+                _dockDragDetectedTime = DateTime.Now;
+                _logger.Debug("IsDraggingDock became true at {Time}", _dockDragDetectedTime);
+            }
 
-            // Hide WebViews when dock drag starts
+            // Reset tracking if IsDraggingDock becomes false
+            if (!anyWindowDragging && _dockDragDetectedTime != DateTime.MinValue)
+            {
+                var dragDuration = DateTime.Now - _dockDragDetectedTime;
+                _logger.Debug("IsDraggingDock became false after {Duration}ms (threshold: {Threshold}ms)",
+                    dragDuration.TotalMilliseconds, DRAG_DETECTION_THRESHOLD);
+                _dockDragDetectedTime = DateTime.MinValue;
+            }
+
+            // Only consider it a real drag if IsDraggingDock has been true for longer than threshold
+            bool isDockDragging = anyWindowDragging &&
+                                  _dockDragDetectedTime != DateTime.MinValue &&
+                                  (DateTime.Now - _dockDragDetectedTime).TotalMilliseconds >= DRAG_DETECTION_THRESHOLD;
+
+            // Hide WebViews when dock drag starts (after threshold)
             if (isDockDragging && !_isDragInProgress)
             {
-                _logger.Information("*** DOCK DRAG DETECTED - HIDING WebViews ***");
+                _logger.Information("*** DOCK DRAG DETECTED - HIDING WebViews (after {Duration}ms threshold) ***",
+                    (DateTime.Now - _dockDragDetectedTime).TotalMilliseconds);
                 _isDragInProgress = true;
                 HideWebViewForDrag();
             }
 
             // Restore WebViews when dock drag ends
-            if (!isDockDragging && _isDragInProgress)
+            if (!anyWindowDragging && _isDragInProgress)
             {
                 var timeSinceHidden = DateTime.Now - _webViewHiddenTime;
                 if (timeSinceHidden.TotalMilliseconds >= MIN_WEBVIEW_HIDE_DURATION)
@@ -436,6 +458,7 @@ public partial class SimpleTabbedWindow : Window
                     _logger.Information("*** DOCK DRAG ENDED - RESTORING WebViews (hidden for {HideDuration}ms) ***", timeSinceHidden.TotalMilliseconds);
                     _isDragInProgress = false;
                     _isPointerPressed = false;
+                    _dockDragDetectedTime = DateTime.MinValue;
                     RestoreWebViewAfterDrag();
                 }
             }
@@ -449,6 +472,7 @@ public partial class SimpleTabbedWindow : Window
                     _logger.Information("*** FALLBACK TIMEOUT - RESTORING WebViews after 10 seconds ***");
                     _isDragInProgress = false;
                     _isPointerPressed = false;
+                    _dockDragDetectedTime = DateTime.MinValue;
                     RestoreWebViewAfterDrag();
                 }
             }

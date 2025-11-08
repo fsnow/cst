@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using CST.Avalonia.Commands;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
+using CST.Avalonia.ViewModels.Dock;
 using CST.Conversion;
 using CstBook = CST.Book;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ namespace CST.Avalonia.ViewModels;
 /// ViewModel for the Open Book dialog - replacement for FormSelectBook
 /// Provides hierarchical tree navigation of Buddhist texts with state persistence
 /// </summary>
-public class OpenBookDialogViewModel : ViewModelBase, IDisposable
+public class OpenBookDialogViewModel : ReactiveTool, IDisposable
 {
     private readonly ILocalizationService _localizationService;
     private readonly IScriptService _scriptService;
@@ -45,6 +46,14 @@ public class OpenBookDialogViewModel : ViewModelBase, IDisposable
         _stateService = stateService;
         _treeStateService = treeStateService;
         _logger = logger;
+
+        // Configure Dock properties
+        Id = "OpenBookTool";
+        Title = "Select a Book";
+        CanPin = false;     // Prevent pinning (vertical text issues)
+        CanClose = false;   // Keep book tree always available
+        CanFloat = true;    // Allow floating to separate window
+        CanDrag = true;     // Allow dragging
 
         BookTree = new ObservableCollection<BookTreeNode>();
         SelectedNodes = new ObservableCollection<BookTreeNode>();

@@ -10,6 +10,7 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using CST.Avalonia.ViewModels;
+using CST.Avalonia.ViewModels.Dock;
 using CST.Avalonia.Views;
 using CST.Avalonia.Models;
 using CST.Conversion;
@@ -39,40 +40,15 @@ namespace CST.Avalonia.Services
             _logger.Debug("Creating dock layout");
             
             // Get ViewModels from the service provider
-            var openBookViewModel = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
-            var searchViewModel = App.ServiceProvider?.GetRequiredService<SearchViewModel>();
-            _logger.Debug("Retrieved view models - OpenBook: {OpenBookType}, Search: {SearchType}", 
-                openBookViewModel?.GetType().Name ?? "null", searchViewModel?.GetType().Name ?? "null");
-            
-            // Create the book selection tool
-            var openBookTool = new Tool
-            {
-                Id = "OpenBookTool",
-                Title = "Select a Book",
-                Context = openBookViewModel,
-                CanPin = false,    // Prevent pinning to avoid vertical text issues
-                CanClose = false,  // Prevent accidental closing
-                CanFloat = true,   // Allow floating out
-                CanDrag = true     // Allow dragging
-            };
+            // ViewModels ARE the tools now (ReactiveTool pattern) - no wrapper needed
+            var openBookTool = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
+            var searchTool = App.ServiceProvider?.GetRequiredService<SearchViewModel>();
 
-            // Create the search tool
-            var searchTool = new Tool
+            _logger.Debug("Created tools - OpenBook: {OpenBookType}, Search: {SearchType}",
+                openBookTool?.GetType().Name ?? "null", searchTool?.GetType().Name ?? "null");
+            if (openBookTool != null)
             {
-                Id = "SearchTool",
-                Title = "Search",
-                Context = searchViewModel,
-                CanPin = false,    // Prevent pinning to avoid vertical text issues
-                CanClose = false,  // Prevent accidental closing
-                CanFloat = true,   // Allow floating out
-                CanDrag = true     // Allow dragging
-            };
-            
-            _logger.Debug("Created tools - OpenBook context: {OpenBookContext}, Search context: {SearchContext}", 
-                openBookTool.Context?.GetType().Name ?? "null", searchTool.Context?.GetType().Name ?? "null");
-            if (openBookViewModel != null)
-            {
-                _logger.Debug("OpenBookViewModel BookTree has {BookCount} items", openBookViewModel.BookTree.Count);
+                _logger.Debug("OpenBookViewModel BookTree has {BookCount} items", openBookTool.BookTree.Count);
             }
 
             // Create the book selection tool dock (left side)
@@ -100,15 +76,8 @@ namespace CST.Avalonia.Services
             };
 
             // Create a permanent welcome document that prevents tab area collapse
-            var welcomeDocument = new Document
-            {
-                Id = "WelcomeDocument",
-                Title = "Welcome",
-                Context = new WelcomeViewModel(),
-                CanClose = false,  // This prevents the tab from being closed
-                CanFloat = false,  // Prevent floating this document
-                CanPin = false     // Prevent pinning
-            };
+            // WelcomeViewModel IS the document - no wrapper needed (ReactiveDocument pattern)
+            var welcomeDocument = new WelcomeViewModel();
 
             // Create document dock for book content (right side)
             var documentDock = new DocumentDock
@@ -138,12 +107,12 @@ namespace CST.Avalonia.Services
                         foreach (var item in e.OldItems)
                         {
                             Log.Information("*** REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
-                            
+
                             // Clean up application state when documents are removed
-                            if (item is Document removedDocument)
+                            if (item is BookDisplayViewModel removedBookViewModel)
                             {
-                                Log.Information("*** Document removed from UI - cleaning up application state: {DocumentId} ***", removedDocument.Id);
-                                RemoveBookWindowState(removedDocument);
+                                Log.Information("*** Document removed from UI - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
+                                RemoveBookWindowState(removedBookViewModel.Id);
                             }
                         }
                     }
@@ -295,6 +264,14 @@ namespace CST.Avalonia.Services
                 {
                     document.Factory = this;
                 }
+                else if (otherDockable is ReactiveDocument reactiveDocument)
+                {
+                    reactiveDocument.Factory = this;
+                }
+                else if (otherDockable is ReactiveTool reactiveTool)
+                {
+                    reactiveTool.Factory = this;
+                }
                 else if (otherDockable is ProportionalDockSplitter splitter)
                 {
                     splitter.Factory = this;
@@ -384,6 +361,10 @@ namespace CST.Avalonia.Services
             var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
 
             // Create BookDisplayViewModel with proper services and script
+            // Generate unique ID for search results to allow multiple instances
+            var searchGuid = Guid.NewGuid();
+            var windowId = $"Search_{book.FileName}_{searchGuid:N}";
+
             var bookDisplayViewModel = new BookDisplayViewModel(
                 book,
                 searchTerms,  // Pass search terms for highlighting (in IPE format)
@@ -392,18 +373,22 @@ namespace CST.Avalonia.Services
                 settingsService,
                 fontService,
                 book.DocId,   // Pass DocId for Lucene offset lookup
-                positions     // NEW: Pass positions with IsFirstTerm flags for two-color highlighting
+                positions,    // NEW: Pass positions with IsFirstTerm flags for two-color highlighting
+                windowId      // Pass unique ID for search results
             );
-            
+
             // Set the correct script after construction
             if (scriptService != null)
             {
                 bookDisplayViewModel.BookScript = scriptService.CurrentScript;
                 _logger.Debug("Set book script to: {Script} for search result", scriptService.CurrentScript);
             }
-            
+
+            // Add search icon to title for search results
+            bookDisplayViewModel.Title = $"🔍 {bookDisplayViewModel.DisplayTitle}";
+
             // Search terms are already passed to BookDisplayViewModel constructor for highlighting
-            
+
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
             bookDisplayViewModel!.OpenBookRequested += (linkedBook, anchorForLinked) =>
             {
@@ -411,36 +396,23 @@ namespace CST.Avalonia.Services
                 // Open the linked book with anchor navigation for positioning
                 OpenBook(linkedBook, anchorForLinked);
             };
-            
-            // Create a document for the book with search context - use unique ID to avoid conflicts
-            var displayTitle = bookDisplayViewModel.DisplayTitle;
-            var searchGuid = Guid.NewGuid();
-            var document = new Document
-            {
-                Id = $"Search_{book.FileName}_{searchGuid:N}",
-                Title = $"🔍 {displayTitle}",
-                Context = bookDisplayViewModel,
-                CanClose = true,
-                CanFloat = true,
-                CanPin = false
-            };
-            
-            _logger.Debug("Creating search document with ID: {DocumentId}", document.Id);
-            
-            // Add to the main document dock
+
+            _logger.Debug("Creating search document with ID: {DocumentId}", bookDisplayViewModel.Id);
+
+            // BookDisplayViewModel is now a ReactiveDocument - add it directly to the dock
             var documentDock = FindDocumentDock();
             if (documentDock != null)
             {
-                Log.Information("*** ADDING SEARCH DOCUMENT TO LAYOUT: {DocumentId} ***", document.Id);
+                Log.Information("*** ADDING SEARCH DOCUMENT TO LAYOUT: {DocumentId} ***", bookDisplayViewModel.Id);
 
                 // Capture current proportions before adding document (preserves user adjustments)
                 CaptureMainDockProportions();
 
-                documentDock.VisibleDockables?.Add(document);
-                documentDock.ActiveDockable = document;
-                SetFactory(document);
+                documentDock.VisibleDockables?.Add(bookDisplayViewModel);
+                documentDock.ActiveDockable = bookDisplayViewModel;
+                SetFactory(bookDisplayViewModel);
                 Log.Information("*** SEARCH DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
-                _logger.Debug("Added search document to layout: {DocumentId}", document.Id);
+                _logger.Debug("Added search document to layout: {DocumentId}", bookDisplayViewModel.Id);
 
                 // Restore user's proportions (framework may have recalculated them)
                 RestoreMainDockProportions();
@@ -514,53 +486,33 @@ namespace CST.Avalonia.Services
                 OpenBook(linkedBook, anchorForLinked);
             };
             
-            // Use the same DisplayTitle logic as BookDisplayViewModel to ensure consistency
-            string documentTitle = bookDisplayViewModel.DisplayTitle;
-
-            // Create a new document for the book
-            // Use provided windowId for restoration, or generate new GUID for new instances
-            var generatedGuid = Guid.NewGuid();
-            var documentId = windowId ?? $"Book_{book.FileName}_{generatedGuid:N}";
-            _logger.Debug("Creating document with ID: {DocumentId}", documentId);
-            var document = new Document
+            // BookDisplayViewModel is now a ReactiveDocument - use it directly (no Document wrapper)
+            // Subscribe to DisplayTitle changes to update the Title for tab updates
+            bookDisplayViewModel.PropertyChanged += (sender, e) =>
             {
-                Id = documentId,
-                Title = documentTitle,
-                Context = bookDisplayViewModel,
-                CanFloat = true,   // Allow floating for multi-window support
-                CanPin = false,    // Prevent pinning
-                CanClose = true    // Allow closing
-            };
-            
-            // Subscribe to DisplayTitle changes to update the Document.Title for tab updates
-            if (bookDisplayViewModel is INotifyPropertyChanged propertyChanged)
-            {
-                propertyChanged.PropertyChanged += (sender, e) =>
+                if (e.PropertyName == nameof(BookDisplayViewModel.DisplayTitle))
                 {
-                    if (e.PropertyName == nameof(BookDisplayViewModel.DisplayTitle))
-                    {
-                        _logger.Information("DisplayTitle changed for document {DocumentId}: {OldTitle} -> {NewTitle}", 
-                            document.Id, document.Title, bookDisplayViewModel.DisplayTitle);
-                        document.Title = bookDisplayViewModel.DisplayTitle;
-                    }
-                };
-            }
-            
+                    _logger.Information("DisplayTitle changed for document {DocumentId}: {OldTitle} -> {NewTitle}",
+                        bookDisplayViewModel.Id, bookDisplayViewModel.Title, bookDisplayViewModel.DisplayTitle);
+                    bookDisplayViewModel.Title = bookDisplayViewModel.DisplayTitle;
+                }
+            };
+
             // Add to the document dock
-            AddDocumentToLayout(document);
-            
+            AddDocumentToLayout(bookDisplayViewModel);
+
             // Don't save state immediately - let tab changes trigger state saving
-            
+
             // Subscribe to script changes to update state when script changes
             bookDisplayViewModel.PropertyChanged += (sender, e) =>
             {
                 if (e.PropertyName == nameof(BookDisplayViewModel.BookScript))
                 {
-                    UpdateBookScriptInState(document.Id, bookDisplayViewModel.BookScript);
+                    UpdateBookScriptInState(bookDisplayViewModel.Id, bookDisplayViewModel.BookScript);
                 }
             };
-            
-            _logger.Debug("Book document created: {DocumentId} with title: {Title}", document.Id, document.Title);
+
+            _logger.Debug("Book document created: {DocumentId} with title: {Title}", bookDisplayViewModel.Id, bookDisplayViewModel.Title);
         }
 
         private void SaveAllBookWindowStates()
@@ -569,20 +521,19 @@ namespace CST.Avalonia.Services
             {
                 var documentDock = FindDocumentDock();
                 if (documentDock?.VisibleDockables == null) return;
-                
+
                 var activeDocument = documentDock.ActiveDockable;
                 Log.Information("*** Saving all book states - Active document: {ActiveId} ***", activeDocument?.Id ?? "none");
-                
+
                 foreach (var dockable in documentDock.VisibleDockables)
                 {
-                    if (dockable is Document document && 
-                        document.Context is BookDisplayViewModel bookDisplayViewModel && 
+                    if (dockable is BookDisplayViewModel bookDisplayViewModel &&
                         bookDisplayViewModel.Book != null)
                     {
                         // Only the active document gets IsSelected = true
-                        var isSelected = document == activeDocument;
-                        SaveBookWindowState(bookDisplayViewModel.Book, bookDisplayViewModel, document, isSelected);
-                        Log.Information("*** Saved state for {BookFileName} - IsSelected: {IsSelected} ***", 
+                        var isSelected = dockable == activeDocument;
+                        SaveBookWindowState(bookDisplayViewModel.Book, bookDisplayViewModel, isSelected);
+                        Log.Information("*** Saved state for {BookFileName} - IsSelected: {IsSelected} ***",
                             bookDisplayViewModel.Book.FileName, isSelected);
                     }
                 }
@@ -593,20 +544,20 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private void SaveBookWindowState(CST.Book book, BookDisplayViewModel bookDisplayViewModel, Document document, bool? isSelected = null)
+        private void SaveBookWindowState(CST.Book book, BookDisplayViewModel bookDisplayViewModel, bool? isSelected = null)
         {
             try
             {
                 // Get the book index
                 var booksList = Books.Inst.ToList();
                 var bookIndex = booksList.IndexOf(book);
-                
+
                 if (bookIndex == -1)
                 {
                     Log.Warning("Could not find book index for {BookFileName}", book.FileName);
                     return;
                 }
-                
+
                 // Get the application state service
                 var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
                 if (stateService == null)
@@ -614,14 +565,14 @@ namespace CST.Avalonia.Services
                     Log.Warning("ApplicationStateService not available");
                     return;
                 }
-                
+
                 // Use provided isSelected value or determine it dynamically
-                var isSelectedValue = isSelected ?? (document == FindDocumentDock()?.ActiveDockable);
-                
-                // Create book window state using document.Id as WindowId
+                var isSelectedValue = isSelected ?? (bookDisplayViewModel == FindDocumentDock()?.ActiveDockable);
+
+                // Create book window state using bookDisplayViewModel.Id as WindowId
                 var bookWindowState = new BookWindowState
                 {
-                    WindowId = document.Id,
+                    WindowId = bookDisplayViewModel.Id,
                     BookIndex = bookIndex,
                     BookFileName = book.FileName,
                     BookScript = bookDisplayViewModel.BookScript,
@@ -633,10 +584,10 @@ namespace CST.Avalonia.Services
                     ShowFootnotes = true, // Default for now
                     ShowSearchTerms = bookDisplayViewModel.HasSearchHighlights
                 };
-                
+
                 // Update the state
                 stateService.UpdateBookWindowState(bookWindowState);
-                
+
                 Log.Information("Saved book window state for {BookFileName} (index {BookIndex})", book.FileName, bookIndex);
             }
             catch (Exception ex)
@@ -662,46 +613,47 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private void RemoveBookWindowState(Document document)
+        private void RemoveBookWindowState(string windowId)
         {
             try
             {
                 var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
                 if (stateService != null)
                 {
-                    stateService.RemoveBookWindowStateByWindowId(document.Id);
-                    Log.Information("Removed book window state for document {DocumentId}", document.Id);
+                    stateService.RemoveBookWindowStateByWindowId(windowId);
+                    Log.Information("Removed book window state for window {WindowId}", windowId);
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to remove book window state for document {DocumentId}", document.Id);
+                Log.Error(ex, "Failed to remove book window state for window {WindowId}", windowId);
             }
         }
 
         public void CloseBook(string bookId)
         {
-            var document = FindDocument(bookId);
-            if (document != null)
+            var dockable = FindDockable(bookId);
+            if (dockable != null)
             {
                 // Remove book window state before removing the document
-                RemoveBookWindowState(document);
-                
-                RemoveDocumentFromLayout(document);
+                RemoveBookWindowState(dockable.Id);
+
+                RemoveDocumentFromLayout(dockable);
                 _logger.Debug("Closed book: {BookId}", bookId);
             }
         }
 
         public WelcomeViewModel? GetWelcomeViewModel()
         {
-            var welcomeDoc = FindDocument("WelcomeDocument");
-            return welcomeDoc?.Context as WelcomeViewModel;
+            // WelcomeViewModel IS the document now (ReactiveDocument pattern)
+            var welcomeDoc = FindDockable("WelcomeDocument");
+            return welcomeDoc as WelcomeViewModel;
         }
 
         public void ShowWelcomeScreen()
         {
             // Show the Welcome document tab as active
-            var welcomeDoc = FindDocument("WelcomeDocument");
+            var welcomeDoc = FindDockable("WelcomeDocument");
             if (welcomeDoc != null)
             {
                 var documentDock = FindDocumentDock();
@@ -737,7 +689,7 @@ namespace CST.Avalonia.Services
         {
             if (dockable is Document document && document.Id == documentId)
                 return document;
-                
+
             if (dockable is IDock dock && dock.VisibleDockables != null)
             {
                 foreach (var child in dock.VisibleDockables)
@@ -748,42 +700,72 @@ namespace CST.Avalonia.Services
             }
             return null;
         }
+
+        // Generic dockable finder - works for ReactiveDocument/ReactiveTool as well as Document/Tool
+        private IDockable? FindDockable(string id)
+        {
+            if (_context is RootDock rootDock && rootDock.VisibleDockables != null)
+            {
+                foreach (var dockable in rootDock.VisibleDockables)
+                {
+                    var found = FindDockableRecursive(dockable, id);
+                    if (found != null) return found;
+                }
+            }
+            return null;
+        }
+
+        private IDockable? FindDockableRecursive(IDockable dockable, string id)
+        {
+            if (dockable.Id == id)
+                return dockable;
+
+            if (dockable is IDock dock && dock.VisibleDockables != null)
+            {
+                foreach (var child in dock.VisibleDockables)
+                {
+                    var found = FindDockableRecursive(child, id);
+                    if (found != null) return found;
+                }
+            }
+            return null;
+        }
         
-        private void ActivateDocument(Document document)
+        private void ActivateDocument(IDockable dockable)
         {
             // Find the document dock containing this document and make it active
             var documentDock = FindDocumentDock();
             if (documentDock != null)
             {
-                documentDock.ActiveDockable = document;
-                _logger.Debug("Activated existing document: {DocumentId}", document.Id);
+                documentDock.ActiveDockable = dockable;
+                _logger.Debug("Activated existing document: {DocumentId}", dockable.Id);
             }
         }
-        
-        private void AddDocumentToLayout(Document document)
+
+        private void AddDocumentToLayout(IDockable dockable)
         {
             var documentDock = FindDocumentDock();
             if (documentDock != null)
             {
-                Log.Information("*** ADDING DOCUMENT TO LAYOUT: {DocumentId} ***", document.Id);
+                Log.Information("*** ADDING DOCUMENT TO LAYOUT: {DocumentId} ***", dockable.Id);
 
                 // Capture current proportions before adding document (preserves user adjustments)
                 CaptureMainDockProportions();
 
                 // Debug: Check for duplicate IDs (this shouldn't happen but let's detect it)
-                var existingWithSameId = documentDock.VisibleDockables?.Where(d => d.Id == document.Id).ToList();
+                var existingWithSameId = documentDock.VisibleDockables?.Where(d => d.Id == dockable.Id).ToList();
                 if (existingWithSameId?.Any() == true)
                 {
                     Log.Error("*** ERROR: Document with ID {DocumentId} already exists {Count} times! ***",
-                        document.Id, existingWithSameId.Count);
-                    _logger.Error("Document with ID {DocumentId} already exists {Count} times", document.Id, existingWithSameId.Count);
+                        dockable.Id, existingWithSameId.Count);
+                    _logger.Error("Document with ID {DocumentId} already exists {Count} times", dockable.Id, existingWithSameId.Count);
                 }
 
-                documentDock.VisibleDockables?.Add(document);
-                documentDock.ActiveDockable = document;
-                SetFactory(document); // Ensure the document has the factory reference
+                documentDock.VisibleDockables?.Add(dockable);
+                documentDock.ActiveDockable = dockable;
+                SetFactory(dockable); // Ensure the document has the factory reference
                 Log.Information("*** DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
-                _logger.Debug("Added document to layout: {DocumentId}", document.Id);
+                _logger.Debug("Added document to layout: {DocumentId}", dockable.Id);
 
                 // Restore user's proportions (framework may have recalculated them)
                 RestoreMainDockProportions();
@@ -795,22 +777,22 @@ namespace CST.Avalonia.Services
             }
         }
         
-        private void RemoveDocumentFromLayout(Document document)
+        private void RemoveDocumentFromLayout(IDockable dockable)
         {
             var documentDock = FindDocumentDock();
             if (documentDock != null && documentDock.VisibleDockables != null)
             {
-                Log.Information("*** REMOVING DOCUMENT FROM LAYOUT: {DocumentId} ***", document.Id);
+                Log.Information("*** REMOVING DOCUMENT FROM LAYOUT: {DocumentId} ***", dockable.Id);
                 var countBefore = documentDock.VisibleDockables.Count;
-                documentDock.VisibleDockables.Remove(document);
+                documentDock.VisibleDockables.Remove(dockable);
                 var countAfter = documentDock.VisibleDockables.Count;
                 Log.Information("*** DOCUMENT REMOVAL: Before={CountBefore}, After={CountAfter} ***", countBefore, countAfter);
-                
+
                 // If this was the active document, activate another one
-                if (documentDock.ActiveDockable == document)
+                if (documentDock.ActiveDockable == dockable)
                 {
                     // Find the Welcome document first, then fall back to last document
-                    var welcomeDoc = documentDock.VisibleDockables.OfType<Document>().FirstOrDefault(d => d.Id == "WelcomeDocument");
+                    var welcomeDoc = documentDock.VisibleDockables.FirstOrDefault(d => d.Id == "WelcomeDocument");
                     documentDock.ActiveDockable = welcomeDoc ?? documentDock.VisibleDockables.LastOrDefault();
                     Log.Information("*** ACTIVATED NEW DOCUMENT: {NewActiveDocument} ***", documentDock.ActiveDockable?.Id ?? "null");
                 }
@@ -1022,6 +1004,10 @@ namespace CST.Avalonia.Services
                         {
                             Log.Information($"*** {indent}  - Document: {doc.Title} (ID: {doc.Id}) ***");
                         }
+                        else if (dockable is ReactiveDocument reactiveDoc)
+                        {
+                            Log.Information($"*** {indent}  - ReactiveDocument: {reactiveDoc.Title} (ID: {reactiveDoc.Id}) ***");
+                        }
                         else
                         {
                             Log.Information($"*** {indent}  - Other: {dockable.GetType().Name} (ID: {dockable.Id ?? "null"}) ***");
@@ -1169,12 +1155,12 @@ namespace CST.Avalonia.Services
         public override void FloatDockable(IDockable dockable)
         {
             Log.Information("*** FloatDockable called for: {DockableType} (ID: {DockableId}) ***", dockable?.GetType().Name, dockable?.Id);
-            Log.Information("*** Dockable CanFloat: {CanFloat} ***", (dockable as Document)?.CanFloat ?? false);
-            
+            Log.Information("*** Dockable CanFloat: {CanFloat} ***", dockable?.CanFloat ?? false);
+
             // Check if dockable can float - if not, don't proceed
-            if (dockable is Document document && !document.CanFloat)
+            if (dockable != null && !dockable.CanFloat)
             {
-                Log.Warning("*** FLOATING REJECTED - Document CanFloat is false ***");
+                Log.Warning("*** FLOATING REJECTED - Dockable CanFloat is false ***");
                 return;
             }
             
@@ -1200,20 +1186,20 @@ namespace CST.Avalonia.Services
             {
                 Log.Error(ex, "*** FLOATING FAILED - Exception during FloatDockable operation ***");
                 Log.Error(ex, "*** This might be why tabs disappear - floating failed but document was already removed from original dock ***");
-                
+
                 // The document might have been removed from the original dock but the floating window creation failed
                 // We need to add it back to prevent data loss
-                if (dockable is Document failedDocument)
+                if (dockable != null)
                 {
-                    Log.Information("*** Attempting to restore document to original dock after failed float ***");
+                    Log.Information("*** Attempting to restore dockable to original dock after failed float ***");
                     try
                     {
-                        AddDocumentToLayout(failedDocument);
-                        Log.Information("*** Document restored to original dock ***");
+                        AddDocumentToLayout(dockable);
+                        Log.Information("*** Dockable restored to original dock ***");
                     }
                     catch (Exception restoreEx)
                     {
-                        Log.Error(restoreEx, "*** CRITICAL: Failed to restore document after failed float - document may be lost ***");
+                        Log.Error(restoreEx, "*** CRITICAL: Failed to restore dockable after failed float - document may be lost ***");
                     }
                 }
                 
@@ -1236,13 +1222,17 @@ namespace CST.Avalonia.Services
         public override void CloseDockable(IDockable dockable)
         {
             Log.Information("*** CloseDockable called for: {DockableType} (ID: {DockableId}) ***", dockable?.GetType().Name, dockable?.Id);
-            
+
             // Allow closing but add logging to help debug accidental closes
             if (dockable is Document document)
             {
-                Log.Information("*** Closing document: {DocumentTitle} ***", document.Title);
+                Log.Information("*** Closing Document: {DocumentTitle} ***", document.Title);
             }
-            
+            else if (dockable is ReactiveDocument reactiveDocument)
+            {
+                Log.Information("*** Closing ReactiveDocument: {DocumentTitle} ***", reactiveDocument.Title);
+            }
+
             if (dockable != null)
             {
                 base.CloseDockable(dockable);
@@ -1478,12 +1468,12 @@ namespace CST.Avalonia.Services
                             foreach (var item in e.OldItems)
                             {
                                 Log.Information("*** FLOATING WINDOW REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
-                                
+
                                 // Clean up application state when documents are removed from floating windows
-                                if (item is Document removedDocument)
+                                if (item is BookDisplayViewModel removedBookViewModel)
                                 {
-                                    Log.Information("*** Document removed from floating window - cleaning up application state: {DocumentId} ***", removedDocument.Id);
-                                    RemoveBookWindowState(removedDocument);
+                                    Log.Information("*** Document removed from floating window - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
+                                    RemoveBookWindowState(removedBookViewModel.Id);
                                 }
                             }
                         }
@@ -1808,31 +1798,35 @@ namespace CST.Avalonia.Services
                     return true;
                 }
                 
-                // For DocumentDock, check if it has any actual documents
+                // For DocumentDock, check if it has any actual documents (Document OR ReactiveDocument)
                 if (dock is DocumentDock documentDock)
                 {
-                    var documents = documentDock.VisibleDockables?.OfType<Document>().ToList() ?? new List<Document>();
-                    
+                    var documents = documentDock.VisibleDockables?
+                        .Where(d => d is Document || d is ReactiveDocument)
+                        .ToList() ?? new List<IDockable>();
+
                     // Enhanced logging to debug the empty dock issue
                     if (documentDock.VisibleDockables?.Count > 0)
                     {
-                        Log.Information("***   DocumentDock {DockId} has {Count} dockables:", 
+                        Log.Information("***   DocumentDock {DockId} has {Count} dockables:",
                             documentDock.Id ?? "null", documentDock.VisibleDockables.Count);
                         foreach (var dockable in documentDock.VisibleDockables)
                         {
-                            Log.Information("***     - {DockableType} (ID: {DockableId})", 
+                            Log.Information("***     - {DockableType} (ID: {DockableId})",
                                 dockable.GetType().Name, dockable.Id ?? "null");
                         }
-                        Log.Information("***   But only {DocumentCount} are actual Documents", documents.Count);
+                        Log.Information("***   But {DocumentCount} are Document/ReactiveDocument", documents.Count);
                     }
-                    
+
                     return documents.Count == 0;
                 }
-                
-                // For ToolDock, check if it has any actual tools
+
+                // For ToolDock, check if it has any actual tools (Tool OR ReactiveTool)
                 if (dock is ToolDock toolDock)
                 {
-                    var tools = toolDock.VisibleDockables?.OfType<Tool>().ToList() ?? new List<Tool>();
+                    var tools = toolDock.VisibleDockables?
+                        .Where(d => d is Tool || d is ReactiveTool)
+                        .ToList() ?? new List<IDockable>();
                     return tools.Count == 0;
                 }
                 

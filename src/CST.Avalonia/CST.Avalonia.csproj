@@ -59,6 +59,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Dock.Avalonia" Version="11.3.0.15" />
+    <PackageReference Include="Dock.Controls.Recycling" Version="11.3.0.15" />
     <PackageReference Include="Dock.Model" Version="11.3.0.15" />
     <PackageReference Include="Dock.Model.Mvvm" Version="11.3.0.15" />
     <!-- WebView packages for different architectures -->
