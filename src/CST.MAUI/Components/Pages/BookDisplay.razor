@@ -1,0 +1,51 @@
+@page "/book/{BookFileName}"
+@using CST.MAUI.Services
+@inject BookService BookService
+
+<div class="book-container">
+    @if (isLoading)
+    {
+        <p>Loading book...</p>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error">
+            <h3>Error</h3>
+            <p>@errorMessage</p>
+        </div>
+    }
+    else
+    {
+        @((MarkupString)htmlContent)
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? BookFileName { get; set; }
+
+    private string htmlContent = "";
+    private string errorMessage = "";
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(BookFileName))
+        {
+            errorMessage = "No book file specified";
+            isLoading = false;
+            return;
+        }
+
+        try
+        {
+            htmlContent = await BookService.LoadBookAsHtmlAsync(BookFileName);
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load book: {ex.Message}";
+            isLoading = false;
+        }
+    }
+}

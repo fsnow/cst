@@ -1,5 +1,41 @@
 ﻿@page "/"
+@using CST.MAUI.Services
+@inject BookService BookService
+@inject NavigationManager Navigation
 
-<h1>Hello, world!</h1>
+<h1>CST Reader - MAUI POC</h1>
 
-Welcome to your new app.
+<p>Day 1: Load and display XML book</p>
+
+@if (books != null && books.Any())
+{
+    <p>Total books available: @books.Count</p>
+    <p>Click to load a test book:</p>
+    <ul>
+        @foreach (var book in books.Take(10))
+        {
+            <li>
+                <button @onclick="() => LoadBook(book.FileName)">@book.ShortNavPath</button>
+                <small>(@book.FileName)</small>
+            </li>
+        }
+    </ul>
+}
+else
+{
+    <p>Loading books...</p>
+}
+
+@code {
+    private List<CST.Book>? books;
+
+    protected override void OnInitialized()
+    {
+        books = BookService.GetAllBooks();
+    }
+
+    private void LoadBook(string fileName)
+    {
+        Navigation.NavigateTo($"/book/{fileName}");
+    }
+}
