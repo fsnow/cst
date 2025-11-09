@@ -1,13 +1,14 @@
 using System.Xml;
 using System.Xml.Xsl;
 using CST;
+using CST.Conversion;
 
 namespace CST.MAUI.Services;
 
 public class BookService
 {
     private readonly string _xmlBooksPath;
-    private XslCompiledTransform? _cachedXslTransform;
+    private readonly Dictionary<Script, XslCompiledTransform> _cachedXslTransforms = new();
     private readonly object _xslLock = new object();
 
     public BookService()
@@ -23,32 +24,68 @@ public class BookService
             "xml"
         );
 
-        // Load and cache XSL transform on background thread
-        Task.Run(() => LoadXslTransform());
+        // Load and cache XSL transforms on background thread
+        Task.Run(() => LoadXslTransforms());
     }
 
-    private void LoadXslTransform()
+    private void LoadXslTransforms()
     {
-        try
+        // Load the most common scripts first (Latin, Devanagari, Thai, Myanmar)
+        var priorityScripts = new[] { Script.Latin, Script.Devanagari, Script.Thai, Script.Myanmar };
+
+        foreach (var script in priorityScripts)
         {
-            lock (_xslLock)
+            try
             {
-                if (_cachedXslTransform != null) return;
-
-                using var xslStream = FileSystem.OpenAppPackageFileAsync("tipitaka-latn.xsl").Result;
-                using var xslReader = XmlReader.Create(xslStream);
-
-                _cachedXslTransform = new XslCompiledTransform();
-                _cachedXslTransform.Load(xslReader);
+                LoadXslTransform(script);
+            }
+            catch
+            {
+                // Continue loading other scripts even if one fails
             }
         }
-        catch
+    }
+
+    private void LoadXslTransform(Script script)
+    {
+        lock (_xslLock)
         {
-            // XSL loading will be retried on first book load if needed
+            if (_cachedXslTransforms.ContainsKey(script)) return;
+
+            var xslFileName = GetXslFileName(script);
+            using var xslStream = FileSystem.OpenAppPackageFileAsync(xslFileName).Result;
+            using var xslReader = XmlReader.Create(xslStream);
+
+            var transform = new XslCompiledTransform();
+            transform.Load(xslReader);
+
+            _cachedXslTransforms[script] = transform;
         }
     }
 
-    public async Task<string> LoadBookAsHtmlAsync(string bookFileName)
+    private string GetXslFileName(Script script)
+    {
+        return script switch
+        {
+            Script.Bengali => "tipitaka-beng.xsl",
+            Script.Cyrillic => "tipitaka-cyrl.xsl",
+            Script.Devanagari => "tipitaka-deva.xsl",
+            Script.Gujarati => "tipitaka-gujr.xsl",
+            Script.Gurmukhi => "tipitaka-guru.xsl",
+            Script.Kannada => "tipitaka-knda.xsl",
+            Script.Khmer => "tipitaka-khmr.xsl",
+            Script.Latin => "tipitaka-latn.xsl",
+            Script.Malayalam => "tipitaka-mlym.xsl",
+            Script.Myanmar => "tipitaka-mymr.xsl",
+            Script.Sinhala => "tipitaka-sinh.xsl",
+            Script.Telugu => "tipitaka-telu.xsl",
+            Script.Thai => "tipitaka-thai.xsl",
+            Script.Tibetan => "tipitaka-tibt.xsl",
+            _ => "tipitaka-latn.xsl"
+        };
+    }
+
+    public async Task<string> LoadBookAsHtmlAsync(string bookFileName, Script script = Script.Latin)
     {
         try
         {
@@ -69,21 +106,29 @@ public class BookService
                 var xmlDoc = new XmlDocument();
                 xmlDoc.LoadXml(xmlContent);
 
-                // Ensure XSL is loaded (should already be cached from constructor)
+                // Apply script conversion if needed - XML is stored in Devanagari
+                // Port of CST.Avalonia BookDisplayViewModel.cs:700-706
+                if (script != Script.Devanagari)
+                {
+                    var convertedXml = ScriptConverter.ConvertBook(xmlDoc.OuterXml, script);
+                    xmlDoc.LoadXml(convertedXml);
+                }
+
+                // Ensure XSL is loaded (load on-demand if not already cached)
                 lock (_xslLock)
                 {
-                    if (_cachedXslTransform == null)
+                    if (!_cachedXslTransforms.ContainsKey(script))
                     {
-                        LoadXslTransform();
+                        LoadXslTransform(script);
                     }
 
-                    if (_cachedXslTransform == null)
+                    if (!_cachedXslTransforms.TryGetValue(script, out var transform))
                     {
-                        return "<html><body><h1>Could not load XSL file</h1></body></html>";
+                        return $"<html><body><h1>Could not load XSL file for script: {script}</h1></body></html>";
                     }
 
                     using var stringWriter = new StringWriter();
-                    _cachedXslTransform.Transform(xmlDoc, null, stringWriter);
+                    transform.Transform(xmlDoc, null, stringWriter);
 
                     return stringWriter.ToString();
                 }
