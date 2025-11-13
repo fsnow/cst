@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
+using CST.Avalonia.ViewModels.Dock;
 using CST.Conversion;
 using CST;
 using DynamicData;
@@ -19,7 +20,7 @@ using ReactiveUI;
 
 namespace CST.Avalonia.ViewModels;
 
-public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
+public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
 {
     private readonly ISearchService _searchService;
     private readonly IScriptService _scriptService;
@@ -47,6 +48,14 @@ public class SearchViewModel : ViewModelBase, IActivatableViewModel, IDisposable
         _scriptService = scriptService;
         _fontService = fontService;
         _logger = logger;
+
+        // Configure Dock properties
+        Id = "SearchTool";
+        Title = "Search";
+        CanPin = false;     // Prevent pinning (vertical text issues)
+        CanClose = false;   // Keep search panel always available
+        CanFloat = true;    // Allow floating to separate window
+        CanDrag = true;     // Allow dragging
 
         Activator = new ViewModelActivator();
 

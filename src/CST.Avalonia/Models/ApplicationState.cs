@@ -188,6 +188,12 @@ public class BookWindowState
     public List<TermPosition> SearchPositions { get; set; } = new();
 
     /// <summary>
+    /// Current scroll position anchor for restoring position on startup
+    /// (e.g., "para123", "V1.0023", "dn1_1", etc.)
+    /// </summary>
+    public string? CurrentAnchor { get; set; }
+
+    /// <summary>
     /// Tab order index
     /// </summary>
     public int TabIndex { get; set; }

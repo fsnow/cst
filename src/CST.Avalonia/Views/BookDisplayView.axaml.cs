@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,6 +32,7 @@ public partial class BookDisplayView : UserControl
     private BookDisplayViewModel? _viewModel;
     private WebView? _webView;
     private ScrollViewer? _fallbackBrowser;
+    private IDisposable? _lifecycleSubscription; // Subscription to WebViewLifecycleOperation changes
     private int _lastScrollPosition = 0;
     private bool _isBrowserInitialized = false;
     private TaskCompletionSource<string?>? _paraAnchorTcs = null;
@@ -47,6 +49,10 @@ public partial class BookDisplayView : UserControl
     private string _lastKnownOther = "*";
     private string _lastKnownPara = "*";
 
+    // Cache the last successfully captured anchor for shutdown save
+    // This is populated by GetCurrentParagraphAnchorAsync() when JavaScript succeeds
+    private string? _lastCapturedAnchor = null;
+
     // Timer-based drag monitoring fields
     private System.Timers.Timer? _dragMonitoringTimer;
     private DateTime _lastPointerPressedTime = DateTime.MinValue;
@@ -57,6 +63,10 @@ public partial class BookDisplayView : UserControl
     private const double DRAG_THRESHOLD = 5.0; // pixels
     private const int DRAG_TIMER_INTERVAL = 50; // milliseconds
     private const int MIN_WEBVIEW_HIDE_DURATION = 500; // milliseconds - minimum time WebView stays hidden
+    private const int DRAG_TIME_THRESHOLD = 150; // milliseconds - wait before treating pointer movement as drag (filters out tab clicks)
+
+    // Window context tracking for CEF handle invalidation detection
+    private Window? _currentWindow = null;
 
     public BookDisplayView()
     {
@@ -77,6 +87,10 @@ public partial class BookDisplayView : UserControl
         
         // Add keyboard event handler with highest priority to intercept before WebView
         this.AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+        // Monitor visual tree attachment to detect window context changes (float/unfloat)
+        this.AttachedToVisualTree += OnAttachedToVisualTree;
+        this.DetachedFromVisualTree += OnDetachedFromVisualTree;
 
         // Try to create WebView browser
         TryCreateWebView();
@@ -145,16 +159,138 @@ public partial class BookDisplayView : UserControl
         }
     }
 
+    private void DisposeWebView()
+    {
+        if (_webView != null)
+        {
+            try
+            {
+                _logger.Information("Disposing WebView to release CEF native handle");
+
+                // Unsubscribe from events
+                _webView.Navigated -= OnNavigationCompleted;
+                _webView.TitleChanged -= OnTitleChanged;
+
+                // Dispose the WebView to release native resources
+                _webView.Dispose();
+
+                _webView = null;
+                _isBrowserInitialized = false;
+
+                _logger.Information("WebView disposed successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error while disposing WebView");
+                _webView = null;
+            }
+        }
+    }
+
     protected override void OnLoaded(RoutedEventArgs e)
     {
         base.OnLoaded(e);
         this.PropertyChanged += OnIsVisibleChanged;
         _logger.Information("BookDisplayView OnLoaded called");
         SetupCSharpScrollTracking();
-        
+
         // Monitor drag operations to temporarily hide WebView for drop indicators
         _logger.Information("Calling SetupDragMonitoring from OnLoaded");
         SetupDragMonitoring();
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        // PHASE 2 LOGGING: Track lifecycle events to determine if tab reordering triggers detachment
+        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        _logger.Information("▶▶▶ ATTACHED to visual tree - Book: {BookFile}, Instance: {InstanceId}",
+            _viewModel?.Book?.FileName ?? "null", _viewModel?.Id ?? "null");
+
+        // Get the new window this view is attached to
+        var newWindow = this.GetVisualRoot() as Window;
+
+        if (newWindow != null)
+        {
+            // Compare by reference equality, not by title
+            // This ensures we detect actual window instance changes (float/unfloat)
+            if (_currentWindow != null && !ReferenceEquals(_currentWindow, newWindow))
+            {
+                // Window changed! This happens during float/unfloat operations
+                // CEF native handles are window-specific and become invalid
+                _logger.Warning("*** ⚠️ WINDOW CONTEXT CHANGED - Disposing and recreating WebView ***");
+                _logger.Warning("    Old window: {OldTitle} (Hash: {OldHash}), New window: {NewTitle} (Hash: {NewHash})",
+                    _currentWindow.Title ?? "null", _currentWindow.GetHashCode(),
+                    newWindow.Title ?? "null", newWindow.GetHashCode());
+                _logger.Warning("    Book: {BookFile}, ViewModel: {ViewModelId}",
+                    _viewModel?.Book?.FileName ?? "null", _viewModel?.Id ?? "null");
+
+                // Dispose old WebView to release invalid CEF native handle
+                DisposeWebView();
+
+                // Update window reference
+                _currentWindow = newWindow;
+
+                // Recreate WebView with fresh native handle for new window
+                TryCreateWebView();
+
+                // Reload content if ViewModel has HTML
+                if (_viewModel != null && !string.IsNullOrEmpty(_viewModel.HtmlContent))
+                {
+                    _logger.Information("Reloading HTML content after WebView recreation");
+                    Dispatcher.UIThread.Post(() => LoadHtmlContent());
+                }
+            }
+            else if (_currentWindow == null)
+            {
+                // First attachment - just track the window
+                _currentWindow = newWindow;
+                _logger.Information("*** 🆕 BookDisplayView attached to window for FIRST TIME ***");
+                _logger.Information("    Window: {WindowTitle} (Hash: {Hash})",
+                    newWindow.Title ?? "null", newWindow.GetHashCode());
+                _logger.Information("    Book: {BookFile}, ViewModel: {ViewModelId}",
+                    _viewModel?.Book?.FileName ?? "null", _viewModel?.Id ?? "null");
+
+                // Notify ViewModel that View is now attached - executes any pending anchor navigation
+                _viewModel?.OnViewAttached();
+            }
+            else
+            {
+                // Same window instance - normal ControlRecycling show/hide (tab switching)
+                _logger.Information("*** ✅ SAME WINDOW - ControlRecycling reattachment (tab switching) ***");
+                _logger.Information("    Window: {WindowTitle} (Hash: {Hash})",
+                    newWindow.Title ?? "null", newWindow.GetHashCode());
+                _logger.Information("    Book: {BookFile}, ViewModel: {ViewModelId}",
+                    _viewModel?.Book?.FileName ?? "null", _viewModel?.Id ?? "null");
+
+                // ControlRecycling reattachment - page numbers remain in ViewModel properties
+                // No need to trigger updates here, the View bindings will automatically
+                // pick up the ViewModel's existing page number values
+                _logger.Information("    Tab reattached - ViewModel page numbers: VRI={Vri}, Para={Para}",
+                    _viewModel?.VriPage ?? "*", _viewModel?.CurrentParagraph ?? "*");
+
+                // Notify ViewModel that View is now attached - executes any pending anchor navigation
+                _viewModel?.OnViewAttached();
+            }
+        }
+        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        // PHASE 2 LOGGING: Track detachment events to determine if tab reordering triggers detachment
+        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        _logger.Information("◀◀◀ DETACHED from visual tree - Book: {BookFile}, Instance: {InstanceId}",
+            _viewModel?.Book?.FileName ?? "null", _viewModel?.Id ?? "null");
+        _logger.Information("    Window: {WindowTitle} (Hash: {Hash})",
+            _currentWindow?.Title ?? "null", _currentWindow?.GetHashCode() ?? 0);
+
+        // CRITICAL FIX: Clear _currentWindow so that when ControlRecycling reattaches this View,
+        // OnAttachedToVisualTree will detect window context change and recreate WebView
+        // This fixes the crash when: float → unfloat → switch tab → tab back
+        _logger.Information("    Clearing _currentWindow to force window change detection on next attach");
+        _currentWindow = null;
+
+        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -167,6 +303,7 @@ public partial class BookDisplayView : UserControl
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.NavigateToHighlightRequested -= NavigateToHighlight;
             _viewModel.NavigateToChapterRequested -= NavigateToAnchor;
+            _lifecycleSubscription?.Dispose();
             _viewModel.BookDisplayControl = null;
         }
 
@@ -180,7 +317,18 @@ public partial class BookDisplayView : UserControl
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             _viewModel.NavigateToHighlightRequested += NavigateToHighlight;
             _viewModel.NavigateToChapterRequested += NavigateToAnchor;
-            
+
+            // Phase 4: Subscribe to WebViewLifecycleOperation changes for float/unfloat operations
+            // Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
+            // IMPORTANT: Capture ViewModel in local variable so dispose has stable reference
+            var vm = _viewModel;
+            _lifecycleSubscription = System.Reactive.Linq.Observable
+                .FromEventPattern<System.ComponentModel.PropertyChangedEventHandler, System.ComponentModel.PropertyChangedEventArgs>(
+                    h => vm.PropertyChanged += h,
+                    h => vm.PropertyChanged -= h)
+                .Where(pattern => pattern.EventArgs.PropertyName == nameof(BookDisplayViewModel.WebViewLifecycleOperation))
+                .Subscribe(_ => OnWebViewLifecycleOperationChanged());
+
             // If the ViewModel already has HTML content, load it immediately
             // This handles the case where the view is recreated but the ViewModel persists
             if (!string.IsNullOrEmpty(_viewModel.HtmlContent))
@@ -189,6 +337,51 @@ public partial class BookDisplayView : UserControl
                 Dispatcher.UIThread.Post(() => LoadHtmlContent());
             }
         }
+    }
+
+    /// <summary>
+    /// Handle WebViewLifecycleOperation changes for float/unfloat operations
+    /// Phase 4: Manual WebView disposal and recreation to prevent CEF crash
+    /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
+    /// </summary>
+    private void OnWebViewLifecycleOperationChanged()
+    {
+        if (_viewModel == null) return;
+
+        var operation = _viewModel.WebViewLifecycleOperation;
+        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        _logger.Information("WebViewLifecycleOperation changed: {Operation}", operation);
+
+        switch (operation)
+        {
+            case WebViewLifecycleOperation.PrepareForFloat:
+            case WebViewLifecycleOperation.PrepareForUnfloat:
+                _logger.Warning("*** DISPOSING WebView before window operation ***");
+                DisposeWebView();
+                _logger.Information("WebView disposed, ready for window operation");
+                break;
+
+            case WebViewLifecycleOperation.RestoreAfterFloat:
+            case WebViewLifecycleOperation.RestoreAfterUnfloat:
+                _logger.Warning("*** RECREATING WebView after window operation ***");
+                TryCreateWebView();
+
+                // Reload HTML content if available
+                if (!string.IsNullOrEmpty(_viewModel.HtmlContent))
+                {
+                    _logger.Information("Reloading HTML content ({Length} chars) after WebView recreation",
+                        _viewModel.HtmlContent.Length);
+                    Dispatcher.UIThread.Post(() => LoadHtmlContent());
+                }
+                _logger.Information("WebView recreated and content reloaded");
+                break;
+
+            case WebViewLifecycleOperation.None:
+            default:
+                // No action needed
+                break;
+        }
+        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 
     private void OnIsVisibleChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -247,6 +440,12 @@ public partial class BookDisplayView : UserControl
                     // Check content size and use appropriate loading method
                     _logger.Debug("Loading HTML content - length: {Length}", _viewModel.HtmlContent.Length);
                     //_logger.Debug("LoadHtmlContent", "HTML content preview", _viewModel.HtmlContent.Substring(0, Math.Min(200, _viewModel.HtmlContent.Length)) + "...");
+
+                    // CRITICAL FIX: Invalidate anchor cache when loading new content
+                    // This prevents scroll timer from querying stale cache and overwriting
+                    // ViewModel's page numbers with "*" values during tab switches
+                    _anchorCacheBuilt = false;
+                    _logger.Debug("Invalidated anchor cache - will rebuild after navigation completes");
 
                     // Write HTML content to temporary file and load it
                     // This completely bypasses data URI size limitations
@@ -452,26 +651,42 @@ public partial class BookDisplayView : UserControl
                     var currentChapter = '*';
                     try {{
                         if (window.cstAnchorCache && window.cstAnchorCache.sortedChapterAnchors && window.cstAnchorCache.sortedChapterAnchors.length > 0) {{
-                            // Find the chapter anchor that's closest to but not above the current scroll position
+                            // Look for chapters within viewport (scrollY to scrollY+200px)
+                            var searchStart = scrollY;
+                            var searchEnd = scrollY + 200;
                             var bestChapter = null;
                             var bestDistance = Infinity;
-                            
+
+                            // First, look for chapters within the viewport
                             for (var i = 0; i < window.cstAnchorCache.sortedChapterAnchors.length; i++) {{
                                 var chapterAnchor = window.cstAnchorCache.sortedChapterAnchors[i];
-                                var distance = scrollY - chapterAnchor.position;
-                                
-                                // If we're at or past this chapter, and it's closer than our current best
-                                if (distance >= 0 && distance < bestDistance) {{
-                                    bestChapter = chapterAnchor;
-                                    bestDistance = distance;
+                                if (chapterAnchor.position >= searchStart && chapterAnchor.position <= searchEnd) {{
+                                    var distance = Math.abs(chapterAnchor.position - scrollY);
+                                    if (distance < bestDistance) {{
+                                        bestDistance = distance;
+                                        bestChapter = chapterAnchor;
+                                    }}
+                                }} else if (chapterAnchor.position > searchEnd) {{
+                                    break; // Past viewport, stop searching
                                 }}
                             }}
-                            
-                            // If no chapter was found (e.g., we're at the very top), use the first chapter
+
+                            // If no chapter within viewport, fall back to closest chapter BEFORE scroll position
+                            if (!bestChapter) {{
+                                for (var i = window.cstAnchorCache.sortedChapterAnchors.length - 1; i >= 0; i--) {{
+                                    var chapterAnchor = window.cstAnchorCache.sortedChapterAnchors[i];
+                                    if (chapterAnchor.position <= scrollY) {{
+                                        bestChapter = chapterAnchor;
+                                        break;
+                                    }}
+                                }}
+                            }}
+
+                            // If still no chapter found (e.g., at very top), use the first chapter
                             if (!bestChapter && window.cstAnchorCache.sortedChapterAnchors.length > 0) {{
                                 bestChapter = window.cstAnchorCache.sortedChapterAnchors[0];
                             }}
-                            
+
                             if (bestChapter) {{
                                 currentChapter = bestChapter.name;
                             }}
@@ -479,11 +694,23 @@ public partial class BookDisplayView : UserControl
                     }} catch(chapterError) {{
                         // If chapter detection fails, use '*' as fallback
                     }}
-                    
-                    // ATOMIC UPDATE: Send all status info in one message with tab ID including chapter
-                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|SCROLL=' + scrollY + '|TAB:__TAB_ID_PLACEHOLDER__';
+
+                    // Get the best anchor for scroll position restoration (paragraph, chapter, or page)
+                    var bestAnchor = '*';
+                    try {{
+                        if (window.cstAnchorCache && window.cstAnchorCache.getCurrentAnchor) {{
+                            var anchor = window.cstAnchorCache.getCurrentAnchor(scrollY);
+                            if (anchor && anchor !== 'null') {{
+                                bestAnchor = anchor;
+                            }}
+                        }}
+                    }} catch(anchorError) {{
+                    }}
+
+                    // ATOMIC UPDATE: Send all status info in one message with tab ID including chapter and best anchor
+                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + scrollY + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
-                    document.title = 'CST_STATUS_UPDATE:VRI=*|MYANMAR=*|PTS=*|THAI=*|OTHER=*|PARA=*|CHAPTER=*|SCROLL=0|TAB:__TAB_ID_PLACEHOLDER__';
+                    document.title = 'CST_STATUS_UPDATE:VRI=*|MYANMAR=*|PTS=*|THAI=*|OTHER=*|PARA=*|CHAPTER=*|ANCHOR=*|SCROLL=0|TAB:__TAB_ID_PLACEHOLDER__';
                 }}
             ";
 
@@ -677,9 +904,90 @@ public partial class BookDisplayView : UserControl
                             }}
                             
                             return ""*"";
+                        }},
+
+                        getCurrentAnchor: function(scrollY) {{
+                            // Find the best anchor of ANY type (paragraph, chapter, or page) within viewport
+                            // Allow anchors slightly below scroll position (within top 200px of viewport)
+                            var searchStart = scrollY;
+                            var searchEnd = scrollY + 200; // Look within first 200px of viewport
+
+                            var bestAnchor = null;
+                            var bestDistance = Infinity;
+
+                            // Check paragraph anchors
+                            for (var i = 0; i < this.sortedParagraphAnchors.length; i++) {{
+                                var anchor = this.sortedParagraphAnchors[i];
+                                if (anchor.position >= searchStart && anchor.position <= searchEnd) {{
+                                    var distance = Math.abs(anchor.position - scrollY);
+                                    if (distance < bestDistance) {{
+                                        bestDistance = distance;
+                                        bestAnchor = anchor.name;
+                                    }}
+                                }} else if (anchor.position > searchEnd) {{
+                                    break; // List is sorted, no need to continue
+                                }}
+                            }}
+
+                            // Check chapter anchors
+                            for (var i = 0; i < this.sortedChapterAnchors.length; i++) {{
+                                var anchor = this.sortedChapterAnchors[i];
+                                if (anchor.position >= searchStart && anchor.position <= searchEnd) {{
+                                    var distance = Math.abs(anchor.position - scrollY);
+                                    if (distance < bestDistance) {{
+                                        bestDistance = distance;
+                                        bestAnchor = anchor.name;
+                                    }}
+                                }} else if (anchor.position > searchEnd) {{
+                                    break;
+                                }}
+                            }}
+
+                            // If we found an anchor within the viewport, return it
+                            if (bestAnchor) {{
+                                return bestAnchor;
+                            }}
+
+                            // Otherwise, fall back to closest anchor BEFORE scroll position
+                            // Check all sorted lists and find the closest one
+                            var candidates = [];
+
+                            // Last paragraph before scroll position
+                            for (var i = this.sortedParagraphAnchors.length - 1; i >= 0; i--) {{
+                                if (this.sortedParagraphAnchors[i].position <= scrollY) {{
+                                    candidates.push(this.sortedParagraphAnchors[i]);
+                                    break;
+                                }}
+                            }}
+
+                            // Last chapter before scroll position
+                            for (var i = this.sortedChapterAnchors.length - 1; i >= 0; i--) {{
+                                if (this.sortedChapterAnchors[i].position <= scrollY) {{
+                                    candidates.push(this.sortedChapterAnchors[i]);
+                                    break;
+                                }}
+                            }}
+
+                            // Find the closest candidate
+                            if (candidates.length > 0) {{
+                                var closest = candidates[0];
+                                for (var i = 1; i < candidates.length; i++) {{
+                                    if (candidates[i].position > closest.position) {{
+                                        closest = candidates[i];
+                                    }}
+                                }}
+                                return closest.name;
+                            }}
+
+                            // Last resort: return 'top' if we're near the beginning
+                            if (scrollY < 100) {{
+                                return 'top';
+                            }}
+
+                            return null;
                         }}
                     }};
-                    
+
                     // Build the cache immediately
                     window.cstAnchorCache.build();
                     
@@ -812,7 +1120,7 @@ public partial class BookDisplayView : UserControl
                 _logger.Debug("Processing status update message");
 
                 // Parse message components
-                string vri = "*", myanmar = "*", pts = "*", thai = "*", other = "*", para = "*", chapter = "*";
+                string vri = "*", myanmar = "*", pts = "*", thai = "*", other = "*", para = "*", chapter = "*", anchor = "*";
                 int scrollY = 0;
                 bool isCacheBuilt = false;
 
@@ -825,6 +1133,7 @@ public partial class BookDisplayView : UserControl
                     else if (part.StartsWith("OTHER=")) other = part.Substring(6);
                     else if (part.StartsWith("PARA=")) para = part.Substring(5);
                     else if (part.StartsWith("CHAPTER=")) chapter = part.Substring(8);
+                    else if (part.StartsWith("ANCHOR=")) anchor = part.Substring(7);
                     else if (part.StartsWith("SCROLL=")) int.TryParse(part.Substring(7), out scrollY);
                     else if (part.StartsWith("CACHE_BUILT="))
                     {
@@ -845,7 +1154,7 @@ public partial class BookDisplayView : UserControl
                 else
                 {
                     // Handle status update
-                    _logger.Debug("Status values - VRI: {Vri}, Myanmar: {Myanmar}, PTS: {Pts}, Thai: {Thai}, Other: {Other}, Para: {Para}, Chapter: {Chapter}, Scroll: {ScrollY}", vri, myanmar, pts, thai, other, para, chapter, scrollY);
+                    _logger.Debug("Status values - VRI: {Vri}, Myanmar: {Myanmar}, PTS: {Pts}, Thai: {Thai}, Other: {Other}, Para: {Para}, Chapter: {Chapter}, Anchor: {Anchor}, Scroll: {ScrollY}", vri, myanmar, pts, thai, other, para, chapter, anchor, scrollY);
 
                     // Update scroll position
                     if (scrollY > 0) _lastKnownScrollY = scrollY;
@@ -857,6 +1166,13 @@ public partial class BookDisplayView : UserControl
                     if (thai != "*") _lastKnownThai = thai;
                     if (other != "*") _lastKnownOther = other;
                     if (para != "*") _lastKnownPara = para;
+
+                    // Cache the best anchor in ViewModel for shutdown save (persists across float/unfloat)
+                    if (anchor != "*" && !string.IsNullOrEmpty(anchor) && _viewModel != null)
+                    {
+                        _viewModel.UpdateLastCapturedAnchor(anchor);
+                        _logger.Debug("Cached best anchor in ViewModel from status update: {Anchor}", anchor);
+                    }
 
                     // Update the ViewModel
                     if (_viewModel != null)
@@ -1259,19 +1575,40 @@ public partial class BookDisplayView : UserControl
                         
                         findCurrentChapter: function() {
                             var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                            var currentChapter = null;
-                            
-                            // Find the topmost chapter that is still above the scroll position
+                            var searchStart = scrollTop;
+                            var searchEnd = scrollTop + 200; // Look within top 200px of viewport
+
+                            var bestChapter = null;
+                            var bestDistance = Infinity;
+
+                            // First, look for chapters within the viewport (scrollTop to scrollTop+200px)
                             for (var i = 0; i < this.chapterElements.length; i++) {
                                 var chapter = this.chapterElements[i];
-                                if (chapter.offsetTop <= scrollTop + 50) { // 50px buffer
-                                    currentChapter = chapter.id;
-                                } else {
-                                    break;
+                                if (chapter.offsetTop >= searchStart && chapter.offsetTop <= searchEnd) {
+                                    var distance = Math.abs(chapter.offsetTop - scrollTop);
+                                    if (distance < bestDistance) {
+                                        bestDistance = distance;
+                                        bestChapter = chapter.id;
+                                    }
+                                } else if (chapter.offsetTop > searchEnd) {
+                                    break; // Past the viewport, no need to continue
                                 }
                             }
-                            
-                            return currentChapter;
+
+                            // If we found a chapter within viewport, return it
+                            if (bestChapter) {
+                                return bestChapter;
+                            }
+
+                            // Otherwise, fall back to the closest chapter BEFORE scroll position
+                            for (var i = this.chapterElements.length - 1; i >= 0; i--) {
+                                var chapter = this.chapterElements[i];
+                                if (chapter.offsetTop <= scrollTop) {
+                                    return chapter.id;
+                                }
+                            }
+
+                            return null;
                         },
                         
                         updateCurrentChapter: function() {
@@ -1737,11 +2074,8 @@ public partial class BookDisplayView : UserControl
                     try {
                         var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
                         var result = '';
-                        if (window.cstAnchorCache && window.cstAnchorCache.getCurrentParagraph) {
-                            var paraNum = window.cstAnchorCache.getCurrentParagraph(scrollY);
-                            if (paraNum && paraNum !== '*') {
-                                result = 'para' + paraNum;
-                            }
+                        if (window.cstAnchorCache && window.cstAnchorCache.getCurrentAnchor) {
+                            result = window.cstAnchorCache.getCurrentAnchor(scrollY);
                         }
                         document.title = 'CST_GET_PARA_RESULT:' + (result || 'null') + '|TAB:{_tabId}';
                     } catch (error) {
@@ -1759,7 +2093,14 @@ public partial class BookDisplayView : UserControl
 
                 if (completedTask == _paraAnchorTcs.Task)
                 {
-                    return await _paraAnchorTcs.Task;
+                    var result = await _paraAnchorTcs.Task;
+                    // Cache the result in ViewModel for shutdown save (persists across float/unfloat)
+                    if (!string.IsNullOrEmpty(result) && result != "null" && _viewModel != null)
+                    {
+                        _viewModel.UpdateLastCapturedAnchor(result);
+                        _logger.Debug("Cached anchor in ViewModel: {Anchor}", result);
+                    }
+                    return result;
                 }
                 else
                 {
@@ -1890,26 +2231,12 @@ public partial class BookDisplayView : UserControl
 
     private void SetupDragMonitoring()
     {
-        _logger.Information("Setting up timer-based drag monitoring to handle WebView interference");
-        
-        // Create timer for monitoring drag operations
-        _dragMonitoringTimer = new System.Timers.Timer(DRAG_TIMER_INTERVAL);
-        _dragMonitoringTimer.Elapsed += OnDragMonitoringTimer;
-        _dragMonitoringTimer.AutoReset = true;
-        
-        var window = TopLevel.GetTopLevel(this) as Window;
-        if (window != null)
-        {
-            // Monitor pointer events to detect potential drag operations
-            window.AddHandler(InputElement.PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel);
-            window.AddHandler(InputElement.PointerReleasedEvent, OnWindowPointerReleased, RoutingStrategies.Tunnel);
-            window.AddHandler(InputElement.PointerMovedEvent, OnWindowPointerMoved, RoutingStrategies.Tunnel);
-            _logger.Information("Timer-based drag monitoring setup on parent window");
-        }
-        
-        // Start the monitoring timer
-        _dragMonitoringTimer.Start();
-        _logger.Information("Drag monitoring timer started");
+        _logger.Information("Drag monitoring disabled in BookDisplayView - SimpleTabbedWindow handles all drag detection");
+        // BookDisplayView's local drag monitoring is DISABLED because:
+        // 1. SimpleTabbedWindow already has comprehensive drag detection for ALL windows
+        // 2. Duplicate monitoring causes CEF crashes when WebViews are hidden/shown during tab switches
+        // 3. ControlRecycling + repeated WebView hide/show operations invalidate CEF native handles
+        // 4. The crash: AvnNativeControlHostTopLevelAttachment::InitializeWithChildHandle null pointer dereference
     }
 
     private void OnDragMonitoringTimer(object? sender, System.Timers.ElapsedEventArgs e)
@@ -2088,19 +2415,55 @@ public partial class BookDisplayView : UserControl
     {
         if (_isPointerPressed && !_isDragInProgress)
         {
+            // Check if pointer has been pressed long enough to be a drag (not just a tab click)
+            var timeSincePress = DateTime.Now - _lastPointerPressedTime;
+            if (timeSincePress.TotalMilliseconds < DRAG_TIME_THRESHOLD)
+            {
+                _logger.Debug("Pointer movement ignored - too soon after press ({Duration}ms < {Threshold}ms)",
+                    timeSincePress.TotalMilliseconds, DRAG_TIME_THRESHOLD);
+                return;
+            }
+
             var currentPosition = e.GetPosition(this);
             var distance = Math.Sqrt(
                 Math.Pow(currentPosition.X - _lastPointerPressedPosition.X, 2) +
                 Math.Pow(currentPosition.Y - _lastPointerPressedPosition.Y, 2)
             );
-            
+
             if (distance > DRAG_THRESHOLD)
             {
-                _logger.Information("*** POINTER MOVEMENT DETECTED DRAG - HIDING WebView ***");
+                _logger.Information("*** POINTER MOVEMENT DETECTED DRAG - HIDING WebView (after {Duration}ms) ***",
+                    timeSincePress.TotalMilliseconds);
                 _isDragInProgress = true;
                 HideWebViewForDrag();
             }
         }
+    }
+
+    /// <summary>
+    /// Get the current anchor for scroll position restoration (synchronous fallback)
+    /// This method is used during shutdown when WebView may not be available for async JavaScript execution
+    /// Returns the last successfully captured anchor from GetCurrentParagraphAnchorAsync()
+    /// </summary>
+    public string? GetCurrentAnchorSync()
+    {
+        // Return the cached anchor from last successful JavaScript query
+        // This is populated during tab switches when the browser is active
+        if (!string.IsNullOrEmpty(_lastCapturedAnchor))
+        {
+            _logger.Information("GetCurrentAnchorSync: Using cached anchor = {Anchor}", _lastCapturedAnchor);
+            return _lastCapturedAnchor;
+        }
+
+        // Fallback: Use the last known VRI anchor from status updates
+        if (!string.IsNullOrEmpty(_lastKnownVri) && _lastKnownVri != "*")
+        {
+            _logger.Information("GetCurrentAnchorSync: Using VRI fallback = {Anchor}", _lastKnownVri);
+            return _lastKnownVri;
+        }
+
+        _logger.Debug("GetCurrentAnchorSync: No anchor available");
+        return null;
     }
 
 }

@@ -95,6 +95,29 @@
                     <TextBlock Text="Ṭīkā"/>
                 </Button>
             </StackPanel>
+
+            <!-- Spacer to push window controls to the right -->
+            <Border HorizontalAlignment="Stretch" />
+
+            <!-- Window Management (Float/Dock) - Right-aligned -->
+            <Button Command="{Binding FloatWindowCommand}"
+                    IsVisible="{Binding !IsFloating}"
+                    ToolTip.Tip="Open this book in a separate window"
+                    Margin="5,0"
+                    Padding="8,4"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Right">
+                <TextBlock Text="↗" FontSize="16" VerticalAlignment="Center"/>
+            </Button>
+            <Button Command="{Binding UnfloatWindowCommand}"
+                    IsVisible="{Binding IsFloating}"
+                    ToolTip.Tip="Move this book back to main window"
+                    Margin="5,0"
+                    Padding="8,4"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Right">
+                <TextBlock Text="↙" FontSize="16" VerticalAlignment="Center"/>
+            </Button>
         </StackPanel>
 
         <!-- Status Bar -->
