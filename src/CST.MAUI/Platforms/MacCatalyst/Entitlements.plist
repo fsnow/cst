@@ -3,12 +3,20 @@
 <plist version="1.0">
     <!-- See https://aka.ms/maui-publish-app-store#add-entitlements for more information about adding entitlements.-->
     <dict>
-        <!-- App Sandbox must be enabled to distribute a MacCatalyst app through the Mac App Store. -->
+        <!-- App Sandbox disabled to allow access to shared CSTReader XML files -->
+        <!-- For POC: Direct file system access to Application Support/CSTReader -->
         <key>com.apple.security.app-sandbox</key>
-        <true/>
-        <!-- When App Sandbox is enabled, this value is required to open outgoing network connections. -->
+        <false/>
+
+        <!-- Network access for future features -->
         <key>com.apple.security.network.client</key>
         <true/>
+
+        <!-- Allow reading files from user's home directory -->
+        <key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
+        <array>
+            <string>Library/Application Support/CSTReader/</string>
+        </array>
     </dict>
 </plist>
 

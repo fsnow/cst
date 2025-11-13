@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using CST.MAUI.Services;
 
 namespace CST.MAUI;
 
@@ -15,6 +16,9 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddMauiBlazorWebView();
+
+		// Register our services
+		builder.Services.AddSingleton<BookService>();
 
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();

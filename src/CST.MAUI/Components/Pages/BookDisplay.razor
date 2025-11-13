@@ -1,0 +1,114 @@
+@page "/book/{BookFileName}"
+@using CST.MAUI.Services
+@using CST.Conversion
+@using Microsoft.JSInterop
+@inject BookService BookService
+@inject IJSRuntime JSRuntime
+
+<style>
+    .book-toolbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 10px;
+        background: #f0f0f0;
+        border-bottom: 1px solid #ccc;
+        z-index: 1000;
+    }
+
+    .book-content {
+        margin-top: 50px; /* Space for fixed toolbar */
+    }
+</style>
+
+<div class="book-toolbar">
+    <label for="script-selector">Script: </label>
+    <select id="script-selector" @bind="selectedScript" @bind:after="OnScriptChanged">
+        <option value="@Script.Latin">Latin (Roman)</option>
+        <option value="@Script.Devanagari">Devanagari</option>
+        <option value="@Script.Thai">Thai</option>
+        <option value="@Script.Myanmar">Myanmar</option>
+        <option value="@Script.Sinhala">Sinhala</option>
+        <option value="@Script.Bengali">Bengali</option>
+        <option value="@Script.Gujarati">Gujarati</option>
+        <option value="@Script.Gurmukhi">Gurmukhi</option>
+        <option value="@Script.Kannada">Kannada</option>
+        <option value="@Script.Khmer">Khmer</option>
+        <option value="@Script.Malayalam">Malayalam</option>
+        <option value="@Script.Telugu">Telugu</option>
+        <option value="@Script.Tibetan">Tibetan</option>
+        <option value="@Script.Cyrillic">Cyrillic</option>
+    </select>
+</div>
+
+<div class="book-content">
+    @if (isLoading)
+    {
+        <p>Loading book...</p>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error">
+            <h3>Error</h3>
+            <p>@errorMessage</p>
+        </div>
+    }
+    else
+    {
+        @((MarkupString)htmlContent)
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? BookFileName { get; set; }
+
+    private string htmlContent = "";
+    private string errorMessage = "";
+    private bool isLoading = true;
+    private Script selectedScript = Script.Latin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBookAsync();
+    }
+
+    private async Task OnScriptChanged()
+    {
+        await LoadBookAsync();
+
+        // Blur the dropdown to work around BlazorWebView focus issue
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('script-selector')?.blur()");
+        }
+        catch
+        {
+            // Ignore JS errors in case element doesn't exist yet
+        }
+    }
+
+    private async Task LoadBookAsync()
+    {
+        if (string.IsNullOrEmpty(BookFileName))
+        {
+            errorMessage = "No book file specified";
+            isLoading = false;
+            return;
+        }
+
+        try
+        {
+            isLoading = true;
+            errorMessage = "";
+            htmlContent = await BookService.LoadBookAsHtmlAsync(BookFileName, selectedScript);
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load book: {ex.Message}";
+            isLoading = false;
+        }
+    }
+}
