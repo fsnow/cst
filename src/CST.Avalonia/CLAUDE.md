@@ -1,8 +1,8 @@
-# CST Avalonia Project Status - October 2025
+# CST Avalonia Project Status - November 2025
 
-## Current Status: **BETA 3 IN DEVELOPMENT** 🚧
+## Current Status: **BETA 4 IN DEVELOPMENT** 🚧
 
-**Last Updated**: October 24, 2025
+**Last Updated**: November 13, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 **XML Books Location**: `/Users/fsnow/Library/Application Support/CSTReader/xml` (217 TEI XML book files)
 
@@ -20,7 +20,12 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 
 ### **Core Application Features**
 - **Dock-Based IDE Interface**: Fully functional docking system with resizable panels, tab management, and persistent layout state
-- **Complete Session Restoration**: Application saves and restores all open books, scripts, window positions, and search highlights across sessions
+- **Complete Session Restoration**: Application saves and restores all open books, scripts, window positions, scroll positions, and search highlights across sessions
+  - Scroll position captured every 200ms via scroll timer
+  - Best anchor (paragraph/chapter/page) persists across float/unfloat operations
+  - Deferred navigation for inactive tabs at startup
+  - Immediate position capture on shutdown for latest accuracy
+- **Button-Based Float/Unfloat**: Manual window lifecycle control prevents CEF crashes when floating/docking book tabs
 - **Cross-Platform Build System**: Native macOS `.dmg` packages with proper application branding and menu integration
 - **Code Signing & Security**: Developer ID signed applications and DMG installers for macOS without "damaged" application errors on first launch
 - **Advanced Logging System**: Structured Serilog logging with configurable levels, unified across all components including CST.Lucene
@@ -207,9 +212,8 @@ Multi-word and phrase search currently only work with 2 words. Searches with 3 o
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
 - **Comprehensive Application State Restoration**:
-    - **Current Status**: Basic book restoration works (search highlights, script, window positions), but CST4 had much more comprehensive state
+    - **Current Status**: Book restoration works with search highlights, script, window positions, and scroll positions. CST4 had additional state features to review.
     - **Search Navigation State**: Save and restore CurrentHitIndex (which hit user was viewing, e.g., "50 of 53")
-    - **Scroll Position**: Save and restore exact scroll position within each book
     - **CST4 Comparison Review**: Conduct post-Beta 3 review of CST4's state restoration features to identify missing functionality
     - **Full Parity Goal**: Match CST4's comprehensive session restoration for professional user experience
     - **Note**: Beta 3 successfully restores search highlights and navigation UI, but starts at hit 1 and top of document
@@ -500,9 +504,9 @@ All CST4 feature analysis documents are preserved in `docs/reference/cst4/` to e
 
 With font system, script synchronization, phrase/proximity search, two-color highlighting, complete Dark Mode support (UI and book content), macOS Tahoe Glass icon transparency, and all 14 Pali script input parsers complete, the immediate priorities are:
 
-1. **Beta 3 Priority Items**:
+1. **Beta 4 Priority Items**:
    - Fix search hit restoration bug (highlighted search hits not restored when reopening books at startup)
 2. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
 3. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
-The core infrastructure is robust with font management, full script conversion support (all 14 scripts for both display and input), accurate search counting, phrase/proximity search with two-color highlighting, complete Dark Mode support for all UI and book content, macOS Tahoe Glass icon transparency, and real-time UI updates all working correctly. Focus now shifts to Beta 3 release preparation with the search hit restoration fix as the remaining priority item.
+
