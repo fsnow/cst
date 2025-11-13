@@ -550,17 +550,27 @@ public partial class App : Application
         if (state.BookWindows.Any() && !_hasRestoredInitialBooks)
         {
             _hasRestoredInitialBooks = true;
-            
+
+            // CRITICAL: Make a copy of BookWindows BEFORE clearing, since state.BookWindows
+            // and stateService.Current.BookWindows reference the same list!
+            var bookWindowsToRestore = state.BookWindows.ToList();
+            Log.Information("Captured {Count} book windows to restore", bookWindowsToRestore.Count);
+
             // Suppress StateChanged events during restoration to prevent loops
             var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
             if (stateService != null)
             {
                 stateService.SetStateChangedEventsSuppression(true);
+
+                // Clear existing bookWindows before restoration to prevent accumulation of stale entries
+                // This ensures we start with a clean slate and only restored books will be in state
+                Log.Information("Clearing {Count} existing book window entries before restoration", stateService.Current.BookWindows.Count);
+                stateService.Current.BookWindows.Clear();
             }
-            
+
             try
             {
-                RestoreBookWindows(state.BookWindows);
+                RestoreBookWindows(bookWindowsToRestore);
             }
             finally
             {
@@ -633,12 +643,14 @@ public partial class App : Application
                                     // Validate the book filename matches (for extra safety)
                                     if (book.FileName == bookWindowState.BookFileName)
                                     {
-                                        Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}, SearchTerms: {TermCount}, Positions: {PosCount}",
-                                            book.FileName, bookWindowState.WindowId, bookWindowState.SearchTerms.Count, bookWindowState.SearchPositions.Count);
-                                        // Open the book through SimpleTabbedWindow with saved script, search data, and WindowId
+                                        Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}, SearchTerms: {TermCount}, Positions: {PosCount}, Anchor: {Anchor}",
+                                            book.FileName, bookWindowState.WindowId, bookWindowState.SearchTerms.Count, bookWindowState.SearchPositions.Count,
+                                            bookWindowState.CurrentAnchor ?? "null");
+                                        // Open the book through SimpleTabbedWindow with saved script, search data, WindowId, and scroll position
                                         mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId,
-                                            bookWindowState.DocId, bookWindowState.SearchPositions);
-                                        Log.Debug("Book restored: {BookFile} with script: {Script}", book.FileName, bookWindowState.BookScript);
+                                            bookWindowState.DocId, bookWindowState.SearchPositions, bookWindowState.CurrentAnchor);
+                                        Log.Debug("Book restored: {BookFile} with script: {Script}, anchor: {Anchor}",
+                                            book.FileName, bookWindowState.BookScript, bookWindowState.CurrentAnchor ?? "null");
                                     }
                                     else
                                     {

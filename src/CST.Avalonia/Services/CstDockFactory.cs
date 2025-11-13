@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Threading;
 using Dock.Model.Core;
@@ -172,11 +173,13 @@ namespace CST.Avalonia.Services
                             CleanupEmptySplits();
                         }, DispatcherPriority.Render);
                     }
-                    
-                    // Check if this is the main document dock or a floating window dock
-                    Log.Information("*** Main dock collection changed - checking for empty floating windows ***");
-                    CheckForEmptyFloatingWindows();
-                    
+
+                    // Only clean up empty splits in the main dock
+                    // NOTE: We do NOT check for empty floating windows here because:
+                    // - Main window tab operations (drag, close) shouldn't affect floating windows
+                    // - Floating windows monitor their own collection changes (line ~1700)
+                    // - CheckForEmptyFloatingWindows() during main dock changes causes floating windows
+                    //   to disappear when their document references are temporarily null during cleanup
                     Log.Information("*** Main dock collection changed - cleaning up empty splits ***");
                     CleanupEmptySplits();
                 };
@@ -374,7 +377,8 @@ namespace CST.Avalonia.Services
                 fontService,
                 book.DocId,   // Pass DocId for Lucene offset lookup
                 positions,    // NEW: Pass positions with IsFirstTerm flags for two-color highlighting
-                windowId      // Pass unique ID for search results
+                windowId,     // Pass unique ID for search results
+                this          // Pass factory for float/unfloat operations
             );
 
             // Set the correct script after construction
@@ -467,7 +471,7 @@ namespace CST.Avalonia.Services
             var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
 
             // Pass search data if available (for state restoration with highlighting)
-            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions);
+            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this);
             
             // Set the correct script after construction
             if (bookDisplayViewModel != null)
@@ -477,7 +481,16 @@ namespace CST.Avalonia.Services
                 bookDisplayViewModel.BookScript = targetScript;
                 _logger.Debug("Set book script to: {ActualScript} (requested: {RequestedScript})", targetScript, bookScript?.ToString() ?? "null");
             }
-            
+
+            // Phase 1: Prevent drag-to-float for documents with CEF WebView
+            // CanDrag = true allows tab reordering within same window
+            // CanFloat = false prevents drag-to-float across windows (CEF crash mitigation)
+            // Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
+            bookDisplayViewModel.CanDrag = true;   // Allow tab reordering
+            bookDisplayViewModel.CanFloat = false; // Prevent drag-to-float (will use buttons instead)
+            _logger.Debug("Book docking capabilities set: CanDrag={CanDrag}, CanFloat={CanFloat}",
+                bookDisplayViewModel.CanDrag, bookDisplayViewModel.CanFloat);
+
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
             bookDisplayViewModel!.OpenBookRequested += (linkedBook, anchorForLinked) =>
             {
@@ -515,7 +528,7 @@ namespace CST.Avalonia.Services
             _logger.Debug("Book document created: {DocumentId} with title: {Title}", bookDisplayViewModel.Id, bookDisplayViewModel.Title);
         }
 
-        private void SaveAllBookWindowStates()
+        private async void SaveAllBookWindowStates()
         {
             try
             {
@@ -530,6 +543,9 @@ namespace CST.Avalonia.Services
                     if (dockable is BookDisplayViewModel bookDisplayViewModel &&
                         bookDisplayViewModel.Book != null)
                     {
+                        // Capture final position before saving (ensures very latest scroll position is saved)
+                        await bookDisplayViewModel.CaptureCurrentPositionAsync();
+
                         // Only the active document gets IsSelected = true
                         var isSelected = dockable == activeDocument;
                         SaveBookWindowState(bookDisplayViewModel.Book, bookDisplayViewModel, isSelected);
@@ -569,6 +585,12 @@ namespace CST.Avalonia.Services
                 // Use provided isSelected value or determine it dynamically
                 var isSelectedValue = isSelected ?? (bookDisplayViewModel == FindDocumentDock()?.ActiveDockable);
 
+                // Get the cached scroll position anchor for restoration on next startup
+                // The anchor is updated every 200ms by the scroll timer and persists in the ViewModel
+                string? currentAnchor = bookDisplayViewModel.LastCapturedAnchor;
+                Log.Information("Using cached scroll position anchor for {BookFileName}: {Anchor}",
+                    book.FileName, currentAnchor ?? "null");
+
                 // Create book window state using bookDisplayViewModel.Id as WindowId
                 var bookWindowState = new BookWindowState
                 {
@@ -579,6 +601,7 @@ namespace CST.Avalonia.Services
                     SearchTerms = bookDisplayViewModel.SearchTerms ?? new List<string>(),
                     DocId = bookDisplayViewModel.DocId,
                     SearchPositions = bookDisplayViewModel.SearchPositions ?? new List<TermPosition>(),
+                    CurrentAnchor = currentAnchor, // Save scroll position for restoration
                     TabIndex = 0, // TODO: Get actual tab index from dock
                     IsSelected = isSelectedValue,
                     ShowFootnotes = true, // Default for now
@@ -1208,7 +1231,222 @@ namespace CST.Avalonia.Services
             
             Log.Information("*** FloatDockable completed ***");
         }
-        
+
+        /// <summary>
+        /// Float a book window by creating a brand new ViewModel instance
+        /// This forces ControlRecycling to create a fresh View with no CEF baggage
+        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
+        /// </summary>
+        public async void FloatDockableWithoutRecycling(BookDisplayViewModel oldVm)
+        {
+            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            Log.Information("FloatDockableWithoutRecycling called for: {BookFile}, OldInstance: {OldInstanceId}",
+                oldVm.Book.FileName, oldVm.Id);
+
+            try
+            {
+                // Step 1: Query WebView for actual current scroll position
+                string? currentAnchor = null;
+                if (oldVm.BookDisplayControl != null)
+                {
+                    Log.Information("Querying WebView for current scroll position...");
+                    currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                    Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
+                }
+                else
+                {
+                    // Fallback to last known VRI anchor if WebView not available
+                    currentAnchor = oldVm.CurrentVriAnchor;
+                    Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
+                }
+
+                // Step 2: Capture all other state from old ViewModel
+                var book = oldVm.Book;
+                var searchTerms = oldVm.SearchTerms?.ToList();
+                var searchPositions = oldVm.SearchPositions?.ToList();
+                var bookScript = oldVm.BookScript;
+                var docId = oldVm.DocId;
+                var currentHitIndex = oldVm.CurrentHitIndex;
+                var totalHits = oldVm.TotalHits;
+
+                Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
+                    searchTerms?.Count ?? 0, bookScript, currentHitIndex, totalHits, currentAnchor ?? "none");
+
+                // Step 2: Remove old ViewModel state from ApplicationState BEFORE removing from dock
+                RemoveBookWindowState(oldVm.Id);
+                Log.Information("Removed old ViewModel state from ApplicationState");
+
+                // Step 3: Remove old ViewModel from dock (auto-disposes View and WebView)
+                if (oldVm.Owner is IDock currentDock)
+                {
+                    RemoveDockable(oldVm, false);
+                    Log.Information("Removed old ViewModel from dock");
+                }
+
+                // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
+                var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
+                var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
+                var fontService = App.ServiceProvider?.GetService<IFontService>();
+
+                var newVm = new BookDisplayViewModel(
+                    book: book,
+                    searchTerms: searchTerms,
+                    initialAnchor: currentAnchor,  // Restore scroll position
+                    chapterListsService: chapterListsService,
+                    settingsService: settingsService,
+                    fontService: fontService,
+                    docId: docId,
+                    searchPositions: searchPositions,
+                    windowId: null,  // CRITICAL: null = generates fresh GUID
+                    dockFactory: this
+                );
+
+                // Restore additional state
+                newVm.BookScript = bookScript;
+                newVm.CurrentHitIndex = currentHitIndex;
+                newVm.TotalHits = totalHits;
+                newVm.IsFloating = true;
+
+                Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
+
+                // Step 5: Add new ViewModel to main dock first (FloatDockable requires it to have an Owner)
+                var mainDocDock = FindDocumentDock();
+                if (mainDocDock == null)
+                {
+                    Log.Error("Cannot float - main document dock not found");
+                    return;
+                }
+
+                AddDockable(mainDocDock, newVm);
+                Log.Information("Added new ViewModel to main dock");
+
+                // Step 6: Float the new ViewModel (creates fresh View in floating window)
+                newVm.CanFloat = true;
+                base.FloatDockable(newVm);
+                newVm.CanFloat = false;  // Restore to prevent drag-to-float
+
+                Log.Information("Float operation completed - new instance in floating window");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "CRITICAL: Float operation failed for book: {BookFile}", oldVm.Book.FileName);
+            }
+
+            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        }
+
+        /// <summary>
+        /// Unfloat a book window by creating a brand new ViewModel instance
+        /// This forces ControlRecycling to create a fresh View with no CEF baggage
+        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
+        /// </summary>
+        public async void UnfloatDockableWithoutRecycling(BookDisplayViewModel oldVm)
+        {
+            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            Log.Information("UnfloatDockableWithoutRecycling called for: {BookFile}, OldInstance: {OldInstanceId}",
+                oldVm.Book.FileName, oldVm.Id);
+
+            try
+            {
+                // Find main document dock
+                var mainDocDock = FindDocumentDock();
+                if (mainDocDock == null)
+                {
+                    Log.Error("Cannot unfloat - main document dock not found");
+                    return;
+                }
+
+                // Step 1: Query WebView for actual current scroll position
+                string? currentAnchor = null;
+                if (oldVm.BookDisplayControl != null)
+                {
+                    Log.Information("Querying WebView for current scroll position...");
+                    currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                    Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
+                }
+                else
+                {
+                    // Fallback to last known VRI anchor if WebView not available
+                    currentAnchor = oldVm.CurrentVriAnchor;
+                    Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
+                }
+
+                // Step 2: Capture all other state from old ViewModel
+                var book = oldVm.Book;
+                var searchTerms = oldVm.SearchTerms?.ToList();
+                var searchPositions = oldVm.SearchPositions?.ToList();
+                var bookScript = oldVm.BookScript;
+                var docId = oldVm.DocId;
+                var currentHitIndex = oldVm.CurrentHitIndex;
+                var totalHits = oldVm.TotalHits;
+
+                Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
+                    searchTerms?.Count ?? 0, bookScript, currentHitIndex, totalHits, currentAnchor ?? "none");
+
+                // Step 2: Remove old ViewModel state from ApplicationState BEFORE removing from dock
+                RemoveBookWindowState(oldVm.Id);
+                Log.Information("Removed old ViewModel state from ApplicationState");
+
+                // Step 3: Remove old ViewModel from floating dock (auto-disposes View and WebView)
+                if (oldVm.Owner is IDock currentDock)
+                {
+                    RemoveDockable(oldVm, false);
+                    Log.Information("Removed old ViewModel from floating dock");
+                }
+
+                // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
+                var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
+                var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
+                var fontService = App.ServiceProvider?.GetService<IFontService>();
+
+                var newVm = new BookDisplayViewModel(
+                    book: book,
+                    searchTerms: searchTerms,
+                    initialAnchor: currentAnchor,  // Restore scroll position
+                    chapterListsService: chapterListsService,
+                    settingsService: settingsService,
+                    fontService: fontService,
+                    docId: docId,
+                    searchPositions: searchPositions,
+                    windowId: null,  // CRITICAL: null = generates fresh GUID
+                    dockFactory: this
+                );
+
+                // Restore additional state
+                newVm.BookScript = bookScript;
+                newVm.CurrentHitIndex = currentHitIndex;
+                newVm.TotalHits = totalHits;
+                newVm.IsFloating = false;
+
+                Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
+
+                // Step 5: Add to main dock and set active (creates fresh View automatically)
+                AddDockable(mainDocDock, newVm);
+                SetActiveDockable(newVm);
+                SetFocusedDockable(mainDocDock, newVm);
+
+                // Clean up empty floating windows
+                CleanupEmptyFloatingWindows();
+
+                Log.Information("Unfloat operation completed - new instance in main window");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "CRITICAL: Unfloat operation failed for book: {BookFile}", oldVm.Book.FileName);
+            }
+
+            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        }
+
+        /// <summary>
+        /// Clean up empty floating windows after unfloat operations
+        /// </summary>
+        private void CleanupEmptyFloatingWindows()
+        {
+            // Use the existing method that properly handles empty window detection and cleanup
+            CheckForEmptyFloatingWindows();
+        }
+
         // Override CreateDocumentDock to enable visual drop adorners
         public override DocumentDock CreateDocumentDock()
         {
@@ -1235,13 +1473,20 @@ namespace CST.Avalonia.Services
 
             if (dockable != null)
             {
+                // Remove from application state if it's a BookDisplayViewModel
+                if (dockable is BookDisplayViewModel)
+                {
+                    RemoveBookWindowState(dockable.Id);
+                    Log.Information("*** Removed book window state for {DockableId} ***", dockable.Id);
+                }
+
                 base.CloseDockable(dockable);
             }
             else
             {
                 Log.Warning("*** CloseDockable called with null dockable ***");
             }
-            
+
             // Clean up empty splits after closing a dockable
             Log.Information("*** Post-close cleanup - checking for empty splits ***");
             CleanupEmptySplits();
@@ -1313,6 +1558,13 @@ namespace CST.Avalonia.Services
             Log.Information("*** RemoveDockable called - Dockable: {DockableId}, Collapse: {Collapse} ***", dockable?.Id, collapse);
             if (dockable != null)
             {
+                // Remove from application state if it's a BookDisplayViewModel
+                if (dockable is BookDisplayViewModel)
+                {
+                    RemoveBookWindowState(dockable.Id);
+                    Log.Information("*** Removed book window state for {DockableId} ***", dockable.Id);
+                }
+
                 base.RemoveDockable(dockable, collapse);
             }
             else
@@ -1321,7 +1573,7 @@ namespace CST.Avalonia.Services
                 return;
             }
             Log.Information("*** RemoveDockable completed ***");
-            
+
             // Trigger cleanup after remove operations
             Log.Information("*** Post-remove cleanup - checking for empty splits ***");
             CleanupEmptySplits();

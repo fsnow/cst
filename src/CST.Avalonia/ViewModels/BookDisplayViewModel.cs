@@ -73,9 +73,15 @@ namespace CST.Avalonia.ViewModels
         private string _htmlContent = "";
         private bool _isWebViewAvailable = true; // Start optimistically to avoid fallback flash
         private bool _updatingChapterFromScroll = false;
+        private bool _isFloating = false; // True when this book is in a floating window
         private bool _isInitializing = true;
+        private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
+        private WebViewState? _savedWebViewState = null; // Saved state during float/unfloat
+        private readonly CstDockFactory? _dockFactory; // Factory for float/unfloat operations
+        private string? _lastCapturedAnchor = null; // Cached anchor for scroll position restoration (persists across float/unfloat)
+        private string? _pendingAnchorNavigation = null; // Anchor to navigate to when View becomes available
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null, CstDockFactory? dockFactory = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             // For now, create ScriptService without logger
@@ -83,6 +89,7 @@ namespace CST.Avalonia.ViewModels
             _chapterListsService = chapterListsService;
             _settingsService = settingsService;
             _fontService = fontService;
+            _dockFactory = dockFactory;
             _book = book;
             _searchTerms = searchTerms;
             _searchPositions = searchPositions;  // NEW: Store positions for two-color highlighting
@@ -152,7 +159,11 @@ namespace CST.Avalonia.ViewModels
             // WebView edit commands
             CopyCommand = ReactiveCommand.Create(ExecuteCopy);
             SelectAllCommand = ReactiveCommand.Create(ExecuteSelectAll);
-            
+
+            // Window management commands (Float/Unfloat)
+            FloatWindowCommand = ReactiveCommand.Create(FloatWindow);
+            UnfloatWindowCommand = ReactiveCommand.Create(UnfloatWindow);
+
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
                 .Skip(1) // Skip initial value
@@ -261,6 +272,8 @@ namespace CST.Avalonia.ViewModels
         public ReactiveCommand<Unit, Unit> OpenTikaCommand { get; }
         public ReactiveCommand<Unit, Unit> CopyCommand { get; }
         public ReactiveCommand<Unit, Unit> SelectAllCommand { get; }
+        public ReactiveCommand<Unit, Unit> FloatWindowCommand { get; }
+        public ReactiveCommand<Unit, Unit> UnfloatWindowCommand { get; }
 
         public Script BookScript
         {
@@ -272,6 +285,18 @@ namespace CST.Avalonia.ViewModels
         {
             get => _isLoading;
             set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+        }
+
+        public bool IsFloating
+        {
+            get => _isFloating;
+            set => this.RaiseAndSetIfChanged(ref _isFloating, value);
+        }
+
+        public WebViewLifecycleOperation WebViewLifecycleOperation
+        {
+            get => _webViewLifecycleOperation;
+            set => this.RaiseAndSetIfChanged(ref _webViewLifecycleOperation, value);
         }
 
         public string PageStatusText
@@ -326,6 +351,75 @@ namespace CST.Avalonia.ViewModels
         {
             get => _otherPage;
             set => this.RaiseAndSetIfChanged(ref _otherPage, value);
+        }
+
+        /// <summary>
+        /// Gets the last captured anchor for scroll position restoration.
+        /// Updated every 200ms by the scroll timer, persists across float/unfloat.
+        /// </summary>
+        public string? LastCapturedAnchor => _lastCapturedAnchor;
+
+        /// <summary>
+        /// Updates the cached anchor for scroll position restoration.
+        /// Called by BookDisplayView scroll timer every 200ms.
+        /// Also clears any pending anchor navigation since user has now scrolled.
+        /// </summary>
+        public void UpdateLastCapturedAnchor(string? anchor)
+        {
+            _lastCapturedAnchor = anchor;
+
+            // Clear pending navigation - user has scrolled manually, so we shouldn't
+            // jump to the old pending position when tab reattaches
+            if (_pendingAnchorNavigation != null)
+            {
+                _logger.Debug("Clearing pending anchor navigation {PendingAnchor} - user has scrolled to {CurrentAnchor}",
+                    _pendingAnchorNavigation, anchor);
+                _pendingAnchorNavigation = null;
+            }
+        }
+
+        /// <summary>
+        /// Called by BookDisplayView when it becomes attached to visual tree.
+        /// Executes any pending anchor navigation that was deferred because View wasn't ready.
+        /// </summary>
+        public void OnViewAttached()
+        {
+            if (!string.IsNullOrEmpty(_pendingAnchorNavigation) && BookDisplayControl != null)
+            {
+                _logger.Information("View now attached - executing pending anchor navigation: {Anchor}", _pendingAnchorNavigation);
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    // Wait for content to fully render
+                    await Task.Delay(500);
+                    BookDisplayControl?.ScrollToPageAnchor(_pendingAnchorNavigation);
+                    _pendingAnchorNavigation = null; // Clear after navigation
+                });
+            }
+        }
+
+        /// <summary>
+        /// Captures the current scroll position immediately before shutdown.
+        /// This ensures the very latest position is saved even if the user quit
+        /// before the 200ms scroll timer fired.
+        /// </summary>
+        public async Task CaptureCurrentPositionAsync()
+        {
+            if (BookDisplayControl != null)
+            {
+                try
+                {
+                    var anchor = await BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                    if (!string.IsNullOrEmpty(anchor) && anchor != "null")
+                    {
+                        _lastCapturedAnchor = anchor;
+                        _logger.Information("Captured final position before shutdown: {Anchor}", anchor);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "Failed to capture final position before shutdown");
+                }
+            }
         }
 
         public string CurrentParagraph
@@ -525,7 +619,10 @@ namespace CST.Avalonia.ViewModels
                         }
                         else
                         {
-                            _logger.Warning("BookDisplayControl is null, cannot navigate to anchor");
+                            // View not created yet (inactive tab with ControlRecycling)
+                            // Store for later navigation when tab becomes active
+                            _pendingAnchorNavigation = _initialAnchor;
+                            _logger.Information("View not ready - stored pending anchor navigation: {Anchor}", _initialAnchor);
                         }
                     });
                 }
@@ -1304,6 +1401,78 @@ namespace CST.Avalonia.ViewModels
             NavigateToHighlightRequested?.Invoke(-2); // Use -2 as a special signal for select all
         }
 
+        /// <summary>
+        /// Float this book window - opens book in a separate floating window
+        /// Creates a brand new ViewModel instance in the floating window
+        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
+        /// </summary>
+        private void FloatWindow()
+        {
+            _logger.Information("FloatWindow command called for book: {BookFile}, Instance: {InstanceId}",
+                Book.FileName, Id);
+
+            // Factory creates brand new ViewModel with same book/state in floating window
+            // This ViewModel instance will be disposed when removed from main dock
+            if (_dockFactory != null)
+            {
+                _dockFactory.FloatDockableWithoutRecycling(this);
+            }
+            else
+            {
+                _logger.Error("Factory not available - cannot float window");
+            }
+        }
+
+        /// <summary>
+        /// Unfloat this book window - moves book back to main window
+        /// Creates a brand new ViewModel instance in the main window
+        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
+        /// </summary>
+        private void UnfloatWindow()
+        {
+            _logger.Information("UnfloatWindow command called for book: {BookFile}, Instance: {InstanceId}",
+                Book.FileName, Id);
+
+            // Factory creates brand new ViewModel with same book/state in main window
+            // This ViewModel instance will be disposed when removed from floating dock
+            if (_dockFactory != null)
+            {
+                _dockFactory.UnfloatDockableWithoutRecycling(this);
+            }
+            else
+            {
+                _logger.Error("Factory not available - cannot unfloat window");
+            }
+        }
+
+        /// <summary>
+        /// Restore WebView state after float/unfloat operation
+        /// </summary>
+        private void RestoreWebViewState()
+        {
+            if (_savedWebViewState == null)
+            {
+                _logger.Warning("No saved state to restore");
+                return;
+            }
+
+            _logger.Information("Restoring WebView state: HtmlLength={HtmlLength}, Positions={PositionCount}, Terms={TermCount}",
+                _savedWebViewState.HtmlContent?.Length ?? 0,
+                _savedWebViewState.SearchPositions?.Count ?? 0,
+                _savedWebViewState.SearchTerms?.Count ?? 0);
+
+            // Restore state (Note: _searchTerms and _searchPositions are readonly,
+            // so we can't reassign them - they stay as initialized)
+            _htmlContent = _savedWebViewState.HtmlContent ?? "";
+            CurrentHitIndex = _savedWebViewState.CurrentHitIndex;
+            TotalHits = _savedWebViewState.TotalHits;
+
+            // Update hit status text
+            UpdateHitStatusText();
+
+            // View will reload HTML and restore scroll position when it recreates WebView
+        }
+
         private void UpdateHitStatusText()
         {
             if (TotalHits > 0)
@@ -1791,4 +1960,32 @@ namespace CST.Avalonia.ViewModels
         }
     }
 
+    /// <summary>
+    /// Lifecycle operations for WebView management during float/unfloat
+    /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md Phase 4
+    /// </summary>
+    public enum WebViewLifecycleOperation
+    {
+        None,
+        PrepareForFloat,      // Signal View to dispose WebView before floating
+        RestoreAfterFloat,    // Signal View to recreate WebView after floating
+        PrepareForUnfloat,    // Signal View to dispose WebView before unfloating
+        RestoreAfterUnfloat   // Signal View to recreate WebView after unfloating
+    }
+
+    /// <summary>
+    /// Saved state for WebView recreation after float/unfloat operations
+    /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md Phase 4
+    /// </summary>
+    public class WebViewState
+    {
+        public string? HtmlContent { get; set; }
+        public int ScrollPosition { get; set; }
+        public List<TermPosition>? SearchPositions { get; set; }
+        public List<string>? SearchTerms { get; set; }
+        public Script BookScript { get; set; }
+        public string? CurrentAnchor { get; set; }
+        public int CurrentHitIndex { get; set; }
+        public int TotalHits { get; set; }
+    }
 }
