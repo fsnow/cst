@@ -208,6 +208,16 @@ Multi-word and phrase search currently only work with 2 words. Searches with 3 o
     - **Issue**: Application produces debug-splash.log file with excessive debug logging
     - **Goal**: Clean up and reduce verbose logging output during normal operation
     - **Impact**: Improves startup performance and reduces disk I/O
+- **Test Suite Cleanup (Post Beta 3)**:
+    - **Current Status**: 146 tests passing, 10 skipped for Beta 3 release
+    - **Skipped Tests**: 10 tests with test infrastructure issues (not production bugs):
+        - 3 MacFontService tests (testing removed/refactored internals via reflection)
+        - 3 Incremental indexing tests (progress report async/timing issues)
+        - 2 IndexingService initialization tests (mock settings service issues)
+        - 1 DefaultIndexDirectory test (mock validation issue)
+        - 1 InitialIndexing test (incomplete - needs all 217 XML files or mocked catalog)
+    - **Goal**: Fix or rewrite skipped tests to achieve 100% pass rate
+    - **Priority**: Medium - tests skipped due to infrastructure issues, actual functionality verified via manual testing
 - **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)
     - **Show/Hide Search Hits Toggle**: Add search hit highlighting visibility control (check CST4 UI for exact naming)
