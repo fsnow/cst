@@ -1,0 +1,37 @@
+{
+  "latestVersion": "5.0.0-beta.3",
+  "releaseDate": "2025-11-22",
+  "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.3",
+  "minimumVersion": "5.0.0-beta.1",
+  "announcements": [
+    {
+      "id": "beta3-release",
+      "title": "Beta 3 Released - CEF Crash Fix",
+      "content": "CST Reader Beta 3 is now available with the critical CEF crash fix, scroll position restoration, complete Dark Mode support, and phrase/proximity search with two-color highlighting.",
+      "date": "2025-11-22",
+      "showUntil": "2025-12-31",
+      "targetVersions": ["5.0.0-beta.1", "5.0.0-beta.2"],
+      "severity": "info"
+    }
+  ],
+  "criticalNotices": [],
+  "versionMessages": {
+    "5.0.0-beta.3": {
+      "type": "info",
+      "title": "You're Running Beta 3",
+      "content": "Thank you for testing Beta 3! The critical CEF crash issue has been fixed. Please report any issues on GitHub."
+    },
+    "5.0.0-beta.2": {
+      "type": "warning",
+      "title": "Beta 3 Available - Critical Crash Fix",
+      "content": "Beta 3 is now available with a critical fix for CEF crashes when floating book windows, plus scroll position restoration and complete Dark Mode support.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.3"
+    },
+    "5.0.0-beta.1": {
+      "type": "warning",
+      "title": "Beta 3 Available - Critical Crash Fix",
+      "content": "Beta 3 is now available with a critical fix for CEF crashes when floating book windows, plus scroll position restoration and complete Dark Mode support.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.3"
+    }
+  }
+}
