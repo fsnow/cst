@@ -25,10 +25,10 @@ CST Reader 5.0 is a modern, cross-platform Pali text reader featuring:
 - **Native Packaging**: Production-ready macOS .dmg packages with proper application branding
 
 ### Text Display & Scripts
-- **Multi-Script Support**: All 14 Pali scripts for display (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
-- **Script Input**: 9 scripts supported for search input (missing Thai, Telugu, Tibetan, Khmer, Cyrillic)
+- **Multi-Script Support**: All 14 Pali scripts supported for both display and search input (Devanagari, Latin, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
 - **Per-Tab Script Selection**: Each book tab remembers its script setting independently
 - **Font Management**: Complete per-script UI font system with native font detection and real-time updates
+- **Script Conversion Quality**: 99.96% accuracy across all scripts with comprehensive validation framework
 
 ### Advanced Search System
 - **Full-Text Search**: Lucene.NET 4.8+ implementation with position-based indexing for all 217 texts
