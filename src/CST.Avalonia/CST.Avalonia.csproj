@@ -10,15 +10,15 @@
     <CFBundleName>CST Reader</CFBundleName>
     <CFBundleDisplayName>CST Reader</CFBundleDisplayName>
     <CFBundleIdentifier>com.cst.avalonia</CFBundleIdentifier>
-    <CFBundleVersion>5.0.0-beta.3</CFBundleVersion>
-    <CFBundleShortVersionString>5.0.0-beta.3</CFBundleShortVersionString>
+    <CFBundleVersion>5.0.0-beta.4</CFBundleVersion>
+    <CFBundleShortVersionString>5.0.0-beta.4</CFBundleShortVersionString>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- .NET Assembly Version Properties -->
-    <Version>5.0.0-beta.3</Version>
-    <AssemblyVersion>5.0.0.0</AssemblyVersion>
-    <FileVersion>5.0.0.0</FileVersion>
-    <InformationalVersion>5.0.0-beta.3</InformationalVersion>
+    <Version>5.0.0-beta.4</Version>
+    <AssemblyVersion>5.0.0.4</AssemblyVersion>
+    <FileVersion>5.0.0.4</FileVersion>
+    <InformationalVersion>5.0.0-beta.4</InformationalVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">

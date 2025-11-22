@@ -2,7 +2,7 @@
 
 ## Current Status: **BETA 4 IN DEVELOPMENT** 🚧
 
-**Last Updated**: November 13, 2025
+**Last Updated**: November 22, 2025
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 **XML Books Location**: `/Users/fsnow/Library/Application Support/CSTReader/xml` (217 TEI XML book files)
 
