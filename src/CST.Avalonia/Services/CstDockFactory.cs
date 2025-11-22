@@ -694,35 +694,6 @@ namespace CST.Avalonia.Services
             // by switching to another document tab
             _logger.Debug("HideWelcomeScreen called (no action needed - switch to book tab instead)");
         }
-        
-        private Document? FindDocument(string documentId)
-        {
-            if (_context is RootDock rootDock && rootDock.VisibleDockables != null)
-            {
-                foreach (var dockable in rootDock.VisibleDockables)
-                {
-                    var document = FindDocumentRecursive(dockable, documentId);
-                    if (document != null) return document;
-                }
-            }
-            return null;
-        }
-        
-        private Document? FindDocumentRecursive(IDockable dockable, string documentId)
-        {
-            if (dockable is Document document && document.Id == documentId)
-                return document;
-
-            if (dockable is IDock dock && dock.VisibleDockables != null)
-            {
-                foreach (var child in dock.VisibleDockables)
-                {
-                    var found = FindDocumentRecursive(child, documentId);
-                    if (found != null) return found;
-                }
-            }
-            return null;
-        }
 
         // Generic dockable finder - works for ReactiveDocument/ReactiveTool as well as Document/Tool
         private IDockable? FindDockable(string id)
@@ -1388,8 +1359,16 @@ namespace CST.Avalonia.Services
                 Log.Information("Removed old ViewModel state from ApplicationState");
 
                 // Step 3: Remove old ViewModel from floating dock (auto-disposes View and WebView)
+                // IMPORTANT: Track which host window this book is in BEFORE removing it
+                CstHostWindow? sourceHostWindow = null;
                 if (oldVm.Owner is IDock currentDock)
                 {
+                    // Find the host window that contains this dock
+                    sourceHostWindow = HostWindows.OfType<CstHostWindow>()
+                        .FirstOrDefault(hw => FindDocumentDockInLayout(hw.Layout) == currentDock);
+
+                    Log.Information("Unfloating from host window: {WindowId}", sourceHostWindow?.Id ?? "unknown");
+
                     RemoveDockable(oldVm, false);
                     Log.Information("Removed old ViewModel from floating dock");
                 }
@@ -1425,8 +1404,27 @@ namespace CST.Avalonia.Services
                 SetActiveDockable(newVm);
                 SetFocusedDockable(mainDocDock, newVm);
 
-                // Clean up empty floating windows
-                CleanupEmptyFloatingWindows();
+                // Clean up ONLY the specific floating window that this book came from
+                // DO NOT check all floating windows - this was causing other floating windows to disappear
+                if (sourceHostWindow != null)
+                {
+                    var documentDock = FindDocumentDockInLayout(sourceHostWindow.Layout);
+                    if (documentDock != null)
+                    {
+                        // Check for ReactiveDocument (BookDisplayViewModel) not just Document
+                        var hasDocuments = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Any() ?? false;
+                        if (!hasDocuments)
+                        {
+                            Log.Information("Source floating window {WindowId} is now empty - closing it", sourceHostWindow.Id);
+                            CloseEmptyHostWindow(sourceHostWindow);
+                        }
+                        else
+                        {
+                            Log.Information("Source floating window {WindowId} still has {Count} documents - keeping it open",
+                                sourceHostWindow.Id, documentDock.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0);
+                        }
+                    }
+                }
 
                 Log.Information("Unfloat operation completed - new instance in main window");
             }
@@ -1803,12 +1801,13 @@ namespace CST.Avalonia.Services
                     if (documentDock != null)
                     {
                         var totalDockables = documentDock.VisibleDockables?.Count ?? 0;
-                        var hasDocuments = documentDock.VisibleDockables?.OfType<Document>().Any() ?? false;
-                        var docCount = documentDock.VisibleDockables?.OfType<Document>().Count() ?? 0;
-                        
-                        Log.Information("*** Host window {WindowId} - Layout: {LayoutType}, DocumentDock found - Total dockables: {TotalCount}, Documents: {DocumentCount}, HasDocuments: {HasDocuments} ***", 
+                        // Check for ReactiveDocument (BookDisplayViewModel) not just Document
+                        var hasDocuments = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Any() ?? false;
+                        var docCount = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0;
+
+                        Log.Information("*** Host window {WindowId} - Layout: {LayoutType}, DocumentDock found - Total dockables: {TotalCount}, ReactiveDocuments: {DocumentCount}, HasDocuments: {HasDocuments} ***",
                             hostWindow.Id, hostWindow.Layout?.GetType().Name, totalDockables, docCount, hasDocuments);
-                        
+
                         if (!hasDocuments)
                         {
                             Log.Information("*** EMPTY FLOATING WINDOW DETECTED: {WindowId} - scheduling for closure ***", hostWindow.Id);
