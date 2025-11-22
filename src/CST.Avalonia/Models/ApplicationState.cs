@@ -45,8 +45,8 @@ public class ApplicationState
 public class MainWindowState
 {
     public WindowState WindowState { get; set; } = WindowState.Normal;
-    public double Width { get; set; } = 1024;
-    public double Height { get; set; } = 768;
+    public double Width { get; set; } = 1400;
+    public double Height { get; set; } = 900;
     public double? X { get; set; }
     public double? Y { get; set; }
     public bool IsMaximized { get; set; }
