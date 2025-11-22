@@ -171,6 +171,18 @@ gh release create v5.0.0-beta.X \
 
 ### Release Notes Template
 
+**IMPORTANT:** Before writing release notes, review all commits since the previous release:
+
+```bash
+# Review commit history
+git log v5.0.0-beta.2..v5.0.0-beta.3 --oneline
+
+# Get detailed commit messages
+git log v5.0.0-beta.2..v5.0.0-beta.3 --format="%h %s%n%b"
+```
+
+This ensures accurate release notes based on actual changes, not assumptions.
+
 ```markdown
 # CST Reader 5.0.0-beta.X
 
