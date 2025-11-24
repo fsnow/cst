@@ -43,10 +43,23 @@ namespace CST.Avalonia.ViewModels
         
         // Event for requesting new book to be opened (will be handled by SimpleTabbedWindow)
         public event Action<Book, string?>? OpenBookRequested;
-        
+
         public event Action<int>? NavigateToHighlightRequested;
         public event Action<string>? NavigateToChapterRequested;
-        
+
+        // Event for requesting Go To dialog (will be handled by SimpleTabbedWindow)
+        public event Action? OpenGoToDialogRequested;
+
+        // Protected methods to invoke events (allows external classes to trigger events)
+        internal void InvokeOpenGoToDialog()
+        {
+            var subscriberCount = OpenGoToDialogRequested?.GetInvocationList()?.Length ?? 0;
+            Log.Information("InvokeOpenGoToDialog called for book: {BookFile}, Subscribers: {Count}",
+                Book.FileName, subscriberCount);
+            OpenGoToDialogRequested?.Invoke();
+        }
+        internal void InvokeNavigateToChapter(string anchor) => NavigateToChapterRequested?.Invoke(anchor);
+
         private Script _bookScript;
         private bool _isLoading;
         private string _pageStatusText = "";

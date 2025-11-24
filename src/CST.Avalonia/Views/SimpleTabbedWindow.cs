@@ -16,6 +16,8 @@ using CST.Conversion;
 using Serilog;
 using Microsoft.Extensions.DependencyInjection;
 using WebViewControl;
+using Dock.Model.Mvvm.Controls;
+using Dock.Model.Core;
 
 namespace CST.Avalonia.Views;
 
@@ -544,5 +546,70 @@ public partial class SimpleTabbedWindow : Window
                 _logger.Information("Restored WebView in window: {WindowTitle}", window.Title);
             }
         }
+    }
+
+    private void OnTestPdfMenuItemClick(object? sender, EventArgs e)
+    {
+        _logger.Information("Opening PDF Test Window");
+
+        var testWindow = new PdfTestWindow
+        {
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+
+        testWindow.Show(this);
+    }
+
+    private void OnGoToMenuItemClick(object? sender, EventArgs e)
+    {
+        _logger.Information("Go To menu item clicked from window: {WindowTitle}", this.Title);
+
+        // Check if THIS window (could be main or floating) has a LayoutViewModel in its dock content
+        // Look through the visual tree to find a DockControl with a LayoutViewModel
+        var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
+        if (dockControl?.DataContext is LayoutViewModel layoutViewModel)
+        {
+            _logger.Information("Found LayoutViewModel in current window's DockControl");
+
+            // Get the active document from this window's layout
+            if (layoutViewModel.Layout is RootDock rootDock)
+            {
+                var documentDock = FindDocumentDockInLayout(rootDock);
+                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel)
+                {
+                    _logger.Information("Triggering Go To dialog for active book: {BookFile}", bookViewModel.Book.FileName);
+                    bookViewModel.InvokeOpenGoToDialog();
+                    return;
+                }
+                else
+                {
+                    _logger.Warning("No active book in this window's document dock. ActiveDockable type: {Type}",
+                        documentDock?.ActiveDockable?.GetType().Name ?? "null");
+                }
+            }
+        }
+
+        _logger.Warning("Could not find active book document for Go To command");
+    }
+
+    private DocumentDock? FindDocumentDockInLayout(IDock dock)
+    {
+        if (dock is DocumentDock documentDock)
+            return documentDock;
+
+        if (dock.VisibleDockables != null)
+        {
+            foreach (var dockable in dock.VisibleDockables)
+            {
+                if (dockable is IDock childDock)
+                {
+                    var result = FindDocumentDockInLayout(childDock);
+                    if (result != null)
+                        return result;
+                }
+            }
+        }
+
+        return null;
     }
 }

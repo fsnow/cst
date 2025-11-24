@@ -100,6 +100,15 @@ public partial class BookDisplayView : UserControl
     {
         _logger.Debug("KEYBOARD: BookDisplayView KeyDown. Key: {Key}, Modifiers: {Modifiers}, Source: {Source}", e.Key, e.KeyModifiers, e.Source?.GetType().Name);
         
+        // Check for Cmd+G or Ctrl+G (Go To)
+        if (e.Key == Key.G && (e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)))
+        {
+            _logger.Debug("*** GO TO SHORTCUT DETECTED IN BookDisplayView ***");
+            e.Handled = true; // Prevent further processing
+            _viewModel?.InvokeOpenGoToDialog();
+            return;
+        }
+
         // Check for Cmd+C or Ctrl+C
         if (e.Key == Key.C && (e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)))
         {
@@ -108,7 +117,7 @@ public partial class BookDisplayView : UserControl
             ExecuteCopy();
             return;
         }
-        
+
         // Check for Cmd+A or Ctrl+A (Select All)
         if (e.Key == Key.A && (e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control)))
         {
@@ -833,41 +842,52 @@ public partial class BookDisplayView : UserControl
                         getPageReferences: function(scrollY) {{
                             var result = {{ vri: '*', myanmar: '*', pts: '*', thai: '*', other: '*' }};
                             var docPos = scrollY + 20; // CST4 algorithm offset
-                            
+                            var isAtTop = scrollY < 100; // Consider at top if within first 100px
+
                             // PERFORMANCE OPTIMIZATION: Use pre-sorted lists instead of expensive sorting on every call
                             // The findBestAnchor function now works on the pre-sorted lists
+                            // Three cases:
+                            // 1. Normal: Look in first 200px of viewport
+                            // 2. Scrolled down: Look backwards for closest anchor
+                            // 3. At top of book: Search forward for first page number (after headings/namo tassa)
                             function findBestAnchor(sortedAnchors) {{
                                 if (!sortedAnchors || sortedAnchors.length === 0) {{
                                     return null;
                                 }}
-                                
-                                // Linear search is vastly more performant than the previous implementation
-                                // Since the list is sorted, we can stop as soon as we pass the scroll position
+
+                                // Case 1 & 2: Linear search for anchor at or before current position
                                 var bestAnchor = null;
                                 for (var i = 0; i < sortedAnchors.length; i++) {{
                                     if (sortedAnchors[i].position <= docPos) {{
                                         bestAnchor = sortedAnchors[i];
                                     }} else {{
                                         // Since the list is sorted, we can stop here
-                                        break; 
+                                        break;
                                     }}
                                 }}
+
+                                // Case 3: If at top and no anchor found, search forward for first page number
+                                if (!bestAnchor && isAtTop && sortedAnchors.length > 0) {{
+                                    // Return the very first anchor in the book
+                                    bestAnchor = sortedAnchors[0];
+                                }}
+
                                 return bestAnchor;
                             }}
-                            
+
                             // Find best anchor for each type using the pre-sorted lists
                             var vriAnchor = findBestAnchor(this.sortedPageAnchors.V);
                             var myanmarAnchor = findBestAnchor(this.sortedPageAnchors.M);
                             var ptsAnchor = findBestAnchor(this.sortedPageAnchors.P);
                             var thaiAnchor = findBestAnchor(this.sortedPageAnchors.T);
                             var otherAnchor = findBestAnchor(this.sortedPageAnchors.O);
-                            
+
                             result.vri = vriAnchor ? vriAnchor.name : '*';
                             result.myanmar = myanmarAnchor ? myanmarAnchor.name : '*';
                             result.pts = ptsAnchor ? ptsAnchor.name : '*';
                             result.thai = thaiAnchor ? thaiAnchor.name : '*';
                             result.other = otherAnchor ? otherAnchor.name : '*';
-                            
+
                             return result;
                         }},
                         

@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Dock.Model.Core;
 using Dock.Avalonia.Controls;
 using CST.Avalonia.Views;
@@ -49,8 +50,10 @@ namespace CST.Avalonia.Services
 
         private void SetupViewMenu()
         {
-            // Create View menu for this floating window
-            var viewMenu = new NativeMenu();
+            // Create native menu for this floating window
+            var nativeMenu = new NativeMenu();
+
+            // View menu
             var viewMenuItem = new NativeMenuItem
             {
                 Header = "View",
@@ -71,9 +74,25 @@ namespace CST.Avalonia.Services
 
             viewMenuItem.Menu.Add(selectBookItem);
             viewMenuItem.Menu.Add(searchItem);
-            viewMenu.Add(viewMenuItem);
+            nativeMenu.Add(viewMenuItem);
 
-            NativeMenu.SetMenu(this, viewMenu);
+            // Tools menu
+            var toolsMenuItem = new NativeMenuItem
+            {
+                Header = "Tools",
+                Menu = new NativeMenu()
+            };
+
+            var goToItem = new NativeMenuItem
+            {
+                Header = "Go To...",
+                Gesture = KeyGesture.Parse("Cmd+G")
+            };
+
+            toolsMenuItem.Menu.Add(goToItem);
+            nativeMenu.Add(toolsMenuItem);
+
+            NativeMenu.SetMenu(this, nativeMenu);
 
             // Menu event handlers will be set up by App when this window is shown
         }

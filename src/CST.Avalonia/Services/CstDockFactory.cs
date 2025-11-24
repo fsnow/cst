@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
@@ -30,6 +31,9 @@ namespace CST.Avalonia.Services
         // These start at 0.25/0.75 but can be adjusted by the user dragging the splitter
         private double _mainDockLeftProportion = 0.25;
         private double _mainDockRightProportion = 0.75;
+
+        // Track which books have Go To event subscriptions to prevent duplicates
+        private readonly HashSet<string> _goToSubscribedBooks = new HashSet<string>();
 
         public CstDockFactory()
         {
@@ -401,6 +405,26 @@ namespace CST.Avalonia.Services
                 OpenBook(linkedBook, anchorForLinked);
             };
 
+            // Subscribe to OpenGoToDialogRequested event
+            _logger.Debug("Subscribing to OpenGoToDialogRequested for book: {BookFile} (ID: {BookId})",
+                bookDisplayViewModel.Book.FileName, bookDisplayViewModel.Id);
+            bookDisplayViewModel.OpenGoToDialogRequested += () =>
+            {
+                _logger.Information("OpenGoToDialogRequested event fired for book: {BookFile}", bookDisplayViewModel.Book.FileName);
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    try
+                    {
+                        await ShowGoToDialog(bookDisplayViewModel);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Error showing Go To dialog");
+                    }
+                });
+            };
+            _goToSubscribedBooks.Add(bookDisplayViewModel.Id);
+
             _logger.Debug("Creating search document with ID: {DocumentId}", bookDisplayViewModel.Id);
 
             // BookDisplayViewModel is now a ReactiveDocument - add it directly to the dock
@@ -498,7 +522,27 @@ namespace CST.Avalonia.Services
                 // Open the linked book with anchor navigation for positioning
                 OpenBook(linkedBook, anchorForLinked);
             };
-            
+
+            // Subscribe to OpenGoToDialogRequested event
+            _logger.Debug("Subscribing to OpenGoToDialogRequested for book: {BookFile} (ID: {BookId})",
+                bookDisplayViewModel.Book.FileName, bookDisplayViewModel.Id);
+            bookDisplayViewModel.OpenGoToDialogRequested += () =>
+            {
+                _logger.Information("OpenGoToDialogRequested event fired for book: {BookFile}", bookDisplayViewModel.Book.FileName);
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    try
+                    {
+                        await ShowGoToDialog(bookDisplayViewModel);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Error showing Go To dialog");
+                    }
+                });
+            };
+            _goToSubscribedBooks.Add(bookDisplayViewModel.Id);
+
             // BookDisplayViewModel is now a ReactiveDocument - use it directly (no Document wrapper)
             // Subscribe to DisplayTitle changes to update the Title for tab updates
             bookDisplayViewModel.PropertyChanged += (sender, e) =>
@@ -1280,6 +1324,9 @@ namespace CST.Avalonia.Services
 
                 Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
 
+                // Subscribe to events for the new instance
+                EnsureBookEventSubscription(newVm);
+
                 // Step 5: Add new ViewModel to main dock first (FloatDockable requires it to have an Owner)
                 var mainDocDock = FindDocumentDock();
                 if (mainDocDock == null)
@@ -1398,6 +1445,9 @@ namespace CST.Avalonia.Services
                 newVm.IsFloating = false;
 
                 Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
+
+                // Subscribe to events for the new instance
+                EnsureBookEventSubscription(newVm);
 
                 // Step 5: Add to main dock and set active (creates fresh View automatically)
                 AddDockable(mainDocDock, newVm);
@@ -2581,6 +2631,162 @@ namespace CST.Avalonia.Services
                 Log.Information("*** Panel visibility updated after window close ***");
             }
         }
-        
+
+        // Find which window contains a specific book instance
+        private Window? FindWindowContainingBook(BookDisplayViewModel bookViewModel)
+        {
+            _logger.Debug("Searching for window containing book: {BookFile}", bookViewModel.Book.FileName);
+
+            // Check main window first
+            if (App.MainWindow != null)
+            {
+                var mainDocDock = FindDocumentDock();
+                if (mainDocDock?.VisibleDockables?.Contains(bookViewModel) == true)
+                {
+                    _logger.Information("Book found in main window");
+                    return App.MainWindow;
+                }
+            }
+
+            // Check floating windows
+            foreach (var hostWindow in HostWindows)
+            {
+                if (hostWindow is CstHostWindow cstHostWindow && cstHostWindow.Layout != null)
+                {
+                    var docDock = FindDocumentDockInLayout(cstHostWindow.Layout) as DocumentDock;
+                    if (docDock?.VisibleDockables?.Contains(bookViewModel) == true)
+                    {
+                        _logger.Information("Book found in floating window: {WindowTitle}", cstHostWindow.Title);
+                        return cstHostWindow;
+                    }
+                }
+            }
+
+            _logger.Warning("Book not found in any window");
+            return null;
+        }
+
+        // Ensure all existing books have event subscriptions
+        public void EnsureBookEventSubscriptions()
+        {
+            _logger.Debug("Ensuring event subscriptions for all books");
+            int subscriptionCount = 0;
+
+            // Subscribe to books in main window
+            var mainDocDock = FindDocumentDock();
+            if (mainDocDock?.VisibleDockables != null)
+            {
+                foreach (var dockable in mainDocDock.VisibleDockables)
+                {
+                    if (dockable is BookDisplayViewModel bookViewModel)
+                    {
+                        EnsureBookEventSubscription(bookViewModel);
+                        subscriptionCount++;
+                    }
+                }
+            }
+
+            // Subscribe to books in floating windows
+            foreach (var hostWindow in HostWindows.OfType<CstHostWindow>())
+            {
+                if (hostWindow.Layout != null)
+                {
+                    var docDock = FindDocumentDockInLayout(hostWindow.Layout) as DocumentDock;
+                    if (docDock?.VisibleDockables != null)
+                    {
+                        foreach (var dockable in docDock.VisibleDockables)
+                        {
+                            if (dockable is BookDisplayViewModel bookViewModel)
+                            {
+                                EnsureBookEventSubscription(bookViewModel);
+                                subscriptionCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            _logger.Information("Event subscriptions ensured for {Count} books", subscriptionCount);
+        }
+
+        // Ensure a single book has event subscriptions (idempotent - won't duplicate subscriptions)
+        private void EnsureBookEventSubscription(BookDisplayViewModel bookViewModel)
+        {
+            // Check if already subscribed using the book's unique ID
+            if (!_goToSubscribedBooks.Contains(bookViewModel.Id))
+            {
+                _logger.Debug("Adding Go To event subscription for book: {BookFile} (ID: {BookId})",
+                    bookViewModel.Book.FileName, bookViewModel.Id);
+
+                bookViewModel.OpenGoToDialogRequested += () =>
+                {
+                    _logger.Information("OpenGoToDialogRequested event fired for book: {BookFile}", bookViewModel.Book.FileName);
+                    Dispatcher.UIThread.Post(async () =>
+                    {
+                        try
+                        {
+                            await ShowGoToDialog(bookViewModel);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error(ex, "Error showing Go To dialog");
+                        }
+                    });
+                };
+
+                _goToSubscribedBooks.Add(bookViewModel.Id);
+            }
+        }
+
+        // Show Go To dialog for a book
+        private async System.Threading.Tasks.Task ShowGoToDialog(BookDisplayViewModel bookViewModel)
+        {
+            try
+            {
+                _logger.Information("Showing Go To dialog for book: {BookFile}", bookViewModel.Book.FileName);
+
+                // Create dialog ViewModel
+                var dialogViewModel = new GoToDialogViewModel(bookViewModel);
+
+                // Create and show dialog
+                var dialog = new GoToDialog(dialogViewModel);
+
+                // Find the owner window - check if book is in a floating window or main window
+                Window? ownerWindow = FindWindowContainingBook(bookViewModel);
+                if (ownerWindow == null)
+                {
+                    _logger.Warning("Cannot find window containing book - falling back to main window");
+                    ownerWindow = App.MainWindow;
+                }
+
+                if (ownerWindow == null)
+                {
+                    _logger.Warning("Cannot show Go To dialog - no window found");
+                    return;
+                }
+
+                _logger.Information("Showing dialog with owner: {OwnerType}", ownerWindow.GetType().Name);
+
+                // Show dialog modally
+                var result = await dialog.ShowDialog<bool>(ownerWindow);
+
+                if (result && !string.IsNullOrEmpty(dialogViewModel.ConstructedAnchor))
+                {
+                    _logger.Information("Go To navigation requested: {Anchor}", dialogViewModel.ConstructedAnchor);
+
+                    // Trigger navigation via internal invoke method
+                    bookViewModel.InvokeNavigateToChapter(dialogViewModel.ConstructedAnchor);
+                }
+                else
+                {
+                    _logger.Debug("Go To dialog cancelled or no anchor constructed");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error showing Go To dialog");
+            }
+        }
+
     }
 }

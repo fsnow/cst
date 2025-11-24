@@ -19,6 +19,14 @@
                     <NativeMenuItem Header="Search" />
                 </NativeMenu>
             </NativeMenuItem>
+
+            <!-- Tools Menu -->
+            <NativeMenuItem Header="Tools">
+                <NativeMenu>
+                    <NativeMenuItem Header="Go To..." Click="OnGoToMenuItemClick" Gesture="cmd+g" />
+                    <NativeMenuItem Header="Test PDF Access (SharePoint)" Click="OnTestPdfMenuItemClick" />
+                </NativeMenu>
+            </NativeMenuItem>
         </NativeMenu>
     </NativeMenu.Menu>
 

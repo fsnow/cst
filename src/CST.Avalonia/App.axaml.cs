@@ -12,6 +12,7 @@ using Avalonia.Data.Core.Plugins;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Views;
 using CST.Avalonia.Services;
@@ -581,6 +582,28 @@ public partial class App : Application
                 }
             }
         }
+
+        // Ensure all books have event subscriptions (runs every time, not just during restoration)
+        Dispatcher.UIThread.Post(async () =>
+        {
+            // Wait for UI to be fully initialized
+            await Task.Delay(1000);
+
+            Log.Debug("Ensuring event subscriptions for all books...");
+
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&
+                desktop.MainWindow is SimpleTabbedWindow mainWindow &&
+                mainWindow.DataContext is LayoutViewModel layoutViewModel &&
+                layoutViewModel.Factory is CstDockFactory factory)
+            {
+                Log.Information("Calling EnsureBookEventSubscriptions");
+                factory.EnsureBookEventSubscriptions();
+            }
+            else
+            {
+                Log.Warning("Could not ensure book event subscriptions - factory not found");
+            }
+        });
     }
 
     private void OnApplicationStateChanged(ApplicationState state)
@@ -1060,6 +1083,35 @@ public partial class App : Application
                             }
                         }
                     }
+                    else if (item is NativeMenuItem toolsMenuItem && toolsMenuItem.Header?.ToString() == "Tools")
+                    {
+                        Log.Information("Found Tools menu in floating window");
+                        var toolsMenu = toolsMenuItem.Menu;
+                        if (toolsMenu != null)
+                        {
+                            Log.Information("Tools menu has {Count} items", toolsMenu.Count());
+                            foreach (var toolItem in toolsMenu)
+                            {
+                                if (toolItem is NativeMenuItem toolSubItem)
+                                {
+                                    Log.Information("Found Tools menu item: {Header}", toolSubItem.Header);
+                                    if (toolSubItem.Header?.ToString() == "Go To...")
+                                    {
+                                        Log.Information("Wiring up Go To menu item click event");
+                                        toolSubItem.Click += (s, e) =>
+                                        {
+                                            Log.Information("Go To menu item clicked via Tools menu (floating window)");
+                                            OnGoToMenuItemClickFromFloatingWindow(window);
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Log.Warning("Tools menu is null");
+                        }
+                    }
                 }
 
                 Log.Information("Floating window menu setup complete - Total menu items tracked: {SelectBookCount} + {SearchCount}",
@@ -1091,6 +1143,51 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open settings window from native menu");
+        }
+    }
+
+    private void OnGoToMenuItemClickFromFloatingWindow(Window floatingWindow)
+    {
+        try
+        {
+            Log.Information("Go To menu item clicked from floating window: {WindowTitle}", floatingWindow.Title);
+            Log.Information("Window type: {Type}", floatingWindow.GetType().Name);
+
+            // Floating windows are CstHostWindow instances with Layout property
+            if (floatingWindow is CstHostWindow hostWindow)
+            {
+                Log.Information("Found CstHostWindow");
+                Log.Information("HostWindow.Layout type: {Type}", hostWindow.Layout?.GetType().Name ?? "null");
+
+                if (hostWindow.Layout != null)
+                {
+                    // Find DocumentDock in the host window's layout
+                    var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
+                    Log.Information("DocumentDock found: {Found}", documentDock != null);
+
+                    if (documentDock != null)
+                    {
+                        Log.Information("DocumentDock.ActiveDockable type: {Type}", documentDock.ActiveDockable?.GetType().Name ?? "null");
+
+                        if (documentDock.ActiveDockable is BookDisplayViewModel bookViewModel)
+                        {
+                            Log.Information("Triggering Go To dialog for active book in floating window: {BookFile}", bookViewModel.Book.FileName);
+                            bookViewModel.InvokeOpenGoToDialog();
+                            return;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                Log.Warning("Window is not a CstHostWindow, type: {Type}", floatingWindow.GetType().Name);
+            }
+
+            Log.Warning("Could not find active book document in floating window for Go To command");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error handling Go To from floating window");
         }
     }
 

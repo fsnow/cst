@@ -1,0 +1,89 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CST.Avalonia.ViewModels"
+        xmlns:converters="using:CST.Avalonia.Converters"
+        mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="320"
+        x:Class="CST.Avalonia.Views.GoToDialog"
+        x:DataType="vm:GoToDialogViewModel"
+        Title="Go To..."
+        Width="450" Height="320"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}">
+
+    <Design.DataContext>
+        <vm:GoToDialogViewModel/>
+    </Design.DataContext>
+
+    <Grid Margin="25,20" RowDefinitions="Auto,*" ColumnDefinitions="*,Auto">
+
+        <!-- Left Column: "Go To What:" label and radio buttons -->
+        <StackPanel Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Spacing="10" Margin="0,0,30,0">
+            <TextBlock Text="Go To What:" FontSize="14" Margin="0,0,0,5"/>
+
+            <RadioButton Content="Paragraph"
+                         IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=Paragraph}"
+                         IsEnabled="{Binding IsParagraphAvailable}"
+                         GroupName="NavType"/>
+
+            <RadioButton Content="VRI Page"
+                         IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=VriPage}"
+                         IsEnabled="{Binding IsVriPageAvailable}"
+                         GroupName="NavType"/>
+
+            <RadioButton Content="Myanmar Page"
+                         IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=MyanmarPage}"
+                         IsEnabled="{Binding IsMyanmarPageAvailable}"
+                         GroupName="NavType"/>
+
+            <RadioButton Content="PTS Page"
+                         IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=PtsPage}"
+                         IsEnabled="{Binding IsPtsPageAvailable}"
+                         GroupName="NavType"/>
+
+            <RadioButton Content="Thai Page"
+                         IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=ThaiPage}"
+                         IsEnabled="{Binding IsThaiPageAvailable}"
+                         GroupName="NavType"/>
+
+            <RadioButton Content="Other Page"
+                         IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=OtherPage}"
+                         IsEnabled="{Binding IsOtherPageAvailable}"
+                         GroupName="NavType"/>
+        </StackPanel>
+
+        <!-- Right Column: Number input and buttons -->
+        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="15" VerticalAlignment="Top" MinWidth="200">
+            <!-- Number Input -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Number" FontSize="14"/>
+                <TextBox Text="{Binding InputNumber}"
+                         Width="220"
+                         Height="32"
+                         FontSize="14"
+                         HorizontalAlignment="Left"
+                         x:Name="NumberTextBox"/>
+            </StackPanel>
+
+            <!-- OK Button -->
+            <Button Content="OK"
+                    Command="{Binding NavigateCommand}"
+                    Width="160"
+                    Height="36"
+                    HorizontalContentAlignment="Center"
+                    IsDefault="True"
+                    x:Name="OkButton"/>
+
+            <!-- Cancel Button -->
+            <Button Content="Cancel"
+                    Command="{Binding CancelCommand}"
+                    Width="160"
+                    Height="36"
+                    HorizontalContentAlignment="Center"
+                    IsCancel="True"/>
+        </StackPanel>
+
+    </Grid>
+</Window>
