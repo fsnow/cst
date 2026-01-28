@@ -27,6 +27,11 @@
             <views:BookDisplayView />
         </DataTemplate>
 
+        <!-- DataTemplate for PdfDisplayViewModel (ReactiveDocument) -> PdfDisplayView -->
+        <DataTemplate DataType="{x:Type vm:PdfDisplayViewModel}">
+            <views:PdfDisplayView />
+        </DataTemplate>
+
         <!-- DataTemplate for WelcomeViewModel (ReactiveDocument) -> Welcome screen with WebView -->
         <DataTemplate DataType="{x:Type vm:WelcomeViewModel}">
             <views:WelcomeView />

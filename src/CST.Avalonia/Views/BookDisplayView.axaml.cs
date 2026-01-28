@@ -137,6 +137,24 @@ public partial class BookDisplayView : UserControl
             }
             return;
         }
+
+        // Check for Option+1 or Alt+1 (View Source - Burmese 1957)
+        if (e.Key == Key.D1 && e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            _logger.Debug("*** VIEW SOURCE 1957 SHORTCUT DETECTED IN BookDisplayView ***");
+            e.Handled = true; // Prevent further processing
+            _viewModel?.ShowSource1957Command.Execute().Subscribe();
+            return;
+        }
+
+        // Check for Option+2 or Alt+2 (View Source - Burmese 2010)
+        if (e.Key == Key.D2 && e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            _logger.Debug("*** VIEW SOURCE 2010 SHORTCUT DETECTED IN BookDisplayView ***");
+            e.Handled = true; // Prevent further processing
+            _viewModel?.ShowSource2010Command.Execute().Subscribe();
+            return;
+        }
     }
 
     private void TryCreateWebView()
@@ -1351,6 +1369,44 @@ public partial class BookDisplayView : UserControl
                 _logger.Error("Error processing select all request from JavaScript | {Details}", ex.Message);
             }
         }
+        // Check for View Source 1957 request from JavaScript
+        else if (title != null && title.StartsWith("CST_VIEW_SOURCE_1957:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Debug("*** VIEW SOURCE 1957 REQUESTED FROM JAVASCRIPT ***");
+                    _viewModel?.ShowSource1957Command.Execute().Subscribe();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing View Source 1957 request from JavaScript | {Details}", ex.Message);
+            }
+        }
+        // Check for View Source 2010 request from JavaScript
+        else if (title != null && title.StartsWith("CST_VIEW_SOURCE_2010:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Debug("*** VIEW SOURCE 2010 REQUESTED FROM JAVASCRIPT ***");
+                    _viewModel?.ShowSource2010Command.Execute().Subscribe();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing View Source 2010 request from JavaScript | {Details}", ex.Message);
+            }
+        }
         // Check for JS log messages
         else if (title != null && title.StartsWith("CST_LOG_MSG::"))
         {
@@ -1435,9 +1491,28 @@ public partial class BookDisplayView : UserControl
                                     window.cstLogger.log('DEBUG', 'Select All shortcut detected in JavaScript');
                                     event.preventDefault(); // Prevent default browser behavior
                                     event.stopPropagation(); // Stop event bubbling
-                                    
+
                                     // Signal C# to handle select all operation
                                     document.title = 'CST_SELECT_ALL_REQUESTED:|TAB:{_tabId}';
+                                    return false;
+                                }
+
+                                // Check for Shift+Ctrl+E or Shift+Cmd+E (View Source 2010)
+                                // Must check before Cmd+E since both involve 'e' key
+                                if ((event.key === 'E' || event.key === 'e') && event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                    window.cstLogger.log('DEBUG', 'View Source 2010 shortcut detected in JavaScript');
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    document.title = 'CST_VIEW_SOURCE_2010:|TAB:{_tabId}';
+                                    return false;
+                                }
+
+                                // Check for Ctrl+E or Cmd+E (View Source 1957) - without Shift
+                                if (event.key === 'e' && !event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                    window.cstLogger.log('DEBUG', 'View Source 1957 shortcut detected in JavaScript');
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    document.title = 'CST_VIEW_SOURCE_1957:|TAB:{_tabId}';
                                     return false;
                                 }
                             }, true); // Use capture phase to intercept before other handlers

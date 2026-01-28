@@ -2,7 +2,7 @@
 
 ## Current Status: **BETA 4 IN DEVELOPMENT** 🚧
 
-**Last Updated**: November 22, 2025
+**Last Updated**: January 15, 2026
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 **XML Books Location**: `/Users/fsnow/Library/Application Support/CSTReader/xml` (217 TEI XML book files)
 
@@ -122,6 +122,17 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 - **Dark Mode Support**: Complete Dark Mode support for all UI panels (main window toolbar, book view toolbar/status bar, search panel, settings window) and book content area with proper FluentTheme integration
 - **Dark Mode Book Content**: WebView book content displays with black background and white text when system is in Dark Mode, with proper color-inverted search highlighting
 - **macOS Tahoe Glass Icon**: Application icon with proper transparency support for macOS Tahoe Glass interface, eliminating grey background artifacts
+
+### **View Source PDF Feature**
+- **PDF Display in Dockable Tabs**: View Burmese 1957 edition PDFs directly in the application using CEF's built-in PDFium viewer
+- **SharePoint Integration**: PDFs downloaded from SharePoint via Microsoft Graph API with Azure AD authentication
+- **Context-Aware Page Navigation**: Automatically opens PDF to the correct page based on current Myanmar page in the book
+- **Page Mapping**: Uses CST4's proven formula: `pdfPage = source.PageStart + (myanmarPage - 1)` with proper handling of volume.page format (e.g., "3.10")
+- **Keyboard Shortcut**: Cmd+E triggers View Source 1957 (implemented via JavaScript interop due to CEF keyboard capture)
+- **Toolbar Button**: "1957" button in book toolbar for mouse-based access
+- **Local Caching**: Downloaded PDFs cached in `~/Library/Application Support/CSTReader/pdf/` to avoid redundant downloads
+- **Tab Lifecycle**: PDF tabs can be switched without crashing; WebView properly preserved across tab switches
+- **Limitations**: Float button not yet implemented for PDF tabs, but PDFs can be dragged to other windows via the dock system
 
 ### **Technical Architecture**
 - **Modern .NET 9**: Built on latest .NET with Avalonia UI 11.x for cross-platform desktop development
@@ -249,13 +260,10 @@ Multi-word and phrase search currently only work with 2 words. Searches with 3 o
     - **UI Integration**: Add GoTo menu item and keyboard shortcut (matching CST4 functionality)
     - **Validation**: Validate user input and provide feedback for invalid references
     - **History**: Track recently visited locations for quick navigation
-- **View Source Feature**:
-    - **PDF Display**: Display Burmese CST PDFs in system browser
-    - **Context-Aware Navigation**: Jump to correct PDF page based on current book location in open window
-    - **Page Mapping**: Implement mapping between book locations and corresponding PDF pages
-    - **UI Integration**: Add "View Source" menu item or button (matching CST4 functionality)
-    - **PDF Resources**: Ensure Burmese CST PDF files are accessible to the application
-    - **Error Handling**: Handle missing PDFs or invalid page references gracefully
+- **View Source Feature Enhancements**:
+    - **2010 Edition Support**: Add Cmd+Shift+E shortcut and toolbar button for Burmese 2010 edition PDFs
+    - **Float Support**: Implement proper float/unfloat for PDF tabs (currently can only drag to other windows)
+    - **Additional Source Types**: Consider adding VRI Print edition support if PDFs become available
 - **Semantic Search with Vector Embeddings (Research)**:
     - **Phase 1 - Semantic Search**: Natural language question search with pre-calculated vector embeddings
     - **Zero-Cost Requirement**: All AI processing on user's local machine, no API costs
@@ -276,12 +284,14 @@ CST.Avalonia/
 ├── ViewModels/
 │   ├── LayoutViewModel.cs             # Main VM for the docking layout
 │   ├── BookDisplayViewModel.cs        # VM for book tabs with search highlighting
+│   ├── PdfDisplayViewModel.cs         # VM for PDF source document tabs
 │   ├── OpenBookDialogViewModel.cs     # VM for the book selection tree
 │   ├── SearchViewModel.cs             # VM for search panel with live results
 │   └── SettingsViewModel.cs           # VM for the settings window
 ├── Views/
 │   ├── SimpleTabbedWindow.cs          # The main application window
 │   ├── BookDisplayView.axaml          # Book view with WebView rendering
+│   ├── PdfDisplayView.axaml           # PDF view with WebView for PDFium rendering
 │   ├── OpenBookPanel.axaml            # The book selection tree view
 │   ├── SearchPanel.axaml              # Search UI with filters and results
 │   └── SettingsWindow.axaml           # The settings window
@@ -293,10 +303,14 @@ CST.Avalonia/
 │   ├── IndexingService.cs             # Manages Lucene index lifecycle
 │   ├── XmlFileDatesService.cs         # Tracks file changes for incremental indexing
 │   ├── XmlUpdateService.cs            # GitHub API integration for XML file updates
-│   └── SearchService.cs               # Lucene search with position-based results
+│   ├── SearchService.cs               # Lucene search with position-based results
+│   └── SharePointService.cs           # Microsoft Graph API for SharePoint PDF downloads
 ├── Converters/
 │   └── FontHelper.cs                  # Custom attached properties for DataTemplate font binding
 └── App.axaml.cs                       # DI configuration, startup logic, state restoration
+
+CST.Core/
+└── Sources.cs                         # PDF source mappings (book -> PDF path, page offsets)
 
 CST.Avalonia_inactive/
 └── ... (Contains placeholder/legacy files for Search, etc.)
@@ -306,12 +320,13 @@ CST.Avalonia_inactive/
 - **Avalonia UI 11.x**
 - **.NET 9.0**
 - **Dock.Avalonia**
-- **WebViewControl-Avalonia**
+- **WebViewControl-Avalonia**: CEF-based WebView for book content and PDF display (PDFium)
 - **ReactiveUI**
 - **Microsoft.Extensions.DI**
 - **Serilog**
 - **Lucene.NET 4.8+**: Full-text search with position-based indexing
 - **Octokit.NET**: GitHub API integration for XML file updates
+- **Microsoft.Graph + Azure.Identity**: SharePoint PDF downloads via Graph API
 - **xUnit + Moq**: Comprehensive test framework with 62 tests
 
 ## Build & Run Instructions
@@ -512,11 +527,13 @@ All CST4 feature analysis documents are preserved in `docs/reference/cst4/` to e
 
 ## Next Steps
 
-With font system, script synchronization, phrase/proximity search, two-color highlighting, complete Dark Mode support (UI and book content), macOS Tahoe Glass icon transparency, and all 14 Pali script input parsers complete, the immediate priorities are:
+With View Source PDF (1957 edition) now working, the immediate priorities are:
 
 1. **Beta 4 Priority Items**:
    - Fix search hit restoration bug (highlighted search hits not restored when reopening books at startup)
-2. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
-3. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
+   - Commit View Source PDF feature (currently uncommitted - new files: PdfDisplayViewModel.cs, PdfDisplayView.axaml/.cs, SharePointService.cs, ISharePointService.cs, Sources.cs updates)
+2. **View Source Enhancements**: Add 2010 edition support with Cmd+Shift+E shortcut
+3. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
+4. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
 

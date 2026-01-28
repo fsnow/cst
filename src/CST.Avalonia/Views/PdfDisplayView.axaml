@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CST.Avalonia.ViewModels"
+             xmlns:wv="using:WebViewControl"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="CST.Avalonia.Views.PdfDisplayView"
+             x:DataType="vm:PdfDisplayViewModel"
+             Focusable="True">
+
+    <Design.DataContext>
+        <vm:PdfDisplayViewModel/>
+    </Design.DataContext>
+
+    <DockPanel>
+        <!-- Status Bar at Bottom -->
+        <Grid DockPanel.Dock="Bottom" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" MinHeight="26">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Status Text -->
+            <TextBlock Grid.Column="0" Text="{Binding StatusText}"
+                       VerticalAlignment="Center" Margin="8,0"/>
+
+            <!-- Loading Indicator -->
+            <ProgressBar Grid.Column="1" IsIndeterminate="True"
+                         IsVisible="{Binding IsLoading}"
+                         Width="100" Height="16" Margin="8,0"/>
+        </Grid>
+
+        <!-- Main PDF Viewer -->
+        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+            <Panel>
+                <!-- WebView for PDF Display (CEF's PDFium handles PDF rendering) -->
+                <wv:WebView x:Name="webView"
+                           IsVisible="{Binding IsWebViewAvailable}"
+                           Focusable="True"
+                           IsTabStop="True"
+                           ZIndex="-1000"
+                           IsHitTestVisible="True"/>
+
+                <!-- Fallback when WebView not available -->
+                <ScrollViewer x:Name="fallbackDisplay"
+                              Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                              IsVisible="{Binding !IsWebViewAvailable}">
+                    <StackPanel Margin="20">
+                        <TextBlock Text="PDF Viewer Not Available"
+                                   FontWeight="Bold"
+                                   FontSize="18"
+                                   Margin="0,0,0,10"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="The PDF viewer requires the WebView component which is not available on this system."
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{Binding PdfLocalPath, StringFormat='PDF Location: {0}'}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,20,0,0"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Panel>
+        </Border>
+    </DockPanel>
+</UserControl>

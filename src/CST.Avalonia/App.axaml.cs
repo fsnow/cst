@@ -926,6 +926,9 @@ public partial class App : Application
         // XML Update service
         services.AddSingleton<IXmlUpdateService, XmlUpdateService>();
 
+        // SharePoint service for PDF downloads
+        services.AddSingleton<ISharePointService, SharePointService>();
+
         // Register ViewModels
         services.AddSingleton<OpenBookDialogViewModel>();
         services.AddSingleton<SearchViewModel>();

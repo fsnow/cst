@@ -79,20 +79,34 @@
             <!-- Book Type Navigation (Mula/Atthakatha/Tika) -->
             <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
                         IsVisible="{Binding HasLinkedBooks}">
-                <Button Command="{Binding OpenMulaCommand}" 
+                <Button Command="{Binding OpenMulaCommand}"
                         IsEnabled="{Binding HasMula}"
                         ToolTip.Tip="Open root text" Margin="2">
                     <TextBlock Text="Mula"/>
                 </Button>
-                <Button Command="{Binding OpenAtthakathaCommand}" 
+                <Button Command="{Binding OpenAtthakathaCommand}"
                         IsEnabled="{Binding HasAtthakatha}"
                         ToolTip.Tip="Open commentary" Margin="2">
                     <TextBlock Text="Aṭṭha"/>
                 </Button>
-                <Button Command="{Binding OpenTikaCommand}" 
+                <Button Command="{Binding OpenTikaCommand}"
                         IsEnabled="{Binding HasTika}"
                         ToolTip.Tip="Open sub-commentary" Margin="2">
                     <TextBlock Text="Ṭīkā"/>
+                </Button>
+            </StackPanel>
+
+            <Separator/>
+
+            <!-- View Source PDF buttons -->
+            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
+                <Button Command="{Binding ShowSource1957Command}"
+                        ToolTip.Tip="View Burmese 1957 edition PDF (Cmd+E)" Margin="2">
+                    <TextBlock Text="1957"/>
+                </Button>
+                <Button Command="{Binding ShowSource2010Command}"
+                        ToolTip.Tip="View Burmese 2010 edition PDF (Shift+Cmd+E)" Margin="2">
+                    <TextBlock Text="2010"/>
                 </Button>
             </StackPanel>
 

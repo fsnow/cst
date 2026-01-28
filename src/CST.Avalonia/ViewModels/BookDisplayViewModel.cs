@@ -50,6 +50,9 @@ namespace CST.Avalonia.ViewModels
         // Event for requesting Go To dialog (will be handled by SimpleTabbedWindow)
         public event Action? OpenGoToDialogRequested;
 
+        // Event for requesting PDF source display (will be handled by SimpleTabbedWindow)
+        public event Action<string, Sources.SourceType, int>? OpenPdfRequested;
+
         // Protected methods to invoke events (allows external classes to trigger events)
         internal void InvokeOpenGoToDialog()
         {
@@ -177,6 +180,10 @@ namespace CST.Avalonia.ViewModels
             FloatWindowCommand = ReactiveCommand.Create(FloatWindow);
             UnfloatWindowCommand = ReactiveCommand.Create(UnfloatWindow);
 
+            // View Source PDF commands
+            ShowSource1957Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese1957));
+            ShowSource2010Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese2010));
+
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
                 .Skip(1) // Skip initial value
@@ -287,6 +294,8 @@ namespace CST.Avalonia.ViewModels
         public ReactiveCommand<Unit, Unit> SelectAllCommand { get; }
         public ReactiveCommand<Unit, Unit> FloatWindowCommand { get; }
         public ReactiveCommand<Unit, Unit> UnfloatWindowCommand { get; }
+        public ReactiveCommand<Unit, Unit> ShowSource1957Command { get; }
+        public ReactiveCommand<Unit, Unit> ShowSource2010Command { get; }
 
         public Script BookScript
         {
@@ -1456,6 +1465,73 @@ namespace CST.Avalonia.ViewModels
             {
                 _logger.Error("Factory not available - cannot unfloat window");
             }
+        }
+
+        /// <summary>
+        /// Show source PDF for the current book at the current Myanmar page.
+        /// Downloads PDF from SharePoint and displays in a dockable tab.
+        /// </summary>
+        private void ShowSource(Sources.SourceType sourceType)
+        {
+            _logger.Information("ShowSource called - raw _myanmarPage value: '{MyanmarPage}', book: {Book}",
+                _myanmarPage, _book.FileName);
+
+            // Get current Myanmar page from status bar
+            // Format can be "123" (single volume) or "3.10" (volume.page for multi-volume)
+            int currentPage = 1;
+            if (_myanmarPage != "*" && !string.IsNullOrEmpty(_myanmarPage))
+            {
+                if (_myanmarPage.Contains('.'))
+                {
+                    // Multi-volume format: "3.10" means volume 3, page 10
+                    // We need just the page number (part after the decimal)
+                    var parts = _myanmarPage.Split('.');
+                    if (parts.Length >= 2 && int.TryParse(parts[1], out int pageNum))
+                    {
+                        currentPage = pageNum;
+                        _logger.Debug("Parsed multi-volume Myanmar page: {Volume}.{Page} -> page {CurrentPage}",
+                            parts[0], parts[1], currentPage);
+                    }
+                    else
+                    {
+                        _logger.Warning("Failed to parse multi-volume Myanmar page: {MyanmarPage}", _myanmarPage);
+                        return;  // Don't proceed with unparseable page
+                    }
+                }
+                else if (int.TryParse(_myanmarPage, out int pageNum))
+                {
+                    // Single volume format: just the page number
+                    currentPage = pageNum;
+                }
+                else
+                {
+                    _logger.Warning("Cannot show source: Myanmar page number not parseable (current: {MyanmarPage})", _myanmarPage);
+                    return;  // Don't proceed with unparseable page
+                }
+            }
+            else
+            {
+                _logger.Warning("Cannot show source: Myanmar page number not available yet (current: {MyanmarPage})", _myanmarPage);
+                return;  // Don't proceed with default page 1 - wait for page to load
+            }
+
+            // Get source info from Sources.cs
+            var source = Sources.Inst.GetSource(_book.FileName, sourceType);
+            if (source == null)
+            {
+                _logger.Warning("No {SourceType} source available for {BookFilename}", sourceType, _book.FileName);
+                return;
+            }
+
+            // Calculate target PDF page using CST4 formula: pdfPage = source.PageStart + (currentMyanmarPage - 1)
+            int pdfPage = source.PageStart + (currentPage - 1);
+            if (pdfPage < 1) pdfPage = 1;
+
+            _logger.Information("Showing source PDF: {SourceType} for {BookFilename}, Myanmar page {MyanmarPage} -> PDF page {PdfPage}",
+                sourceType, _book.FileName, currentPage, pdfPage);
+
+            // Request PDF window to be opened
+            OpenPdfRequested?.Invoke(_book.FileName, sourceType, pdfPage);
         }
 
         /// <summary>

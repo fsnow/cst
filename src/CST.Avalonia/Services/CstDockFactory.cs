@@ -543,6 +543,14 @@ namespace CST.Avalonia.Services
             };
             _goToSubscribedBooks.Add(bookDisplayViewModel.Id);
 
+            // Subscribe to OpenPdfRequested event for View Source feature
+            bookDisplayViewModel.OpenPdfRequested += (bookFilename, sourceType, targetPage) =>
+            {
+                _logger.Information("OpenPdfRequested event fired for book: {BookFile}, source: {SourceType}, page: {Page}",
+                    bookFilename, sourceType, targetPage);
+                OpenPdf(bookFilename, sourceType, targetPage);
+            };
+
             // BookDisplayViewModel is now a ReactiveDocument - use it directly (no Document wrapper)
             // Subscribe to DisplayTitle changes to update the Title for tab updates
             bookDisplayViewModel.PropertyChanged += (sender, e) =>
@@ -570,6 +578,33 @@ namespace CST.Avalonia.Services
             };
 
             _logger.Debug("Book document created: {DocumentId} with title: {Title}", bookDisplayViewModel.Id, bookDisplayViewModel.Title);
+        }
+
+        /// <summary>
+        /// Opens a PDF source document for viewing.
+        /// Downloads the PDF from SharePoint and displays it in a dockable tab.
+        /// </summary>
+        public void OpenPdf(string bookFilename, Sources.SourceType sourceType, int targetPage)
+        {
+            _logger.Information("Opening PDF for {BookFilename}, {SourceType}, page {Page}",
+                bookFilename, sourceType, targetPage);
+
+            // Get SharePointService from DI
+            var sharePointService = App.ServiceProvider?.GetService<ISharePointService>();
+
+            // Create PdfDisplayViewModel
+            var pdfViewModel = new PdfDisplayViewModel(
+                bookFilename,
+                sourceType,
+                targetPage,
+                sharePointService,
+                this
+            );
+
+            // Add to the document dock
+            AddDocumentToLayout(pdfViewModel);
+
+            _logger.Debug("PDF document created: {DocumentId} with title: {Title}", pdfViewModel.Id, pdfViewModel.Title);
         }
 
         private async void SaveAllBookWindowStates()
