@@ -2,7 +2,7 @@
 
 ## Current Status: **BETA 4 IN DEVELOPMENT** 🚧
 
-**Last Updated**: January 15, 2026
+**Last Updated**: January 28, 2026
 **Working Directory**: `[project-root]/src/CST.Avalonia`
 **XML Books Location**: `/Users/fsnow/Library/Application Support/CSTReader/xml` (217 TEI XML book files)
 
@@ -130,8 +130,18 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 - **Page Mapping**: Uses CST4's proven formula: `pdfPage = source.PageStart + (myanmarPage - 1)` with proper handling of volume.page format (e.g., "3.10")
 - **Keyboard Shortcut**: Cmd+E triggers View Source 1957 (implemented via JavaScript interop due to CEF keyboard capture)
 - **Toolbar Button**: "1957" button in book toolbar for mouse-based access
-- **Local Caching**: Downloaded PDFs cached in `~/Library/Application Support/CSTReader/pdf/` to avoid redundant downloads
+- **Local Caching**: Downloaded PDFs cached in `~/Library/Application Support/CSTReader/pdfs/` to avoid redundant downloads
 - **Tab Lifecycle**: PDF tabs can be switched without crashing; WebView properly preserved across tab switches
+- **Completed Source Mappings** (156+ books in Sources.cs):
+    - **1957 Mula**: Vinaya (5), DN (3), MN (3), SN (5), AN (11), KN (14), Abhidhamma (12) = 53 books
+    - **2010 Mula**: All texts mirroring 1957 structure = 40 books
+    - **1957 Atthakatha**: All commentaries = 45 books
+    - **1957 Tika**: DN (3), MN (3), SN (5), AN (4), KN-Netti (1), Vinaya (3), Abhidhamma (3) = 22 books
+    - **Anya/Visuddhimagga**: Mula 1-2, Mahatika 1-2, Nidanakatha = 5 books
+- **Mapping Methodology**: startPage verified by finding the large decorative book title heading with "နမော တဿ..." invocation
+- **Known Issues**:
+    - MN Tika 1 (s0201t) spans two PDF volumes; needs special handling to select PDF based on volume number in page marker (1.x vs 2.x)
+    - Two 1957 Abhidhamma PDFs are 0 bytes in SharePoint (Dhammasangani, Yamaka-3)
 - **Limitations**: Float button not yet implemented for PDF tabs, but PDFs can be dragged to other windows via the dock system
 
 ### **Technical Architecture**
@@ -261,9 +271,10 @@ Multi-word and phrase search currently only work with 2 words. Searches with 3 o
     - **Validation**: Validate user input and provide feedback for invalid references
     - **History**: Track recently visited locations for quick navigation
 - **View Source Feature Enhancements**:
-    - **2010 Edition Support**: Add Cmd+Shift+E shortcut and toolbar button for Burmese 2010 edition PDFs
+    - **Remaining Anya Mappings**: Map remaining Anya text folders to XML files (Sihaḷa, Leḍī, Buddha-vandanā, Vaṃsa, Byākaraṇa, Nīti, Pakiṇṇaka, Saṅgāyana-puccha)
+    - **2010 Edition Support**: Add Cmd+Shift+E shortcut and toolbar button for Burmese 2010 edition PDFs (2010 Mula mappings complete; need 2010 Atthakatha/Tika if PDFs exist)
+    - **MN Tika Volume Selection**: Implement special case for s0201t.tik.xml which spans two PDF volumes (use volume number from page marker)
     - **Float Support**: Implement proper float/unfloat for PDF tabs (currently can only drag to other windows)
-    - **Additional Source Types**: Consider adding VRI Print edition support if PDFs become available
 - **Semantic Search with Vector Embeddings (Research)**:
     - **Phase 1 - Semantic Search**: Natural language question search with pre-calculated vector embeddings
     - **Zero-Cost Requirement**: All AI processing on user's local machine, no API costs
@@ -527,12 +538,12 @@ All CST4 feature analysis documents are preserved in `docs/reference/cst4/` to e
 
 ## Next Steps
 
-With View Source PDF (1957 edition) now working, the immediate priorities are:
+With View Source PDF (1957 edition) now committed and working, the immediate priorities are:
 
 1. **Beta 4 Priority Items**:
    - Fix search hit restoration bug (highlighted search hits not restored when reopening books at startup)
-   - Commit View Source PDF feature (currently uncommitted - new files: PdfDisplayViewModel.cs, PdfDisplayView.axaml/.cs, SharePointService.cs, ISharePointService.cs, Sources.cs updates)
-2. **View Source Enhancements**: Add 2010 edition support with Cmd+Shift+E shortcut
+   - Complete remaining Anya PDF mappings (8 folders with ~35 XML files)
+2. **View Source Enhancements**: Add 2010 edition support with Cmd+Shift+E shortcut and toolbar button
 3. **Custom Book Collections**: Implement user-defined book collection feature for targeted searches
 4. **Search Navigation Enhancements**: Add keyboard shortcuts for search hit navigation (First/Previous/Next/Last)
 
