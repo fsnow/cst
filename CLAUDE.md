@@ -264,12 +264,20 @@ Multi-word and phrase search currently only work with 2 words. Searches with 3 o
     - **Dictionary Data**: Port dictionary data files from CST4
     - **Context Menu**: Right-click word lookup integration
     - **Keyboard Shortcuts**: Quick dictionary access hotkeys
+- **Third-Party Dictionary Support**:
+    - **Digital Pali Dictionary**: Integration with https://digitalpalidictionary.github.io/
+    - **External Dictionary Format**: Support for importing/using third-party dictionary data
+    - **Note**: Separate from CST4's built-in dictionaries; enables community dictionary resources
 - **GoTo Feature**:
-    - **Book Navigation**: Implement "Go To" dialog for jumping to specific book locations
-    - **Page/Section Navigation**: Support navigation by page number, section, verse, or other CST reference systems
+    - **Within-Book Navigation**: Ctrl+G dialog for jumping to paragraph/page in active book (partially planned in docs/features/in-progress/GO_TO_IMPLEMENTATION.md)
+    - **Page Range Display**: Show valid page ranges for each numbering system in the dialog (e.g., "Myanmar: 1-345", "PTS: 1-120")
+    - **Bounds Validation**: Improved error handling when user enters page outside valid range, with clear feedback
+    - **Cross-Book Navigation**: Parse references like "KN 2.345" to identify correct book, open it, and jump to page
+    - **Multiple Reference Systems**: Support Burmese (Myanmar), Thai, PTS, and VRI page numbering for cross-book navigation
+    - **View Source PDF Integration**: When using Burmese references with mapped PDFs, optionally open both rendered book AND source PDF simultaneously to corresponding pages
     - **UI Integration**: Add GoTo menu item and keyboard shortcut (matching CST4 functionality)
-    - **Validation**: Validate user input and provide feedback for invalid references
     - **History**: Track recently visited locations for quick navigation
+    - **Note**: Current implementation plan (GO_TO_IMPLEMENTATION.md) only covers within-book navigation; needs expansion for cross-book and PDF integration
 - **View Source Feature Enhancements**:
     - **Remaining Anya Mappings**: Map remaining Anya text folders to XML files (Sihaḷa, Leḍī, Buddha-vandanā, Vaṃsa, Byākaraṇa, Nīti, Pakiṇṇaka, Saṅgāyana-puccha)
     - **2010 Edition Support**: Add Cmd+Shift+E shortcut and toolbar button for Burmese 2010 edition PDFs (2010 Mula mappings complete; need 2010 Atthakatha/Tika if PDFs exist)
@@ -522,6 +530,8 @@ docs/
 - **Architecture doc** → `docs/architecture/[TOPIC].md`
 - **Research/exploration** → `docs/research/[TOPIC].md`
 - **Test results** → `docs/testing/[TEST_NAME].md`
+
+**Important**: When adding or removing documentation files, update `docs/README.md` to keep the index current.
 
 **When implementing a feature:**
 

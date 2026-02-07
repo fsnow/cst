@@ -16,6 +16,7 @@ Core technical documentation about how the system works:
 - [Project Overview](architecture/OVERVIEW.md) - High-level project structure
 - [Ideal Pali Encoding (IPE)](architecture/IDEAL_PALI_ENCODING.md) - Script-independent encoding system
 - [Character Set Analysis](architecture/CHARACTER_SET_ANALYSIS.md) - Unicode character analysis
+- [Window & Dock Architecture](architecture/WINDOW_DOCK_ARCHITECTURE.md) - Docking system and window management
 - [Reactive Dock ViewModels](architecture/REACTIVE_DOCK_VIEWMODELS.md) - ReactiveUI + Dock base classes
 - [Dock Notepad Patterns](architecture/DOCK_NOTEPAD_PATTERNS.md) - ControlRecycling, StaticViewLocator & DockFluentTheme analysis
 - [Reactive Dock Refactoring Plan](architecture/REACTIVE_DOCK_REFACTORING_PLAN.md) - Migration strategy for ViewModel refactoring
@@ -25,8 +26,15 @@ Lessons learned, known issues, and technical challenges:
 - [Cyrillic Encoding Limitation](implementation/CYRILLIC_ENCODING_LIMITATION.md) - Permanent encoding ambiguity
 - [Avalonia High CPU on macOS](implementation/AVALONIA_HIGH_CPU.md) - Framework-level CPU usage issue
 - [CEF Packaging](implementation/CEF_PACKAGING_ISSUE.md) - Chromium helper app bundling
+- [Control Recycling CEF Crash](implementation/CONTROL_RECYCLING_CEF_CRASH.md) - WebView crash with dock control recycling
 - [Code Signing](implementation/CODE_SIGNING.md) - macOS Developer ID signing
 - [Notarization](implementation/NOTARIZATION_TICKET_ISSUE.md) - Apple notarization troubleshooting
+- [Documentation Reorganization](implementation/DOCUMENTATION_REORGANIZATION.md) - Docs structure migration
+
+### 🛠️ **development/** - Development Processes
+Guides for development workflows:
+- [Release Process](development/RELEASE_PROCESS.md) - Steps for releasing new versions
+- [Proposed Claude Skills](development/PROPOSED_CLAUDE_SKILLS.md) - AI assistant skill definitions
 
 ### ✨ **features/** - Feature Planning & Specifications
 Feature documentation organized by status:
@@ -48,8 +56,14 @@ Historical planning documents for implemented features. Actual implementation ma
   - [Mul/Attha/Tika Buttons](features/implemented/navigation/MUL_ATTHA_TIKA_BUTTONS.md)
   - [Chapter Lists](features/implemented/navigation/CHAPTER_LISTS.md)
 
+- **ui/** - User interface features
+  - [View Menu Panel Management](features/implemented/ui/view-menu-panel-management.md)
+
 #### **features/in-progress/** - Current Development
 Active work happening now:
+
+- [Go To Implementation](features/in-progress/GO_TO_IMPLEMENTATION.md) - Navigate to page/paragraph dialog
+- [View Source PDF Implementation](features/in-progress/VIEW_SOURCE_PDF_IMPLEMENTATION.md) - Burmese PDF viewing
 
 - **windows/** - Windows 11 port
   - [Windows Support Plan](features/in-progress/windows/WINDOWS_SUPPORT.md)
@@ -66,8 +80,14 @@ Features planned for future implementation (from CST4 analysis):
 
 ### 🔬 **research/** - Research & Exploration
 Exploratory research and investigations:
+- [Alternative Rendering Engines](research/ALTERNATIVE_RENDERING_ENGINES.md) - Comparison of rendering approaches
 - [Browser Embedding Options](research/BROWSER_EMBEDDING_OPTIONS.md) - WebView alternatives
+- [Button-Based Float Approach](research/BUTTON_BASED_FLOAT_APPROACH.md) - Manual float/unfloat to prevent CEF crashes
 - [Git Integration](research/GIT_INTEGRATION.md) - Git-based features
+- [MAUI Blazor POC Plan](research/MAUI_BLAZOR_POC_PLAN.md) - Cross-platform proof of concept planning
+- [MAUI Blazor POC Results](research/MAUI_BLAZOR_POC_RESULTS.md) - POC findings and conclusions
+- [Rendering Requirements](research/RENDERING_REQUIREMENTS.md) - Content rendering needs analysis
+- [Strategic Technology Options](research/STRATEGIC_TECHNOLOGY_OPTIONS.md) - Technology direction evaluation
 
 ### 📚 **reference/** - Reference Materials
 External resources and CST4 feature references:
