@@ -124,7 +124,7 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 - **macOS Tahoe Glass Icon**: Application icon with proper transparency support for macOS Tahoe Glass interface, eliminating grey background artifacts
 
 ### **View Source PDF Feature**
-- **PDF Display in Dockable Tabs**: View Burmese 1957 edition PDFs directly in the application using CEF's built-in PDFium viewer
+- **PDF Display in Dockable Tabs**: View Burmese 1957 and 2010 edition PDFs directly in the application using CEF's built-in PDFium viewer
 - **SharePoint Integration**: PDFs downloaded from SharePoint via Microsoft Graph API with Azure AD authentication
 - **Context-Aware Page Navigation**: Automatically opens PDF to the correct page based on current Myanmar page in the book
 - **Page Mapping**: Uses CST4's proven formula: `pdfPage = source.PageStart + (myanmarPage - 1)` with proper handling of volume.page format (e.g., "3.10")

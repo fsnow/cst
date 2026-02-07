@@ -329,7 +329,7 @@ public class Sources
 		addSource("s0502m.mul.xml", SourceType.Burmese1957, 24, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
 		addSource("s0503m.mul.xml", SourceType.Burmese1957, 24, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
 		addSource("s0504m.mul.xml", SourceType.Burmese1957, 23, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
-		addSource("s0505m.mul.xml", SourceType.Burmese1957, 38, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}");
+		addSource("s0505m.mul.xml", SourceType.Burmese1957, 117, $"{Burmese1957Sutta}/{KN_KhuddakaSuttanipata_1957}"); // PDF has 100 duplicate pages; startPage should be ~23 once fixed
 		addSource("s0506m.mul.xml", SourceType.Burmese1957, 17, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
 		addSource("s0507m.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
 		addSource("s0508m.mul.xml", SourceType.Burmese1957, 16, $"{Burmese1957Sutta}/{KN_VimanavattuTherigatha_1957}");
