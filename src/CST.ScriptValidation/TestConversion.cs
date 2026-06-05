@@ -3,7 +3,7 @@ using CST.Conversion;
 
 class TestConversion
 {
-    static void Main()
+    static void AnalyzeGghAmbiguity()
     {
         var deva = "ग्ग्ह";
         Console.WriteLine($"Devanagari: {deva}");

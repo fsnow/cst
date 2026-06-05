@@ -122,7 +122,7 @@ public class QuickTest
     {
         // Test scripts
         var scriptsToTest = new[] { Script.Gujarati };
-        // Script.Bengali, Script.Cyrillic, Script.Gujarati, Script.Gurmukhi, Script.Kannada, Script.Khmer,
+        // Script.Bengali, Script.Cyrillic, Script.Devanagari, Script.Gujarati, Script.Gurmukhi, Script.Kannada, Script.Khmer,
         // Script.Latin, Script.Malayalam, Script.Myanmar, Script.Sinhala, Script.Telugu, Script.Thai, Script.Tibetan
 
         var results = new List<ScriptValidationResult>();
