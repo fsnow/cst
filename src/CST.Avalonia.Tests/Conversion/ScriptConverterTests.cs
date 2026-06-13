@@ -50,11 +50,13 @@ namespace CST.Avalonia.Tests.Conversion
         [InlineData("saṃyutta")]
         public void TestLatinToIpeToDevanagariToIpeToLatinRoundTrip(string input)
         {
-            // Act - Full round trip through all scripts
-            // Note: Based on ScriptConverter.cs, IPE -> Devanagari goes through Latin
+            // Act - Full round trip through all scripts.
+            // Note: this exercises the legacy IPE -> Latin -> Devanagari path
+            // explicitly. ScriptConverter now converts IPE -> Devanagari directly
+            // via Ipe2Deva (see the DirectIpe2Deva_* tests below); this test is
+            // retained to confirm the legacy path still round-trips.
             string ipe1 = Latn2Ipe.Convert(input);
-            
-            // IPE -> Latin -> Devanagari (this is how ScriptConverter does it)
+
             string latinFromIpe = Ipe2Latn.Convert(ipe1);
             string deva = Latn2Deva.Convert(latinFromIpe);
             
@@ -173,6 +175,58 @@ namespace CST.Avalonia.Tests.Conversion
             Assert.NotNull(ipe);
             
             Console.WriteLine($"Edge case - {description}: '{input}' -> '{ipe}'");
+        }
+
+        // --- Direct IPE -> Devanagari converter (Ipe2Deva) ---
+        // ScriptConverter previously converted IPE -> Devanagari via an
+        // IPE -> Latin -> Devanagari shortcut. It now uses the direct, lossless
+        // Ipe2Deva converter. These tests guard that converter, which is used to
+        // display search results (stored as IPE) when the script is Devanagari.
+
+        [Theory]
+        [InlineData("bhikkhusaṅghena")]
+        [InlineData("dhammacakkappavattanaṃ")] // cakka = ka+ka conjunct, niggahita
+        [InlineData("aṭṭhakathā")]             // independent 'a', retroflex conjunct
+        [InlineData("saṃyutta")]               // medial niggahita
+        [InlineData("paṭiccasamuppādo")]       // cca = ca+ca conjunct, ends in 'o'
+        [InlineData("ñāṇa")]
+        [InlineData("uppalavaṇṇā")]            // independent 'u'
+        [InlineData("iddhi")]                  // independent 'i'
+        [InlineData("ekaṃ")]                   // independent 'e' + niggahita
+        [InlineData("oḷārikaṃ")]               // independent 'o', retroflex l
+        public void DirectIpe2Deva_RoundTripsLosslessly(string latin)
+        {
+            // IPE preserves the exact akshara structure, so re-encoding the
+            // Devanagari produced by Ipe2Deva must reproduce the original IPE.
+            string ipe = Latn2Ipe.Convert(latin);
+            string deva = Ipe2Deva.Convert(ipe);
+            string ipeBack = Deva2Ipe.Convert(deva);
+
+            Assert.Equal(ipe, ipeBack);
+        }
+
+        [Fact]
+        public void ScriptConverter_IpeToDevanagari_UsesDirectConverter()
+        {
+            // ScriptConverter's IPE -> Devanagari path must match Ipe2Deva exactly.
+            string ipe = Latn2Ipe.Convert("paṭiccasamuppādo");
+
+            Assert.Equal(
+                Ipe2Deva.Convert(ipe),
+                ScriptConverter.Convert(ipe, Script.Ipe, Script.Devanagari));
+        }
+
+        [Fact]
+        public void DirectIpe2Deva_InsertsZwjInOpenConjuncts()
+        {
+            // "cakka" contains the ka+ka conjunct, which must carry a ZWJ
+            // (U+200D) so it renders in the open/half form. The Latin path
+            // delegates to the same shared helper, so output must be identical.
+            string ipe = Latn2Ipe.Convert("cakka");
+            string deva = Ipe2Deva.Convert(ipe);
+
+            Assert.Contains('\u200D', deva); // ZWJ
+            Assert.Equal(Latn2Deva.Convert(Ipe2Latn.Convert(ipe)), deva);
         }
 
         private string GetByteString(string s)

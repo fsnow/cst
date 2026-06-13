@@ -159,20 +159,9 @@ namespace CST.Conversion
 				word.Length = 0;
 			}
 
-			// insert ZWJ in some Devanagari conjuncts
-			book = book.Replace("\u0915\u094D\u0915", "\u0915\u094D\u200D\u0915"); // ka + ka
-			book = book.Replace("\u0915\u094D\u0932", "\u0915\u094D\u200D\u0932"); // ka + la
-			book = book.Replace("\u0915\u094D\u0935", "\u0915\u094D\u200D\u0935"); // ka + va
-			book = book.Replace("\u091A\u094D\u091A", "\u091A\u094D\u200D\u091A"); // ca + ca
-			book = book.Replace("\u091C\u094D\u091C", "\u091C\u094D\u200D\u091C"); // ja + ja
-			book = book.Replace("\u091E\u094D\u091A", "\u091E\u094D\u200D\u091A"); // n(tilde)a + ca
-			book = book.Replace("\u091E\u094D\u091C", "\u091E\u094D\u200D\u091C"); // n(tilde)a + ja
-            book = book.Replace("\u091E\u094D\u091E", "\u091E\u094D\u200D\u091E"); // n(tilde)a + �a
-            book = book.Replace("\u0928\u094D\u0928", "\u0928\u094D\u200D\u0928"); // na + na
-			book = book.Replace("\u092A\u094D\u0932", "\u092A\u094D\u200D\u0932"); // pa + la
-			book = book.Replace("\u0932\u094D\u0932", "\u0932\u094D\u200D\u0932"); // la + la
-
-			return book.ToString();
+			// ZWJ insertion for open-form conjuncts is shared with the
+			// IPE -> Devanagari path; see Ipe2Deva.InsertConjunctZwj.
+			return Ipe2Deva.InsertConjunctZwj(book.ToString());
 		}
 
         public static bool IsDigit(char c)

@@ -31,7 +31,7 @@ namespace CST.Conversion
                 }
                 else if (outputScript == Script.Devanagari)
                 {
-                    outStr = Convert(Convert(str, Script.Ipe, Script.Latin), Script.Latin, Script.Devanagari);
+                    outStr = Ipe2Deva.Convert(str);
                 }
                 else
                 {
