@@ -127,7 +127,7 @@ namespace CST.Conversion
 
             // convert "nti to n"ti, per Dhananjay email 3 Aug 07
             // commenting out per Ramnath/Priti email  29 Aug 07
-            //str = Regex.Replace(str, "([’”]*)nti", "n$1ti");
+            //str = Regex.Replace(str, "([\u0092\u0094]*)nti", "n$1ti");
 
             return str;
         }

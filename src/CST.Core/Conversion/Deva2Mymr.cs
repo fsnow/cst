@@ -131,7 +131,7 @@ namespace CST.Conversion
 
             string mya = sb.ToString();
 
-            // Replace ña + virama + ña with ñña character
+            // Replace n(tilde)a + virama + n(tilde)a with n(tilde)n(tilde)a character
             mya = mya.Replace("\u1009\u1039\u1009", "\u100A");
 
             // use dependent consonant signs ya, ra, wa and ha, if after virama
