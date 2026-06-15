@@ -22,9 +22,9 @@ public class QuickTest
         }
         else
         {
-            Console.WriteLine("Data source: syllable-test-words.txt (curated test set)");
-            dataSource = "syllable-test-words.txt (curated test set)";
-            testWords = LoadSyllableTestWords();
+            Console.WriteLine("Data source: syllable-test-words.txt + vowel-test-words.txt (curated test set)");
+            dataSource = "syllable-test-words.txt + vowel-test-words.txt (curated test set)";
+            testWords = LoadCuratedTestWords();
         }
 
         Console.WriteLine($"Total words to test: {testWords.Count}\n");
@@ -40,22 +40,37 @@ public class QuickTest
         }
     }
 
-    static List<string> LoadSyllableTestWords()
+    // The curated set combines the syllable coverage words with the vowel-hiatus
+    // coverage words (independent vowels in medial position, vowel-vowel hiatus,
+    // etc.). The two files are complementary: syllable-test-words.txt covers every
+    // unique syllable; vowel-test-words.txt covers every vowel-hiatus combination
+    // found in the corpus (these expose transliteration ambiguities, e.g. Cyrillic).
+    static List<string> LoadCuratedTestWords()
     {
-        string syllableFile = "syllable-test-words.txt";
+        var words = new List<string>();
+        words.AddRange(LoadWordsFile("syllable-test-words.txt", required: true));
+        words.AddRange(LoadWordsFile("vowel-test-words.txt", required: false));
+        // De-duplicate while preserving first-seen order.
+        return words.Distinct().ToList();
+    }
 
-        if (!File.Exists(syllableFile))
+    static List<string> LoadWordsFile(string fileName, bool required)
+    {
+        if (!File.Exists(fileName))
         {
-            Console.WriteLine($"ERROR: {syllableFile} not found");
-            Environment.Exit(1);
+            if (required)
+            {
+                Console.WriteLine($"ERROR: {fileName} not found");
+                Environment.Exit(1);
+            }
+            Console.WriteLine($"Note: {fileName} not found, skipping");
+            return new List<string>();
         }
 
-        string syllableText = File.ReadAllText(syllableFile);
-        var words = syllableText.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+        string text = File.ReadAllText(fileName);
+        return text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries)
             .Where(w => !string.IsNullOrWhiteSpace(w))
             .ToList();
-
-        return words;
     }
 
     static List<string> LoadFullCorpus()
@@ -121,9 +136,12 @@ public class QuickTest
     static List<ScriptValidationResult> RunValidation(List<string> testWords)
     {
         // Test scripts
-        var scriptsToTest = new[] { Script.Gujarati };
-        // Script.Bengali, Script.Cyrillic, Script.Devanagari, Script.Gujarati, Script.Gurmukhi, Script.Kannada, Script.Khmer,
-        // Script.Latin, Script.Malayalam, Script.Myanmar, Script.Sinhala, Script.Telugu, Script.Thai, Script.Tibetan
+        var scriptsToTest = new[]
+        {
+            Script.Bengali, Script.Cyrillic, Script.Devanagari, Script.Gujarati, Script.Gurmukhi,
+            Script.Kannada, Script.Khmer, Script.Latin, Script.Malayalam, Script.Myanmar,
+            Script.Sinhala, Script.Telugu, Script.Thai, Script.Tibetan
+        };
 
         var results = new List<ScriptValidationResult>();
 
