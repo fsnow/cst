@@ -192,6 +192,17 @@ public partial class App : Application
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Pre-loading fonts..."));
                 await InitializeFontsAsync();
 
+                // Initialize the search index directory BEFORE checking for XML updates.
+                // The update flow re-indexes downloaded files via IndexingService, which
+                // needs its index directory set first; otherwise BookIndexer throws on an
+                // empty path. (InitializeIndexingAsync below calls InitializeAsync again,
+                // which is idempotent.)
+                var indexingServiceInit = ServiceProvider?.GetRequiredService<IIndexingService>();
+                if (indexingServiceInit != null)
+                {
+                    await indexingServiceInit.InitializeAsync();
+                }
+
                 // Check for XML updates first to ensure we have latest files
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Checking for XML updates..."));
                 await CheckForXmlUpdatesAsync(welcomeViewModel);

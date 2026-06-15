@@ -700,13 +700,18 @@ namespace CST.Avalonia.Services
                         File.Move(file, destPath, overwrite: true);
                     }
                     
-                    // Save all file dates with commit hashes (both up-to-date and newly downloaded)
-                    await _xmlFileDatesService.SaveFileDatesDataAsync(allFiles, latestCommitHash);
-                    
-                    // Trigger incremental indexing
+                    // Trigger incremental indexing BEFORE persisting file dates. The
+                    // dates cache must still show these files as changed when BuildIndexAsync
+                    // runs its change detection; persisting dates first would make it see
+                    // "0 changed" and skip indexing entirely.
                     UpdateStatusChanged?.Invoke("Re-indexing updated files...");
                     var progress = new Progress<IndexingProgress>();
                     await _indexingService.BuildIndexAsync(progress);
+
+                    // Save all file dates with commit hashes (both up-to-date and newly
+                    // downloaded) only AFTER indexing succeeds, so a failed index leaves the
+                    // cache stale and the next launch retries instead of silently skipping.
+                    await _xmlFileDatesService.SaveFileDatesDataAsync(allFiles, latestCommitHash);
                     
                     UpdateStatusChanged?.Invoke($"Successfully updated {filesToUpdate.Count} files");
                     _logger.LogInformation("Update completed successfully. API calls used: 2 total. Direct downloads: {Count}", filesToUpdate.Count);
