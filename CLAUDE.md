@@ -39,7 +39,7 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 - **Script Synchronization**: Search results and book tree automatically update display when global script changes
 - **Script Conversion Validation & Quality Assurance**:
    - **Comprehensive Round-Trip Testing**: Automated validation tool tests Deva → IPE → Script → IPE → Script conversions for all 14 Pali scripts
-   - **Corpus-Based Test Coverage**: 2,248 carefully selected words covering all unique syllable patterns and 140 medial independent vowel patterns found in the 217-book Pali corpus
+   - **Corpus-Based Test Coverage**: A curated set of 2,364 words (deduplicated) — `syllable-test-words.txt` (every unique syllable pattern) plus `vowel-test-words.txt` (every vowel-hiatus combination, i.e. independent vowels in mid-word position) — drawn from the 217-book Pali corpus
    - **Multiple Testing Modes**:
      - `validate`: Round-trip conversion accuracy testing with HTML reports
      - `compare`: Compare CST converters against external converters (pnfo, Aksharamukha)
@@ -49,10 +49,11 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
      - Rapid development of 5 missing input parsers (Bengali, Gujarati, Gurmukhi, Kannada, Malayalam)
      - Rapid development of 5 missing script converters (Khmer, Myanmar, Sinhala, Telugu, Tibetan)
      - Discovery and fix of longstanding bugs in converters/parsers
-     - **99.96% success rate** across all 13 scripts (Thai, Myanmar, Latin, Bengali, Gujarati, Gurmukhi, Kannada, Malayalam, Tibetan, Sinhala, Khmer, Telugu, Cyrillic)
-   - **Known Limitations**:
-     - **Cyrillic**: ~15 failures (0.67%) due to inherent encoding ambiguity for consonant + аа patterns
-     - **All Scripts**: 1 shared failure due to Latin transliteration ambiguity (`ग्ग्ह` vs `ग्घ` - "g+g+h" vs "g+gh") in likely erroneous source word
+     - **Lossless round-trip conversion for 13 of the 14 scripts** (Bengali, Devanagari, Gujarati, Gurmukhi, Kannada, Khmer, Latin, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan); the Cyrillic exceptions are a transliteration-scheme limitation, not a converter defect (see below)
+   - **Findings — distinguishing scheme limitations, source-data errors, and bugs**:
+     - **Transliteration-scheme limitation — Cyrillic**: ~19 of the 2,364 curated words (~0.8%) do not round-trip, because the current Cyrillic scheme cannot distinguish certain vowel sequences (consonant + аа, and vowel hiatus). This is an inherent limitation of the scheme, **not a converter bug**; reconsidering the scheme is tracked as future low-priority work.
+     - **Source-data errors (not conversion failures)**: The framework surfaces typos in the VRI source XML. Example: `ग्ग्ह` ("g+g+h") in `s0103t.tik.xml` — the only occurrence in 217 books, vs. 7,519 of the correct `ग्गहण` — was removed from the test set and reported to VRI; Tipitaka.org confirmed it was corrected in the source in March 2026. The vowel-hiatus scan also produced a candidate-error list (`src/CST.ScriptValidation/reports/vowel-hiatus-candidate-errors.md`) for further VRI review.
+     - **Converter bugs**: longstanding parser/converter bugs found via this framework have been fixed (see Production Impact above); none are currently outstanding.
    - **Documentation**: See `src/CST.ScriptValidation/README.md` for complete usage guide and technical details
 
 ### **UI Font Management System**
