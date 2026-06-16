@@ -24,7 +24,6 @@
             <NativeMenuItem Header="Tools">
                 <NativeMenu>
                     <NativeMenuItem Header="Go To..." Click="OnGoToMenuItemClick" Gesture="cmd+g" />
-                    <NativeMenuItem Header="Test PDF Access (SharePoint)" Click="OnTestPdfMenuItemClick" />
                 </NativeMenu>
             </NativeMenuItem>
         </NativeMenu>

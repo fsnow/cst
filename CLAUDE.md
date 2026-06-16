@@ -69,11 +69,12 @@ CST Reader is a modern, cross-platform Pali text reader featuring a complete imp
 - **Full-Text Search Engine**: Complete Lucene.NET 4.8+ implementation with position-based indexing for all 217 Pali texts
 - **Advanced Search Features**:
     - Single and multi-term exact searches with accurate counting
-    - **Phrase Search**: Quoted terms (e.g., `"evaṃ me"`) find exact adjacent word sequences
-    - **Proximity Search**: Unquoted multi-word searches find terms within adjustable word distance (default: 10 words)
-    - **Two-Color Highlighting**: Blue background for primary search terms, green background for context words in proximity matches
+    - **Phrase Search**: Quoted terms (e.g., `"evaṃ me sutaṃ"`) find exact adjacent word sequences of **any length** (3+ words supported)
+    - **Proximity Search**: Unquoted multi-word searches (any number of words) find terms within an adjustable word-distance window (default: 10). The window is an *all-within-a-window* test — every word must fall inside one span of the given size — which is intentionally stricter than CST4 (which measured each word's distance from the first word only)
+    - **Mixed / Multiple Phrases**: A query is parsed into *units* (a word or a quoted phrase); within a phrase words must be adjacent, between units the proximity window applies. This supports a phrase plus loose words (`"evaṃ me" sutaṃ`) and multiple distinct phrases (`"evaṃ me" "taṃ kho"`) — neither of which CST4 could express
+    - **Two-Color Highlighting**: Blue for the match anchor (first word of each match), green for the remaining matched words; one navigable hit per match occurrence (Next/Prev steps occurrence-by-occurrence, and the in-book hit count equals the number of matches)
     - **Tag Crossing Detection**: Proper XML structure preservation when highlights span CST's partial word bolding and quotation markup
-    - Wildcard search (`*` and `?`) working in all 14 scripts, with expansion support in multi-word searches
+    - Wildcard search (`*` and `?`) working in all 14 scripts, with expansion support in multi-word searches. Wildcard expansion is capped (5,000 forms per term) and a **truncation indicator** is shown in the search panel when a result set is capped (so incomplete results are never silent)
     - Regular expression search support
     - Position-based highlighting with correct character offsets
 - **Smart Book Filtering**:
@@ -182,25 +183,6 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
 **Technical Details**: See `markdown/notes/AVALONIA_HIGH_CPU.md` for complete analysis including CPU profiling data, stack traces, and references to Avalonia GitHub issues (#11070, #15894).
 
 **Note**: This is an Avalonia framework limitation, not a CST Reader bug. Future improvements depend on Avalonia framework optimizations or alternative rendering approaches.
-
-### **Multi-Word Search Limitation**
-
-Multi-word and phrase search currently only work with 2 words. Searches with 3 or more words return no results.
-
-**What Works**:
-- Single word searches
-- Two-word proximity search (e.g., `dhamma vinaya`)
-- Two-word phrase search (e.g., `"evaṃ me"`)
-
-**What Doesn't Work**:
-- Three or more word proximity searches (e.g., `dhamma vinaya sangha`)
-- Three or more word phrase searches (e.g., `"evaṃ me sutaṃ"`)
-
-**Impact**: Users cannot search for common longer phrases like "evaṃ me sutaṃ" (Thus have I heard) or perform proximity searches with multiple concepts.
-
-**Issue Tracking**: See issue #30 for technical details and debugging investigation.
-
-**Priority**: High - This is a bug in core search functionality that significantly impacts usability.
 
 ## Outstanding Work
 

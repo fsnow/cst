@@ -79,9 +79,10 @@ namespace CST.Avalonia.ViewModels
         public event EventHandler? PanelVisibilityChanged;
 
         public void OpenBook(CST.Book book, List<string>? searchTerms = null, Script? bookScript = null, string? windowId = null,
-            int? docId = null, List<TermPosition>? searchPositions = null, string? initialAnchor = null)
+            int? docId = null, List<TermPosition>? searchPositions = null, string? initialAnchor = null,
+            int? initialCurrentHitIndex = null)
         {
-            _factory.OpenBook(book, initialAnchor, bookScript, windowId, searchTerms, docId, searchPositions);
+            _factory.OpenBook(book, initialAnchor, bookScript, windowId, searchTerms, docId, searchPositions, initialCurrentHitIndex);
         }
 
         public void CloseBook(string bookId)

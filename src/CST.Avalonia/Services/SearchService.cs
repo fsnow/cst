@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
+using CST.Avalonia.Search;
 using CST.Conversion;
 using CST.Lucene;
 using Lucene.Net.Documents;
@@ -86,24 +87,30 @@ public class SearchService : ISearchService
             var ipeTerm = Any2Ipe.Convert(query.QueryText);
             ipeTerm = ipeTerm.Replace("  ", " ").Trim();
 
-            // Check for phrase search
-            query.IsPhrase = ipeTerm.StartsWith("\"") || ipeTerm.EndsWith("\"");
-            
-            // Remove quotation marks
-            ipeTerm = CleanQuotationMarks(ipeTerm);
+            // Normalize smart double-quotes to ASCII so pasted text still triggers phrase parsing.
+            ipeTerm = ipeTerm.Replace("\u201C", "\"").Replace("\u201D", "\"");
 
-            // Check for multi-word search
-            query.IsMultiWord = ipeTerm.Contains(" ");
+            // Parse into units, honoring quoted phrases (do NOT pre-strip quotes). A unit is a
+            // single word or a quoted phrase; within a phrase => adjacency, between units => the
+            // proximity window. Richer than CST4's single whole-query phrase flag.
+            var units = MultiWordSearch.ParseUnits(ipeTerm);
+
+            // Diagnostic/UI flags retained for downstream consumers.
+            query.IsPhrase = units.Any(u => u.IsPhrase);
+            query.IsMultiWord = units.Count > 1 || (units.Count == 1 && units[0].IsPhrase);
 
             SearchResult result;
-            if (query.IsMultiWord)
+            if (units.Count == 0)
             {
-                var terms = ipeTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                result = await SearchMultipleTermsAsync(reader, terms, query, books, cancellationToken);
+                result = new SearchResult();
+            }
+            else if (units.Count == 1 && !units[0].IsPhrase)
+            {
+                result = await SearchSingleTermAsync(reader, units[0].Words[0], query, books, cancellationToken);
             }
             else
             {
-                result = await SearchSingleTermAsync(reader, ipeTerm, query, books, cancellationToken);
+                result = await SearchMultiWordAsync(reader, units, query, books, cancellationToken);
             }
 
             stopwatch.Stop();
@@ -148,6 +155,11 @@ public class SearchService : ISearchService
         var matchingTerms = await GetMatchingTermsAsync(reader, termMatcher, cancellationToken);
 
         var termsToProcess = matchingTerms.Take(query.PageSize).ToList();
+        if (matchingTerms.Count > termsToProcess.Count)
+        {
+            result.ResultsTruncated = true;
+            result.TruncationMessage = $"Showing the first {termsToProcess.Count:N0} of {matchingTerms.Count:N0} matching words — refine your search to narrow the results.";
+        }
         _logger.LogInformation("Processing {Count} terms for display conversion", termsToProcess.Count);
         
         // Debug: Log first and last few terms to understand the order
@@ -198,141 +210,138 @@ public class SearchService : ISearchService
         return result;
     }
 
-    private async Task<SearchResult> SearchMultipleTermsAsync(
-        DirectoryReader reader,
-        string[] ipeTerms,
-        SearchQuery query,
-        Books books,
-        CancellationToken cancellationToken)
-    {
-        // Route to phrase/proximity search if enabled
-        if (query.IsPhrase || query.ProximityDistance > 0)
-        {
-            return await SearchMultiWordAsync(reader, ipeTerms, query, books, cancellationToken);
-        }
-
-        // Fallback: search for each term independently (old behavior)
-        var result = new SearchResult();
-
-        foreach (var term in ipeTerms)
-        {
-            var singleQuery = new SearchQuery
-            {
-                QueryText = term,
-                Mode = query.Mode,
-                Filter = query.Filter,
-                PageSize = query.PageSize
-            };
-
-            var singleResult = await SearchSingleTermAsync(reader, term, singleQuery, books, cancellationToken);
-
-            // Merge results
-            result.Terms.AddRange(singleResult.Terms);
-            result.TotalOccurrenceCount += singleResult.TotalOccurrenceCount;
-        }
-
-        result.TotalTermCount = result.Terms.Count;
-        result.TotalBookCount = result.Terms.SelectMany(t => t.Occurrences).Select(o => o.Book).Distinct().Count();
-
-        return result;
-    }
-
     /// <summary>
-    /// Searches for multiple words with phrase or proximity matching.
-    /// Based on CST4's GetMatchingTermsWithContext algorithm.
+    /// Multi-word / phrase search over a sequence of units. Within a phrase unit the words must be
+    /// adjacent (query order); between units the matched occurrences must fall within a proximity
+    /// window (all-within-a-window, measured between unit anchors). Produces MatchingTerm results
+    /// with two-color highlighting data (first unit = blue, the rest = green). See
+    /// <see cref="MultiWordSearch"/> for the pure matching logic and its unit tests.
     /// </summary>
-    /// <param name="reader">Index reader</param>
-    /// <param name="ipeTerms">Array of IPE-encoded search terms</param>
-    /// <param name="query">Search query with IsPhrase and ProximityDistance</param>
-    /// <param name="books">Books collection</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Search results with unique word pairs and multi-color highlighting data</returns>
     private async Task<SearchResult> SearchMultiWordAsync(
         DirectoryReader reader,
-        string[] ipeTerms,
+        List<SearchUnit> units,
         SearchQuery query,
         Books books,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Multi-word search: {TermCount} terms, IsPhrase={IsPhrase}, Distance={Distance}",
-            ipeTerms.Length, query.IsPhrase, query.ProximityDistance);
+        _logger.LogInformation("Multi-word search: {UnitCount} units, IsPhrase={IsPhrase}, Distance={Distance}",
+            units.Count, query.IsPhrase, query.ProximityDistance);
 
         var result = new SearchResult();
         var bookBits = CalculateBookBits(query.Filter, books);
         var liveDocs = MultiFields.GetLiveDocs(reader);
 
-        // Step 1: Expand wildcards for each term
-        var expandedTerms = new List<string>[ipeTerms.Length];
-        for (int i = 0; i < ipeTerms.Length; i++)
+        // Step 1: expand wildcards for every word slot of every unit.
+        // expandedUnits[u][slot] = concrete index words for that slot.
+        var expandedUnits = new List<List<string>[]>(units.Count);
+        int truncatedTermCount = 0;
+        foreach (var unit in units)
         {
-            var term = ipeTerms[i];
-
-            if (query.Mode == SearchMode.Wildcard && (term.Contains("*") || term.Contains("?")))
+            var slots = new List<string>[unit.Words.Count];
+            for (int s = 0; s < unit.Words.Count; s++)
             {
-                expandedTerms[i] = ExpandWildcard(term, 100);
-                _logger.LogDebug("Word {Index}: '{Term}' expanded to {Count} terms", i, term, expandedTerms[i].Count);
+                var w = unit.Words[s];
+                if (query.Mode == SearchMode.Wildcard && (w.Contains("*") || w.Contains("?")))
+                {
+                    slots[s] = ExpandWildcard(w, out var wasTruncated);
+                    if (wasTruncated) truncatedTermCount++;
+                }
+                else
+                {
+                    slots[s] = new List<string> { w };
+                }
             }
-            else
-            {
-                expandedTerms[i] = new List<string> { term };
-            }
-
+            expandedUnits.Add(slots);
             cancellationToken.ThrowIfCancellationRequested();
         }
-
-        // Step 2: Filter books - only keep books containing ALL terms (from at least one expansion)
-        var booksWithAllTerms = new HashSet<int>();
-
-        for (int docId = 0; docId < reader.MaxDoc; docId++)
+        if (truncatedTermCount > 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            result.ResultsTruncated = true;
+            result.TruncationMessage = $"{truncatedTermCount} wildcard word(s) matched more than {WildcardExpansionLimit:N0} forms and were truncated — some results may be missing. Use more specific wildcards for complete results.";
+        }
 
-            var book = books.FromDocId(docId);
-            if (book == null || !bookBits[book.Index])
-                continue;
-
-            bool hasAllTerms = true;
-
-            // Check if this book contains at least one variant of each word
-            foreach (var termVariants in expandedTerms)
+        // Steps 2-3: gather positions for every expanded term in a SINGLE pass per term, bucketed
+        // by book, then run the matcher per candidate book. This is O(total postings) rather than
+        // O(books x terms) dictionary seeks - the difference between ~1s and ~60s for common stems.
+        // slotPositionsByBook[unit][slot]: docId -> positions of any expansion of that slot in that book.
+        var slotPositionsByBook = new List<Dictionary<int, List<TermPosition>>[]>(expandedUnits.Count);
+        var sw = Stopwatch.StartNew();
+        foreach (var slots in expandedUnits)
+        {
+            var perSlot = new Dictionary<int, List<TermPosition>>[slots.Length];
+            for (int s = 0; s < slots.Length; s++)
             {
-                bool hasThisTerm = false;
-
-                foreach (var term in termVariants)
+                var byDoc = new Dictionary<int, List<TermPosition>>();
+                foreach (var term in slots[s])
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var termBytes = new BytesRef(Encoding.UTF8.GetBytes(term));
                     var dape = MultiFields.GetTermPositionsEnum(reader, liveDocs, "text", termBytes);
+                    if (dape == null)
+                        continue;
 
-                    if (dape != null)
+                    int docId;
+                    while ((docId = dape.NextDoc()) != DocIdSetIterator.NO_MORE_DOCS)
                     {
-                        int advancedDoc = dape.Advance(docId);
-                        if (advancedDoc == docId)
+                        int freq = dape.Freq;
+                        List<TermPosition>? list = null;
+                        for (int i = 0; i < freq; i++)
                         {
-                            hasThisTerm = true;
-                            break;
+                            int pos = dape.NextPosition();
+                            int startOffset = dape.StartOffset;
+                            int endOffset = dape.EndOffset;
+                            if (startOffset < 0 || endOffset <= startOffset)
+                                continue;
+
+                            if (list == null && !byDoc.TryGetValue(docId, out list))
+                            {
+                                list = new List<TermPosition>();
+                                byDoc[docId] = list;
+                            }
+                            list!.Add(new TermPosition
+                            {
+                                Position = pos,
+                                StartOffset = startOffset,
+                                EndOffset = endOffset,
+                                Word = term
+                            });
                         }
                     }
                 }
-
-                if (!hasThisTerm)
-                {
-                    hasAllTerms = false;
-                    break;
-                }
+                perSlot[s] = byDoc;
             }
-
-            if (hasAllTerms)
-            {
-                booksWithAllTerms.Add(docId);
-            }
+            slotPositionsByBook.Add(perSlot);
         }
+        _logger.LogInformation("Multi-word: gathered positions for all expanded terms in {Elapsed}ms", sw.ElapsedMilliseconds);
 
-        _logger.LogInformation("Found {BookCount} books containing all terms", booksWithAllTerms.Count);
+        // Candidate books = present in EVERY slot of EVERY unit, and in the active filter.
+        HashSet<int>? candidateBooks = null;
+        foreach (var perSlot in slotPositionsByBook)
+        {
+            foreach (var byDoc in perSlot)
+            {
+                if (candidateBooks == null)
+                    candidateBooks = new HashSet<int>(byDoc.Keys);
+                else
+                    candidateBooks.IntersectWith(byDoc.Keys);
+                if (candidateBooks.Count == 0) break;
+            }
+            if (candidateBooks != null && candidateBooks.Count == 0) break;
+        }
+        candidateBooks ??= new HashSet<int>();
+        candidateBooks.RemoveWhere(docId =>
+        {
+            var b = books.FromDocId(docId);
+            return b == null || !bookBits[b.Index];
+        });
 
-        // Step 3: For each book with all terms, find proximity/phrase matches
-        var wordPairs = new Dictionary<string, MatchingTerm>(); // Key: "term1|term2"
+        _logger.LogInformation("Found {BookCount} candidate books containing all terms", candidateBooks.Count);
 
-        foreach (var docId in booksWithAllTerms)
+        // Per candidate book, resolve unit occurrences and combine into hits.
+        var combos = new Dictionary<string, MatchingTerm>(); // key: word0~word1~...
+        sw.Restart();
+
+        foreach (var docId in candidateBooks)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -340,154 +349,90 @@ public class SearchService : ISearchService
             if (book == null)
                 continue;
 
-            // Get all combinations of term1 and term2 (only handling 2-word searches for now)
-            if (expandedTerms.Length == 2)
+            var unitOccurrences = new List<List<UnitOccurrence>>(slotPositionsByBook.Count);
+            bool anyEmpty = false;
+            foreach (var perSlot in slotPositionsByBook)
             {
-                foreach (var term1 in expandedTerms[0])
+                var wordSlots = new List<TermPosition>[perSlot.Length];
+                for (int s = 0; s < perSlot.Length; s++)
                 {
-                    foreach (var term2 in expandedTerms[1])
+                    if (!perSlot[s].TryGetValue(docId, out var list))
                     {
-                        var positions1 = GetTermPositions(reader, liveDocs, term1, docId);
-                        var positions2 = GetTermPositions(reader, liveDocs, term2, docId);
-
-                        if (positions1.Count == 0 || positions2.Count == 0)
-                            continue;
-
-                        // Find matches based on search type
-                        List<(int pos1, int pos2)> matches;
-
-                        if (query.IsPhrase)
-                        {
-                            matches = FindPhraseMatches(positions1.Select(p => p.Position).ToList(),
-                                                       positions2.Select(p => p.Position).ToList());
-                        }
-                        else
-                        {
-                            var proximityMatches = FindProximityMatches(
-                                positions1.Select(p => p.Position).ToList(),
-                                positions2.Select(p => p.Position).ToList(),
-                                query.ProximityDistance);
-                            matches = proximityMatches.Select(m => (m.pos1, m.pos2)).ToList();
-                        }
-
-                        if (matches.Count > 0)
-                        {
-                            // Create unique key for this word pair
-                            string pairKey = $"{term1}|{term2}";
-
-                            if (!wordPairs.ContainsKey(pairKey))
-                            {
-                                wordPairs[pairKey] = new MatchingTerm
-                                {
-                                    Term = pairKey,
-                                    DisplayTerm = $"{ConvertToDisplayScript(term1)} {ConvertToDisplayScript(term2)}",
-                                    Occurrences = new List<BookOccurrence>()
-                                };
-                            }
-
-                            // Build TermPosition objects with WordIndex and IsFirstTerm
-                            var termPositions = new List<TermPosition>();
-
-                            foreach (var (pos1, pos2) in matches)
-                            {
-                                // Add first term position
-                                var tp1 = positions1.FirstOrDefault(p => p.Position == pos1);
-                                if (tp1 != null)
-                                {
-                                    termPositions.Add(new TermPosition
-                                    {
-                                        Position = tp1.Position,
-                                        StartOffset = tp1.StartOffset,
-                                        EndOffset = tp1.EndOffset,
-                                        WordIndex = 0,
-                                        IsFirstTerm = true,
-                                        Word = term1
-                                    });
-                                }
-
-                                // Add second term position
-                                var tp2 = positions2.FirstOrDefault(p => p.Position == pos2);
-                                if (tp2 != null)
-                                {
-                                    termPositions.Add(new TermPosition
-                                    {
-                                        Position = tp2.Position,
-                                        StartOffset = tp2.StartOffset,
-                                        EndOffset = tp2.EndOffset,
-                                        WordIndex = 1,
-                                        IsFirstTerm = false,
-                                        Word = term2
-                                    });
-                                }
-                            }
-
-                            // Sort by position for proper highlighting
-                            termPositions.Sort();
-
-                            var occurrence = new BookOccurrence
-                            {
-                                Book = book,
-                                Count = matches.Count,
-                                Positions = termPositions
-                            };
-
-                            wordPairs[pairKey].Occurrences.Add(occurrence);
-                            wordPairs[pairKey].TotalCount += matches.Count;
-                        }
+                        anyEmpty = true;
+                        break;
                     }
+                    list.Sort();
+                    wordSlots[s] = list;
                 }
+                if (anyEmpty) break;
+
+                var occs = MultiWordSearch.FindUnitOccurrences(wordSlots);
+                if (occs.Count == 0) { anyEmpty = true; break; }
+                unitOccurrences.Add(occs);
+            }
+            if (anyEmpty)
+                continue;
+
+            var hits = MultiWordSearch.FindHits(unitOccurrences, query.ProximityDistance);
+
+            foreach (var hit in hits)
+            {
+                var ordered = hit.OrderBy(tp => tp.Position).ToList();
+                string key = string.Join("~", ordered.Select(tp => tp.Word));
+
+                if (!combos.TryGetValue(key, out var mt))
+                {
+                    mt = new MatchingTerm
+                    {
+                        Term = key,
+                        DisplayTerm = string.Join(" ", ordered.Select(tp => ConvertToDisplayScript(tp.Word))),
+                        Occurrences = new List<BookOccurrence>()
+                    };
+                    combos[key] = mt;
+                }
+
+                var occ = mt.Occurrences.FirstOrDefault(o => o.Book == book);
+                if (occ == null)
+                {
+                    occ = new BookOccurrence { Book = book, Count = 0, Positions = new List<TermPosition>() };
+                    mt.Occurrences.Add(occ);
+                }
+
+                occ.Positions.AddRange(hit);
+                occ.Count++;
+                mt.TotalCount++;
+            }
+        }
+        _logger.LogInformation("Multi-word: matched {BookCount} candidate books in {Elapsed}ms", candidateBooks.Count, sw.ElapsedMilliseconds);
+
+        // De-duplicate highlight positions per occurrence (a word can be shared by overlapping
+        // hits); prefer the first-term marking. Then sort for highlighting.
+        foreach (var mt in combos.Values)
+        {
+            foreach (var occ in mt.Occurrences)
+            {
+                var byOffset = new Dictionary<int, TermPosition>();
+                foreach (var tp in occ.Positions)
+                {
+                    if (!byOffset.TryGetValue(tp.StartOffset, out var existing) || (tp.IsFirstTerm && !existing.IsFirstTerm))
+                        byOffset[tp.StartOffset] = tp;
+                }
+                occ.Positions = byOffset.Values.OrderBy(p => p.Position).ToList();
             }
         }
 
-        // Step 4: Convert results
-        result.Terms = wordPairs.Values.ToList();
+        // Step 4: convert results
+        // Order matching combinations alphabetically by their IPE words (word-by-word), matching
+        // CST4 and the single-term path. The '~'-joined key sorts word0, then word1, etc.
+        result.Terms = combos.Values.OrderBy(t => t.Term, StringComparer.Ordinal).ToList();
         result.TotalTermCount = result.Terms.Count;
         result.TotalOccurrenceCount = result.Terms.Sum(t => t.TotalCount);
         result.TotalBookCount = result.Terms.SelectMany(t => t.Occurrences).Select(o => o.Book).Distinct().Count();
 
-        _logger.LogInformation("Multi-word search found {PairCount} unique word pairs, {OccurrenceCount} total occurrences",
+        _logger.LogInformation("Multi-word search found {ComboCount} unique word combinations, {OccurrenceCount} total occurrences",
             result.TotalTermCount, result.TotalOccurrenceCount);
 
         return result;
-    }
-
-    /// <summary>
-    /// Helper to get term positions for a specific document.
-    /// </summary>
-    private List<TermPosition> GetTermPositions(DirectoryReader reader, IBits liveDocs, string term, int targetDocId)
-    {
-        var positions = new List<TermPosition>();
-        var termBytes = new BytesRef(Encoding.UTF8.GetBytes(term));
-        var dape = MultiFields.GetTermPositionsEnum(reader, liveDocs, "text", termBytes);
-
-        if (dape == null)
-            return positions;
-
-        int docId = dape.Advance(targetDocId);
-        if (docId != targetDocId)
-            return positions;
-
-        int freq = dape.Freq;
-        for (int i = 0; i < freq; i++)
-        {
-            int pos = dape.NextPosition();
-            int startOffset = dape.StartOffset;
-            int endOffset = dape.EndOffset;
-
-            if (startOffset >= 0 && endOffset > startOffset)
-            {
-                positions.Add(new TermPosition
-                {
-                    Position = pos,
-                    StartOffset = startOffset,
-                    EndOffset = endOffset,
-                    IsFirstTerm = true,  // Single-term helper: all positions are "first term"
-                    Word = term
-                });
-            }
-        }
-
-        return positions;
     }
 
     private async Task<List<BookOccurrence>> GetTermOccurrencesAsync(
@@ -608,8 +553,14 @@ public class SearchService : ISearchService
     /// <param name="pattern">Wildcard pattern (* = any chars, ? = single char)</param>
     /// <param name="maxResults">Maximum number of terms to return (default 100)</param>
     /// <returns>List of matching IPE-encoded terms</returns>
-    private List<string> ExpandWildcard(string pattern, int maxResults = 100)
+    // Per-term wildcard expansion cap. High enough not to limit real Pali stems (which run to a
+    // few hundred inflected/compound forms), low enough to refuse a runaway pattern like "*".
+    // The matcher is position-based, not cartesian, so this bounds postings work, not E^N.
+    private const int WildcardExpansionLimit = 5000;
+
+    private List<string> ExpandWildcard(string pattern, out bool truncated, int maxResults = WildcardExpansionLimit)
     {
+        truncated = false;
         var reader = _indexReader;
         if (reader == null)
             return new List<string>();
@@ -621,75 +572,57 @@ public class SearchService : ISearchService
         var regex = new System.Text.RegularExpressions.Regex(regexPattern);
 
         var fields = MultiFields.GetFields(reader);
-        var terms = fields.GetTerms("text");
+        var terms = fields?.GetTerms("text");
         if (terms == null)
             return new List<string>();
+
+        // The term dictionary is sorted, so seek straight to the literal prefix that precedes the
+        // first wildcard char and stop once we leave that prefix range — instead of scanning all
+        // ~500K terms from the start on every call. A leading-wildcard pattern has no prefix and
+        // still requires a full scan.
+        int firstWild = pattern.IndexOfAny(new[] { '*', '?' });
+        var literalPrefix = firstWild < 0 ? pattern : pattern.Substring(0, firstWild);
 
         var termsEnum = terms.GetEnumerator();
         var results = new List<string>();
 
-        while (termsEnum.MoveNext() && results.Count < maxResults)
+        if (literalPrefix.Length > 0)
         {
-            var term = termsEnum.Term.Utf8ToString();
-            if (regex.IsMatch(term))
+            var status = termsEnum.SeekCeil(new BytesRef(Encoding.UTF8.GetBytes(literalPrefix)));
+            if (status != TermsEnum.SeekStatus.END)
             {
-                results.Add(term);
+                do
+                {
+                    var term = termsEnum.Term.Utf8ToString();
+                    if (!term.StartsWith(literalPrefix, StringComparison.Ordinal))
+                        break; // sorted: past the prefix range, nothing more can match
+                    if (regex.IsMatch(term))
+                    {
+                        if (results.Count >= maxResults) { truncated = true; break; }
+                        results.Add(term);
+                    }
+                } while (termsEnum.MoveNext());
             }
         }
-
-        _logger.LogDebug("Expanded wildcard '{Pattern}' to {Count} terms", pattern, results.Count);
-        return results;
-    }
-
-    /// <summary>
-    /// Finds positions where two terms appear within specified distance.
-    /// </summary>
-    /// <param name="positions1">Positions of first term</param>
-    /// <param name="positions2">Positions of second term</param>
-    /// <param name="maxDistance">Maximum word distance (e.g., 10)</param>
-    /// <returns>List of matching position pairs with distances</returns>
-    private List<(int pos1, int pos2, int distance)> FindProximityMatches(
-        List<int> positions1,
-        List<int> positions2,
-        int maxDistance)
-    {
-        var matches = new List<(int, int, int)>();
-        foreach (var pos1 in positions1)
+        else
         {
-            foreach (var pos2 in positions2)
+            while (termsEnum.MoveNext())
             {
-                int distance = Math.Abs(pos1 - pos2);
-                if (distance <= maxDistance && distance > 0)
+                var term = termsEnum.Term.Utf8ToString();
+                if (regex.IsMatch(term))
                 {
-                    matches.Add((pos1, pos2, distance));
+                    if (results.Count >= maxResults) { truncated = true; break; }
+                    results.Add(term);
                 }
             }
         }
-        return matches;
-    }
 
-    /// <summary>
-    /// Finds positions where term2 appears exactly after term1 (adjacent words).
-    /// </summary>
-    /// <param name="positions1">Positions of first term</param>
-    /// <param name="positions2">Positions of second term</param>
-    /// <returns>List of matching adjacent position pairs</returns>
-    private List<(int pos1, int pos2)> FindPhraseMatches(
-        List<int> positions1,
-        List<int> positions2)
-    {
-        var positions2Set = new HashSet<int>(positions2);
-        var matches = new List<(int, int)>();
+        if (truncated)
+            _logger.LogWarning("Wildcard '{Pattern}' matched more than {Max} terms; truncated. Use a more specific pattern for complete results.", pattern, maxResults);
+        else
+            _logger.LogDebug("Expanded wildcard '{Pattern}' to {Count} terms", pattern, results.Count);
 
-        foreach (var pos1 in positions1)
-        {
-            // For phrase search, term2 must be exactly at position (term1 + 1)
-            if (positions2Set.Contains(pos1 + 1))
-            {
-                matches.Add((pos1, pos1 + 1));
-            }
-        }
-        return matches;
+        return results;
     }
 
     public async Task<List<string>> GetAllTermsAsync(string prefix = "", int limit = 100, CancellationToken cancellationToken = default)
@@ -859,23 +792,16 @@ public class SearchService : ISearchService
         return ScriptConverter.Convert(ipeTerm, Script.Ipe, currentScript);
     }
 
-    private string CleanQuotationMarks(string text)
-    {
-        return text
-            .Replace("\"", "")
-            .Replace("'", "")
-            .Replace("\u2019", "")  // Right single quotation mark
-            .Replace("\u201C", "")  // Left double quotation mark
-            .Replace("\u201D", "")  // Right double quotation mark
-            .Replace("\u201E", "");  // Double low-9 quotation mark
-    }
-
     private string GenerateCacheKey(SearchQuery query)
     {
         var sb = new StringBuilder();
         sb.Append(query.QueryText);
         sb.Append('|');
         sb.Append(query.Mode);
+        sb.Append('|');
+        // Proximity distance affects multi-word results, so it must be part of the key —
+        // otherwise changing the Word Distance and re-running returns the stale cached result.
+        sb.Append(query.ProximityDistance);
         sb.Append('|');
         sb.Append(query.Filter.IncludeVinaya);
         sb.Append(query.Filter.IncludeSutta);

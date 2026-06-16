@@ -197,7 +197,7 @@ namespace CST.Avalonia.Services
                     if (e.PropertyName == nameof(documentDock.ActiveDockable))
                     {
                         Log.Information("*** ACTIVE TAB CHANGED - Saving all book window states ***");
-                        SaveAllBookWindowStates();
+                        _ = SaveAllBookWindowStatesAsync();
                     }
                 };
             }
@@ -459,7 +459,8 @@ namespace CST.Avalonia.Services
         private static string? _lastRegularOpenedBook = null;
         
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
-            List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null)
+            List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null,
+            int? initialCurrentHitIndex = null)
         {
             _logger.Information("Opening book: {BookFile} with anchor: {Anchor}, SearchTerms: {TermCount}, Positions: {PosCount}",
                 book.FileName, anchor ?? "null", searchTerms?.Count ?? 0, searchPositions?.Count ?? 0);
@@ -495,7 +496,7 @@ namespace CST.Avalonia.Services
             var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
 
             // Pass search data if available (for state restoration with highlighting)
-            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this);
+            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex);
             
             // Set the correct script after construction
             if (bookDisplayViewModel != null)
@@ -607,7 +608,7 @@ namespace CST.Avalonia.Services
             _logger.Debug("PDF document created: {DocumentId} with title: {Title}", pdfViewModel.Id, pdfViewModel.Title);
         }
 
-        private async void SaveAllBookWindowStates()
+        public async Task SaveAllBookWindowStatesAsync()
         {
             try
             {
@@ -681,6 +682,8 @@ namespace CST.Avalonia.Services
                     DocId = bookDisplayViewModel.DocId,
                     SearchPositions = bookDisplayViewModel.SearchPositions ?? new List<TermPosition>(),
                     CurrentAnchor = currentAnchor, // Save scroll position for restoration
+                    CurrentHitIndex = bookDisplayViewModel.CurrentHitIndex, // Save which search hit was active
+                    TotalHits = bookDisplayViewModel.TotalHits,
                     TabIndex = 0, // TODO: Get actual tab index from dock
                     IsSelected = isSelectedValue,
                     ShowFootnotes = true, // Default for now

@@ -63,6 +63,7 @@ Historical planning documents for implemented features. Actual implementation ma
 Active work happening now:
 
 - [Go To Implementation](features/in-progress/GO_TO_IMPLEMENTATION.md) - Navigate to page/paragraph dialog
+- [PDF Cleanup and Verification](features/in-progress/PDF_CLEANUP_AND_VERIFICATION.md) - PDF surgery and page marker validation
 - [View Source PDF Implementation](features/in-progress/VIEW_SOURCE_PDF_IMPLEMENTATION.md) - Burmese PDF viewing
 
 - **windows/** - Windows 11 port

@@ -14,6 +14,15 @@
         <vm:BookDisplayViewModel/>
     </Design.DataContext>
 
+    <UserControl.Styles>
+        <!-- Bitmap <Image> content doesn't inherit a Button's disabled foreground, so an image
+             button looks identical when disabled. Dim it explicitly so hit-navigation buttons
+             visibly grey out at the first/last hit (their commands' CanExecute is false there). -->
+        <Style Selector="Button:disabled Image">
+            <Setter Property="Opacity" Value="0.35"/>
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel>
         <!-- Toolbar -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" MinHeight="40">

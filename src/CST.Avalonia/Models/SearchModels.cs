@@ -56,6 +56,11 @@ public class SearchResult
     public int TotalBookCount { get; set; }
     public string? ContinuationToken { get; set; }
     public TimeSpan SearchDuration { get; set; }
+
+    // True when results were capped (wildcard expansion limit or single-term page size).
+    // Surfaced in the UI so users know the result set may be incomplete.
+    public bool ResultsTruncated { get; set; }
+    public string? TruncationMessage { get; set; }
 }
 
 public class MatchingTerm

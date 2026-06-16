@@ -682,7 +682,8 @@ public partial class App : Application
                                             bookWindowState.CurrentAnchor ?? "null");
                                         // Open the book through SimpleTabbedWindow with saved script, search data, WindowId, and scroll position
                                         mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId,
-                                            bookWindowState.DocId, bookWindowState.SearchPositions, bookWindowState.CurrentAnchor);
+                                            bookWindowState.DocId, bookWindowState.SearchPositions, bookWindowState.CurrentAnchor,
+                                            bookWindowState.CurrentHitIndex);
                                         Log.Debug("Book restored: {BookFile} with script: {Script}, anchor: {Anchor}",
                                             book.FileName, bookWindowState.BookScript, bookWindowState.CurrentAnchor ?? "null");
                                     }
@@ -827,6 +828,19 @@ public partial class App : Application
             var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
             if (stateService != null)
             {
+                // Re-capture the latest live ViewModel state (scroll position, search hit
+                // index, etc.) BEFORE serializing. Per-VM capture otherwise only happens on
+                // a tab switch, so anything changed since the last switch is lost on close —
+                // notably when the window is closed with the red button instead of Cmd+Q.
+                if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&
+                    desktop.MainWindow is SimpleTabbedWindow mainWindow &&
+                    mainWindow.DataContext is LayoutViewModel layoutViewModel &&
+                    layoutViewModel.Factory is CstDockFactory factory)
+                {
+                    Log.Information("SHUTDOWN: Re-capturing live book window states before save");
+                    await factory.SaveAllBookWindowStatesAsync();
+                }
+
                 // Force immediate save on shutdown
                 var success = await stateService.ForceSaveAsync();
                 Log.Information("SHUTDOWN: Final state save completed - Success: {Success}", success);

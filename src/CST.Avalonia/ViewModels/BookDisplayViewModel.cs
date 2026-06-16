@@ -36,6 +36,7 @@ namespace CST.Avalonia.ViewModels
         private readonly List<string>? _searchTerms;
         private readonly List<TermPosition>? _searchPositions;  // NEW: Store positions with IsFirstTerm flags
         private readonly string? _initialAnchor;
+        private readonly int? _initialCurrentHitIndex; // saved search hit to restore (null = fresh open)
         private readonly int? _docId;
 
         // Logger instance for BookDisplayViewModel
@@ -96,8 +97,9 @@ namespace CST.Avalonia.ViewModels
         private readonly CstDockFactory? _dockFactory; // Factory for float/unfloat operations
         private string? _lastCapturedAnchor = null; // Cached anchor for scroll position restoration (persists across float/unfloat)
         private string? _pendingAnchorNavigation = null; // Anchor to navigate to when View becomes available
+        private int? _pendingHitNavigation = null; // Search hit to scroll to when View becomes available
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null, CstDockFactory? dockFactory = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null, CstDockFactory? dockFactory = null, int? initialCurrentHitIndex = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             // For now, create ScriptService without logger
@@ -110,6 +112,7 @@ namespace CST.Avalonia.ViewModels
             _searchTerms = searchTerms;
             _searchPositions = searchPositions;  // NEW: Store positions for two-color highlighting
             _initialAnchor = initialAnchor;
+            _initialCurrentHitIndex = initialCurrentHitIndex;
             _docId = docId;
             _bookScript = _scriptService.CurrentScript;
 
@@ -162,11 +165,19 @@ namespace CST.Avalonia.ViewModels
             _hasSearchHighlights = _totalHits > 0;
             _bookInfoText = GetBookInfoDisplayName(book);
             
-            // Initialize commands with simple setup to avoid threading issues
-            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit);
-            PreviousHitCommand = ReactiveCommand.Create(NavigateToPreviousHit);
-            NextHitCommand = ReactiveCommand.Create(NavigateToNextHit);
-            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit);
+            // Hit-navigation commands: First/Previous enabled only when not at the
+            // first hit; Next/Last only when not at the last hit. Avalonia disables
+            // the bound buttons automatically when CanExecute is false.
+            var canGoBack = this.WhenAnyValue(
+                x => x.HasSearchHighlights, x => x.CurrentHitIndex, x => x.TotalHits,
+                (has, idx, total) => has && total > 0 && idx > 1);
+            var canGoForward = this.WhenAnyValue(
+                x => x.HasSearchHighlights, x => x.CurrentHitIndex, x => x.TotalHits,
+                (has, idx, total) => has && total > 0 && idx < total);
+            FirstHitCommand = ReactiveCommand.Create(NavigateToFirstHit, canGoBack);
+            PreviousHitCommand = ReactiveCommand.Create(NavigateToPreviousHit, canGoBack);
+            NextHitCommand = ReactiveCommand.Create(NavigateToNextHit, canGoForward);
+            LastHitCommand = ReactiveCommand.Create(NavigateToLastHit, canGoForward);
             
             OpenMulaCommand = ReactiveCommand.CreateFromTask(OpenMulaBookAsync);
             OpenAtthakathaCommand = ReactiveCommand.CreateFromTask(OpenAtthakathaBookAsync);
@@ -417,6 +428,17 @@ namespace CST.Avalonia.ViewModels
                     _pendingAnchorNavigation = null; // Clear after navigation
                 });
             }
+
+            if (_pendingHitNavigation is int pendingHit && BookDisplayControl != null)
+            {
+                _logger.Information("View now attached - executing pending hit navigation: {Hit}", pendingHit);
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    await Task.Delay(500);
+                    NavigateToHighlightRequested?.Invoke(pendingHit);
+                    _pendingHitNavigation = null; // Clear after navigation
+                });
+            }
         }
 
         /// <summary>
@@ -653,9 +675,30 @@ namespace CST.Avalonia.ViewModels
                     _logger.Debug("Setting up search navigation: {TermCount} terms", _searchTerms.Count);
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        CurrentHitIndex = 1;
+                        CurrentHitIndex = ResolveRestoreHitIndex(TotalHits);
                         UpdateHitStatusText();
                     });
+
+                    // On state restoration, scroll back to the hit the user was viewing.
+                    // (Fresh search opens are scrolled by the search-open path, so only
+                    // do this when a saved hit index was supplied.)
+                    if (_initialCurrentHitIndex.HasValue && TotalHits > 0)
+                    {
+                        await Task.Delay(1000); // let highlighted content render
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            if (BookDisplayControl != null)
+                            {
+                                NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
+                                _logger.Debug("Restored scroll to hit {Hit}", CurrentHitIndex);
+                            }
+                            else
+                            {
+                                _pendingHitNavigation = CurrentHitIndex;
+                                _logger.Information("View not ready - stored pending hit navigation: {Hit}", CurrentHitIndex);
+                            }
+                        });
+                    }
                 }
                 
                 _logger.Debug("InitializeAsync completed successfully");
@@ -1145,7 +1188,8 @@ namespace CST.Avalonia.ViewModels
                     HasSearchHighlights = totalHits > 0;
                     if (totalHits > 0)
                     {
-                        CurrentHitIndex = 1;
+                        // Restore the hit the user was on (or 1 for a fresh open).
+                        CurrentHitIndex = ResolveRestoreHitIndex(totalHits);
                         UpdateHitStatusText();
                     }
                 });
@@ -1350,6 +1394,16 @@ namespace CST.Avalonia.ViewModels
             {
                 _logger.Error(ex, "Failed to copy XSL files");
             }
+        }
+
+        // Returns the saved hit to restore, clamped to [1, totalHits]; falls back to 1
+        // for a fresh open (no saved index) or an out-of-range value.
+        private int ResolveRestoreHitIndex(int totalHits)
+        {
+            if (totalHits <= 0) return 1;
+            if (_initialCurrentHitIndex is int saved && saved >= 1 && saved <= totalHits)
+                return saved;
+            return 1;
         }
 
         private void NavigateToFirstHit()

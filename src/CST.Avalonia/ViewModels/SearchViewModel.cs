@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Models;
+using CST.Avalonia.Search;
 using CST.Avalonia.Services;
 using CST.Avalonia.ViewModels.Dock;
 using CST.Conversion;
@@ -280,10 +281,21 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         set => this.RaiseAndSetIfChanged(ref _proximityDistance, value);
     }
 
-    // Phrase and proximity search UI properties
-    public bool IsPhraseSearch => SearchText?.Contains("\"") ?? false;
-    public bool IsMultiWord => (SearchText?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ?? 0) > 1;
-    public bool IsProximitySearchEnabled => !IsPhraseSearch && IsMultiWord;
+    // Phrase and proximity search UI properties.
+    // The query parses into units (word or quoted phrase). Within a phrase => adjacency; between
+    // units => the proximity window. So with multi-phrase support these are no longer mutually
+    // exclusive: e.g. `"evam me" sutam` is BOTH a phrase and a proximity search.
+    private List<SearchUnit> ParsedUnits =>
+        MultiWordSearch.ParseUnits((SearchText ?? string.Empty).Replace("\u201C", "\"").Replace("\u201D", "\""));
+
+    // True when any quoted multi-word group is present (=> "exact word order" applies to it).
+    public bool IsPhraseSearch => ParsedUnits.Any(u => u.IsPhrase);
+
+    // True when the query has more than one word in total (a phrase counts each of its words).
+    public bool IsMultiWord => ParsedUnits.Sum(u => u.Words.Count) > 1;
+
+    // The proximity window applies only BETWEEN units, i.e. when there are 2+ units.
+    public bool IsProximitySearchEnabled => ParsedUnits.Count > 1;
 
     // Search state
     private bool _isSearching;
@@ -291,6 +303,21 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     {
         get => _isSearching;
         set => this.RaiseAndSetIfChanged(ref _isSearching, value);
+    }
+
+    // Set when the result set was capped (wildcard expansion or page-size limit); shown in the UI.
+    private bool _isResultsTruncated;
+    public bool IsResultsTruncated
+    {
+        get => _isResultsTruncated;
+        set => this.RaiseAndSetIfChanged(ref _isResultsTruncated, value);
+    }
+
+    private string? _truncationMessage;
+    public string? TruncationMessage
+    {
+        get => _truncationMessage;
+        set => this.RaiseAndSetIfChanged(ref _truncationMessage, value);
     }
 
     // Collections
@@ -469,6 +496,8 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
                 Terms.Clear();
                 Occurrences.Clear();
                 SelectedTerms.Clear();
+                IsResultsTruncated = false;
+                TruncationMessage = null;
             });
 
             // Build search query
@@ -542,6 +571,9 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
                     SelectedTerms.Add(Terms[0]);
                     _logger.LogInformation("Auto-selected single search term: {Term}", Terms[0].DisplayTerm);
                 }
+
+                IsResultsTruncated = result.ResultsTruncated;
+                TruncationMessage = result.TruncationMessage;
 
                 StatusText = $"Search completed in {result.SearchDuration.TotalMilliseconds:F0}ms - Found {result.TotalTermCount} terms, {result.TotalOccurrenceCount} occurrences";
                 
@@ -781,7 +813,11 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         foreach (var term in Terms)
         {
             var oldDisplayTerm = term.DisplayTerm;
-            term.DisplayTerm = ScriptConverter.Convert(term.Term, Script.Ipe, newScript);
+            // Multi-word/phrase results store Term as the matched words joined by '~'. Convert each
+            // word independently and rejoin with spaces so the label reads naturally (a single-word
+            // term has no '~' and is converted as-is).
+            term.DisplayTerm = string.Join(" ",
+                term.Term.Split('~').Select(w => ScriptConverter.Convert(w, Script.Ipe, newScript)));
             _logger.LogInformation("*** [SEARCH SCRIPT] Updated term: '{OldDisplayTerm}' -> '{NewDisplayTerm}' ***", 
                 oldDisplayTerm, term.DisplayTerm);
         }

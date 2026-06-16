@@ -194,6 +194,17 @@ public class BookWindowState
     public string? CurrentAnchor { get; set; }
 
     /// <summary>
+    /// Which search hit the user was viewing (1-based), restored so navigation
+    /// resumes at "N of Total" instead of resetting to "1 of Total".
+    /// </summary>
+    public int CurrentHitIndex { get; set; } = 1;
+
+    /// <summary>
+    /// Total search hits at save time (count of first-term positions).
+    /// </summary>
+    public int TotalHits { get; set; }
+
+    /// <summary>
     /// Tab order index
     /// </summary>
     public int TabIndex { get; set; }

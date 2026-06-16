@@ -362,23 +362,49 @@
       </Border>
     </Grid>
     
-    <!-- Status Bar -->
-    <Border Grid.Row="2" 
-            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
-            Padding="12,8"
-            Margin="8">
-      <Grid ColumnDefinitions="*,*">
-        <!-- Statistics aligned with Terms and Books columns -->
-        <TextBlock Grid.Column="0" 
-                   Text="{Binding TermStats}"
-                   FontSize="11"
-                   VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="1" 
-                   Text="{Binding OccurrenceStats}"
-                   FontSize="11"
-                   VerticalAlignment="Center"/>
-      </Grid>
-    </Border>
-    
+    <!-- Status / truncation (Row 2) -->
+    <StackPanel Grid.Row="2">
+
+      <!-- Truncation warning: shown only when the result set was capped -->
+      <Border IsVisible="{Binding IsResultsTruncated}"
+              Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+              BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Padding="10,6"
+              Margin="8,0,8,4">
+        <Grid ColumnDefinitions="Auto,*">
+          <PathIcon Grid.Column="0"
+                    Data="M12 2L1 21H23L12 2M12 6L19.53 19H4.47L12 6M11 10V14H13V10H11M11 16V18H13V16H11Z"
+                    Width="14" Height="14" Margin="0,0,8,0"
+                    Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                    VerticalAlignment="Top"/>
+          <TextBlock Grid.Column="1"
+                     Text="{Binding TruncationMessage}"
+                     FontSize="11"
+                     TextWrapping="Wrap"
+                     VerticalAlignment="Center"/>
+        </Grid>
+      </Border>
+
+      <!-- Status Bar -->
+      <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+              Padding="12,8"
+              Margin="8,0,8,8">
+        <Grid ColumnDefinitions="*,*">
+          <!-- Statistics aligned with Terms and Books columns -->
+          <TextBlock Grid.Column="0"
+                     Text="{Binding TermStats}"
+                     FontSize="11"
+                     VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="1"
+                     Text="{Binding OccurrenceStats}"
+                     FontSize="11"
+                     VerticalAlignment="Center"/>
+        </Grid>
+      </Border>
+
+    </StackPanel>
+
   </Grid>
 </UserControl>

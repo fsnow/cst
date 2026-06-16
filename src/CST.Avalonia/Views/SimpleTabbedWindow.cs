@@ -206,12 +206,13 @@ public partial class SimpleTabbedWindow : Window
     }
 
     public void OpenBook(Book book, List<string>? searchTerms = null, Script? bookScript = null, string? windowId = null,
-        int? docId = null, List<TermPosition>? searchPositions = null, string? initialAnchor = null)
+        int? docId = null, List<TermPosition>? searchPositions = null, string? initialAnchor = null,
+        int? initialCurrentHitIndex = null)
     {
         // Delegate to LayoutViewModel if available
         if (DataContext is LayoutViewModel layoutViewModel)
         {
-            layoutViewModel.OpenBook(book, searchTerms, bookScript, windowId, docId, searchPositions, initialAnchor);
+            layoutViewModel.OpenBook(book, searchTerms, bookScript, windowId, docId, searchPositions, initialAnchor, initialCurrentHitIndex);
         }
         else
         {
@@ -546,18 +547,6 @@ public partial class SimpleTabbedWindow : Window
                 _logger.Information("Restored WebView in window: {WindowTitle}", window.Title);
             }
         }
-    }
-
-    private void OnTestPdfMenuItemClick(object? sender, EventArgs e)
-    {
-        _logger.Information("Opening PDF Test Window");
-
-        var testWindow = new PdfTestWindow
-        {
-            WindowStartupLocation = WindowStartupLocation.CenterOwner
-        };
-
-        testWindow.Show(this);
     }
 
     private void OnGoToMenuItemClick(object? sender, EventArgs e)
