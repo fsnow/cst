@@ -618,7 +618,9 @@ namespace CST.Avalonia.Services
                 var activeDocument = documentDock.ActiveDockable;
                 Log.Information("*** Saving all book states - Active document: {ActiveId} ***", activeDocument?.Id ?? "none");
 
-                foreach (var dockable in documentDock.VisibleDockables)
+                // Snapshot before iterating: there is an await inside the loop, and a concurrent dock
+                // drag/cleanup can modify VisibleDockables during it, throwing "Collection was modified".
+                foreach (var dockable in documentDock.VisibleDockables.ToList())
                 {
                     if (dockable is BookDisplayViewModel bookDisplayViewModel &&
                         bookDisplayViewModel.Book != null)
@@ -1336,6 +1338,11 @@ namespace CST.Avalonia.Services
                     Log.Information("Removed old ViewModel from dock");
                 }
 
+                // The old ViewModel is permanently replaced by newVm below; its state was already
+                // captured above, so release its subscriptions and GoTo id now (avoids the leak).
+                _goToSubscribedBooks.Remove(oldVm.Id);
+                oldVm.Dispose();
+
                 // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
                 var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
                 var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
@@ -1458,6 +1465,11 @@ namespace CST.Avalonia.Services
                     Log.Information("Removed old ViewModel from floating dock");
                 }
 
+                // The old ViewModel is permanently replaced by newVm below; its state was already
+                // captured above, so release its subscriptions and GoTo id now (avoids the leak).
+                _goToSubscribedBooks.Remove(oldVm.Id);
+                oldVm.Dispose();
+
                 // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
                 var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
                 var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
@@ -1567,6 +1579,15 @@ namespace CST.Avalonia.Services
                 }
 
                 base.CloseDockable(dockable);
+
+                // Tab permanently closed: release the VM's subscriptions and drop its GoTo id so
+                // neither leaks for the rest of the session. (Safe here — CloseDockable is the real
+                // close path, not the recycled detach/reorder path.)
+                if (dockable is BookDisplayViewModel closedBookVm)
+                {
+                    _goToSubscribedBooks.Remove(closedBookVm.Id);
+                    closedBookVm.Dispose();
+                }
             }
             else
             {

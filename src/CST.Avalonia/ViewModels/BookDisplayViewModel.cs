@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -26,8 +27,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CST.Avalonia.ViewModels
 {
-    public class BookDisplayViewModel : ReactiveDocument
+    public class BookDisplayViewModel : ReactiveDocument, IDisposable
     {
+        // Reactive subscriptions owned by this VM; disposed when the tab is permanently closed
+        // (or replaced during float/unfloat) to release the FontService subscription that would
+        // otherwise root this VM on a singleton for the life of the session.
+        private readonly CompositeDisposable _disposables = new();
+        private bool _disposed;
+
         private readonly ScriptService _scriptService;
         private readonly ChapterListsService? _chapterListsService;
         private readonly ISettingsService? _settingsService;
@@ -271,21 +278,21 @@ namespace CST.Avalonia.ViewModels
                             _logger.Debug("Restored position to page anchor: {Anchor}", savedPageAnchor);
                         });
                     }
-                });
-            
-            // Subscribe to font setting changes
+                })
+                .DisposeWith(_disposables);
+
+            // Subscribe to font setting changes. Use a named handler (not an anonymous lambda) so
+            // it can be unsubscribed in Dispose — otherwise the singleton FontService roots this
+            // VM forever and every closed/floated book tab leaks.
             if (_fontService != null)
             {
-                _fontService.FontSettingsChanged += (_, _) =>
-                {
-                    this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
-                    this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
-                };
+                _fontService.FontSettingsChanged += OnFontSettingsChanged;
             }
-                
+
             this.WhenAnyValue(x => x.SelectedChapter)
                 .Where(chapter => chapter != null && !_isInitializing)
-                .Subscribe(chapter => NavigateToChapter(chapter!));
+                .Subscribe(chapter => NavigateToChapter(chapter!))
+                .DisposeWith(_disposables);
                 
             // Initialize data on UI thread to prevent threading issues
             _ = Dispatcher.UIThread.InvokeAsync(InitializeAsync);
@@ -2100,6 +2107,30 @@ namespace CST.Avalonia.ViewModels
             {
                 return "*";
             }
+        }
+
+        private void OnFontSettingsChanged(object? sender, EventArgs e)
+        {
+            this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+            this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+        }
+
+        /// <summary>
+        /// Releases this VM's reactive subscriptions and the FontService event subscription.
+        /// Called by CstDockFactory when the book tab is permanently closed, or when the VM is
+        /// replaced during float/unfloat. Idempotent. The View/WebView and its timers are owned
+        /// by the recycled View, not disposed here.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+
+            if (_fontService != null)
+                _fontService.FontSettingsChanged -= OnFontSettingsChanged;
+
+            _disposables.Dispose();
         }
     }
 
