@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
 using CST.Lucene;
+using Lucene.Net.Documents;
+using Lucene.Net.Index;
+using Lucene.Net.Util;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -13,6 +16,7 @@ namespace CST.Avalonia.Tests.Services
 {
     public class IndexingServiceTests : IDisposable
     {
+
         private readonly Mock<ILogger<IndexingService>> _mockLogger;
         private readonly Mock<ISettingsService> _mockSettingsService;
         private readonly Mock<IXmlFileDatesService> _mockXmlFileDatesService;
@@ -50,6 +54,63 @@ namespace CST.Avalonia.Tests.Services
                 Directory.Delete(_testIndexDir, true);
             if (Directory.Exists(_testXmlDir))
                 Directory.Delete(_testXmlDir, true);
+        }
+
+        // ---- Resource disposal: FSDirectory / reader leak fix --------------------------
+
+        /// <summary>Writes a real, openable Lucene index with the given number of documents
+        /// into the configured test index directory.</summary>
+        private void CreateMinimalIndex(int docCount)
+        {
+            using var directory = global::Lucene.Net.Store.FSDirectory.Open(_testIndexDir);
+            using var analyzer = new DevaXmlAnalyzer(LuceneVersion.LUCENE_48);
+            var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, analyzer);
+            using var writer = new IndexWriter(directory, config);
+            for (int i = 0; i < docCount; i++)
+            {
+                var doc = new Document();
+                doc.Add(new TextField("text", "\u0927\u092E\u094D\u092E", Field.Store.NO)); // "dhamma" (Devanagari)
+                writer.AddDocument(doc);
+            }
+            writer.Commit();
+        }
+
+        [Fact]
+        public async Task GetIndexReader_RealIndex_OpensReader_AndDisposeIsIdempotent()
+        {
+            CreateMinimalIndex(3);
+            await _service.InitializeAsync();
+
+            var reader = _service.GetIndexReader();
+            Assert.NotNull(reader);
+            Assert.Equal(3, reader!.NumDocs);
+
+            // Dispose releases the reader/FSDirectory and must be safe to call more than once.
+            _service.Dispose();
+            _service.Dispose();
+        }
+
+        [Fact]
+        public async Task Dispose_AfterOpeningReader_ReleasesIndexDirectoryHandles()
+        {
+            CreateMinimalIndex(1);
+            await _service.InitializeAsync();
+            Assert.NotNull(_service.GetIndexReader());
+
+            _service.Dispose();
+
+            // With the reader/FSDirectory handles released, the index directory can be deleted.
+            // (On POSIX/macOS deletion succeeds even with open handles, so this genuinely catches
+            // a leaked handle only on Windows/CI; it documents the intended contract regardless.)
+            var ex = Record.Exception(() => Directory.Delete(_testIndexDir, true));
+            Assert.Null(ex);
+        }
+
+        [Fact]
+        public void Dispose_WithoutOpeningReader_IsSafe()
+        {
+            var ex = Record.Exception(() => { _service.Dispose(); _service.Dispose(); });
+            Assert.Null(ex);
         }
 
         [Fact(Skip = "Mock settings service not triggering SaveSettingsAsync - revisit post Beta 3")]
@@ -164,7 +225,11 @@ namespace CST.Avalonia.Tests.Services
                 .ReturnsAsync(new List<int>());
 
             var progressReports = new List<IndexingProgress>();
-            var progress = new Progress<IndexingProgress>(p => progressReports.Add(p));
+            // Use a synchronous IProgress: Progress<T> delivers its callback asynchronously (via the
+            // captured SynchronizationContext / thread pool), so a synchronous assert immediately
+            // after the await races the callback — under parallel test load the callback is delayed
+            // and progressReports is still empty. A synchronous IProgress runs Report() inline.
+            var progress = new SynchronousProgress<IndexingProgress>(p => progressReports.Add(p));
 
             // Act
             await _service.BuildIndexAsync(progress);

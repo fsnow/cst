@@ -26,6 +26,8 @@ public class SearchService : ISearchService
     private readonly IScriptService _scriptService;
     private readonly ISettingsService _settingsService;
     private DirectoryReader? _indexReader;
+    private FSDirectory? _directory;
+    private string? _directoryPath;
     private readonly Dictionary<string, SearchResult> _searchCache = new();
     private readonly object _readerLock = new();
 
@@ -53,8 +55,19 @@ public class SearchService : ISearchService
                     throw new InvalidOperationException("Index directory not configured");
                 }
 
-                var directory = FSDirectory.Open(indexPath);
-                _indexReader = DirectoryReader.Open(directory);
+                // Reuse a single FSDirectory across reader refreshes; only (re)open it when missing
+                // or the configured index path changes. Opening (and never disposing) a new
+                // directory on every refresh leaked native handles for the life of the session.
+                if (_directory == null || _directoryPath != indexPath)
+                {
+                    _directory?.Dispose();
+                    _directory = FSDirectory.Open(indexPath);
+                    _directoryPath = indexPath;
+                }
+
+                var newReader = DirectoryReader.Open(_directory);
+                _indexReader?.Dispose();   // dispose the superseded (stale) reader
+                _indexReader = newReader;
                 _logger.LogInformation("Opened index reader with {DocCount} documents", _indexReader.NumDocs);
             }
             return _indexReader;
@@ -815,7 +828,13 @@ public class SearchService : ISearchService
 
     public void Dispose()
     {
-        _indexReader?.Dispose();
+        lock (_readerLock)
+        {
+            _indexReader?.Dispose();
+            _indexReader = null;
+            _directory?.Dispose();
+            _directory = null;
+        }
     }
 }
 

@@ -53,7 +53,7 @@ namespace CST.Avalonia.Tests.Integration
                 Directory.Delete(_testAppDataDir, true);
         }
 
-        [Fact(Skip = "Progress report async/timing issue - revisit post Beta 3")]
+        [Fact]
         public async Task IncrementalIndexing_WithChangedFile_DetectsAndIndexesChanges()
         {
             // Arrange
@@ -73,7 +73,7 @@ namespace CST.Avalonia.Tests.Integration
 
             // Act 1: First call should report no changes
             var progressReports1 = new List<IndexingProgress>();
-            var progress1 = new Progress<IndexingProgress>(p => progressReports1.Add(p));
+            var progress1 = new SynchronousProgress<IndexingProgress>(p => progressReports1.Add(p));
 
             await indexingService.BuildIndexAsync(progress1);
 
@@ -89,7 +89,7 @@ namespace CST.Avalonia.Tests.Integration
 
             // Act 2: Second call should detect changes
             var progressReports2 = new List<IndexingProgress>();
-            var progress2 = new Progress<IndexingProgress>(p => progressReports2.Add(p));
+            var progress2 = new SynchronousProgress<IndexingProgress>(p => progressReports2.Add(p));
 
             // This will throw because we don't have real XML files or valid index,
             // but we can verify that it attempted to process the changed files
@@ -134,7 +134,7 @@ namespace CST.Avalonia.Tests.Integration
             _output.WriteLine("✅ BuildIndexAsync called GetChangedBooksAsync even with valid index");
         }
 
-        [Fact(Skip = "Progress report async/timing issue - revisit post Beta 3")]
+        [Fact]
         public async Task BuildIndexAsync_WithNoChangesAndValidIndex_ReportsUpToDate()
         {
             // Arrange
@@ -153,7 +153,7 @@ namespace CST.Avalonia.Tests.Integration
             xmlFileDatesService.SetMockChangedBooks(changedBooks);
 
             var progressReports = new List<IndexingProgress>();
-            var progress = new Progress<IndexingProgress>(p => progressReports.Add(p));
+            var progress = new SynchronousProgress<IndexingProgress>(p => progressReports.Add(p));
 
             // Act
             await indexingService.BuildIndexAsync(progress);

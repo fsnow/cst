@@ -213,14 +213,14 @@ CST Reader exhibits elevated CPU usage on macOS compared to typical desktop appl
     - **Goal**: Clean up and reduce verbose logging output during normal operation
     - **Impact**: Improves startup performance and reduces disk I/O
 - **Test Suite Cleanup (Post Beta 3)**:
-    - **Current Status**: 146 tests passing, 10 skipped for Beta 3 release
-    - **Skipped Tests**: 10 tests with test infrastructure issues (not production bugs):
+    - **Current Status**: 193 tests passing, 7 skipped
+    - **Fixed (Jun 2026)**: the 3 incremental-indexing "progress report async/timing" tests are no longer skipped. Root cause was a test bug, not a production one: they asserted synchronously on progress delivered asynchronously by `Progress<T>` (which posts to the captured `SynchronizationContext`/thread pool), so under parallel-suite load the callback was delayed past the assert. Fixed with a shared synchronous `IProgress<T>` test double (`CST.Avalonia.Tests/SynchronousProgress.cs`).
+    - **Remaining Skipped Tests**: 7 tests with test-infrastructure issues (not production bugs):
         - 3 MacFontService tests (testing removed/refactored internals via reflection)
-        - 3 Incremental indexing tests (progress report async/timing issues)
         - 2 IndexingService initialization tests (mock settings service issues)
         - 1 DefaultIndexDirectory test (mock validation issue)
         - 1 InitialIndexing test (incomplete - needs all 217 XML files or mocked catalog)
-    - **Goal**: Fix or rewrite skipped tests to achieve 100% pass rate
+    - **Goal**: Fix or rewrite the remaining skipped tests to achieve 100% pass rate
     - **Priority**: Medium - tests skipped due to infrastructure issues, actual functionality verified via manual testing
 - **Book Display Features**:
     - **Show/Hide Footnotes Toggle**: Add footnote visibility control (check CST4 UI for exact naming)

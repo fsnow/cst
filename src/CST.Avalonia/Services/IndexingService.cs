@@ -10,7 +10,7 @@ using Lucene.Net.Store;
 
 namespace CST.Avalonia.Services
 {
-    public class IndexingService : IIndexingService
+    public class IndexingService : IIndexingService, IDisposable
     {
         private readonly ILogger<IndexingService> _logger;
         private readonly ISettingsService _settingsService;
@@ -18,6 +18,8 @@ namespace CST.Avalonia.Services
         private BookIndexerAsync? _bookIndexer;
         private string _indexDirectory = string.Empty;
         private DirectoryReader? _indexReader;
+        private FSDirectory? _directory;
+        private string? _directoryPath;
         private readonly object _readerLock = new object();
 
         public string IndexDirectory => _indexDirectory;
@@ -232,8 +234,16 @@ namespace CST.Avalonia.Services
                     {
                         if (System.IO.Directory.Exists(_indexDirectory))
                         {
-                            var directory = FSDirectory.Open(_indexDirectory);
-                            _indexReader = DirectoryReader.Open(directory);
+                            // Reuse a single FSDirectory; only (re)open it when missing or the
+                            // index path changes. Opening a new directory each time without
+                            // disposing it leaked native handles.
+                            if (_directory == null || _directoryPath != _indexDirectory)
+                            {
+                                _directory?.Dispose();
+                                _directory = FSDirectory.Open(_indexDirectory);
+                                _directoryPath = _indexDirectory;
+                            }
+                            _indexReader = DirectoryReader.Open(_directory);
                             _logger.LogDebug("Opened new index reader for highlighting");
                         }
                         else
@@ -249,6 +259,17 @@ namespace CST.Avalonia.Services
                     _logger.LogError(ex, "Failed to get index reader");
                     return null;
                 }
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_readerLock)
+            {
+                _indexReader?.Dispose();
+                _indexReader = null;
+                _directory?.Dispose();
+                _directory = null;
             }
         }
     }
