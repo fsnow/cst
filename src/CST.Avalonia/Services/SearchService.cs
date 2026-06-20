@@ -28,7 +28,8 @@ public class SearchService : ISearchService
     private DirectoryReader? _indexReader;
     private FSDirectory? _directory;
     private string? _directoryPath;
-    private readonly Dictionary<string, SearchResult> _searchCache = new();
+    private const int SearchCacheMaxEntries = 50;
+    private readonly BoundedCache<string, SearchResult> _searchCache = new(SearchCacheMaxEntries);
     private readonly object _readerLock = new();
 
     public SearchService(
@@ -69,6 +70,9 @@ public class SearchService : ISearchService
                 _indexReader?.Dispose();   // dispose the superseded (stale) reader
                 _indexReader = newReader;
                 _logger.LogInformation("Opened index reader with {DocCount} documents", _indexReader.NumDocs);
+
+                // The index changed: drop cached search results so we never serve stale hits.
+                _searchCache.Clear();
             }
             return _indexReader;
         }
@@ -82,15 +86,19 @@ public class SearchService : ISearchService
         {
             _logger.LogInformation("Searching for: {Query} with mode {Mode}", query.QueryText, query.Mode);
 
+            // Refresh the reader first so a mid-session re-index clears stale cache entries
+            // (the cache is cleared inside GetIndexReaderAsync when the reader is reopened)
+            // before we consult the cache below.
+            var reader = await GetIndexReaderAsync();
+
             // Check cache
             var cacheKey = GenerateCacheKey(query);
-            if (_searchCache.TryGetValue(cacheKey, out var cachedResult))
+            if (_searchCache.TryGet(cacheKey, out var cachedResult) && cachedResult != null)
             {
                 _logger.LogDebug("Returning cached result for query: {Query}", query.QueryText);
                 return cachedResult;
             }
 
-            var reader = await GetIndexReaderAsync();
             var books = Books.Inst;
             
             // Ensure all books have DocIds
@@ -129,8 +137,8 @@ public class SearchService : ISearchService
             stopwatch.Stop();
             result.SearchDuration = stopwatch.Elapsed;
 
-            // Cache the result
-            _searchCache[cacheKey] = result;
+            // Cache the result (bounded; FIFO eviction)
+            _searchCache.Set(cacheKey, result);
 
             _logger.LogInformation("Search completed in {Duration}ms with {TermCount} terms, {OccurrenceCount} occurrences",
                 stopwatch.ElapsedMilliseconds, result.TotalTermCount, result.TotalOccurrenceCount);
@@ -858,25 +866,21 @@ internal class ExactTermMatcher : ITermMatcher
 
 internal class WildcardTermMatcher : ITermMatcher
 {
-    private readonly string _pattern;
-    private readonly string _regexPattern;
-    
+    private readonly System.Text.RegularExpressions.Regex _regex;
+
     public WildcardTermMatcher(string pattern)
     {
-        _pattern = pattern;
-        // Convert wildcard pattern to regex
-        _regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(_pattern)
+        // Convert the wildcard pattern to a regex and compile it once. Matches() is called for
+        // every term in the index, so using the static Regex.IsMatch(term, pattern) per call
+        // (which re-evaluates the pattern each time) was needless overhead.
+        var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
             .Replace("\\*", ".*")
             .Replace("\\?", ".") + "$";
-        // Regex pattern created for wildcard search
+        _regex = new System.Text.RegularExpressions.Regex(
+            regexPattern, System.Text.RegularExpressions.RegexOptions.Compiled);
     }
-    
-    public bool Matches(string term)
-    {
-        var matches = System.Text.RegularExpressions.Regex.IsMatch(term, _regexPattern);
-        // Debug logging removed for production use
-        return matches;
-    }
+
+    public bool Matches(string term) => _regex.IsMatch(term);
 }
 
 internal class RegexTermMatcher : ITermMatcher
@@ -885,7 +889,9 @@ internal class RegexTermMatcher : ITermMatcher
     
     public RegexTermMatcher(string pattern)
     {
-        _regex = new System.Text.RegularExpressions.Regex(pattern);
+        // Compiled: Matches() runs against every term in the index for a regex search.
+        _regex = new System.Text.RegularExpressions.Regex(
+            pattern, System.Text.RegularExpressions.RegexOptions.Compiled);
     }
     
     public bool Matches(string term) => _regex.IsMatch(term);
