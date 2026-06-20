@@ -278,19 +278,52 @@ public partial class SimpleTabbedWindow : Window
             {
                 var mainWindowState = stateService.Current.MainWindow;
                 
-                // Restore window dimensions
+                // Identify which currently-connected screen (if any) the saved position lands on.
+                // A position saved on a monitor that's no longer attached must NOT be replayed
+                // blindly, or the window restores off-screen and is unusable (CST4 lesson).
+                var screens = Screens?.All;
+                bool canValidate = screens != null && screens.Count > 0;
+                var savedPos = (mainWindowState.X.HasValue && mainWindowState.Y.HasValue)
+                    ? new PixelPoint((int)mainWindowState.X.Value, (int)mainWindowState.Y.Value)
+                    : (PixelPoint?)null;
+                // Probe a point near the title bar so the window stays grabbable.
+                var targetScreen = (canValidate && savedPos.HasValue)
+                    ? screens!.FirstOrDefault(s => s.WorkingArea.Contains(new PixelPoint(savedPos.Value.X + 40, savedPos.Value.Y + 10)))
+                    : null;
+
+                // Restore window dimensions, clamped to the relevant screen's working area.
                 if (mainWindowState.Width > 0 && mainWindowState.Height > 0)
                 {
-                    Width = mainWindowState.Width;
-                    Height = mainWindowState.Height;
+                    double w = mainWindowState.Width, h = mainWindowState.Height;
+                    var sizeScreen = targetScreen ?? Screens?.Primary ?? (canValidate ? screens![0] : null);
+                    if (sizeScreen != null)
+                    {
+                        w = Math.Min(w, sizeScreen.WorkingArea.Width / sizeScreen.Scaling);
+                        h = Math.Min(h, sizeScreen.WorkingArea.Height / sizeScreen.Scaling);
+                    }
+                    Width = w;
+                    Height = h;
                     _logger.Information("Restored window size: {Width}x{Height}", Width, Height);
                 }
 
-                // Restore window position if saved
-                if (mainWindowState.X.HasValue && mainWindowState.Y.HasValue)
+                // Restore position only if it's on a connected screen (or we can't validate);
+                // otherwise center on the primary screen.
+                if (savedPos.HasValue && (!canValidate || targetScreen != null))
                 {
-                    Position = new PixelPoint((int)mainWindowState.X.Value, (int)mainWindowState.Y.Value);
-                    _logger.Information("Restored window position: {X},{Y}", mainWindowState.X.Value, mainWindowState.Y.Value);
+                    Position = savedPos.Value;
+                    _logger.Information("Restored window position: {X},{Y}", savedPos.Value.X, savedPos.Value.Y);
+                }
+                else if (savedPos.HasValue)
+                {
+                    var primary = Screens?.Primary ?? screens![0];
+                    var wa = primary.WorkingArea;
+                    int winW = (int)(Width * primary.Scaling);
+                    int winH = (int)(Height * primary.Scaling);
+                    int cx = wa.X + Math.Max(0, (wa.Width - winW) / 2);
+                    int cy = wa.Y + Math.Max(0, (wa.Height - winH) / 2);
+                    Position = new PixelPoint(cx, cy);
+                    _logger.Warning("Saved window position {X},{Y} is off all connected screens; centered on primary at {CX},{CY}",
+                        savedPos.Value.X, savedPos.Value.Y, cx, cy);
                 }
 
                 // Restore window state (Normal, Maximized, Minimized)
