@@ -40,14 +40,14 @@ namespace CST.Avalonia.Services
         public string? GetScriptFontFamily(Script script)
         {
             var scriptName = script.ToString();
-            _logger.LogInformation("[FONT SERVICE] GetScriptFontFamily called for script: {Script}", scriptName);
+            _logger.LogDebug("[FONT SERVICE] GetScriptFontFamily called for script: {Script}", scriptName);
             if (CurrentFontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
             {
                 var fontFamily = setting.FontFamily;
-                _logger.LogInformation("[FONT SERVICE] Font family for {Script}: '{FontFamily}' (null/empty=system default)", scriptName, fontFamily ?? "null");
+                _logger.LogDebug("[FONT SERVICE] Font family for {Script}: '{FontFamily}' (null/empty=system default)", scriptName, fontFamily ?? "null");
                 // Return null for system default, or the specific font family
                 var result = string.IsNullOrWhiteSpace(fontFamily) ? null : fontFamily;
-                _logger.LogInformation("[FONT SERVICE] Returning font family: '{Result}' for {Script}", result ?? "null", scriptName);
+                _logger.LogDebug("[FONT SERVICE] Returning font family: '{Result}' for {Script}", result ?? "null", scriptName);
                 return result;
             }
             
@@ -118,7 +118,7 @@ namespace CST.Avalonia.Services
         
         public async Task<List<string>> GetAvailableFontsForScriptAsync(Script script)
         {
-            _logger.LogInformation("Getting available fonts for script: {Script}", script);
+            _logger.LogDebug("Getting available fonts for script: {Script}", script);
             
             // Return cached fonts if available
             if (_cachedFonts.TryGetValue(script, out var cachedFonts))
@@ -148,7 +148,7 @@ namespace CST.Avalonia.Services
         
         public async Task<string?> GetSystemDefaultFontForScriptAsync(Script script)
         {
-            _logger.LogInformation("Getting system default font for script: {Script}", script);
+            _logger.LogDebug("Getting system default font for script: {Script}", script);
             
 #if MACOS
             if (_macFontService != null)

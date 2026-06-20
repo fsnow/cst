@@ -116,7 +116,7 @@ namespace CST.Avalonia.Services
                             // Clean up application state when documents are removed
                             if (item is BookDisplayViewModel removedBookViewModel)
                             {
-                                Log.Information("*** Document removed from UI - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
+                                Log.Debug("*** Document removed from UI - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
                                 RemoveBookWindowState(removedBookViewModel.Id);
                             }
                         }
@@ -146,7 +146,7 @@ namespace CST.Avalonia.Services
                                             if (item is IDockable dockable)
                                             {
                                                 FloatDockable(dockable);
-                                                Log.Information("*** Floated Tool/ToolDock instead of tab docking ***");
+                                                Log.Debug("*** Floated Tool/ToolDock instead of tab docking ***");
                                             }
                                         }
                                     });
@@ -158,12 +158,12 @@ namespace CST.Avalonia.Services
                     // SYNCHRONOUS cleanup when documents are removed - prevent empty areas from ever being visible
                     if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems?.Count > 0)
                     {
-                        Log.Information("*** SYNCHRONOUS cleanup triggered by document removal ***");
+                        Log.Debug("*** SYNCHRONOUS cleanup triggered by document removal ***");
                         try
                         {
                             // Run cleanup synchronously FIRST to prevent any visibility of empty areas
                             CleanupEmptySplits();
-                            Log.Information("*** SYNCHRONOUS cleanup completed successfully ***");
+                            Log.Debug("*** SYNCHRONOUS cleanup completed successfully ***");
                         }
                         catch (Exception ex)
                         {
@@ -173,7 +173,7 @@ namespace CST.Avalonia.Services
                         // Also schedule async cleanup as backup in case synchronous cleanup missed something
                         Dispatcher.UIThread.Post(() =>
                         {
-                            Log.Information("*** ASYNC backup cleanup after document removal ***");
+                            Log.Debug("*** ASYNC backup cleanup after document removal ***");
                             CleanupEmptySplits();
                         }, DispatcherPriority.Render);
                     }
@@ -184,7 +184,7 @@ namespace CST.Avalonia.Services
                     // - Floating windows monitor their own collection changes (line ~1700)
                     // - CheckForEmptyFloatingWindows() during main dock changes causes floating windows
                     //   to disappear when their document references are temporarily null during cleanup
-                    Log.Information("*** Main dock collection changed - cleaning up empty splits ***");
+                    Log.Debug("*** Main dock collection changed - cleaning up empty splits ***");
                     CleanupEmptySplits();
                 };
             }
@@ -196,7 +196,7 @@ namespace CST.Avalonia.Services
                 {
                     if (e.PropertyName == nameof(documentDock.ActiveDockable))
                     {
-                        Log.Information("*** ACTIVE TAB CHANGED - Saving all book window states ***");
+                        Log.Debug("*** ACTIVE TAB CHANGED - Saving all book window states ***");
                         _ = SaveAllBookWindowStatesAsync();
                     }
                 };
@@ -431,7 +431,7 @@ namespace CST.Avalonia.Services
             var documentDock = FindDocumentDock();
             if (documentDock != null)
             {
-                Log.Information("*** ADDING SEARCH DOCUMENT TO LAYOUT: {DocumentId} ***", bookDisplayViewModel.Id);
+                Log.Debug("*** ADDING SEARCH DOCUMENT TO LAYOUT: {DocumentId} ***", bookDisplayViewModel.Id);
 
                 // Capture current proportions before adding document (preserves user adjustments)
                 CaptureMainDockProportions();
@@ -616,7 +616,7 @@ namespace CST.Avalonia.Services
                 if (documentDock?.VisibleDockables == null) return;
 
                 var activeDocument = documentDock.ActiveDockable;
-                Log.Information("*** Saving all book states - Active document: {ActiveId} ***", activeDocument?.Id ?? "none");
+                Log.Debug("*** Saving all book states - Active document: {ActiveId} ***", activeDocument?.Id ?? "none");
 
                 // Snapshot before iterating: there is an await inside the loop, and a concurrent dock
                 // drag/cleanup can modify VisibleDockables during it, throwing "Collection was modified".
@@ -631,7 +631,7 @@ namespace CST.Avalonia.Services
                         // Only the active document gets IsSelected = true
                         var isSelected = dockable == activeDocument;
                         SaveBookWindowState(bookDisplayViewModel.Book, bookDisplayViewModel, isSelected);
-                        Log.Information("*** Saved state for {BookFileName} - IsSelected: {IsSelected} ***",
+                        Log.Debug("*** Saved state for {BookFileName} - IsSelected: {IsSelected} ***",
                             bookDisplayViewModel.Book.FileName, isSelected);
                     }
                 }
@@ -860,11 +860,11 @@ namespace CST.Avalonia.Services
             var documentDock = FindDocumentDock();
             if (documentDock != null && documentDock.VisibleDockables != null)
             {
-                Log.Information("*** REMOVING DOCUMENT FROM LAYOUT: {DocumentId} ***", dockable.Id);
+                Log.Debug("*** REMOVING DOCUMENT FROM LAYOUT: {DocumentId} ***", dockable.Id);
                 var countBefore = documentDock.VisibleDockables.Count;
                 documentDock.VisibleDockables.Remove(dockable);
                 var countAfter = documentDock.VisibleDockables.Count;
-                Log.Information("*** DOCUMENT REMOVAL: Before={CountBefore}, After={CountAfter} ***", countBefore, countAfter);
+                Log.Debug("*** DOCUMENT REMOVAL: Before={CountBefore}, After={CountAfter} ***", countBefore, countAfter);
 
                 // If this was the active document, activate another one
                 if (documentDock.ActiveDockable == dockable)
@@ -872,7 +872,7 @@ namespace CST.Avalonia.Services
                     // Find the Welcome document first, then fall back to last document
                     var welcomeDoc = documentDock.VisibleDockables.FirstOrDefault(d => d.Id == "WelcomeDocument");
                     documentDock.ActiveDockable = welcomeDoc ?? documentDock.VisibleDockables.LastOrDefault();
-                    Log.Information("*** ACTIVATED NEW DOCUMENT: {NewActiveDocument} ***", documentDock.ActiveDockable?.Id ?? "null");
+                    Log.Debug("*** ACTIVATED NEW DOCUMENT: {NewActiveDocument} ***", documentDock.ActiveDockable?.Id ?? "null");
                 }
             }
         }
@@ -936,11 +936,11 @@ namespace CST.Avalonia.Services
                 else
                 {
                     // This is a split operation (Left, Right, etc) - allow it
-                    Log.Information("*** Allowing Tool/ToolDock split operation: {Operation} ***", operationStr);
+                    Log.Debug("*** Allowing Tool/ToolDock split operation: {Operation} ***", operationStr);
                 }
             }
             
-            Log.Information("*** Using framework default split behavior ***");
+            Log.Debug("*** Using framework default split behavior ***");
             
             // Let the framework handle the split
             if (dock != null && dockable != null)
@@ -957,20 +957,20 @@ namespace CST.Avalonia.Services
             var operationString = operation.ToString();
             if (operationString == "Left" || operationString == "Right" || operationString == "Top" || operationString == "Bottom")
             {
-                Log.Information("*** Setting equal proportions after {Operation} split ***", operationString);
+                Log.Debug("*** Setting equal proportions after {Operation} split ***", operationString);
                 SetEqualProportions(dock);
             }
             
             // IMMEDIATE cleanup after split operations - run at multiple priorities to ensure fast execution
             Dispatcher.UIThread.Post(() =>
             {
-                Log.Information("*** IMMEDIATE Post-split cleanup (priority Render) ***");
+                Log.Debug("*** IMMEDIATE Post-split cleanup (priority Render) ***");
                 CleanupEmptySplits();
             }, DispatcherPriority.Render);
 
             Dispatcher.UIThread.Post(() =>
             {
-                Log.Information("*** SECONDARY Post-split cleanup (priority Background) ***");
+                Log.Debug("*** SECONDARY Post-split cleanup (priority Background) ***");
                 CleanupEmptySplits();
             }, DispatcherPriority.Background);
             
@@ -987,28 +987,28 @@ namespace CST.Avalonia.Services
         {
             try
             {
-                Log.Information("*** ===== COMPLETE DOCK HIERARCHY DEBUG (Main + Floating Windows) ===== ***");
+                Log.Debug("*** ===== COMPLETE DOCK HIERARCHY DEBUG (Main + Floating Windows) ===== ***");
                 
                 // Log main window hierarchy
-                Log.Information("*** MAIN WINDOW HIERARCHY: ***");
+                Log.Debug("*** MAIN WINDOW HIERARCHY: ***");
                 if (_context is IDock rootDock)
                 {
                     LogDockHierarchyRecursive(rootDock, 0);
                 }
                 else
                 {
-                    Log.Information("*** No main window context available ***");
+                    Log.Debug("*** No main window context available ***");
                 }
                 
                 // Log all floating windows
-                Log.Information("*** FLOATING WINDOWS HIERARCHY (Total: {HostWindowCount}): ***", HostWindows.Count);
+                Log.Debug("*** FLOATING WINDOWS HIERARCHY (Total: {HostWindowCount}): ***", HostWindows.Count);
                 for (int i = 0; i < HostWindows.Count; i++)
                 {
                     var hostWindow = HostWindows[i];
                     
                     if (hostWindow is CstHostWindow cstHostWindow)
                     {
-                        Log.Information("*** FLOATING WINDOW {Index}: {WindowId} ***", i, cstHostWindow.Id);
+                        Log.Debug("*** FLOATING WINDOW {Index}: {WindowId} ***", i, cstHostWindow.Id);
                         
                         if (cstHostWindow.Layout is IDock floatingDock)
                         {
@@ -1016,16 +1016,16 @@ namespace CST.Avalonia.Services
                         }
                         else
                         {
-                            Log.Information("***   No dock layout ***");
+                            Log.Debug("***   No dock layout ***");
                         }
                     }
                     else
                     {
-                        Log.Information("*** FLOATING WINDOW {Index}: Not CstHostWindow (Type: {WindowType}) ***", i, hostWindow.GetType().Name);
+                        Log.Debug("*** FLOATING WINDOW {Index}: Not CstHostWindow (Type: {WindowType}) ***", i, hostWindow.GetType().Name);
                     }
                 }
                 
-                Log.Information("*** ===== END DOCK HIERARCHY DEBUG ===== ***");
+                Log.Debug("*** ===== END DOCK HIERARCHY DEBUG ===== ***");
             }
             catch (Exception ex)
             {
@@ -1071,7 +1071,7 @@ namespace CST.Avalonia.Services
                     dockInfo += $" - {toolDock.VisibleDockables?.Count ?? 0} total, {tools.Count} tools";
                 }
                 
-                Log.Information($"*** {indent}{dockInfo} ***");
+                Log.Debug($"*** {indent}{dockInfo} ***");
                 
                 // Log documents in DocumentDocks
                 if (dock is DocumentDock docDockForDetails && docDockForDetails.VisibleDockables != null)
@@ -1080,15 +1080,15 @@ namespace CST.Avalonia.Services
                     {
                         if (dockable is Document doc)
                         {
-                            Log.Information($"*** {indent}  - Document: {doc.Title} (ID: {doc.Id}) ***");
+                            Log.Debug($"*** {indent}  - Document: {doc.Title} (ID: {doc.Id}) ***");
                         }
                         else if (dockable is ReactiveDocument reactiveDoc)
                         {
-                            Log.Information($"*** {indent}  - ReactiveDocument: {reactiveDoc.Title} (ID: {reactiveDoc.Id}) ***");
+                            Log.Debug($"*** {indent}  - ReactiveDocument: {reactiveDoc.Title} (ID: {reactiveDoc.Id}) ***");
                         }
                         else
                         {
-                            Log.Information($"*** {indent}  - Other: {dockable.GetType().Name} (ID: {dockable.Id ?? "null"}) ***");
+                            Log.Debug($"*** {indent}  - Other: {dockable.GetType().Name} (ID: {dockable.Id ?? "null"}) ***");
                         }
                     }
                 }
@@ -1118,20 +1118,20 @@ namespace CST.Avalonia.Services
         {
             try
             {
-                Log.Information("*** SetEqualProportions called for dock: {DockType} (ID: {DockId}) ***", 
+                Log.Debug("*** SetEqualProportions called for dock: {DockType} (ID: {DockId}) ***", 
                     dock?.GetType().Name, dock?.Id);
                 
                 // Find the parent that contains this dock
                 var parent = dock != null ? FindParentDock(dock) : null;
                 if (parent is ProportionalDock proportionalParent && proportionalParent.VisibleDockables != null)
                 {
-                    Log.Information("*** Found ProportionalDock parent: {ParentId} with {ChildCount} dockables ***",
+                    Log.Debug("*** Found ProportionalDock parent: {ParentId} with {ChildCount} dockables ***",
                         proportionalParent.Id, proportionalParent.VisibleDockables.Count);
 
                     // IMPORTANT: Don't adjust MainDock proportions - it should maintain 25% LeftTools / 75% DocumentDock
                     if (proportionalParent.Id == "MainDock")
                     {
-                        Log.Information("*** Skipping SetEqualProportions for MainDock - preserving LeftTools (25%) / DocumentDock (75%) split ***");
+                        Log.Debug("*** Skipping SetEqualProportions for MainDock - preserving LeftTools (25%) / DocumentDock (75%) split ***");
                         return;
                     }
 
@@ -1141,22 +1141,22 @@ namespace CST.Avalonia.Services
                         
                     if (nonSplitters.Count == 2)
                     {
-                        Log.Information("*** Setting 50/50 proportions for 2 child docks ***");
+                        Log.Debug("*** Setting 50/50 proportions for 2 child docks ***");
                         nonSplitters[0].Proportion = 0.5;
                         nonSplitters[1].Proportion = 0.5;
                         
-                        Log.Information("*** Proportions set - First: {FirstProp}, Second: {SecondProp} ***", 
+                        Log.Debug("*** Proportions set - First: {FirstProp}, Second: {SecondProp} ***", 
                             nonSplitters[0].Proportion, nonSplitters[1].Proportion);
                     }
                     else
                     {
-                        Log.Information("*** Parent has {ChildCount} non-splitter children - not setting proportions ***", 
+                        Log.Debug("*** Parent has {ChildCount} non-splitter children - not setting proportions ***", 
                             nonSplitters.Count);
                     }
                 }
                 else
                 {
-                    Log.Information("*** No ProportionalDock parent found or parent has no children ***");
+                    Log.Debug("*** No ProportionalDock parent found or parent has no children ***");
                 }
             }
             catch (Exception ex)
@@ -1232,8 +1232,8 @@ namespace CST.Avalonia.Services
         // Override to handle floating operations
         public override void FloatDockable(IDockable dockable)
         {
-            Log.Information("*** FloatDockable called for: {DockableType} (ID: {DockableId}) ***", dockable?.GetType().Name, dockable?.Id);
-            Log.Information("*** Dockable CanFloat: {CanFloat} ***", dockable?.CanFloat ?? false);
+            Log.Debug("*** FloatDockable called for: {DockableType} (ID: {DockableId}) ***", dockable?.GetType().Name, dockable?.Id);
+            Log.Debug("*** Dockable CanFloat: {CanFloat} ***", dockable?.CanFloat ?? false);
 
             // Check if dockable can float - if not, don't proceed
             if (dockable != null && !dockable.CanFloat)
@@ -1244,7 +1244,7 @@ namespace CST.Avalonia.Services
             
             try 
             {
-                Log.Information("*** Calling base FloatDockable ***");
+                Log.Debug("*** Calling base FloatDockable ***");
                 if (dockable != null)
                 {
                     base.FloatDockable(dockable);
@@ -1254,10 +1254,10 @@ namespace CST.Avalonia.Services
                     Log.Warning("*** FloatDockable called with null dockable ***");
                     return;
                 }
-                Log.Information("*** Base FloatDockable completed successfully ***");
+                Log.Debug("*** Base FloatDockable completed successfully ***");
                 
                 // Clean up any empty splits left behind after floating
-                Log.Information("*** Post-float cleanup - checking for empty splits ***");
+                Log.Debug("*** Post-float cleanup - checking for empty splits ***");
                 CleanupEmptySplits();
             }
             catch (Exception ex)
@@ -1269,11 +1269,11 @@ namespace CST.Avalonia.Services
                 // We need to add it back to prevent data loss
                 if (dockable != null)
                 {
-                    Log.Information("*** Attempting to restore dockable to original dock after failed float ***");
+                    Log.Debug("*** Attempting to restore dockable to original dock after failed float ***");
                     try
                     {
                         AddDocumentToLayout(dockable);
-                        Log.Information("*** Dockable restored to original dock ***");
+                        Log.Debug("*** Dockable restored to original dock ***");
                     }
                     catch (Exception restoreEx)
                     {
@@ -1284,7 +1284,7 @@ namespace CST.Avalonia.Services
                 // Don't rethrow - we want to handle this gracefully
             }
             
-            Log.Information("*** FloatDockable completed ***");
+            Log.Debug("*** FloatDockable completed ***");
         }
 
         /// <summary>
@@ -1493,6 +1493,7 @@ namespace CST.Avalonia.Services
                 newVm.CurrentHitIndex = currentHitIndex;
                 newVm.TotalHits = totalHits;
                 newVm.IsFloating = false;
+                newVm.CanFloat = false; // Restore drag-to-float block (CEF crash mitigation); matches the open + float paths
 
                 Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
 
@@ -1557,16 +1558,16 @@ namespace CST.Avalonia.Services
         // Override to prevent accidental closes during drag operations
         public override void CloseDockable(IDockable dockable)
         {
-            Log.Information("*** CloseDockable called for: {DockableType} (ID: {DockableId}) ***", dockable?.GetType().Name, dockable?.Id);
+            Log.Debug("*** CloseDockable called for: {DockableType} (ID: {DockableId}) ***", dockable?.GetType().Name, dockable?.Id);
 
             // Allow closing but add logging to help debug accidental closes
             if (dockable is Document document)
             {
-                Log.Information("*** Closing Document: {DocumentTitle} ***", document.Title);
+                Log.Debug("*** Closing Document: {DocumentTitle} ***", document.Title);
             }
             else if (dockable is ReactiveDocument reactiveDocument)
             {
-                Log.Information("*** Closing ReactiveDocument: {DocumentTitle} ***", reactiveDocument.Title);
+                Log.Debug("*** Closing ReactiveDocument: {DocumentTitle} ***", reactiveDocument.Title);
             }
 
             if (dockable != null)
@@ -1575,7 +1576,7 @@ namespace CST.Avalonia.Services
                 if (dockable is BookDisplayViewModel)
                 {
                     RemoveBookWindowState(dockable.Id);
-                    Log.Information("*** Removed book window state for {DockableId} ***", dockable.Id);
+                    Log.Debug("*** Removed book window state for {DockableId} ***", dockable.Id);
                 }
 
                 base.CloseDockable(dockable);
@@ -1595,7 +1596,7 @@ namespace CST.Avalonia.Services
             }
 
             // Clean up empty splits after closing a dockable
-            Log.Information("*** Post-close cleanup - checking for empty splits ***");
+            Log.Debug("*** Post-close cleanup - checking for empty splits ***");
             CleanupEmptySplits();
         }
         
@@ -1615,14 +1616,14 @@ namespace CST.Avalonia.Services
             Log.Information("*** SwapDockable completed ***");
             
             // Trigger cleanup after swap operations as they can leave empty structures
-            Log.Information("*** Post-swap cleanup - checking for empty splits ***");
+            Log.Debug("*** Post-swap cleanup - checking for empty splits ***");
             CleanupEmptySplits();
         }
         
         // Override MoveDockable to trigger cleanup after tab moves
         public override void MoveDockable(IDock dock, IDockable sourceDockable, IDockable targetDockable)
         {
-            Log.Information("*** MoveDockable called - Dock: {DockId}, Source: {SourceId}, Target: {TargetId} ***", dock?.Id, sourceDockable?.Id, targetDockable?.Id);
+            Log.Debug("*** MoveDockable called - Dock: {DockId}, Source: {SourceId}, Target: {TargetId} ***", dock?.Id, sourceDockable?.Id, targetDockable?.Id);
             if (dock != null && sourceDockable != null && targetDockable != null)
             {
                 base.MoveDockable(dock, sourceDockable, targetDockable);
@@ -1632,17 +1633,17 @@ namespace CST.Avalonia.Services
                 Log.Warning("*** MoveDockable called with null parameters ***");
                 return;
             }
-            Log.Information("*** MoveDockable completed ***");
+            Log.Debug("*** MoveDockable completed ***");
             
             // Trigger cleanup after move operations as they can leave empty structures
-            Log.Information("*** Post-move cleanup - checking for empty splits ***");
+            Log.Debug("*** Post-move cleanup - checking for empty splits ***");
             CleanupEmptySplits();
         }
         
         // Override AddDockable to trigger cleanup 
         public override void AddDockable(IDock dock, IDockable dockable)
         {
-            Log.Information("*** AddDockable called - Dock: {DockId}, Dockable: {DockableId} ***", dock?.Id, dockable?.Id);
+            Log.Debug("*** AddDockable called - Dock: {DockId}, Dockable: {DockableId} ***", dock?.Id, dockable?.Id);
             if (dock != null && dockable != null)
             {
                 base.AddDockable(dock, dockable);
@@ -1652,24 +1653,24 @@ namespace CST.Avalonia.Services
                 Log.Warning("*** AddDockable called with null parameters ***");
                 return;
             }
-            Log.Information("*** AddDockable completed ***");
+            Log.Debug("*** AddDockable completed ***");
             
             // Trigger cleanup after add operations 
-            Log.Information("*** Post-add cleanup - checking for empty splits ***");
+            Log.Debug("*** Post-add cleanup - checking for empty splits ***");
             CleanupEmptySplits();
         }
         
         // Override RemoveDockable to trigger cleanup
         public override void RemoveDockable(IDockable dockable, bool collapse)
         {
-            Log.Information("*** RemoveDockable called - Dockable: {DockableId}, Collapse: {Collapse} ***", dockable?.Id, collapse);
+            Log.Debug("*** RemoveDockable called - Dockable: {DockableId}, Collapse: {Collapse} ***", dockable?.Id, collapse);
             if (dockable != null)
             {
                 // Remove from application state if it's a BookDisplayViewModel
                 if (dockable is BookDisplayViewModel)
                 {
                     RemoveBookWindowState(dockable.Id);
-                    Log.Information("*** Removed book window state for {DockableId} ***", dockable.Id);
+                    Log.Debug("*** Removed book window state for {DockableId} ***", dockable.Id);
                 }
 
                 base.RemoveDockable(dockable, collapse);
@@ -1679,10 +1680,10 @@ namespace CST.Avalonia.Services
                 Log.Warning("*** RemoveDockable called with null dockable ***");
                 return;
             }
-            Log.Information("*** RemoveDockable completed ***");
+            Log.Debug("*** RemoveDockable completed ***");
 
             // Trigger cleanup after remove operations
-            Log.Information("*** Post-remove cleanup - checking for empty splits ***");
+            Log.Debug("*** Post-remove cleanup - checking for empty splits ***");
             CleanupEmptySplits();
         }
         
@@ -1718,7 +1719,7 @@ namespace CST.Avalonia.Services
         // CreateWindowFrom - called by host window locator when floating windows are needed
         public IHostWindow CreateWindowFrom(IDockWindow? source)
         {
-            Log.Information("*** CreateWindowFrom called for IDockWindow: {WindowId} ***", source?.Id);
+            Log.Debug("*** CreateWindowFrom called for IDockWindow: {WindowId} ***", source?.Id);
             
             try
             {
@@ -1733,7 +1734,7 @@ namespace CST.Avalonia.Services
                     if (source.Layout != null)
                     {
                         customWindow.SetLayout(source.Layout);
-                        Log.Information("*** Layout set on floating window: {LayoutType} ***", source.Layout.GetType().Name);
+                        Log.Debug("*** Layout set on floating window: {LayoutType} ***", source.Layout.GetType().Name);
                         
                         // Set up collection monitoring for floating window document docks
                         SetupFloatingWindowMonitoring(source.Layout);
@@ -1743,18 +1744,18 @@ namespace CST.Avalonia.Services
                     if (source.X != 0 || source.Y != 0)
                     {
                         customWindow.SetPosition(source.X, source.Y);
-                        Log.Information("*** Window position set: {X}, {Y} ***", source.X, source.Y);
+                        Log.Debug("*** Window position set: {X}, {Y} ***", source.X, source.Y);
                     }
                     
                     // Set size if specified
                     if (source.Width > 0 && source.Height > 0)
                     {
                         customWindow.SetSize(source.Width, source.Height);
-                        Log.Information("*** Window size set: {Width}x{Height} ***", source.Width, source.Height);
+                        Log.Debug("*** Window size set: {Width}x{Height} ***", source.Width, source.Height);
                     }
                 }
                 
-                Log.Information("*** CreateWindowFrom completed successfully ***");
+                Log.Debug("*** CreateWindowFrom completed successfully ***");
                 return hostWindow;
             }
             catch (Exception ex)
@@ -1768,7 +1769,7 @@ namespace CST.Avalonia.Services
         // Create host window for floating documents - fallback approach
         private IHostWindow CreateCstHostWindow()
         {
-            Log.Information("*** CreateCstHostWindow() called - creating floating window via fallback ***");
+            Log.Debug("*** CreateCstHostWindow() called - creating floating window via fallback ***");
             try
             {
                 var hostWindow = new CstHostWindow();
@@ -1781,14 +1782,14 @@ namespace CST.Avalonia.Services
                     if (Application.Current is App app)
                     {
                         app.SetupFloatingWindowMenu(hostWindow);
-                        Log.Information("*** View menu setup completed for floating window ***");
+                        Log.Debug("*** View menu setup completed for floating window ***");
                     }
                 }
 
-                Log.Information("*** Host window created successfully ***");
-                Log.Information("*** Host window properties: Id={Id}, Factory={HasFactory} ***",
+                Log.Debug("*** Host window created successfully ***");
+                Log.Debug("*** Host window properties: Id={Id}, Factory={HasFactory} ***",
                     hostWindow.Id, hostWindow.Factory != null);
-                Log.Information("*** Total host windows: {HostWindowCount} ***", HostWindows.Count);
+                Log.Debug("*** Total host windows: {HostWindowCount} ***", HostWindows.Count);
 
                 return hostWindow;
             }
@@ -1815,23 +1816,23 @@ namespace CST.Avalonia.Services
             {
                 if (layout is DocumentDock documentDock && documentDock.VisibleDockables is ObservableCollection<IDockable> observableCollection)
                 {
-                    Log.Information("*** Setting up collection monitoring for floating window document dock: {DockId} ***", documentDock.Id);
+                    Log.Debug("*** Setting up collection monitoring for floating window document dock: {DockId} ***", documentDock.Id);
                     
                     observableCollection.CollectionChanged += (sender, e) =>
                     {
-                        Log.Information("*** FLOATING WINDOW COLLECTION CHANGED: Action={Action}, NewItems={NewCount}, RemovedItems={RemoveCount} ***", 
+                        Log.Debug("*** FLOATING WINDOW COLLECTION CHANGED: Action={Action}, NewItems={NewCount}, RemovedItems={RemoveCount} ***", 
                             e.Action, e.NewItems?.Count ?? 0, e.OldItems?.Count ?? 0);
                         
                         if (e.OldItems != null)
                         {
                             foreach (var item in e.OldItems)
                             {
-                                Log.Information("*** FLOATING WINDOW REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
+                                Log.Debug("*** FLOATING WINDOW REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
 
                                 // Clean up application state when documents are removed from floating windows
                                 if (item is BookDisplayViewModel removedBookViewModel)
                                 {
-                                    Log.Information("*** Document removed from floating window - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
+                                    Log.Debug("*** Document removed from floating window - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
                                     RemoveBookWindowState(removedBookViewModel.Id);
                                 }
                             }
@@ -1840,16 +1841,16 @@ namespace CST.Avalonia.Services
                         {
                             foreach (var item in e.NewItems)
                             {
-                                Log.Information("*** FLOATING WINDOW ADDED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
+                                Log.Debug("*** FLOATING WINDOW ADDED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
                             }
                         }
                         
                         // Check for empty floating windows after any collection change
-                        Log.Information("*** Floating window collection changed - calling CheckForEmptyFloatingWindows ***");
+                        Log.Debug("*** Floating window collection changed - calling CheckForEmptyFloatingWindows ***");
                         CheckForEmptyFloatingWindows();
                         
                         // Clean up empty splits in floating windows after any collection change
-                        Log.Information("*** Floating window collection changed - cleaning up empty splits ***");
+                        Log.Debug("*** Floating window collection changed - cleaning up empty splits ***");
                         CleanupEmptySplits();
                     };
                 }
@@ -1896,13 +1897,13 @@ namespace CST.Avalonia.Services
         {
             try
             {
-                Log.Information("*** CheckForEmptyFloatingWindows called - Total host windows: {HostWindowCount} ***", HostWindows.Count);
+                Log.Debug("*** CheckForEmptyFloatingWindows called - Total host windows: {HostWindowCount} ***", HostWindows.Count);
                 
                 var emptyWindows = new List<CstHostWindow>();
                 
                 foreach (var hostWindow in HostWindows.OfType<CstHostWindow>().ToList())
                 {
-                    Log.Information("*** Checking host window: {WindowId} ***", hostWindow.Id);
+                    Log.Debug("*** Checking host window: {WindowId} ***", hostWindow.Id);
                     
                     // Find the DocumentDock within the host window's layout hierarchy
                     var documentDock = FindDocumentDockInLayout(hostWindow.Layout);
@@ -1914,12 +1915,12 @@ namespace CST.Avalonia.Services
                         var hasDocuments = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Any() ?? false;
                         var docCount = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0;
 
-                        Log.Information("*** Host window {WindowId} - Layout: {LayoutType}, DocumentDock found - Total dockables: {TotalCount}, ReactiveDocuments: {DocumentCount}, HasDocuments: {HasDocuments} ***",
+                        Log.Debug("*** Host window {WindowId} - Layout: {LayoutType}, DocumentDock found - Total dockables: {TotalCount}, ReactiveDocuments: {DocumentCount}, HasDocuments: {HasDocuments} ***",
                             hostWindow.Id, hostWindow.Layout?.GetType().Name, totalDockables, docCount, hasDocuments);
 
                         if (!hasDocuments)
                         {
-                            Log.Information("*** EMPTY FLOATING WINDOW DETECTED: {WindowId} - scheduling for closure ***", hostWindow.Id);
+                            Log.Debug("*** EMPTY FLOATING WINDOW DETECTED: {WindowId} - scheduling for closure ***", hostWindow.Id);
                             emptyWindows.Add(hostWindow);
                         }
                     }
@@ -1933,11 +1934,11 @@ namespace CST.Avalonia.Services
                 // Close empty windows
                 foreach (var emptyWindow in emptyWindows)
                 {
-                    Log.Information("*** AUTO-CLOSING EMPTY FLOATING WINDOW: {WindowId} ***", emptyWindow.Id);
+                    Log.Debug("*** AUTO-CLOSING EMPTY FLOATING WINDOW: {WindowId} ***", emptyWindow.Id);
                     CloseEmptyHostWindow(emptyWindow);
                 }
                 
-                Log.Information("*** CheckForEmptyFloatingWindows completed - Closed {EmptyWindowCount} empty windows ***", emptyWindows.Count);
+                Log.Debug("*** CheckForEmptyFloatingWindows completed - Closed {EmptyWindowCount} empty windows ***", emptyWindows.Count);
             }
             catch (Exception ex)
             {
@@ -1952,7 +1953,7 @@ namespace CST.Avalonia.Services
         {
             try
             {
-                Log.Information("*** CleanupEmptySplits called - starting iterative cleanup (Main + {FloatingCount} floating windows) ***", HostWindows.Count);
+                Log.Debug("*** CleanupEmptySplits called - starting iterative cleanup (Main + {FloatingCount} floating windows) ***", HostWindows.Count);
                 int totalRemoved = 0;
                 int iteration = 0;
                 
@@ -1961,14 +1962,14 @@ namespace CST.Avalonia.Services
                 while (true)
                 {
                     iteration++;
-                    Log.Information("*** CleanupEmptySplits iteration {Iteration} ***", iteration);
+                    Log.Debug("*** CleanupEmptySplits iteration {Iteration} ***", iteration);
                     
                     var emptySplits = new List<IDock>();
                     
                     // Check main window
                     if (_context is IDock rootDock && rootDock.VisibleDockables != null)
                     {
-                        Log.Information("*** Checking main window for empty splits ***");
+                        Log.Debug("*** Checking main window for empty splits ***");
                         foreach (var dockable in rootDock.VisibleDockables)
                         {
                             if (dockable is IDock dock)
@@ -1985,7 +1986,7 @@ namespace CST.Avalonia.Services
                         
                         if (hostWindow is CstHostWindow cstHostWindow)
                         {
-                            Log.Information("*** Checking floating window {Index} ({WindowId}) for empty splits ***", i, cstHostWindow.Id);
+                            Log.Debug("*** Checking floating window {Index} ({WindowId}) for empty splits ***", i, cstHostWindow.Id);
                             
                             if (cstHostWindow.Layout is IDock floatingDock)
                             {
@@ -1993,22 +1994,22 @@ namespace CST.Avalonia.Services
                             }
                             else
                             {
-                                Log.Information("***   Floating window {Index} has no dock layout ***", i);
+                                Log.Debug("***   Floating window {Index} has no dock layout ***", i);
                             }
                         }
                         else
                         {
-                            Log.Information("*** Floating window {Index}: Not CstHostWindow (Type: {WindowType}) ***", i, hostWindow.GetType().Name);
+                            Log.Debug("*** Floating window {Index}: Not CstHostWindow (Type: {WindowType}) ***", i, hostWindow.GetType().Name);
                         }
                     }
                     
-                    Log.Information("*** Iteration {Iteration}: Found {EmptySplitCount} empty splits to clean up ***", 
+                    Log.Debug("*** Iteration {Iteration}: Found {EmptySplitCount} empty splits to clean up ***", 
                         iteration, emptySplits.Count);
                     
                     // If no empty splits found, we're done
                     if (emptySplits.Count == 0)
                     {
-                        Log.Information("*** No more empty splits found - cleanup complete ***");
+                        Log.Debug("*** No more empty splits found - cleanup complete ***");
                         break;
                     }
                     
@@ -2027,11 +2028,11 @@ namespace CST.Avalonia.Services
                     }
                     
                     totalRemoved += emptySplits.Count;
-                    Log.Information("*** Iteration {Iteration}: Removed {RemovedCount} empty splits ***", 
+                    Log.Debug("*** Iteration {Iteration}: Removed {RemovedCount} empty splits ***", 
                         iteration, emptySplits.Count);
                 }
                 
-                Log.Information("*** CleanupEmptySplits completed after {Iterations} iterations - Total removed: {TotalRemoved} empty splits ***", 
+                Log.Debug("*** CleanupEmptySplits completed after {Iterations} iterations - Total removed: {TotalRemoved} empty splits ***", 
                     iteration, totalRemoved);
             }
             catch (Exception ex)
@@ -2052,7 +2053,7 @@ namespace CST.Avalonia.Services
                     return;
                 }
                 
-                Log.Information("*** Examining dock: {DockType} (ID: {DockId}) with {DockableCount} dockables ***", 
+                Log.Debug("*** Examining dock: {DockType} (ID: {DockId}) with {DockableCount} dockables ***", 
                     dock.GetType().Name, dock.Id ?? "null", dock.VisibleDockables.Count);
                 
                 // Check if this is a ProportionalDock (split container)
@@ -2063,14 +2064,14 @@ namespace CST.Avalonia.Services
                         .Where(d => !(d is ProportionalDockSplitter))
                         .ToList() ?? new List<IDockable>();
                     
-                    Log.Information("*** ProportionalDock {DockId} has {NonSplitterCount} non-splitter dockables ***", 
+                    Log.Debug("*** ProportionalDock {DockId} has {NonSplitterCount} non-splitter dockables ***", 
                         proportionalDock.Id ?? "null", nonSplitterDockables.Count);
                     
                     // List each dockable for debugging
                     for (int i = 0; i < nonSplitterDockables.Count; i++)
                     {
                         var dockable = nonSplitterDockables[i];
-                        Log.Information("***   Child {Index}: {DockableType} (ID: {DockableId}) ***", 
+                        Log.Debug("***   Child {Index}: {DockableType} (ID: {DockableId}) ***", 
                             i, dockable.GetType().Name, (dockable as IDockable)?.Id ?? "null");
                     }
                     
@@ -2086,7 +2087,7 @@ namespace CST.Avalonia.Services
                             if (child is IDock childDock)
                             {
                                 bool isEmpty = IsEmptyDock(childDock);
-                                Log.Information("***     Child {ChildType} (ID: {ChildId}) is empty: {IsEmpty} ***", 
+                                Log.Debug("***     Child {ChildType} (ID: {ChildId}) is empty: {IsEmpty} ***", 
                                     childDock.GetType().Name, childDock.Id ?? "null", isEmpty);
                                     
                                 if (isEmpty)
@@ -2101,7 +2102,7 @@ namespace CST.Avalonia.Services
                             else
                             {
                                 // Non-dock dockable (like a document or tool) - not empty
-                                Log.Information("***     Child {ChildType} is not a dock - not empty ***", 
+                                Log.Debug("***     Child {ChildType} is not a dock - not empty ***", 
                                     child.GetType().Name);
                                 allChildrenEmpty = false;
                             }
@@ -2110,20 +2111,20 @@ namespace CST.Avalonia.Services
                         // Strategy 1: If ALL children are empty, mark the whole ProportionalDock for removal
                         if (allChildrenEmpty && nonSplitterDockables.Count > 0)
                         {
-                            Log.Information("*** EMPTY SPLIT DETECTED: ProportionalDock {DockId} - all {ChildCount} children are empty ***", 
+                            Log.Debug("*** EMPTY SPLIT DETECTED: ProportionalDock {DockId} - all {ChildCount} children are empty ***", 
                                 proportionalDock.Id ?? "null", nonSplitterDockables.Count);
                             emptySplits.Add(proportionalDock);
                         }
                         // Strategy 2: If some children are empty but not all, mark individual empty children
                         else if (emptyChildren.Count > 0)
                         {
-                            Log.Information("*** PARTIAL EMPTY SPLIT DETECTED: ProportionalDock {DockId} - {EmptyCount} of {TotalCount} children are empty ***", 
+                            Log.Debug("*** PARTIAL EMPTY SPLIT DETECTED: ProportionalDock {DockId} - {EmptyCount} of {TotalCount} children are empty ***", 
                                 proportionalDock.Id ?? "null", emptyChildren.Count, nonSplitterDockables.Count);
                             
                             // Add individual empty children to cleanup list
                             foreach (var emptyChild in emptyChildren)
                             {
-                                Log.Information("*** ADDING INDIVIDUAL EMPTY CHILD FOR CLEANUP: {ChildType} (ID: {ChildId}) ***", 
+                                Log.Debug("*** ADDING INDIVIDUAL EMPTY CHILD FOR CLEANUP: {ChildType} (ID: {ChildId}) ***", 
                                     emptyChild.GetType().Name, emptyChild.Id ?? "null");
                                 emptySplits.Add(emptyChild);
                             }
@@ -2168,14 +2169,14 @@ namespace CST.Avalonia.Services
                     // Enhanced logging to debug the empty dock issue
                     if (documentDock.VisibleDockables?.Count > 0)
                     {
-                        Log.Information("***   DocumentDock {DockId} has {Count} dockables:",
+                        Log.Debug("***   DocumentDock {DockId} has {Count} dockables:",
                             documentDock.Id ?? "null", documentDock.VisibleDockables.Count);
                         foreach (var dockable in documentDock.VisibleDockables)
                         {
-                            Log.Information("***     - {DockableType} (ID: {DockableId})",
+                            Log.Debug("***     - {DockableType} (ID: {DockableId})",
                                 dockable.GetType().Name, dockable.Id ?? "null");
                         }
-                        Log.Information("***   But {DocumentCount} are Document/ReactiveDocument", documents.Count);
+                        Log.Debug("***   But {DocumentCount} are Document/ReactiveDocument", documents.Count);
                     }
 
                     return documents.Count == 0;
@@ -2208,7 +2209,7 @@ namespace CST.Avalonia.Services
                     {
                         if (proportionalDock.Id != "LeftTools")
                         {
-                            Log.Information("*** ProportionalDock {DockId} is redundant - has only one child dock (unnecessary nesting) ***",
+                            Log.Debug("*** ProportionalDock {DockId} is redundant - has only one child dock (unnecessary nesting) ***",
                                 proportionalDock.Id ?? "null");
                             return true;
                         }
@@ -2305,7 +2306,7 @@ namespace CST.Avalonia.Services
                         // The framework creates duplicate DocumentDock IDs during splits which is normal behavior
                         
                         // If we get here, it's a ProportionalDock without special handling needed
-                        Log.Information("*** ProportionalDock has no special handling - removing completely ***");
+                        Log.Debug("*** ProportionalDock has no special handling - removing completely ***");
                         parent.VisibleDockables.Remove(emptySplit);
                     }
                     else
@@ -2359,7 +2360,7 @@ namespace CST.Avalonia.Services
                     
                     foreach (var splitter in splitters)
                     {
-                        Log.Debug("*** Removing unnecessary splitter from ProportionalDock {DockId} ***", 
+                        Log.Information("*** Removing unnecessary splitter from ProportionalDock {DockId} ***", 
                             proportionalDock.Id ?? "null");
                         proportionalDock.VisibleDockables.Remove(splitter);
                     }
@@ -2379,17 +2380,17 @@ namespace CST.Avalonia.Services
         {
             try
             {
-                Log.Information("*** FindParentDock searching for parent of: {TargetDockType} (ID: {TargetDockId}) ***", 
+                Log.Debug("*** FindParentDock searching for parent of: {TargetDockType} (ID: {TargetDockId}) ***", 
                     targetDock?.GetType().Name, targetDock?.Id ?? "null");
                 
                 // Search in main window first
                 if (_context is IDock rootDock && rootDock.VisibleDockables != null)
                 {
-                    Log.Information("*** Searching in main window hierarchy ***");
+                    Log.Debug("*** Searching in main window hierarchy ***");
                     var parent = targetDock != null ? FindParentDockRecursive(rootDock, targetDock) : null;
                     if (parent != null)
                     {
-                        Log.Information("*** Found parent in main window: {ParentType} (ID: {ParentId}) ***", 
+                        Log.Debug("*** Found parent in main window: {ParentType} (ID: {ParentId}) ***", 
                             parent.GetType().Name, parent.Id ?? "null");
                         return parent;
                     }
@@ -2402,11 +2403,11 @@ namespace CST.Avalonia.Services
                     
                     if (hostWindow is CstHostWindow cstHostWindow && cstHostWindow.Layout is IDock floatingDock)
                     {
-                        Log.Information("*** Searching in floating window {Index} ({WindowId}) ***", i, cstHostWindow.Id);
+                        Log.Debug("*** Searching in floating window {Index} ({WindowId}) ***", i, cstHostWindow.Id);
                         var parent = targetDock != null ? FindParentDockRecursive(floatingDock, targetDock) : null;
                         if (parent != null)
                         {
-                            Log.Information("*** Found parent in floating window {Index}: {ParentType} (ID: {ParentId}) ***", 
+                            Log.Debug("*** Found parent in floating window {Index}: {ParentType} (ID: {ParentId}) ***", 
                                 i, parent.GetType().Name, parent.Id ?? "null");
                             return parent;
                         }
@@ -2477,7 +2478,7 @@ namespace CST.Avalonia.Services
                     var mainDock = FindDockByIdRecursive(rootDock, "MainDock") as ProportionalDock;
                     if (mainDock?.VisibleDockables == null)
                     {
-                        Log.Information("*** CaptureMainDockProportions: MainDock not found ***");
+                        Log.Debug("*** CaptureMainDockProportions: MainDock not found ***");
                         return;
                     }
 
@@ -2495,7 +2496,7 @@ namespace CST.Avalonia.Services
                         _mainDockLeftProportion = leftDock.Proportion;
                         _mainDockRightProportion = documentDock.Proportion;
 
-                        Log.Information("*** CaptureMainDockProportions: Captured Left={Left:F3} (ID: {LeftId}), Right={Right:F3} (was Left={OldLeft:F3}, Right={OldRight:F3}) ***",
+                        Log.Debug("*** CaptureMainDockProportions: Captured Left={Left:F3} (ID: {LeftId}), Right={Right:F3} (was Left={OldLeft:F3}, Right={OldRight:F3}) ***",
                             _mainDockLeftProportion, leftDock.Id, _mainDockRightProportion, oldLeft, oldRight);
                     }
                     else
@@ -2504,11 +2505,11 @@ namespace CST.Avalonia.Services
                             leftDock != null, documentDock != null);
 
                         // Debug: Log all visible dockables in MainDock to diagnose
-                        Log.Information("*** CaptureMainDockProportions: MainDock has {Count} visible dockables ***",
+                        Log.Debug("*** CaptureMainDockProportions: MainDock has {Count} visible dockables ***",
                             mainDock.VisibleDockables.Count);
                         foreach (var dockable in mainDock.VisibleDockables)
                         {
-                            Log.Information("***   - {Type} (ID: {Id}, Proportion: {Prop:F3}) ***",
+                            Log.Debug("***   - {Type} (ID: {Id}, Proportion: {Prop:F3}) ***",
                                 dockable.GetType().Name, dockable.Id ?? "null", dockable.Proportion);
                         }
                     }
@@ -2568,7 +2569,7 @@ namespace CST.Avalonia.Services
                             leftDock.Proportion = _mainDockLeftProportion;
                             documentDock.Proportion = _mainDockRightProportion;
 
-                            Log.Information("*** RestoreMainDockProportions: Restored proportions from Left={CurrentLeft:F3} (ID: {LeftId}), Right={CurrentRight:F3} to Left={TargetLeft:F3}, Right={TargetRight:F3} ***",
+                            Log.Debug("*** RestoreMainDockProportions: Restored proportions from Left={CurrentLeft:F3} (ID: {LeftId}), Right={CurrentRight:F3} to Left={TargetLeft:F3}, Right={TargetRight:F3} ***",
                                 currentLeft, leftDock.Id, currentRight, _mainDockLeftProportion, _mainDockRightProportion);
                         }
                         else
@@ -2583,11 +2584,11 @@ namespace CST.Avalonia.Services
                             leftDock != null, documentDock != null);
 
                         // Debug: Log all visible dockables in MainDock to diagnose
-                        Log.Information("*** RestoreMainDockProportions: MainDock has {Count} visible dockables ***",
+                        Log.Debug("*** RestoreMainDockProportions: MainDock has {Count} visible dockables ***",
                             mainDock.VisibleDockables.Count);
                         foreach (var dockable in mainDock.VisibleDockables)
                         {
-                            Log.Information("***   - {Type} (ID: {Id}, Proportion: {Prop:F3}) ***",
+                            Log.Debug("***   - {Type} (ID: {Id}, Proportion: {Prop:F3}) ***",
                                 dockable.GetType().Name, dockable.Id ?? "null", dockable.Proportion);
                         }
                     }
@@ -2631,7 +2632,7 @@ namespace CST.Avalonia.Services
         {
             try
             {
-                Log.Information("*** Closing empty host window: {WindowId} ***", hostWindow.Id);
+                Log.Debug("*** Closing empty host window: {WindowId} ***", hostWindow.Id);
 
                 // Remove from our tracking first
                 HostWindows.Remove(hostWindow);
@@ -2639,7 +2640,7 @@ namespace CST.Avalonia.Services
                 // Close the actual window
                 hostWindow.Close();
 
-                Log.Information("*** Empty host window closed successfully ***");
+                Log.Debug("*** Empty host window closed successfully ***");
             }
             catch (Exception ex)
             {
@@ -2650,7 +2651,7 @@ namespace CST.Avalonia.Services
         // Handle closing of host windows (manually closed or with remaining documents)
         public void CloseHostWindow(CstHostWindow hostWindow)
         {
-            Log.Information("*** CloseHostWindow called for: {WindowId} ***", hostWindow.Id);
+            Log.Debug("*** CloseHostWindow called for: {WindowId} ***", hostWindow.Id);
             
             // Move any remaining documents back to the main window
             if (hostWindow.Layout is DocumentDock floatingDock && floatingDock.VisibleDockables != null)
@@ -2662,32 +2663,32 @@ namespace CST.Avalonia.Services
                     
                     if (documentsToMove.Any())
                     {
-                        Log.Information("*** Moving {DocumentCount} documents back to main window ***", documentsToMove.Count);
+                        Log.Debug("*** Moving {DocumentCount} documents back to main window ***", documentsToMove.Count);
                         
                         foreach (var document in documentsToMove)
                         {
                             floatingDock.VisibleDockables.Remove(document);
                             mainDocumentDock.VisibleDockables?.Add(document);
                             mainDocumentDock.ActiveDockable = document;
-                            Log.Information("*** Moved document {DocumentId} back to main window ***", document.Id);
+                            Log.Debug("*** Moved document {DocumentId} back to main window ***", document.Id);
                         }
                     }
                     else
                     {
-                        Log.Information("*** No documents to move - window was already empty ***");
+                        Log.Debug("*** No documents to move - window was already empty ***");
                     }
                 }
             }
             
             HostWindows.Remove(hostWindow);
-            Log.Information("*** Host window removed from tracking. Remaining host windows: {Count} ***", HostWindows.Count);
+            Log.Debug("*** Host window removed from tracking. Remaining host windows: {Count} ***", HostWindows.Count);
 
             // Update panel visibility state after removing window
             // This ensures menu checkmarks update correctly when panels were in the closed window
             if (App.MainWindow?.DataContext is LayoutViewModel layoutViewModel)
             {
                 layoutViewModel.UpdatePanelVisibility();
-                Log.Information("*** Panel visibility updated after window close ***");
+                Log.Debug("*** Panel visibility updated after window close ***");
             }
         }
 
