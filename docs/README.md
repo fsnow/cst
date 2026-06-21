@@ -17,6 +17,8 @@ Core technical documentation about how the system works:
 - [Ideal Pali Encoding (IPE)](architecture/IDEAL_PALI_ENCODING.md) - Script-independent encoding system
 - [Character Set Analysis](architecture/CHARACTER_SET_ANALYSIS.md) - Unicode character analysis
 - [Window & Dock Architecture](architecture/WINDOW_DOCK_ARCHITECTURE.md) - Docking system and window management
+- [Dock Subsystem (current behavior)](architecture/DOCK_SUBSYSTEM.md) - Live map of dock handling: object model, ID scheme, CEF WebView lifecycle, failure modes, open design questions
+- [Dock/WebView Workarounds Inventory](architecture/DOCK_WEBVIEW_WORKAROUNDS.md) - Every CEF/Dock/NativeControlHost workaround and the reason it exists
 - [Reactive Dock ViewModels](architecture/REACTIVE_DOCK_VIEWMODELS.md) - ReactiveUI + Dock base classes
 - [Dock Notepad Patterns](architecture/DOCK_NOTEPAD_PATTERNS.md) - ControlRecycling, StaticViewLocator & DockFluentTheme analysis
 - [Reactive Dock Refactoring Plan](architecture/REACTIVE_DOCK_REFACTORING_PLAN.md) - Migration strategy for ViewModel refactoring
