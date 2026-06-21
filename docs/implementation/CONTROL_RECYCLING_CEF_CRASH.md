@@ -1102,7 +1102,7 @@ dotnet publish -c Release -r osx-x64
    - May still have visible flicker
 
 3. **Research Avalonia educational licensing** - Contact Avalonia team
-   - CST is scholarly tool for Buddhist canon research
+   - CST is scholarly tool for Pali canon research
    - Non-commercial, educational use case
    - May qualify for special licensing
 
