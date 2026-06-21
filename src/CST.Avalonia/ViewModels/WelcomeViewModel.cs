@@ -19,6 +19,10 @@ namespace CST.Avalonia.ViewModels
         private string _htmlContent = "";
         private bool _isStartupInProgress = false;
         private string _startupStatusMessage = "";
+        // Once startup completes, ignore any late status updates. Status updates and CompleteStartup are
+        // posted to the UI thread at different priorities, so a queued "Checking…" can otherwise run
+        // *after* CompleteStartup and re-show the banner permanently (#38).
+        private bool _startupComplete = false;
 
         public string HtmlContent
         {
@@ -400,6 +404,12 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public void SetStartupStatus(string message)
         {
+            // Ignore late updates that arrive after startup has been marked complete (see #38).
+            if (_startupComplete)
+            {
+                Log.Debug("Welcome page startup already complete; ignoring late status: {Status}", message);
+                return;
+            }
             StartupStatusMessage = message;
             IsStartupInProgress = !string.IsNullOrEmpty(message);
             Log.Debug("Welcome page startup status: {Status}", message);
@@ -410,6 +420,7 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public void CompleteStartup()
         {
+            _startupComplete = true;
             IsStartupInProgress = false;
             StartupStatusMessage = "";
             Log.Information("Welcome page startup completed");
