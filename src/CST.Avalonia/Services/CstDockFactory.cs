@@ -240,6 +240,11 @@ namespace CST.Avalonia.Services
             // Set the factory on all dockables
             SetFactory(rootDock);
 
+            // Register the invariant spine by REFERENCE (see IsProtectedSpine). Only these exact
+            // instances are protected from cleanup; framework-cloned docks that copy a spine id are not.
+            _spineDocks.Clear();
+            _spineDocks.AddRange(new IDockable[] { rootDock, windowLayout, mainDock, documentDock });
+
             _logger.Debug("Layout created - Root: {RootCount} dockables, Main: {MainCount}, LeftTool: {LeftCount}, Document: {DocCount}",
                 rootDock.VisibleDockables?.Count ?? 0, mainDock.VisibleDockables?.Count ?? 0, 
                 leftToolDock.VisibleDockables?.Count ?? 0, documentDock.VisibleDockables?.Count ?? 0);
@@ -1550,9 +1555,37 @@ namespace CST.Avalonia.Services
         public override DocumentDock CreateDocumentDock()
         {
             var documentDock = new DocumentDock();
+            // Stamp a stable unique id so framework-created docks are never anonymous.
+            // (The spine's MainDocumentDock is built directly in CreateLayout with its
+            //  well-known id, so it is unaffected by this.)
+            if (string.IsNullOrEmpty(documentDock.Id))
+                documentDock.Id = $"DocDock_{Guid.NewGuid():N}";
             documentDock.CanCreateDocument = false;
             documentDock.IsCollapsable = false;
             return documentDock;
+        }
+
+        // Framework-created split containers were previously born with empty ids, which broke
+        // every fixed-id lookup and let degraded/anonymous structures accumulate during drags
+        // (see docs/architecture/DOCK_SUBSYSTEM.md). Stamp a stable unique id at creation so no
+        // dock is ever anonymous. The hand-built spine docks in CreateLayout set their own
+        // well-known ids and never go through these factory methods.
+        public override ProportionalDock CreateProportionalDock()
+        {
+            // base returns the concrete Mvvm ProportionalDock (typed as the interface) with its
+            // VisibleDockables list initialized — keep that, just stamp an id.
+            var dock = (ProportionalDock)base.CreateProportionalDock();
+            if (string.IsNullOrEmpty(dock.Id))
+                dock.Id = $"PDock_{Guid.NewGuid():N}";
+            return dock;
+        }
+
+        public override ToolDock CreateToolDock()
+        {
+            var dock = (ToolDock)base.CreateToolDock();
+            if (string.IsNullOrEmpty(dock.Id))
+                dock.Id = $"ToolDock_{Guid.NewGuid():N}";
+            return dock;
         }
         
         // Override to prevent accidental closes during drag operations
@@ -2044,7 +2077,7 @@ namespace CST.Avalonia.Services
         /// <summary>
         /// Recursively find empty splits in the dock hierarchy
         /// </summary>
-        private void FindEmptySplits(IDock dock, List<IDock> emptySplits)
+        internal void FindEmptySplits(IDock dock, List<IDock> emptySplits)
         {
             try
             {
@@ -2108,14 +2141,19 @@ namespace CST.Avalonia.Services
                             }
                         }
                         
-                        // Strategy 1: If ALL children are empty, mark the whole ProportionalDock for removal
-                        if (allChildrenEmpty && nonSplitterDockables.Count > 0)
+                        // Strategy 1: If ALL children are empty, mark the whole ProportionalDock for removal.
+                        // BUT never mark a protected spine dock — instead fall through to Strategy 2 so its
+                        // empty/redundant CHILDREN are removed (e.g. a redundant wrapper under MainDock is
+                        // collapsed, promoting MainDocumentDock back up), letting the tree heal toward the
+                        // spine without ever trying to delete the spine itself.
+                        if (allChildrenEmpty && nonSplitterDockables.Count > 0 && !IsProtectedSpine(proportionalDock))
                         {
-                            Log.Debug("*** EMPTY SPLIT DETECTED: ProportionalDock {DockId} - all {ChildCount} children are empty ***", 
+                            Log.Debug("*** EMPTY SPLIT DETECTED: ProportionalDock {DockId} - all {ChildCount} children are empty ***",
                                 proportionalDock.Id ?? "null", nonSplitterDockables.Count);
                             emptySplits.Add(proportionalDock);
                         }
                         // Strategy 2: If some children are empty but not all, mark individual empty children
+                        // (also handles the protected-parent case above: parent stays, empty children go)
                         else if (emptyChildren.Count > 0)
                         {
                             Log.Debug("*** PARTIAL EMPTY SPLIT DETECTED: ProportionalDock {DockId} - {EmptyCount} of {TotalCount} children are empty ***", 
@@ -2150,10 +2188,25 @@ namespace CST.Avalonia.Services
         /// <summary>
         /// Check if a dock is empty (contains no meaningful content)
         /// </summary>
-        private bool IsEmptyDock(IDock dock)
+        // The invariant spine — the ACTUAL dock instances created in CreateLayout (Root, WindowLayout,
+        // MainDock, MainDocumentDock). Matched by REFERENCE, not by id: the framework can clone a dock and
+        // copy its id (document-area splits produce several "MainDocumentDock"-id'd clones), and those
+        // clones must NOT be protected — only the originals. See docs/architecture/DOCK_SUBSYSTEM.md.
+        internal readonly List<IDockable> _spineDocks = new();
+
+        internal bool IsProtectedSpine(IDockable? dock) =>
+            dock != null && _spineDocks.Any(d => ReferenceEquals(d, dock));
+
+        internal bool IsEmptyDock(IDock dock)
         {
             try
             {
+                // Never treat a spine dock as empty/redundant — it stays put even when single-child.
+                if (IsProtectedSpine(dock))
+                {
+                    return false;
+                }
+
                 if (dock?.VisibleDockables == null || dock.VisibleDockables.Count == 0)
                 {
                     return true;
@@ -2260,7 +2313,14 @@ namespace CST.Avalonia.Services
         {
             try
             {
-                Log.Information("*** Removing empty split: {DockType} (ID: {DockId}) ***", 
+                // Defense-in-depth: never remove a protected spine dock, even if something flagged it.
+                if (IsProtectedSpine(emptySplit))
+                {
+                    Log.Warning("*** Refusing to remove protected spine dock: {DockId} ***", emptySplit.Id ?? "null");
+                    return;
+                }
+
+                Log.Information("*** Removing empty split: {DockType} (ID: {DockId}) ***",
                     emptySplit.GetType().Name, emptySplit.Id ?? "null");
                 
                 // Find the parent dock
