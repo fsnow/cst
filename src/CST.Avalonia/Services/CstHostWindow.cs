@@ -143,6 +143,12 @@ namespace CST.Avalonia.Services
             Close();
         }
 
+        // IHostWindow.SetActive (added in Dock 11.3.6.5) - bring the floating window to the foreground.
+        public void SetActive()
+        {
+            Activate();
+        }
+
         public void SetPosition(double x, double y)
         {
             Position = new PixelPoint((int)x, (int)y);
