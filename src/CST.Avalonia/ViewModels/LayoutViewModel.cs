@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reactive;
 using ReactiveUI;
 using Dock.Model.Core;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
@@ -161,34 +162,23 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
-            var openBookTool = new Tool
-            {
-                Id = "OpenBookTool",
-                Title = "Select a Book",
-                Context = openBookViewModel,
-                CanPin = false,
-                CanClose = false,
-                CanFloat = true,
-                CanDrag = true,
-                Factory = _factory
-            };
-
-            // Find the existing LeftToolDock (created by CstDockFactory at initialization)
-            var mainDock = Layout?.VisibleDockables?.FirstOrDefault(d => d.Id == "MainDock") as ProportionalDock;
-            var leftToolDock = FindToolDock(mainDock, "LeftToolDock");
-
+            // Get the tool container, recreating it under MainDock if it was removed (failure mode #4).
+            var leftToolDock = _factory.EnsureLeftToolDock();
             if (leftToolDock == null)
             {
-                Log.Error("[Layout] LeftToolDock not found - cannot add Select a Book panel. Layout may be corrupted.");
+                Log.Error("[Layout] Cannot add Select a Book panel - MainDock unavailable.");
                 return;
             }
 
-            // Add tool to the existing ToolDock
-            _factory.AddDockable(leftToolDock, openBookTool);
-            _factory.SetActiveDockable(openBookTool);
-            _factory.SetFocusedDockable(leftToolDock, openBookTool);
+            // The VM IS a ReactiveTool (its Id/Title/flags are set in its constructor), so add it
+            // directly — exactly as CreateLayout does at startup. Wrapping it in a generic Tool { Context }
+            // renders an empty panel because the view locator resolves by dockable type.
+            openBookViewModel.Factory = _factory;
+            _factory.AddDockable(leftToolDock, openBookViewModel);
+            _factory.SetActiveDockable(openBookViewModel);
+            _factory.SetFocusedDockable(leftToolDock, openBookViewModel);
 
-            Log.Information("[Layout] Select a Book panel added to existing LeftToolDock");
+            Log.Information("[Layout] Select a Book panel added to LeftToolDock");
 
             IsSelectBookPanelVisible = true;
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
@@ -227,34 +217,23 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
-            var searchTool = new Tool
-            {
-                Id = "SearchTool",
-                Title = "Search",
-                Context = searchViewModel,
-                CanPin = false,
-                CanClose = false,
-                CanFloat = true,
-                CanDrag = true,
-                Factory = _factory
-            };
-
-            // Find the existing LeftToolDock (created by CstDockFactory at initialization)
-            var mainDock = Layout?.VisibleDockables?.FirstOrDefault(d => d.Id == "MainDock") as ProportionalDock;
-            var leftToolDock = FindToolDock(mainDock, "LeftToolDock");
-
+            // Get the tool container, recreating it under MainDock if it was removed (failure mode #4).
+            var leftToolDock = _factory.EnsureLeftToolDock();
             if (leftToolDock == null)
             {
-                Log.Error("[Layout] LeftToolDock not found - cannot add Search panel. Layout may be corrupted.");
+                Log.Error("[Layout] Cannot add Search panel - MainDock unavailable.");
                 return;
             }
 
-            // Add tool to the existing ToolDock
-            _factory.AddDockable(leftToolDock, searchTool);
-            _factory.SetActiveDockable(searchTool);
-            _factory.SetFocusedDockable(leftToolDock, searchTool);
+            // The VM IS a ReactiveTool (its Id/Title/flags are set in its constructor), so add it
+            // directly — exactly as CreateLayout does at startup. Wrapping it in a generic Tool { Context }
+            // renders an empty panel because the view locator resolves by dockable type.
+            searchViewModel.Factory = _factory;
+            _factory.AddDockable(leftToolDock, searchViewModel);
+            _factory.SetActiveDockable(searchViewModel);
+            _factory.SetFocusedDockable(leftToolDock, searchViewModel);
 
-            Log.Information("[Layout] Search panel added to existing LeftToolDock");
+            Log.Information("[Layout] Search panel added to LeftToolDock");
 
             IsSearchPanelVisible = true;
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
@@ -298,7 +277,7 @@ namespace CST.Avalonia.ViewModels
             Log.Information("[Layout] Search panel hidden");
         }
 
-        private void RemoveToolFromLayout(Tool tool)
+        private void RemoveToolFromLayout(ITool tool)
         {
             // Try to find in main layout first
             var parentDock = FindParentDock(Layout, tool);
@@ -366,7 +345,7 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        private IDock? FindParentDock(IDockable? dockable, Tool targetTool)
+        private IDock? FindParentDock(IDockable? dockable, ITool targetTool)
         {
             if (dockable is IDock dock && dock.VisibleDockables != null)
             {
@@ -399,7 +378,7 @@ namespace CST.Avalonia.ViewModels
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        private Tool? FindTool(string toolId)
+        private ITool? FindTool(string toolId)
         {
             // Search main layout first
             var tool = FindToolRecursive(Layout, toolId);
@@ -426,12 +405,13 @@ namespace CST.Avalonia.ViewModels
             return null;
         }
 
-        private Tool? FindToolRecursive(IDockable? dockable, string toolId)
+        private ITool? FindToolRecursive(IDockable? dockable, string toolId)
         {
             if (dockable == null) return null;
 
-            // Check if this is the tool we're looking for
-            if (dockable is Tool tool && tool.Id == toolId)
+            // Check if this is the tool we're looking for (match ITool, not concrete Tool — the
+            // panels are ReactiveTools, which implement ITool but do not derive from Tool).
+            if (dockable is ITool tool && tool.Id == toolId)
             {
                 return tool;
             }
@@ -442,29 +422,6 @@ namespace CST.Avalonia.ViewModels
                 foreach (var child in dock.VisibleDockables)
                 {
                     var found = FindToolRecursive(child, toolId);
-                    if (found != null) return found;
-                }
-            }
-
-            return null;
-        }
-
-        private ToolDock? FindToolDock(IDockable? dockable, string dockId)
-        {
-            if (dockable == null) return null;
-
-            // Check if this is the tool dock we're looking for
-            if (dockable is ToolDock toolDock && toolDock.Id == dockId)
-            {
-                return toolDock;
-            }
-
-            // Check if this dockable has child dockables
-            if (dockable is IDock dock && dock.VisibleDockables != null)
-            {
-                foreach (var child in dock.VisibleDockables)
-                {
-                    var found = FindToolDock(child, dockId);
                     if (found != null) return found;
                 }
             }

@@ -180,4 +180,44 @@ public class CstDockFactoryTests
         Assert.Contains(wrapper, result);        // redundant wrapper under the RootDock now collapses
         Assert.DoesNotContain(mainDock, result); // protected spine still safe
     }
+
+    // ---- Q2: recreate-on-demand tool container (failure mode #4) ----
+
+    [Fact]
+    public void EnsureLeftToolDock_RecreatesUnderMainDock_WhenMissing()
+    {
+        var f = new CstDockFactory();
+        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+
+        var dock = f.EnsureLeftToolDock();
+
+        Assert.NotNull(dock);
+        Assert.Equal("LeftToolDock", dock!.Id);
+        Assert.Contains(mainDock.VisibleDockables!, d => d.Id == "LeftTools"); // wrapper inserted under MainDock
+    }
+
+    [Fact]
+    public void EnsureLeftToolDock_ReusesExisting_WhenPresent()
+    {
+        var f = new CstDockFactory();
+        var existing = new ToolDock { Id = "LeftToolDock", VisibleDockables = List() };
+        var leftTools = new ProportionalDock { Id = "LeftTools", VisibleDockables = List(existing) };
+        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(leftTools, doc) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+        var before = mainDock.VisibleDockables!.Count;
+
+        var dock = f.EnsureLeftToolDock();
+
+        Assert.Same(existing, dock);                              // reused, not recreated
+        Assert.Equal(before, mainDock.VisibleDockables!.Count);  // nothing inserted
+    }
 }

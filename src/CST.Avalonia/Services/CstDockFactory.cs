@@ -32,6 +32,11 @@ namespace CST.Avalonia.Services
         private double _mainDockLeftProportion = 0.25;
         private double _mainDockRightProportion = 0.75;
 
+        // Typed references to two spine docks, set in CreateLayout, used to recreate the tool container
+        // on demand (see EnsureLeftToolDock). Reference-stable: MainDock is protected and never removed.
+        internal RootDock? _rootDock;
+        internal ProportionalDock? _mainDock;
+
         // Track which books have Go To event subscriptions to prevent duplicates
         private readonly HashSet<string> _goToSubscribedBooks = new HashSet<string>();
 
@@ -244,6 +249,8 @@ namespace CST.Avalonia.Services
             // instances are protected from cleanup; framework-cloned docks that copy a spine id are not.
             _spineDocks.Clear();
             _spineDocks.AddRange(new IDockable[] { rootDock, windowLayout, mainDock, documentDock });
+            _rootDock = rootDock;
+            _mainDock = mainDock;
 
             _logger.Debug("Layout created - Root: {RootCount} dockables, Main: {MainCount}, LeftTool: {LeftCount}, Document: {DocCount}",
                 rootDock.VisibleDockables?.Count ?? 0, mainDock.VisibleDockables?.Count ?? 0, 
@@ -1603,6 +1610,64 @@ namespace CST.Avalonia.Services
             if (string.IsNullOrEmpty(dock.Id))
                 dock.Id = $"RootDock_{Guid.NewGuid():N}";
             return dock;
+        }
+
+        /// <summary>
+        /// Returns the LeftToolDock that hosts the tool panels, recreating it (and its LeftTools wrapper)
+        /// under the protected MainDock if it has been removed — e.g. both panels were floated out and
+        /// their windows closed (failure mode #4). This is what lets View → Show Search / Select-a-Book
+        /// always bring panels back instead of no-op'ing on a corrupted layout.
+        /// </summary>
+        internal ToolDock? EnsureLeftToolDock()
+        {
+            // Reuse an existing LeftToolDock anywhere in the main layout (it may be nested after drags).
+            if (_rootDock != null && FindDockByIdRecursive(_rootDock, "LeftToolDock") is ToolDock existing)
+            {
+                return existing;
+            }
+
+            if (_mainDock?.VisibleDockables == null)
+            {
+                Log.Error("*** EnsureLeftToolDock: MainDock unavailable - cannot recreate tool container ***");
+                return null;
+            }
+
+            Log.Information("*** EnsureLeftToolDock: LeftToolDock missing - recreating tool container under MainDock ***");
+
+            var leftToolDock = new ToolDock
+            {
+                Id = "LeftToolDock",
+                Title = "Tools",
+                Alignment = Alignment.Left,
+                GripMode = GripMode.Visible,
+                CanDrag = true,
+                CanDrop = true,
+                VisibleDockables = CreateList<IDockable>(),
+                Factory = this
+            };
+            var leftTools = new ProportionalDock
+            {
+                Id = "LeftTools",
+                Proportion = 0.25,
+                Orientation = Orientation.Vertical,
+                IsCollapsable = false,
+                CanDrop = true,
+                VisibleDockables = CreateList<IDockable>(leftToolDock),
+                Factory = this
+            };
+
+            // Insert at the left of MainDock (mirrors CreateLayout: [leftTools, splitter, documents]).
+            var splitter = new ProportionalDockSplitter { Id = "MainSplitter", Title = "MainSplitter" };
+            _mainDock.VisibleDockables.Insert(0, splitter);
+            _mainDock.VisibleDockables.Insert(0, leftTools);
+
+            // Wire the new docks (Owner, Factory, init events) the way CreateLayout/InitLayout does.
+            // Without a proper Owner, base.FloatDockable can't detach them, so floating these recreated
+            // panels would silently no-op.
+            InitDockable(leftTools, _mainDock);
+            InitDockable(leftToolDock, leftTools);
+
+            return leftToolDock;
         }
         
         // Override to prevent accidental closes during drag operations
