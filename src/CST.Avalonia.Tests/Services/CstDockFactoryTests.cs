@@ -42,6 +42,13 @@ public class CstDockFactoryTests
     }
 
     [Fact]
+    public void CreateRootDock_StampsNonEmptyId()
+    {
+        var d = new CstDockFactory().CreateRootDock();
+        Assert.False(string.IsNullOrEmpty(d.Id));
+    }
+
+    [Fact]
     public void Create_ProducesUniqueIds()
     {
         var f = new CstDockFactory();
@@ -53,6 +60,8 @@ public class CstDockFactoryTests
             f.CreateToolDock().Id,
             f.CreateDocumentDock().Id,
             f.CreateDocumentDock().Id,
+            f.CreateRootDock().Id,
+            f.CreateRootDock().Id,
         };
         Assert.Equal(ids.Length, ids.Distinct().Count());
     }
@@ -149,5 +158,26 @@ public class CstDockFactoryTests
 
         Assert.Contains(wrapper, result);        // redundant wrapper marked for collapse
         Assert.DoesNotContain(mainDock, result); // protected spine NOT marked
+    }
+
+    [Fact]
+    public void FindEmptySplits_RedundantWrapperDirectlyUnderRoot_IsCollapsed()
+    {
+        // Blind spot reproduced live: a single-child wrapper sitting directly under WindowLayout (a
+        // RootDock) was never flattened, because the child-scan only ran for ProportionalDock parents.
+        // Now its own redundancy is judged regardless of parent — so it collapses, promoting MainDock up.
+        var f = new CstDockFactory();
+        var mainDoc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(mainDoc) };
+        var wrapper = new ProportionalDock { Id = "PDock_wrap", VisibleDockables = List(mainDock) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(wrapper) };
+        f._spineDocks.Add(mainDock);
+        f._spineDocks.Add(mainDoc);
+
+        var result = new List<IDock>();
+        f.FindEmptySplits(windowLayout, result);
+
+        Assert.Contains(wrapper, result);        // redundant wrapper under the RootDock now collapses
+        Assert.DoesNotContain(mainDock, result); // protected spine still safe
     }
 }

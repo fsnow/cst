@@ -1328,6 +1328,7 @@ namespace CST.Avalonia.Services
                 var docId = oldVm.DocId;
                 var currentHitIndex = oldVm.CurrentHitIndex;
                 var totalHits = oldVm.TotalHits;
+                var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
 
                 Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
                     searchTerms?.Count ?? 0, bookScript, currentHitIndex, totalHits, currentAnchor ?? "none");
@@ -1371,6 +1372,9 @@ namespace CST.Avalonia.Services
                 newVm.CurrentHitIndex = currentHitIndex;
                 newVm.TotalHits = totalHits;
                 newVm.IsFloating = true;
+                // Setting BookScript doesn't refresh the dockable Title (the tab binds to Title, not
+                // DisplayTitle), so carry the old tab title over — else it reverts to Devanagari (#6).
+                newVm.Title = title;
 
                 Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
 
@@ -1447,6 +1451,7 @@ namespace CST.Avalonia.Services
                 var docId = oldVm.DocId;
                 var currentHitIndex = oldVm.CurrentHitIndex;
                 var totalHits = oldVm.TotalHits;
+                var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
 
                 Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
                     searchTerms?.Count ?? 0, bookScript, currentHitIndex, totalHits, currentAnchor ?? "none");
@@ -1499,6 +1504,8 @@ namespace CST.Avalonia.Services
                 newVm.TotalHits = totalHits;
                 newVm.IsFloating = false;
                 newVm.CanFloat = false; // Restore drag-to-float block (CEF crash mitigation); matches the open + float paths
+                // Carry the exact tab title across recreation (BookScript change doesn't refresh Title) — #6.
+                newVm.Title = title;
 
                 Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
 
@@ -1585,6 +1592,16 @@ namespace CST.Avalonia.Services
             var dock = (ToolDock)base.CreateToolDock();
             if (string.IsNullOrEmpty(dock.Id))
                 dock.Id = $"ToolDock_{Guid.NewGuid():N}";
+            return dock;
+        }
+
+        public override RootDock CreateRootDock()
+        {
+            // The framework creates a fresh RootDock per floating window; stamp it too so no dock is
+            // anonymous. CreateLayout overwrites the two main roots with their well-known ids afterward.
+            var dock = (RootDock)base.CreateRootDock();
+            if (string.IsNullOrEmpty(dock.Id))
+                dock.Id = $"RootDock_{Guid.NewGuid():N}";
             return dock;
         }
         
@@ -2108,6 +2125,19 @@ namespace CST.Avalonia.Services
                             i, dockable.GetType().Name, (dockable as IDockable)?.Id ?? "null");
                     }
                     
+                    // Self-redundancy: collapse a single-child ProportionalDock regardless of its parent
+                    // type. The child-scan below only runs for ProportionalDock parents, so a redundant
+                    // wrapper sitting directly under a RootDock (e.g. around the protected MainDock) would
+                    // otherwise never be flattened, leaving the tree one level short of the spine.
+                    // (Protected spine and the intentional LeftTools wrapper are excluded.)
+                    if (nonSplitterDockables.Count == 1 && nonSplitterDockables[0] is IDock
+                        && !IsProtectedSpine(proportionalDock) && proportionalDock.Id != "LeftTools")
+                    {
+                        Log.Debug("*** REDUNDANT SINGLE-CHILD DOCK: {DockId} - collapsing ***", proportionalDock.Id ?? "null");
+                        if (!emptySplits.Contains(proportionalDock))
+                            emptySplits.Add(proportionalDock);
+                    }
+
                     // Check for empty child docks
                     if (nonSplitterDockables.Count > 0)
                     {
