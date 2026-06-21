@@ -254,7 +254,26 @@ namespace CST.Avalonia.Services
                 }
 
                 Directory.CreateDirectory(appDataDir);
-                
+
+                // Merge: preserve an already-persisted LastIndexedTimestamp when the incoming entry's is
+                // null. XmlUpdateService passes files with null timestamps (the download "needs indexing"
+                // marker) AFTER indexing has already recorded real timestamps via SaveFileDatesAsync.
+                // Without this, those just-indexed files would be saved with null and re-indexed on the
+                // next startup (#40). Genuine re-downloads are still caught by the lastWriteTime check.
+                var previousFiles = _fileDatesData?.Files;
+                if (previousFiles != null)
+                {
+                    foreach (var kvp in files)
+                    {
+                        if (kvp.Value.LastIndexedTimestamp == null
+                            && previousFiles.TryGetValue(kvp.Key, out var prev)
+                            && prev.LastIndexedTimestamp.HasValue)
+                        {
+                            kvp.Value.LastIndexedTimestamp = prev.LastIndexedTimestamp;
+                        }
+                    }
+                }
+
                 _fileDatesData = new FileDatesWithCommits
                 {
                     LastKnownRepositoryCommitHash = repositoryCommitHash,

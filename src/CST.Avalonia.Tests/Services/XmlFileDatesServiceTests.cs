@@ -170,6 +170,40 @@ namespace CST.Avalonia.Tests.Services
             service.UpdateFileDate(999999, testDate);
         }
 
+        [Fact]
+        public async Task SaveFileDatesDataAsync_PreservesExistingTimestamp_WhenIncomingIsNull()
+        {
+            // Regression for #40: after indexing records a real timestamp, XmlUpdateService re-saves the
+            // file with a null timestamp (its download "needs indexing" marker). The save must preserve
+            // the existing timestamp, else the file is dropped from the cache and re-indexed at startup.
+            var service = new TestableXmlFileDatesService(_mockLogger.Object, _mockSettingsService.Object, _testAppDataDir);
+            await service.InitializeAsync(); // sets the file-dates path
+            var indexedTime = new DateTime(2026, 6, 21, 10, 0, 0, DateTimeKind.Utc);
+
+            // 1. Indexing recorded a real timestamp + commit hash.
+            await service.SaveFileDatesDataAsync(
+                new Dictionary<string, FileCommitInfo>
+                {
+                    ["e0801n.nrf.xml"] = new FileCommitInfo { LastIndexedTimestamp = indexedTime, CommitHash = "abc123" }
+                },
+                "repoHash1");
+
+            // 2. XmlUpdateService re-saves with a null timestamp (download marker) + new commit hash.
+            await service.SaveFileDatesDataAsync(
+                new Dictionary<string, FileCommitInfo>
+                {
+                    ["e0801n.nrf.xml"] = new FileCommitInfo { LastIndexedTimestamp = null, CommitHash = "def456" }
+                },
+                "repoHash2");
+
+            // 3. Indexed timestamp preserved (not clobbered to null); commit hash takes the new value.
+            var data = await service.GetFileDatesDataAsync();
+            Assert.NotNull(data);
+            Assert.True(data!.Files.TryGetValue("e0801n.nrf.xml", out var info));
+            Assert.Equal(indexedTime, info!.LastIndexedTimestamp);
+            Assert.Equal("def456", info.CommitHash);
+        }
+
         // Testable version that allows us to override the app data directory
         private class TestableXmlFileDatesService : XmlFileDatesService
         {
