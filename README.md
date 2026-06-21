@@ -21,7 +21,9 @@ CST Reader 5.0 is a modern, cross-platform Pali text reader featuring:
 ### Core Application
 - **Cross-Platform**: Built on .NET 9 and Avalonia UI, supporting macOS (tested) with Windows and Linux compatibility
 - **IDE-Style Interface**: Dock-based layout with resizable panels, tab management, and persistent session state
-- **Complete Session Restoration**: Saves and restores open books, search highlights, window positions across sessions
+- **Complete Session Restoration**: Saves and restores open books, search highlights, window positions, and scroll positions across sessions
+- **Floating Windows**: Book and PDF tabs can be floated into separate windows (button-based, to stay crash-safe with CEF on macOS)
+- **Dark Mode**: Full dark-mode support across all panels and book content, including color-inverted search highlights
 - **Native Packaging**: Production-ready macOS .dmg packages with proper application branding
 
 ### Text Display & Scripts
@@ -32,15 +34,20 @@ CST Reader 5.0 is a modern, cross-platform Pali text reader featuring:
 
 ### Advanced Search System
 - **Full-Text Search**: Lucene.NET 4.8+ implementation with position-based indexing for all 217 texts
-- **Search Features**: Exact search, wildcard search, regular expressions, position-based highlighting
+- **Query Types**: Exact, phrase (quoted), proximity (all-within-a-window), and mixed/multiple-phrase queries; wildcard (`*`/`?`) and regular-expression search — all working across the 14 scripts
+- **Two-Color Highlighting**: Distinct colors for the match anchor vs. remaining matched words, with occurrence-by-occurrence Next/Prev navigation
 - **Smart Filtering**: Checkbox-based book filters with live counts and category management
-- **Incremental Indexing**: Only processes changed files, not entire text corpus
+- **Incremental Indexing**: Only processes changed files, not the entire text corpus
 - **XML Updates**: Automatic GitHub integration for file updates with SHA-based change detection
+
+### Source Texts (View Source PDF)
+- **Burmese Edition PDFs**: View the Burmese 1957 and 2010 edition source PDFs in dockable tabs (rendered via CEF's PDFium), downloaded on demand from SharePoint and cached locally
+- **Context-Aware Navigation**: Opens the PDF to the page matching the current page in the rendered book
 
 ### Technical Architecture
 - **Modern Stack**: .NET 9, Avalonia UI 11.x, ReactiveUI, Dependency Injection
 - **WebView Rendering**: Uses WebViewControl-Avalonia for book content with search highlighting
-- **Comprehensive Testing**: 62 tests covering unit, integration, and performance scenarios
+- **Comprehensive Testing**: 200+ tests covering unit, integration, and performance scenarios
 - **Advanced Logging**: Structured Serilog logging across all components
 
 ## Development Setup (macOS)
@@ -96,7 +103,7 @@ src/CST.Avalonia/          # Main application source
 └── Tests/                  # Comprehensive test suite
 
 src/CST.Lucene/            # Search engine library
-markdown/planning/          # Development planning documents
+docs/                       # Architecture, features, research, release process
 ```
 
 ## Text Data
@@ -109,6 +116,11 @@ For working with the legacy Windows versions:
 - **CST 4.0** (previous release): Switch to `cst_4_0` branch for older stable version
 
 See individual branch READMEs for specific legacy build instructions.
+
+## Documentation & Roadmap
+
+- **Documentation index:** [docs/README.md](docs/README.md) — architecture, implementation notes, feature specs, research, and the release process.
+- **Roadmap / planned work:** tracked as [GitHub issues](https://github.com/fsnow/cst/issues) (filter by the `feature` / `enhancement` labels); detailed specs for several features live in [docs/features/planned/](docs/features/planned/).
 
 ## License
 The texts are provided by the Vipassana Research Institute (VRI). See individual text files for specific attribution and licensing information.

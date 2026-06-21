@@ -2,8 +2,8 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** November 22, 2025
-**Current Version:** 5.0.0-beta.3
+**Last Updated:** June 21, 2026
+**Current Version:** 5.0.0-beta.4
 
 ---
 
@@ -22,10 +22,14 @@ The release process consists of five main steps:
 
 Before starting the release process, verify on Kestrel:
 
-- [ ] All version strings updated and consistent:
+- [ ] All version strings updated and consistent (full list — these all drifted before Beta 4):
+  - `CST.Avalonia.csproj` - Version / InformationalVersion / AssemblyVersion / FileVersion + CFBundleVersion / CFBundleShortVersionString (canonical source)
+  - `Info.plist` - CFBundleVersion + CFBundleShortVersionString
+  - `package-macos.sh` - helper-bundle CFBundleVersion / CFBundleShortVersionString
+  - `Resources/welcome-content.html` - header version + footer version/date
+  - `Services/WelcomeUpdateService.cs` - `CurrentAppVersion` default
+  - `ViewModels/WelcomeViewModel.cs` - version fallback string
   - `CLAUDE.md` - header, status, dates
-  - `Resources/welcome-content.html` - header and footer versions
-  - `CST.Avalonia.csproj` - assembly version properties
 - [ ] Build succeeds: `dotnet build`
 - [ ] Tests pass: `dotnet test` (or acceptable skip rate documented)
 - [ ] All changes committed and pushed to `main` branch
