@@ -21,6 +21,11 @@ Frank's framing: real AI support is arriving on macOS (Apple Intelligence, a rev
 third-party model integration), so it's worth capturing App Intents as a future feature now and
 understanding what adoption would entail given our **Avalonia / .NET 9** stack.
 
+**Success bar (Frank):** the deliverable is genuine **Siri / Apple Intelligence** integration via App
+Intents (approach A below). Anything short of Siri support — AppleScript / Apple-Events scriptability, or
+bare URL-scheme Shortcuts as an *end state* — is **not a viable substitute** for the feature. Such options
+matter only as the **bridge layer** the real path reuses, never as the deliverable itself.
+
 ## 2. Landscape (as of WWDC 2026, June 8 2026)
 
 - **App Intents expanded** to connect apps to Siri's AI capabilities: *personal context understanding*,
@@ -104,6 +109,27 @@ bridge from those Swift intents to the running .NET process.
 - **Pros:** no Swift/Xcode; modest but real system presence.
 - **Cons:** suggestion/indexing only — not invokable actions; predates the App Intents model Apple now pushes.
 
+## 5a. Update (June 2026): `net10.0-macos` + .NET 10 Swift interop — refines approach A's bridge, not the requirement
+
+A claim worth recording (it will resurface): *"change the TFM to `net10.0-macos` alongside the desktop
+target → full .NET-for-macOS workload → write Swift-style interop and register `NSAppleEventDescriptor`s
+natively."* Assessment against the success bar and §4:
+
+- **Does not remove the Swift-only / build-time requirement.** App Intents has no Obj-C surface, so the
+  .NET-for-macOS workload (which projects **Objective-C** frameworks into C#) still doesn't expose it.
+  Intents must be **authored in Swift and processed by `appintentsmetadataprocessor`**. `net10.0-macos`
+  changes the *plumbing*, not the *authoring* — §4's conclusion stands.
+- **It is, though, a cleaner bridge than the §5.A options.** .NET 10's **Swift interop** (calling Swift
+  directly via the Swift calling convention) is the most direct way for our managed code to talk to the
+  embedded Swift App-Intents component — preferable to URL-scheme / XPC / distributed-notification bridges
+  **if** the Avalonia-TFM question (§7) resolves favorably. Add it to the §5.A bridge list as the preferred
+  mechanism. The macOS workload also uses Xcode tooling for packaging, which *might* be the natural place to
+  run the Swift build + metadata phase — to be confirmed in the PoC.
+- **`NSAppleEventDescriptor` is a red herring here.** That is **Apple Events / AppleScript** — the classic
+  scripting mechanism, *not* App Intents and *not* Siri / Apple Intelligence. Per the success bar,
+  AppleScript scriptability is **ruled out** as a substitute (it does not deliver Siri). Recorded so the
+  conflation in that paragraph doesn't get chased again.
+
 ## 6. Build & packaging implications (approach A)
 - `package-macos.sh` would gain an **Xcode-built Swift target** producing the App Intents bundle + metadata,
   merged into `Contents/` (likely under `Contents/Frameworks` or an app-intents location) before signing.
@@ -140,6 +166,11 @@ drives out-of-process** — a new toolchain, a build-time metadata phase with no
 - **Feasibility of embedding App Intents in a non-Xcode bundle** — must be proven with a minimal PoC before
   committing. If Apple's discovery strictly requires a real Xcode app target, approach A may be blocked and
   we fall back to B/C (or reconsider the build to produce the macOS app via Xcode wrapping the .NET output).
+- **Can an Avalonia app target / multi-target `net10.0-macos` (the macOS workload) cleanly?** Avalonia
+  targets plain `net10.0` and does its own native interop; combining it with the MAUI/macOS workload TFM
+  (to get .NET 10 Swift interop + Foundation bindings) is **non-standard and unproven for our stack** —
+  validate before relying on Swift interop as the bridge. If it doesn't compose, fall back to the §5.A
+  out-of-process bridges (URL scheme / XPC / distributed notifications), which need no TFM change.
 - **Apple Intelligence is region-limited** and OS-version-gated (macOS 26.4 / 27) — feature availability is
   uneven for our users.
 - **Maintenance surface**: a Swift sub-project + bridge is new tech in an otherwise .NET codebase.
