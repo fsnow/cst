@@ -2930,7 +2930,7 @@ namespace CST.Avalonia.Services
             // Check if already subscribed using the book's unique ID
             if (!_goToSubscribedBooks.Contains(bookViewModel.Id))
             {
-                _logger.Debug("Adding Go To event subscription for book: {BookFile} (ID: {BookId})",
+                _logger.Debug("Adding book-action event subscriptions (Go To / Attha-Tika / View Source) for book: {BookFile} (ID: {BookId})",
                     bookViewModel.Book.FileName, bookViewModel.Id);
 
                 bookViewModel.OpenGoToDialogRequested += () =>
@@ -2947,6 +2947,23 @@ namespace CST.Avalonia.Services
                             _logger.Error(ex, "Error showing Go To dialog");
                         }
                     });
+                };
+
+                // Attha/Tika linked-book buttons. Must be re-wired here (not only in the open-book create
+                // path) so float/unfloat-created ViewModels keep working — they get a fresh GUID and route
+                // through this method, so without this the buttons silently no-op after any float/unfloat.
+                bookViewModel.OpenBookRequested += (linkedBook, anchorForLinked) =>
+                {
+                    _logger.Debug("Opening linked book: {BookFile} with anchor: {Anchor}", linkedBook.FileName, anchorForLinked ?? "null");
+                    OpenBook(linkedBook, anchorForLinked);
+                };
+
+                // View Source PDF buttons (1957 / 2010) — same reasoning as OpenBookRequested above.
+                bookViewModel.OpenPdfRequested += (bookFilename, sourceType, targetPage) =>
+                {
+                    _logger.Information("OpenPdfRequested event fired for book: {BookFile}, source: {SourceType}, page: {Page}",
+                        bookFilename, sourceType, targetPage);
+                    OpenPdf(bookFilename, sourceType, targetPage);
                 };
 
                 _goToSubscribedBooks.Add(bookViewModel.Id);
