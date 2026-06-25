@@ -59,6 +59,29 @@ adopt. It's how both Apple's Siri and any plugged-in assistant discover and invo
 These map cleanly onto features we already have or plan (open book, Go-To navigation, search), so the
 *intent surface* is small and well-defined. The hard part is **how to expose it from a .NET app**.
 
+## 3a. Spoken-Pāli understanding — a key dependency
+
+Even with intents exposed, the *quality* of the experience hinges on the assistant understanding
+**spoken Pāli**, which splits into two layers we don't fully control:
+
+1. **ASR (speech → text).** Siri has no Pāli dictation model, so spoken terms like *Dīgha Nikāya*,
+   *Majjhima*, *Visuddhimagga*, *paṭiccasamuppāda* arrive mangled/anglicized — upstream of anything App
+   Intents sees.
+2. **NLU (text → the right entity/action).** Mapping that imperfect transcription to the correct
+   book/sutta/reference — where **real-LLM-level understanding** (Apple Intelligence's model, or a Claude
+   Siri Extension) earns its keep: knowing "the long discourses" = Dīgha Nikāya, "loving-kindness" → mettā,
+   tolerating phonetic spellings.
+
+We can't supply the assistant's brain, but we can make our surface **maximally resolvable**:
+- Give `Book`/`Sutta` AppEntities **rich aliases** — Pāli name + common English name + abbreviations
+  (DN/MN/SN) + alternate transliterations/scripts — so any model has more to match against.
+- Back the `EntityQuery` with our **own fuzzy/phonetic matching** (reusing the existing search +
+  script-conversion infra) as a safety net, so a rough transcription still resolves on our side rather than
+  depending entirely on the assistant.
+
+Net: experience quality tracks the assistant's LLM understanding of Pāli (outside our control), but rich
+aliases + a forgiving resolver raise the floor regardless of which brain is driving.
+
 ## 4. The core challenge: App Intents is Swift-only + build-time metadata
 
 Two hard requirements make this non-trivial for an Avalonia/.NET app:
