@@ -1,6 +1,6 @@
 # CLAUDE.md — Agent guide for CST Reader
 
-CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform Pāli text reader — .NET 9 + Avalonia UI, a ground-up rewrite of the WinForms CST4. Texts are provided by the Vipassana Research Institute (VRI). Currently **Beta 4 in development**; development/testing is on **macOS** (Windows/Linux are designed-in but untested).
+CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform Pāli text reader — .NET 10 + Avalonia UI, a ground-up rewrite of the WinForms CST4. Texts are provided by the Vipassana Research Institute (VRI). Currently **Beta 5 in development**; development/testing is on **macOS** (Windows/Linux are designed-in but untested).
 
 - **Feature overview:** see [README.md](README.md) (front page).
 - **Roadmap / planned work:** [GitHub issues](https://github.com/fsnow/cst/issues) (`feature`/`enhancement` labels) + specs in [docs/features/planned/](docs/features/planned/). Issues are the canonical tracker.

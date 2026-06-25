@@ -2,8 +2,8 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** June 21, 2026
-**Current Version:** 5.0.0-beta.4
+**Last Updated:** June 23, 2026
+**Current Version:** 5.0.0-beta.5
 
 ---
 
@@ -18,9 +18,26 @@ The release process consists of five main steps:
 
 ---
 
+## Toolchain Requirements
+
+**Both build machines need the .NET 10 SDK** — Kestrel (build/test) and Caracara (release packaging).
+As of Beta 5 the solution targets `net10.0` (.NET 9 reached end of support; see #48). Verify before building:
+
+```bash
+dotnet --list-sdks   # expect a 10.0.x entry
+```
+
+If missing, install via the official `.pkg` from https://dotnet.microsoft.com/download/dotnet/10.0
+(Apple-Silicon installer on Kestrel, Intel installer on Caracara). The CST.MAUI POC additionally needs
+`sudo dotnet workload install maui`, but it is not part of the shipping macOS app.
+
+---
+
 ## Pre-Release Checklist (Kestrel)
 
 Before starting the release process, verify on Kestrel:
+
+- [ ] .NET 10 SDK present (`dotnet --list-sdks` shows 10.0.x) — see Toolchain Requirements
 
 - [ ] All version strings updated and consistent (full list — these all drifted before Beta 4):
   - `CST.Avalonia.csproj` - Version / InformationalVersion / AssemblyVersion / FileVersion + CFBundleVersion / CFBundleShortVersionString (canonical source)
