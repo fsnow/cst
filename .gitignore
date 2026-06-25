@@ -32,3 +32,5 @@ src/CST.ScriptValidation/obj/
 *.log
 
 screenshots/
+
+src/CST.MAUI/obj/
