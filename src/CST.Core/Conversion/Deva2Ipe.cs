@@ -9,6 +9,12 @@ namespace CST.Conversion
     {
         private static IDictionary<string, string> deva2Ipe;
 
+        // Fast lookup table indexed by char code: fastArr[c] = mapped char, or '\0' = no mapping (pass
+        // through). The Devanagari block and the Latin-1 IPE values all fit under U+0980. Empty-value
+        // entries (virama, ZWNJ, ZWJ) are skipped here and removed explicitly in Convert(). (#86)
+        private const int FastArrLen = 0x0980;
+        private static readonly char[] fastArr = new char[FastArrLen];
+
         static Deva2Ipe()
         {
             deva2Ipe = new Dictionary<string, string>();
@@ -83,9 +89,20 @@ namespace CST.Conversion
             deva2Ipe["\u094D"] = ""; // virama
             deva2Ipe["\u200C"] = ""; // ZWNJ (ignore)
             deva2Ipe["\u200D"] = ""; // ZWJ (ignore)
+
+            // Derive the fast table from the same data (single-char -> single-char entries only), so the
+            // two implementations share one source of truth.
+            foreach (var kvp in deva2Ipe)
+                if (kvp.Key.Length == 1 && kvp.Value.Length == 1 && kvp.Key[0] < FastArrLen)
+                    fastArr[kvp.Key[0]] = kvp.Value[0];
         }
 
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation - the original readable version, kept verbatim as the correctness
+        /// oracle for the optimized <see cref="Convert"/>. Do NOT change this; tests assert
+        /// Convert == ConvertReference across the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
             // insert "a" after all consonants that are not followed by virama, dependent vowel or "a"
             // (This still works after we inserted ZWJ in the Devanagari. The ZWJ goes after virama.)
@@ -106,6 +123,47 @@ namespace CST.Conversion
             }
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Optimized single-pass conversion. Folds the reference's three inherent-"a" regex passes and the
+        /// per-char dictionary lookup (which allocated a string per char via c.ToString()) into one pass.
+        /// Byte-identical to <see cref="ConvertReference"/> for all real Devanagari input (verified by tests). (#86)
+        ///
+        /// A Devanagari consonant (U+0915-U+0939) carries an inherent "a" (U+00C1 in IPE) unless the next
+        /// char is a dependent vowel sign or the virama (U+093E-U+094D), which the reference enforced via regex.
+        /// </summary>
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            // Each input char yields at most 2 output chars (mapped char + inherent vowel); size for that.
+            var buf = new char[2 * n];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+
+                // virama (U+094D) / ZWNJ (U+200C) / ZWJ (U+200D) -> removed (reference maps these to "")
+                if (c == 0x094D || c == 0x200C || c == 0x200D)
+                    continue;
+
+                char mapped = (c < FastArrLen) ? fastArr[c] : '\0';
+                buf[k++] = (mapped != '\0') ? mapped : c; // mapped value, else pass through
+
+                // A consonant (U+0915-U+0939) carries an inherent "a" (U+00C1) unless the next char is a
+                // dependent vowel sign or the virama (U+093E-U+094D).
+                if (c >= 0x0915 && c <= 0x0939)
+                {
+                    char next = (i + 1 < n) ? devStr[i + 1] : '\0';
+                    if (next < 0x093E || next > 0x094D)
+                        buf[k++] = (char)0x00C1;
+                }
+            }
+
+            return new string(buf, 0, k);
         }
     }
 }
