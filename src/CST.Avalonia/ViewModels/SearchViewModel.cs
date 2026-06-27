@@ -507,18 +507,16 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             var searchText = SearchText ?? string.Empty;
             
             // Determine actual search mode:
-            // If user selected Wildcard mode but didn't use wildcards, treat as exact match
-            // If user selected Regex mode but didn't use regex chars, treat as exact match
+            // If the user selected Wildcard mode but used no wildcard chars, treat it as exact — a
+            // wildcard pattern with no */? is anchored (^pat$) and equivalent to an exact match.
+            // Regex mode is NOT downgraded: a plain string like "kassa" is a valid (unanchored) regex
+            // that matches every term containing it as a substring, so downgrading to exact would
+            // silently drop most matches (the user explicitly chose Regex). (#58)
             var searchMode = SelectedSearchMode.Value;
             if (searchMode == SearchMode.Wildcard && !ContainsWildcardChars(searchText))
             {
                 searchMode = SearchMode.Exact;
                 _logger.LogInformation("No wildcard characters detected, using exact match");
-            }
-            else if (searchMode == SearchMode.Regex && !ContainsRegexChars(searchText))
-            {
-                searchMode = SearchMode.Exact;
-                _logger.LogInformation("No regex characters detected, using exact match");
             }
             
             var query = new SearchQuery
@@ -815,14 +813,6 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     {
         // Check for wildcard characters (* and ?)
         return text.Contains('*') || text.Contains('?');
-    }
-    
-    private static bool ContainsRegexChars(string text)
-    {
-        // Check for common regex metacharacters
-        // This is a simplified check - you might want to expand this based on your needs
-        var regexChars = new[] { '.', '^', '$', '[', ']', '(', ')', '{', '}', '|', '\\', '+' };
-        return regexChars.Any(text.Contains);
     }
     
     /// <summary>
