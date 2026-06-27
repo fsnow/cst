@@ -130,7 +130,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
                 .Throttle(TimeSpan.FromMilliseconds(500))
                 .DistinctUntilChanged()
                 .Where(text => !string.IsNullOrWhiteSpace(text))
-                .SelectMany(async _ => 
+                .SelectMany(async _ =>
                 {
                     await ExecuteSearchAsync();
                     return Unit.Default;
@@ -659,23 +659,44 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         IncludeOther = false;
     }
     
+    // Pumped whenever a book-type filter toggles; throttled in WhenActivated to re-run the search live.
+    private readonly System.Reactive.Subjects.Subject<Unit> _filterChanged = new();
+
     private void SetupFilterChangeNotifications()
     {
-        // When any filter changes, raise property changed for summary properties
-        this.WhenAnyValue(
-            x => x.IncludeVinaya,
-            x => x.IncludeSutta,
-            x => x.IncludeAbhidhamma,
-            x => x.IncludeMula,
-            x => x.IncludeAttha,
-            x => x.IncludeTika,
-            x => x.IncludeOther)
-            .Subscribe(_ =>
+        // The 7-property WhenAnyValue tuple overload used here previously did not fire on toggle, so
+        // the summary labels never refreshed and results didn't re-filter until the next manual search
+        // (#52). Drive off the raw PropertyChanged event instead — it is guaranteed to fire for every
+        // Include* change. Labels update immediately here; the debounced live re-search is in WhenActivated.
+        this.PropertyChanged += (_, e) =>
+        {
+            if (IsFilterProperty(e.PropertyName))
             {
                 this.RaisePropertyChanged(nameof(FilterSummary));
                 this.RaisePropertyChanged(nameof(BookCountLabel));
-            });
+                _filterChanged.OnNext(Unit.Default);
+            }
+        };
+
+        // Re-run the search live when a book-type filter changes. This lives here (ctor-level), NOT in
+        // WhenActivated, because SearchPanel is a plain UserControl with no activation wiring, so the VM's
+        // WhenActivated block never runs (the SearchText live auto-search there is dead for the same reason).
+        // Debounced so quick multi-toggles and Select All/None collapse into one search; only re-runs when
+        // there is an active query. Held alive by the _filterChanged subject field. (#52)
+        _filterChanged
+            .Throttle(TimeSpan.FromMilliseconds(300))
+            .Where(_ => !string.IsNullOrWhiteSpace(SearchText))
+            .SelectMany(async _ =>
+            {
+                await ExecuteSearchAsync();
+                return Unit.Default;
+            })
+            .Subscribe();
     }
+
+    private static bool IsFilterProperty(string? name) => name is
+        nameof(IncludeVinaya) or nameof(IncludeSutta) or nameof(IncludeAbhidhamma) or
+        nameof(IncludeMula) or nameof(IncludeAttha) or nameof(IncludeTika) or nameof(IncludeOther);
 
     private void UpdateOccurrences()
     {
