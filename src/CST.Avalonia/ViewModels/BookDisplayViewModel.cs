@@ -199,9 +199,14 @@ namespace CST.Avalonia.ViewModels
             FloatWindowCommand = ReactiveCommand.Create(FloatWindow);
             UnfloatWindowCommand = ReactiveCommand.Create(UnfloatWindow);
 
-            // View Source PDF commands
-            ShowSource1957Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese1957));
-            ShowSource2010Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese2010));
+            // View Source PDF commands — disabled until the current Myanmar page resolves (the status bar
+            // shows "*" until then, and the target PDF page is derived from it). Clicking before that was a
+            // silent no-op; gating canExecute makes ReactiveCommand grey the buttons out and re-enable them
+            // automatically once the page is known. (#54)
+            var canShowSource = this.WhenAnyValue(x => x.MyanmarPage,
+                page => !string.IsNullOrEmpty(page) && page != "*");
+            ShowSource1957Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese1957), canShowSource);
+            ShowSource2010Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese2010), canShowSource);
 
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
