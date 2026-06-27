@@ -92,7 +92,7 @@ public partial class PdfDisplayView : UserControl
         // Subscribe to WebViewLifecycleOperation changes for float/unfloat
         _lifecycleSubscription = _viewModel
             .WhenAnyValue(vm => vm.WebViewLifecycleOperation)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(new global::CST.Avalonia.AvaloniaUIThreadScheduler())
             .Subscribe(OnWebViewLifecycleOperationChanged);
 
         // If PDF URL is already available (e.g., restored from state), load it

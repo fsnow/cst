@@ -27,6 +27,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using ReactiveUI;
+using ReactiveUI.Builder;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using WebViewControl;
@@ -74,17 +75,19 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         
-        // Configure ReactiveUI to use the UI thread scheduler to prevent threading issues
-        RxApp.MainThreadScheduler = new AvaloniaUIThreadScheduler();
-        
+        // ReactiveUI 23 replaced the static RxApp config with a builder. Set the UI-thread scheduler
+        // (so ReactiveCommands/observables marshal to the UI thread) and the global exception handler.
+        // (ReactiveUI.Avalonia was dropped; we supply our own AvaloniaUIThreadScheduler.)
+        RxAppBuilder.CreateReactiveUIBuilder()
+            .WithMainThreadScheduler(new AvaloniaUIThreadScheduler())
+            .WithExceptionHandler(new ReactiveExceptionHandler())
+            .Build();
+
         // Wire up native menu events on macOS
         if (OperatingSystem.IsMacOS())
         {
             SetupNativeMenuEvents();
         }
-        
-        // Set up global exception handling for unhandled exceptions
-        RxApp.DefaultExceptionHandler = new ReactiveExceptionHandler();
     }
 
     public override void OnFrameworkInitializationCompleted()
