@@ -112,15 +112,17 @@ namespace CST.Avalonia.Services
         public void UpdateSetting<T>(string propertyName, T value)
         {
             var property = typeof(Settings).GetProperty(propertyName);
-            if (property != null && property.CanWrite)
+            if (property == null || !property.CanWrite)
             {
-                property.SetValue(_settings, value);
-                _logger.Debug("Updated setting {Property} to {Value}", propertyName, value);
+                // Fail fast. The property name is effectively a compile-time constant (callers pass
+                // nameof(Settings.X)), so a missing or read-only property is a programming error - silently
+                // warning let typos slip through with the setting never applied. (#63)
+                throw new ArgumentException(
+                    $"Settings has no writable property named '{propertyName}'.", nameof(propertyName));
             }
-            else
-            {
-                _logger.Warning("Property {Property} not found or not writable", propertyName);
-            }
+
+            property.SetValue(_settings, value);
+            _logger.Debug("Updated setting {Property} to {Value}", propertyName, value);
         }
 
         public string GetSettingsFilePath()
