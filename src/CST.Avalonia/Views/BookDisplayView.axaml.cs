@@ -234,7 +234,7 @@ public partial class BookDisplayView : UserControl
             _viewModel?.Book?.FileName ?? "null", _viewModel?.Id ?? "null");
 
         // Get the new window this view is attached to
-        var newWindow = this.GetVisualRoot() as Window;
+        var newWindow = TopLevel.GetTopLevel(this) as Window;
 
         if (newWindow != null)
         {

@@ -5,6 +5,8 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
 using Serilog;
+// Avalonia 12 added Avalonia.Controls.NavigationType, which collides with the app's enum here.
+using NavigationType = CST.Avalonia.ViewModels.NavigationType;
 
 namespace CST.Avalonia.Views
 {
@@ -18,7 +20,9 @@ namespace CST.Avalonia.Views
             _logger = Log.ForContext<GoToDialog>();
             InitializeComponent();
 #if DEBUG
-            this.AttachDevTools();
+            // AttachDevTools() removed for the Avalonia 12 upgrade: Avalonia.Diagnostics has no 12.x release yet.
+            // Restore once Avalonia.Diagnostics 12.x is referenced again (see CST.Avalonia.csproj).
+            // this.AttachDevTools();
 #endif
         }
 

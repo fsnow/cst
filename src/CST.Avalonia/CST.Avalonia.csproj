@@ -53,20 +53,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.6" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.6" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.6" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.6" />
-    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
-    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.6">
+    <PackageReference Include="Avalonia" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
+    <!-- Avalonia.Diagnostics temporarily removed for the Avalonia 12 upgrade: no 12.x release exists yet
+         (latest is 11.3.18, which pins Avalonia 11.3 and conflicts with Avalonia 12). Dev-only F12 inspector;
+         the app does not need it to run. Re-add (Debug-only, as below) once Avalonia.Diagnostics 12.x ships. -->
+    <!--
+    <PackageReference Include="Avalonia.Diagnostics" Version="12.0.5">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Dock.Avalonia" Version="11.3.6.5" />
-    <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="11.3.6.5" />
-    <PackageReference Include="Dock.Controls.Recycling" Version="11.3.6.5" />
-    <PackageReference Include="Dock.Model" Version="11.3.6.5" />
-    <PackageReference Include="Dock.Model.Mvvm" Version="11.3.6.5" />
+    -->
+    <PackageReference Include="Dock.Avalonia" Version="12.0.0.2" />
+    <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="12.0.0.2" />
+    <PackageReference Include="Dock.Controls.Recycling" Version="12.0.0.2" />
+    <PackageReference Include="Dock.Model" Version="12.0.0.2" />
+    <PackageReference Include="Dock.Model.Mvvm" Version="12.0.0.2" />
     <PackageReference Include="PdfPig" Version="0.1.14" />
     <!-- WebView packages for different architectures -->
     <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'osx-arm64'" />

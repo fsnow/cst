@@ -1003,7 +1003,7 @@ public partial class App : Application
                                     if (viewSubItem.Header?.ToString() == "Select a Book")
                                     {
                                         _selectBookMenuItems.Add(viewSubItem);
-                                        viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
+                                        viewSubItem.ToggleType = MenuItemToggleType.CheckBox;
                                         viewSubItem.IsChecked = true; // Start checked since panels are visible by default
                                         viewSubItem.Click += (s, e) =>
                                         {
@@ -1014,7 +1014,7 @@ public partial class App : Application
                                     else if (viewSubItem.Header?.ToString() == "Search")
                                     {
                                         _searchMenuItems.Add(viewSubItem);
-                                        viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
+                                        viewSubItem.ToggleType = MenuItemToggleType.CheckBox;
                                         viewSubItem.IsChecked = true; // Start checked since panels are visible by default
                                         viewSubItem.Click += (s, e) =>
                                         {
@@ -1259,15 +1259,10 @@ public partial class App : Application
 
     private void DisableAvaloniaDataAnnotationValidation()
     {
-        // Get an array of plugins to remove
-        var dataValidationPluginsToRemove =
-            BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
-
-        // remove each entry found
-        foreach (var plugin in dataValidationPluginsToRemove)
-        {
-            BindingPlugins.DataValidators.Remove(plugin);
-        }
+        // No-op under Avalonia 12: BindingPlugins (Avalonia.Data.Core.Plugins) became internal, so the
+        // standard MVVM-template "remove DataAnnotationsValidationPlugin" opt-out no longer compiles.
+        // This app does not use DataAnnotations form validation, so leaving the default plugin in place
+        // is harmless. TODO(Avalonia 12): revisit if a public opt-out is reintroduced or double-validation appears.
     }
 }
 

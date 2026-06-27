@@ -63,13 +63,13 @@ namespace CST.Avalonia.Services
             var selectBookItem = new NativeMenuItem
             {
                 Header = "Select a Book",
-                ToggleType = NativeMenuItemToggleType.CheckBox
+                ToggleType = MenuItemToggleType.CheckBox
             };
 
             var searchItem = new NativeMenuItem
             {
                 Header = "Search",
-                ToggleType = NativeMenuItemToggleType.CheckBox
+                ToggleType = MenuItemToggleType.CheckBox
             };
 
             viewMenuItem.Menu.Add(selectBookItem);
@@ -147,6 +147,30 @@ namespace CST.Avalonia.Services
         public void SetActive()
         {
             Activate();
+        }
+
+        // IHostWindow.GetWindowState / SetWindowState (added in Dock 12) - map between Avalonia's
+        // WindowState and Dock's DockWindowState (both have Normal / Minimized / Maximized / FullScreen).
+        public DockWindowState GetWindowState()
+        {
+            return WindowState switch
+            {
+                global::Avalonia.Controls.WindowState.Minimized => DockWindowState.Minimized,
+                global::Avalonia.Controls.WindowState.Maximized => DockWindowState.Maximized,
+                global::Avalonia.Controls.WindowState.FullScreen => DockWindowState.FullScreen,
+                _ => DockWindowState.Normal,
+            };
+        }
+
+        public void SetWindowState(DockWindowState windowState)
+        {
+            WindowState = windowState switch
+            {
+                DockWindowState.Minimized => global::Avalonia.Controls.WindowState.Minimized,
+                DockWindowState.Maximized => global::Avalonia.Controls.WindowState.Maximized,
+                DockWindowState.FullScreen => global::Avalonia.Controls.WindowState.FullScreen,
+                _ => global::Avalonia.Controls.WindowState.Normal,
+            };
         }
 
         public void SetPosition(double x, double y)

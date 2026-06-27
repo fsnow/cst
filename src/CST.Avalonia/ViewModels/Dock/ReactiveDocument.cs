@@ -267,6 +267,63 @@ public class ReactiveDocument : ReactiveObject, IDocument
         set => this.RaiseAndSetIfChanged(ref _dockGroup, value);
     }
 
+    // --- Dock 12 IDockable additions (pinning / docking-state). The app does not use pinning;
+    //     defaults mirror Dock.Model.Mvvm base classes (CanDockAsDocument=true, DockingState=Docked, rest null/false). ---
+    private bool _canDockAsDocument = true;
+    private DockCapabilityOverrides? _dockCapabilityOverrides;
+    private DockingWindowState _dockingState = DockingWindowState.Docked;
+    private bool _keepPinnedDockableVisible;
+    private DockRect? _pinnedBounds;
+    private PinnedDockDisplayMode? _pinnedDockDisplayModeOverride;
+
+    /// <inheritdoc/>
+    [DataMember(IsRequired = false, EmitDefaultValue = true)]
+    public bool CanDockAsDocument
+    {
+        get => _canDockAsDocument;
+        set => this.RaiseAndSetIfChanged(ref _canDockAsDocument, value);
+    }
+
+    /// <inheritdoc/>
+    [DataMember(IsRequired = false, EmitDefaultValue = true)]
+    public DockCapabilityOverrides? DockCapabilityOverrides
+    {
+        get => _dockCapabilityOverrides;
+        set => this.RaiseAndSetIfChanged(ref _dockCapabilityOverrides, value);
+    }
+
+    /// <inheritdoc/>
+    [DataMember(IsRequired = false, EmitDefaultValue = true)]
+    public DockingWindowState DockingState
+    {
+        get => _dockingState;
+        set => this.RaiseAndSetIfChanged(ref _dockingState, value);
+    }
+
+    /// <inheritdoc/>
+    [DataMember(IsRequired = false, EmitDefaultValue = true)]
+    public bool KeepPinnedDockableVisible
+    {
+        get => _keepPinnedDockableVisible;
+        set => this.RaiseAndSetIfChanged(ref _keepPinnedDockableVisible, value);
+    }
+
+    /// <inheritdoc/>
+    [DataMember(IsRequired = false, EmitDefaultValue = true)]
+    public DockRect? PinnedBounds
+    {
+        get => _pinnedBounds;
+        set => this.RaiseAndSetIfChanged(ref _pinnedBounds, value);
+    }
+
+    /// <inheritdoc/>
+    [DataMember(IsRequired = false, EmitDefaultValue = true)]
+    public PinnedDockDisplayMode? PinnedDockDisplayModeOverride
+    {
+        get => _pinnedDockDisplayModeOverride;
+        set => this.RaiseAndSetIfChanged(ref _pinnedDockDisplayModeOverride, value);
+    }
+
     /// <inheritdoc/>
     public string? GetControlRecyclingId() => _id;
 
