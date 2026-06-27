@@ -64,8 +64,11 @@ namespace CST
                 }
             }
 
-            // if all the books have doc IDs in the search index, we're done
-            if (allIndexed)
+            // If every book already has a docId AND nothing changed, the index is complete — done.
+            // Must also require no changedFiles: an already-indexed book can still be a *changed* book that
+            // needs re-indexing, so returning on `allIndexed` alone would skip incremental updates. (Before
+            // #61 this was masked because the broken GetAllDocIds left allIndexed always false.) (#61)
+            if (allIndexed && changedFiles.Count == 0)
                 return;
 
             // Only index the changed files, not all books with DocId < 0
@@ -123,19 +126,20 @@ namespace CST
             
             IndexReader indexReader = DirectoryReader.Open(fSDirectory);
 
+            // Lucene.NET 4.8 quirk: MultiFields.GetLiveDocs returns null when the segment(s) have NO
+            // deletions — meaning ALL docs are live, not "nothing to do". When it is non-null, IBits.Get(i)
+            // is TRUE for a *live* doc, so we skip only deleted docs. (Previously this returned on null and
+            // did `if (Get(i)) continue` — inverted — so it set no docIds on a clean index and mapped
+            // deleted docs on a dirty one. #61)
             IBits liveDocs = MultiFields.GetLiveDocs(indexReader);
-            if (liveDocs == null)
-            {
-                return;
-            }
 
             Books books = Books.Inst;
 
             int j = 0;
             for (int i = 0; i < indexReader.MaxDoc; i++)
             {
-                if (liveDocs.Get(i))
-                    continue;
+                if (liveDocs != null && !liveDocs.Get(i))
+                    continue; // skip deleted docs
 
                 Document doc = indexReader.Document(i);
                 books.SetDocId(doc.Get("file"), i);
