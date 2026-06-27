@@ -191,7 +191,7 @@ namespace CST.Conversion
                 if (c == 0x094D || c == 0x200C || c == 0x200D) // virama / ZWNJ / ZWJ -> removed
                     continue;
 
-                string m = (c < MapLen) ? map[c] : null;
+                string? m = (c < MapLen) ? map[c] : null;
                 if (m != null)
                 {
                     if (m.Length == 1) buf[k++] = m[0];

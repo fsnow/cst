@@ -10,6 +10,11 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> deva2Mymr;
 
+        // Fast lookup for the optimized Convert(): map[c] = replacement string, null = pass through. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly string[] map = new string[MapLen];
+        private static int maxValLen = 1;
+
         static Deva2Mymr()
         {
             deva2Mymr = new Dictionary<char, object>();
@@ -98,6 +103,14 @@ namespace CST.Conversion
             deva2Mymr['\u0970'] = '.'; // Devanagari abbreviation sign
             deva2Mymr['\u200C'] = ""; // ZWNJ (ignore)
             deva2Mymr['\u200D'] = ""; // ZWJ (ignore)
+
+            // Build the fast lookup table from the same data (#86).
+            foreach (var kvp in deva2Mymr)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length > 0) { map[kvp.Key] = v; if (v.Length > maxValLen) maxValLen = v.Length; }
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -118,7 +131,7 @@ namespace CST.Conversion
 
         // more generalized, reusable conversion method:
         // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        public static string ConvertReference(string devStr)
         {
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
@@ -167,6 +180,86 @@ namespace CST.Conversion
             mya = mya.Replace("\u1004\u1039", "\u1004\u103A\u1039");
 
             return mya;
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized single pass (#86): folds the char map AND all Myanmar ligature/vowel post-processing
+        // (the sequential string.Replace passes in ConvertReference) into ONE traversal, via a small
+        // output-buffer state machine. Byte-identical to ConvertReference (verified by tests).
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            var buf = new char[n * (maxValLen + 1) + 1]; // slack for inserted asat / killer
+            int k = 0;
+
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x200C || c == 0x200D) // ZWNJ / ZWJ -> removed (virama maps to a real Myanmar char)
+                    continue;
+
+                string? m = (c < MapLen) ? map[c] : null;
+                if (m == null)
+                {
+                    k = Emit(buf, k, c);
+                }
+                else
+                {
+                    for (int j = 0; j < m.Length; j++)
+                        k = Emit(buf, k, m[j]);
+                }
+            }
+
+            // n-overdot + virama at end of text also gets the asat/killer (the global Replace matches at EOS)
+            if (k >= 2 && buf[k - 1] == 0x1039 && buf[k - 2] == 0x1004)
+            {
+                buf[k] = (char)0x1039; buf[k - 1] = (char)0x103A; k++;
+            }
+
+            return new string(buf, 0, k);
+        }
+
+        // Append one Myanmar output char, applying the ligature/vowel rules against the buffer tail -
+        // mirrors, position-by-position, the ordered Replace passes of ConvertReference. (#86)
+        private static int Emit(char[] buf, int k, char x)
+        {
+            // n-overdot killer: a \u1004\u1039 not consumed by a following medial (ya/ra/wa/ha) gets \u103A
+            if (k >= 2 && buf[k - 1] == 0x1039 && buf[k - 2] == 0x1004
+                && x != 0x101A && x != 0x101B && x != 0x101D && x != 0x101F)
+            {
+                buf[k] = (char)0x1039; buf[k - 1] = (char)0x103A; k++; // insert asat before the virama
+            }
+
+            buf[k++] = x;
+
+            if (x == 0x1009 && k >= 3 && buf[k - 2] == 0x1039 && buf[k - 3] == 0x1009)
+            {
+                buf[k - 3] = (char)0x100A; k -= 2; // n(tilde) + virama + n(tilde) -> single char
+            }
+            else if (x == 0x101A && k >= 2 && buf[k - 2] == 0x1039) { buf[k - 2] = (char)0x103B; k--; } // medial ya
+            else if (x == 0x101B && k >= 2 && buf[k - 2] == 0x1039) { buf[k - 2] = (char)0x103C; k--; } // medial ra
+            else if (x == 0x101D && k >= 2 && buf[k - 2] == 0x1039) { buf[k - 2] = (char)0x103D; k--; } // medial wa
+            else if (x == 0x101F && k >= 2 && buf[k - 2] == 0x1039) { buf[k - 2] = (char)0x103E; k--; } // medial ha
+            else if (x == 0x101E && k >= 3 && buf[k - 2] == 0x1039 && buf[k - 3] == 0x101E)
+            {
+                buf[k - 3] = (char)0x103F; k -= 2; // sa + virama + sa -> great sa
+            }
+            else if (x == 0x102C)
+            {
+                int pp = k - 2;
+                if (pp >= 0 && buf[pp] == 0x1031) pp--; // skip the e vowel
+                if (pp >= 0 && (buf[pp] == 0x1001 || buf[pp] == 0x1002 || buf[pp] == 0x1015 || buf[pp] == 0x101D
+                               || (buf[pp] == 0x1013 && pp >= 2 && buf[pp - 1] == 0x1039 && buf[pp - 2] == 0x1012)))
+                {
+                    buf[k - 1] = (char)0x102B; // tall aa
+                }
+            }
+
+            return k;
         }
 
         public static string ConvertDandas(string str)

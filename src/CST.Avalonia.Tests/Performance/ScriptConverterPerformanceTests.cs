@@ -43,6 +43,7 @@ public class ScriptConverterPerformanceTests
             ("Deva2Cyrl", Deva2Cyrl.Convert),
             ("Deva2Sinh", Deva2Sinh.Convert),
             ("Deva2Thai", Deva2Thai.Convert),
+            ("Deva2Mymr-ref", Deva2Mymr.ConvertReference),
             ("Deva2Mymr", Deva2Mymr.Convert),
         };
 
