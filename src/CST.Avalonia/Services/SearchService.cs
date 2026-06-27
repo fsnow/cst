@@ -267,6 +267,14 @@ public class SearchService : ISearchService
                     slots[s] = ExpandWildcard(w, out var wasTruncated);
                     if (wasTruncated) truncatedTermCount++;
                 }
+                else if (query.Mode == SearchMode.Regex)
+                {
+                    // Each unit of a multi-word regex must be expanded to its matching terms, just like the
+                    // single-term path uses RegexTermMatcher. Previously regex units fell through to the
+                    // literal branch below and matched nothing. (#60)
+                    slots[s] = ExpandRegex(w, out var wasTruncated);
+                    if (wasTruncated) truncatedTermCount++;
+                }
                 else
                 {
                     slots[s] = new List<string> { w };
@@ -647,6 +655,88 @@ public class SearchService : ISearchService
             _logger.LogDebug("Expanded wildcard '{Pattern}' to {Count} terms", pattern, results.Count);
 
         return results;
+    }
+
+    // Expand a Regex unit to the index terms it matches, for the multi-word path (mirrors how the
+    // single-term path uses RegexTermMatcher). The pattern is already IPE-encoded and matched UNANCHORED
+    // (a term that *contains* a match), exactly like RegexTermMatcher. If the pattern is start-anchored
+    // (^lit...), seek to its literal prefix to avoid scanning all ~500K terms; otherwise full-scan. An
+    // invalid pattern throws RegexParseException, surfaced upstream as the quiet "Invalid regex pattern"
+    // hint (#59). (#60)
+    private List<string> ExpandRegex(string pattern, out bool truncated, int maxResults = WildcardExpansionLimit)
+    {
+        truncated = false;
+        var reader = _indexReader;
+        if (reader == null)
+            return new List<string>();
+
+        var regex = new System.Text.RegularExpressions.Regex(pattern);
+
+        var fields = MultiFields.GetFields(reader);
+        var terms = fields?.GetTerms("text");
+        if (terms == null)
+            return new List<string>();
+
+        // A start-anchored pattern can only match terms beginning with its literal prefix, so seek there.
+        // An unanchored pattern matches substrings anywhere and must be full-scanned.
+        var literalPrefix = StartAnchoredLiteralPrefix(pattern);
+
+        var termsEnum = terms.GetEnumerator();
+        var results = new List<string>();
+
+        if (literalPrefix.Length > 0)
+        {
+            var status = termsEnum.SeekCeil(new BytesRef(Encoding.UTF8.GetBytes(literalPrefix)));
+            if (status != TermsEnum.SeekStatus.END)
+            {
+                do
+                {
+                    var term = termsEnum.Term.Utf8ToString();
+                    if (!term.StartsWith(literalPrefix, StringComparison.Ordinal))
+                        break; // sorted: past the prefix range, nothing more can match
+                    if (regex.IsMatch(term))
+                    {
+                        if (results.Count >= maxResults) { truncated = true; break; }
+                        results.Add(term);
+                    }
+                } while (termsEnum.MoveNext());
+            }
+        }
+        else
+        {
+            while (termsEnum.MoveNext())
+            {
+                var term = termsEnum.Term.Utf8ToString();
+                if (regex.IsMatch(term))
+                {
+                    if (results.Count >= maxResults) { truncated = true; break; }
+                    results.Add(term);
+                }
+            }
+        }
+
+        if (truncated)
+            _logger.LogWarning("Regex '{Pattern}' matched more than {Max} terms; truncated. Use a more specific pattern for complete results.", pattern, maxResults);
+        else
+            _logger.LogDebug("Expanded regex '{Pattern}' to {Count} terms", pattern, results.Count);
+
+        return results;
+    }
+
+    // The literal prefix of a start-anchored regex: the run of non-metacharacter chars immediately after a
+    // leading '^'. Returns "" if the pattern isn't start-anchored or has no literal prefix (=> full scan).
+    private static string StartAnchoredLiteralPrefix(string pattern)
+    {
+        if (pattern.Length < 2 || pattern[0] != '^')
+            return string.Empty;
+        const string meta = "\\.*+?()[]{}|^$";
+        var sb = new StringBuilder();
+        for (int i = 1; i < pattern.Length; i++)
+        {
+            if (meta.IndexOf(pattern[i]) >= 0) break;
+            sb.Append(pattern[i]);
+        }
+        return sb.ToString();
     }
 
     public async Task<List<string>> GetAllTermsAsync(string prefix = "", int limit = 100, CancellationToken cancellationToken = default)
