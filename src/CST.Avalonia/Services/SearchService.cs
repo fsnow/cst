@@ -311,6 +311,9 @@ public class SearchService : ISearchService
                             int pos = dape.NextPosition();
                             int startOffset = dape.StartOffset;
                             int endOffset = dape.EndOffset;
+                            // Offsets are exclusive (endOffset = one past the token's last source char),
+                            // so valid tokens — including single-source-char ones like "ca" = च — have
+                            // endOffset > startOffset. Drop only empty/corrupt spans.
                             if (startOffset < 0 || endOffset <= startOffset)
                                 continue;
 

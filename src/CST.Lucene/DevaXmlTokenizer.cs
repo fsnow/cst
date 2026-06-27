@@ -224,9 +224,14 @@ namespace CST
                     startPos++;
                 }
 
-                int endPos = pos - 1;
-                // chop off any final hyphens, right single quotes or underscores
-                // and change the end offset
+                // endOffset is EXCLUSIVE (standard Lucene convention): the index one past the token's
+                // last source char. After the accumulation loop above, `pos` already points one past
+                // the last char, so endPos = pos. (Previously `pos - 1` stored an INCLUSIVE end offset,
+                // which made single-source-char tokens like "ca" = च zero-width [start == end]; search
+                // then discarded them, so any multi-word query containing one returned nothing — #53.)
+                int endPos = pos;
+                // chop off any final hyphens, right single quotes or underscores and shrink the end
+                // offset accordingly (endPos-- keeps the exclusive end of the shortened token).
                 while (token.EndsWith("-") || token.EndsWith("\x2019") || token.EndsWith("_"))
                 {
                     token = token.Substring(0, token.Length - 1);

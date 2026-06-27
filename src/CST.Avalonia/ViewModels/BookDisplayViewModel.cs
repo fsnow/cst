@@ -1071,14 +1071,14 @@ namespace CST.Avalonia.ViewModels
                 foreach (var (start, end, term) in offsetList)
                 {
                     // Get the actual text at this offset
-                    var highlightedText = xmlString.Substring(start, end - start + 1);
+                    var highlightedText = xmlString.Substring(start, end - start);
                     
                     // Create the highlight tags - always use unique IDs for navigation
                     var openTag = $"<hi rend=\"hit\" id=\"hit{hitIndex + 1}\">";
                     var closeTag = "</hi>";
                     
                     // Replace the text at this offset with highlighted version
-                    sb.Remove(start, end - start + 1);
+                    sb.Remove(start, end - start);
                     sb.Insert(start, openTag + highlightedText + closeTag);
                     
                     Log.Debug("[BookDisplay] Applied highlight #{Number} at offset {Start}-{End}: '{Text}' (term: '{Term}')", 
@@ -1135,7 +1135,7 @@ namespace CST.Avalonia.ViewModels
                     var startOffset = position.StartOffset;
                     var endOffset = position.EndOffset;
 
-                    if (startOffset < 0 || endOffset < startOffset || endOffset >= xmlContent.Length)
+                    if (startOffset < 0 || endOffset < startOffset || endOffset > xmlContent.Length)
                     {
                         Log.Warning("[BookDisplay] Invalid offset range: {Start}-{End} (xml length: {Length})",
                             startOffset, endOffset, xmlContent.Length);
@@ -1143,7 +1143,7 @@ namespace CST.Avalonia.ViewModels
                     }
 
                     // NOTE: CST4 uses +1 for Lucene offsets (see Search.cs:595, 676)
-                    var highlightedText = xmlContent.Substring(startOffset, endOffset - startOffset + 1);
+                    var highlightedText = xmlContent.Substring(startOffset, endOffset - startOffset);
 
                     // Check for existing <hi> tags in the highlighted text (tag crossing detection from CST4)
                     bool hasHiOpen = highlightedText.Contains("<hi");
@@ -1176,7 +1176,7 @@ namespace CST.Avalonia.ViewModels
                     }
 
                     // Replace the text at this offset with highlighted version
-                    sb.Remove(startOffset, endOffset - startOffset + 1);
+                    sb.Remove(startOffset, endOffset - startOffset);
                     sb.Insert(startOffset, finalText);
 
                     Log.Debug("[BookDisplay] Applied {RendValue} highlight #{HitNum} at offset {Start}-{End}: '{Text}' (IsFirstTerm={IsFirst}, Word={Word})",
