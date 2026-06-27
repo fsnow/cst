@@ -350,6 +350,14 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         set => this.RaiseAndSetIfChanged(ref _statusText, value);
     }
 
+    // Unintrusive inline hint shown under the search box only when non-empty (e.g. invalid regex). (#59)
+    private string _validationMessage = string.Empty;
+    public string ValidationMessage
+    {
+        get => _validationMessage;
+        set => this.RaiseAndSetIfChanged(ref _validationMessage, value);
+    }
+
     // Commands
     public ReactiveCommand<Unit, Unit> SearchCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
@@ -492,20 +500,10 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
 
             IsSearching = true;
             StatusText = "Searching...";
-            
-            // Clear previous results
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                Terms.Clear();
-                Occurrences.Clear();
-                SelectedTerms.Clear();
-                IsResultsTruncated = false;
-                TruncationMessage = null;
-            });
 
             // Build search query
             var searchText = SearchText ?? string.Empty;
-            
+
             // Determine actual search mode:
             // If the user selected Wildcard mode but used no wildcard chars, treat it as exact — a
             // wildcard pattern with no */? is anchored (^pat$) and equivalent to an exact match.
@@ -518,7 +516,28 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
                 searchMode = SearchMode.Exact;
                 _logger.LogInformation("No wildcard characters detected, using exact match");
             }
-            
+
+            // Regex pre-validation (unintrusive): with live search-as-you-type a partially typed regex is
+            // routinely in an invalid state. Show a quiet hint and KEEP the current results, rather than
+            // clearing them or surfacing a raw RegexParseException. (Wildcard/Exact can't be invalid.) (#59)
+            if (searchMode == SearchMode.Regex && !IsValidRegexPattern(searchText))
+            {
+                ValidationMessage = "Invalid regex pattern";
+                IsSearching = false;
+                return;
+            }
+            ValidationMessage = string.Empty; // valid pattern (or non-regex) — clear any prior hint
+
+            // Clear previous results
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Terms.Clear();
+                Occurrences.Clear();
+                SelectedTerms.Clear();
+                IsResultsTruncated = false;
+                TruncationMessage = null;
+            });
+
             var query = new SearchQuery
             {
                 QueryText = searchText,
@@ -594,6 +613,14 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             StatusText = "Search cancelled";
             IsSearching = false;
         }
+        catch (System.Text.RegularExpressions.RegexParseException)
+        {
+            // Backstop for any invalid regex the up-front check didn't catch (e.g. a multi-unit query).
+            // Quiet hint, not an error. (#59)
+            _logger.LogDebug("Invalid regex pattern for query: {Query}", SearchText);
+            ValidationMessage = "Invalid regex pattern";
+            IsSearching = false;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search failed");
@@ -609,6 +636,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         Occurrences.Clear();
         SelectedTerms.Clear();
         StatusText = "Ready to search";
+        ValidationMessage = string.Empty;
     }
 
     private void ExecuteOpenBook(BookOccurrenceViewModel? occurrence)
@@ -813,6 +841,24 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     {
         // Check for wildcard characters (* and ?)
         return text.Contains('*') || text.Contains('?');
+    }
+
+    // Validate a Regex query the same way the search compiles it: the text is IPE-converted, then the
+    // matcher does new Regex(pattern). Compile a throwaway here so an invalid pattern can be reported
+    // quietly without running (or error-logging) a failed search. Empty/whitespace is treated as valid
+    // (handled downstream as a no-op). (#59)
+    private static bool IsValidRegexPattern(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return true;
+        try
+        {
+            _ = new System.Text.RegularExpressions.Regex(Any2Ipe.Convert(text));
+            return true;
+        }
+        catch (System.Text.RegularExpressions.RegexParseException)
+        {
+            return false;
+        }
     }
     
     /// <summary>
