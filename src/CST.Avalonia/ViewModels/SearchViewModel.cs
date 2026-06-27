@@ -122,22 +122,24 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         // Setup filter change notifications
         SetupFilterChangeNotifications();
         
-        // Setup live search with debouncing
+        // Live search-as-you-type (debounced 300ms). Ctor-level, NOT in WhenActivated, because SearchPanel
+        // is a plain UserControl with no activation wiring (no Avalonia.ReactiveUI integration), so the VM's
+        // WhenActivated block never runs — same reason the #52 filter re-search lives at ctor level.
+        // DistinctUntilChanged skips no-op edits; ExecuteSearchAsync cancels any in-flight search, so fast
+        // typing collapses cleanly. (#57)
+        this.WhenAnyValue(x => x.SearchText)
+            .Throttle(TimeSpan.FromMilliseconds(300))
+            .DistinctUntilChanged()
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .SelectMany(async _ =>
+            {
+                await ExecuteSearchAsync();
+                return Unit.Default;
+            })
+            .Subscribe();
+
         this.WhenActivated(disposables =>
         {
-            // Auto-search when text changes (with debounce)
-            this.WhenAnyValue(x => x.SearchText)
-                .Throttle(TimeSpan.FromMilliseconds(500))
-                .DistinctUntilChanged()
-                .Where(text => !string.IsNullOrWhiteSpace(text))
-                .SelectMany(async _ =>
-                {
-                    await ExecuteSearchAsync();
-                    return Unit.Default;
-                })
-                .Subscribe()
-                .DisposeWith(disposables);
-
             // Update occurrences when term selection changes
             SelectedTerms.CollectionChanged += (_, e) => 
             {
