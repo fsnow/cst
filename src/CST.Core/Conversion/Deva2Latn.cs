@@ -11,6 +11,11 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> deva2Latn;
 
+        // Fast lookup table for the optimized Convert(): map[c] = replacement string, null = pass through.
+        // Built from deva2Latn; empty-value entries (virama, ZWNJ, ZWJ) are skipped and removed explicitly. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly string[] map = new string[MapLen];
+
         static Deva2Latn()
         {
             deva2Latn = new Dictionary<char, object>();
@@ -105,6 +110,14 @@ namespace CST.Conversion
             
             deva2Latn['\u200C'] = ""; // ZWNJ (ignore)
             deva2Latn['\u200D'] = ""; // ZWJ (ignore)
+
+            // Build the fast lookup table from the same data (#86).
+            foreach (var kvp in deva2Latn)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length > 0) map[kvp.Key] = v; // skip "" (virama) -> removed explicitly in Convert
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -132,9 +145,11 @@ namespace CST.Conversion
             return str;
         }
 
-        // more generalized, reusable conversion method:
-        // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
             // insert 'a' after all consonants that are not followed by virama, dependent vowel or 'a'
             devStr = Regex.Replace(devStr, "([\u0915-\u0939])([^\u093E-\u094Da])", "$1a$2", RegexOptions.Compiled);
@@ -155,6 +170,46 @@ namespace CST.Conversion
             }
 
             return sb.ToString();
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Folds the
+        // inherent-'a' regex passes and the per-char dictionary lookup (which boxed each char/string value
+        // via Append(object)) into one pass over a char buffer.
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            var buf = new char[3 * n]; // each input char -> at most a 2-char value plus an inherent 'a'
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x094D || c == 0x200C || c == 0x200D) // virama / ZWNJ / ZWJ -> removed
+                    continue;
+
+                string m = (c < MapLen) ? map[c] : null;
+                if (m != null)
+                {
+                    if (m.Length == 1) buf[k++] = m[0];
+                    else { m.CopyTo(0, buf, k, m.Length); k += m.Length; }
+                }
+                else
+                {
+                    buf[k++] = c; // pass through (Latin, danda, punctuation, etc.)
+                }
+
+                if (c >= 0x0915 && c <= 0x0939) // consonant: inherent 'a' unless next is a vowel sign or virama
+                {
+                    char next = (i + 1 < n) ? devStr[i + 1] : '\0';
+                    if (next < 0x093E || next > 0x094D)
+                        buf[k++] = 'a';
+                }
+            }
+            return new string(buf, 0, k);
         }
 
         public static string ConvertDandas(string str)

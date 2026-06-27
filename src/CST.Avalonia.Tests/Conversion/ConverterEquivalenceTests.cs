@@ -8,14 +8,15 @@ using Xunit.Abstractions;
 namespace CST.Avalonia.Tests.Conversion;
 
 /// <summary>
-/// Oracle test for #86: the optimized <see cref="Deva2Ipe.Convert"/> must be byte-identical to the frozen
-/// readable <see cref="Deva2Ipe.ConvertReference"/> across the real corpus (all 217 Devanagari books).
-/// Reads book text from disk so no Devanagari glyphs appear in this source file.
+/// Oracle tests for #86: each optimized converter's <c>Convert</c> must be byte-identical to its frozen
+/// readable <c>ConvertReference</c> across the real corpus (all 217 Devanagari books). Reads book text
+/// from disk, so no Devanagari glyphs appear in this source file. Add a [Fact] per converter as the
+/// optimization rolls out.
 /// </summary>
-public class Deva2IpeEquivalenceTests
+public class ConverterEquivalenceTests
 {
     private readonly ITestOutputHelper _out;
-    public Deva2IpeEquivalenceTests(ITestOutputHelper o) => _out = o;
+    public ConverterEquivalenceTests(ITestOutputHelper o) => _out = o;
 
     private static string XmlDir =>
         Environment.GetEnvironmentVariable("CST_XML_DIR")
@@ -23,7 +24,14 @@ public class Deva2IpeEquivalenceTests
                         "Library/Application Support/CSTReader/xml");
 
     [Fact]
-    public void FastConvert_MatchesReference_OverAllBooks()
+    public void Deva2Ipe_FastMatchesReference()
+        => AssertEquivalentOverCorpus("Deva2Ipe", Deva2Ipe.Convert, Deva2Ipe.ConvertReference);
+
+    [Fact]
+    public void Deva2Latn_FastMatchesReference()
+        => AssertEquivalentOverCorpus("Deva2Latn", Deva2Latn.Convert, Deva2Latn.ConvertReference);
+
+    private void AssertEquivalentOverCorpus(string name, Func<string, string> fast, Func<string, string> reference)
     {
         var dir = XmlDir;
         Assert.True(Directory.Exists(dir), $"xml dir not found: {dir}");
@@ -35,20 +43,20 @@ public class Deva2IpeEquivalenceTests
         foreach (var f in files)
         {
             var deva = File.ReadAllText(f); // UTF-16-LE corpus; BOM honored
-            var fast = Deva2Ipe.Convert(deva);
-            var reference = Deva2Ipe.ConvertReference(deva);
-            if (!string.Equals(fast, reference, StringComparison.Ordinal))
+            var a = fast(deva);
+            var b = reference(deva);
+            if (!string.Equals(a, b, StringComparison.Ordinal))
             {
-                int at = FirstDiff(fast, reference);
+                int at = FirstDiff(a, b);
                 Assert.Fail(
-                    $"Mismatch in {Path.GetFileName(f)} at index {at} (lenF={fast.Length}, lenR={reference.Length})\n" +
-                    $"  fast: [{Snippet(fast, at)}]\n" +
-                    $"  ref : [{Snippet(reference, at)}]");
+                    $"{name} mismatch in {Path.GetFileName(f)} at index {at} (lenFast={a.Length}, lenRef={b.Length})\n" +
+                    $"  fast: [{Snippet(a, at)}]\n" +
+                    $"  ref : [{Snippet(b, at)}]");
             }
             checked_++;
             chars += deva.Length;
         }
-        _out.WriteLine($"Deva2Ipe.Convert == ConvertReference across {checked_} books ({chars:N0} chars), byte-identical.");
+        _out.WriteLine($"{name}.Convert == ConvertReference across {checked_} books ({chars:N0} chars), byte-identical.");
     }
 
     private static int FirstDiff(string a, string b)
