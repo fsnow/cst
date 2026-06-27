@@ -12,6 +12,11 @@ namespace CST.Conversion
 
         private static IDictionary<char, object> deva2Cyrl;
 
+        // Fast lookup for the optimized Convert(): map[c] = replacement string, null = pass through. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly string[] map = new string[MapLen];
+        private static int maxValLen = 1;
+
         static Deva2Cyrl()
         {
             deva2Cyrl = new Dictionary<char, object>();
@@ -102,6 +107,14 @@ namespace CST.Conversion
             deva2Cyrl['\u0970'] = "."; // Dev abbreviation sign
             deva2Cyrl['\u200C'] = ""; // ZWNJ (ignore)
             deva2Cyrl['\u200D'] = ""; // ZWJ (ignore)
+
+            // Build the fast lookup table from the same data (#86).
+            foreach (var kvp in deva2Cyrl)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length > 0) { map[kvp.Key] = v; if (v.Length > maxValLen) maxValLen = v.Length; }
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -125,9 +138,11 @@ namespace CST.Conversion
             return str;
         }
 
-        // more generalized, reusable conversion method:
-        // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
             // Insert Cyrillic 'a' after all consonants that are not followed by virama, dependent vowel, combining marks, or cyrillic a
             // (This still works after we inserted ZWJ in the Devanagari. The ZWJ goes after virama.)
@@ -146,6 +161,47 @@ namespace CST.Conversion
             }
 
             return sb.ToString();
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests).
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            var buf = new char[n * (maxValLen + 1)];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x094D || c == 0x200C || c == 0x200D) // virama / ZWNJ / ZWJ -> removed
+                    continue;
+
+                string m = (c < MapLen) ? map[c] : null;
+                if (m != null)
+                {
+                    if (m.Length == 1) buf[k++] = m[0];
+                    else { m.CopyTo(0, buf, k, m.Length); k += m.Length; }
+                }
+                else
+                {
+                    buf[k++] = c; // pass through
+                }
+
+                // consonant carries inherent Cyrillic 'a' (U+0430) unless the next char is a combining mark
+                // (U+0900-U+0903), a dependent vowel sign or the virama (U+093E-U+094D)
+                if (c >= 0x0915 && c <= 0x0939)
+                {
+                    char next = (i + 1 < n) ? devStr[i + 1] : '\0';
+                    bool suppress = (next >= 0x0900 && next <= 0x0903) || (next >= 0x093E && next <= 0x094D);
+                    if (!suppress)
+                        buf[k++] = (char)0x0430;
+                }
+            }
+            return new string(buf, 0, k);
         }
 
         public static string ConvertDandas(string str)

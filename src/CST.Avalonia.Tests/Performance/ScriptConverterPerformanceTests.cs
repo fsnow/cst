@@ -39,6 +39,7 @@ public class ScriptConverterPerformanceTests
             ("Deva2Ipe",  Deva2Ipe.Convert),             // optimized single-pass (#86)
             ("Deva2Latn-ref", Deva2Latn.ConvertReference),
             ("Deva2Latn", Deva2Latn.Convert),
+            ("Deva2Cyrl-ref", Deva2Cyrl.ConvertReference),
             ("Deva2Cyrl", Deva2Cyrl.Convert),
             ("Deva2Sinh", Deva2Sinh.Convert),
             ("Deva2Thai", Deva2Thai.Convert),

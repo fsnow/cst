@@ -31,6 +31,10 @@ public class ConverterEquivalenceTests
     public void Deva2Latn_FastMatchesReference()
         => AssertEquivalentOverCorpus("Deva2Latn", Deva2Latn.Convert, Deva2Latn.ConvertReference);
 
+    [Fact]
+    public void Deva2Cyrl_FastMatchesReference()
+        => AssertEquivalentOverCorpus("Deva2Cyrl", Deva2Cyrl.Convert, Deva2Cyrl.ConvertReference);
+
     private void AssertEquivalentOverCorpus(string name, Func<string, string> fast, Func<string, string> reference)
     {
         var dir = XmlDir;
