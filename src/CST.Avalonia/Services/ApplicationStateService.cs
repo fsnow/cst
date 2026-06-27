@@ -192,8 +192,9 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
     {
         try
         {
-            // Create backup before saving
-            await CreateBackupAsync();
+            // Create backup before saving. ConfigureAwait(false) throughout the save path so the
+            // synchronous shutdown wait (Dispose -> task.Wait) can't deadlock by capturing the UI context. (#62)
+            await CreateBackupAsync().ConfigureAwait(false);
 
             // Update timestamp
             Current.LastSaved = DateTime.UtcNow;
@@ -203,7 +204,7 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
             
             // Write to temporary file first, then rename (atomic operation)
             var tempPath = _stateFilePath + ".tmp";
-            await File.WriteAllTextAsync(tempPath, json);
+            await File.WriteAllTextAsync(tempPath, json).ConfigureAwait(false);
             
             // Atomic replacement using File.Replace for true atomicity
             if (File.Exists(_stateFilePath))
@@ -254,18 +255,21 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
     {
         Current.OpenBookDialog = dialogState;
         FireStateChangedEvent();
+        MarkDirty(); // #62: was missing - dialog state could be lost on a non-graceful exit
     }
 
     public void UpdateSearchDialogState(SearchDialogState dialogState)
     {
         Current.SearchDialog = dialogState;
         FireStateChangedEvent();
+        MarkDirty(); // #62
     }
 
     public void UpdateDictionaryDialogState(DictionaryDialogState dialogState)
     {
         Current.DictionaryDialog = dialogState;
         FireStateChangedEvent();
+        MarkDirty(); // #62
     }
 
     public void UpdateBookWindowState(BookWindowState bookWindowState)
@@ -330,6 +334,7 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
     {
         Current.Preferences = preferences;
         FireStateChangedEvent();
+        MarkDirty(); // #62
     }
 
     public bool[] GetTreeExpansionStates()
@@ -343,6 +348,7 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         Current.OpenBookDialog.TreeVersion = treeVersion;
         Current.OpenBookDialog.TotalNodeCount = totalNodeCount;
         FireStateChangedEvent();
+        MarkDirty(); // #62
     }
 
     public void AddRecentBook(int bookIndex, string fileName, string displayName)
@@ -418,7 +424,7 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
             var backupPath = Path.Combine(_backupDirectory, $"application-state-{timestamp}.json");
             
             var json = JsonSerializer.Serialize(Current, _jsonOptions);
-            await File.WriteAllTextAsync(backupPath, json);
+            await File.WriteAllTextAsync(backupPath, json).ConfigureAwait(false);
 
             // Keep only last 10 backups
             var backups = GetBackupFilePaths();
