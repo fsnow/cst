@@ -5,6 +5,13 @@ This document describes the complete process for releasing a new version of CST 
 **Last Updated:** June 23, 2026
 **Current Version:** 5.0.0-beta.5
 
+> ⚠️ **Beta 5 — mandatory clean start (put at the TOP of the GitHub release notes).** The search
+> index offset format changed in #53 (offsets standardized to Lucene-exclusive). An index built by
+> an earlier beta will mis-match / mis-highlight, so users **must** delete the contents of
+> `~/Library/Application Support/CSTReader/` before running Beta 5. Lead the release notes with this
+> instruction — not buried in "Upgrade Notes."
+> General rule: whenever the tokenizer or index format changes, the clean-start instruction goes first.
+
 ---
 
 ## Overview
