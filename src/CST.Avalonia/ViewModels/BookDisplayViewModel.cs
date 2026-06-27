@@ -661,8 +661,12 @@ namespace CST.Avalonia.ViewModels
                 await LoadBookContentAsync();
                 
                 _logger.Debug("Step 5: Handling initial navigation");
-                // Navigate to initial position if specified
-                if (!string.IsNullOrEmpty(_initialAnchor))
+                // Navigate to initial position if specified.
+                // A search-restored book has BOTH a saved scroll anchor and a saved hit index; prefer
+                // scrolling to the exact hit (the search branch below) over the anchor, which only lands at
+                // the paragraph start and can leave the highlighted term off-screen in a long paragraph. (#36)
+                bool restoreSearchHit = _searchTerms?.Any() == true && _initialCurrentHitIndex.HasValue;
+                if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
                 {
                     _logger.Debug("Navigating to initial anchor: {Anchor}", _initialAnchor);
                     // Wait a bit for content to render, then navigate to anchor
@@ -692,25 +696,26 @@ namespace CST.Avalonia.ViewModels
                         UpdateHitStatusText();
                     });
 
-                    // On state restoration, scroll back to the hit the user was viewing.
-                    // (Fresh search opens are scrolled by the search-open path, so only
-                    // do this when a saved hit index was supplied.)
-                    if (_initialCurrentHitIndex.HasValue && TotalHits > 0)
+                    // On state restoration, scroll to the EXACT hit the user was viewing - not just the
+                    // paragraph (a long paragraph can leave the highlighted term off-screen). Queue it via
+                    // _pendingHitNavigation so it still fires if the view/highlights render later. (#36)
+                    if (_initialCurrentHitIndex is int savedHit && savedHit >= 1)
                     {
-                        await Task.Delay(1000); // let highlighted content render
-                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        _pendingHitNavigation = savedHit;
+                        if (BookDisplayControl != null && TotalHits > 0)
                         {
-                            if (BookDisplayControl != null)
+                            await Task.Delay(1000); // let highlighted content render
+                            await Dispatcher.UIThread.InvokeAsync(() =>
                             {
-                                NavigateToHighlightRequested?.Invoke(CurrentHitIndex);
-                                _logger.Debug("Restored scroll to hit {Hit}", CurrentHitIndex);
-                            }
-                            else
-                            {
-                                _pendingHitNavigation = CurrentHitIndex;
-                                _logger.Information("View not ready - stored pending hit navigation: {Hit}", CurrentHitIndex);
-                            }
-                        });
+                                NavigateToHighlightRequested?.Invoke(Math.Min(savedHit, TotalHits));
+                                _pendingHitNavigation = null;
+                                _logger.Debug("Restored scroll to hit {Hit}", savedHit);
+                            });
+                        }
+                        else
+                        {
+                            _logger.Information("View/highlights not ready - pending hit navigation: {Hit}", savedHit);
+                        }
                     }
                 }
                 
