@@ -62,6 +62,10 @@
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
+    <!-- Security pin: override Avalonia's transitive Tmds.DBus.Protocol 0.21.2 (high-severity
+         GHSA-xrw6-gwf8-vvr9). Linux D-Bus IPC only - unused on macOS and we don't ship Linux - but
+         this clears the NU1903 restore advisory. Minimal bump to stay close to what Avalonia expects. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
     <PackageReference Include="Dock.Avalonia" Version="11.3.6.5" />
     <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="11.3.6.5" />
     <PackageReference Include="Dock.Controls.Recycling" Version="11.3.6.5" />
