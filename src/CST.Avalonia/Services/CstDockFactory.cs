@@ -89,6 +89,17 @@ namespace CST.Avalonia.Services
             // WelcomeViewModel IS the document - no wrapper needed (ReactiveDocument pattern)
             var welcomeDocument = new WelcomeViewModel();
 
+            // Bring the Welcome tab forward whenever its startup/indexing status banner updates, so
+            // progress (especially a full re-index) is visible instead of hidden behind a restored book
+            // tab. Self-limited (SetStartupStatus no-ops after CompleteStartup); defensive so a focus
+            // change can never break startup. (#56)
+            welcomeDocument.StartupStatusWritten += () =>
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try { SetActiveDockable(welcomeDocument); }
+                    catch (Exception ex) { Log.Debug(ex, "Could not focus Welcome tab on status update"); }
+                });
+
             // Create document dock for book content (right side)
             var documentDock = new DocumentDock
             {

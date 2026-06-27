@@ -402,6 +402,12 @@ namespace CST.Avalonia.ViewModels
         /// <summary>
         /// Updates the startup status message
         /// </summary>
+        /// Raised when the startup/indexing status banner is written (before CompleteStartup). The dock
+        /// factory subscribes to bring the Welcome tab forward so progress — especially a full re-index —
+        /// is visible instead of hidden behind a restored book tab. Self-limited: no-ops once startup
+        /// completes. (#56)
+        public event Action? StartupStatusWritten;
+
         public void SetStartupStatus(string message)
         {
             // Ignore late updates that arrive after startup has been marked complete (see #38).
@@ -413,6 +419,9 @@ namespace CST.Avalonia.ViewModels
             StartupStatusMessage = message;
             IsStartupInProgress = !string.IsNullOrEmpty(message);
             Log.Debug("Welcome page startup status: {Status}", message);
+
+            if (!string.IsNullOrEmpty(message))
+                StartupStatusWritten?.Invoke();
         }
 
         /// <summary>
