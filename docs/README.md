@@ -36,6 +36,7 @@ Lessons learned, known issues, and technical challenges:
 ### 🛠️ **development/** - Development Processes
 Guides for development workflows:
 - [Release Process](development/RELEASE_PROCESS.md) - Steps for releasing new versions
+- [Cloud / Web Session Setup](development/CLOUD_SESSION_SETUP.md) - Provisioning a fresh remote container: XML corpus download, .NET SDK egress-policy block, CST_XML_DIR
 - [Proposed Claude Skills](development/PROPOSED_CLAUDE_SKILLS.md) - AI assistant skill definitions
 
 ### ✨ **features/** - Feature Planning & Specifications
