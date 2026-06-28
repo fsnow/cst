@@ -28,9 +28,13 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
     private readonly IApplicationStateService _applicationStateService;
-    // True while ApplyState() is restoring saved values, so the save-on-change handler doesn't echo them
-    // straight back. (#87)
-    private bool _suppressStateSave;
+    // True while ApplyState() is restoring saved values. Used to (a) stop the save-on-change handlers from
+    // echoing restored values back, and (b) stop the filter/mode/proximity changes from each kicking off a
+    // live re-search during restore - the single SearchText change drives one search instead. (#87)
+    private bool _isRestoringState;
+    // Saved selected-term keys waiting to be re-applied once the restored query's search repopulates the
+    // term list (the list is empty at restore time). Applied once, then cleared. (#87)
+    private List<string>? _pendingSelectedTerms;
     private readonly ILogger<SearchViewModel> _logger;
     private CancellationTokenSource? _searchCancellation;
     private Action<Script>? _scriptChangedHandler;
@@ -181,7 +185,15 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         // per-change call is fine - and keeps the in-memory state current for the shutdown save.
         this.PropertyChanged += (_, e) =>
         {
-            if (!_suppressStateSave && IsPersistableProperty(e.PropertyName))
+            if (!_isRestoringState && IsPersistableProperty(e.PropertyName))
+                _applicationStateService.UpdateSearchDialogState(CaptureState());
+        };
+
+        // The selected matching terms drive the occurrences list; persist them too. The collection is
+        // cleared/repopulated by each search, but the net settled state is what gets saved. (#87)
+        SelectedTerms.CollectionChanged += (_, _) =>
+        {
+            if (!_isRestoringState)
                 _applicationStateService.UpdateSearchDialogState(CaptureState());
         };
     }
@@ -189,7 +201,8 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     private static bool IsPersistableProperty(string? name) =>
         name is nameof(SearchText) or nameof(SelectedSearchMode) or nameof(ProximityDistance)
             or nameof(IncludeVinaya) or nameof(IncludeSutta) or nameof(IncludeAbhidhamma)
-            or nameof(IncludeMula) or nameof(IncludeAttha) or nameof(IncludeTika) or nameof(IncludeOther);
+            or nameof(IncludeMula) or nameof(IncludeAttha) or nameof(IncludeTika) or nameof(IncludeOther)
+            or nameof(IsTextTypesExpanded);
 
     /// <summary>Snapshot the persistable search inputs into a <see cref="SearchDialogState"/>. (#87)</summary>
     internal SearchDialogState CaptureState() => new()
@@ -204,6 +217,8 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         IncludeAttha = IncludeAttha,
         IncludeTika = IncludeTika,
         IncludeOther = IncludeOther,
+        IsTextTypesExpanded = IsTextTypesExpanded,
+        SelectedTerms = SelectedTerms.Select(t => t.Term).ToList(),
     };
 
     /// <summary>Apply saved search inputs to the view model (no-op if null). (#87)</summary>
@@ -212,7 +227,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         if (state == null)
             return;
 
-        _suppressStateSave = true;
+        _isRestoringState = true;
         try
         {
             IncludeVinaya = state.IncludeVinaya;
@@ -222,19 +237,35 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             IncludeAttha = state.IncludeAttha;
             IncludeTika = state.IncludeTika;
             IncludeOther = state.IncludeOther;
+            IsTextTypesExpanded = state.IsTextTypesExpanded;
             ProximityDistance = state.ProximityDistance;
 
             var mode = SearchModes.FirstOrDefault(m => m.Value == state.SearchMode);
             if (mode != null)
                 SelectedSearchMode = mode;
 
+            // The term list is empty until the search re-runs, so defer re-selecting the saved terms;
+            // ExecuteSearchAsync applies them once the results come back.
+            _pendingSelectedTerms = state.SelectedTerms is { Count: > 0 } ? new List<string>(state.SelectedTerms) : null;
+
             SearchText = state.SearchText; // set last - triggers the live search-as-you-type
         }
         finally
         {
-            _suppressStateSave = false;
+            _isRestoringState = false;
         }
     }
+
+    /// <summary>Raised on the UI thread after a search finishes populating the term list, so the view can
+    /// restore a saved term selection into the list box. (#87)</summary>
+    public event Action? SearchResultsReady;
+
+    /// <summary>Saved term keys awaiting selection in the list box after a restore (null if none). The
+    /// view reads this on <see cref="SearchResultsReady"/> and then calls <see cref="ClearPendingSelectedTerms"/>. (#87)</summary>
+    public IReadOnlyList<string>? PendingSelectedTerms => _pendingSelectedTerms;
+
+    /// <summary>Called by the view once it has applied the pending term selection. (#87)</summary>
+    public void ClearPendingSelectedTerms() => _pendingSelectedTerms = null;
 
     private void SetupFontAndScriptHandlers()
     {
@@ -350,6 +381,14 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     {
         get => _includeOther;
         set => this.RaiseAndSetIfChanged(ref _includeOther, value);
+    }
+
+    // Expanded/collapsed state of the "Include Text Types" box (persisted). (#87)
+    private bool _isTextTypesExpanded;
+    public bool IsTextTypesExpanded
+    {
+        get => _isTextTypesExpanded;
+        set => this.RaiseAndSetIfChanged(ref _isTextTypesExpanded, value);
     }
 
     // Proximity distance
@@ -660,13 +699,19 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
                     Terms.Add(termVm);
                 }
 
-                // Auto-select if there's only one term (common case for single-term searches)
-                // For multi-term searches, let users manually select which terms they want
-                if (Terms.Count == 1)
+                // Auto-select the single term (common case), unless a saved selection is pending restore:
+                // in that case the view selects the saved terms in the list box once notified (below), so
+                // the selection goes through the normal SelectionChanged -> SyncSelection path (visual
+                // highlight + occurrences). (#87)
+                if (_pendingSelectedTerms == null && Terms.Count == 1)
                 {
                     SelectedTerms.Add(Terms[0]);
                     _logger.LogInformation("Auto-selected single search term: {Term}", Terms[0].DisplayTerm);
                 }
+
+                // Notify the view (on the UI thread) that the term list is ready, so it can restore a
+                // saved term selection into the list box via the normal selection path. (#87)
+                SearchResultsReady?.Invoke();
 
                 IsResultsTruncated = result.ResultsTruncated;
                 TruncationMessage = result.TruncationMessage;
@@ -778,7 +823,17 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             {
                 this.RaisePropertyChanged(nameof(FilterSummary));
                 this.RaisePropertyChanged(nameof(BookCountLabel));
-                _filterChanged.OnNext(Unit.Default);
+                // Don't re-search per-property while restoring saved state; the restored SearchText drives
+                // a single search. Otherwise the filter trigger and the SearchText search-as-you-type race
+                // and the term list ends up doubled. (#87)
+                if (!_isRestoringState) _filterChanged.OnNext(Unit.Default);
+            }
+            else if (e.PropertyName is nameof(SelectedSearchMode) or nameof(ProximityDistance))
+            {
+                // Mode (Wildcard/Regex) and proximity change the result set too, so re-run the live
+                // search when one of them changes (same debounced path as the filters) - except during
+                // restore, for the reason above.
+                if (!_isRestoringState) _filterChanged.OnNext(Unit.Default);
             }
         };
 

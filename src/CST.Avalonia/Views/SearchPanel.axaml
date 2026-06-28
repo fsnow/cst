@@ -200,7 +200,7 @@
         </Border>
 
         <!-- Book Type Filters -->
-        <Expander Name="FilterExpander" IsExpanded="False" Margin="0,4,0,0">
+        <Expander Name="FilterExpander" IsExpanded="{Binding IsTextTypesExpanded}" Margin="0,4,0,0">
           <Expander.Header>
             <Grid ColumnDefinitions="Auto,*,Auto">
               <TextBlock Grid.Column="0" Text="Include Text Types" FontWeight="Medium"/>

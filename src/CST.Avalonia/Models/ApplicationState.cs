@@ -107,6 +107,14 @@ public class SearchDialogState
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeAttha { get; set; } = true;
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeTika { get; set; } = true;
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeOther { get; set; } = true;
+
+    // Whether the "Include Text Types" box is expanded.
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public bool IsTextTypesExpanded { get; set; }
+
+    // IPE keys of the matching terms the user had selected (drives the occurrences list). Re-selected
+    // after the restored query's search repopulates the term list.
+    public List<string> SelectedTerms { get; set; } = new();
 }
 
 /// <summary>

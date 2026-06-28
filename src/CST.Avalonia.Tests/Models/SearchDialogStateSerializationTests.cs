@@ -61,6 +61,23 @@ public class SearchDialogStateSerializationTests
         Assert.Equal(SearchMode.Wildcard, back.SearchMode);
         Assert.Equal(10, back.ProximityDistance);
         Assert.Equal(string.Empty, back.SearchText);
+        Assert.False(back.IsTextTypesExpanded);
+        Assert.Empty(back.SelectedTerms);
+    }
+
+    [Fact]
+    public void ExpanderAndSelectedTerms_RoundTrip()
+    {
+        var s = new SearchDialogState
+        {
+            IsTextTypesExpanded = true,
+            SelectedTerms = { "buddho", "dhammo", "sangho" },
+        };
+
+        var back = RoundTrip(s);
+
+        Assert.True(back.IsTextTypesExpanded);
+        Assert.Equal(new[] { "buddho", "dhammo", "sangho" }, back.SelectedTerms);
     }
 
     [Fact]

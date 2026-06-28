@@ -75,6 +75,9 @@ public class SearchViewModelStateTests
         vm.SearchText = "buddha";
         vm.ProximityDistance = 5;
         vm.IncludeTika = false;
+        vm.IsTextTypesExpanded = true;
+        vm.SelectedTerms.Add(new MatchingTermViewModel { Term = "buddho" });
+        vm.SelectedTerms.Add(new MatchingTermViewModel { Term = "buddhassa" });
 
         var s = vm.CaptureState();
 
@@ -82,6 +85,8 @@ public class SearchViewModelStateTests
         Assert.Equal(5, s.ProximityDistance);
         Assert.False(s.IncludeTika);
         Assert.Equal(SearchMode.Wildcard, s.SearchMode); // ctor default
+        Assert.True(s.IsTextTypesExpanded);
+        Assert.Equal(new[] { "buddho", "buddhassa" }, s.SelectedTerms);
     }
 
     [Fact]
@@ -100,6 +105,7 @@ public class SearchViewModelStateTests
             IncludeAttha = false,
             IncludeTika = true,
             IncludeOther = false,
+            IsTextTypesExpanded = true,
         };
 
         vm.ApplyState(s);
@@ -108,6 +114,7 @@ public class SearchViewModelStateTests
         Assert.Equal(s.SearchText, c.SearchText);
         Assert.Equal(s.SearchMode, c.SearchMode);
         Assert.Equal(s.ProximityDistance, c.ProximityDistance);
+        Assert.Equal(s.IsTextTypesExpanded, c.IsTextTypesExpanded);
         Assert.Equal(s.IncludeVinaya, c.IncludeVinaya);
         Assert.Equal(s.IncludeSutta, c.IncludeSutta);
         Assert.Equal(s.IncludeAbhidhamma, c.IncludeAbhidhamma);

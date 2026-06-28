@@ -54,6 +54,17 @@ public partial class SearchPanel : UserControl
             termsList.SelectionChanged += OnTermsListSelectionChanged;
             termsList.Tapped += OnTermsListTapped;
         }
+
+        // Restore a saved term selection (#87) into the list box once results are ready. Setting the
+        // list box selection drives the normal SelectionChanged -> SyncSelection path (visual highlight
+        // + occurrences), which a VM-only collection change cannot do.
+        if (DataContext is SearchViewModel vm)
+        {
+            vm.SearchResultsReady += OnSearchResultsReady;
+            // The restore search may have already completed before this view subscribed; apply now if so
+            // (no-op while results aren't in yet - the event will fire when they are).
+            OnSearchResultsReady();
+        }
         
         // Note: We handle book opening directly in OnOccurrenceDoubleClick
         // No need to subscribe to OpenBookRequested event anymore
@@ -138,6 +149,33 @@ public partial class SearchPanel : UserControl
         // This method can be removed or used for additional logic if needed
     }
     
+    private void OnSearchResultsReady()
+    {
+        if (DataContext is not SearchViewModel vm)
+            return;
+        var pending = vm.PendingSelectedTerms;
+        if (pending is not { Count: > 0 })
+            return;
+        if (vm.Terms.Count == 0)
+            return; // results not in yet - don't consume the pending selection; the event will fire again
+
+        var termsList = this.FindControl<ListBox>("TermsList");
+        if (termsList?.SelectedItems == null)
+            return;
+
+        termsList.SelectedItems.Clear();
+        foreach (var term in vm.Terms.Where(t => pending.Contains(t.Term)))
+            termsList.SelectedItems.Add(term);
+
+        vm.ClearPendingSelectedTerms();
+        Log.Information("[SearchPanel] Restored {Count} selected term(s) into the list box", termsList.SelectedItems.Count);
+
+        // Selecting items auto-scrolls to the last selected one; bring the list back to the top so the
+        // restored term list opens at the top rather than scrolled down. (#87)
+        if (termsList.ItemCount > 0)
+            Dispatcher.UIThread.Post(() => termsList.ScrollIntoView(0), DispatcherPriority.Background);
+    }
+
     private void OnTermsListSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (sender is ListBox listBox)
