@@ -292,7 +292,11 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
             
             // Trigger property change to ensure UI updates
             this.RaisePropertyChanged(nameof(BookTree));
-            
+
+            // Persist expansion on every expand/collapse. The panel is always-open (CanClose=false) so it
+            // never fires Close(); this subscription is the real save trigger that makes restore work. (#64)
+            SubscribeExpansionTracking(BookTree);
+
             // Restore tree expansion state after tree is built
             _ = RestoreTreeExpansionState();
         });
@@ -428,6 +432,30 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
         }
     }
 
+    // True while RestoreTreeExpansionState applies saved state, so the resulting IsExpanded changes don't
+    // trigger a redundant save. (#64)
+    private bool _suppressExpansionSave;
+
+    // Subscribe to every node so an expand/collapse persists immediately (debounced by the state
+    // service's dirty-timer + shutdown save). The always-open panel never closes, so this - not Close() -
+    // is what actually saves the tree's expansion. (#64)
+    private void SubscribeExpansionTracking(IEnumerable<BookTreeNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            node.PropertyChanged -= OnNodeExpansionChanged;
+            node.PropertyChanged += OnNodeExpansionChanged;
+            if (node.Children.Count > 0)
+                SubscribeExpansionTracking(node.Children);
+        }
+    }
+
+    private void OnNodeExpansionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (!_suppressExpansionSave && e.PropertyName == nameof(BookTreeNode.IsExpanded))
+            SaveTreeExpansionState();
+    }
+
     /// <summary>
     /// Restore tree expansion state - equivalent to CST4 SetNodeStates()
     /// </summary>
@@ -449,11 +477,20 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
 
             // Identity-keyed restore: surviving nodes keep their expansion even if the tree gained or
             // reordered entries (no all-or-nothing structure check anymore). (#64)
-            var restored = _treeStateService.ApplyExpandedKeys(BookTree, savedKeys);
-            _logger.LogDebug("Restored expansion for {Restored} of {Saved} saved node keys", restored, savedKeys.Count);
+            // Suppress the change-tracking save while we apply, so the restore doesn't re-save itself.
+            _suppressExpansionSave = true;
+            try
+            {
+                var restored = _treeStateService.ApplyExpandedKeys(BookTree, savedKeys);
+                _logger.LogDebug("Restored expansion for {Restored} of {Saved} saved node keys", restored, savedKeys.Count);
 
-            // Try to restore selected book
-            await RestoreSelectedBook(dialogState.SelectedBookPath);
+                // Try to restore selected book
+                await RestoreSelectedBook(dialogState.SelectedBookPath);
+            }
+            finally
+            {
+                _suppressExpansionSave = false;
+            }
         }
         catch (Exception ex)
         {
