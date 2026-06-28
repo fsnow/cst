@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
@@ -30,7 +31,7 @@ namespace CST.Lucene
 
         public async Task IndexAllAsync(IProgress<IndexingProgress> progress, List<int> changedFiles)
         {
-            await Task.Run(async () =>
+            await Task.Run(() =>
             {
                 _logger.Information("BookIndexerAsync.IndexAllAsync() starting with {ChangedFiles} changed files", changedFiles.Count);
                 _logger.Information("XmlDirectory: {XmlDirectory}", XmlDirectory);
@@ -51,8 +52,9 @@ namespace CST.Lucene
                         progress?.Report(indexingProgress);
                         lastProgressReport = now;
 
-                        // Yield control to prevent system lockup
-                        Task.Delay(1).Wait();
+                        // Brief yield on this background indexing thread so the throttled progress report
+                        // can be processed. (#80: was Task.Delay(1).Wait() - a blocking wait-on-Task.)
+                        Thread.Sleep(1);
                     }
                 }, changedFiles);
 
