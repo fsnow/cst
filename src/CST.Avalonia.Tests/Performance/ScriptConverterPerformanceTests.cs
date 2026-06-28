@@ -28,7 +28,7 @@ public class ScriptConverterPerformanceTests
     {
         var path = Path.Combine(XmlDir, "s0101m.mul.xml"); // DN1 mula
         if (!File.Exists(path))
-            Assert.Skip($"DN1 not found at {path} (set CST_XML_DIR). Integration/benchmark test.");
+            return; // DN1 absent (CI / fresh checkout): benchmark no-ops instead of failing
 
         // UTF-16-LE corpus; File.ReadAllText honors the BOM.
         var deva = File.ReadAllText(path);
