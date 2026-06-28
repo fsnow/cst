@@ -58,4 +58,31 @@ public class MixedScriptSearchTests
         Assert.Equal(deva, Any2Deva.Convert(beng));   // Bengali run -> same Devanagari
         Assert.Equal(deva + deva, Any2Deva.Convert(Word + beng));
     }
+
+    // "evam me sutam" ("Thus have I heard") - the canonical sutta opening. The final nasal is niggahita
+    // (U+1E43), which is encoded differently per script (Thai even has a dedicated codepoint), so it is
+    // the interesting case for cross-script normalization.
+    private const string EvamMeSutam = "eva\u1E43 me suta\u1E43";
+
+    [Theory]
+    [InlineData(Script.Devanagari)]
+    [InlineData(Script.Thai)]
+    [InlineData(Script.Sinhala)]
+    [InlineData(Script.Myanmar)]
+    public void EvamMeSutam_WholePhraseInEachScript_NormalizesToSameIpe(Script script)
+    {
+        var ipe = Latn2Ipe.Convert(EvamMeSutam);
+        var inScript = ScriptConverter.Convert(EvamMeSutam, Script.Latin, script);
+        Assert.Equal(ipe, Any2Ipe.Convert(inScript));
+    }
+
+    [Fact]
+    public void EvamMeSutam_SplitMidPhraseAcrossScripts_NormalizesToWholePhrase()
+    {
+        // A user types the opening in Latin and finishes the last word in Devanagari; the niggahita must
+        // survive the script boundary so the whole normalizes to the all-Latin IPE.
+        var ipe = Latn2Ipe.Convert(EvamMeSutam);
+        var lastWordDeva = ScriptConverter.Convert("suta\u1E43", Script.Latin, Script.Devanagari);
+        Assert.Equal(ipe, Any2Ipe.Convert("eva\u1E43 me " + lastWordDeva));
+    }
 }
