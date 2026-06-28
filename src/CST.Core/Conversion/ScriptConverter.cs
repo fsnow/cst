@@ -18,6 +18,11 @@ namespace CST.Conversion
         // for future: convert toTitleCase to an enumeration with FlagsAttribute if there are more options to handle
         public static string Convert(string str, Script inputScript, Script outputScript, bool toTitleCase)
         {
+            // Null/empty needs no conversion - and the per-script converters would NRE on null
+            // (e.g. a search result whose ShortNavPath and FileName are both null). (#82)
+            if (string.IsNullOrEmpty(str))
+                return str;
+
             string outStr = "";
             if (inputScript == outputScript)
             {

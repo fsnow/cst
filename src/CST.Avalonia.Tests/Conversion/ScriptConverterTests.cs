@@ -12,6 +12,16 @@ namespace CST.Avalonia.Tests.Conversion
     /// </summary>
     public class ScriptConverterTests
     {
+        [Fact]
+        public void Convert_NullOrEmpty_ReturnsInputWithoutThrowing()
+        {
+            // A search result whose ShortNavPath and FileName are both null reaches Convert(null);
+            // it must not throw. (#82)
+            Assert.Null(ScriptConverter.Convert(null!, Script.Devanagari, Script.Latin));
+            Assert.Equal("", ScriptConverter.Convert("", Script.Devanagari, Script.Latin));
+            Assert.Equal("", ScriptConverter.Convert("", Script.Ipe, Script.Devanagari, true));
+        }
+
         [Theory]
         [InlineData("ṭh", "Latin -> IPE -> Latin round-trip for problematic 'ṭh'")]
         [InlineData("a", "Latin 'a' -> IPE (should be hex C1)")]
