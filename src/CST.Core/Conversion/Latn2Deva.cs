@@ -117,6 +117,17 @@ namespace CST.Conversion
             paliAspiratables.Add('d');
             paliAspiratables.Add('p');
             paliAspiratables.Add('b');
+
+            // Mirror the sets/dictionaries into char-indexed tables for the optimized path. (#86)
+            foreach (char c in paliChars) if (c < MapLen) isPaliCharArr[c] = true;
+            foreach (char c in paliVowels) if (c < MapLen) isPaliVowelArr[c] = true;
+            foreach (var kvp in devInitialVowels) if (kvp.Key < MapLen) initVowelArr[kvp.Key] = kvp.Value;
+            foreach (var kvp in devVowels) if (kvp.Key < MapLen && kvp.Value is char vch) depVowelArr[kvp.Key] = vch; // 'a' -> "" stays '\0'
+            foreach (var kvp in devConsonants)
+            {
+                if (kvp.Key.Length == 1) { if (kvp.Key[0] < MapLen) consCharArr[kvp.Key[0]] = kvp.Value[0]; }
+                else if (kvp.Key.Length == 2 && kvp.Key[1] == 'h' && kvp.Key[0] < MapLen) consAspArr[kvp.Key[0]] = kvp.Value[0];
+            }
         }
 
         private static ISet<char> paliChars;
@@ -127,7 +138,21 @@ namespace CST.Conversion
         private static IDictionary<char, object> devVowels;
         private static IDictionary<string, string> devConsonants;
 
-        public static string Convert(string latin)
+        // Fast char-indexed tables for the optimized Convert(), mirroring the data above.
+        // '\0' = none; depVowelArr['a'] is '\0' because the inherent "a" is written as nothing. (#86)
+        private const int MapLen = 0x1E70; // covers the Latin Pali letters incl. U+1E6D (t underdot)
+        private static readonly bool[] isPaliCharArr = new bool[MapLen];
+        private static readonly bool[] isPaliVowelArr = new bool[MapLen];
+        private static readonly char[] initVowelArr = new char[MapLen];
+        private static readonly char[] depVowelArr = new char[MapLen];
+        private static readonly char[] consCharArr = new char[MapLen];  // single-letter consonant -> Deva
+        private static readonly char[] consAspArr = new char[MapLen];   // aspiratable letter (+'h') -> Deva
+
+        /// <summary>
+        /// FROZEN reference implementation - the correctness oracle for the optimized Convert(). Do NOT change;
+        /// tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string latin)
 		{
 			StringBuilder book = new StringBuilder();
 			StringBuilder word = new StringBuilder();
@@ -163,6 +188,127 @@ namespace CST.Conversion
 			// IPE -> Devanagari path; see Ipe2Deva.InsertConjunctZwj.
 			return Ipe2Deva.InsertConjunctZwj(book.ToString());
 		}
+
+        // Optimized true single pass (#86): byte-identical to ConvertReference (verified by tests). Folds the
+        // word splitting, the per-word ToDevanagari akshara reconstruction, and the shared 11-pass
+        // Ipe2Deva.InsertConjunctZwj into one scan that writes straight into a char buffer - no per-word strings,
+        // no book/word StringBuilders, no separate ZWJ pass. ZWJ is checked only at a consonant emit (the only
+        // char that can complete an open-form conjunct).
+        public static string Convert(string latin)
+        {
+            if (string.IsNullOrEmpty(latin))
+                return latin;
+
+            int n = latin.Length;
+            var buf = new char[n * 3 + 4]; // consonant -> virama + consonant + ZWJ; plus per-word final halanta
+            int k = 0;
+            int prevC2Index = -1; char prevC1 = '\0', prevC2 = '\0'; // ZWJ non-overlap state (whole book)
+
+            const char scriptZero = '\u0966';
+            LetterType last = LetterType.Vowel; // per-word akshara state
+            bool inWord = false;
+            char wordLastChar = '\0'; // last Latin char of the current word, for the word-final halanta
+
+            int i = 0;
+            while (i < n)
+            {
+                char c = latin[i];
+                bool isPali = c < MapLen && isPaliCharArr[c];
+
+                if (inWord && !isPali)
+                {
+                    // word ends: word-final halanta if its last char is a single-letter consonant key
+                    if (wordLastChar < MapLen && consCharArr[wordLastChar] != '\0')
+                        buf[k++] = '\u094d';
+                    inWord = false; last = LetterType.Vowel; wordLastChar = '\0';
+                    buf[k++] = c; // the boundary char passes through (matches book.Append(c))
+                    i++;
+                    continue;
+                }
+
+                if (isPali)
+                {
+                    if (c < MapLen && isPaliVowelArr[c])
+                    {
+                        if (last == LetterType.Vowel || last == LetterType.Nasal)
+                            buf[k++] = initVowelArr[c];
+                        else if (depVowelArr[c] != '\0') // the inherent "a" is written as nothing
+                            buf[k++] = depVowelArr[c];
+                        last = LetterType.Vowel;
+                        wordLastChar = c; i++;
+                    }
+                    else if (c == 0x1E43 || c == 0x1E41) // m underdot / m overdot (niggahita)
+                    {
+                        buf[k++] = '\u0902'; // anusvara
+                        last = LetterType.Nasal;
+                        wordLastChar = c; i++;
+                    }
+                    else // consonant
+                    {
+                        if (last == LetterType.Consonant)
+                            buf[k++] = '\u094d'; // halant after the previous consonant
+
+                        char c2 = (i + 1 < n) ? latin[i + 1] : ' ';
+                        char deva;
+                        if (c < MapLen && consAspArr[c] != '\0' && c2 == 'h') // aspirate: consonant + 'h'
+                        {
+                            deva = consAspArr[c]; wordLastChar = c2; i += 2;
+                        }
+                        else
+                        {
+                            deva = consCharArr[c]; wordLastChar = c; i++;
+                        }
+                        buf[k++] = deva;
+                        // C1 + virama + C2 -> C1 + virama + ZWJ + C2 (the consonant is the only ZWJ trigger);
+                        // skip a same-pair match overlapping the previous insertion (one non-overlapping Replace).
+                        if (k >= 3 && buf[k - 2] == 0x094D)
+                        {
+                            char c1 = buf[k - 3];
+                            if (IsZwjConjunct(c1, deva) && !((k - 3 == prevC2Index) && c1 == prevC1 && deva == prevC2))
+                            {
+                                buf[k - 1] = (char)0x200D;
+                                buf[k++] = deva;
+                                prevC2Index = k - 1; prevC1 = c1; prevC2 = deva;
+                            }
+                        }
+                        last = LetterType.Consonant;
+                    }
+                    inWord = true;
+                }
+                else if (c >= '0' && c <= '9') // digit, not in a word
+                {
+                    buf[k++] = (char)(c - '0' + scriptZero);
+                    i++;
+                }
+                else
+                {
+                    buf[k++] = c; // pass through
+                    i++;
+                }
+            }
+
+            // trailing word: word-final halanta
+            if (inWord && wordLastChar < MapLen && consCharArr[wordLastChar] != '\0')
+                buf[k++] = '\u094d';
+
+            return new string(buf, 0, k);
+        }
+
+        // The 11 Devanagari conjuncts handled by Ipe2Deva.InsertConjunctZwj. (#86)
+        private static bool IsZwjConjunct(char c1, char c2)
+        {
+            switch (c1)
+            {
+                case (char)0x0915: return c2 == 0x0915 || c2 == 0x0932 || c2 == 0x0935; // ka + ka/la/va
+                case (char)0x091A: return c2 == 0x091A;                                 // ca + ca
+                case (char)0x091C: return c2 == 0x091C;                                 // ja + ja
+                case (char)0x091E: return c2 == 0x091A || c2 == 0x091C || c2 == 0x091E; // nya + ca/ja/nya
+                case (char)0x0928: return c2 == 0x0928;                                 // na + na
+                case (char)0x092A: return c2 == 0x0932;                                 // pa + la
+                case (char)0x0932: return c2 == 0x0932;                                 // la + la
+                default: return false;
+            }
+        }
 
         public static bool IsDigit(char c)
 		{

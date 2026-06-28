@@ -10,6 +10,11 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> deva2Gujarati;
 
+        // Fast lookup for the optimized Convert(): map[c] = replacement string, null = pass through. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly string[] map = new string[MapLen];
+        private static int maxValLen = 1;
+
         static Deva2Gujr()
         {
             deva2Gujarati = new Dictionary<char, object>();
@@ -103,6 +108,14 @@ namespace CST.Conversion
             // zero-width joiners
             deva2Gujarati['\u200C'] = ""; // ZWNJ (remove)
             deva2Gujarati['\u200D'] = ""; // ZWJ (remove)
+
+            // Build the fast lookup table from the same data (#86).
+            foreach (var kvp in deva2Gujarati)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length > 0) { map[kvp.Key] = v; if (v.Length > maxValLen) maxValLen = v.Length; }
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -118,9 +131,11 @@ namespace CST.Conversion
             return str;
         }
 
-        // more generalized, reusable conversion method:
-        // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
@@ -132,6 +147,33 @@ namespace CST.Conversion
             }
 
             return sb.ToString();
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Replaces the
+        // per-char dictionary lookup (ContainsKey + indexer, plus Append(object) boxing) with one scan over a
+        // char buffer using a string[] table. Pure dictionary substitution - no inherent-'a' or positional rules.
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            var buf = new char[n * maxValLen];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x200C || c == 0x200D) // ZWNJ / ZWJ -> removed (map to "" in the reference)
+                    continue;
+
+                string? m = (c < MapLen) ? map[c] : null;
+                if (m == null) buf[k++] = c; // pass through (danda, Latin, punctuation, etc.)
+                else if (m.Length == 1) buf[k++] = m[0];
+                else { m.CopyTo(0, buf, k, m.Length); k += m.Length; }
+            }
+            return new string(buf, 0, k);
         }
 
         public static string ConvertDandas(string str)

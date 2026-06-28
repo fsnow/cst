@@ -8,6 +8,10 @@ namespace CST.Conversion
     {
         private static IDictionary<char, char> telu2Dev;
 
+        // Fast reverse-lookup table for the optimized Convert(): map[c] = Deva char, '\0' = pass through. (#86)
+        private const int MapLen = 0x0C80; // covers the Telugu block (source chars)
+        private static readonly char[] map = new char[MapLen];
+
         static Telu2Deva()
         {
             telu2Dev = new Dictionary<char, char>();
@@ -90,9 +94,17 @@ namespace CST.Conversion
             telu2Dev['\u0C6D'] = '\u096D';
             telu2Dev['\u0C6E'] = '\u096E';
             telu2Dev['\u0C6F'] = '\u096F';
+
+            // Build the fast reverse table from the same data (#86).
+            foreach (var kvp in telu2Dev)
+                if (kvp.Key < MapLen) map[kvp.Key] = kvp.Value;
         }
 
-        public static string Convert(string teluStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string teluStr)
         {
             StringBuilder sb = new StringBuilder();
             foreach (char c in teluStr.ToCharArray())
@@ -104,6 +116,26 @@ namespace CST.Conversion
             }
 
             return sb.ToString();
+        }
+
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Replaces the
+        // per-char dictionary lookup with one scan over a char buffer using a reverse char[] table. Pure
+        // dictionary substitution - no positional rules.
+        public static string Convert(string teluStr)
+        {
+            if (string.IsNullOrEmpty(teluStr))
+                return teluStr;
+
+            int n = teluStr.Length;
+            var buf = new char[n];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = teluStr[i];
+                char m = (c < MapLen) ? map[c] : '\0';
+                buf[k++] = (m != '\0') ? m : c; // mapped Deva char, else pass through
+            }
+            return new string(buf, 0, k);
         }
     }
 }

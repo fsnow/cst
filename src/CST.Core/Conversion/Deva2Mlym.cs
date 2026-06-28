@@ -10,6 +10,11 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> deva2Mlym;
 
+        // Fast lookup for the optimized Convert(): map[c] = replacement char, '\0' = pass through. All
+        // Malayalam mappings are single-char, so a char[] table suffices. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly char[] map = new char[MapLen];
+
         static Deva2Mlym()
         {
             deva2Mlym = new Dictionary<char, object>();
@@ -116,6 +121,14 @@ namespace CST.Conversion
             // zero-width joiners
             deva2Mlym['\u200C'] = ""; // ZWNJ (remove)
             deva2Mlym['\u200D'] = ""; // ZWJ (remove)
+
+            // Build the fast char table from the same data (single-char values only; ZWNJ/ZWJ "" skipped). (#86)
+            foreach (var kvp in deva2Mlym)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length == 1) map[kvp.Key] = v[0];
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -129,9 +142,11 @@ namespace CST.Conversion
             return CleanupPunctuation(str);
         }
 
-        // more generalized, reusable conversion method:
-        // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
@@ -150,6 +165,45 @@ namespace CST.Conversion
                     new MatchEvaluator(ConvertEOChars), RegexOptions.Compiled);
 
             return mlym;
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Folds the dict
+        // map AND the post-processing e/o-shortening regex into one scan. The regex shortens a long e/o vowel
+        // (\u0D0F\u0D13\u0D47\u0D4B) when immediately followed by a double consonant (C + virama + C); here we
+        // detect that pattern by looking back at the buffer tail as the second consonant is emitted.
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            var buf = new char[n]; // all mappings are single-char; removals only shrink, so n is enough
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x200C || c == 0x200D) // ZWNJ / ZWJ -> removed
+                    continue;
+
+                char x = (c < MapLen && map[c] != '\0') ? map[c] : c;
+                buf[k++] = x;
+
+                // short e/o before a double consonant: tail is [longVowel, C, virama, C(=x)]
+                if (x >= 0x0D15 && x <= 0x0D39 && k >= 4
+                    && buf[k - 2] == 0x0D4D && buf[k - 3] >= 0x0D15 && buf[k - 3] <= 0x0D39)
+                {
+                    switch (buf[k - 4])
+                    {
+                        case (char)0x0D0F: buf[k - 4] = (char)0x0D0E; break; // e  -> short e
+                        case (char)0x0D13: buf[k - 4] = (char)0x0D12; break; // o  -> short o
+                        case (char)0x0D47: buf[k - 4] = (char)0x0D46; break; // e sign -> short
+                        case (char)0x0D4B: buf[k - 4] = (char)0x0D4A; break; // o sign -> short
+                    }
+                }
+            }
+            return new string(buf, 0, k);
         }
 
         // two capture groups, 1 is the vowel, 2 is the following double consonants

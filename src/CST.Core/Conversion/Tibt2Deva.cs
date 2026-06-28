@@ -10,6 +10,12 @@ namespace CST.Conversion
         private static IDictionary<string, string> tibt2Deva;
         private static IDictionary<char, string> tibtChar2Deva;
 
+        // Fast tables for the optimized Convert(): multiStarter marks chars that can begin a multi-char tibt2Deva
+        // key; charMap is the tibtChar2Deva value (Tibetan block), null = pass through. (#86)
+        private const int MapLen = 0x1000; // covers the Tibetan block (source chars)
+        private static readonly bool[] multiStarter = new bool[MapLen];
+        private static readonly string[] charMap = new string[MapLen];
+
         static Tibt2Deva()
         {
             tibt2Deva = new Dictionary<string, string>();
@@ -97,7 +103,7 @@ namespace CST.Conversion
             tibtChar2Deva['\u0F28'] = "\u096E";
             tibtChar2Deva['\u0F29'] = "\u096F";
 
-            // Build subjoined consonant mappings (U+0F90-0FB9 → halant + consonant)
+            // Build subjoined consonant mappings (U+0F90-0FB9 \u2192 halant + consonant)
             // These map subjoined forms back to virama + base consonant
             for (int i = 0; i <= 39; i++)
             {
@@ -112,22 +118,98 @@ namespace CST.Conversion
             // Special cases for fixed-form subjoined consonants
             tibtChar2Deva['\u0FBB'] = "\u0F84\u0F61"; // subjoined ya (yya)
             tibtChar2Deva['\u0FBA'] = "\u0F84\u0F5D"; // subjoined va (vva)
+
+            // Build the fast tables (#86).
+            foreach (var kvp in tibt2Deva)
+                if (kvp.Key.Length > 0 && kvp.Key[0] < MapLen) multiStarter[kvp.Key[0]] = true;
+            foreach (var kvp in tibtChar2Deva)
+                if (kvp.Key < MapLen) charMap[kvp.Key] = kvp.Value;
         }
 
+        // Optimized (#86): byte-identical to ConvertReference (verified by tests). Keeps the reference's six
+        // preprocessing Replaces, then replaces the two stateful Substring/dictionary loops with char-table
+        // lookups (multi-char probes only when the char can begin a key).
         public static string Convert(string tibtStr)
         {
+            if (string.IsNullOrEmpty(tibtStr))
+                return tibtStr;
+
+            // Pre-processing (identical to the reference).
+            tibtStr = tibtStr.Replace("\u0F5B\u0F84\u0F5C", "\u0F5B\u0FAC"); // jjha
+            tibtStr = tibtStr.Replace("\u0F61\u0F84\u0F67", "\u0F61\u0FB7"); // yha
+            tibtStr = tibtStr.Replace("\u0F5D\u0F84\u0F67", "\u0F5D\u0FB7"); // vha
+            tibtStr = tibtStr.Replace("\u0F61\u0FBB", "\u0F61\u0FB1");       // yya
+            tibtStr = tibtStr.Replace("\u0F5D\u0FBA", "\u0F5D\u0FAD");       // vva
+            tibtStr = tibtStr.Replace("\u0F0B", "");                          // remove intersyllabic tsheg
+
+            var sb = new StringBuilder(tibtStr.Length);
+            int i = 0;
+            while (i < tibtStr.Length)
+            {
+                bool matched = false;
+                char c0 = tibtStr[i];
+                bool starter = c0 < MapLen && multiStarter[c0]; // can this char begin a multi-char key?
+
+                if (starter && i + 3 < tibtStr.Length
+                    && tibt2Deva.TryGetValue(tibtStr.Substring(i, 4), out string? four))
+                { sb.Append(four); i += 4; matched = true; }
+
+                if (!matched && starter && i + 2 < tibtStr.Length
+                    && tibt2Deva.TryGetValue(tibtStr.Substring(i, 3), out string? three))
+                { sb.Append(three); i += 3; matched = true; }
+
+                if (!matched && starter && i + 1 < tibtStr.Length
+                    && tibt2Deva.TryGetValue(tibtStr.Substring(i, 2), out string? two))
+                { sb.Append(two); i += 2; matched = true; }
+
+                if (!matched)
+                {
+                    char c = tibtStr[i];
+                    string? m = (c < MapLen) ? charMap[c] : null;
+                    if (m != null) sb.Append(m); else sb.Append(c);
+                    i++;
+                }
+            }
+
+            string intermediate = sb.ToString();
+
+            // Convert Tibetan halant (U+0F84) + base consonant -> Deva virama + Deva consonant.
+            var finalSb = new StringBuilder(intermediate.Length);
+            i = 0;
+            while (i < intermediate.Length)
+            {
+                char c = intermediate[i];
+                if (c == 0x0F84 && i + 1 < intermediate.Length)
+                {
+                    char tib = intermediate[i + 1];
+                    string? dc = (tib < MapLen) ? charMap[tib] : null;
+                    if (dc != null) { finalSb.Append('\u094D'); finalSb.Append(dc); i += 2; }
+                    else { finalSb.Append(c); i++; }
+                }
+                else { finalSb.Append(c); i++; }
+            }
+
+            return finalSb.ToString();
+        }
+
+        /// <summary>
+        /// FROZEN reference implementation - the correctness oracle for the optimized Convert(). Do NOT change;
+        /// tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string tibtStr)
+        {
             // Pre-processing: Handle special exceptions that use explicit halant
-            // jjha: \u0F5B\u0F84\u0F5C → \u0F5B\u0FAC
+            // jjha: \u0F5B\u0F84\u0F5C \u2192 \u0F5B\u0FAC
             tibtStr = tibtStr.Replace("\u0F5B\u0F84\u0F5C", "\u0F5B\u0FAC");
-            // yha: \u0F61\u0F84\u0F67 → \u0F61\u0FB7
+            // yha: \u0F61\u0F84\u0F67 \u2192 \u0F61\u0FB7
             tibtStr = tibtStr.Replace("\u0F61\u0F84\u0F67", "\u0F61\u0FB7");
-            // vha: \u0F5D\u0F84\u0F67 → \u0F5D\u0FB7
+            // vha: \u0F5D\u0F84\u0F67 \u2192 \u0F5D\u0FB7
             tibtStr = tibtStr.Replace("\u0F5D\u0F84\u0F67", "\u0F5D\u0FB7");
 
             // Pre-processing: Handle fixed-form subjoined consonants
-            // yya: \u0F61\u0FBB → \u0F61\u0FB1
+            // yya: \u0F61\u0FBB \u2192 \u0F61\u0FB1
             tibtStr = tibtStr.Replace("\u0F61\u0FBB", "\u0F61\u0FB1");
-            // vva: \u0F5D\u0FBA → \u0F5D\u0FAD
+            // vva: \u0F5D\u0FBA \u2192 \u0F5D\u0FAD
             tibtStr = tibtStr.Replace("\u0F5D\u0FBA", "\u0F5D\u0FAD");
 
             // Remove intersyllabic tsheg (U+0F0B)

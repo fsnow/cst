@@ -10,6 +10,11 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> deva2Tibt;
 
+        // Fast lookup for the optimized Convert(): map[c] = replacement string, null = pass through. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly string[] map = new string[MapLen];
+        private static int maxValLen = 1;
+
         static Deva2Tibt()
         {
             deva2Tibt = new Dictionary<char, object>();
@@ -100,6 +105,14 @@ namespace CST.Conversion
             // zero-width joiners
             deva2Tibt['\u200C'] = ""; // ZWNJ (ignore)
             deva2Tibt['\u200D'] = ""; // ZWJ (ignore)
+
+            // Build the fast lookup table from the same data (#86).
+            foreach (var kvp in deva2Tibt)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length > 0) { map[kvp.Key] = v; if (v.Length > maxValLen) maxValLen = v.Length; }
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -112,7 +125,11 @@ namespace CST.Conversion
 
         // more generalized, reusable conversion method:
         // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
 			// add intersyllabic tsheg between "syllables".
 			devStr = Regex.Replace(devStr, "([\u0900-\u094C])([\u0904-\u0939])", "$1\u0F0B$2");
@@ -148,6 +165,70 @@ namespace CST.Conversion
             tib = tib.Replace("\u0F5D\u0FB7", "\u0F5D\u0F84\u0F67"); //vha
 
             return tib;
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized (#86): byte-identical to ConvertReference (verified by tests). Replaces the two tsheg
+        // regexes, the dict map, the 40-iteration halant+consonant -> subjoined Replace loop, and the 5 ligature
+        // exception Replaces with two linear passes. Pass 1 inserts the intersyllabic tsheg (U+0F0B) on raw
+        // Devanagari adjacency, maps each char, and subjoins halant (U+0F84) + base (U+0F40..U+0F67) on the fly.
+        // Pass 2 applies the yya/vva/jjha/yha/vha exceptions (which the reference runs only after all subjoining).
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            // pass 1: tsheg + map + subjoin. Each input char -> <= maxValLen chars plus a possible leading tsheg.
+            var buf = new char[n * (maxValLen + 1)];
+            int k = 0;
+            char prevRaw = '\0';
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x200C || c == 0x200D) { prevRaw = c; continue; } // ZWNJ/ZWJ -> "" (still break adjacency)
+
+                // intersyllabic tsheg between a non-virama char (U+0900-U+094C) and a following independent
+                // vowel or consonant (U+0904-U+0939) - the net effect of the reference's two tsheg passes.
+                if (prevRaw >= 0x0900 && prevRaw <= 0x094C && c >= 0x0904 && c <= 0x0939)
+                    k = EmitTibt(buf, k, (char)0x0F0B);
+
+                string? m = (c < MapLen) ? map[c] : null;
+                if (m == null) k = EmitTibt(buf, k, c);
+                else for (int p = 0; p < m.Length; p++) k = EmitTibt(buf, k, m[p]);
+
+                prevRaw = c;
+            }
+
+            // pass 2: ligature exceptions. A subjoined char can expand to 2 chars (jjha/yha/vha), so size for 2x.
+            var outp = new char[k * 2];
+            int o = 0;
+            for (int p = 0; p < k; p++)
+            {
+                char x = buf[p];
+                char prev = (o > 0) ? outp[o - 1] : '\0';
+                if (x == 0x0FB1 && prev == 0x0F61) outp[o++] = (char)0x0FBB;       // yya: subjoined ya -> fixed-form
+                else if (x == 0x0FAD && prev == 0x0F5D) outp[o++] = (char)0x0FBA;  // vva: subjoined va -> fixed-form
+                else if (x == 0x0FAC && prev == 0x0F5B) { outp[o++] = (char)0x0F84; outp[o++] = (char)0x0F5C; } // jjha
+                else if (x == 0x0FB7 && prev == 0x0F61) { outp[o++] = (char)0x0F84; outp[o++] = (char)0x0F67; } // yha
+                else if (x == 0x0FB7 && prev == 0x0F5D) { outp[o++] = (char)0x0F84; outp[o++] = (char)0x0F67; } // vha
+                else outp[o++] = x;
+            }
+            return new string(outp, 0, o);
+        }
+
+        // Append one Tibetan char, subjoining halant (U+0F84) + base consonant (U+0F40..U+0F67) into the
+        // subjoined form (U+0F90..U+0FB7), reproducing the reference's halant+consonant Replace loop. (#86)
+        private static int EmitTibt(char[] buf, int k, char x)
+        {
+            buf[k++] = x;
+            if (k >= 2 && buf[k - 2] == 0x0F84 && x >= 0x0F40 && x <= 0x0F67)
+            {
+                buf[k - 2] = (char)(0x0F90 + (x - 0x0F40));
+                k--;
+            }
+            return k;
         }
     }
 }

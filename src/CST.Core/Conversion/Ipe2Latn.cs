@@ -8,6 +8,11 @@ namespace CST
     {
         private static Dictionary<string, string> ipe2Latn;
 
+        // Fast lookup table for the optimized Convert(): map[c] = replacement string, null = pass through. (#86)
+        private const int MapLen = 0x00EA; // covers the IPE code points (U+00C0..U+00E9)
+        private static readonly string[] map = new string[MapLen];
+        private static int maxValLen = 1;
+
         static Ipe2Latn()
         {
             ipe2Latn = new Dictionary<string, string>();
@@ -68,9 +73,21 @@ namespace CST
             ipe2Latn["\x00E7"] = "s"; // sa
             ipe2Latn["\x00E8"] = "h"; // ha
             ipe2Latn["\x00E9"] = "\x1E37"; // l underdot a
+
+            // Build the fast lookup table from the same single-char-keyed data (#86).
+            foreach (var kvp in ipe2Latn)
+                if (kvp.Key.Length == 1 && kvp.Key[0] < MapLen)
+                {
+                    map[kvp.Key[0]] = kvp.Value;
+                    if (kvp.Value.Length > maxValLen) maxValLen = kvp.Value.Length;
+                }
         }
 
-        public static string Convert(string ipe)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string ipe)
         {
             StringBuilder sb = new StringBuilder();
             foreach (char c in ipe)
@@ -82,6 +99,28 @@ namespace CST
             }
 
             return sb.ToString();
+        }
+
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Replaces the
+        // per-char dictionary lookup (which allocated a string per char via c.ToString()) with one scan over a
+        // char buffer using a string[] table.
+        public static string Convert(string ipe)
+        {
+            if (string.IsNullOrEmpty(ipe))
+                return ipe;
+
+            int n = ipe.Length;
+            var buf = new char[n * maxValLen];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = ipe[i];
+                string? m = (c < MapLen) ? map[c] : null;
+                if (m == null) buf[k++] = c;
+                else if (m.Length == 1) buf[k++] = m[0];
+                else { m.CopyTo(0, buf, k, m.Length); k += m.Length; }
+            }
+            return new string(buf, 0, k);
         }
     }
 }
