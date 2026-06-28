@@ -82,6 +82,7 @@ Features planned for future implementation (from CST4 analysis):
 - [Localization Strategy](features/planned/LOCALIZATION_STRATEGY.md) - Multi-language UI
 - [Vector Search](features/planned/VECTOR_SEARCH.md) - Semantic search (future exploration)
 - [App Intents / Siri & Apple Intelligence](features/planned/APP_INTENTS_SUPPORT.md) - macOS assistant integration (research/feasibility)
+- [Script Converter Optimization (#86)](features/planned/CONVERTER_OPTIMIZATION_TASK.md) - Single-pass converters with a byte-identical oracle (task brief, in progress)
 
 ### 🔬 **research/** - Research & Exploration
 Exploratory research and investigations:
