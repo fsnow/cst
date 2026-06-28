@@ -200,7 +200,7 @@ namespace CST.Conversion
             StringBuilder book = new StringBuilder(latin.Length);
             StringBuilder word = new StringBuilder();
 
-            char scriptZero = '०';
+            char scriptZero = '\u0966';
 
             foreach (char c in latin)
             {
@@ -251,15 +251,15 @@ namespace CST.Conversion
                         dev.Append(depVowelArr[c]);
                     last = LetterType.Vowel;
                 }
-                else if (c.Equals('ṃ') || c.Equals('ṁ')) // m underdot / m overdot (niggahita)
+                else if (c.Equals('\u1E43') || c.Equals('\u1E41')) // m underdot / m overdot (niggahita)
                 {
                     last = LetterType.Nasal;
-                    dev.Append('ं'); // anusvara
+                    dev.Append('\u0902'); // anusvara
                 }
                 else
                 {
                     if (last == LetterType.Consonant)
-                        dev.Append('्'); // halant after the previous consonant
+                        dev.Append('\u094D'); // halant after the previous consonant
 
                     if (c < MapLen && consAspArr[c] != '\0' && c2 == 'h')
                     {
@@ -275,7 +275,7 @@ namespace CST.Conversion
 
             char lastCh = latin[latin.Length - 1];
             if (lastCh < MapLen && consCharArr[lastCh] != '\0') // word-final consonant -> halanta
-                dev.Append('्');
+                dev.Append('\u094D');
 
             return dev.ToString();
         }

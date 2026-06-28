@@ -158,7 +158,7 @@ namespace CST.Conversion
 
                 if (!matched)
                 {
-                    // Try single character mapping in khmer2Dev first (for standalone 'ឣ')
+                    // Try single character mapping in khmer2Dev first (for standalone '\u17A3')
                     char c = khmerStr[i];
                     string oneChar = c.ToString();
                     if (khmer2Dev.ContainsKey(oneChar))

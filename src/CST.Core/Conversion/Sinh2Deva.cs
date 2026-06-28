@@ -26,9 +26,9 @@ namespace CST.Conversion
             sinh2Deva['\u0D8B'] = '\u0909'; // u
             sinh2Deva['\u0D8C'] = '\u090A'; // uu
             sinh2Deva['\u0D91'] = '\u090F'; // e (short - but Pali only has one 'e')
-            sinh2Deva['\u0D92'] = '\u090F'; // ē (long - map to same Deva 'e' since Pali has only one)
+            sinh2Deva['\u0D92'] = '\u090F'; // \u0113 (long - map to same Deva 'e' since Pali has only one)
             sinh2Deva['\u0D94'] = '\u0913'; // o (short - but Pali only has one 'o')
-            sinh2Deva['\u0D95'] = '\u0913'; // ō (long - map to same Deva 'o' since Pali has only one)
+            sinh2Deva['\u0D95'] = '\u0913'; // \u014D (long - map to same Deva 'o' since Pali has only one)
 
             // velar stops
             sinh2Deva['\u0D9A'] = '\u0915'; // ka
@@ -81,9 +81,9 @@ namespace CST.Conversion
             sinh2Deva['\u0DD4'] = '\u0941'; // u
             sinh2Deva['\u0DD6'] = '\u0942'; // uu
             sinh2Deva['\u0DD9'] = '\u0947'; // e (short - but Pali only has one 'e')
-            sinh2Deva['\u0DDA'] = '\u0947'; // ē (long - map to same Deva 'e' since Pali has only one)
+            sinh2Deva['\u0DDA'] = '\u0947'; // \u0113 (long - map to same Deva 'e' since Pali has only one)
             sinh2Deva['\u0DDC'] = '\u094B'; // o (short - but Pali only has one 'o')
-            sinh2Deva['\u0DDD'] = '\u094B'; // ō (long - map to same Deva 'o' since Pali has only one)
+            sinh2Deva['\u0DDD'] = '\u094B'; // \u014D (long - map to same Deva 'o' since Pali has only one)
 
             // various signs
             sinh2Deva['\u0DCA'] = '\u094D'; // Sinhala virama -> Dev. virama

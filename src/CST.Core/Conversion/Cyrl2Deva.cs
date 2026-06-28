@@ -24,70 +24,70 @@ namespace CST.Conversion
 
             // Multi-character sequences (longest first for proper matching)
 
-            // Consonants with combining marks + х (aspirates)
-            cyrl2Dev["д\u0307х"] = "\u0927"; // dha (dental) - only dot-above, matching Deva2Cyrl output
-            cyrl2Dev["г\u0307х"] = "\u0918"; // gha
-            cyrl2Dev["ж\u0307х"] = "\u091D"; // jha
+            // Consonants with combining marks + \u0445 (aspirates)
+            cyrl2Dev["\u0434\u0307\u0445"] = "\u0927"; // dha (dental) - only dot-above, matching Deva2Cyrl output
+            cyrl2Dev["\u0433\u0307\u0445"] = "\u0918"; // gha
+            cyrl2Dev["\u0436\u0307\u0445"] = "\u091D"; // jha
 
             // Consonants with combining marks
-            cyrl2Dev["м\u0323"] = "\u0902"; // niggahita
-            cyrl2Dev["г\u0307"] = "\u0917"; // ga
-            cyrl2Dev["н\u0307"] = "\u0919"; // n overdot a (ṅ)
-            cyrl2Dev["ж\u0307"] = "\u091C"; // ja
-            cyrl2Dev["н\u0303"] = "\u091E"; // n tilde a (ñ)
-            cyrl2Dev["д\u0323"] = "\u0921"; // d underdot a
-            cyrl2Dev["н\u0323"] = "\u0923"; // n underdot a
-            cyrl2Dev["д\u0307"] = "\u0924"; // ta (dental)
-            cyrl2Dev["т\u0307"] = "\u0925"; // tha (dental)
-            cyrl2Dev["д\u0307\u0323"] = "\u0926"; // da (dental)
-            cyrl2Dev["б\u0323"] = "\u092C"; // ba
-            cyrl2Dev["л\u0323"] = "\u0933"; // l underdot a
+            cyrl2Dev["\u043C\u0323"] = "\u0902"; // niggahita
+            cyrl2Dev["\u0433\u0307"] = "\u0917"; // ga
+            cyrl2Dev["\u043D\u0307"] = "\u0919"; // n overdot a (\u1E45)
+            cyrl2Dev["\u0436\u0307"] = "\u091C"; // ja
+            cyrl2Dev["\u043D\u0303"] = "\u091E"; // n tilde a (\u00F1)
+            cyrl2Dev["\u0434\u0323"] = "\u0921"; // d underdot a
+            cyrl2Dev["\u043D\u0323"] = "\u0923"; // n underdot a
+            cyrl2Dev["\u0434\u0307"] = "\u0924"; // ta (dental)
+            cyrl2Dev["\u0442\u0307"] = "\u0925"; // tha (dental)
+            cyrl2Dev["\u0434\u0307\u0323"] = "\u0926"; // da (dental)
+            cyrl2Dev["\u0431\u0323"] = "\u092C"; // ba
+            cyrl2Dev["\u043B\u0323"] = "\u0933"; // l underdot a
 
             // Multi-letter aspirates (2 chars)
-            cyrl2Dev["гх"] = "\u0918"; // gha (simple form without dot)
-            cyrl2Dev["жх"] = "\u091D"; // jha (simple form without dot)
-            cyrl2Dev["дх"] = "\u0922"; // dha (retroflex)
-            cyrl2Dev["бх"] = "\u092D"; // bha
+            cyrl2Dev["\u0433\u0445"] = "\u0918"; // gha (simple form without dot)
+            cyrl2Dev["\u0436\u0445"] = "\u091D"; // jha (simple form without dot)
+            cyrl2Dev["\u0434\u0445"] = "\u0922"; // dha (retroflex)
+            cyrl2Dev["\u0431\u0445"] = "\u092D"; // bha
 
             // Double-letter long vowels (independent and dependent forms map to same)
-            cyrl2Dev["аа"] = "\u0906"; // aa (independent) / U+093E (dependent) - we'll handle context later
-            cyrl2Dev["ий"] = "\u0908"; // ii (independent) / U+0940 (dependent)
-            cyrl2Dev["уу"] = "\u090A"; // uu (independent) / U+0942 (dependent)
+            cyrl2Dev["\u0430\u0430"] = "\u0906"; // aa (independent) / U+093E (dependent) - we'll handle context later
+            cyrl2Dev["\u0438\u0439"] = "\u0908"; // ii (independent) / U+0940 (dependent)
+            cyrl2Dev["\u0443\u0443"] = "\u090A"; // uu (independent) / U+0942 (dependent)
 
             // Single-character consonants (velar stops)
-            cyrlChar2Dev['г'] = "\u0915"; // ka
-            cyrlChar2Dev['к'] = "\u0916"; // kha
+            cyrlChar2Dev['\u0433'] = "\u0915"; // ka
+            cyrlChar2Dev['\u043A'] = "\u0916"; // kha
 
             // Single-character consonants (palatal stops)
-            cyrlChar2Dev['ж'] = "\u091A"; // ca
-            cyrlChar2Dev['ч'] = "\u091B"; // cha
+            cyrlChar2Dev['\u0436'] = "\u091A"; // ca
+            cyrlChar2Dev['\u0447'] = "\u091B"; // cha
 
             // Single-character consonants (retroflex stops)
-            cyrlChar2Dev['д'] = "\u091F"; // t underdot a
-            cyrlChar2Dev['т'] = "\u0920"; // t underdot ha
+            cyrlChar2Dev['\u0434'] = "\u091F"; // t underdot a
+            cyrlChar2Dev['\u0442'] = "\u0920"; // t underdot ha
 
             // Single-character consonants (labial stops)
-            cyrlChar2Dev['б'] = "\u092A"; // pa
-            cyrlChar2Dev['п'] = "\u092B"; // pha
-            cyrlChar2Dev['м'] = "\u092E"; // ma
+            cyrlChar2Dev['\u0431'] = "\u092A"; // pa
+            cyrlChar2Dev['\u043F'] = "\u092B"; // pha
+            cyrlChar2Dev['\u043C'] = "\u092E"; // ma
 
             // Single-character consonants (nasals)
-            cyrlChar2Dev['н'] = "\u0928"; // na
+            cyrlChar2Dev['\u043D'] = "\u0928"; // na
 
             // Single-character consonants (liquids, fricatives)
-            cyrlChar2Dev['я'] = "\u092F"; // ya
-            cyrlChar2Dev['р'] = "\u0930"; // ra
-            cyrlChar2Dev['л'] = "\u0932"; // la
-            cyrlChar2Dev['в'] = "\u0935"; // va
-            cyrlChar2Dev['с'] = "\u0938"; // sa
-            cyrlChar2Dev['х'] = "\u0939"; // ha
+            cyrlChar2Dev['\u044F'] = "\u092F"; // ya
+            cyrlChar2Dev['\u0440'] = "\u0930"; // ra
+            cyrlChar2Dev['\u043B'] = "\u0932"; // la
+            cyrlChar2Dev['\u0432'] = "\u0935"; // va
+            cyrlChar2Dev['\u0441'] = "\u0938"; // sa
+            cyrlChar2Dev['\u0445'] = "\u0939"; // ha
 
             // Independent vowels (single chars)
-            cyrlChar2Dev['а'] = "\u0905"; // a (will be context-dependent)
-            cyrlChar2Dev['и'] = "\u0907"; // i
-            cyrlChar2Dev['у'] = "\u0909"; // u
-            cyrlChar2Dev['з'] = "\u090F"; // e
-            cyrlChar2Dev['о'] = "\u0913"; // o
+            cyrlChar2Dev['\u0430'] = "\u0905"; // a (will be context-dependent)
+            cyrlChar2Dev['\u0438'] = "\u0907"; // i
+            cyrlChar2Dev['\u0443'] = "\u0909"; // u
+            cyrlChar2Dev['\u0437'] = "\u090F"; // e
+            cyrlChar2Dev['\u043E'] = "\u0913"; // o
 
             // Numerals (ASCII)
             cyrlChar2Dev['0'] = "\u0966";
@@ -132,7 +132,7 @@ namespace CST.Conversion
                     string fourChar = cyrlStr.Substring(i, 4);
                     if (cyrl2Dev.TryGetValue(fourChar, out string? four))
                     {
-                        if (lastWasConsonant) sb.Append('्'); // virama for cluster
+                        if (lastWasConsonant) sb.Append('\u094D'); // virama for cluster
                         sb.Append(four);
                         i += 4; lastWasConsonant = true; matched = true;
                     }
@@ -144,8 +144,8 @@ namespace CST.Conversion
                     string threeChar = cyrlStr.Substring(i, 3);
                     if (cyrl2Dev.TryGetValue(threeChar, out string? devaOutput))
                     {
-                        bool isNiggahita = (devaOutput == "ं");
-                        if (lastWasConsonant && !isNiggahita) sb.Append('्');
+                        bool isNiggahita = (devaOutput == "\u0902");
+                        if (lastWasConsonant && !isNiggahita) sb.Append('\u094D');
                         sb.Append(devaOutput);
                         i += 3; lastWasConsonant = !isNiggahita; matched = true;
                     }
@@ -157,22 +157,22 @@ namespace CST.Conversion
                     string twoChar = cyrlStr.Substring(i, 2);
                     if (cyrl2Dev.TryGetValue(twoChar, out string? devaOutput))
                     {
-                        if (twoChar == "аа" || twoChar == "ий" || twoChar == "уу")
+                        if (twoChar == "\u0430\u0430" || twoChar == "\u0438\u0439" || twoChar == "\u0443\u0443")
                         {
                             // after a consonant these are dependent long vowels, else independent
                             if (lastWasConsonant)
                             {
-                                if (twoChar == "аа") devaOutput = "ा";
-                                else if (twoChar == "ий") devaOutput = "ी";
-                                else devaOutput = "ू";
+                                if (twoChar == "\u0430\u0430") devaOutput = "\u093E";
+                                else if (twoChar == "\u0438\u0439") devaOutput = "\u0940";
+                                else devaOutput = "\u0942";
                             }
                             sb.Append(devaOutput);
                             i += 2; matched = true; lastWasConsonant = false;
                         }
                         else
                         {
-                            bool isNiggahita = (devaOutput == "ं");
-                            if (lastWasConsonant && !isNiggahita) sb.Append('्');
+                            bool isNiggahita = (devaOutput == "\u0902");
+                            if (lastWasConsonant && !isNiggahita) sb.Append('\u094D');
                             sb.Append(devaOutput);
                             i += 2; matched = true; lastWasConsonant = !isNiggahita;
                         }
@@ -185,25 +185,25 @@ namespace CST.Conversion
                     string? devaOutput = (c < MapLen) ? singleMap[c] : null;
                     if (devaOutput != null)
                     {
-                        if (c == 'а') // 'а' (a)
+                        if (c == '\u0430') // '\u0430' (a)
                         {
                             if (lastWasConsonant) { i++; lastWasConsonant = false; continue; } // inherent 'a'
                             lastWasConsonant = false;
                         }
-                        else if (c == 'и' || c == 'у' || c == 'з' || c == 'о') // и у з о
+                        else if (c == '\u0438' || c == '\u0443' || c == '\u0437' || c == '\u043E') // \u0438 \u0443 \u0437 \u043E
                         {
                             if (lastWasConsonant)
                             {
-                                if (c == 'и') devaOutput = "ि"; // dependent i
-                                else if (c == 'у') devaOutput = "ु"; // dependent u
-                                else if (c == 'з') devaOutput = "े"; // dependent e
-                                else devaOutput = "ो"; // dependent o
+                                if (c == '\u0438') devaOutput = "\u093F"; // dependent i
+                                else if (c == '\u0443') devaOutput = "\u0941"; // dependent u
+                                else if (c == '\u0437') devaOutput = "\u0947"; // dependent e
+                                else devaOutput = "\u094B"; // dependent o
                             }
                             lastWasConsonant = false;
                         }
                         else if (IsCyrillicConsonant(c))
                         {
-                            if (lastWasConsonant) sb.Append('्'); // cluster -> virama first
+                            if (lastWasConsonant) sb.Append('\u094D'); // cluster -> virama first
                             lastWasConsonant = true;
                         }
                         else if (c >= '0' && c <= '9')
@@ -239,7 +239,7 @@ namespace CST.Conversion
             {
                 bool matched = false;
 
-                // Try 4-character mappings first (д\u0307\u0323х)
+                // Try 4-character mappings first (\u0434\u0307\u0323\u0445)
                 if (i + 3 < cyrlStr.Length)
                 {
                     string fourChar = cyrlStr.Substring(i, 4);
@@ -291,15 +291,15 @@ namespace CST.Conversion
                         string devaOutput = cyrl2Dev[twoChar];
 
                         // Handle double-letter vowels: check if last was consonant
-                        if (twoChar == "аа" || twoChar == "ий" || twoChar == "уу")
+                        if (twoChar == "\u0430\u0430" || twoChar == "\u0438\u0439" || twoChar == "\u0443\u0443")
                         {
                             if (lastWasConsonant)
                             {
-                                // COMMON CASE: After consonant → dependent long vowel
-                                // "аа" → dependent ā (U+093E), "ий" → dependent ī (U+0940), "уу" → dependent ū (U+0942)
-                                if (twoChar == "аа") devaOutput = "\u093E"; // dependent long ā
-                                else if (twoChar == "ий") devaOutput = "\u0940"; // dependent long ī
-                                else if (twoChar == "уу") devaOutput = "\u0942"; // dependent long ū
+                                // COMMON CASE: After consonant \u2192 dependent long vowel
+                                // "\u0430\u0430" \u2192 dependent \u0101 (U+093E), "\u0438\u0439" \u2192 dependent \u012B (U+0940), "\u0443\u0443" \u2192 dependent \u016B (U+0942)
+                                if (twoChar == "\u0430\u0430") devaOutput = "\u093E"; // dependent long \u0101
+                                else if (twoChar == "\u0438\u0439") devaOutput = "\u0940"; // dependent long \u012B
+                                else if (twoChar == "\u0443\u0443") devaOutput = "\u0942"; // dependent long \u016B
 
                                 sb.Append(devaOutput);
                                 i += 2;
@@ -307,7 +307,7 @@ namespace CST.Conversion
                             }
                             else
                             {
-                                // RARE CASE: Not after consonant → independent long vowel
+                                // RARE CASE: Not after consonant \u2192 independent long vowel
                                 // Use the mapping from cyrl2Dev dictionary (already set to independent vowels)
                                 sb.Append(devaOutput);
                                 i += 2;
@@ -320,7 +320,7 @@ namespace CST.Conversion
                             // Check if this is niggahita (NOT a consonant - no virama needed)
                             bool isNiggahita = (devaOutput == "\u0902");
 
-                            // Aspirates (гх, жх, дх, бх) and other 2-char consonants
+                            // Aspirates (\u0433\u0445, \u0436\u0445, \u0434\u0445, \u0431\u0445) and other 2-char consonants
                             // If last was a consonant and this is not niggahita, add virama for cluster
                             if (lastWasConsonant && !isNiggahita)
                             {
@@ -345,8 +345,8 @@ namespace CST.Conversion
                     {
                         string devaOutput = cyrlChar2Dev[c];
 
-                        // Special handling for 'а' (a)
-                        if (c == 'а')
+                        // Special handling for '\u0430' (a)
+                        if (c == '\u0430')
                         {
                             // If preceded by a consonant, skip it (inherent 'a')
                             if (lastWasConsonant)
@@ -358,16 +358,16 @@ namespace CST.Conversion
                             // Otherwise it's independent vowel 'a'
                             lastWasConsonant = false;
                         }
-                        // Single vowels (и, у, з, о)
-                        else if (c == 'и' || c == 'у' || c == 'з' || c == 'о')
+                        // Single vowels (\u0438, \u0443, \u0437, \u043E)
+                        else if (c == '\u0438' || c == '\u0443' || c == '\u0437' || c == '\u043E')
                         {
                             if (lastWasConsonant)
                             {
                                 // Use dependent vowel form
-                                if (c == 'и') devaOutput = "\u093F"; // dependent i
-                                else if (c == 'у') devaOutput = "\u0941"; // dependent u
-                                else if (c == 'з') devaOutput = "\u0947"; // dependent e
-                                else if (c == 'о') devaOutput = "\u094B"; // dependent o
+                                if (c == '\u0438') devaOutput = "\u093F"; // dependent i
+                                else if (c == '\u0443') devaOutput = "\u0941"; // dependent u
+                                else if (c == '\u0437') devaOutput = "\u0947"; // dependent e
+                                else if (c == '\u043E') devaOutput = "\u094B"; // dependent o
                             }
                             lastWasConsonant = false;
                         }
@@ -405,11 +405,11 @@ namespace CST.Conversion
 
         private static bool IsCyrillicConsonant(char c)
         {
-            // Check if character is a Cyrillic consonant (г, к, ж, ч, д, т, б, п, н, м, я, р, л, в, с, х)
-            return c == 'г' || c == 'к' || c == 'ж' || c == 'ч' ||
-                   c == 'д' || c == 'т' || c == 'б' || c == 'п' ||
-                   c == 'н' || c == 'м' || c == 'я' || c == 'р' ||
-                   c == 'л' || c == 'в' || c == 'с' || c == 'х';
+            // Check if character is a Cyrillic consonant (\u0433, \u043A, \u0436, \u0447, \u0434, \u0442, \u0431, \u043F, \u043D, \u043C, \u044F, \u0440, \u043B, \u0432, \u0441, \u0445)
+            return c == '\u0433' || c == '\u043A' || c == '\u0436' || c == '\u0447' ||
+                   c == '\u0434' || c == '\u0442' || c == '\u0431' || c == '\u043F' ||
+                   c == '\u043D' || c == '\u043C' || c == '\u044F' || c == '\u0440' ||
+                   c == '\u043B' || c == '\u0432' || c == '\u0441' || c == '\u0445';
         }
 
         private static bool IsDevanagariConsonant(char c)

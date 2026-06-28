@@ -156,7 +156,7 @@ namespace CST.Conversion
             string thai = sb.ToString();
 
             // Post-processing: combine i + niggahita into single character
-            // In Thai Pali, iṃ has a special single Unicode character
+            // In Thai Pali, i\u1E43 has a special single Unicode character
             thai = thai.Replace("\u0E34\u0E4D", "\u0E36");
 
             return thai;
