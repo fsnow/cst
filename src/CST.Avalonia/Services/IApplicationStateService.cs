@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Conversion;
@@ -77,14 +78,14 @@ public interface IApplicationStateService
     void UpdatePreferences(ApplicationPreferences preferences);
 
     /// <summary>
-    /// Get tree expansion states as boolean array (for debugging)
+    /// Get the path-keys of expanded tree nodes (identity-keyed; survives tree additions/reorder). (#64)
     /// </summary>
-    bool[] GetTreeExpansionStates();
+    List<string> GetExpandedNodeKeys();
 
     /// <summary>
-    /// Set tree expansion states from boolean array
+    /// Set the path-keys of expanded tree nodes. (#64)
     /// </summary>
-    void SetTreeExpansionStates(bool[] states, int treeVersion, int totalNodeCount);
+    void SetExpandedNodeKeys(List<string> expandedNodeKeys);
 
     /// <summary>
     /// Add book to recent books list

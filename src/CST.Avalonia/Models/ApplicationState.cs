@@ -64,20 +64,11 @@ public class OpenBookDialogState
     public double? Y { get; set; }
 
     /// <summary>
-    /// Tree expansion states stored as boolean array for easy JSON debugging
-    /// Each boolean corresponds to a tree node in traversal order
+    /// Path-keys of the expanded tree nodes (node identity = path of Devanagari text from the root).
+    /// Identity-keyed rather than positional, so the saved expansion survives future tree additions or
+    /// reordering. (#64)
     /// </summary>
-    public List<bool> TreeExpansionStates { get; set; } = new();
-
-    /// <summary>
-    /// Version of tree structure when states were saved (for validation)
-    /// </summary>
-    public int TreeVersion { get; set; }
-
-    /// <summary>
-    /// Total number of nodes when state was saved (for validation)
-    /// </summary>
-    public int TotalNodeCount { get; set; }
+    public List<string> ExpandedNodeKeys { get; set; } = new();
 
     /// <summary>
     /// Selected book path for restoring selection

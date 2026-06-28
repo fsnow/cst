@@ -337,16 +337,14 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         MarkDirty(); // #62
     }
 
-    public bool[] GetTreeExpansionStates()
+    public List<string> GetExpandedNodeKeys()
     {
-        return Current.OpenBookDialog.TreeExpansionStates.ToArray();
+        return new List<string>(Current.OpenBookDialog.ExpandedNodeKeys);
     }
 
-    public void SetTreeExpansionStates(bool[] states, int treeVersion, int totalNodeCount)
+    public void SetExpandedNodeKeys(List<string> expandedNodeKeys)
     {
-        Current.OpenBookDialog.TreeExpansionStates = states.ToList();
-        Current.OpenBookDialog.TreeVersion = treeVersion;
-        Current.OpenBookDialog.TotalNodeCount = totalNodeCount;
+        Current.OpenBookDialog.ExpandedNodeKeys = expandedNodeKeys ?? new List<string>();
         FireStateChangedEvent();
         MarkDirty(); // #62
     }
@@ -522,13 +520,7 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
             }
         }
 
-        // Check for tree state consistency
-        if (state.OpenBookDialog.TreeExpansionStates.Count != state.OpenBookDialog.TotalNodeCount && 
-            state.OpenBookDialog.TotalNodeCount > 0)
-        {
-            warnings.Add("Tree expansion state count mismatch - tree structure may have changed");
-            result.IsValid = false;
-        }
+        // (Tree expansion is now identity-keyed (#64), so no positional count/version consistency check.)
 
         result.Errors = errors.ToArray();
         result.Warnings = warnings.ToArray();
@@ -554,14 +546,6 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
 
         // Remove invalid book windows
         state.BookWindows.RemoveAll(w => w.BookIndex < 0);
-
-        // Clear tree expansion states if count mismatch
-        if (state.OpenBookDialog.TreeExpansionStates.Count != state.OpenBookDialog.TotalNodeCount)
-        {
-            state.OpenBookDialog.TreeExpansionStates.Clear();
-            state.OpenBookDialog.TotalNodeCount = 0;
-            state.OpenBookDialog.TreeVersion = 0;
-        }
 
         _logger.LogInformation("Applied fixes to application state");
     }

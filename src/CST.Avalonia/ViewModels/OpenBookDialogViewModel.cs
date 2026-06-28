@@ -409,12 +409,9 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
             if (BookTree.Count == 0)
                 return;
 
-            var expansionStates = _treeStateService.CollectExpansionStates(BookTree);
-            var treeVersion = _treeStateService.GenerateTreeVersion(BookTree);
-            var totalNodeCount = _treeStateService.CountAllNodes(BookTree);
+            var expandedKeys = _treeStateService.CollectExpandedKeys(BookTree);
+            _stateService.SetExpandedNodeKeys(expandedKeys);
 
-            _stateService.SetTreeExpansionStates(expansionStates, treeVersion, totalNodeCount);
-            
             // Also save selected book path for restoration
             if (SelectedNode?.CstBook != null)
             {
@@ -423,7 +420,7 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
                 _stateService.UpdateOpenBookDialogState(dialogState);
             }
 
-            _logger.LogDebug("Saved tree expansion state with {NodeCount} nodes", totalNodeCount);
+            _logger.LogDebug("Saved {Count} expanded tree node keys", expandedKeys.Count);
         }
         catch (Exception ex)
         {
@@ -442,30 +439,21 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
                 return;
 
             var dialogState = _stateService.Current.OpenBookDialog;
-            var savedStates = dialogState.TreeExpansionStates.ToArray();
-            
-            if (savedStates.Length == 0)
+            var savedKeys = dialogState.ExpandedNodeKeys;
+
+            if (savedKeys.Count == 0)
             {
-                _logger.LogDebug("No saved tree expansion states found");
+                _logger.LogDebug("No saved tree expansion keys found");
                 return;
             }
 
-            // Validate tree structure hasn't changed
-            if (!_treeStateService.ValidateTreeStructure(BookTree, dialogState.TreeVersion, dialogState.TotalNodeCount))
-            {
-                _logger.LogInformation("Tree structure changed, skipping expansion state restoration");
-                return;
-            }
+            // Identity-keyed restore: surviving nodes keep their expansion even if the tree gained or
+            // reordered entries (no all-or-nothing structure check anymore). (#64)
+            var restored = _treeStateService.ApplyExpandedKeys(BookTree, savedKeys);
+            _logger.LogDebug("Restored expansion for {Restored} of {Saved} saved node keys", restored, savedKeys.Count);
 
-            // Apply saved expansion states
-            var success = _treeStateService.ApplyExpansionStates(BookTree, savedStates);
-            if (success)
-            {
-                _logger.LogDebug("Restored tree expansion state for {NodeCount} nodes", savedStates.Length);
-                
-                // Try to restore selected book
-                await RestoreSelectedBook(dialogState.SelectedBookPath);
-            }
+            // Try to restore selected book
+            await RestoreSelectedBook(dialogState.SelectedBookPath);
         }
         catch (Exception ex)
         {
