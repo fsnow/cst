@@ -6,9 +6,69 @@ namespace CST.Conversion
 {
     public static class ScriptConverter
     {
-        static ScriptConverter()
+        // Direct converters for specific (from, to) pairs. Any pair not listed here (and not an identity
+        // conversion) is routed through Devanagari - the pivot hub - via _toDevanagari. (#75)
+        private static readonly Dictionary<(Script From, Script To), Func<string, string>> _direct = new()
         {
-        }
+            [(Script.Ipe, Script.Latin)] = Ipe2Latn.Convert,
+            [(Script.Ipe, Script.Devanagari)] = Ipe2Deva.Convert,
+
+            [(Script.Devanagari, Script.Ipe)] = Deva2Ipe.Convert,
+            [(Script.Devanagari, Script.Bengali)] = Deva2Beng.Convert,
+            [(Script.Devanagari, Script.Cyrillic)] = Deva2Cyrl.Convert,
+            [(Script.Devanagari, Script.Gujarati)] = Deva2Gujr.Convert,
+            [(Script.Devanagari, Script.Gurmukhi)] = Deva2Guru.Convert,
+            [(Script.Devanagari, Script.Kannada)] = Deva2Knda.Convert,
+            [(Script.Devanagari, Script.Khmer)] = Deva2Khmr.Convert,
+            [(Script.Devanagari, Script.Latin)] = Deva2Latn.Convert,
+            [(Script.Devanagari, Script.Malayalam)] = Deva2Mlym.Convert,
+            [(Script.Devanagari, Script.Myanmar)] = Deva2Mymr.Convert,
+            [(Script.Devanagari, Script.Sinhala)] = Deva2Sinh.Convert,
+            [(Script.Devanagari, Script.Telugu)] = Deva2Telu.Convert,
+            [(Script.Devanagari, Script.Thai)] = Deva2Thai.Convert,
+            [(Script.Devanagari, Script.Tibetan)] = Deva2Tibt.Convert,
+
+            [(Script.Latin, Script.Ipe)] = Latn2Ipe.Convert,
+            [(Script.Latin, Script.Devanagari)] = Latn2Deva.Convert,
+
+            [(Script.Bengali, Script.Devanagari)] = Beng2Deva.Convert,
+            [(Script.Gujarati, Script.Devanagari)] = Gujr2Deva.Convert,
+            [(Script.Gurmukhi, Script.Devanagari)] = Guru2Deva.Convert,
+            [(Script.Kannada, Script.Devanagari)] = Knda2Deva.Convert,
+            [(Script.Malayalam, Script.Devanagari)] = Mlym2Deva.Convert,
+            [(Script.Myanmar, Script.Devanagari)] = Mymr2Deva.Convert,
+            [(Script.Sinhala, Script.Devanagari)] = Sinh2Deva.Convert,
+            [(Script.Thai, Script.Devanagari)] = Thai2Deva.Convert,
+            [(Script.Khmer, Script.Devanagari)] = Khmr2Deva.Convert,
+            [(Script.Tibetan, Script.Devanagari)] = Tibt2Deva.Convert,
+            [(Script.Telugu, Script.Devanagari)] = Telu2Deva.Convert,
+            [(Script.Cyrillic, Script.Devanagari)] = Cyrl2Deva.Convert,
+
+            [(Script.Unknown, Script.Ipe)] = Any2Ipe.Convert,
+        };
+
+        // How to reach Devanagari from a given input script, for conversions that pivot through it
+        // (e.g. Bengali -> Thai = Bengali -> Devanagari -> Thai). Latin and Unknown deliberately use the
+        // script-auto-detecting Any2Deva here, matching the original dispatch's non-Devanagari-output
+        // paths. Devanagari itself is absent: it is the hub and never pivots. (#75)
+        private static readonly Dictionary<Script, Func<string, string>> _toDevanagari = new()
+        {
+            [Script.Ipe] = Ipe2Deva.Convert,
+            [Script.Latin] = Any2Deva.Convert,
+            [Script.Bengali] = Beng2Deva.Convert,
+            [Script.Gujarati] = Gujr2Deva.Convert,
+            [Script.Gurmukhi] = Guru2Deva.Convert,
+            [Script.Kannada] = Knda2Deva.Convert,
+            [Script.Malayalam] = Mlym2Deva.Convert,
+            [Script.Myanmar] = Mymr2Deva.Convert,
+            [Script.Sinhala] = Sinh2Deva.Convert,
+            [Script.Thai] = Thai2Deva.Convert,
+            [Script.Khmer] = Khmr2Deva.Convert,
+            [Script.Tibetan] = Tibt2Deva.Convert,
+            [Script.Telugu] = Telu2Deva.Convert,
+            [Script.Cyrillic] = Cyrl2Deva.Convert,
+            [Script.Unknown] = Any2Deva.Convert,
+        };
 
         public static string Convert(string str, Script inputScript, Script outputScript)
         {
@@ -23,159 +83,18 @@ namespace CST.Conversion
             if (string.IsNullOrEmpty(str))
                 return str;
 
-            string outStr = "";
+            string outStr;
             if (inputScript == outputScript)
-            {
                 outStr = str;
-            }
-            else if (inputScript == Script.Ipe)
-            {
-                if (outputScript == Script.Latin)
-                {
-                    outStr = Ipe2Latn.Convert(str);
-                }
-                else if (outputScript == Script.Devanagari)
-                {
-                    outStr = Ipe2Deva.Convert(str);
-                }
-                else
-                {
-                    outStr = Convert(Convert(str, Script.Ipe, Script.Devanagari), Script.Devanagari, outputScript);
-                }
-            }
-            else if (inputScript == Script.Devanagari)
-            {
-                if (outputScript == Script.Ipe)
-                    outStr = Deva2Ipe.Convert(str);
-                else if (outputScript == Script.Bengali)
-                    outStr = Deva2Beng.Convert(str);
-                else if (outputScript == Script.Cyrillic)
-                    outStr = Deva2Cyrl.Convert(str);
-                else if (outputScript == Script.Gujarati)
-                    outStr = Deva2Gujr.Convert(str);
-                else if (outputScript == Script.Gurmukhi)
-                    outStr = Deva2Guru.Convert(str);
-                else if (outputScript == Script.Kannada)
-                    outStr = Deva2Knda.Convert(str);
-                else if (outputScript == Script.Khmer)
-                    outStr = Deva2Khmr.Convert(str);
-                else if (outputScript == Script.Latin)
-                    outStr = Deva2Latn.Convert(str);
-                else if (outputScript == Script.Malayalam)
-                    outStr = Deva2Mlym.Convert(str);
-                else if (outputScript == Script.Myanmar)
-                    outStr = Deva2Mymr.Convert(str);
-                else if (outputScript == Script.Sinhala)
-                    outStr = Deva2Sinh.Convert(str);
-                else if (outputScript == Script.Telugu)
-                    outStr = Deva2Telu.Convert(str);
-                else if (outputScript == Script.Thai)
-                    outStr = Deva2Thai.Convert(str);
-                else if (outputScript == Script.Tibetan)
-                    outStr = Deva2Tibt.Convert(str);
-            }
-            else if (inputScript == Script.Latin)
-            {
-                if (outputScript == Script.Ipe)
-                    outStr = Latn2Ipe.Convert(str);
-                else if (outputScript == Script.Devanagari)
-                    outStr = Latn2Deva.Convert(str);
-                else
-                {
-                    outStr = Convert(Any2Deva.Convert(str), Script.Devanagari, outputScript);
-                }
-            }
-            else if (inputScript == Script.Bengali)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Beng2Deva.Convert(str);
-                else
-                    outStr = Convert(Beng2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Gujarati)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Gujr2Deva.Convert(str);
-                else
-                    outStr = Convert(Gujr2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Gurmukhi)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Guru2Deva.Convert(str);
-                else
-                    outStr = Convert(Guru2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Kannada)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Knda2Deva.Convert(str);
-                else
-                    outStr = Convert(Knda2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Malayalam)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Mlym2Deva.Convert(str);
-                else
-                    outStr = Convert(Mlym2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Myanmar)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Mymr2Deva.Convert(str);
-                else
-                    outStr = Convert(Mymr2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Sinhala)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Sinh2Deva.Convert(str);
-                else
-                    outStr = Convert(Sinh2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Thai)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Thai2Deva.Convert(str);
-                else
-                    outStr = Convert(Thai2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Khmer)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Khmr2Deva.Convert(str);
-                else
-                    outStr = Convert(Khmr2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Tibetan)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Tibt2Deva.Convert(str);
-                else
-                    outStr = Convert(Tibt2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Telugu)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Telu2Deva.Convert(str);
-                else
-                    outStr = Convert(Telu2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Cyrillic)
-            {
-                if (outputScript == Script.Devanagari)
-                    outStr = Cyrl2Deva.Convert(str);
-                else
-                    outStr = Convert(Cyrl2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
-            else if (inputScript == Script.Unknown)
-            {
-                if (outputScript == Script.Ipe)
-                    outStr = Any2Ipe.Convert(str);
-                else
-                    outStr = Convert(Any2Deva.Convert(str), Script.Devanagari, outputScript);
-            }
+            else if (_direct.TryGetValue((inputScript, outputScript), out var convert))
+                outStr = convert(str);
+            else if (_toDevanagari.TryGetValue(inputScript, out var toDeva))
+                // Pivot through Devanagari, then convert on to the target script.
+                outStr = Convert(toDeva(str), Script.Devanagari, outputScript);
+            else
+                // No conversion path (e.g. Devanagari -> an unsupported output script): the original
+                // dispatch left outStr as "" in this case, so preserve that.
+                outStr = "";
 
             if (toTitleCase && outputScript == Script.Latin)
                 return ToTitleCase(outStr);
