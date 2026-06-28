@@ -81,29 +81,24 @@ public class OpenBookDialogState
 /// </summary>
 public class SearchDialogState
 {
-    public bool IsVisible { get; set; }
-    public double Width { get; set; } = 600;
-    public double Height { get; set; } = 400;
-    public double? X { get; set; }
-    public double? Y { get; set; }
+    // The user's query text, restored verbatim. (#87)
+    public string SearchText { get; set; } = string.Empty;
 
-    // Search Parameters
-    public string SearchTerms { get; set; } = string.Empty;
-    public int ContextDistance { get; set; } = 50;
-    public List<int> SelectedBooks { get; set; } = new();
-    public List<int> SelectedWords { get; set; } = new();
+    // Search mode (Exact is implicit when no special chars are present; the UI offers Wildcard/Regex).
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public SearchMode SearchMode { get; set; } = SearchMode.Wildcard;
 
-    // Search Options
-    public bool SearchVinaya { get; set; } = true;
-    public bool SearchSutta { get; set; } = true;
-    public bool SearchAbhidhamma { get; set; } = true;
-    public bool SearchMula { get; set; } = true;
-    public bool SearchAtthakatha { get; set; } = true;
-    public bool SearchTika { get; set; } = true;
-    public bool SearchOtherTexts { get; set; } = true;
-    public bool SearchAll { get; set; } = true;
-    public int SearchUse { get; set; }
-    public int BookCollectionSelected { get; set; }
+    // Proximity window (words) for multi-unit queries.
+    public int ProximityDistance { get; set; } = 10;
+
+    // Book-type filters (match SearchViewModel.Include*; all on by default).
+    public bool IncludeVinaya { get; set; } = true;
+    public bool IncludeSutta { get; set; } = true;
+    public bool IncludeAbhidhamma { get; set; } = true;
+    public bool IncludeMula { get; set; } = true;
+    public bool IncludeAttha { get; set; } = true;
+    public bool IncludeTika { get; set; } = true;
+    public bool IncludeOther { get; set; } = true;
 }
 
 /// <summary>

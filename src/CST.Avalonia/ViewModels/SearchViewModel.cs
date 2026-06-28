@@ -27,6 +27,10 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     private readonly ISearchService _searchService;
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
+    private readonly IApplicationStateService _applicationStateService;
+    // True while ApplyState() is restoring saved values, so the save-on-change handler doesn't echo them
+    // straight back. (#87)
+    private bool _suppressStateSave;
     private readonly ILogger<SearchViewModel> _logger;
     private CancellationTokenSource? _searchCancellation;
     private Action<Script>? _scriptChangedHandler;
@@ -36,6 +40,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         App.ServiceProvider?.GetService(typeof(ISearchService)) as ISearchService ?? throw new InvalidOperationException("SearchService not available"),
         App.ServiceProvider?.GetService(typeof(IScriptService)) as IScriptService ?? throw new InvalidOperationException("ScriptService not available"),
         App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService ?? throw new InvalidOperationException("FontService not available"),
+        App.ServiceProvider?.GetService(typeof(IApplicationStateService)) as IApplicationStateService ?? throw new InvalidOperationException("ApplicationStateService not available"),
         App.ServiceProvider?.GetService(typeof(ILogger<SearchViewModel>)) as ILogger<SearchViewModel> ?? throw new InvalidOperationException("Logger not available"))
     {
     }
@@ -44,11 +49,13 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         ISearchService searchService,
         IScriptService scriptService,
         IFontService fontService,
+        IApplicationStateService applicationStateService,
         ILogger<SearchViewModel> logger)
     {
         _searchService = searchService;
         _scriptService = scriptService;
         _fontService = fontService;
+        _applicationStateService = applicationStateService;
         _logger = logger;
 
         // Configure Dock properties
@@ -138,6 +145,10 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             })
             .Subscribe();
 
+        // Restore saved search inputs and start persisting changes. Done after the live-search wiring
+        // above so a restored query repopulates its results. (#87)
+        SetupStatePersistence();
+
         this.WhenActivated(disposables =>
         {
             // Update occurrences when term selection changes
@@ -158,6 +169,74 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
                 .Subscribe(_ => UpdateStatistics())
                 .DisposeWith(disposables);
         });
+    }
+
+    // --- Search-pane state persistence (#87) -------------------------------------------------------
+
+    private void SetupStatePersistence()
+    {
+        // Restore the saved search inputs. Setting SearchText last lets the live search-as-you-type
+        // repopulate results for the restored query.
+        ApplyState(_applicationStateService.Current.SearchDialog);
+
+        // Persist whenever a saved field changes. UpdateSearchDialogState marks the state dirty (the 60s
+        // timer + the shutdown save handle the disk write) and its StateChanged listeners are cheap, so a
+        // per-change call is fine - and keeps the in-memory state current for the shutdown save.
+        this.PropertyChanged += (_, e) =>
+        {
+            if (!_suppressStateSave && IsPersistableProperty(e.PropertyName))
+                _applicationStateService.UpdateSearchDialogState(CaptureState());
+        };
+    }
+
+    private static bool IsPersistableProperty(string? name) =>
+        name is nameof(SearchText) or nameof(SelectedSearchMode) or nameof(ProximityDistance)
+            or nameof(IncludeVinaya) or nameof(IncludeSutta) or nameof(IncludeAbhidhamma)
+            or nameof(IncludeMula) or nameof(IncludeAttha) or nameof(IncludeTika) or nameof(IncludeOther);
+
+    /// <summary>Snapshot the persistable search inputs into a <see cref="SearchDialogState"/>. (#87)</summary>
+    internal SearchDialogState CaptureState() => new()
+    {
+        SearchText = SearchText ?? string.Empty,
+        SearchMode = SelectedSearchMode?.Value ?? SearchMode.Wildcard,
+        ProximityDistance = ProximityDistance,
+        IncludeVinaya = IncludeVinaya,
+        IncludeSutta = IncludeSutta,
+        IncludeAbhidhamma = IncludeAbhidhamma,
+        IncludeMula = IncludeMula,
+        IncludeAttha = IncludeAttha,
+        IncludeTika = IncludeTika,
+        IncludeOther = IncludeOther,
+    };
+
+    /// <summary>Apply saved search inputs to the view model (no-op if null). (#87)</summary>
+    internal void ApplyState(SearchDialogState? state)
+    {
+        if (state == null)
+            return;
+
+        _suppressStateSave = true;
+        try
+        {
+            IncludeVinaya = state.IncludeVinaya;
+            IncludeSutta = state.IncludeSutta;
+            IncludeAbhidhamma = state.IncludeAbhidhamma;
+            IncludeMula = state.IncludeMula;
+            IncludeAttha = state.IncludeAttha;
+            IncludeTika = state.IncludeTika;
+            IncludeOther = state.IncludeOther;
+            ProximityDistance = state.ProximityDistance;
+
+            var mode = SearchModes.FirstOrDefault(m => m.Value == state.SearchMode);
+            if (mode != null)
+                SelectedSearchMode = mode;
+
+            SearchText = state.SearchText; // set last - triggers the live search-as-you-type
+        }
+        finally
+        {
+            _suppressStateSave = false;
+        }
     }
 
     private void SetupFontAndScriptHandlers()
