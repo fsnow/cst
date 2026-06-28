@@ -15,6 +15,7 @@ CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform P
 - **The docking UI is non-negotiable** — never remove, replace, or "simplify away" the dock-based interface.
 - **CEF/WebView: never carry a *live* WebView across a re-parent** — it SIGSEGVs on macOS. Float/unfloat go through the controlled button paths (dispose-before-move + fresh browser). See [docs/architecture/DOCK_SUBSYSTEM.md](docs/architecture/DOCK_SUBSYSTEM.md).
 - **Downloaded source PDFs are a preservation mechanism, not an evictable cache** — never propose deleting them.
+- **Never suggest pausing, "calling it", or a "stopping point"** — you have no sense of elapsed time, so it is never your call. Finish the task, report the result, and either continue or wait for the next instruction. The user decides when to stop.
 
 ## Build / run / test
 ```bash
