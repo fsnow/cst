@@ -8,6 +8,10 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> gujr2Deva;
 
+        // Fast reverse-lookup table for the optimized Convert(): map[c] = Deva char, '\0' = pass through. (#86)
+        private const int MapLen = 0x0B00; // covers the Gujarati block (source chars)
+        private static readonly char[] map = new char[MapLen];
+
         static Gujr2Deva()
         {
             gujr2Deva = new Dictionary<char, object>();
@@ -97,9 +101,17 @@ namespace CST.Conversion
             gujr2Deva['\u0AED'] = '\u096D';
             gujr2Deva['\u0AEE'] = '\u096E';
             gujr2Deva['\u0AEF'] = '\u096F';
+
+            // Build the fast reverse table from the same data (#86).
+            foreach (var kvp in gujr2Deva)
+                if (kvp.Key < MapLen) map[kvp.Key] = kvp.Value is char ch ? ch : ((string)kvp.Value)[0];
         }
 
-        public static string Convert(string str)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string str)
         {
             StringBuilder sb = new StringBuilder();
             foreach (char c in str.ToCharArray())
@@ -111,6 +123,26 @@ namespace CST.Conversion
             }
 
             return sb.ToString();
+        }
+
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Replaces the
+        // per-char dictionary lookup with one scan over a char buffer using a reverse char[] table. Pure
+        // dictionary substitution - no positional rules.
+        public static string Convert(string str)
+        {
+            if (string.IsNullOrEmpty(str))
+                return str;
+
+            int n = str.Length;
+            var buf = new char[n];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = str[i];
+                char m = (c < MapLen) ? map[c] : '\0';
+                buf[k++] = (m != '\0') ? m : c; // mapped Deva char, else pass through
+            }
+            return new string(buf, 0, k);
         }
     }
 }

@@ -10,6 +10,11 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> dev2Thai;
 
+        // Fast lookup for the optimized Convert(): map[c] = replacement string, null = pass through. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly string[] map = new string[MapLen];
+        private static int maxValLen = 1;
+
         static Deva2Thai()
         {
             dev2Thai = new Dictionary<char, object>();
@@ -97,6 +102,14 @@ namespace CST.Conversion
             dev2Thai['\u0970'] = '.'; // Dev. abbreviation sign
             dev2Thai['\u200C'] = ""; // ZWNJ (remove)
             dev2Thai['\u200D'] = ""; // ZWJ (remove)
+
+            // Build the fast lookup table from the same data (#86).
+            foreach (var kvp in dev2Thai)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length > 0) { map[kvp.Key] = v; if (v.Length > maxValLen) maxValLen = v.Length; }
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -112,7 +125,11 @@ namespace CST.Conversion
 
         // more generalized, reusable conversion method:
         // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
             // first remove all the ZWJs
             devStr = devStr.Replace("\u200D", "");
@@ -143,6 +160,57 @@ namespace CST.Conversion
             thai = thai.Replace("\u0E34\u0E4D", "\u0E36");
 
             return thai;
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Folds the ZWJ
+        // removal, the two e/o-vowel reorder regexes, the dict map, and the i+niggahita combine into one scan.
+        // A consonant (U+0915-U+0939) immediately followed by the e (U+0947) or o (U+094B) dependent vowel
+        // emits the Thai pre-vowel (U+0E40/U+0E42) BEFORE the consonant; U+0E34 + U+0E4D collapses to U+0E36.
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            var buf = new char[n * maxValLen + 1];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x200D) continue; // ZWJ removed first (reference step 1)
+                if (c == 0x200C) continue; // ZWNJ -> "" in the dict pass
+
+                // reorder: consonant + e/o dependent vowel -> Thai pre-vowel then consonant. ZWJ between the
+                // two was already removed before the reference's reorder regex, so skip it when peeking.
+                if (c >= 0x0915 && c <= 0x0939)
+                {
+                    int j = i + 1;
+                    while (j < n && devStr[j] == 0x200D) j++;
+                    char next = (j < n) ? devStr[j] : '\0';
+                    if (next == 0x0947 || next == 0x094B)
+                    {
+                        k = Emit(buf, k, next == 0x0947 ? (char)0x0E40 : (char)0x0E42);
+                        k = Emit(buf, k, (c < MapLen && map[c] != null) ? map[c][0] : c); // consonant (single-char)
+                        i = j; // consume the vowel (and any skipped ZWJ)
+                        continue;
+                    }
+                }
+
+                string? m = (c < MapLen) ? map[c] : null;
+                if (m == null) k = Emit(buf, k, c);
+                else for (int p = 0; p < m.Length; p++) k = Emit(buf, k, m[p]);
+            }
+            return new string(buf, 0, k);
+        }
+
+        // Append one Thai char, collapsing i (U+0E34) + niggahita (U+0E4D) into U+0E36. (#86)
+        private static int Emit(char[] buf, int k, char x)
+        {
+            buf[k++] = x;
+            if (x == 0x0E4D && k >= 2 && buf[k - 2] == 0x0E34) { buf[k - 2] = (char)0x0E36; k--; }
+            return k;
         }
 
         public static string ConvertDandas(string str)

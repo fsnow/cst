@@ -9,6 +9,13 @@ namespace CST.Conversion
         private static IDictionary<string, string> latn2Ipe;
         private static ISet<char> latnAspiratables;
 
+        // Fast tables for the optimized Convert(): map1[c] = IPE char for a single Latin code point ('\0' =
+        // pass through); map2[c] = IPE char for an aspirate (Latin consonant + 'h'). All IPE values are one
+        // char. map2[c] != '\0' also signals that c is aspiratable. (#86)
+        private const int MapLen = 0x1E70; // covers the Latin Pali letters incl. U+1E6D (t underdot)
+        private static readonly char[] map1 = new char[MapLen];
+        private static readonly char[] map2 = new char[MapLen];
+
         static Latn2Ipe()
         {
             latn2Ipe = new Dictionary<string, string>();
@@ -82,9 +89,21 @@ namespace CST.Conversion
             latnAspiratables.Add('d');
             latnAspiratables.Add('p');
             latnAspiratables.Add('b');
+
+            // Build the fast tables from the same data: single-char keys -> map1, "<c>h" aspirate keys -> map2.
+            // Every latnAspiratables entry is the first char of a 2-char key, so map2 doubles as the test. (#86)
+            foreach (var kvp in latn2Ipe)
+            {
+                if (kvp.Key.Length == 1) { if (kvp.Key[0] < MapLen) map1[kvp.Key[0]] = kvp.Value[0]; }
+                else if (kvp.Key.Length == 2 && kvp.Key[1] == 'h' && kvp.Key[0] < MapLen) map2[kvp.Key[0]] = kvp.Value[0];
+            }
         }
 
-        public static string Convert(string latn)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string latn)
         {
             StringBuilder sb = new StringBuilder();
             char[] arr = latn.ToLower().ToCharArray();
@@ -108,6 +127,35 @@ namespace CST.Conversion
             }
 
             return sb.ToString();
+        }
+
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Replaces the
+        // per-char c.ToString() dictionary lookups and the aspiratable HashSet with char[] tables. Keeps the
+        // reference's ToLower() so casing behaviour is identical.
+        public static string Convert(string latn)
+        {
+            if (string.IsNullOrEmpty(latn))
+                return latn;
+
+            string lower = latn.ToLower();
+            int n = lower.Length;
+            var buf = new char[n]; // each input char -> at most 1 IPE char; an aspirate consumes 2 -> 1
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = lower[i];
+                if (i < n - 1 && c < MapLen && map2[c] != '\0' && lower[i + 1] == 'h')
+                {
+                    buf[k++] = map2[c]; // aspirate: consonant + 'h' -> single IPE char
+                    i++;
+                }
+                else
+                {
+                    char m = (c < MapLen) ? map1[c] : '\0';
+                    buf[k++] = (m != '\0') ? m : c; // mapped IPE char, else pass through
+                }
+            }
+            return new string(buf, 0, k);
         }
     }
 }

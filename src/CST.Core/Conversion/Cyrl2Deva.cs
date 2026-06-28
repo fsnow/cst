@@ -10,6 +10,13 @@ namespace CST.Conversion
         private static IDictionary<string, string> cyrl2Dev;
         private static IDictionary<char, string> cyrlChar2Dev;
 
+        // Fast tables for the optimized Convert(): multiStarter[c] marks chars that can begin a multi-char
+        // cyrl2Dev key (so the per-position Substring lookups are only attempted when they could match);
+        // singleMap[c] is the cyrlChar2Dev value, null = not a single-char key. (#86)
+        private const int MapLen = 0x0500; // covers the Cyrillic block + ASCII digits (source chars)
+        private static readonly bool[] multiStarter = new bool[MapLen];
+        private static readonly string[] singleMap = new string[MapLen];
+
         static Cyrl2Deva()
         {
             cyrl2Dev = new Dictionary<string, string>();
@@ -93,9 +100,136 @@ namespace CST.Conversion
             cyrlChar2Dev['7'] = "\u096D";
             cyrlChar2Dev['8'] = "\u096E";
             cyrlChar2Dev['9'] = "\u096F";
+
+            // Build the fast tables: starter chars from the multi-char keys, and the single-char map. (#86)
+            foreach (var kvp in cyrl2Dev)
+                if (kvp.Key.Length > 0 && kvp.Key[0] < MapLen) multiStarter[kvp.Key[0]] = true;
+            foreach (var kvp in cyrlChar2Dev)
+                if (kvp.Key < MapLen) singleMap[kvp.Key] = kvp.Value;
         }
 
+        // Optimized (#86): byte-identical to ConvertReference (verified by tests). Same stateful algorithm, but
+        // the multi-char Substring+dictionary probes run only when the current char can start a multi-char key
+        // (multiStarter), and single-char lookups use a char-indexed table instead of c.ToString() + the dict.
         public static string Convert(string cyrlStr)
+        {
+            if (string.IsNullOrEmpty(cyrlStr))
+                return cyrlStr;
+
+            StringBuilder sb = new StringBuilder(cyrlStr.Length);
+            int i = 0;
+            bool lastWasConsonant = false;
+
+            while (i < cyrlStr.Length)
+            {
+                bool matched = false;
+                char c0 = cyrlStr[i];
+                bool starter = c0 < MapLen && multiStarter[c0]; // can this char begin a multi-char key?
+
+                // 4-char (none exist today, but kept to mirror the reference precedence exactly)
+                if (starter && i + 3 < cyrlStr.Length)
+                {
+                    string fourChar = cyrlStr.Substring(i, 4);
+                    if (cyrl2Dev.TryGetValue(fourChar, out string? four))
+                    {
+                        if (lastWasConsonant) sb.Append('्'); // virama for cluster
+                        sb.Append(four);
+                        i += 4; lastWasConsonant = true; matched = true;
+                    }
+                }
+
+                // 3-char (combining marks on consonants)
+                if (!matched && starter && i + 2 < cyrlStr.Length)
+                {
+                    string threeChar = cyrlStr.Substring(i, 3);
+                    if (cyrl2Dev.TryGetValue(threeChar, out string? devaOutput))
+                    {
+                        bool isNiggahita = (devaOutput == "ं");
+                        if (lastWasConsonant && !isNiggahita) sb.Append('्');
+                        sb.Append(devaOutput);
+                        i += 3; lastWasConsonant = !isNiggahita; matched = true;
+                    }
+                }
+
+                // 2-char (double vowels, aspirates)
+                if (!matched && starter && i + 1 < cyrlStr.Length)
+                {
+                    string twoChar = cyrlStr.Substring(i, 2);
+                    if (cyrl2Dev.TryGetValue(twoChar, out string? devaOutput))
+                    {
+                        if (twoChar == "аа" || twoChar == "ий" || twoChar == "уу")
+                        {
+                            // after a consonant these are dependent long vowels, else independent
+                            if (lastWasConsonant)
+                            {
+                                if (twoChar == "аа") devaOutput = "ा";
+                                else if (twoChar == "ий") devaOutput = "ी";
+                                else devaOutput = "ू";
+                            }
+                            sb.Append(devaOutput);
+                            i += 2; matched = true; lastWasConsonant = false;
+                        }
+                        else
+                        {
+                            bool isNiggahita = (devaOutput == "ं");
+                            if (lastWasConsonant && !isNiggahita) sb.Append('्');
+                            sb.Append(devaOutput);
+                            i += 2; matched = true; lastWasConsonant = !isNiggahita;
+                        }
+                    }
+                }
+
+                if (!matched)
+                {
+                    char c = cyrlStr[i];
+                    string? devaOutput = (c < MapLen) ? singleMap[c] : null;
+                    if (devaOutput != null)
+                    {
+                        if (c == 'а') // 'а' (a)
+                        {
+                            if (lastWasConsonant) { i++; lastWasConsonant = false; continue; } // inherent 'a'
+                            lastWasConsonant = false;
+                        }
+                        else if (c == 'и' || c == 'у' || c == 'з' || c == 'о') // и у з о
+                        {
+                            if (lastWasConsonant)
+                            {
+                                if (c == 'и') devaOutput = "ि"; // dependent i
+                                else if (c == 'у') devaOutput = "ु"; // dependent u
+                                else if (c == 'з') devaOutput = "े"; // dependent e
+                                else devaOutput = "ो"; // dependent o
+                            }
+                            lastWasConsonant = false;
+                        }
+                        else if (IsCyrillicConsonant(c))
+                        {
+                            if (lastWasConsonant) sb.Append('्'); // cluster -> virama first
+                            lastWasConsonant = true;
+                        }
+                        else if (c >= '0' && c <= '9')
+                        {
+                            lastWasConsonant = false;
+                        }
+                        sb.Append(devaOutput);
+                        i++;
+                    }
+                    else
+                    {
+                        sb.Append(c); // pass through
+                        i++;
+                        lastWasConsonant = false;
+                    }
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// FROZEN reference implementation - the correctness oracle for the optimized Convert(). Do NOT change;
+        /// tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string cyrlStr)
         {
             StringBuilder sb = new StringBuilder();
             int i = 0;

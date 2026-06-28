@@ -8,6 +8,10 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> beng2Deva;
 
+        // Fast reverse-lookup table for the optimized Convert(): map[c] = Deva char, '\0' = pass through. (#86)
+        private const int MapLen = 0x0A00; // covers the Bengali block (source chars)
+        private static readonly char[] map = new char[MapLen];
+
         static Beng2Deva()
         {
             beng2Deva = new Dictionary<char, object>();
@@ -102,9 +106,86 @@ namespace CST.Conversion
             beng2Deva['\u09ED'] = '\u096D';
             beng2Deva['\u09EE'] = '\u096E';
             beng2Deva['\u09EF'] = '\u096F';
+
+            // Build the fast reverse table from the same data (#86).
+            foreach (var kvp in beng2Deva)
+                if (kvp.Key < MapLen) map[kvp.Key] = kvp.Value is char ch ? ch : ((string)kvp.Value)[0];
         }
 
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Folds the la+nukta
+        // pre-Replace, the reverse dict map, and the 11 ZWJ-conjunct string.Replace passes into one scan.
         public static string Convert(string str)
+        {
+            if (string.IsNullOrEmpty(str))
+                return str;
+
+            int n = str.Length;
+            var buf = new char[n * 2]; // each input char -> 1 Deva char plus at most one inserted ZWJ
+            int k = 0;
+            int prevC2Index = -1; char prevC1 = '\0', prevC2 = '\0'; // last inserted conjunct, for non-overlap
+            for (int i = 0; i < n; i++)
+            {
+                char c = str[i];
+                // la (U+09B2) + nukta (U+09BC) -> Deva l-underdot (U+0933), bypassing the dict (pre-Replace)
+                if (c == 0x09B2 && i + 1 < n && str[i + 1] == 0x09BC)
+                {
+                    k = EmitDeva(buf, k, (char)0x0933, ref prevC2Index, ref prevC1, ref prevC2);
+                    i++; // consume the nukta
+                    continue;
+                }
+                char m = (c < MapLen) ? map[c] : '\0';
+                k = EmitDeva(buf, k, (m != '\0') ? m : c, ref prevC2Index, ref prevC1, ref prevC2);
+            }
+            return new string(buf, 0, k);
+        }
+
+        // Append one Deva char, inserting ZWJ into the registered conjuncts: C1 + virama + C2 -> C1 + virama
+        // + ZWJ + C2 (mirrors the reference's ordered ZWJ-conjunct Replace passes). (#86)
+        private static int EmitDeva(char[] buf, int k, char x, ref int prevC2Index, ref char prevC1, ref char prevC2)
+        {
+            buf[k++] = x;
+            if (k >= 3 && buf[k - 2] == 0x094D)
+            {
+                char c1 = buf[k - 3];
+                if (IsZwjConjunct(c1, x))
+                {
+                    // Each conjunct is one ordered, non-overlapping string.Replace in the reference. Skip only
+                    // when this match overlaps the previously inserted one AND is the SAME pair (so it belongs
+                    // to the same Replace call, which would not match overlapping text). Different pairs are
+                    // independent Replace calls and both fire.
+                    bool samePairOverlap = (k - 3 == prevC2Index) && c1 == prevC1 && x == prevC2;
+                    if (!samePairOverlap)
+                    {
+                        buf[k - 1] = (char)0x200D;
+                        buf[k++] = x;
+                        prevC2Index = k - 1; prevC1 = c1; prevC2 = x;
+                    }
+                }
+            }
+            return k;
+        }
+
+        // The 11 Devanagari conjuncts that take a ZWJ between virama and the second consonant. (#86)
+        private static bool IsZwjConjunct(char c1, char c2)
+        {
+            switch (c1)
+            {
+                case (char)0x0915: return c2 == 0x0915 || c2 == 0x0932 || c2 == 0x0935; // ka + ka/la/va
+                case (char)0x091A: return c2 == 0x091A;                                 // ca + ca
+                case (char)0x091C: return c2 == 0x091C;                                 // ja + ja
+                case (char)0x091E: return c2 == 0x091A || c2 == 0x091C || c2 == 0x091E; // nya + ca/ja/nya
+                case (char)0x0928: return c2 == 0x0928;                                 // na + na
+                case (char)0x092A: return c2 == 0x0932;                                 // pa + la
+                case (char)0x0932: return c2 == 0x0932;                                 // la + la
+                default: return false;
+            }
+        }
+
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string str)
         {
             // la with dot
             str = str.Replace("\u09B2\u09BC", "\u0933");

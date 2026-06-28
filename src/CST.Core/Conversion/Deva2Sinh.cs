@@ -10,6 +10,11 @@ namespace CST.Conversion
     {
         private static IDictionary<char, object> deva2Sinh;
 
+        // Fast lookup for the optimized Convert(): map[c] = replacement string, null = pass through. (#86)
+        private const int MapLen = 0x0980;
+        private static readonly string[] map = new string[MapLen];
+        private static int maxValLen = 1;
+
         static Deva2Sinh()
         {
             deva2Sinh = new Dictionary<char, object>();
@@ -103,6 +108,14 @@ namespace CST.Conversion
             // zero-width joiners
             deva2Sinh['\u200C'] = ""; // ZWNJ (ignore)
             deva2Sinh['\u200D'] = ""; // ZWJ (ignore)
+
+            // Build the fast lookup table from the same data (#86).
+            foreach (var kvp in deva2Sinh)
+            {
+                if (kvp.Key >= MapLen) continue;
+                string v = kvp.Value is char ch ? ch.ToString() : (string)kvp.Value;
+                if (v.Length > 0) { map[kvp.Key] = v; if (v.Length > maxValLen) maxValLen = v.Length; }
+            }
         }
 
         public static string ConvertBook(string devStr)
@@ -116,9 +129,11 @@ namespace CST.Conversion
             return CleanupPunctuation(str);
         }
 
-        // more generalized, reusable conversion method:
-        // no stylesheet modifications, capitalization, etc.
-        public static string Convert(string devStr)
+        /// <summary>
+        /// FROZEN reference implementation (the original readable version) - the correctness oracle for the
+        /// optimized Convert(). Do NOT change; tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string devStr)
         {
             StringBuilder sb = new StringBuilder();
             foreach (char c in devStr.ToCharArray())
@@ -143,6 +158,44 @@ namespace CST.Conversion
             str = str.Replace("\u0D9A\u0DCA\u200C\u0D9A", "\u0D9A\u0DCA\u200D\u0D9A");
 
             return str;
+        }
+
+        // more generalized, reusable conversion method:
+        // no stylesheet modifications, capitalization, etc.
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Folds the dict
+        // map (virama -> U+0DCA U+200C) AND the three joiner-fixup string.Replace passes into one scan, applying
+        // the ZWNJ(U+200C)->ZWJ(U+200D) change against the buffer tail as each triggering letter is emitted.
+        public static string Convert(string devStr)
+        {
+            if (string.IsNullOrEmpty(devStr))
+                return devStr;
+
+            int n = devStr.Length;
+            var buf = new char[n * maxValLen];
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = devStr[i];
+                if (c == 0x200C || c == 0x200D) // ZWNJ / ZWJ -> removed
+                    continue;
+
+                string? m = (c < MapLen) ? map[c] : null;
+                if (m == null) k = Emit(buf, k, c);
+                else for (int j = 0; j < m.Length; j++) k = Emit(buf, k, m[j]);
+            }
+            return new string(buf, 0, k);
+        }
+
+        // Append one Sinhala char, applying the virama-joiner fixups against the buffer tail. (#86)
+        private static int Emit(char[] buf, int k, char x)
+        {
+            buf[k++] = x;
+            // virama (U+0DCA) + ZWNJ before ya (U+0DBA) / ra (U+0DBB), or between two ka (U+0D9A): ZWNJ -> ZWJ
+            if ((x == 0x0DBA || x == 0x0DBB) && k >= 3 && buf[k - 2] == 0x200C && buf[k - 3] == 0x0DCA)
+                buf[k - 2] = (char)0x200D;
+            else if (x == 0x0D9A && k >= 4 && buf[k - 2] == 0x200C && buf[k - 3] == 0x0DCA && buf[k - 4] == 0x0D9A)
+                buf[k - 2] = (char)0x200D;
+            return k;
         }
 
         public static string ConvertDandas(string str)

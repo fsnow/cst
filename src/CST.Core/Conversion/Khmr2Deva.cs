@@ -9,6 +9,11 @@ namespace CST.Conversion
         private static IDictionary<string, string> khmer2Dev;
         private static IDictionary<char, string> khmerChar2Dev;
 
+        // Fast reverse table for the optimized Convert(): charMap[c] = Deva char, '\0' = pass through. The only
+        // multi-char rule (independent a U+17A2 + sign aa U+17B6 -> independent aa) is handled inline. (#86)
+        private const int MapLen = 0x1800; // covers the Khmer block (source chars)
+        private static readonly char[] charMap = new char[MapLen];
+
         static Khmr2Deva()
         {
             khmer2Dev = new Dictionary<string, string>();
@@ -93,9 +98,44 @@ namespace CST.Conversion
             khmerChar2Dev['\u17E7'] = "\u096D";
             khmerChar2Dev['\u17E8'] = "\u096E";
             khmerChar2Dev['\u17E9'] = "\u096F";
+
+            // Build the fast single-char reverse table from khmerChar2Dev (values are all single chars). The
+            // 1-char khmer2Dev key U+17A2 is intentionally left out and handled inline in Convert. (#86)
+            foreach (var kvp in khmerChar2Dev)
+                if (kvp.Key < MapLen) charMap[kvp.Key] = kvp.Value[0];
         }
 
+        // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Replaces the
+        // per-position Substring + dictionary lookups with one scan over a char buffer using a reverse table;
+        // the lone two-char sequence (U+17A2 U+17B6 -> independent aa) is matched inline.
         public static string Convert(string khmerStr)
+        {
+            if (string.IsNullOrEmpty(khmerStr))
+                return khmerStr;
+
+            int n = khmerStr.Length;
+            var buf = new char[n]; // each input char -> at most 1 Deva char (the 2-char "aa" collapses to 1)
+            int k = 0;
+            for (int i = 0; i < n; i++)
+            {
+                char c = khmerStr[i];
+                if (c == 0x17A2) // independent a; with a following sign aa (U+17B6) it becomes independent aa
+                {
+                    if (i + 1 < n && khmerStr[i + 1] == 0x17B6) { buf[k++] = (char)0x0906; i++; }
+                    else buf[k++] = (char)0x0905;
+                    continue;
+                }
+                char m = (c < MapLen) ? charMap[c] : '\0';
+                buf[k++] = (m != '\0') ? m : c;
+            }
+            return new string(buf, 0, k);
+        }
+
+        /// <summary>
+        /// FROZEN reference implementation - the correctness oracle for the optimized Convert(). Do NOT change;
+        /// tests assert Convert == ConvertReference over the corpus. (#86)
+        /// </summary>
+        public static string ConvertReference(string khmerStr)
         {
             StringBuilder sb = new StringBuilder();
             int i = 0;
