@@ -14,11 +14,15 @@ namespace CST.Conversion
             foreach (char c in str.ToCharArray())
             {
                 Script cScript = GetScript(c);
-                if (cScript == lastScript)
+                // Zero-width joiners (Unknown) belong to the surrounding run; they must not split it,
+                // or a script's contextual conjunct handling breaks at the boundary. Mirrors Any2Ipe.
+                if (cScript == lastScript || cScript == Script.Unknown)
                     run += c;
                 else
                 {
-                    deva += Convert(run, lastScript);
+                    if (run.Length > 0)
+                        deva += Convert(run, lastScript);
+
                     run = "" + c;
                     lastScript = cScript;
                 }
@@ -65,7 +69,9 @@ namespace CST.Conversion
         {
             int ccode = System.Convert.ToInt32(c);
             Script script;
-            if (ccode >= 0x0900 && ccode <= 0x097F)
+            if (ccode == 0x200C || ccode == 0x200D) // ZWJ and ZWNJ
+                script = Script.Unknown;
+            else if (ccode >= 0x0900 && ccode <= 0x097F)
                 script = Script.Devanagari;
             else if (ccode >= 0x0980 && ccode <= 0x09FF)
                 script = Script.Bengali;
