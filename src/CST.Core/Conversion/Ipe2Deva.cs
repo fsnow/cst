@@ -183,8 +183,10 @@ namespace CST.Conversion
         }
 
         // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Same akshara
-        // reconstruction as the reference, but folds the 11-pass InsertConjunctZwj into the same scan via an
-        // incremental, non-overlapping ZWJ insertion against the buffer tail.
+        // reconstruction as the reference, folding the 11-pass InsertConjunctZwj into the same scan. The ZWJ
+        // insertion is checked ONLY where a conjunct can complete - the consonant emit (a conjunct's second
+        // consonant is the only char that can trigger it) - so vowel/virama/niggahita/pass-through emits are
+        // plain buffer writes.
         public static string Convert(string ipe)
         {
             if (string.IsNullOrEmpty(ipe))
@@ -205,11 +207,11 @@ namespace CST.Conversion
                     if (pendingConsonant)
                     {
                         if (c != IpeInherentA) // the inherent "a" is written as nothing
-                            k = EmitDeva(buf, k, dependentVowelArr[c], ref prevC2Index, ref prevC1, ref prevC2);
+                            buf[k++] = dependentVowelArr[c];
                     }
                     else
                     {
-                        k = EmitDeva(buf, k, independentVowelArr[c], ref prevC2Index, ref prevC1, ref prevC2);
+                        buf[k++] = independentVowelArr[c];
                     }
                     pendingConsonant = false;
                     continue;
@@ -218,53 +220,42 @@ namespace CST.Conversion
                 // Anything non-vowel closes a pending consonant with an explicit virama.
                 if (pendingConsonant)
                 {
-                    k = EmitDeva(buf, k, DevaVirama, ref prevC2Index, ref prevC1, ref prevC2);
+                    buf[k++] = DevaVirama;
                     pendingConsonant = false;
                 }
 
                 char deva = (c < MapLen) ? consonantArr[c] : '\0';
                 if (deva != '\0')
                 {
-                    k = EmitDeva(buf, k, deva, ref prevC2Index, ref prevC1, ref prevC2);
+                    buf[k++] = deva;
+                    // C1 + virama + C2 -> C1 + virama + ZWJ + C2 for the registered open-form conjuncts; skip a
+                    // same-pair match that overlaps the previously inserted one (one ordered non-overlapping Replace).
+                    if (k >= 3 && buf[k - 2] == 0x094D)
+                    {
+                        char c1 = buf[k - 3];
+                        if (IsZwjConjunct(c1, deva) && !((k - 3 == prevC2Index) && c1 == prevC1 && deva == prevC2))
+                        {
+                            buf[k - 1] = (char)0x200D;
+                            buf[k++] = deva;
+                            prevC2Index = k - 1; prevC1 = c1; prevC2 = deva;
+                        }
+                    }
                     pendingConsonant = true;
                 }
                 else if (c == IpeNiggahita)
                 {
-                    k = EmitDeva(buf, k, DevaNiggahita, ref prevC2Index, ref prevC1, ref prevC2);
+                    buf[k++] = DevaNiggahita;
                 }
                 else
                 {
-                    k = EmitDeva(buf, k, c, ref prevC2Index, ref prevC1, ref prevC2);
+                    buf[k++] = c;
                 }
             }
 
             if (pendingConsonant) // word-final halanta
-                k = EmitDeva(buf, k, DevaVirama, ref prevC2Index, ref prevC1, ref prevC2);
+                buf[k++] = DevaVirama;
 
             return new string(buf, 0, k);
-        }
-
-        // Append one Deva char, folding in InsertConjunctZwj: C1 + virama + C2 -> C1 + virama + ZWJ + C2 for the
-        // registered open-form conjuncts. Each conjunct is one ordered, non-overlapping Replace in the reference,
-        // so skip only when this match overlaps the previously inserted one AND is the SAME pair. (#86)
-        private static int EmitDeva(char[] buf, int k, char x, ref int prevC2Index, ref char prevC1, ref char prevC2)
-        {
-            buf[k++] = x;
-            if (k >= 3 && buf[k - 2] == 0x094D)
-            {
-                char c1 = buf[k - 3];
-                if (IsZwjConjunct(c1, x))
-                {
-                    bool samePairOverlap = (k - 3 == prevC2Index) && c1 == prevC1 && x == prevC2;
-                    if (!samePairOverlap)
-                    {
-                        buf[k - 1] = (char)0x200D;
-                        buf[k++] = x;
-                        prevC2Index = k - 1; prevC1 = c1; prevC2 = x;
-                    }
-                }
-            }
-            return k;
         }
 
         // The 11 Devanagari conjuncts handled by InsertConjunctZwj. (#86)

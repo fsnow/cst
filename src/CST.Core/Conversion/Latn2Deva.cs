@@ -138,7 +138,7 @@ namespace CST.Conversion
         private static IDictionary<char, object> devVowels;
         private static IDictionary<string, string> devConsonants;
 
-        // Fast char-indexed tables for the optimized Convert()/ToDevanagariFast, mirroring the data above.
+        // Fast char-indexed tables for the optimized Convert(), mirroring the data above.
         // '\0' = none; depVowelArr['a'] is '\0' because the inherent "a" is written as nothing. (#86)
         private const int MapLen = 0x1E70; // covers the Latin Pali letters incl. U+1E6D (t underdot)
         private static readonly bool[] isPaliCharArr = new bool[MapLen];
@@ -189,131 +189,109 @@ namespace CST.Conversion
 			return Ipe2Deva.InsertConjunctZwj(book.ToString());
 		}
 
-        // Optimized (#86): byte-identical to ConvertReference (verified by tests). Same word-by-word structure,
-        // but ToDevanagariFast builds each word in O(n) (the reference's String.Concat loop was O(n^2)) and the
-        // shared 11-pass Ipe2Deva.InsertConjunctZwj is folded into one ZwjFold scan.
+        // Optimized true single pass (#86): byte-identical to ConvertReference (verified by tests). Folds the
+        // word splitting, the per-word ToDevanagari akshara reconstruction, and the shared 11-pass
+        // Ipe2Deva.InsertConjunctZwj into one scan that writes straight into a char buffer - no per-word strings,
+        // no book/word StringBuilders, no separate ZWJ pass. ZWJ is checked only at a consonant emit (the only
+        // char that can complete an open-form conjunct).
         public static string Convert(string latin)
         {
             if (string.IsNullOrEmpty(latin))
                 return latin;
 
-            StringBuilder book = new StringBuilder(latin.Length);
-            StringBuilder word = new StringBuilder();
+            int n = latin.Length;
+            var buf = new char[n * 3 + 4]; // consonant -> virama + consonant + ZWJ; plus per-word final halanta
+            int k = 0;
+            int prevC2Index = -1; char prevC1 = '\0', prevC2 = '\0'; // ZWJ non-overlap state (whole book)
 
-            char scriptZero = '\u0966';
+            const char scriptZero = '\u0966';
+            LetterType last = LetterType.Vowel; // per-word akshara state
+            bool inWord = false;
+            char wordLastChar = '\0'; // last Latin char of the current word, for the word-final halanta
 
-            foreach (char c in latin)
-            {
-                if (word.Length > 0 && IsPaliChar(c) == false)
-                {
-                    book.Append(ToDevanagariFast(word.ToString()));
-                    book.Append(c); // punctuation
-                    word.Length = 0;
-                }
-                else if (IsDigit(c))
-                {
-                    char scriptNumber = (char)(c - '0' + scriptZero);
-                    book.Append(scriptNumber);
-                }
-                else if (IsPaliChar(c))
-                    word.Append(c);
-                else
-                    book.Append(c);
-            }
-
-            if (word.Length > 0)
-            {
-                book.Append(ToDevanagariFast(word.ToString()));
-                word.Length = 0;
-            }
-
-            return ZwjFold(book.ToString());
-        }
-
-        // O(n) StringBuilder version of ToDevanagari - same outputs, no per-char whole-string reallocation. (#86)
-        private static string ToDevanagariFast(string latin)
-        {
-            var dev = new StringBuilder(latin.Length + 4);
-            LetterType last = LetterType.Vowel;
-
-            for (int i = 0; i < latin.Length; i++)
+            int i = 0;
+            while (i < n)
             {
                 char c = latin[i];
-                char c2 = ' ';
-                if (i < latin.Length - 1)
-                    c2 = latin[i + 1];
+                bool isPali = c < MapLen && isPaliCharArr[c];
 
-                if (c < MapLen && isPaliVowelArr[c])
+                if (inWord && !isPali)
                 {
-                    if (last == LetterType.Vowel || last == LetterType.Nasal)
-                        dev.Append(initVowelArr[c]);
-                    else if (depVowelArr[c] != '\0') // the inherent "a" is written as nothing
-                        dev.Append(depVowelArr[c]);
-                    last = LetterType.Vowel;
+                    // word ends: word-final halanta if its last char is a single-letter consonant key
+                    if (wordLastChar < MapLen && consCharArr[wordLastChar] != '\0')
+                        buf[k++] = '\u094d';
+                    inWord = false; last = LetterType.Vowel; wordLastChar = '\0';
+                    buf[k++] = c; // the boundary char passes through (matches book.Append(c))
+                    i++;
+                    continue;
                 }
-                else if (c.Equals('\u1E43') || c.Equals('\u1E41')) // m underdot / m overdot (niggahita)
+
+                if (isPali)
                 {
-                    last = LetterType.Nasal;
-                    dev.Append('\u0902'); // anusvara
+                    if (c < MapLen && isPaliVowelArr[c])
+                    {
+                        if (last == LetterType.Vowel || last == LetterType.Nasal)
+                            buf[k++] = initVowelArr[c];
+                        else if (depVowelArr[c] != '\0') // the inherent "a" is written as nothing
+                            buf[k++] = depVowelArr[c];
+                        last = LetterType.Vowel;
+                        wordLastChar = c; i++;
+                    }
+                    else if (c == 0x1E43 || c == 0x1E41) // m underdot / m overdot (niggahita)
+                    {
+                        buf[k++] = '\u0902'; // anusvara
+                        last = LetterType.Nasal;
+                        wordLastChar = c; i++;
+                    }
+                    else // consonant
+                    {
+                        if (last == LetterType.Consonant)
+                            buf[k++] = '\u094d'; // halant after the previous consonant
+
+                        char c2 = (i + 1 < n) ? latin[i + 1] : ' ';
+                        char deva;
+                        if (c < MapLen && consAspArr[c] != '\0' && c2 == 'h') // aspirate: consonant + 'h'
+                        {
+                            deva = consAspArr[c]; wordLastChar = c2; i += 2;
+                        }
+                        else
+                        {
+                            deva = consCharArr[c]; wordLastChar = c; i++;
+                        }
+                        buf[k++] = deva;
+                        // C1 + virama + C2 -> C1 + virama + ZWJ + C2 (the consonant is the only ZWJ trigger);
+                        // skip a same-pair match overlapping the previous insertion (one non-overlapping Replace).
+                        if (k >= 3 && buf[k - 2] == 0x094D)
+                        {
+                            char c1 = buf[k - 3];
+                            if (IsZwjConjunct(c1, deva) && !((k - 3 == prevC2Index) && c1 == prevC1 && deva == prevC2))
+                            {
+                                buf[k - 1] = (char)0x200D;
+                                buf[k++] = deva;
+                                prevC2Index = k - 1; prevC1 = c1; prevC2 = deva;
+                            }
+                        }
+                        last = LetterType.Consonant;
+                    }
+                    inWord = true;
+                }
+                else if (c >= '0' && c <= '9') // digit, not in a word
+                {
+                    buf[k++] = (char)(c - '0' + scriptZero);
+                    i++;
                 }
                 else
                 {
-                    if (last == LetterType.Consonant)
-                        dev.Append('\u094D'); // halant after the previous consonant
-
-                    if (c < MapLen && consAspArr[c] != '\0' && c2 == 'h')
-                    {
-                        dev.Append(consAspArr[c]); // aspirate: consonant + 'h'
-                        i++;
-                    }
-                    else
-                        dev.Append(consCharArr[c]);
-
-                    last = LetterType.Consonant;
+                    buf[k++] = c; // pass through
+                    i++;
                 }
             }
 
-            char lastCh = latin[latin.Length - 1];
-            if (lastCh < MapLen && consCharArr[lastCh] != '\0') // word-final consonant -> halanta
-                dev.Append('\u094D');
+            // trailing word: word-final halanta
+            if (inWord && wordLastChar < MapLen && consCharArr[wordLastChar] != '\0')
+                buf[k++] = '\u094d';
 
-            return dev.ToString();
-        }
-
-        // Single-pass equivalent of Ipe2Deva.InsertConjunctZwj: insert ZWJ into the registered open-form
-        // conjuncts. Conjuncts never span word boundaries, so one scan over the whole book is exact. (#86)
-        private static string ZwjFold(string s)
-        {
-            int n = s.Length;
-            var buf = new char[n * 2];
-            int k = 0;
-            int prevC2Index = -1; char prevC1 = '\0', prevC2 = '\0';
-            for (int i = 0; i < n; i++)
-                k = EmitDeva(buf, k, s[i], ref prevC2Index, ref prevC1, ref prevC2);
             return new string(buf, 0, k);
-        }
-
-        // C1 + virama + C2 -> C1 + virama + ZWJ + C2 for the registered conjuncts. Each conjunct is one ordered,
-        // non-overlapping Replace in InsertConjunctZwj, so skip only when this match overlaps the previously
-        // inserted one AND is the SAME pair. (#86)
-        private static int EmitDeva(char[] buf, int k, char x, ref int prevC2Index, ref char prevC1, ref char prevC2)
-        {
-            buf[k++] = x;
-            if (k >= 3 && buf[k - 2] == 0x094D)
-            {
-                char c1 = buf[k - 3];
-                if (IsZwjConjunct(c1, x))
-                {
-                    bool samePairOverlap = (k - 3 == prevC2Index) && c1 == prevC1 && x == prevC2;
-                    if (!samePairOverlap)
-                    {
-                        buf[k - 1] = (char)0x200D;
-                        buf[k++] = x;
-                        prevC2Index = k - 1; prevC1 = c1; prevC2 = x;
-                    }
-                }
-            }
-            return k;
         }
 
         // The 11 Devanagari conjuncts handled by Ipe2Deva.InsertConjunctZwj. (#86)
