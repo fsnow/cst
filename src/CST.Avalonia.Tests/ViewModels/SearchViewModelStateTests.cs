@@ -40,8 +40,10 @@ public class SearchViewModelStateTests
     }
 
     [Fact]
-    public void Construction_RestoresSavedSearchState()
+    public void Construction_DoesNotRestore_RestoreIsAppliedSeparately()
     {
+        // Restore is pushed by App after the async state load completes; construction alone must not
+        // restore, because the VM can be built before the load finishes. (#87)
         var saved = new SearchDialogState
         {
             SearchText = "dhamma*",
@@ -52,6 +54,11 @@ public class SearchViewModelStateTests
         };
 
         var (vm, _) = CreateVm(saved);
+
+        Assert.True(string.IsNullOrEmpty(vm.SearchText)); // not restored at construction
+        Assert.True(vm.IncludeVinaya);                    // still the default
+
+        vm.ApplyState(saved); // App's post-load push
 
         Assert.Equal("dhamma*", vm.SearchText);
         Assert.Equal(SearchMode.Regex, vm.SelectedSearchMode.Value);
@@ -123,12 +130,17 @@ public class SearchViewModelStateTests
     }
 
     [Fact]
-    public void RestoringDuringConstruction_DoesNotSave()
+    public void ApplyState_DoesNotEchoBackAsSave()
     {
-        // ApplyState during construction must not echo the restored values back as a save.
-        var saved = new SearchDialogState { SearchText = "metta", IncludeVinaya = false };
-        var (_, state) = CreateVm(saved);
+        // Restore runs after construction (App's post-load push), when the save handler is already live,
+        // so ApplyState must not echo the restored values back as a save (the _suppressStateSave guard).
+        var (vm, state) = CreateVm();
+        state.Invocations.Clear(); // ignore anything from construction
+
+        vm.ApplyState(new SearchDialogState { SearchText = "metta", IncludeVinaya = false });
 
         state.Verify(x => x.UpdateSearchDialogState(It.IsAny<SearchDialogState>()), Times.Never);
+        Assert.Equal("metta", vm.SearchText);
+        Assert.False(vm.IncludeVinaya);
     }
 }

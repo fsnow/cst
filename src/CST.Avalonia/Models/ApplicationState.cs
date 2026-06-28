@@ -81,24 +81,32 @@ public class OpenBookDialogState
 /// </summary>
 public class SearchDialogState
 {
-    // The user's query text, restored verbatim. (#87)
+    // Every field is force-serialized (JsonIgnoreCondition.Never) so it round-trips exactly. The global
+    // serializer uses WhenWritingDefault, which would otherwise drop a `false` filter from the JSON and
+    // let it revert to the `= true` default on load - an unchecked book-type filter would come back
+    // checked. (#87)
+
+    // The user's query text, restored verbatim.
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public string SearchText { get; set; } = string.Empty;
 
     // Search mode (Exact is implicit when no special chars are present; the UI offers Wildcard/Regex).
     [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public SearchMode SearchMode { get; set; } = SearchMode.Wildcard;
 
     // Proximity window (words) for multi-unit queries.
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public int ProximityDistance { get; set; } = 10;
 
     // Book-type filters (match SearchViewModel.Include*; all on by default).
-    public bool IncludeVinaya { get; set; } = true;
-    public bool IncludeSutta { get; set; } = true;
-    public bool IncludeAbhidhamma { get; set; } = true;
-    public bool IncludeMula { get; set; } = true;
-    public bool IncludeAttha { get; set; } = true;
-    public bool IncludeTika { get; set; } = true;
-    public bool IncludeOther { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeVinaya { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeSutta { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeAbhidhamma { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeMula { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeAttha { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeTika { get; set; } = true;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public bool IncludeOther { get; set; } = true;
 }
 
 /// <summary>

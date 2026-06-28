@@ -553,6 +553,17 @@ public partial class App : Application
         {
             scriptService.InitializeFromState();
         }
+
+        // Restore the Search pane inputs now that state is loaded. The SearchViewModel singleton may be
+        // constructed before the async load completes, so its ctor only wires up saving - the restore is
+        // applied here. Marshalled to the UI thread (this may run off it) since it constructs the VM if
+        // needed and updates bound properties. (#87)
+        var searchState = state.SearchDialog;
+        Dispatcher.UIThread.Post(() =>
+        {
+            var searchViewModel = ServiceProvider?.GetService<SearchViewModel>();
+            searchViewModel?.ApplyState(searchState);
+        });
         
         // Restore main window state (dimensions, position, etc.) - MUST be on UI thread
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&

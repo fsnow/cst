@@ -145,8 +145,9 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             })
             .Subscribe();
 
-        // Restore saved search inputs and start persisting changes. Done after the live-search wiring
-        // above so a restored query repopulates its results. (#87)
+        // Start persisting input changes. The actual restore (ApplyState) is pushed from App once the
+        // saved state has finished loading - the ctor can run before the async load completes, so
+        // restoring here would read an empty default. (#87)
         SetupStatePersistence();
 
         this.WhenActivated(disposables =>
@@ -175,10 +176,6 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
 
     private void SetupStatePersistence()
     {
-        // Restore the saved search inputs. Setting SearchText last lets the live search-as-you-type
-        // repopulate results for the restored query.
-        ApplyState(_applicationStateService.Current.SearchDialog);
-
         // Persist whenever a saved field changes. UpdateSearchDialogState marks the state dirty (the 60s
         // timer + the shutdown save handle the disk write) and its StateChanged listeners are cheap, so a
         // per-change call is fine - and keeps the in-memory state current for the shutdown save.
