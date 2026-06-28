@@ -44,7 +44,7 @@ public class SearchService : ISearchService
         _settingsService = settingsService;
     }
 
-    private async Task<DirectoryReader> GetIndexReaderAsync()
+    private DirectoryReader GetIndexReader()
     {
         lock (_readerLock)
         {
@@ -87,9 +87,9 @@ public class SearchService : ISearchService
             _logger.LogInformation("Searching for: {Query} with mode {Mode}", query.QueryText, query.Mode);
 
             // Refresh the reader first so a mid-session re-index clears stale cache entries
-            // (the cache is cleared inside GetIndexReaderAsync when the reader is reopened)
+            // (the cache is cleared inside GetIndexReader when the reader is reopened)
             // before we consult the cache below.
-            var reader = await GetIndexReaderAsync();
+            var reader = GetIndexReader();
 
             // Check cache
             var cacheKey = GenerateCacheKey(query);
@@ -743,7 +743,7 @@ public class SearchService : ISearchService
     {
         try
         {
-            var reader = await GetIndexReaderAsync();
+            var reader = GetIndexReader();
             var allTerms = new List<string>();
             var fields = MultiFields.GetFields(reader);
             var terms = fields.GetTerms("text");
@@ -783,7 +783,7 @@ public class SearchService : ISearchService
     {
         try
         {
-            var reader = await GetIndexReaderAsync();
+            var reader = GetIndexReader();
             var books = Books.Inst;
             var book = books[bookFileName];
             
