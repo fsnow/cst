@@ -42,9 +42,11 @@ public class ConverterEquivalenceTests
     private void AssertEquivalentOverCorpus(string name, Func<string, string> fast, Func<string, string> reference)
     {
         var dir = XmlDir;
-        Assert.True(Directory.Exists(dir), $"xml dir not found: {dir}");
+        if (!Directory.Exists(dir))
+            Assert.Skip($"XML corpus not found at {dir} (set CST_XML_DIR). Integration test.");
         var files = Directory.GetFiles(dir, "*.xml").OrderBy(f => f, StringComparer.Ordinal).ToArray();
-        Assert.True(files.Length > 0, "no book xml files found");
+        if (files.Length == 0)
+            Assert.Skip($"No book XML files in {dir}. Integration test.");
 
         int checked_ = 0;
         long chars = 0;

@@ -27,7 +27,8 @@ public class ScriptConverterPerformanceTests
     public void Baseline_ConvertDN1_PerScript()
     {
         var path = Path.Combine(XmlDir, "s0101m.mul.xml"); // DN1 mula
-        Assert.True(File.Exists(path), $"DN1 not found at {path}");
+        if (!File.Exists(path))
+            Assert.Skip($"DN1 not found at {path} (set CST_XML_DIR). Integration/benchmark test.");
 
         // UTF-16-LE corpus; File.ReadAllText honors the BOM.
         var deva = File.ReadAllText(path);
