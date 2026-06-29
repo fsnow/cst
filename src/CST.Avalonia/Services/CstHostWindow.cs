@@ -41,60 +41,11 @@ namespace CST.Avalonia.Services
             MinHeight = 400;
             WindowStartupLocation = WindowStartupLocation.Manual;
 
-            // Add View menu to floating window (same as main window)
-            SetupViewMenu();
+            // The floating-window native menu (View/Tools) is built and wired in one place:
+            // App.SetupFloatingWindowMenu, invoked from CstDockFactory when this window is created. (#79)
 
             // Initialize the window layout
             InitializeWindow();
-        }
-
-        private void SetupViewMenu()
-        {
-            // Create native menu for this floating window
-            var nativeMenu = new NativeMenu();
-
-            // View menu
-            var viewMenuItem = new NativeMenuItem
-            {
-                Header = "View",
-                Menu = new NativeMenu()
-            };
-
-            var selectBookItem = new NativeMenuItem
-            {
-                Header = "Select a Book",
-                ToggleType = NativeMenuItemToggleType.CheckBox
-            };
-
-            var searchItem = new NativeMenuItem
-            {
-                Header = "Search",
-                ToggleType = NativeMenuItemToggleType.CheckBox
-            };
-
-            viewMenuItem.Menu.Add(selectBookItem);
-            viewMenuItem.Menu.Add(searchItem);
-            nativeMenu.Add(viewMenuItem);
-
-            // Tools menu
-            var toolsMenuItem = new NativeMenuItem
-            {
-                Header = "Tools",
-                Menu = new NativeMenu()
-            };
-
-            var goToItem = new NativeMenuItem
-            {
-                Header = "Go To...",
-                Gesture = KeyGesture.Parse("Cmd+G")
-            };
-
-            toolsMenuItem.Menu.Add(goToItem);
-            nativeMenu.Add(toolsMenuItem);
-
-            NativeMenu.SetMenu(this, nativeMenu);
-
-            // Menu event handlers will be set up by App when this window is shown
         }
 
         private void InitializeWindow()

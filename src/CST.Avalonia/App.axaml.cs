@@ -1073,92 +1073,69 @@ public partial class App : Application
     }
 
     // Public method to set up menu events for floating windows
+    /// <summary>
+    /// Builds and wires the native View/Tools menu for a floating dock window (macOS). This is the single
+    /// source for the floating-window menu - it creates the items, syncs their initial state, attaches the
+    /// click handlers, tracks the toggle items for cross-window state sync, and assigns the menu to the
+    /// window. (Previously the structure was built in CstHostWindow's ctor and re-discovered here by header
+    /// string; #79.)
+    /// </summary>
     public void SetupFloatingWindowMenu(Window window)
     {
         if (!OperatingSystem.IsMacOS()) return;
 
         try
         {
-            var windowMenu = NativeMenu.GetMenu(window);
-            if (windowMenu != null && windowMenu.Count() > 0)
-            {
-                foreach (var item in windowMenu)
-                {
-                    if (item is NativeMenuItem viewMenuItem && viewMenuItem.Header?.ToString() == "View")
-                    {
-                        var viewMenu = viewMenuItem.Menu;
-                        if (viewMenu != null)
-                        {
-                            foreach (var viewItem in viewMenu)
-                            {
-                                if (viewItem is NativeMenuItem viewSubItem)
-                                {
-                                    if (viewSubItem.Header?.ToString() == "Select a Book")
-                                    {
-                                        _selectBookMenuItems.Add(viewSubItem);
-                                        // Sync initial state
-                                        if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
-                                        {
-                                            viewSubItem.IsChecked = layoutViewModel.IsSelectBookPanelVisible;
-                                        }
-                                        viewSubItem.Click += (s, e) =>
-                                        {
-                                            Log.Information("Toggle Select a Book panel clicked via View menu (floating window)");
-                                            ToggleSelectBookPanel();
-                                        };
-                                    }
-                                    else if (viewSubItem.Header?.ToString() == "Search")
-                                    {
-                                        _searchMenuItems.Add(viewSubItem);
-                                        // Sync initial state
-                                        if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
-                                        {
-                                            viewSubItem.IsChecked = layoutViewModel.IsSearchPanelVisible;
-                                        }
-                                        viewSubItem.Click += (s, e) =>
-                                        {
-                                            Log.Information("Toggle Search panel clicked via View menu (floating window)");
-                                            ToggleSearchPanel();
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else if (item is NativeMenuItem toolsMenuItem && toolsMenuItem.Header?.ToString() == "Tools")
-                    {
-                        Log.Information("Found Tools menu in floating window");
-                        var toolsMenu = toolsMenuItem.Menu;
-                        if (toolsMenu != null)
-                        {
-                            Log.Information("Tools menu has {Count} items", toolsMenu.Count());
-                            foreach (var toolItem in toolsMenu)
-                            {
-                                if (toolItem is NativeMenuItem toolSubItem)
-                                {
-                                    Log.Information("Found Tools menu item: {Header}", toolSubItem.Header);
-                                    if (toolSubItem.Header?.ToString() == "Go To...")
-                                    {
-                                        Log.Information("Wiring up Go To menu item click event");
-                                        toolSubItem.Click += (s, e) =>
-                                        {
-                                            Log.Information("Go To menu item clicked via Tools menu (floating window)");
-                                            OnGoToMenuItemClickFromFloatingWindow(window);
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            Log.Warning("Tools menu is null");
-                        }
-                    }
-                }
+            var layoutViewModel = MainWindow?.DataContext as LayoutViewModel;
 
-                Log.Information("Floating window menu setup complete - Total menu items tracked: {SelectBookCount} + {SearchCount}",
-                    _selectBookMenuItems.Count, _searchMenuItems.Count);
-            }
+            // View menu: Select a Book / Search (checkable, mirror the panels' visibility)
+            var selectBookItem = new NativeMenuItem
+            {
+                Header = "Select a Book",
+                ToggleType = NativeMenuItemToggleType.CheckBox,
+                IsChecked = layoutViewModel?.IsSelectBookPanelVisible ?? false
+            };
+            selectBookItem.Click += (s, e) =>
+            {
+                Log.Information("Toggle Select a Book panel clicked via View menu (floating window)");
+                ToggleSelectBookPanel();
+            };
+            _selectBookMenuItems.Add(selectBookItem);
+
+            var searchItem = new NativeMenuItem
+            {
+                Header = "Search",
+                ToggleType = NativeMenuItemToggleType.CheckBox,
+                IsChecked = layoutViewModel?.IsSearchPanelVisible ?? false
+            };
+            searchItem.Click += (s, e) =>
+            {
+                Log.Information("Toggle Search panel clicked via View menu (floating window)");
+                ToggleSearchPanel();
+            };
+            _searchMenuItems.Add(searchItem);
+
+            var viewMenu = new NativeMenu();
+            viewMenu.Add(selectBookItem);
+            viewMenu.Add(searchItem);
+
+            // Tools menu: Go To...
+            var goToItem = new NativeMenuItem { Header = "Go To...", Gesture = KeyGesture.Parse("Cmd+G") };
+            goToItem.Click += (s, e) =>
+            {
+                Log.Information("Go To menu item clicked via Tools menu (floating window)");
+                OnGoToMenuItemClickFromFloatingWindow(window);
+            };
+            var toolsMenu = new NativeMenu();
+            toolsMenu.Add(goToItem);
+
+            var nativeMenu = new NativeMenu();
+            nativeMenu.Add(new NativeMenuItem { Header = "View", Menu = viewMenu });
+            nativeMenu.Add(new NativeMenuItem { Header = "Tools", Menu = toolsMenu });
+            NativeMenu.SetMenu(window, nativeMenu);
+
+            Log.Information("Floating window menu built - tracked toggle items: {SelectBookCount} select-book, {SearchCount} search",
+                _selectBookMenuItems.Count, _searchMenuItems.Count);
         }
         catch (Exception ex)
         {
