@@ -863,6 +863,15 @@ public partial class App : Application
             {
                 Log.Warning("SHUTDOWN: ApplicationStateService not available");
             }
+
+            // Flush any pending debounced settings save so a change made within the debounce window
+            // isn't lost on close. (#67)
+            var settingsService = ServiceProvider?.GetService<ISettingsService>();
+            if (settingsService != null)
+            {
+                await settingsService.FlushPendingSaveAsync();
+                Log.Information("SHUTDOWN: Pending settings save flushed");
+            }
         }
         catch (Exception ex)
         {

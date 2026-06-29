@@ -144,7 +144,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.UpdateSetting(nameof(Settings.XmlBooksDirectory), value);
-                    _ = _settingsService.SaveSettingsAsync();
+                    _settingsService.RequestSave();
                 });
                 
             this.WhenAnyValue(x => x.IndexDirectory)
@@ -152,7 +152,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.UpdateSetting(nameof(Settings.IndexDirectory), value);
-                    _ = _settingsService.SaveSettingsAsync();
+                    _settingsService.RequestSave();
                 });
 
         }
@@ -262,7 +262,7 @@ namespace CST.Avalonia.ViewModels
                 fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
                 
                 // Immediate save
-                _ = _settingsService.SaveSettingsAsync();
+                _settingsService.RequestSave();
             }
         }
         
@@ -279,7 +279,7 @@ namespace CST.Avalonia.ViewModels
                 fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
                 
                 // Immediate save
-                _ = _settingsService.SaveSettingsAsync();
+                _settingsService.RequestSave();
             }
         }
         
@@ -296,9 +296,11 @@ namespace CST.Avalonia.ViewModels
             }
         }
         
-        public async Task SaveSettingsAsync()
+        // Debounced save (#67); kept Task-returning for the existing fire-and-forget callers.
+        public Task SaveSettingsAsync()
         {
-            await _settingsService.SaveSettingsAsync();
+            _settingsService.RequestSave();
+            return Task.CompletedTask;
         }
         
         private async void LoadAvailableFontsForScript(ScriptFontSettingViewModel scriptVm)
@@ -694,7 +696,7 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _enableAutomaticUpdates, value);
                 _settingsService.Settings.XmlUpdateSettings.EnableAutomaticUpdates = value;
-                _ = _settingsService.SaveSettingsAsync();
+                _settingsService.RequestSave();
             }
         }
         
@@ -705,7 +707,7 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _xmlRepositoryOwner, value);
                 _settingsService.Settings.XmlUpdateSettings.XmlRepositoryOwner = value;
-                _ = _settingsService.SaveSettingsAsync();
+                _settingsService.RequestSave();
             }
         }
         
@@ -716,7 +718,7 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _xmlRepositoryName, value);
                 _settingsService.Settings.XmlUpdateSettings.XmlRepositoryName = value;
-                _ = _settingsService.SaveSettingsAsync();
+                _settingsService.RequestSave();
             }
         }
         
@@ -727,7 +729,7 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _xmlRepositoryPath, value);
                 _settingsService.Settings.XmlUpdateSettings.XmlRepositoryPath = value;
-                _ = _settingsService.SaveSettingsAsync();
+                _settingsService.RequestSave();
             }
         }
         
@@ -738,7 +740,7 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _xmlRepositoryBranch, value);
                 _settingsService.Settings.XmlUpdateSettings.XmlRepositoryBranch = value;
-                _ = _settingsService.SaveSettingsAsync();
+                _settingsService.RequestSave();
             }
         }
 
@@ -790,7 +792,7 @@ namespace CST.Avalonia.ViewModels
                 .Subscribe(value => 
                 {
                     _settingsService.Settings.DeveloperSettings.LogLevel = value;
-                    _ = _settingsService.SaveSettingsAsync();
+                    _settingsService.RequestSave();
                     
                     // Reconfigure logger immediately
                     ReconfigureLogger(value);

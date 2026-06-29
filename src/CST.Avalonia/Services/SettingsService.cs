@@ -109,6 +109,51 @@ namespace CST.Avalonia.Services
             }
         }
 
+        // --- Debounced save (#67) -----------------------------------------------------------------
+        // UI setting changes call RequestSave() instead of fire-and-forget SaveSettingsAsync(); rapid
+        // changes (e.g. dragging a font-size slider) coalesce into one write ~750ms after the last change.
+        private readonly object _saveLock = new();
+        private System.Timers.Timer? _saveTimer;
+        private bool _savePending;
+
+        public void RequestSave()
+        {
+            lock (_saveLock)
+            {
+                _savePending = true;
+                if (_saveTimer == null)
+                {
+                    _saveTimer = new System.Timers.Timer(750) { AutoReset = false };
+                    _saveTimer.Elapsed += (_, _) => _ = FlushPendingSaveAsync();
+                }
+                _saveTimer.Stop();   // restart the debounce window on each request
+                _saveTimer.Start();
+            }
+        }
+
+        public async Task FlushPendingSaveAsync()
+        {
+            bool shouldSave;
+            lock (_saveLock)
+            {
+                _saveTimer?.Stop();
+                shouldSave = _savePending;
+                _savePending = false;
+            }
+            if (!shouldSave)
+                return;
+            try
+            {
+                await SaveSettingsAsync();
+            }
+            catch (Exception ex)
+            {
+                // Debounced saves are not awaited by callers, so swallow+log rather than crash the timer
+                // thread (SaveSettingsAsync rethrows on failure). (#67)
+                _logger.Error(ex, "Debounced settings save failed");
+            }
+        }
+
         public void UpdateSetting<T>(string propertyName, T value)
         {
             var property = typeof(Settings).GetProperty(propertyName);
