@@ -162,7 +162,7 @@ namespace CST.Avalonia.Tests.Integration
             Assert.True(xmlFileDatesService.GetChangedBooksWasCalled);
             Assert.True(progressReports.Count > 0);
             Assert.Contains(progressReports, p => p.StatusMessage.Contains("up to date"));
-            Assert.True(progressReports.Any(p => p.IsComplete));
+            Assert.Contains(progressReports, p => p.IsComplete);
             _output.WriteLine("✅ Reported 'up to date' status correctly");
         }
 

@@ -266,10 +266,6 @@ namespace CST
 
                     return true;
                 }
-                else
-                {
-                    int i = 0;
-                }
             }
         }
     }

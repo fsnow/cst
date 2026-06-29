@@ -336,7 +336,7 @@ public partial class App : Application
             // Default to showing splash screen if parsing fails
             return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Log.Warning not available yet since Serilog isn't configured, but that's OK
             // This happens very early in startup, before DI is configured

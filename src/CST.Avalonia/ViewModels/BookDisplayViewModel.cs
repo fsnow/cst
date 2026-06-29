@@ -1007,7 +1007,7 @@ namespace CST.Avalonia.ViewModels
                     Log.Debug("[BookDisplay] Looking for term: '{Term}'", searchTerm);
                     
                     // Get the postings for this term
-                    var termsEnum = termVectors.GetIterator(null);
+                    var termsEnum = termVectors.GetEnumerator(null);
                     var termBytes = new BytesRef(System.Text.Encoding.UTF8.GetBytes(searchTerm));
                     
                     if (termsEnum.SeekExact(termBytes))

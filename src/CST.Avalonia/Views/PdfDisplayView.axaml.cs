@@ -15,7 +15,6 @@ public partial class PdfDisplayView : UserControl
     private PdfDisplayViewModel? _viewModel;
     private WebView? _webView;
     private IDisposable? _lifecycleSubscription;
-    private bool _isBrowserInitialized = false;
     private bool _hasPdfLoaded = false;
 
     public PdfDisplayView()
@@ -60,7 +59,6 @@ public partial class PdfDisplayView : UserControl
                 _webView.Navigated -= OnNavigationCompleted;
                 _webView.Dispose();
                 _webView = null;
-                _isBrowserInitialized = false;
                 _hasPdfLoaded = false;  // Reset so PDF reloads after recreate
                 _logger.Information("PDF WebView disposed successfully");
             }
@@ -148,7 +146,6 @@ public partial class PdfDisplayView : UserControl
 
     private void OnNavigationCompleted(object? sender, string url)
     {
-        _isBrowserInitialized = true;
         _logger.Information("PDF navigation completed: {Url}", url);
     }
 
