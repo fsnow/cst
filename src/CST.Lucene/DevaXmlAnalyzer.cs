@@ -8,7 +8,7 @@ namespace CST
     public class DevaXmlAnalyzer : Analyzer
     {
         private readonly LuceneVersion matchVersion;
-        private DevaXmlTokenizer tokenizer;
+        private DevaXmlTokenizer tokenizer = null!;
 
         public DevaXmlAnalyzer(LuceneVersion matchVersion)
         {

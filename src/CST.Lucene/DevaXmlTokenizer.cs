@@ -13,19 +13,19 @@ namespace CST
 {
     public class DevaXmlTokenizer : Tokenizer
     {
-        private StringBuilder text;
+        private StringBuilder text = null!;
 
         // this is the index into the book string
         private int pos;
 
-        private ImmutableHashSet<char> wordChars;
+        private ImmutableHashSet<char> wordChars = null!;
 
         // this tokenizer generates three attributes:
         // term offset, positionIncrement and type
-        private ICharTermAttribute termAtt;
-        private IOffsetAttribute offsetAtt;
-        private IPositionIncrementAttribute posIncrAtt;
-        private ITypeAttribute typeAtt;
+        private ICharTermAttribute termAtt = null!;
+        private IOffsetAttribute offsetAtt = null!;
+        private IPositionIncrementAttribute posIncrAtt = null!;
+        private ITypeAttribute typeAtt = null!;
 
         /// <summary>
         /// Creates a new instance of the <see cref="DevaXmlTokenizer"/>.  Attaches

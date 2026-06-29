@@ -20,15 +20,15 @@ namespace CST
         {
         }
 
-        public string XmlDirectory { get; set; }
+        public string XmlDirectory { get; set; } = string.Empty;
 
-        public string IndexDirectory { get; set; }
+        public string IndexDirectory { get; set; } = string.Empty;
 
         public IndexWriter IndexWriter
         {
             get { return indexWriter; }
         }
-        private IndexWriter indexWriter;
+        private IndexWriter indexWriter = null!;
 
         /// <summary>activ
         /// 
