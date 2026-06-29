@@ -51,8 +51,20 @@ namespace CST.Avalonia.Services
                     
                     if (loadedSettings != null)
                     {
+                        // Migrate older/missing-version files, then repair any invalid values in place (#78).
+                        var notes = SettingsValidator.Migrate(loadedSettings);
+                        foreach (var note in notes)
+                            _logger.Information("Settings migration: {Note}", note);
+                        var fixes = SettingsValidator.Sanitize(loadedSettings);
+                        foreach (var fix in fixes)
+                            _logger.Warning("Settings sanitized: {Fix}", fix);
+
                         _settings = loadedSettings;
                         _logger.Information("Settings loaded successfully from {Path}", _settingsFilePath);
+
+                        // Persist the upgraded/repaired settings so the on-disk file is brought up to date.
+                        if (notes.Count > 0 || fixes.Count > 0)
+                            RequestSave();
                     }
                     else
                     {
