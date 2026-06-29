@@ -1,0 +1,23 @@
+# Normalize line endings: all text files are stored and checked out with LF.
+# One-time renormalization applied when this file was added; enforced going forward.
+* text=auto eol=lf
+
+# Binary file types - never normalize.
+*.bmp   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.icns  binary
+*.svg   text eol=lf
+*.ttf   binary
+*.TTF   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.pdf   binary
+*.dll   binary
+*.exe   binary
+*.zip   binary
+*.snk   binary
