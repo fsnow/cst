@@ -209,7 +209,7 @@ namespace CST.Conversion
         // two capture groups, 1 is the vowel, 2 is the following double consonants
         public static string ConvertEOChars(Match m)
         {
-            string newVal = null;
+            string? newVal = null;
             switch (m.Groups[1].Value)
             {
                 case "\u0D0F":

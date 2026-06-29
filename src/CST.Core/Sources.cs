@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 public class Sources
 {
-	private static Sources sources;
+	private static Sources? sources;
 
 	public static Sources Inst
 	{
@@ -577,7 +577,7 @@ public class Sources
 		d[sourceType] = new Source(sourceType, pageStart, path);
 	}
 
-	public Source GetSource(string filename, SourceType sourceType)
+	public Source? GetSource(string filename, SourceType sourceType)
 	{
 		if (sourcesMap.TryGetValue(filename, out var d) && d.TryGetValue(sourceType, out var source))
 			return source;

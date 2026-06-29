@@ -7,7 +7,7 @@ namespace CST
 {
 	public class Books : IEnumerable<Book>
 	{
-		private static Books books;
+		private static Books? books;
 
 		public static Books Inst
 		{
@@ -2512,49 +2512,49 @@ namespace CST
 			get { return mulaBits; }
 			set { mulaBits = value; }
 		}
-		private BitArray mulaBits;
+		private BitArray mulaBits = null!;
 
 		public BitArray AtthaBits
 		{
 			get { return atthaBits; }
 			set { atthaBits = value; }
 		}
-		private BitArray atthaBits;
+		private BitArray atthaBits = null!;
 
 		public BitArray TikaBits
 		{
 			get { return tikaBits; }
 			set { tikaBits = value; }
 		}
-		private BitArray tikaBits;
+		private BitArray tikaBits = null!;
 
 		public BitArray SuttaBits
 		{
 			get { return suttaBits; }
 			set { suttaBits = value; }
 		}
-		private BitArray suttaBits;
+		private BitArray suttaBits = null!;
 
 		public BitArray VinayaBits
 		{
 			get { return vinayaBits; }
 			set { vinayaBits = value; }
 		}
-		private BitArray vinayaBits;
+		private BitArray vinayaBits = null!;
 
 		public BitArray AbhiBits
 		{
 			get { return abhiBits; }
 			set { abhiBits = value; }
 		}
-		private BitArray abhiBits;
+		private BitArray abhiBits = null!;
 
 		public BitArray OtherBits
 		{
 			get { return otherBits; }
 			set { otherBits = value; }
 		}
-		private BitArray otherBits;
+		private BitArray otherBits = null!;
 
 
 		private void CalculateBitArrays()

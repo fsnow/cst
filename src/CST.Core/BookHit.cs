@@ -18,6 +18,6 @@ namespace CST
             get { return book; }
             set { book = value; }
         }
-        private Book book;
+        private Book book = null!;
     }
 }

@@ -40,7 +40,7 @@ namespace CST.Conversion
             XmlDocument xml = new XmlDocument();
             xml.LoadXml(text);
 
-            XmlNode node = xml.DocumentElement;
+            XmlNode node = xml.DocumentElement!;
 
             bool nextIsCap = false;
             bool descend = true;
@@ -55,7 +55,7 @@ namespace CST.Conversion
                     descend = false;
                 else if (node.NodeType == XmlNodeType.Text)
                 {
-                    string str = node.Value;
+                    string str = node.Value ?? "";
                     string val = "";
                     foreach (char c in str.ToCharArray())
                     {
@@ -82,7 +82,7 @@ namespace CST.Conversion
 
                 if (node.HasChildNodes && descend)
                 {
-                    node = node.FirstChild;
+                    node = node.FirstChild!;
                     nodeFound = true;
                 }
                 else if (node.NextSibling != null)
