@@ -46,14 +46,14 @@ public `VipassanaTech/tipitaka-xml` repo (`XmlUpdateService`), and we can do the
   - Defaults come from `XmlUpdateSettings`: owner `VipassanaTech`, repo `tipitaka-xml`,
     branch `main`, path **`deva master`** (note the space → `%20` in URLs).
 - File list: the 217 canonical filenames are hard-coded in `src/CST.Core/Books.cs`
-  (`book.FileName = "..."`). That file is **UTF-16-LE** — decode before grepping.
+  (`book.FileName = "..."`).
 - Files are **UTF-16-LE with BOM** (`ff fe`), ~226 MB total.
 
 ```bash
-# 1. Extract the authoritative 217-file list from Books.cs (UTF-16-LE)
+# 1. Extract the authoritative 217-file list from Books.cs
 python3 - <<'PY' > /tmp/booklist.txt
 import re
-data = open('src/CST.Core/Books.cs','rb').read().decode('utf-16')
+data = open('src/CST.Core/Books.cs', encoding='utf-8').read()
 print("\n".join(re.findall(r'FileName\s*=\s*"([^"]+\.xml)"', data)))
 PY
 
@@ -119,7 +119,7 @@ dotnet test --filter "FullyQualifiedName~ScriptConverterPerformanceTests"  # bef
 - **GitHub MCP scope:** this session's GitHub API access is scoped to `fsnow/cst` only.
   The corpus comes from a *different* repo (`VipassanaTech/tipitaka-xml`) — fetch it via plain
   **raw HTTPS** (allowed), not the GitHub MCP tools (which would be denied for that repo).
-- **UTF-16-LE everywhere:** the corpus XML and several `CST.Core` source files (e.g. `Books.cs`)
-  are UTF-16-LE. Byte-level `grep`/`sed` is unreliable — decode first.
+- **Corpus is UTF-16-LE:** the corpus XML files are UTF-16-LE with BOM; byte-level `grep`/`sed` is
+  unreliable — decode first. (Repo *source* files are UTF-8 + LF, per `.gitattributes`.)
 - **Branch:** cloud work for this effort lands on the designated feature branch; commit/push
   only when explicitly asked (per the root `CLAUDE.md` hard rules).

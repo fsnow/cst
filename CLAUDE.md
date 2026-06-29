@@ -11,7 +11,7 @@ CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform P
 - **Never use the word "Buddhist"** anywhere — app UI or documentation. Use "Pāli", "Tipiṭaka", "VRI texts", etc.
 - **Commit/push only when explicitly asked.** The user reviews changes first.
 - **Script-conversion code uses `\uXXXX` escapes** — never paste literal/invisible non-Latin characters into source.
-- **The corpus XML is UTF-16-LE** — byte-level `grep`/`sed` is unreliable; decode first.
+- **The corpus XML is UTF-16-LE** — byte-level `grep`/`sed` is unreliable; decode first. (Repo *source* files are UTF-8 + LF, enforced by `.gitattributes` — only the corpus is UTF-16.)
 - **The docking UI is non-negotiable** — never remove, replace, or "simplify away" the dock-based interface.
 - **CEF/WebView: never carry a *live* WebView across a re-parent** — it SIGSEGVs on macOS. Float/unfloat go through the controlled button paths (dispose-before-move + fresh browser). See [docs/architecture/DOCK_SUBSYSTEM.md](docs/architecture/DOCK_SUBSYSTEM.md).
 - **Downloaded source PDFs are a preservation mechanism, not an evictable cache** — never propose deleting them.

@@ -90,8 +90,8 @@ different from the transliterators — treat it as a **separate, later** item, n
 - **Script-conversion code uses `\uXXXX` escapes** — never paste literal/invisible non-Latin
   characters into source. Conversion *logic* uses numeric code-point literals (ASCII source);
   *data tables* keep `\uXXXX`.
-- **The corpus XML is UTF-16-LE** — decode before any byte-level grep/sed; several `CST.Core`
-  source files (e.g. `Books.cs`) are UTF-16-LE too.
+- **The corpus XML is UTF-16-LE** — decode before any byte-level grep/sed. (Repo source files
+  are UTF-8 + LF.)
 - **Commit/push only when explicitly asked** — the human reviews first.
 
 ## Suggested workflow
