@@ -19,12 +19,12 @@ public class ScriptService : IScriptService
     {
         _logger = logger;
         _stateService = stateService;
-        
-        // Subscribe to state changes to initialize when state is first loaded
-        if (_stateService != null)
-        {
-            _stateService.StateChanged += OnStateChanged;
-        }
+
+        // The current script is initialized exactly once, deterministically, via InitializeFromState() after
+        // the application state has finished loading (App.InitializeFromLoadedState). This service is the source
+        // of truth for the script thereafter - it writes changes back into state - so it deliberately does NOT
+        // subscribe to StateChanged (the old OnStateChanged path was redundant and could never fire at load
+        // time, since LoadStateAsync does not raise StateChanged). (#81)
     }
 
     // Parameterless constructor for when dependencies are not available
@@ -63,32 +63,21 @@ public class ScriptService : IScriptService
     public event Action<Script>? ScriptChanged;
 
     /// <summary>
-    /// Initialize the current script from application state after state has been loaded
+    /// The single, deterministic initialization path: set the current script from the loaded application
+    /// state. Called once after state load. Idempotent - a second call is a no-op when already in sync, and
+    /// it fires <see cref="ScriptChanged"/> only when the restored script actually differs from the current
+    /// (default Devanagari) value. (#81)
     /// </summary>
     public void InitializeFromState()
     {
-        if (_stateService != null)
-        {
-            var stateScript = _stateService.Current.Preferences.CurrentScript;
-            if (_currentScript != stateScript)
-            {
-                _currentScript = stateScript;
-                _logger?.LogInformation("Initialized current script from application state: {Script}", _currentScript);
-                ScriptChanged?.Invoke(_currentScript);
-            }
-        }
-    }
+        if (_stateService == null)
+            return;
 
-    /// <summary>
-    /// Handle state changes - initialize script when state is first loaded
-    /// </summary>
-    private void OnStateChanged(Models.ApplicationState state)
-    {
-        // Only initialize once when state is first loaded
-        if (state != null && _currentScript == Script.Devanagari && state.Preferences.CurrentScript != Script.Devanagari)
+        var stateScript = _stateService.Current.Preferences.CurrentScript;
+        if (_currentScript != stateScript)
         {
-            _currentScript = state.Preferences.CurrentScript;
-            _logger?.LogInformation("Auto-initialized current script from loaded state: {Script}", _currentScript);
+            _currentScript = stateScript;
+            _logger?.LogInformation("Initialized current script from application state: {Script}", _currentScript);
             ScriptChanged?.Invoke(_currentScript);
         }
     }
