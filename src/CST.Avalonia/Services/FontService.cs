@@ -41,7 +41,7 @@ namespace CST.Avalonia.Services
         {
             var scriptName = script.ToString();
             _logger.LogDebug("[FONT SERVICE] GetScriptFontFamily called for script: {Script}", scriptName);
-            if (CurrentFontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
+            if (CurrentFontSettings.TryGetFont(script, out var setting) && setting != null)
             {
                 var fontFamily = setting.FontFamily;
                 _logger.LogDebug("[FONT SERVICE] Font family for {Script}: '{FontFamily}' (null/empty=system default)", scriptName, fontFamily ?? "null");
@@ -58,7 +58,7 @@ namespace CST.Avalonia.Services
         public int GetScriptFontSize(Script script)
         {
             var scriptName = script.ToString();
-            if (CurrentFontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
+            if (CurrentFontSettings.TryGetFont(script, out var setting) && setting != null)
             {
                 _logger.LogDebug("Font size for {Script}: {FontSize}", scriptName, setting.FontSize);
                 return setting.FontSize;

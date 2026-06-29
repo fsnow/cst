@@ -148,24 +148,19 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
                 return false;
             }
 
-            // Validate loaded state
-            var validation = await ValidateLoadedState(state);
-            if (!validation.IsValid)
-            {
-                _logger.LogWarning("Loaded state validation failed: {Errors}", 
-                    string.Join(", ", validation.Errors));
-                
-                if (!validation.CanRecover)
-                {
-                    _logger.LogError("State is corrupted and cannot be recovered, using default state");
-                    return false;
-                }
-                
-                // Apply fixes for recoverable issues
-                ApplyStateFixes(state, validation);
-            }
+            // Migrate older/missing-version files, then repair any invalid values in place (#78).
+            var migrationNotes = ApplicationStateValidator.Migrate(state);
+            foreach (var note in migrationNotes)
+                _logger.LogInformation("State migration: {Note}", note);
+            var stateFixes = ApplicationStateValidator.Sanitize(state);
+            foreach (var fix in stateFixes)
+                _logger.LogWarning("State sanitized: {Fix}", fix);
 
             Current = state;
+
+            // If we upgraded or repaired anything, persist it so the on-disk file is brought up to date.
+            if (migrationNotes.Count > 0 || stateFixes.Count > 0)
+                MarkDirty();
             // Don't fire StateChanged on load to prevent infinite loops
             // Initial state will be handled separately
             
@@ -395,9 +390,9 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         }
     }
 
-    public async Task<StateValidationResult> ValidateStateAsync()
+    public Task<StateValidationResult> ValidateStateAsync()
     {
-        return await ValidateLoadedState(Current);
+        return Task.FromResult(ApplicationStateValidator.Validate(Current));
     }
 
     public string[] GetBackupFilePaths()
@@ -461,18 +456,15 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
                     
                     if (state != null)
                     {
-                        var validation = await ValidateLoadedState(state);
-                        if (validation.IsValid || validation.CanRecover)
-                        {
-                            if (!validation.IsValid)
-                                ApplyStateFixes(state, validation);
-                                
-                            Current = state;
-                            FireStateChangedEvent();
-                            
-                            _logger.LogInformation("Loaded application state from backup: {BackupPath}", backupPath);
-                            return true;
-                        }
+                        // Migrate + sanitize the backup the same way as the primary file (#78).
+                        ApplicationStateValidator.Migrate(state);
+                        ApplicationStateValidator.Sanitize(state);
+
+                        Current = state;
+                        FireStateChangedEvent();
+
+                        _logger.LogInformation("Loaded application state from backup: {BackupPath}", backupPath);
+                        return true;
                     }
                 }
                 catch (Exception ex)
@@ -490,66 +482,6 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         }
     }
 
-    private async Task<StateValidationResult> ValidateLoadedState(ApplicationState state)
-    {
-        var result = new StateValidationResult { IsValid = true, CanRecover = true };
-        var errors = new List<string>();
-        var warnings = new List<string>();
-
-        // Validate version compatibility
-        if (string.IsNullOrEmpty(state.Version))
-        {
-            warnings.Add("Missing version information");
-            result.IsValid = false;
-        }
-
-        // Validate main window state
-        if (state.MainWindow.Width <= 0 || state.MainWindow.Height <= 0)
-        {
-            warnings.Add("Invalid main window dimensions");
-            result.IsValid = false;
-        }
-
-        // Validate book window states
-        foreach (var bookWindow in state.BookWindows)
-        {
-            if (bookWindow.BookIndex < 0)
-            {
-                warnings.Add($"Invalid book index: {bookWindow.BookIndex}");
-                result.IsValid = false;
-            }
-        }
-
-        // (Tree expansion is now identity-keyed (#64), so no positional count/version consistency check.)
-
-        result.Errors = errors.ToArray();
-        result.Warnings = warnings.ToArray();
-
-        if (!result.IsValid && warnings.Count > 0 && errors.Count == 0)
-        {
-            result.SuggestedAction = "State has warnings but can be recovered with fixes";
-        }
-        else if (errors.Count > 0)
-        {
-            result.CanRecover = false;
-            result.SuggestedAction = "State is corrupted - recommend clearing and starting fresh";
-        }
-
-        return result;
-    }
-
-    private void ApplyStateFixes(ApplicationState state, StateValidationResult validation)
-    {
-        // Fix invalid window dimensions
-        if (state.MainWindow.Width <= 0) state.MainWindow.Width = 1024;
-        if (state.MainWindow.Height <= 0) state.MainWindow.Height = 768;
-
-        // Remove invalid book windows
-        state.BookWindows.RemoveAll(w => w.BookIndex < 0);
-
-        _logger.LogInformation("Applied fixes to application state");
-    }
-    
     /// <summary>
     /// Force immediate save of state (for shutdown scenarios)
     /// </summary>

@@ -1,9 +1,15 @@
 using System.Collections.Generic;
+using CST.Conversion;
 
 namespace CST.Avalonia.Models
 {
     public class Settings
     {
+        /// <summary>
+        /// Settings-file schema version, for backward-compatible migration. (#78)
+        /// </summary>
+        public string Version { get; set; } = "1.0";
+
         public string XmlBooksDirectory { get; set; } = "";
         public string IndexDirectory { get; set; } = "";  // Empty means use default
         public FontSettings FontSettings { get; set; } = new();
@@ -53,6 +59,13 @@ namespace CST.Avalonia.Models
                 ["Tibetan"] = new ScriptFontSetting { FontFamily = "", FontSize = 14 }
             };
         }
+
+        /// <summary>
+        /// Typed lookup of a script's font setting. Centralizes the <see cref="ScriptKeys"/> mapping so callers
+        /// use the <see cref="Script"/> enum instead of raw string keys. (#78)
+        /// </summary>
+        public bool TryGetFont(Script script, out ScriptFontSetting? setting) =>
+            ScriptFonts.TryGetValue(ScriptKeys.Of(script), out setting);
     }
     
     public class ScriptFontSetting
