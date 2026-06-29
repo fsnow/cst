@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using System.Threading.Tasks;
 using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
@@ -39,6 +40,11 @@ public partial class SimpleTabbedWindow : Window
     private const int DRAG_TIMER_INTERVAL = 50; // Check every 50ms
     private const int MIN_WEBVIEW_HIDE_DURATION = 100; // Minimum 100ms hide duration
     private const int DRAG_DETECTION_THRESHOLD = 150; // Wait 150ms to distinguish tab clicks from real drags
+
+    // Completes once the window has opened, giving a deterministic "UI is ready" signal for startup
+    // book-window restoration instead of fixed Task.Delay() guesses. (#70)
+    private readonly TaskCompletionSource _readyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task WhenReady => _readyTcs.Task;
 
     public SimpleTabbedWindow()
     {
@@ -252,6 +258,7 @@ public partial class SimpleTabbedWindow : Window
     private void OnWindowOpened(object? sender, EventArgs e)
     {
         _isInitialized = true;
+        _readyTcs.TrySetResult(); // signal startup restoration that the UI is ready (#70)
         _logger.Information("Window opened and initialized");
     }
 

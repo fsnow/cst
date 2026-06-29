@@ -582,53 +582,41 @@ public partial class App : Application
             var bookWindowsToRestore = state.BookWindows.ToList();
             Log.Information("Captured {Count} book windows to restore", bookWindowsToRestore.Count);
 
-            // Suppress StateChanged events during restoration to prevent loops
+            // Clear existing bookWindows before restoration so we start clean and only restored books
+            // end up in state. This is a plain list mutation (no StateChanged), so it needs no suppression;
+            // RestoreBookWindowsAsync suppresses events around the actual book-opening.
             var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
             if (stateService != null)
             {
-                stateService.SetStateChangedEventsSuppression(true);
-
-                // Clear existing bookWindows before restoration to prevent accumulation of stale entries
-                // This ensures we start with a clean slate and only restored books will be in state
                 Log.Information("Clearing {Count} existing book window entries before restoration", stateService.Current.BookWindows.Count);
                 stateService.Current.BookWindows.Clear();
             }
 
-            try
-            {
-                RestoreBookWindows(bookWindowsToRestore);
-            }
-            finally
-            {
-                // Re-enable StateChanged events after restoration
-                if (stateService != null)
-                {
-                    stateService.SetStateChangedEventsSuppression(false);
-                }
-            }
+            // Awaited so the event-subscription pass below runs strictly after restoration. The restore
+            // waits on the window's readiness signal instead of a fixed delay. (#70)
+            await RestoreBookWindowsAsync(bookWindowsToRestore);
         }
 
-        // Ensure all books have event subscriptions (runs every time, not just during restoration)
-        Dispatcher.UIThread.Post(async () =>
+        // Ensure all books have event subscriptions. Runs after the window is ready and after any book
+        // restoration has completed - on the UI thread, no fixed delay (was Task.Delay(1000)). (#70)
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop2 &&
+            desktop2.MainWindow is SimpleTabbedWindow readyWindow)
         {
-            // Wait for UI to be fully initialized
-            await Task.Delay(1000);
-
-            Log.Debug("Ensuring event subscriptions for all books...");
-
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&
-                desktop.MainWindow is SimpleTabbedWindow mainWindow &&
-                mainWindow.DataContext is LayoutViewModel layoutViewModel &&
-                layoutViewModel.Factory is CstDockFactory factory)
+            await readyWindow.WhenReady;
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                Log.Information("Calling EnsureBookEventSubscriptions");
-                factory.EnsureBookEventSubscriptions();
-            }
-            else
-            {
-                Log.Warning("Could not ensure book event subscriptions - factory not found");
-            }
-        });
+                if (readyWindow.DataContext is LayoutViewModel layoutViewModel &&
+                    layoutViewModel.Factory is CstDockFactory factory)
+                {
+                    Log.Information("Calling EnsureBookEventSubscriptions");
+                    factory.EnsureBookEventSubscriptions();
+                }
+                else
+                {
+                    Log.Warning("Could not ensure book event subscriptions - factory not found");
+                }
+            }, DispatcherPriority.Background);
+        }
     }
 
     private void OnApplicationStateChanged(ApplicationState state)
@@ -640,112 +628,91 @@ public partial class App : Application
         // Future: Could add other state change handling here if needed
     }
 
-    private void RestoreBookWindows(List<BookWindowState> bookWindows)
+    private async Task RestoreBookWindowsAsync(List<BookWindowState> bookWindows)
     {
         try
         {
             Log.Information("Restoring {BookCount} book windows from saved state", bookWindows.Count);
-            
-            // We need to delay restoration until the UI is fully loaded
-            // Schedule the restoration on the UI thread after a delay
-            Dispatcher.UIThread.Post(async () =>
+
+            if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop ||
+                desktop.MainWindow is not SimpleTabbedWindow mainWindow)
             {
-                var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
-                
-                try
+                Log.Warning("Main window not available for book restoration");
+                return;
+            }
+
+            // Deterministic readiness instead of Task.Delay(500): wait until the window's UI is ready. (#70)
+            await mainWindow.WhenReady;
+
+            var stateService = ServiceProvider?.GetRequiredService<IApplicationStateService>();
+            try
+            {
+                // Suppress StateChanged events during restoration to prevent a feedback loop
+                if (stateService != null)
+                    stateService.SetStateChangedEventsSuppression(true);
+
+                string? selectedBookWindowId = null;
+
+                // First pass: open all books (on the UI thread) and note which one should be selected
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    // Wait for UI to be fully initialized
-                    await Task.Delay(500);
-                    
-                    // Suppress StateChanged events to prevent feedback loop
-                    if (stateService != null)
+                    var bookWindowsCopy = bookWindows.ToList();
+                    foreach (var bookWindowState in bookWindowsCopy)
                     {
-                        stateService.SetStateChangedEventsSuppression(true);
-                    }
-                    
-                    // Get the main window and its dock factory
-                    if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && 
-                        desktop.MainWindow is SimpleTabbedWindow mainWindow)
-                    {
-                        // Use the SimpleTabbedWindow's OpenBook method directly
-                        // Create a copy to avoid collection modification issues
-                        var bookWindowsCopy = bookWindows.ToList();
-                        string? selectedBookWindowId = null;
-                        
-                        // First pass: Open all books and identify which one should be selected
-                        foreach (var bookWindowState in bookWindowsCopy)
+                        try
                         {
-                            try
+                            if (bookWindowState.IsSelected)
+                                selectedBookWindowId = bookWindowState.WindowId;
+
+                            if (bookWindowState.BookIndex >= 0 && bookWindowState.BookIndex < Books.Inst.Count)
                             {
-                                // Remember which book was selected
-                                if (bookWindowState.IsSelected)
+                                var book = Books.Inst[bookWindowState.BookIndex];
+                                if (book.FileName == bookWindowState.BookFileName)
                                 {
-                                    selectedBookWindowId = bookWindowState.WindowId;
-                                }
-                                
-                                // Get the book from Books.Inst by index
-                                if (bookWindowState.BookIndex >= 0 && bookWindowState.BookIndex < Books.Inst.Count)
-                                {
-                                    var book = Books.Inst[bookWindowState.BookIndex];
-                                    
-                                    // Validate the book filename matches (for extra safety)
-                                    if (book.FileName == bookWindowState.BookFileName)
-                                    {
-                                        Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}, SearchTerms: {TermCount}, Positions: {PosCount}, Anchor: {Anchor}",
-                                            book.FileName, bookWindowState.WindowId, bookWindowState.SearchTerms.Count, bookWindowState.SearchPositions.Count,
-                                            bookWindowState.CurrentAnchor ?? "null");
-                                        // Open the book through SimpleTabbedWindow with saved script, search data, WindowId, and scroll position
-                                        mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId,
-                                            bookWindowState.DocId, bookWindowState.SearchPositions, bookWindowState.CurrentAnchor,
-                                            bookWindowState.CurrentHitIndex);
-                                        Log.Debug("Book restored: {BookFile} with script: {Script}, anchor: {Anchor}",
-                                            book.FileName, bookWindowState.BookScript, bookWindowState.CurrentAnchor ?? "null");
-                                    }
-                                    else
-                                    {
-                                        Log.Warning("Book filename mismatch: expected {ExpectedFile}, got {ActualFile}", bookWindowState.BookFileName, book.FileName);
-                                    }
+                                    Log.Information("Restoring book: {BookFile} with WindowId: {WindowId}, SearchTerms: {TermCount}, Positions: {PosCount}, Anchor: {Anchor}",
+                                        book.FileName, bookWindowState.WindowId, bookWindowState.SearchTerms.Count, bookWindowState.SearchPositions.Count,
+                                        bookWindowState.CurrentAnchor ?? "null");
+                                    mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId,
+                                        bookWindowState.DocId, bookWindowState.SearchPositions, bookWindowState.CurrentAnchor,
+                                        bookWindowState.CurrentHitIndex);
+                                    Log.Debug("Book restored: {BookFile} with script: {Script}, anchor: {Anchor}",
+                                        book.FileName, bookWindowState.BookScript, bookWindowState.CurrentAnchor ?? "null");
                                 }
                                 else
                                 {
-                                    Log.Warning("Invalid book index: {BookIndex}", bookWindowState.BookIndex);
+                                    Log.Warning("Book filename mismatch: expected {ExpectedFile}, got {ActualFile}", bookWindowState.BookFileName, book.FileName);
                                 }
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                Log.Error(ex, "Failed to restore book {BookFile}", bookWindowState.BookFileName);
+                                Log.Warning("Invalid book index: {BookIndex}", bookWindowState.BookIndex);
                             }
                         }
-                        
-                        // Second pass: Restore the selected tab if we found one
-                        if (!string.IsNullOrEmpty(selectedBookWindowId))
+                        catch (Exception ex)
                         {
-                            // Add a small delay to ensure all tabs are fully loaded before setting selection
-                            await Task.Delay(100);
-                            RestoreSelectedBookTab(selectedBookWindowId);
+                            Log.Error(ex, "Failed to restore book {BookFile}", bookWindowState.BookFileName);
                         }
                     }
-                    else
-                    {
-                        Log.Warning("Main window not available for book restoration");
-                    }
-                }
-                finally
-                {
-                    // Re-enable StateChanged events
-                    if (stateService != null)
-                    {
-                        stateService.SetStateChangedEventsSuppression(false);
-                    }
-                }
-            });
+                });
+
+                // Second pass: restore the selected tab after the tabs have had a layout pass. Background
+                // priority runs after pending layout - deterministic, replaces Task.Delay(100). (#70)
+                if (!string.IsNullOrEmpty(selectedBookWindowId))
+                    await Dispatcher.UIThread.InvokeAsync(() => RestoreSelectedBookTab(selectedBookWindowId),
+                        DispatcherPriority.Background);
+            }
+            finally
+            {
+                if (stateService != null)
+                    stateService.SetStateChangedEventsSuppression(false);
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to restore book windows");
         }
     }
-    
+
     private void RestoreSelectedBookTab(string selectedWindowId)
     {
         try
