@@ -70,7 +70,7 @@ namespace CST.Avalonia.Tests.Services
                 
                 if (languagesAttr != null)
                 {
-                    var langValue = (IntPtr)languagesAttr.GetValue(null);
+                    var langValue = (IntPtr)languagesAttr.GetValue(null)!;
                     _output.WriteLine($"kCTFontLanguagesAttribute: {langValue}");
                 }
                 else
@@ -80,7 +80,7 @@ namespace CST.Avalonia.Tests.Services
                 
                 if (familyAttr != null)
                 {
-                    var familyValue = (IntPtr)familyAttr.GetValue(null);
+                    var familyValue = (IntPtr)familyAttr.GetValue(null)!;
                     _output.WriteLine($"kCTFontFamilyNameAttribute: {familyValue}");
                 }
                 else
@@ -137,9 +137,9 @@ namespace CST.Avalonia.Tests.Services
                 x => x.Log(
                     LogLevel.Warning,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("No language code mapping")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("No language code mapping")),
                     It.IsAny<Exception>(),
-                    It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
         }
 
@@ -182,9 +182,9 @@ namespace CST.Avalonia.Tests.Services
                     x => x.Log(
                         LogLevel.Information,
                         It.IsAny<EventId>(),
-                        It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Querying fonts for script")),
+                        It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Querying fonts for script")),
                         It.IsAny<Exception>(),
-                        It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                        It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                     Times.Once);
             }
             catch (Exception ex)
@@ -308,7 +308,7 @@ namespace CST.Avalonia.Tests.Services
                     x => x.Log(
                         LogLevel.Debug,
                         It.IsAny<EventId>(),
-                        It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Using MacFontService")),
+                        It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Using MacFontService")),
                         It.IsAny<Exception>(),
                         It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                     Times.Once);
@@ -318,7 +318,7 @@ namespace CST.Avalonia.Tests.Services
                     x => x.Log(
                         LogLevel.Debug,
                         It.IsAny<EventId>(),
-                        It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Using fallback method")),
+                        It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Using fallback method")),
                         It.IsAny<Exception>(),
                         It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                     Times.Once);
@@ -358,9 +358,9 @@ namespace CST.Avalonia.Tests.Services
                 x => x.Log(
                     LogLevel.Debug,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Using fallback method")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Using fallback method")),
                     It.IsAny<Exception>(),
-                    It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
         }
     }

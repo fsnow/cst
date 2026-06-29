@@ -85,7 +85,7 @@ namespace CST.Avalonia.Tests.BugFix
             // After the fix, this should always be called and should detect the changed books
             try
             {
-                await indexingService.BuildIndexAsync(null);
+                await indexingService.BuildIndexAsync(null!);
             }
             catch (Exception ex)
             {

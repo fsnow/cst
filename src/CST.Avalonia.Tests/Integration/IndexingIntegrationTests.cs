@@ -144,7 +144,7 @@ namespace CST.Avalonia.Tests.Integration
             // Act & Assert
             // Test that IndexingService correctly calls XmlFileDatesService
             await Assert.ThrowsAsync<FileNotFoundException>(
-                async () => await indexingService.BuildIndexAsync(null));
+                async () => await indexingService.BuildIndexAsync(null!));
 
             // Verify the services communicated
             Assert.True(xmlFileDatesService.GetChangedBooksWasCalled);

@@ -157,7 +157,7 @@ namespace CST.Avalonia.Tests.Services
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<IOException>(
-                async () => await _service.BuildIndexAsync(null));
+                async () => await _service.BuildIndexAsync(null!));
             
             Assert.Equal("Disk full", exception.Message);
         }

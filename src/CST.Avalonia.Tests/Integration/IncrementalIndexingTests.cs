@@ -126,7 +126,7 @@ namespace CST.Avalonia.Tests.Integration
             // Act
             // This will throw either FileNotFoundException or IndexNotFoundException depending on how far it gets
             var exception = await Assert.ThrowsAnyAsync<Exception>(
-                async () => await indexingService.BuildIndexAsync(null));
+                async () => await indexingService.BuildIndexAsync(null!));
 
             // Assert
             Assert.True(xmlFileDatesService.GetChangedBooksWasCalled);

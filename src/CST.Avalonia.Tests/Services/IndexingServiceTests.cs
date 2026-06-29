@@ -286,7 +286,7 @@ namespace CST.Avalonia.Tests.Services
 
             // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(
-                async () => await _service.BuildIndexAsync(null));
+                async () => await _service.BuildIndexAsync(null!));
         }
 
         [Fact]
@@ -300,7 +300,7 @@ namespace CST.Avalonia.Tests.Services
             // Act & Assert
             // This will throw because we don't have actual XML books, but we can verify the flow
             await Assert.ThrowsAsync<FileNotFoundException>(
-                async () => await _service.UpdateIndexAsync(changedBooks, null));
+                async () => await _service.UpdateIndexAsync(changedBooks, null!));
 
             // The method should not call GetChangedBooksAsync since books are provided
             _mockXmlFileDatesService.Verify(x => x.GetChangedBooksAsync(), Times.Never);
@@ -330,7 +330,7 @@ namespace CST.Avalonia.Tests.Services
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-                async () => await _service.BuildIndexAsync(null));
+                async () => await _service.BuildIndexAsync(null!));
             
             Assert.Equal("Test exception", exception.Message);
         }
@@ -346,7 +346,7 @@ namespace CST.Avalonia.Tests.Services
             // Act & Assert
             // This will throw FileNotFoundException due to missing XML files
             await Assert.ThrowsAsync<FileNotFoundException>(
-                async () => await _service.UpdateIndexAsync(changedBooks, null));
+                async () => await _service.UpdateIndexAsync(changedBooks, null!));
         }
 
         [Fact]
