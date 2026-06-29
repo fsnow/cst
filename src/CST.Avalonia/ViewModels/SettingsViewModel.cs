@@ -185,7 +185,7 @@ namespace CST.Avalonia.ViewModels
         public AppearanceSettingsViewModel(ISettingsService settingsService)
         {
             _settingsService = settingsService;
-            _fontService = App.ServiceProvider.GetRequiredService<IFontService>();
+            _fontService = App.ServiceProvider!.GetRequiredService<IFontService>();
             
             // Initialize script font settings
             ScriptFontSettings = new ObservableCollection<ScriptFontSettingViewModel>();
@@ -287,7 +287,7 @@ namespace CST.Avalonia.ViewModels
         {
             if (_settingsService.Settings.FontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
             {
-                setting.FontFamily = fontFamily;
+                setting.FontFamily = fontFamily ?? string.Empty;
                 setting.FontSize = fontSize;
                 
                 // Notify FontService about the change so other components update
@@ -559,7 +559,7 @@ namespace CST.Avalonia.ViewModels
             try
             {
                 var scriptEnum = GetScriptFromName(ScriptName);
-                var fontService = App.ServiceProvider.GetRequiredService<IFontService>();
+                var fontService = App.ServiceProvider!.GetRequiredService<IFontService>();
                 SystemDefaultFontName = await fontService.GetSystemDefaultFontForScriptAsync(scriptEnum);
                 UpdateFontDisplayName(); // Refresh display name with system default info
             }

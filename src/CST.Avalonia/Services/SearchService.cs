@@ -417,7 +417,7 @@ public class SearchService : ISearchService
                     mt = new MatchingTerm
                     {
                         Term = key,
-                        DisplayTerm = string.Join(" ", ordered.Select(tp => ConvertToDisplayScript(tp.Word))),
+                        DisplayTerm = string.Join(" ", ordered.Select(tp => ConvertToDisplayScript(tp.Word ?? string.Empty))),
                         Occurrences = new List<BookOccurrence>()
                     };
                     combos[key] = mt;
@@ -496,7 +496,7 @@ public class SearchService : ISearchService
             }
             lastDocId = docId;
 
-            CST.Book book = null;
+            CST.Book? book = null;
             try
             {
                 book = books.FromDocId(docId);

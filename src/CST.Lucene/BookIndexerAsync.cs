@@ -29,7 +29,7 @@ namespace CST.Lucene
             set => _bookIndexer.IndexDirectory = value;
         }
 
-        public async Task IndexAllAsync(IProgress<IndexingProgress> progress, List<int> changedFiles)
+        public async Task IndexAllAsync(IProgress<IndexingProgress>? progress, List<int> changedFiles)
         {
             await Task.Run(() =>
             {

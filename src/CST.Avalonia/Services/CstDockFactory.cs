@@ -51,15 +51,12 @@ namespace CST.Avalonia.Services
             
             // Get ViewModels from the service provider
             // ViewModels ARE the tools now (ReactiveTool pattern) - no wrapper needed
-            var openBookTool = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
-            var searchTool = App.ServiceProvider?.GetRequiredService<SearchViewModel>();
+            var openBookTool = App.ServiceProvider!.GetRequiredService<OpenBookDialogViewModel>();
+            var searchTool = App.ServiceProvider!.GetRequiredService<SearchViewModel>();
 
             _logger.Debug("Created tools - OpenBook: {OpenBookType}, Search: {SearchType}",
-                openBookTool?.GetType().Name ?? "null", searchTool?.GetType().Name ?? "null");
-            if (openBookTool != null)
-            {
-                _logger.Debug("OpenBookViewModel BookTree has {BookCount} items", openBookTool.BookTree.Count);
-            }
+                openBookTool.GetType().Name, searchTool.GetType().Name);
+            _logger.Debug("OpenBookViewModel BookTree has {BookCount} items", openBookTool.BookTree.Count);
 
             // Create the book selection tool dock (left side)
             var leftToolDock = new ToolDock
@@ -521,14 +518,11 @@ namespace CST.Avalonia.Services
             // Pass search data if available (for state restoration with highlighting)
             var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex);
             
-            // Set the correct script after construction
-            if (bookDisplayViewModel != null)
-            {
-                // Use provided script or fall back to current application setting
-                Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
-                bookDisplayViewModel.BookScript = targetScript;
-                _logger.Debug("Set book script to: {ActualScript} (requested: {RequestedScript})", targetScript, bookScript?.ToString() ?? "null");
-            }
+            // Set the correct script after construction (bookDisplayViewModel was just newed).
+            // Use provided script or fall back to current application setting
+            Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
+            bookDisplayViewModel.BookScript = targetScript;
+            _logger.Debug("Set book script to: {ActualScript} (requested: {RequestedScript})", targetScript, bookScript?.ToString() ?? "null");
 
             // Phase 1: Prevent drag-to-float for documents with CEF WebView
             // CanDrag = true allows tab reordering within same window

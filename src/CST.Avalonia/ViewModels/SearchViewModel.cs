@@ -545,9 +545,9 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     {
         var books = CST.Books.Inst;
         int bookCount = books.Count;
-        BitArray bookBits = null;
-        BitArray clBits = null;
-        BitArray pitBits = null;
+        BitArray? bookBits = null;
+        BitArray? clBits = null;
+        BitArray? pitBits = null;
         bool clSelected = false;
         bool pitSelected = false;
         
@@ -583,11 +583,11 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         
         // Combine Commentary and Pitaka filters (AND logic between groups)
         if (clSelected && pitSelected)
-            bookBits = clBits.And(pitBits);
+            bookBits = clBits!.And(pitBits!);
         else if (clSelected)
-            bookBits = clBits;
+            bookBits = clBits!;
         else if (pitSelected)
-            bookBits = pitBits;
+            bookBits = pitBits!;
         else
             bookBits = new BitArray(bookCount);
         
