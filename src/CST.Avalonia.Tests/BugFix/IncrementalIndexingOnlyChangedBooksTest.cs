@@ -117,43 +117,11 @@ namespace CST.Avalonia.Tests.BugFix
             _output.WriteLine("✅ Incremental indexing only processed the 1 changed book, not all books");
         }
 
-        [Fact(Skip = "Test incomplete - needs all 217 XML files or mocked Books catalog")]
-        public async Task InitialIndexing_ProcessesAllBooks_WhenNoChangedFiles()
-        {
-            // Arrange
-            var progressMessages = new List<string>();
-            var progress = new Progress<IndexingProgress>(p => 
-            {
-                progressMessages.Add(p.StatusMessage);
-                _output.WriteLine($"Progress: {p.StatusMessage}");
-            });
-
-            // Mock XmlFileDatesService to return empty changed books list (initial indexing)
-            var changedBooks = new List<int>(); // Empty list = initial indexing
-            _mockXmlFileDatesService.Setup(x => x.GetChangedBooksAsync()).ReturnsAsync(changedBooks);
-            
-            // Mock IsIndexValidAsync to return false so indexing proceeds
-            var indexingService = new IndexingService(
-                _mockLogger.Object, 
-                _mockSettingsService.Object, 
-                _mockXmlFileDatesService.Object);
-
-            await indexingService.InitializeAsync();
-
-            // Act
-            await indexingService.BuildIndexAsync(progress);
-
-            // Assert
-            // For initial indexing with empty changed files, it should process all books that need indexing
-            // This validates that the fix doesn't break initial indexing behavior
-            var indexingMessages = progressMessages.FindAll(m => m.Contains("Building search index."));
-            
-            _output.WriteLine($"\nFound {indexingMessages.Count} indexing progress messages for initial indexing");
-            
-            // Should have processed some books (exact count depends on Books.Inst implementation)
-            Assert.True(indexingMessages.Count >= 0, "Initial indexing should process books as needed");
-            
-            _output.WriteLine("✅ Initial indexing behavior preserved when no changed files specified");
-        }
+        // (Removed InitialIndexing_ProcessesAllBooks_WhenNoChangedFiles: it could not verify its premise at the
+        // unit level. It mocked GetChangedBooksAsync() to return an EMPTY list, but in BuildIndexAsync an empty
+        // changed-set means PerformIndexingAsync processes nothing - the "all books on first run" set comes from
+        // the real GetChangedBooksAsync, which the mock replaced. Its only assertion (Count >= 0) was trivially
+        // true. Full/initial indexing over the real catalog is exercised by the Integration tests
+        // (IndexingIntegrationTests / IncrementalIndexingTests). (#46)
     }
 }
