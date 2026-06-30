@@ -386,13 +386,18 @@ namespace CST.Avalonia.ViewModels
         /// <summary>
         /// Updates the startup status message
         /// </summary>
-        /// Raised when the startup/indexing status banner is written (before CompleteStartup). The dock
-        /// factory subscribes to bring the Welcome tab forward so progress — especially a full re-index —
-        /// is visible instead of hidden behind a restored book tab. Self-limited: no-ops once startup
-        /// completes. (#56)
-        public event Action? StartupStatusWritten;
+        /// Raised when a long-running startup task (a full re-index, an XML download) reports progress —
+        /// i.e. SetStartupStatus is called with isWork: true. The dock factory subscribes to bring the
+        /// Welcome tab forward so the work is visible instead of hidden behind a restored book tab. Routine
+        /// startup messages ("Loading settings…", "Checking…") do NOT raise this, so they never steal focus
+        /// from a restored tab. Self-limited: no-ops once startup completes. (#56)
+        public event Action? StartupWorkReported;
 
-        public void SetStartupStatus(string message)
+        /// Raised once when startup/indexing finishes (CompleteStartup). The dock factory uses this to
+        /// return focus to the tab that was active before the work pulled the Welcome tab forward. (#56)
+        public event Action? StartupCompleted;
+
+        public void SetStartupStatus(string message, bool isWork = false)
         {
             // Ignore late updates that arrive after startup has been marked complete (see #38).
             if (_startupComplete)
@@ -404,8 +409,10 @@ namespace CST.Avalonia.ViewModels
             IsStartupInProgress = !string.IsNullOrEmpty(message);
             Log.Debug("Welcome page startup status: {Status}", message);
 
-            if (!string.IsNullOrEmpty(message))
-                StartupStatusWritten?.Invoke();
+            // Only real work (re-index, download) pulls the Welcome tab forward; routine status messages
+            // update the banner text but must not steal focus from a restored book tab. (#56)
+            if (isWork && !string.IsNullOrEmpty(message))
+                StartupWorkReported?.Invoke();
         }
 
         /// <summary>
@@ -413,10 +420,13 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public void CompleteStartup()
         {
+            if (_startupComplete)
+                return;
             _startupComplete = true;
             IsStartupInProgress = false;
             StartupStatusMessage = "";
             Log.Information("Welcome page startup completed");
+            StartupCompleted?.Invoke();
         }
     }
 }

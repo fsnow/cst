@@ -174,6 +174,11 @@ public partial class App : Application
             // Get the WelcomeViewModel to update startup status
             var welcomeViewModel = layoutViewModel.GetWelcomeViewModel();
 
+            // When startup/indexing finishes, return focus to the tab that was active at restore - the
+            // Welcome tab is only pulled forward while real work runs (re-index/download). (#56)
+            if (welcomeViewModel != null)
+                welcomeViewModel.StartupCompleted += OnStartupCompletedReturnFocus;
+
             // Show the window BEFORE starting initialization
             MainWindow.Show();
 
@@ -433,11 +438,11 @@ public partial class App : Application
                         {
                             if (p.TotalBooks > 0)
                             {
-                                welcomeViewModel?.SetStartupStatus($"Indexing book {p.CurrentBook} of {p.TotalBooks}...");
+                                welcomeViewModel?.SetStartupStatus($"Indexing book {p.CurrentBook} of {p.TotalBooks}...", isWork: true);
                             }
                             else if (!string.IsNullOrEmpty(p.StatusMessage))
                             {
-                                welcomeViewModel?.SetStartupStatus(p.StatusMessage);
+                                welcomeViewModel?.SetStartupStatus(p.StatusMessage, isWork: true);
                             }
                         });
                     }
@@ -504,7 +509,7 @@ public partial class App : Application
                 // Update welcome page status
                 Dispatcher.UIThread.Post(() =>
                 {
-                    welcomeViewModel?.SetStartupStatus(message);
+                    welcomeViewModel?.SetStartupStatus(message, isWork: true);
                 });
             };
 
@@ -695,6 +700,10 @@ public partial class App : Application
                     }
                 });
 
+                // Remember the active tab so it can be re-selected after startup work (a re-index pulls the
+                // Welcome tab forward to show progress). (#56)
+                _restoredSelectedWindowId = selectedBookWindowId;
+
                 // Second pass: restore the selected tab after the tabs have had a layout pass. Background
                 // priority runs after pending layout - deterministic, replaces Task.Delay(100). (#70)
                 if (!string.IsNullOrEmpty(selectedBookWindowId))
@@ -711,6 +720,38 @@ public partial class App : Application
         {
             Log.Error(ex, "Failed to restore book windows");
         }
+    }
+
+    // WindowId of the book tab that was active when state was restored; re-selected after startup work
+    // finishes (a re-index pulls the Welcome tab forward). Null/empty when no book tab was active. (#56)
+    private string? _restoredSelectedWindowId;
+
+    private void OnStartupCompletedReturnFocus()
+    {
+        var id = _restoredSelectedWindowId;
+        if (string.IsNullOrEmpty(id))
+            return; // nothing was active to return to (e.g. user closed on the Welcome tab)
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&
+                    desktop.MainWindow is SimpleTabbedWindow mainWindow &&
+                    mainWindow.DataContext is LayoutViewModel layoutViewModel)
+                {
+                    var documentDock = FindDocumentDockInLayout(layoutViewModel.Layout);
+                    // Only return focus if the Welcome tab is still active - don't yank a user who
+                    // deliberately switched to a book tab while the work was running. (#56)
+                    if (documentDock?.ActiveDockable is WelcomeViewModel)
+                        RestoreSelectedBookTab(id);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not return focus to restored tab after startup");
+            }
+        }, DispatcherPriority.Background);
     }
 
     private void RestoreSelectedBookTab(string selectedWindowId)

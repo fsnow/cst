@@ -86,11 +86,13 @@ namespace CST.Avalonia.Services
             // WelcomeViewModel IS the document - no wrapper needed (ReactiveDocument pattern)
             var welcomeDocument = new WelcomeViewModel();
 
-            // Bring the Welcome tab forward whenever its startup/indexing status banner updates, so
-            // progress (especially a full re-index) is visible instead of hidden behind a restored book
-            // tab. Self-limited (SetStartupStatus no-ops after CompleteStartup); defensive so a focus
-            // change can never break startup. (#56)
-            welcomeDocument.StartupStatusWritten += () =>
+            // Bring the Welcome tab forward only while real work runs (a full re-index or an XML download
+            // reports progress), so it is visible instead of hidden behind a restored book tab. Routine
+            // startup messages do NOT raise StartupWorkReported, so a fast startup never flashes the Welcome
+            // tab over a restored book. App returns focus to the restored tab on StartupCompleted.
+            // Self-limited (no-ops after CompleteStartup); defensive so a focus change can never break
+            // startup. (#56)
+            welcomeDocument.StartupWorkReported += () =>
                 Dispatcher.UIThread.Post(() =>
                 {
                     try { SetActiveDockable(welcomeDocument); }
