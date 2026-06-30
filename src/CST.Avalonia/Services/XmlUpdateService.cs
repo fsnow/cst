@@ -242,6 +242,23 @@ namespace CST.Avalonia.Services
             return result;
         }
 
+        /// <summary>
+        /// Verify a downloaded file's bytes against the Git blob SHA the tree reported. Throws
+        /// <see cref="InvalidDataException"/> on a mismatch - a corrupt or partial download must not be written
+        /// to the XML directory. (#65)
+        /// </summary>
+        private void VerifyDownloadIntegrity(string fileName, byte[] content, string expectedSha)
+        {
+            if (GitBlobHash.Matches(content, expectedSha))
+                return;
+
+            _logger.LogError(
+                "Integrity check failed for {FileName}: expected blob SHA {Expected}, got {Actual} ({Size:N0} bytes) - corrupt or partial download",
+                fileName, expectedSha, GitBlobHash.Compute(content), content.Length);
+            throw new InvalidDataException(
+                $"Downloaded '{fileName}' failed its integrity check (Git blob SHA mismatch).");
+        }
+
         private async Task PerformInitialDownloadAsync()
         {
             try
@@ -355,9 +372,11 @@ namespace CST.Avalonia.Services
                         if (response.IsSuccessStatusCode)
                         {
                             var content = await response.Content.ReadAsByteArrayAsync();
+                            VerifyDownloadIntegrity(fileName, content, file.Sha);
+
                             var tempPath = Path.Combine(tempDir, fileName);
                             await File.WriteAllBytesAsync(tempPath, content);
-                            
+
                             downloadedFiles[fileName] = new FileCommitInfo
                             {
                                 LastIndexedTimestamp = null,  // null = needs indexing after download
@@ -670,9 +689,11 @@ namespace CST.Avalonia.Services
                         if (response.IsSuccessStatusCode)
                         {
                             var content = await response.Content.ReadAsByteArrayAsync();
+                            VerifyDownloadIntegrity(fileName, content, file.Sha);
+
                             var tempPath = Path.Combine(tempDir, fileName);
                             await File.WriteAllBytesAsync(tempPath, content);
-                            
+
                             // Add/update this file in our tracking
                             // Set LastIndexedTimestamp to null since file was updated and needs re-indexing
                             allFiles[fileName] = new FileCommitInfo
