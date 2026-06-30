@@ -105,5 +105,29 @@ namespace CST.Avalonia.Tests.Services
             Assert.Equal("5.1.0", sorted[6]?.ToString());
             Assert.Equal("6.0.0", sorted[7]?.ToString());
         }
+
+        [Theory]
+        [InlineData("5.0.0-beta.5+abc1234", "5.0.0-beta.5")] // SemVer build metadata stripped
+        [InlineData("5.0.0+build.99", "5.0.0")]
+        [InlineData("5.0.0-beta.5", "5.0.0-beta.5")]          // no metadata -> unchanged
+        [InlineData("  5.0.0+x  ", "5.0.0")]                  // trimmed
+        [InlineData("5.0.0.0", "5.0.0.0")]                    // 4-part assembly version, no '+'
+        [InlineData("+abc", "")]                              // metadata only
+        [InlineData("", "")]
+        [InlineData("   ", "")]
+        [InlineData(null, "")]
+        public void StripBuildMetadata_RemovesEverythingFromFirstPlus(string? input, string expected)
+            => Assert.Equal(expected, VersionComparer.StripBuildMetadata(input));
+
+        [Fact]
+        public void ParseVersion_ToleratesBuildMetadata()
+        {
+            // The stripped form and the raw +metadata form parse to the same components.
+            var stripped = VersionComparer.ParseVersion("5.0.0-beta.5");
+            var withMeta = VersionComparer.ParseVersion(VersionComparer.StripBuildMetadata("5.0.0-beta.5+deadbee"));
+            Assert.NotNull(stripped);
+            Assert.NotNull(withMeta);
+            Assert.Equal(0, stripped!.CompareTo(withMeta));
+        }
     }
 }

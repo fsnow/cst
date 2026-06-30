@@ -201,6 +201,21 @@ namespace CST.Avalonia.Services
         }
 
         /// <summary>
+        /// Strip SemVer build metadata (everything from the first '+') and surrounding whitespace, e.g.
+        /// "5.0.0-beta.5+abc1234" -> "5.0.0-beta.5". Returns the trimmed input when there is no '+', and an
+        /// empty string for null/blank. Single source of truth so callers don't hand-roll Substring/Split. (#71)
+        /// </summary>
+        public static string StripBuildMetadata(string? version)
+        {
+            if (string.IsNullOrWhiteSpace(version))
+                return string.Empty;
+
+            var trimmed = version.Trim();
+            var plus = trimmed.IndexOf('+');
+            return plus >= 0 ? trimmed.Substring(0, plus) : trimmed;
+        }
+
+        /// <summary>
         /// Get a human-readable description of the version comparison
         /// </summary>
         public static string GetComparisonDescription(VersionComparison comparison, string? latestVersion)
