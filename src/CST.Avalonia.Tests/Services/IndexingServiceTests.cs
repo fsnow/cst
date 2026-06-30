@@ -113,7 +113,7 @@ namespace CST.Avalonia.Tests.Services
             Assert.Null(ex);
         }
 
-        [Fact(Skip = "Mock settings service not triggering SaveSettingsAsync - revisit post Beta 3")]
+        [Fact]
         public async Task InitializeAsync_WithConfiguredIndexDirectory_UsesConfiguredDirectory()
         {
             // Act
@@ -122,19 +122,21 @@ namespace CST.Avalonia.Tests.Services
             // Assert
             Assert.Equal(_testIndexDir, _service.IndexDirectory);
             Assert.True(Directory.Exists(_testIndexDir));
-            _mockXmlFileDatesService.Verify(x => x.InitializeAsync(), Times.Once);
+            // (XmlFileDatesService.InitializeAsync is no longer called from IndexingService.InitializeAsync -
+            //  it was moved to CheckForXmlUpdatesAsync - so that verification was removed. (#46))
         }
 
-        [Fact(Skip = "Mock settings service not triggering SaveSettingsAsync - revisit post Beta 3")]
+        [Fact]
         public async Task InitializeAsync_WithEmptyIndexDirectory_UsesDefaultDirectory()
         {
             // Arrange
             _mockSettingsService.Setup(s => s.Settings)
-                .Returns(new Settings 
-                { 
+                .Returns(new Settings
+                {
                     IndexDirectory = "",
                     XmlBooksDirectory = _testXmlDir
                 });
+            _mockSettingsService.Setup(s => s.SaveSettingsAsync()).Returns(Task.CompletedTask);
 
             var service = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object);
 
@@ -144,7 +146,8 @@ namespace CST.Avalonia.Tests.Services
             // Assert
             Assert.NotEmpty(service.IndexDirectory);
             Assert.NotEqual(_testIndexDir, service.IndexDirectory); // Should use default, not configured
-            _mockXmlFileDatesService.Verify(x => x.InitializeAsync(), Times.Once);
+            // Defaulting persists the chosen directory back to settings.
+            _mockSettingsService.Verify(s => s.SaveSettingsAsync(), Times.Once);
         }
 
         [Fact]

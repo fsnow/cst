@@ -58,7 +58,7 @@ namespace CST.Avalonia.Tests.BugFix
                 Directory.Delete(_testAppDataDir, true);
         }
 
-        [Fact(Skip = "Mock settings service validation issue - revisit post Beta 3")]
+        [Fact]
         public async Task DefaultIndexDirectory_GetsSavedToSettings_OnFirstRun()
         {
             // Arrange
@@ -73,9 +73,10 @@ namespace CST.Avalonia.Tests.BugFix
 
             // Assert
             // After initialization, the IndexDirectory should be populated with the default path
+            // (.../<AppDataDirectoryName>/index, e.g. ".../CSTReader/index").
             Assert.NotEmpty(_testSettings.IndexDirectory);
-            Assert.Contains("CST.Avalonia", _testSettings.IndexDirectory);
-            Assert.Contains("Index", _testSettings.IndexDirectory);
+            Assert.Contains("CSTReader", _testSettings.IndexDirectory);
+            Assert.EndsWith("index", _testSettings.IndexDirectory);
             
             _output.WriteLine($"Final IndexDirectory setting: '{_testSettings.IndexDirectory}'");
 

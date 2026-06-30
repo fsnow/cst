@@ -27,26 +27,9 @@ namespace CST.Avalonia.Tests.Services
             _mockSettingsService = new Mock<ISettingsService>();
         }
 
-        [Fact(Skip = "Test outdated - GetLanguageCodeForScript method no longer exists")]
-        public void MacFontService_LanguageCodeMapping_ReturnsCorrectCodes()
-        {
-            // Arrange
-            var macFontService = new MacFontService(_mockLogger.Object);
-
-            // Act & Assert - Test language code mapping using reflection since the method is private
-            var getLanguageCodeMethod = typeof(MacFontService).GetMethod("GetLanguageCodeForScript", 
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            
-            Assert.NotNull(getLanguageCodeMethod);
-
-            // Test various scripts
-            Assert.Equal("hi", getLanguageCodeMethod.Invoke(null, new object[] { Script.Devanagari }));
-            Assert.Equal("bn", getLanguageCodeMethod.Invoke(null, new object[] { Script.Bengali }));
-            Assert.Equal("en", getLanguageCodeMethod.Invoke(null, new object[] { Script.Latin }));
-            Assert.Equal("my", getLanguageCodeMethod.Invoke(null, new object[] { Script.Myanmar }));
-            Assert.Equal("th", getLanguageCodeMethod.Invoke(null, new object[] { Script.Thai }));
-            Assert.Null(getLanguageCodeMethod.Invoke(null, new object[] { (Script)999 })); // Invalid script
-        }
+        // (Removed MacFontService_LanguageCodeMapping_ReturnsCorrectCodes: it reflected on the private static
+        // GetLanguageCodeForScript, which no longer exists - the implementation switched to a character-set
+        // based approach (GetSampleCharactersForScript). The current behaviour is covered below. (#46))
 
         [Fact]
         public void MacFontService_CoreFoundation_DiagnosticTest()
@@ -118,26 +101,29 @@ namespace CST.Avalonia.Tests.Services
         private IntPtr MacFontService_TestDlopen(string path) => dlopen(path, 0);
         private IntPtr MacFontService_TestDlsym(IntPtr handle, string symbol) => dlsym(handle, symbol);
 
-        [Fact(Skip = "Test outdated - implementation now returns fallback fonts for unsupported scripts")]
-        public async Task MacFontService_GetAvailableFontsForScriptAsync_HandlesUnsupportedScript()
+        [Fact]
+        public async Task MacFontService_GetAvailableFontsForScriptAsync_UnsupportedScript_ReturnsFallbackFonts()
         {
-            // This test can run on any platform since it tests the early return path
+            // An unrecognized script has no sample characters, so the service returns its generic fallback
+            // font list (no Core Text query needed) and logs a warning. Runs on any platform - this path does
+            // not touch the macOS font APIs.
             // Arrange
             var macFontService = new MacFontService(_mockLogger.Object);
 
             // Act
             var result = await macFontService.GetAvailableFontsForScriptAsync((Script)999);
 
-            // Assert
+            // Assert - generic fallback set, not empty
             Assert.NotNull(result);
-            Assert.Empty(result);
+            Assert.NotEmpty(result);
+            Assert.Contains("Arial", result);
 
-            // Verify warning was logged
+            // Verify the "no sample characters" warning was logged
             _mockLogger.Verify(
                 x => x.Log(
                     LogLevel.Warning,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("No language code mapping")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("No sample characters available")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
@@ -332,36 +318,9 @@ namespace CST.Avalonia.Tests.Services
             }
         }
 
-        [Fact(Skip = "Test requires Avalonia font manager infrastructure not available in test environment")]
-        public async Task FontService_GetAvailableFontsForScriptAsync_UsesFallbackOnNonMacOS()
-        {
-            // This test simulates non-macOS behavior by not providing MacFontService
-            // Arrange
-            var mockSettings = new CST.Avalonia.Models.Settings();
-            _mockSettingsService.Setup(x => x.Settings).Returns(mockSettings);
-            
-            // Create FontService without MacFontService (simulates non-macOS)
-            var fontService = new FontService(_mockSettingsService.Object, _mockFontServiceLogger.Object);
-
-            // Act
-            var result = await fontService.GetAvailableFontsForScriptAsync(Script.Devanagari);
-
-            // Assert
-            Assert.NotNull(result);
-            _output.WriteLine($"FontService fallback returned {result.Count} fonts");
-            
-            // The fallback should return all system fonts
-            Assert.True(result.Count > 0, "Fallback should return at least some system fonts");
-
-            // Verify that the FontService logged that it's using fallback
-            _mockFontServiceLogger.Verify(
-                x => x.Log(
-                    LogLevel.Debug,
-                    It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Using fallback method")),
-                    It.IsAny<Exception>(),
-                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-                Times.Once);
-        }
+        // (Removed FontService_GetAvailableFontsForScriptAsync_UsesFallbackOnNonMacOS: the non-macOS fallback
+        // path calls Avalonia's FontManager.Current.SystemFonts, which requires an initialized Avalonia
+        // application that the headless unit-test host doesn't provide - it exercised the framework's font
+        // enumeration rather than our logic. (#46))
     }
 }
