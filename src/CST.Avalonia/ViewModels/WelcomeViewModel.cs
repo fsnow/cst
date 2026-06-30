@@ -63,9 +63,8 @@ namespace CST.Avalonia.ViewModels
                           ?? assembly.GetName().Version?.ToString()
                           ?? "5.0.0-beta.5";
 
-            // Strip the git hash (everything after '+') for display
-            var version = rawVersion.Contains('+') ? rawVersion.Substring(0, rawVersion.IndexOf('+')) : rawVersion;
-            _updateService.CurrentAppVersion = version;
+            // Strip SemVer build metadata (the git hash after '+') for display + comparison. (#71)
+            _updateService.CurrentAppVersion = VersionComparer.StripBuildMetadata(rawVersion);
 
             // DON'T load HTML content in constructor - it will be loaded when the view is attached
             // This prevents "Call from invalid thread" errors in packaged apps
@@ -120,7 +119,9 @@ namespace CST.Avalonia.ViewModels
                 return content;
             }
 
-            // Then try to load from embedded resource (installed application scenario)
+            // Otherwise load from the embedded resource - it is compiled into the assembly (see the
+            // <EmbeddedResource> in CST.Avalonia.csproj), so this is the reliable installed-app source and
+            // replaces the old chain of speculative path probes. (#71)
             var assembly = Assembly.GetExecutingAssembly();
             var resourceName = "CST.Avalonia.Resources.welcome-content.html";
 
@@ -133,26 +134,9 @@ namespace CST.Avalonia.ViewModels
                 return content;
             }
 
-            // Try alternative paths for different deployment scenarios
-            var alternativePaths = new[]
-            {
-                Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "", "Resources", "welcome-content.html"),
-                Path.Combine(Environment.CurrentDirectory, "Resources", "welcome-content.html"),
-                Path.Combine(AppContext.BaseDirectory, "Resources", "welcome-content.html")
-            };
-
-            foreach (var path in alternativePaths)
-            {
-                if (File.Exists(path))
-                {
-                    var content = await File.ReadAllTextAsync(path);
-                    Log.Information("Welcome page HTML loaded from alternative path: {FilePath}", path);
-                    return content;
-                }
-            }
-
-            // Fallback to simple HTML if nothing found
-            Log.Warning("Welcome page resource not found in any location, using fallback HTML");
+            // Neither the dev file nor the embedded resource was found - use the minimal inline page.
+            Log.Warning("Welcome page HTML not found (dev file or embedded resource '{Resource}'); using fallback HTML",
+                resourceName);
             return GetFallbackHtml();
         }
 

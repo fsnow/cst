@@ -278,7 +278,7 @@ namespace CST.Avalonia.Services
             // If no exact match, try without build metadata (strip everything after '+')
             else
             {
-                var versionWithoutBuildMetadata = CurrentAppVersion.Split('+')[0];
+                var versionWithoutBuildMetadata = VersionComparer.StripBuildMetadata(CurrentAppVersion);
                 if (versionWithoutBuildMetadata != CurrentAppVersion && updates.Messages.ContainsKey(versionWithoutBuildMetadata))
                 {
                     message = updates.Messages[versionWithoutBuildMetadata];
