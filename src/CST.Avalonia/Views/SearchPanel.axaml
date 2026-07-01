@@ -8,10 +8,18 @@
              Name="SearchPanelControl">
   
   <UserControl.Styles>
+    <!-- Font-size scale for this panel (#101): a small, intentional set instead of the old
+         arbitrary 10/11/12/default(14) mix -
+           13  section headers (SemiBold)     [.section-header]
+           12  body: combos, expander header, checkboxes, control labels, buttons
+           11  caption: hints, summaries, count badges, stats
+         The search input keeps the Fluent default size (the primary "hero" control), and
+         Pali term/result text uses the user's script size (CurrentScriptFontSize). Keep new
+         chrome text on this scale. -->
     <Style Selector="TextBlock.section-header">
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Margin" Value="0,8,0,4"/>
-      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontSize" Value="13"/>
     </Style>
     
     <Style Selector="Border.search-input-container">
@@ -134,9 +142,10 @@
 
         <!-- Search Mode Selector -->
         <TextBlock Classes="section-header" Text="Search Mode"/>
-        <ComboBox Name="SearchModeCombo" 
+        <ComboBox Name="SearchModeCombo"
                   ItemsSource="{Binding SearchModes}"
                   SelectedItem="{Binding SelectedSearchMode}"
+                  FontSize="12"
                   Margin="0,4,0,8">
           <ComboBox.ItemTemplate>
             <DataTemplate>
@@ -173,7 +182,7 @@
                       HorizontalAlignment="Right"/>
           </Grid>
           <TextBlock Text="Words can appear within this many positions of each other"
-                    FontSize="10"
+                    FontSize="11"
                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                     Margin="0,4,0,0"/>
         </StackPanel>
@@ -203,7 +212,7 @@
         <Expander Name="FilterExpander" IsExpanded="{Binding IsTextTypesExpanded}" Margin="0,4,0,0">
           <Expander.Header>
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <TextBlock Grid.Column="0" Text="Include Text Types" FontWeight="Medium"/>
+              <TextBlock Grid.Column="0" Text="Include Text Types" FontWeight="Medium" FontSize="12"/>
               <TextBlock Grid.Column="1" Text="{Binding FilterSummary}" 
                         FontSize="11" 
                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -218,18 +227,18 @@
           <StackPanel Margin="8,8,0,0">
             <!-- Quick select buttons -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-              <Button Command="{Binding SelectAllFiltersCommand}" 
-                      Content="Select All" 
-                      FontSize="11"
+              <Button Command="{Binding SelectAllFiltersCommand}"
+                      Content="Select All"
+                      FontSize="12"
                       Padding="8,4"
                       Margin="0,0,4,0"/>
-              <Button Command="{Binding SelectNoneFiltersCommand}" 
-                      Content="Select None" 
-                      FontSize="11"
+              <Button Command="{Binding SelectNoneFiltersCommand}"
+                      Content="Select None"
+                      FontSize="12"
                       Padding="8,4"/>
             </StackPanel>
             <!-- Pitaka Filters -->
-            <TextBlock Text="Pitaka:" FontWeight="Medium" FontSize="11" Margin="0,0,0,4"/>
+            <TextBlock Text="Pitaka:" FontWeight="Medium" FontSize="12" Margin="0,0,0,4"/>
             <WrapPanel Margin="0,0,0,8">
               <CheckBox Classes="filter-checkbox" Content="Vinaya" 
                        IsChecked="{Binding IncludeVinaya}"/>
@@ -240,7 +249,7 @@
             </WrapPanel>
             
             <!-- Commentary Level Filters -->
-            <TextBlock Text="Commentary Level:" FontWeight="Medium" FontSize="11" Margin="0,4,0,4"/>
+            <TextBlock Text="Commentary Level:" FontWeight="Medium" FontSize="12" Margin="0,4,0,4"/>
             <WrapPanel Margin="0,0,0,8">
               <CheckBox Classes="filter-checkbox" Content="Mūla" 
                        IsChecked="{Binding IncludeMula}"/>
@@ -291,7 +300,7 @@
                          MinWidth="20"
                          MinHeight="18">
                     <TextBlock Text="{Binding TotalCount}"
-                              FontSize="10"
+                              FontSize="11"
                               FontWeight="Medium"
                               Foreground="{DynamicResource SystemAccentColorDark1}"
                               HorizontalAlignment="Center"
@@ -348,7 +357,7 @@
                          MinWidth="20"
                          MinHeight="18">
                     <TextBlock Text="{Binding Count}"
-                              FontSize="10"
+                              FontSize="11"
                               FontWeight="Medium"
                               Foreground="{DynamicResource SystemAccentColorDark1}"
                               HorizontalAlignment="Center"
