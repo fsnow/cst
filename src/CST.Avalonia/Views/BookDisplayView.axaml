@@ -24,124 +24,121 @@
     </UserControl.Styles>
 
     <DockPanel>
-        <!-- Toolbar -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" MinHeight="40">
-            <!-- Script Selector -->
-            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
-                <TextBlock Text="Script:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+        <!-- Toolbar (#104): DockPanel pins Float/Dock to the right (always reachable); the tool
+             groups live in a WrapPanel so they wrap to a second row instead of clipping off the
+             right edge when the window is narrow. Footprint trimmed: no "Script:"/"Chapter:" text
+             labels (tooltips instead), no separator bars (spacing instead), narrower Chapter combo. -->
+        <DockPanel DockPanel.Dock="Top" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" MinHeight="40">
+
+            <!-- Window Management (Float/Dock) - pinned right, always visible -->
+            <Button DockPanel.Dock="Right"
+                    Command="{Binding FloatWindowCommand}"
+                    IsVisible="{Binding !IsFloating}"
+                    ToolTip.Tip="Open this book in a separate window"
+                    Margin="5,0"
+                    Padding="8,4"
+                    VerticalAlignment="Center">
+                <TextBlock Text="↗" FontSize="16" VerticalAlignment="Center"/>
+            </Button>
+            <Button DockPanel.Dock="Right"
+                    Command="{Binding UnfloatWindowCommand}"
+                    IsVisible="{Binding IsFloating}"
+                    ToolTip.Tip="Move this book back to main window"
+                    Margin="5,0"
+                    Padding="8,4"
+                    VerticalAlignment="Center">
+                <TextBlock Text="↙" FontSize="16" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- Tool groups; wrap to a second row instead of clipping when the window is narrow -->
+            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                <!-- Script Selector -->
                 <ComboBox ItemsSource="{Binding AvailableScripts}"
                           SelectedItem="{Binding BookScript}"
                           MinWidth="120"
-                          ToolTip.Tip="Select script for displaying Pali text">
+                          Margin="5"
+                          VerticalAlignment="Center"
+                          ToolTip.Tip="Script for displaying Pali text">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}"/>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-            </StackPanel>
-            
-            <Separator/>
-            
-            <!-- Chapter Navigation -->
-            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center" 
-                        IsVisible="{Binding HasChapters}">
-                <TextBlock Text="Chapter:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+
+                <!-- Chapter Navigation -->
                 <ComboBox ItemsSource="{Binding Chapters}"
                           SelectedItem="{Binding SelectedChapter}"
-                          MinWidth="200"
+                          MinWidth="150"
+                          MaxWidth="220"
+                          Margin="5"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding HasChapters}"
                           ToolTip.Tip="Navigate to chapter">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding}" 
-                                      TextTrimming="CharacterEllipsis" 
-                                      MaxWidth="180"
+                            <TextBlock Text="{Binding}"
+                                      TextTrimming="CharacterEllipsis"
+                                      MaxWidth="200"
                                       converters:FontHelper.DynamicFontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
                                       converters:FontHelper.DynamicFontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-            </StackPanel>
-            
-            <Separator/>
-            
-            <!-- Search Navigation (visible when search terms present) -->
-            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
-                        IsVisible="{Binding HasSearchHighlights}">
-                <Button Command="{Binding FirstHitCommand}" ToolTip.Tip="First search result" Margin="2">
-                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowFirst.png" Width="16" Height="16"/>
-                </Button>
-                <Button Command="{Binding PreviousHitCommand}" ToolTip.Tip="Previous search result" Margin="2">
-                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowPrevious.png" Width="16" Height="16"/>
-                </Button>
-                <TextBlock Text="{Binding HitStatusText}" VerticalAlignment="Center" Margin="5,0"/>
-                <Button Command="{Binding NextHitCommand}" ToolTip.Tip="Next search result" Margin="2">
-                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowNext.png" Width="16" Height="16"/>
-                </Button>
-                <Button Command="{Binding LastHitCommand}" ToolTip.Tip="Last search result" Margin="2">
-                    <Image Source="avares://CST.Avalonia/Assets/Images/ArrowLast.png" Width="16" Height="16"/>
-                </Button>
-            </StackPanel>
-            
-            <Separator/>
-            
-            <!-- Book Type Navigation (Mula/Atthakatha/Tika) -->
-            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
-                        IsVisible="{Binding HasLinkedBooks}">
-                <Button Command="{Binding OpenMulaCommand}"
-                        IsEnabled="{Binding HasMula}"
-                        ToolTip.Tip="Open root text" Margin="2">
-                    <TextBlock Text="Mula"/>
-                </Button>
-                <Button Command="{Binding OpenAtthakathaCommand}"
-                        IsEnabled="{Binding HasAtthakatha}"
-                        ToolTip.Tip="Open commentary" Margin="2">
-                    <TextBlock Text="Aṭṭha"/>
-                </Button>
-                <Button Command="{Binding OpenTikaCommand}"
-                        IsEnabled="{Binding HasTika}"
-                        ToolTip.Tip="Open sub-commentary" Margin="2">
-                    <TextBlock Text="Ṭīkā"/>
-                </Button>
-            </StackPanel>
 
-            <Separator/>
+                <!-- Search Navigation (visible when search terms present) -->
+                <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
+                            IsVisible="{Binding HasSearchHighlights}">
+                    <Button Command="{Binding FirstHitCommand}" ToolTip.Tip="First search result" Margin="2">
+                        <Image Source="avares://CST.Avalonia/Assets/Images/ArrowFirst.png" Width="16" Height="16"/>
+                    </Button>
+                    <Button Command="{Binding PreviousHitCommand}" ToolTip.Tip="Previous search result" Margin="2">
+                        <Image Source="avares://CST.Avalonia/Assets/Images/ArrowPrevious.png" Width="16" Height="16"/>
+                    </Button>
+                    <TextBlock Text="{Binding HitStatusText}" VerticalAlignment="Center" Margin="5,0"/>
+                    <Button Command="{Binding NextHitCommand}" ToolTip.Tip="Next search result" Margin="2">
+                        <Image Source="avares://CST.Avalonia/Assets/Images/ArrowNext.png" Width="16" Height="16"/>
+                    </Button>
+                    <Button Command="{Binding LastHitCommand}" ToolTip.Tip="Last search result" Margin="2">
+                        <Image Source="avares://CST.Avalonia/Assets/Images/ArrowLast.png" Width="16" Height="16"/>
+                    </Button>
+                </StackPanel>
 
-            <!-- View Source PDF buttons -->
-            <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
-                <Button Command="{Binding ShowSource1957Command}"
-                        ToolTip.Tip="View Burmese 1957 edition PDF (Cmd+E)" Margin="2">
-                    <TextBlock Text="1957"/>
-                </Button>
-                <Button Command="{Binding ShowSource2010Command}"
-                        ToolTip.Tip="View Burmese 2010 edition PDF (Shift+Cmd+E)" Margin="2">
-                    <TextBlock Text="2010"/>
-                </Button>
-            </StackPanel>
+                <!-- Book Type Navigation (Mula/Atthakatha/Tika) -->
+                <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
+                            IsVisible="{Binding HasLinkedBooks}">
+                    <Button Command="{Binding OpenMulaCommand}"
+                            IsEnabled="{Binding HasMula}"
+                            ToolTip.Tip="Open root text" Margin="2">
+                        <TextBlock Text="Mula"/>
+                    </Button>
+                    <Button Command="{Binding OpenAtthakathaCommand}"
+                            IsEnabled="{Binding HasAtthakatha}"
+                            ToolTip.Tip="Open commentary" Margin="2">
+                        <TextBlock Text="Aṭṭha"/>
+                    </Button>
+                    <Button Command="{Binding OpenTikaCommand}"
+                            IsEnabled="{Binding HasTika}"
+                            ToolTip.Tip="Open sub-commentary" Margin="2">
+                        <TextBlock Text="Ṭīkā"/>
+                    </Button>
+                </StackPanel>
 
-            <!-- Spacer to push window controls to the right -->
-            <Border HorizontalAlignment="Stretch" />
+                <!-- View Source PDF buttons -->
+                <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
+                    <Button Command="{Binding ShowSource1957Command}"
+                            ToolTip.Tip="View Burmese 1957 edition PDF (Cmd+E)" Margin="2">
+                        <TextBlock Text="1957"/>
+                    </Button>
+                    <Button Command="{Binding ShowSource2010Command}"
+                            ToolTip.Tip="View Burmese 2010 edition PDF (Shift+Cmd+E)" Margin="2">
+                        <TextBlock Text="2010"/>
+                    </Button>
+                </StackPanel>
 
-            <!-- Window Management (Float/Dock) - Right-aligned -->
-            <Button Command="{Binding FloatWindowCommand}"
-                    IsVisible="{Binding !IsFloating}"
-                    ToolTip.Tip="Open this book in a separate window"
-                    Margin="5,0"
-                    Padding="8,4"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Right">
-                <TextBlock Text="↗" FontSize="16" VerticalAlignment="Center"/>
-            </Button>
-            <Button Command="{Binding UnfloatWindowCommand}"
-                    IsVisible="{Binding IsFloating}"
-                    ToolTip.Tip="Move this book back to main window"
-                    Margin="5,0"
-                    Padding="8,4"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Right">
-                <TextBlock Text="↙" FontSize="16" VerticalAlignment="Center"/>
-            </Button>
-        </StackPanel>
+            </WrapPanel>
+        </DockPanel>
 
         <!-- Status Bar -->
         <Grid DockPanel.Dock="Bottom" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" MinHeight="26">
