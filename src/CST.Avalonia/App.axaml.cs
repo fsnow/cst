@@ -973,6 +973,7 @@ public partial class App : Application
         services.AddSingleton<ChapterListsService>();
         // services.AddSingleton<IBookService, BookService>();
         services.AddSingleton<ISearchService, SearchService>();
+        services.AddSingleton<IDictionaryService, DictionaryService>();
         services.AddTransient<TreeStateService>();
         
         // Indexing services
