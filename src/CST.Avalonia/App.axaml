@@ -22,6 +22,11 @@
             <views:SearchPanel />
         </DataTemplate>
 
+        <!-- DataTemplate for DictionaryViewModel (ReactiveTool) -> DictionaryPanel -->
+        <DataTemplate DataType="{x:Type vm:DictionaryViewModel}">
+            <views:DictionaryPanel />
+        </DataTemplate>
+
         <!-- DataTemplate for BookDisplayViewModel (ReactiveDocument) -> BookDisplayView -->
         <DataTemplate DataType="{x:Type vm:BookDisplayViewModel}">
             <views:BookDisplayView />

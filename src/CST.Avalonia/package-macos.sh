@@ -41,6 +41,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$PROJECT_DIR/bin/Release/net10.0/$RID"
 PUBLISH_DIR="$PROJECT_DIR/bin/Release/net10.0/$RID/publish"
 XSL_SOURCE_DIR="$PROJECT_DIR/xsl"
+DICT_SOURCE_DIR="$PROJECT_DIR/dictionaries"
 DIST_DIR="$PROJECT_DIR/dist"
 
 # Check for available signing identities early
@@ -61,6 +62,7 @@ echo "Creating app bundle structure..."
 mkdir -p "$BUNDLE_NAME/Contents/MacOS"
 mkdir -p "$BUNDLE_NAME/Contents/Resources"
 mkdir -p "$BUNDLE_NAME/Contents/Resources/xsl"
+mkdir -p "$BUNDLE_NAME/Contents/Resources/dictionaries"
 
 # Copy Info.plist
 echo "Copying Info.plist..."
@@ -163,6 +165,15 @@ if [ -d "$XSL_SOURCE_DIR" ]; then
     echo "  - Copied $(ls -1 "$BUNDLE_NAME/Contents/Resources/xsl/"*.xsl 2>/dev/null | wc -l) XSL files"
 else
     echo "  WARNING: XSL source directory not found at $XSL_SOURCE_DIR"
+fi
+
+# Copy Pali dictionaries (per-language subdirs) to Resources; the app seeds app-support from here on first run
+echo "Copying dictionaries..."
+if [ -d "$DICT_SOURCE_DIR" ]; then
+    cp -R "$DICT_SOURCE_DIR"/* "$BUNDLE_NAME/Contents/Resources/dictionaries/" 2>/dev/null || true
+    echo "  - Copied $(find "$BUNDLE_NAME/Contents/Resources/dictionaries" -type f | wc -l | tr -d ' ') dictionary file(s)"
+else
+    echo "  WARNING: dictionaries source directory not found at $DICT_SOURCE_DIR"
 fi
 
 # Create launch script

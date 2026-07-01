@@ -31,6 +31,8 @@ public partial class BookDisplayView : UserControl
 
     private BookDisplayViewModel? _viewModel;
     private WebView? _webView;
+    // Completes when OnTitleChanged receives the CST_LOOKUP_SEL selection pushed for a Cmd+D lookup. (#25)
+    private TaskCompletionSource<string?>? _lookupSelectionTcs;
     private ScrollViewer? _fallbackBrowser;
     private IDisposable? _lifecycleSubscription; // Subscription to WebViewLifecycleOperation changes
     private int _lastScrollPosition = 0;
@@ -183,6 +185,44 @@ public partial class BookDisplayView : UserControl
         {
             _logger.Error(ex, "Failed to initialize WebView");
             _webView = null;
+        }
+    }
+
+    /// <summary>
+    /// Returns the text the user has selected inside the book WebView (or null/empty if none). Used by
+    /// the "Look Up in Dictionary" command (Cmd+D). Unlike GetSelectedTextAsync (which routes via the
+    /// title channel and returns null), EvaluateScript returns the value directly as a Task, so this is
+    /// async and never blocks the UI thread on CEF.
+    /// </summary>
+    public async Task<string?> GetWebViewSelectionAsync()
+    {
+        if (_webView == null || !_isBrowserInitialized)
+            return null;
+        try
+        {
+            // EvaluateScript returns null in this CEF binding, so push the selection out through the
+            // document.title channel (same mechanism as CST_STATUS_UPDATE) and await the round-trip.
+            var tcs = new TaskCompletionSource<string?>();
+            _lookupSelectionTcs = tcs;
+
+            var script = @"
+                try {
+                    var sel = window.getSelection ? window.getSelection().toString() : '';
+                    document.title = 'CST_LOOKUP_SEL:' + encodeURIComponent(sel) + '|TAB:__TAB_ID_PLACEHOLDER__';
+                } catch (e) {
+                    document.title = 'CST_LOOKUP_SEL:|TAB:__TAB_ID_PLACEHOLDER__';
+                }";
+            script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
+            _webView.ExecuteScript(script);
+
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(700));
+            _lookupSelectionTcs = null;
+            return done == tcs.Task ? await tcs.Task : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Information(ex, "GetSelectionForLookup failed");
+            return null;
         }
     }
 
@@ -1128,6 +1168,31 @@ public partial class BookDisplayView : UserControl
     {
         var title = _webView?.Title ?? "";
         _logger.Debug("Page title changed | {Details}", title);
+
+        // Cmd+D lookup: the page pushed the current selection back to us through the title. (#25)
+        if (title != null && title.StartsWith("CST_LOOKUP_SEL:"))
+        {
+            try
+            {
+                var data = title.Substring("CST_LOOKUP_SEL:".Length);
+                var parts = data.Split('|');
+                string messageTabId = "";
+                foreach (var p in parts)
+                    if (p.StartsWith("TAB:")) { messageTabId = p.Substring(4); break; }
+                if (messageTabId != _tabId)
+                    return;   // not for this tab
+                var encoded = parts.Length > 0 ? parts[0] : "";
+                string sel;
+                try { sel = Uri.UnescapeDataString(encoded); } catch { sel = encoded; }
+                _lookupSelectionTcs?.TrySetResult(sel);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to parse CST_LOOKUP_SEL");
+                _lookupSelectionTcs?.TrySetResult(null);
+            }
+            return;
+        }
 
         // Check for new atomic status update with tab ID filtering
         if (title != null && title.StartsWith("CST_STATUS_UPDATE:"))

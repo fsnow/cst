@@ -53,6 +53,7 @@ namespace CST.Avalonia.Services
             // ViewModels ARE the tools now (ReactiveTool pattern) - no wrapper needed
             var openBookTool = App.ServiceProvider!.GetRequiredService<OpenBookDialogViewModel>();
             var searchTool = App.ServiceProvider!.GetRequiredService<SearchViewModel>();
+            var dictionaryTool = App.ServiceProvider!.GetRequiredService<DictionaryViewModel>();
 
             _logger.Debug("Created tools - OpenBook: {OpenBookType}, Search: {SearchType}",
                 openBookTool.GetType().Name, searchTool.GetType().Name);
@@ -64,7 +65,7 @@ namespace CST.Avalonia.Services
                 Id = "LeftToolDock",
                 Title = "Tools",
                 ActiveDockable = openBookTool,
-                VisibleDockables = CreateList<IDockable>(openBookTool, searchTool),
+                VisibleDockables = CreateList<IDockable>(openBookTool, searchTool, dictionaryTool),
                 Alignment = Alignment.Left,
                 GripMode = GripMode.Visible,
                 CanDrag = true,

@@ -632,6 +632,111 @@ public partial class SimpleTabbedWindow : Window
         _logger.Warning("Could not find active book document for Go To command");
     }
 
+    // "Look Up in Dictionary" (Cmd+D): take the word selected in the active book's WebView, drop it into
+    // the Dictionary tool's search box, and bring the Dictionary tab forward. (#25)
+    private async void OnLookUpInDictionaryClick(object? sender, EventArgs e)
+    {
+        _logger.Information("Look Up in Dictionary (Cmd+D) from window: {WindowTitle}", this.Title);
+        try
+        {
+            var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
+            if (dockControl?.DataContext is not LayoutViewModel layoutViewModel)
+                return;
+
+            string? selection = null;
+            if (layoutViewModel.Layout is RootDock rootDock)
+            {
+                var documentDock = FindDocumentDockInLayout(rootDock);
+                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel &&
+                    bookViewModel.BookDisplayControl != null)
+                {
+                    selection = await bookViewModel.BookDisplayControl.GetWebViewSelectionAsync();
+                }
+            }
+
+            var word = ExtractLookupWord(selection);
+            if (string.IsNullOrEmpty(word))
+            {
+                _logger.Debug("Look Up in Dictionary: no word selected in the active book");
+                return;
+            }
+
+            if (App.ServiceProvider?.GetService(typeof(DictionaryViewModel)) is not DictionaryViewModel dictionary)
+                return;
+
+            dictionary.SearchText = word;
+            layoutViewModel.Factory?.SetActiveDockable(dictionary);   // reveal the Dictionary tab
+            _logger.Information("Looked up '{Word}' in the dictionary", word);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Look Up in Dictionary failed");
+        }
+    }
+
+    // Reduce a selection to a single lookup word: first whitespace-delimited token, minus surrounding
+    // punctuation (incl. Devanagari dandas) the dictionary wouldn't match.
+    private static string ExtractLookupWord(string? selection)
+    {
+        if (string.IsNullOrWhiteSpace(selection))
+            return "";
+        var s = selection.Trim();
+        int i = 0;
+        while (i < s.Length && !char.IsWhiteSpace(s[i]))
+            i++;
+        s = s.Substring(0, i);
+        // \u0964 / \u0965 are the Devanagari danda / double danda (escaped per the no-literal-glyphs rule).
+        return s.Trim().Trim('.', ',', ';', ':', '!', '?', '"', '\'', '(', ')', '\u0964', '\u0965');
+    }
+
+    // "Search for Selection" (Cmd+F): take the word or phrase selected in the active book and run it
+    // through the Search tool, bringing the Search tab forward. Multi-word selections are quoted so they
+    // search as an exact phrase. (#25 adjacent feature)
+    private async void OnSearchForSelectionClick(object? sender, EventArgs e)
+    {
+        _logger.Information("Search for Selection (Cmd+F) from window: {WindowTitle}", this.Title);
+        try
+        {
+            var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
+            if (dockControl?.DataContext is not LayoutViewModel layoutViewModel)
+                return;
+
+            string? selection = null;
+            if (layoutViewModel.Layout is RootDock rootDock)
+            {
+                var documentDock = FindDocumentDockInLayout(rootDock);
+                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel &&
+                    bookViewModel.BookDisplayControl != null)
+                {
+                    selection = await bookViewModel.BookDisplayControl.GetWebViewSelectionAsync();
+                }
+            }
+
+            if (App.ServiceProvider?.GetService(typeof(SearchViewModel)) is not SearchViewModel search)
+                return;
+
+            var query = BuildSearchQuery(selection);
+            if (!string.IsNullOrEmpty(query))
+                search.SearchText = query;   // the Search tool's real-time throttle runs the search
+            layoutViewModel.Factory?.SetActiveDockable(search);   // reveal the Search tab
+            _logger.Information("Search for selection: '{Query}'", query);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Search for Selection failed");
+        }
+    }
+
+    // Turn a selection into a search query: trim + collapse internal whitespace; quote it as an exact
+    // phrase when it's more than one word (single words go through bare).
+    private static string BuildSearchQuery(string? selection)
+    {
+        if (string.IsNullOrWhiteSpace(selection))
+            return "";
+        var s = System.Text.RegularExpressions.Regex.Replace(selection.Trim(), @"\s+", " ").Replace("\"", "");
+        return s.Contains(' ') ? $"\"{s}\"" : s;
+    }
+
     private DocumentDock? FindDocumentDockInLayout(IDock dock)
     {
         if (dock is DocumentDock documentDock)

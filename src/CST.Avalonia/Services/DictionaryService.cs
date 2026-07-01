@@ -27,6 +27,7 @@ public sealed class DictionaryService : IDictionaryService
 
     private readonly ILogger<DictionaryService> _logger;
     private readonly string _dictionariesDirectory;
+    private readonly bool _isDefaultLocation;
 
     private readonly Dictionary<string, DictionaryIndex> _cache = new();
     private readonly SemaphoreSlim _loadLock = new(1, 1);
@@ -37,10 +38,71 @@ public sealed class DictionaryService : IDictionaryService
     public DictionaryService(ILogger<DictionaryService> logger, string? dictionariesDirectory = null)
     {
         _logger = logger;
+        _isDefaultLocation = dictionariesDirectory == null;
         _dictionariesDirectory = dictionariesDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             AppConstants.AppDataDirectoryName,
             "dictionaries");
+
+        // On a real install app-support starts empty; populate it once from the bundled data. Skipped
+        // when a directory is injected (tests), so it never overwrites test fixtures. (#25)
+        if (_isDefaultLocation)
+            EnsureBundledDictionaries();
+    }
+
+    // First-run copy of the bundled dictionaries into app-support, mirroring EnsureXslFilesInUserDirectory.
+    private void EnsureBundledDictionaries()
+    {
+        try
+        {
+            // Already populated? (any language subdir with files) -> nothing to do.
+            if (Directory.Exists(_dictionariesDirectory) &&
+                Directory.EnumerateDirectories(_dictionariesDirectory).Any(d => Directory.EnumerateFiles(d).Any()))
+                return;
+
+            var source = ResolveBundledDictionariesDir();
+            if (source == null)
+            {
+                _logger.LogWarning("No bundled dictionaries found to seed {Path}", _dictionariesDirectory);
+                return;
+            }
+
+            int copied = 0;
+            foreach (var langDir in Directory.GetDirectories(source))
+            {
+                var destLangDir = Path.Combine(_dictionariesDirectory, Path.GetFileName(langDir));
+                Directory.CreateDirectory(destLangDir);
+                foreach (var file in Directory.GetFiles(langDir))
+                {
+                    var dest = Path.Combine(destLangDir, Path.GetFileName(file));
+                    if (!File.Exists(dest))
+                    {
+                        File.Copy(file, dest);
+                        copied++;
+                    }
+                }
+            }
+            _logger.LogInformation("Seeded {Count} bundled dictionary file(s) into {Path}", copied, _dictionariesDirectory);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to seed bundled dictionaries into {Path}", _dictionariesDirectory);
+        }
+    }
+
+    // The bundled dictionaries live in the dev project dir, or under Resources/ in a packaged .app.
+    private static string? ResolveBundledDictionariesDir()
+    {
+        var asmDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? "";
+        // Development: bin/<cfg>/<tfm>/ -> ../../../dictionaries (the project's dictionaries/ folder)
+        var dev = Path.Combine(asmDir, "..", "..", "..", "dictionaries");
+        if (Directory.Exists(dev))
+            return dev;
+        // Packaged .app: Contents/MacOS/ -> ../Resources/dictionaries
+        var bundle = Path.Combine(asmDir, "..", "Resources", "dictionaries");
+        if (Directory.Exists(bundle))
+            return bundle;
+        return null;
     }
 
     public IReadOnlyList<string> AvailableLanguages

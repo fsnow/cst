@@ -24,6 +24,8 @@
             <NativeMenuItem Header="Tools">
                 <NativeMenu>
                     <NativeMenuItem Header="Go To..." Click="OnGoToMenuItemClick" Gesture="cmd+g" />
+                    <NativeMenuItem Header="Look Up in Dictionary" Click="OnLookUpInDictionaryClick" Gesture="cmd+d" />
+                    <NativeMenuItem Header="Search for Selection" Click="OnSearchForSelectionClick" Gesture="cmd+f" />
                 </NativeMenu>
             </NativeMenuItem>
         </NativeMenu>

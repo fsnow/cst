@@ -131,6 +131,10 @@ public class DictionaryDialogState
     public string UserText { get; set; } = string.Empty;
     public int SelectedWordIndex { get; set; }
     public int LanguageIndex { get; set; }
+
+    /// <summary>Preferred definition-language code ("en"/"hi"); remembered across sessions (#25).
+    /// A robust code rather than an index, so it survives changes to the available-language order.</summary>
+    public string Language { get; set; } = "en";
 }
 
 /// <summary>
