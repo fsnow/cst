@@ -102,6 +102,7 @@ External resources and CST4 feature references:
   - [Search System](reference/cst4/SEARCH.md)
   - [State Management](reference/cst4/STATE_MANAGEMENT.md)
   - [Splash Screen](reference/cst4/SPLASH_SCREEN.md)
+  - [Keyboard Shortcuts](reference/cst4/KEYBOARD_SHORTCUTS.md)
 
 - **sinhala/** - Sinhala script reference PDFs
   - Error Corrections (2011)
