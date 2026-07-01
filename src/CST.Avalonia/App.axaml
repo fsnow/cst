@@ -40,9 +40,32 @@
     </Application.DataTemplates>
 
     <Application.Resources>
-        <!-- ControlRecycling for view caching - preserves scroll position and state when switching tabs -->
-        <!-- Using instance-based caching (default) - same ViewModel instance = same cached View -->
-        <ControlRecycling x:Key="ControlRecyclingKey" />
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <!-- Light-mode surface hierarchy (#102): a SUBTLE grey "chrome" tone (toolbars,
+                     left tool dock, tree, gutters) against white "content" surfaces (reading pane,
+                     cards) - matching the gentle VS Code "Light 2026" aesthetic, not a high-contrast
+                     ladder. Chrome #F6F6F9 vs content #FFFFFF ~= a 9-level step. Dark mode unchanged
+                     (empty Dark dict below). -->
+                <ResourceDictionary x:Key="Light">
+                    <!-- Chrome: window/page bg, dock gutters, book tree, toolbars, status bars, nav -->
+                    <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#F6F6F9"/>
+                    <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#F6F6F9"/>
+                    <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#F6F6F9"/>
+                    <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#F6F6F9"/>
+                    <!-- Content surfaces: reading pane fallback, cards, search results -->
+                    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFF"/>
+                    <!-- Subtle border so inset content edges read against the grey -->
+                    <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#E6E6EC"/>
+                </ResourceDictionary>
+                <!-- Dark mode unchanged: inherit Fluent dark defaults -->
+                <ResourceDictionary x:Key="Dark"/>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- ControlRecycling for view caching - preserves scroll position and state when switching tabs -->
+            <!-- Using instance-based caching (default) - same ViewModel instance = same cached View -->
+            <ControlRecycling x:Key="ControlRecyclingKey" />
+        </ResourceDictionary>
     </Application.Resources>
 
     <Application.Styles>
