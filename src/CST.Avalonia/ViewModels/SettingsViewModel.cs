@@ -31,18 +31,22 @@ namespace CST.Avalonia.ViewModels
             _logger = Log.ForContext<SettingsViewModel>();
 
 
-            // Initialize categories
-            var generalSettings = new GeneralSettingsViewModel(_settingsService) { Parent = this };
-            var appearanceSettings = new AppearanceSettingsViewModel(_settingsService);
-            var advancedSettings = new AdvancedSettingsViewModel(_settingsService);
-            var developerSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
-            
+            // Initialize categories. Nav names describe the actual settings in each (#100), instead of
+            // generic groupings (General/Appearance/Advanced/Developer).
+            var directoriesSettings = new GeneralSettingsViewModel(_settingsService) { Parent = this };
+            var fontSettings = new AppearanceSettingsViewModel(_settingsService);
+            var configurationSettings = new ConfigurationSettingsViewModel(_settingsService);
+            var xmlUpdateSettings = new XmlUpdateSettingsViewModel(_settingsService);
+            var loggingSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
+
+            // Order: most-adjusted settings first, informational ones last (#100).
             Categories = new ObservableCollection<SettingsCategoryViewModel>
             {
-                new SettingsCategoryViewModel("General", "General application settings", generalSettings),
-                new SettingsCategoryViewModel("Appearance", "Font settings", appearanceSettings),
-                new SettingsCategoryViewModel("Advanced", "Advanced configuration options", advancedSettings),
-                new SettingsCategoryViewModel("Developer", "Debugging and diagnostic tools", developerSettings)
+                new SettingsCategoryViewModel("Pali Script Fonts", fontSettings),
+                new SettingsCategoryViewModel("Logging", loggingSettings),
+                new SettingsCategoryViewModel("XML Data Updates", xmlUpdateSettings),
+                new SettingsCategoryViewModel("Directories", directoriesSettings),
+                new SettingsCategoryViewModel("Configuration", configurationSettings)
             };
 
             // Select first category by default
@@ -95,15 +99,13 @@ namespace CST.Avalonia.ViewModels
 
     public class SettingsCategoryViewModel : ViewModelBase
     {
-        public SettingsCategoryViewModel(string name, string description, ViewModelBase content)
+        public SettingsCategoryViewModel(string name, ViewModelBase content)
         {
             Name = name;
-            Description = description;
             Content = content;
         }
 
         public string Name { get; }
-        public string Description { get; }
         public ViewModelBase Content { get; }
     }
 
@@ -658,37 +660,83 @@ namespace CST.Avalonia.ViewModels
         
     }
 
-    public class AdvancedSettingsViewModel : ViewModelBase
+    // Configuration category (#100): settings file location + open-folder.
+    public class ConfigurationSettingsViewModel : ViewModelBase
+    {
+        private readonly ILogger _logger;
+
+        public ConfigurationSettingsViewModel(ISettingsService settingsService)
+        {
+            _logger = Log.ForContext<ConfigurationSettingsViewModel>();
+            SettingsFilePath = settingsService.GetSettingsFilePath();
+            OpenSettingsFileCommand = ReactiveCommand.Create(OpenSettingsFile);
+        }
+
+        public string SettingsFilePath { get; }
+
+        public ReactiveCommand<Unit, Unit> OpenSettingsFileCommand { get; }
+
+        private void OpenSettingsFile()
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(SettingsFilePath);
+                if (directory != null && Directory.Exists(directory))
+                {
+                    // Open file explorer at the settings directory
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = directory,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to open settings directory");
+            }
+        }
+    }
+
+    // XML Data Updates category (#100): GitHub source for the Tipitaka XML.
+    public class XmlUpdateSettingsViewModel : ViewModelBase
     {
         private readonly ISettingsService _settingsService;
-        private readonly ILogger _logger;
         private bool _enableAutomaticUpdates;
         private string _xmlRepositoryOwner;
         private string _xmlRepositoryName;
         private string _xmlRepositoryPath;
         private string _xmlRepositoryBranch;
 
-        public AdvancedSettingsViewModel(ISettingsService settingsService)
+        public XmlUpdateSettingsViewModel(ISettingsService settingsService)
         {
             _settingsService = settingsService;
-            _logger = Log.ForContext<AdvancedSettingsViewModel>();
-            
-            SettingsFilePath = _settingsService.GetSettingsFilePath();
-            OpenSettingsFileCommand = ReactiveCommand.Create(OpenSettingsFile);
-            
-            // Initialize XML update settings
+
             var xmlSettings = _settingsService.Settings.XmlUpdateSettings;
             _enableAutomaticUpdates = xmlSettings.EnableAutomaticUpdates;
             _xmlRepositoryOwner = xmlSettings.XmlRepositoryOwner;
             _xmlRepositoryName = xmlSettings.XmlRepositoryName;
             _xmlRepositoryPath = xmlSettings.XmlRepositoryPath;
             _xmlRepositoryBranch = xmlSettings.XmlRepositoryBranch;
+
+            RestoreDefaultsCommand = ReactiveCommand.Create(RestoreDefaults);
         }
 
-        public string SettingsFilePath { get; }
-        
-        public ReactiveCommand<Unit, Unit> OpenSettingsFileCommand { get; }
-        
+        // Reset the four repository fields to the known-good defaults so a user who accidentally
+        // edited one doesn't have to know the correct value (or delete settings.json). Leaves the
+        // "Enable automatic updates" checkbox alone (it's a preference, not part of the source). (#100)
+        public ReactiveCommand<Unit, Unit> RestoreDefaultsCommand { get; }
+
+        private void RestoreDefaults()
+        {
+            var defaults = new XmlUpdateSettings();
+            XmlRepositoryOwner = defaults.XmlRepositoryOwner;
+            XmlRepositoryName = defaults.XmlRepositoryName;
+            XmlRepositoryPath = defaults.XmlRepositoryPath;
+            XmlRepositoryBranch = defaults.XmlRepositoryBranch;
+        }
+
         public bool EnableAutomaticUpdates
         {
             get => _enableAutomaticUpdates;
@@ -741,28 +789,6 @@ namespace CST.Avalonia.ViewModels
                 this.RaiseAndSetIfChanged(ref _xmlRepositoryBranch, value);
                 _settingsService.Settings.XmlUpdateSettings.XmlRepositoryBranch = value;
                 _settingsService.RequestSave();
-            }
-        }
-
-        private void OpenSettingsFile()
-        {
-            try
-            {
-                var directory = Path.GetDirectoryName(SettingsFilePath);
-                if (directory != null && Directory.Exists(directory))
-                {
-                    // Open file explorer at the settings directory
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = directory,
-                        UseShellExecute = true,
-                        Verb = "open"
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to open settings directory");
             }
         }
     }

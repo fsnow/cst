@@ -64,12 +64,7 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:SettingsCategoryViewModel">
                             <Border Padding="15,10" Background="Transparent">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding Description}"
-                                              FontSize="11"
-                                              TextWrapping="Wrap"/>
-                                </StackPanel>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -82,15 +77,18 @@
             </Border>
             
             <!-- Settings Content -->
-            <ScrollViewer Grid.Column="1" Padding="20">
-                <ContentControl Content="{Binding SelectedCategory.Content}">
+            <!-- Explicit scroll config + top-aligned content so a tab taller than the window scrolls
+                 instead of being clipped by the window frame (#100). -->
+            <ScrollViewer Grid.Column="1" Padding="20"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <ContentControl Content="{Binding SelectedCategory.Content}"
+                                VerticalAlignment="Top">
                     <ContentControl.DataTemplates>
                         
                         <!-- General Settings Template -->
                         <DataTemplate DataType="vm:GeneralSettingsViewModel">
                             <StackPanel>
-                                <TextBlock Text="General" Classes="SectionTitle"/>
-                                
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="XML Books Directory" Classes="SettingLabel"/>
@@ -129,8 +127,6 @@
                         <!-- Appearance Settings Template -->
                         <DataTemplate DataType="vm:AppearanceSettingsViewModel">
                             <StackPanel>
-                                <TextBlock Text="Appearance" Classes="SectionTitle"/>
-                                
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Pali Script Fonts" Classes="SettingLabel"/>
@@ -218,69 +214,39 @@
                                         </Grid>
                                     </StackPanel>
                                 </Border>
-                                
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="UI Localization Font (TODO, not implemented)" Classes="SettingLabel"/>
-                                        <TextBlock Text="Font for user interface elements (menus, buttons, etc.)" 
-                                                  Classes="SettingDescription"/>
-                                        
-                                        <Grid Margin="0,10,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="80"/>
-                                                <ColumnDefinition Width="200"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                            </Grid.RowDefinitions>
-                                            
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <TextBox Grid.Row="0" Grid.Column="1"
-                                                    Text="{Binding LocalizationFontFamily}"
-                                                    Watermark="System default"
-                                                    Margin="0,0,0,10"/>
-
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:"
-                                                      VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <NumericUpDown Grid.Row="1" Grid.Column="1" 
-                                                          Value="{Binding LocalizationFontSize}"
-                                                          Minimum="8" Maximum="24" Increment="1"
-                                                          Width="120" HorizontalAlignment="Left"/>
-                                        </Grid>
-                                    </StackPanel>
-                                </Border>
                             </StackPanel>
                         </DataTemplate>
                         
                         
                         <!-- Advanced Settings Template -->
-                        <DataTemplate DataType="vm:AdvancedSettingsViewModel">
+                        <!-- Configuration Settings Template -->
+                        <DataTemplate DataType="vm:ConfigurationSettingsViewModel">
                             <StackPanel>
-                                <TextBlock Text="Advanced" Classes="SectionTitle"/>
-                                
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Configuration" Classes="SettingLabel"/>
-                                        <TextBlock Text="Settings are stored in JSON format" 
+                                        <TextBlock Text="Settings are stored in JSON format"
                                                   Classes="SettingDescription"/>
-                                        
+
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                             <TextBlock Text="Settings file: " VerticalAlignment="Center"/>
                                             <TextBlock Text="{Binding SettingsFilePath}"
                                                       FontFamily="Consolas,Courier New,monospace"
                                                       VerticalAlignment="Center"/>
                                         </StackPanel>
-                                        
-                                        <Button Content="Open Settings Folder" 
+
+                                        <Button Content="Open Settings Folder"
                                                Command="{Binding OpenSettingsFileCommand}"
                                                Margin="0,10,0,0"
                                                HorizontalAlignment="Left"/>
                                     </StackPanel>
                                 </Border>
-                                
-                                <!-- XML Updates Settings -->
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- XML Data Updates Settings Template -->
+                        <DataTemplate DataType="vm:XmlUpdateSettingsViewModel">
+                            <StackPanel>
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="XML Data Updates" Classes="SettingLabel"/>
@@ -319,16 +285,20 @@
                                                     Text="{Binding XmlRepositoryBranch}"
                                                     Watermark="e.g., main"/>
                                         </Grid>
+
+                                        <Button Content="Restore Defaults"
+                                               Command="{Binding RestoreDefaultsCommand}"
+                                               Margin="0,15,0,0"
+                                               HorizontalAlignment="Left"
+                                               ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
                         </DataTemplate>
-                        
+
                         <!-- Developer Settings Template -->
                         <DataTemplate DataType="vm:DeveloperSettingsViewModel">
                             <StackPanel>
-                                <TextBlock Text="Developer" Classes="SectionTitle"/>
-                                
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Logging" Classes="SettingLabel"/>
