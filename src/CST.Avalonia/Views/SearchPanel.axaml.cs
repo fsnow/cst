@@ -33,13 +33,9 @@ public partial class SearchPanel : UserControl
             occurrencesList.DoubleTapped += OnOccurrenceDoubleClick;
         }
         
-        // Handle Enter key in search box
-        var searchInput = this.FindControl<TextBox>("SearchInput");
-        if (searchInput != null)
-        {
-            searchInput.KeyDown += OnSearchInputKeyDown;
-        }
-        
+        // Enter/Escape on the search box are wired once via the TextBox.KeyBindings in the axaml
+        // (SearchCommand / ClearCommand) — no code-behind KeyDown handler (SRCH-13).
+
         // Handle search mode combo selection
         var searchModeCombo = this.FindControl<ComboBox>("SearchModeCombo");
         if (searchModeCombo != null)
@@ -126,20 +122,6 @@ public partial class SearchPanel : UserControl
             {
                 Log.Error(ex, "[SearchPanel] Error opening book from search results");
             }
-        }
-    }
-    
-    private void OnSearchInputKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter && DataContext is SearchViewModel viewModel)
-        {
-            // Execute search on Enter
-            viewModel.SearchCommand.Execute().Subscribe();
-        }
-        else if (e.Key == Key.Escape && DataContext is SearchViewModel vm)
-        {
-            // Clear search on Escape
-            vm.ClearCommand.Execute().Subscribe();
         }
     }
     
@@ -230,26 +212,8 @@ public partial class SearchPanel : UserControl
                 Log.Debug("[SearchPanel] ListBox.SelectedItems is null");
             }
             Log.Debug("[SearchPanel] After manual sync - SelectedTerms count: {Count}", viewModel.SelectedTerms.Count);
-            
-            // Explicitly trigger UpdateOccurrences since manual sync might not fire CollectionChanged
-            Log.Debug("[SearchPanel] Explicitly calling UpdateOccurrences");
-            try 
-            {
-                var updateOccurrencesMethod = typeof(SearchViewModel).GetMethod("UpdateOccurrences", 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                updateOccurrencesMethod?.Invoke(viewModel, null);
-                Log.Debug("[SearchPanel] UpdateOccurrences called successfully");
-                
-                // Also explicitly call UpdateStatistics
-                var updateStatisticsMethod = typeof(SearchViewModel).GetMethod("UpdateStatistics", 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                updateStatisticsMethod?.Invoke(viewModel, null);
-                Log.Debug("[SearchPanel] UpdateStatistics called successfully");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "[SearchPanel] Error calling update methods");
-            }
+            // UpdateOccurrences/UpdateStatistics run automatically off the VM's ctor-level
+            // SelectedTerms.CollectionChanged + statistics subscriptions — no reflection needed. (SRCH-10)
         }
     }
     

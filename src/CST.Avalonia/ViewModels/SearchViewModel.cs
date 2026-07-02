@@ -154,26 +154,19 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         // restoring here would read an empty default. (#87)
         SetupStatePersistence();
 
-        this.WhenActivated(disposables =>
+        // These are ctor-level, NOT in a WhenActivated block: SearchPanel is a plain UserControl with no
+        // activation wiring, so WhenActivated never runs. They used to live in a dead WhenActivated block,
+        // and the view compensated by invoking UpdateOccurrences/UpdateStatistics through reflection. (SRCH-10)
+        SelectedTerms.CollectionChanged += (_, e) =>
         {
-            // Update occurrences when term selection changes
-            SelectedTerms.CollectionChanged += (_, e) => 
-            {
-                _logger.LogInformation("*** SelectedTerms CollectionChanged: Action={Action}, NewItems={NewCount}, OldItems={OldCount} ***", 
-                    e.Action, e.NewItems?.Count ?? 0, e.OldItems?.Count ?? 0);
-                _logger.LogInformation("*** Selected terms count: {SelectedCount}, Total terms count: {TotalCount} ***", 
-                    SelectedTerms.Count, Terms.Count);
-                UpdateOccurrences();
-            };
+            _logger.LogInformation("*** SelectedTerms CollectionChanged: Action={Action}, NewItems={NewCount}, OldItems={OldCount} ***",
+                e.Action, e.NewItems?.Count ?? 0, e.OldItems?.Count ?? 0);
+            UpdateOccurrences();
+        };
 
-            // Update statistics
-            this.WhenAnyValue(
-                x => x.Terms,
-                x => x.SelectedTerms,
-                x => x.Occurrences)
-                .Subscribe(_ => UpdateStatistics())
-                .DisposeWith(disposables);
-        });
+        // Recompute the summary line whenever the terms/selection/occurrences change.
+        this.WhenAnyValue(x => x.Terms, x => x.SelectedTerms, x => x.Occurrences)
+            .Subscribe(_ => UpdateStatistics());
     }
 
     // --- Search-pane state persistence (#87) -------------------------------------------------------
@@ -607,14 +600,24 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
 
     private async Task ExecuteSearchAsync()
     {
+        // Supersede any in-flight search and capture THIS search's token, so a stale completion can't
+        // clobber the newer search's results or its IsSearching flag. (SRCH-7)
+        _searchCancellation?.Cancel();
+        var cts = new CancellationTokenSource();
+        _searchCancellation = cts;
+        var token = cts.Token;
+
         try
         {
-            // Cancel any existing search
-            _searchCancellation?.Cancel();
-            _searchCancellation = new CancellationTokenSource();
-
-            IsSearching = true;
-            StatusText = "Searching...";
+            // The pipeline runs on a thread-pool thread (Throttle) and SearchService runs its Lucene work
+            // synchronously (no Task.Run), so keep the search off the UI thread and marshal every UI-bound
+            // write to the dispatcher instead of ObserveOn-ing the whole pipeline onto the UI thread (which
+            // would freeze it for the search's duration). (SRCH-8)
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                IsSearching = true;
+                StatusText = "Searching...";
+            });
 
             // Build search query
             var searchText = SearchText ?? string.Empty;
@@ -637,15 +640,18 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             // clearing them or surfacing a raw RegexParseException. (Wildcard/Exact can't be invalid.) (#59)
             if (searchMode == SearchMode.Regex && !IsValidRegexPattern(searchText))
             {
-                ValidationMessage = "Invalid regex pattern";
-                IsSearching = false;
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ValidationMessage = "Invalid regex pattern";
+                    IsSearching = false;
+                });
                 return;
             }
-            ValidationMessage = string.Empty; // valid pattern (or non-regex) — clear any prior hint
 
-            // Clear previous results
+            // Clear previous results (and any prior validation hint).
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                ValidationMessage = string.Empty;
                 Terms.Clear();
                 Occurrences.Clear();
                 SelectedTerms.Clear();
@@ -676,7 +682,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             _logger.LogInformation("Executing search: {Query}", query.QueryText);
 
             // Execute search
-            var result = await _searchService.SearchAsync(query, _searchCancellation.Token);
+            var result = await _searchService.SearchAsync(query, token);
             
             _logger.LogInformation("Search returned {TermCount} terms, {OccurrenceCount} occurrences", 
                 result.Terms.Count, result.TotalOccurrenceCount);
@@ -684,6 +690,10 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             // Update UI with results
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                // A newer search superseded this one while it ran — don't clobber its results. (SRCH-7)
+                if (token.IsCancellationRequested)
+                    return;
+
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
                 _logger.LogInformation("Starting UI update with script: {Script}", _scriptService.CurrentScript);
                 
@@ -724,29 +734,36 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
                 
                 // Explicitly update statistics after terms are populated and selected
                 UpdateStatistics();
-            });
 
-            IsSearching = false;
+                IsSearching = false;
+            });
         }
         catch (OperationCanceledException)
         {
+            // Superseded/cancelled — leave IsSearching and StatusText to the newer search. (SRCH-7)
             _logger.LogInformation("Search cancelled");
-            StatusText = "Search cancelled";
-            IsSearching = false;
         }
         catch (System.Text.RegularExpressions.RegexParseException)
         {
             // Backstop for any invalid regex the up-front check didn't catch (e.g. a multi-unit query).
             // Quiet hint, not an error. (#59)
             _logger.LogDebug("Invalid regex pattern for query: {Query}", SearchText);
-            ValidationMessage = "Invalid regex pattern";
-            IsSearching = false;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (token.IsCancellationRequested) return;
+                ValidationMessage = "Invalid regex pattern";
+                IsSearching = false;
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search failed");
-            StatusText = $"Search failed: {ex.Message}";
-            IsSearching = false;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (token.IsCancellationRequested) return;
+                StatusText = $"Search failed: {ex.Message}";
+                IsSearching = false;
+            });
         }
     }
 
@@ -866,9 +883,10 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         {
             Occurrences.Clear();
 
-            if (!SelectedTerms.Any()) 
+            if (!SelectedTerms.Any())
             {
                 _logger.LogInformation("*** No selected terms - clearing occurrences ***");
+                UpdateStatistics();   // keep the summary line in sync (SRCH-10)
                 return;
             }
 
@@ -918,6 +936,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
             }
             
             _logger.LogInformation("*** UpdateOccurrences completed - Added {BookCount} books to occurrences collection ***", Occurrences.Count);
+            UpdateStatistics();   // occurrences changed -> refresh the summary line (SRCH-10)
         });
     }
 
