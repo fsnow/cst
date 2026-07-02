@@ -7,18 +7,12 @@ namespace CST
 {
 	public class Books : IEnumerable<Book>
 	{
-		private static Books? books;
+		// Thread-safe lazy init: background indexing (BookIndexer on Task.Run) can race UI startup
+		// restore for the first access. An unlocked "if (books == null) books = new Books()" could
+		// construct two instances, so DocIds written to one wouldn't be visible on the other. (CORE-1)
+		private static readonly Lazy<Books> instance = new(() => new Books());
 
-		public static Books Inst
-		{
-			get
-			{
-				if (books == null)
-					books = new Books();
-
-				return books;
-			}
-		}
+		public static Books Inst => instance.Value;
 
 
 		public Books()
@@ -35,16 +29,27 @@ namespace CST
 		private Dictionary<string, Book> booksByFile;
 		private Dictionary<int, Book> booksByDocId;
 
+		// Guards booksByDocId (and the Book.DocId it indexes). The search path re-syncs DocIds and the
+		// indexer writes them, both off the UI thread; concurrent Dictionary writes are undefined
+		// behavior in .NET. (CORE-1)
+		private readonly object docIdLock = new();
+
 		public void SetDocId(string file, int docId)
 		{
-			Book book = booksByFile[file];
-			book.DocId = docId;
-			booksByDocId[book.DocId] = book;
+			lock (docIdLock)
+			{
+				Book book = booksByFile[file];
+				book.DocId = docId;
+				booksByDocId[book.DocId] = book;
+			}
 		}
 
 		public Book FromDocId(int docId)
 		{
-			return booksByDocId[docId];
+			lock (docIdLock)
+			{
+				return booksByDocId[docId];
+			}
 		}
 
 		public IEnumerator<Book> GetEnumerator()

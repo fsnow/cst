@@ -4,18 +4,11 @@ using System.Collections.Generic;
 
 public class Sources
 {
-	private static Sources? sources;
+	// Thread-safe lazy init: an unlocked "if (sources == null) sources = new Sources()" could
+	// construct two instances under a startup/indexing race. (CORE-1)
+	private static readonly Lazy<Sources> instance = new(() => new Sources());
 
-	public static Sources Inst
-	{
-		get
-		{
-			if (sources == null)
-				sources = new Sources();
-
-			return sources;
-		}
-	}
+	public static Sources Inst => instance.Value;
 
 	// filename -> SourceType -> Source
 	private Dictionary<string, Dictionary<SourceType, Source>> sourcesMap;

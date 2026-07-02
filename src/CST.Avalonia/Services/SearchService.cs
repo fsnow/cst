@@ -105,9 +105,9 @@ public class SearchService : ISearchService
             }
 
             var books = Books.Inst;
-            
-            // Ensure all books have DocIds
-            await EnsureDocIdsAsync(reader, books);
+
+            // Ensure all books have DocIds (once per reader generation, not every search)
+            EnsureDocIds(reader, books);
 
             // Convert search text to IPE (strip pasted zero-width joiners first, or they'd survive into
             // the IPE term and match no index term — SRCH-3).
@@ -901,17 +901,31 @@ public class SearchService : ISearchService
         return bookBits ?? new BitArray(bookCount, false); // Return empty if somehow null
     }
 
-    private async Task EnsureDocIdsAsync(DirectoryReader reader, Books books)
+    // The reader generation whose DocIds we've already applied to Books. DocIds only change when the
+    // index (reader) changes, so re-running the whole MaxDoc scan on every search was wasted work AND
+    // wrote booksByDocId from concurrent pool threads. Sync once per generation, comparing reader
+    // identity (AcquireReader hands out the same instance until it reopens). (CORE-1)
+    private DirectoryReader? _docIdSyncedReader;
+    private readonly object _docIdSyncLock = new();
+
+    private void EnsureDocIds(DirectoryReader reader, Books books)
     {
-        // Ensure all books have their DocIds set
-        for (int i = 0; i < reader.MaxDoc; i++)
+        lock (_docIdSyncLock)
         {
-            var doc = reader.Document(i);
-            var fileName = doc.Get("file");
-            if (!string.IsNullOrEmpty(fileName))
+            if (ReferenceEquals(_docIdSyncedReader, reader))
+                return;
+
+            for (int i = 0; i < reader.MaxDoc; i++)
             {
-                books.SetDocId(fileName, i);
+                var doc = reader.Document(i);
+                var fileName = doc.Get("file");
+                if (!string.IsNullOrEmpty(fileName))
+                {
+                    books.SetDocId(fileName, i);
+                }
             }
+
+            _docIdSyncedReader = reader;
         }
     }
 
