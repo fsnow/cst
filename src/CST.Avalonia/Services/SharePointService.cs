@@ -232,22 +232,13 @@ namespace CST.Avalonia.Services
                     return null;
                 }
 
-                // Ensure directory exists
-                var localDir = Path.GetDirectoryName(localPath);
-                if (!string.IsNullOrEmpty(localDir))
-                {
-                    Directory.CreateDirectory(localDir);
-                }
+                // Save atomically with size verification. A partial download must never land at localPath:
+                // the cache check above trusts any file already there, and these PDFs are the permanent
+                // preservation store (not an evictable cache). (NET-1)
+                if (!await SaveStreamVerifiedAsync(contentStream, localPath, driveItem.Size, _logger))
+                    return null;
 
-                // Save to local file
-                using (var fileStream = File.Create(localPath))
-                {
-                    await contentStream.CopyToAsync(fileStream);
-                }
-
-                var fileInfo = new FileInfo(localPath);
-                _logger.LogInformation("Downloaded PDF to: {Path} ({Size:N0} bytes)", localPath, fileInfo.Length);
-
+                _logger.LogInformation("Downloaded PDF to: {Path} ({Size:N0} bytes)", localPath, new FileInfo(localPath).Length);
                 return localPath;
             }
             catch (Exception ex)
@@ -255,6 +246,52 @@ namespace CST.Avalonia.Services
                 _logger.LogError(ex, "Failed to download PDF: {Path}", sharePointPath);
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Write a download stream to <paramref name="finalPath"/> without ever leaving a partial file
+        /// there: stream into a sibling ".part", verify the byte count against the server-reported size
+        /// (when known), then atomically move it into place. On a size mismatch or any exception the
+        /// ".part" is removed and <paramref name="finalPath"/> is left untouched. (NET-1)
+        /// </summary>
+        internal static async Task<bool> SaveStreamVerifiedAsync(Stream content, string finalPath, long? expectedSize, ILogger logger)
+        {
+            var localDir = Path.GetDirectoryName(finalPath);
+            if (!string.IsNullOrEmpty(localDir))
+                Directory.CreateDirectory(localDir);
+
+            var tempPath = finalPath + ".part";
+            try
+            {
+                using (var fileStream = File.Create(tempPath))
+                {
+                    await content.CopyToAsync(fileStream);
+                }
+
+                var downloadedLength = new FileInfo(tempPath).Length;
+                if (expectedSize.HasValue && downloadedLength != expectedSize.Value)
+                {
+                    logger.LogError("Downloaded size mismatch for {Path}: got {Actual:N0} bytes, expected {Expected:N0}; discarding partial download",
+                        finalPath, downloadedLength, expectedSize.Value);
+                    TryDelete(tempPath);
+                    return false;
+                }
+
+                // Same-volume rename -> atomic promote into place.
+                File.Move(tempPath, finalPath, overwrite: true);
+                return true;
+            }
+            catch
+            {
+                TryDelete(tempPath);
+                throw;
+            }
+        }
+
+        private static void TryDelete(string path)
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch { /* best-effort cleanup of the partial file */ }
         }
 
         public string GetLocalPdfPath(string sharePointPath)
