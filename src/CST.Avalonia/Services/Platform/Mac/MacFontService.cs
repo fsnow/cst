@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -277,7 +278,9 @@ namespace CST.Avalonia.Services.Platform.Mac
     public class MacFontService
     {
         private readonly ILogger<MacFontService> _logger;
-        private readonly Dictionary<Script, string?> _systemDefaultFontCache = new();
+        // ConcurrentDictionary: written from overlapping Task.Run workers (per-script); a plain
+        // Dictionary can corrupt under concurrent writes. (SCRIPT-1)
+        private readonly ConcurrentDictionary<Script, string?> _systemDefaultFontCache = new();
 
         public MacFontService(ILogger<MacFontService> logger)
         {

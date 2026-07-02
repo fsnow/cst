@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -90,7 +91,9 @@ namespace CST.Avalonia.Services
 
         public event EventHandler? FontSettingsChanged;
         
-        private readonly Dictionary<Script, List<string>> _cachedFonts = new Dictionary<Script, List<string>>();
+        // ConcurrentDictionary: PreloadFontsForAllScriptsAsync writes this from many parallel task
+        // continuations at once; a plain Dictionary can corrupt under concurrent writes. (SCRIPT-1)
+        private readonly ConcurrentDictionary<Script, List<string>> _cachedFonts = new();
         
         public async Task PreloadFontsForAllScriptsAsync()
         {
