@@ -269,7 +269,7 @@ U+0914 = U+0F68 U+0F7D
 >> 0x0933  LLA (this is transliterated to Latin by L with dot below)
 
 I don't think U+0933 has a precise correspondence in Tibetan script. (This Devanagari character also doesn't 
-seem to be in the old Indic alphabets from which Buddhist texts were translated into Tibetan.)
+seem to be in the old Indic alphabets from which these texts were translated into Tibetan.)
 
 If this letter is equivalent to a conjunct of two LAs then you would probably have to write it as 
 U+0F63 U+0FB3 in Tibetan script. If it is a unique consonant I think the way to handle it would be to 

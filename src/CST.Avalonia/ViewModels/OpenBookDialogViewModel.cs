@@ -20,7 +20,7 @@ namespace CST.Avalonia.ViewModels;
 
 /// <summary>
 /// ViewModel for the Open Book dialog - replacement for FormSelectBook
-/// Provides hierarchical tree navigation of Buddhist texts with state persistence
+/// Provides hierarchical tree navigation of the Pāli texts with state persistence
 /// </summary>
 public class OpenBookDialogViewModel : ReactiveTool, IDisposable
 {
