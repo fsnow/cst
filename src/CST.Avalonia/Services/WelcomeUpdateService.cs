@@ -29,12 +29,17 @@ namespace CST.Avalonia.Services
         private static readonly TimeSpan MaxCacheAge = TimeSpan.FromDays(30);
         private static readonly TimeSpan HttpTimeout = TimeSpan.FromSeconds(10);
 
+        // One shared client for the app lifetime. A WelcomeUpdateService is created per welcome document
+        // (and each layout reset), so newing an HttpClient per instance leaked an undisposed client every
+        // time. A single long-lived HttpClient is the recommended pattern and needs no disposal. (NET-8)
+        private static readonly HttpClient SharedHttpClient = new() { Timeout = HttpTimeout };
+
         // Current app version - will be injected from App.axaml.cs
         public string CurrentAppVersion { get; set; } = "5.0.0-beta.5";
 
         public WelcomeUpdateService(HttpClient? httpClient = null)
         {
-            _httpClient = httpClient ?? new HttpClient { Timeout = HttpTimeout };
+            _httpClient = httpClient ?? SharedHttpClient;
             _logger = Log.ForContext<WelcomeUpdateService>();
 
             // Determine cache directory based on platform
