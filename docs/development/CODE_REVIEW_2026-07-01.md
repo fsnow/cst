@@ -17,6 +17,38 @@
 
 ---
 
+## Fix status (updated 2026-07-02)
+
+Findings that have been converted to GitHub issues and worked. **Closed** issues are fixed and merged to `main`; **open** ones are in progress (the issue links its PR/commits). Findings not listed here have no dedicated issue yet.
+
+| Finding | Issue | PR | Status |
+|---------|-------|----|--------|
+| SRCH-1  | [#126](https://github.com/fsnow/cst/issues/126) | [#128](https://github.com/fsnow/cst/pull/128) | ✅ Fixed |
+| SRCH-2  | [#113](https://github.com/fsnow/cst/issues/113) | — | ✅ Fixed |
+| SRCH-3  | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed |
+| SRCH-4  | [#114](https://github.com/fsnow/cst/issues/114) | — | ✅ Fixed |
+| SRCH-9  | — | — | ⚠️ **Not a defect** for Telugu/Thai/Tibetan/Khmer — assessed against the old CST4 `src/CST/Conversion/Any2Ipe.cs`; the `CST.Core` parsers are wired and work. Cyrillic portion is tracked as **CORE-3**. |
+| DICT-1  | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed |
+| DICT-2  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) |
+| DICT-3  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
+| DICT-4  | [#120](https://github.com/fsnow/cst/issues/120) | [#122](https://github.com/fsnow/cst/pull/122) | ✅ Fixed |
+| DICT-5  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
+| DICT-6  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
+| CORE-1  | [#127](https://github.com/fsnow/cst/issues/127) | — | ✅ Fixed |
+| CORE-3  | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | 🔧 In review |
+| CORE-4  | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed |
+| NET-1   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed |
+| BOOK-2  | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed |
+| SCRIPT-1| [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed |
+| STATE-1 | [#130](https://github.com/fsnow/cst/issues/130) | — | 🔧 In progress |
+| STATE-2 | [#132](https://github.com/fsnow/cst/issues/132) | — | 🔧 In progress |
+
+**High findings still without an issue:** SEC-1, DOCK-1, DOCK-2, BOOK-1, XCUT-1, SCRIPT-2.
+
+Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
+
+---
+
 ## Security
 
 ### SEC-1 [High] Tenant-wide Graph client secret recoverable from public repo
