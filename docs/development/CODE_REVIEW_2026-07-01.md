@@ -60,7 +60,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | NET-5   | Low    | [#162](https://github.com/fsnow/cst/issues/162) | [#163](https://github.com/fsnow/cst/pull/163) | ✅ Fixed |
 | NET-6   | Low    | — | — | |
 | NET-7   | Low    | [#160](https://github.com/fsnow/cst/issues/160) | [#161](https://github.com/fsnow/cst/pull/161) | ✅ Fixed |
-| NET-8   | Low    | — | — | |
+| NET-8   | Low    | [#171](https://github.com/fsnow/cst/issues/171) | [#172](https://github.com/fsnow/cst/pull/172) | ✅ Fixed |
 | DICT-1  | High   | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed |
 | DICT-2  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) |
 | DICT-3  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
@@ -84,8 +84,8 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-7  | Medium | [#167](https://github.com/fsnow/cst/issues/167) | — | ⏸️ Deferred — needs GUI verification (restoration timing; touches #36) |
 | BOOK-8  | Low    | [#168](https://github.com/fsnow/cst/issues/168) | — | ✅ Fixed |
 | BOOK-9  | Low    | [#169](https://github.com/fsnow/cst/issues/169) | — | ✅ Fixed |
-| BOOK-10 | Low    | — | — | |
-| BOOK-11 | Low    | — | — | |
+| BOOK-10 | Low    | [#170](https://github.com/fsnow/cst/issues/170) | — | ✅ Fixed |
+| BOOK-11 | Low    | [#173](https://github.com/fsnow/cst/issues/173) | — | ✅ Fixed |
 | XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed |
 | XCUT-2  | Medium | — | — | |
 | XCUT-3  | Medium | — | — | |
@@ -104,7 +104,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | |
 | SCRIPT-10 | Low    | — | — | |
 
-**Progress:** 40 fixed, 1 in progress (BOOK-1), 1 deferred (BOOK-7, needs GUI verification), 38 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings are now resolved (SRCH-9 = not-a-defect).
+**Progress:** 43 fixed, 1 in progress (BOOK-1), 1 deferred (BOOK-7, needs GUI verification), 35 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved; BOOK subsystem complete except BOOK-1 (open) and BOOK-7 (deferred).
 **High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.

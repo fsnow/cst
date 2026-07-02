@@ -1832,10 +1832,13 @@ public partial class BookDisplayView : UserControl
             _logger.Debug("NavigateToAnchor acquired JS lock successfully | {Details}", anchor);
             try
             {
+                // JSON-encode the anchor so it's a properly-escaped JS string literal; a raw splice broke
+                // the whole injected script on any anchor containing a quote. (BOOK-11)
+                var anchorJson = System.Text.Json.JsonSerializer.Serialize(anchor);
                 var script = $@"
                 (function() {{
                     try {{
-                        var element = document.getElementById('{anchor}') || document.querySelector('a[name=""{anchor}""]');
+                        var element = document.getElementById({anchorJson}) || document.querySelector('a[name=' + {anchorJson} + ']');
                         if (element) {{
                             element.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
                         }}
@@ -1990,20 +1993,24 @@ public partial class BookDisplayView : UserControl
             _logger.Debug("ScrollToPageAnchor acquired JS lock successfully | {Details}", anchorName);
             try
             {
+                // JSON-encode the anchor so it's a properly-escaped JS string literal (injected once as
+                // __a); a raw splice broke the whole injected script on any anchor with a quote. (BOOK-11)
+                var anchorJson = System.Text.Json.JsonSerializer.Serialize(anchorName);
                 var script = $@"
                     (function() {{
-                        var anchor = document.querySelector('a[name=""{anchorName}""]') || 
-                                    document.querySelector('a[id=""{anchorName}""]') ||
-                                    document.getElementById('{anchorName}');
-                                    
+                        var __a = {anchorJson};
+                        var anchor = document.querySelector('a[name=' + __a + ']') ||
+                                    document.querySelector('a[id=' + __a + ']') ||
+                                    document.getElementById(__a);
+
                         if (anchor) {{
                             anchor.scrollIntoView({{ behavior: ""instant"", block: ""start"" }});
                         }} else {{
                             var allAnchors = Array.from(document.querySelectorAll(""a[name]""));
                             var paraAnchors = allAnchors.filter(a => a.name && a.name.startsWith(""para""));
-                            
-                            if ('{anchorName}'.startsWith(""para"")) {{
-                                var targetText = '{anchorName}'.substring(4);
+
+                            if (__a.startsWith(""para"")) {{
+                                var targetText = __a.substring(4);
                                 if (targetText.indexOf(""-"") !== -1) {{
                                     targetText = targetText.substring(0, targetText.indexOf(""-""));
                                 }}
