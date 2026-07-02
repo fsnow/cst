@@ -43,8 +43,9 @@ Findings that have been converted to GitHub issues and worked. **Closed** issues
 | SCRIPT-1| [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed |
 | STATE-1 | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed |
 | STATE-2 | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed |
+| XCUT-1  | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed |
 
-**High findings still without an issue:** SEC-1, DOCK-1, DOCK-2, XCUT-1, SCRIPT-2.
+**High findings still without an issue:** SEC-1, DOCK-1, DOCK-2, SCRIPT-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
 
