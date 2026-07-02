@@ -40,6 +40,22 @@ public partial class BookDisplayView : UserControl
     private bool _isBrowserInitialized = false;
     private TaskCompletionSource<string?>? _paraAnchorTcs = null;
     private readonly string _tabId = $"tab_{DateTime.Now.Ticks}_{Guid.NewGuid().ToString("N")[..8]}";
+    private string? _tempHtmlFilePath;   // the temp HTML file this View last loaded from; deleted on dispose (BOOK-8)
+
+    static BookDisplayView()
+    {
+        // One-time sweep of stale per-tab book HTML left in the temp dir by previous sessions/crashes
+        // (each View wrote cst_book_*_<tabId>.html and nothing deleted them). Runs before the first
+        // View — and thus before this session writes any — so it only removes leftovers. Best-effort. (BOOK-8)
+        try
+        {
+            foreach (var stale in Directory.EnumerateFiles(Path.GetTempPath(), "cst_book_*.html"))
+            {
+                try { File.Delete(stale); } catch { /* in use / perms — skip */ }
+            }
+        }
+        catch { /* temp dir unavailable — ignore */ }
+    }
 
     // C# scroll tracking for reliable status bar updates
     private int _lastKnownScrollY = 0;
@@ -257,6 +273,13 @@ public partial class BookDisplayView : UserControl
                 _logger.Error(ex, "Error while disposing WebView");
                 _webView = null;
             }
+        }
+
+        // Delete this View's temp HTML file (a re-load re-creates it; on close it's gone for good). (BOOK-8)
+        if (_tempHtmlFilePath != null)
+        {
+            try { File.Delete(_tempHtmlFilePath); } catch { /* already gone / locked — ignore */ }
+            _tempHtmlFilePath = null;
         }
     }
 
@@ -540,6 +563,7 @@ public partial class BookDisplayView : UserControl
 
                     _logger.Debug("Writing to temp file | {Details}", tempFilePath);
                     File.WriteAllText(tempFilePath, _viewModel.HtmlContent, System.Text.Encoding.UTF8);
+                    _tempHtmlFilePath = tempFilePath;   // remember it so DisposeWebView can delete it (BOOK-8)
 
                     var fileUrl = $"file://{tempFilePath}";
                     _logger.Debug("Loading from file URL | {Details}", fileUrl);
