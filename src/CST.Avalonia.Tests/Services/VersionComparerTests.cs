@@ -15,6 +15,10 @@ namespace CST.Avalonia.Tests.Services
         [InlineData("5.0.0-beta.1", "5.0.0-beta.2", VersionComparison.PatchOutdated)]
         [InlineData("5.0.0-beta.1", "5.0.0", VersionComparison.PreReleaseToStable)]
         [InlineData("v5.0.0", "5.0.0", VersionComparison.Current)] // Handle 'v' prefix
+        [InlineData("5.0.0-alpha", "5.0.0-alpha.1", VersionComparison.PatchOutdated)]   // NET-3: build added
+        [InlineData("5.0.0-beta", "5.0.0-beta.2", VersionComparison.PatchOutdated)]     // NET-3: no build vs build
+        [InlineData("5.0.0-alpha.2", "5.0.0-beta.1", VersionComparison.PatchOutdated)]  // alpha < beta
+        [InlineData("5.0.0-alpha.1", "5.0.0-alpha", VersionComparison.NewerThanLatest)] // current is newer
         public void Compare_VariousVersions_ReturnsCorrectComparison(string current, string latest, VersionComparison expected)
         {
             var result = VersionComparer.Compare(current, latest);
@@ -36,6 +40,7 @@ namespace CST.Avalonia.Tests.Services
         [Theory]
         [InlineData("5.0.0", 5, 0, 0, null, null)]
         [InlineData("5.0.0-beta.1", 5, 0, 0, "beta", 1)]
+        [InlineData("5.0.0-beta1", 5, 0, 0, "beta", 1)] // NET-3: dot before build is optional
         [InlineData("5.0.0-alpha", 5, 0, 0, "alpha", null)]
         [InlineData("v5.0.0", 5, 0, 0, null, null)]
         public void ParseVersion_ValidVersions_ParsesCorrectly(string version, int major, int minor, int patch, string? preRelease, int? preReleaseBuild)
