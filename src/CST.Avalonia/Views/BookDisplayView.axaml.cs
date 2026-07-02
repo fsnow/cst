@@ -1575,7 +1575,10 @@ public partial class BookDisplayView : UserControl
                                     event.stopPropagation(); // Stop event bubbling
                                     
                                     // Signal C# to handle copy operation
-                                    document.title = 'CST_COPY_REQUESTED:|TAB:{_tabId}';
+                                    // |SEQ makes a repeated identical command a *distinct* title so
+                                    // TitleChanged fires again (two Cmd+C in one tick used to no-op). C#
+                                    // parses TAB from Split('|')[1], so the trailing SEQ is ignored. (BOOK-4)
+                                    document.title = 'CST_COPY_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
                                 
@@ -1586,7 +1589,7 @@ public partial class BookDisplayView : UserControl
                                     event.stopPropagation(); // Stop event bubbling
 
                                     // Signal C# to handle select all operation
-                                    document.title = 'CST_SELECT_ALL_REQUESTED:|TAB:{_tabId}';
+                                    document.title = 'CST_SELECT_ALL_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
 
@@ -1596,7 +1599,7 @@ public partial class BookDisplayView : UserControl
                                     window.cstLogger.log('DEBUG', 'View Source 2010 shortcut detected in JavaScript');
                                     event.preventDefault();
                                     event.stopPropagation();
-                                    document.title = 'CST_VIEW_SOURCE_2010:|TAB:{_tabId}';
+                                    document.title = 'CST_VIEW_SOURCE_2010:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
 
@@ -1605,7 +1608,7 @@ public partial class BookDisplayView : UserControl
                                     window.cstLogger.log('DEBUG', 'View Source 1957 shortcut detected in JavaScript');
                                     event.preventDefault();
                                     event.stopPropagation();
-                                    document.title = 'CST_VIEW_SOURCE_1957:|TAB:{_tabId}';
+                                    document.title = 'CST_VIEW_SOURCE_1957:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
                             }, true); // Use capture phase to intercept before other handlers
@@ -1625,8 +1628,11 @@ public partial class BookDisplayView : UserControl
                                 }).join(' ');
                                 
                                 var fullMessage = message + ' ' + formattedArgs;
-                                // Use a unique title format to avoid conflicts
-                                document.title = 'CST_LOG_MSG::' + level + '::' + fullMessage + '|TAB:{_tabId}';
+                                // Diagnostic JS logs go to the browser console, NOT document.title. The
+                                // title is the C#<->JS control channel; logging every JS event through it
+                                // (worst: on every keydown) clobbered pending control messages such as
+                                // CST_GET_PARA_RESULT before C# could read them. (BOOK-4)
+                                console.log('[CST][' + level + '] ' + fullMessage);
                             } catch (e) {
                                 // Failsafe, do nothing
                             }
