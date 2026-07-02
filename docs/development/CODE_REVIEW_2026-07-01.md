@@ -19,32 +19,92 @@
 
 ## Fix status (updated 2026-07-02)
 
-Findings that have been converted to GitHub issues and worked. **Closed** issues are fixed and merged to `main`; **open** ones are in progress (the issue links its PR/commits). Findings not listed here have no dedicated issue yet.
+All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ Fixed** = issue closed / merged to `main`; **🔧 In progress** = issue open (its PR/commits are linked from the issue); a blank status means no dedicated issue has been filed yet.
 
-| Finding | Issue | PR | Status |
-|---------|-------|----|--------|
-| SRCH-1  | [#126](https://github.com/fsnow/cst/issues/126) | [#128](https://github.com/fsnow/cst/pull/128) | ✅ Fixed |
-| SRCH-2  | [#113](https://github.com/fsnow/cst/issues/113) | — | ✅ Fixed |
-| SRCH-3  | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed |
-| SRCH-4  | [#114](https://github.com/fsnow/cst/issues/114) | — | ✅ Fixed |
-| SRCH-9  | — | — | ⚠️ **Not a defect** for Telugu/Thai/Tibetan/Khmer — assessed against the old CST4 `src/CST/Conversion/Any2Ipe.cs`; the `CST.Core` parsers are wired and work. Cyrillic portion is tracked as **CORE-3**. |
-| DICT-1  | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed |
-| DICT-2  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) |
-| DICT-3  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
-| DICT-4  | [#120](https://github.com/fsnow/cst/issues/120) | [#122](https://github.com/fsnow/cst/pull/122) | ✅ Fixed |
-| DICT-5  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
-| DICT-6  | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
-| CORE-1  | [#127](https://github.com/fsnow/cst/issues/127) | — | ✅ Fixed |
-| CORE-3  | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | 🔧 In review |
-| CORE-4  | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed |
-| NET-1   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed |
-| BOOK-1  | [#136](https://github.com/fsnow/cst/issues/136) | — | 🔧 In progress |
-| BOOK-2  | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed |
-| SCRIPT-1| [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed |
-| STATE-1 | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed |
-| STATE-2 | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed |
-| XCUT-1  | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed |
+| Finding | Level | Issue | PR | Status |
+|---------|-------|-------|----|--------|
+| SEC-1   | High   | — | — | |
+| DOCK-1  | High   | — | — | |
+| DOCK-2  | High   | — | — | |
+| DOCK-3  | Medium | — | — | |
+| DOCK-4  | Medium | — | — | |
+| DOCK-5  | Medium | — | — | |
+| DOCK-6  | Low    | — | — | |
+| DOCK-7  | Low    | — | — | |
+| DOCK-8  | Low    | — | — | |
+| SRCH-1  | High   | [#126](https://github.com/fsnow/cst/issues/126) | [#128](https://github.com/fsnow/cst/pull/128) | ✅ Fixed |
+| SRCH-2  | High   | [#113](https://github.com/fsnow/cst/issues/113) | — | ✅ Fixed |
+| SRCH-3  | High   | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed |
+| SRCH-4  | High   | [#114](https://github.com/fsnow/cst/issues/114) | — | ✅ Fixed |
+| SRCH-5  | Medium | — | — | |
+| SRCH-6  | Medium | — | — | |
+| SRCH-7  | Medium | — | — | |
+| SRCH-8  | Medium | — | — | |
+| SRCH-9  | Medium | — | — | ⚠️ Not a defect for Telugu/Thai/Tibetan/Khmer (assessed against the old CST4 file; the `CST.Core` parsers work). Cyrillic portion → CORE-3. |
+| SRCH-10 | Medium | — | — | |
+| SRCH-11 | Low    | — | — | |
+| SRCH-12 | Low    | — | — | |
+| SRCH-13 | Low    | — | — | |
+| SRCH-14 | Low    | — | — | |
+| STATE-1 | High   | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed |
+| STATE-2 | High   | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed |
+| STATE-3 | Medium | — | — | |
+| STATE-4 | Medium | — | — | |
+| STATE-5 | Low    | — | — | |
+| STATE-6 | Low    | — | — | |
+| STATE-7 | Low    | — | — | |
+| NET-1   | High   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed |
+| NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed |
+| NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | 🔧 In progress |
+| NET-4   | Low    | — | — | |
+| NET-5   | Low    | — | — | |
+| NET-6   | Low    | — | — | |
+| NET-7   | Low    | — | — | |
+| NET-8   | Low    | — | — | |
+| DICT-1  | High   | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed |
+| DICT-2  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) |
+| DICT-3  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
+| DICT-4  | Medium | [#120](https://github.com/fsnow/cst/issues/120) | [#122](https://github.com/fsnow/cst/pull/122) | ✅ Fixed |
+| DICT-5  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
+| DICT-6  | Low    | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed |
+| CORE-1  | High   | [#127](https://github.com/fsnow/cst/issues/127) | — | ✅ Fixed |
+| CORE-2  | Medium | — | — | |
+| CORE-3  | Medium | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | ✅ Fixed |
+| CORE-4  | Medium | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed |
+| CORE-5  | Low    | — | — | |
+| CORE-6  | Low    | — | — | |
+| CORE-7  | Low    | — | — | |
+| CORE-8  | Low    | — | — | |
+| BOOK-1  | High   | [#136](https://github.com/fsnow/cst/issues/136) | — | 🔧 In progress |
+| BOOK-2  | High   | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed |
+| BOOK-3  | Medium | — | — | |
+| BOOK-4  | Medium | — | — | |
+| BOOK-5  | Medium | — | — | |
+| BOOK-6  | Medium | — | — | |
+| BOOK-7  | Medium | — | — | |
+| BOOK-8  | Low    | — | — | |
+| BOOK-9  | Low    | — | — | |
+| BOOK-10 | Low    | — | — | |
+| BOOK-11 | Low    | — | — | |
+| XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed |
+| XCUT-2  | Medium | — | — | |
+| XCUT-3  | Medium | — | — | |
+| XCUT-4  | Medium | — | — | |
+| XCUT-5  | Low    | — | — | |
+| XCUT-6  | Low    | — | — | |
+| XCUT-7  | Low    | — | — | |
+| SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed |
+| SCRIPT-2  | High   | — | — | |
+| SCRIPT-3  | Medium | — | — | |
+| SCRIPT-4  | Medium | — | — | |
+| SCRIPT-5  | Medium | — | — | |
+| SCRIPT-6  | Low    | — | — | |
+| SCRIPT-7  | Low    | — | — | |
+| SCRIPT-8  | Low    | — | — | |
+| SCRIPT-9  | Low    | — | — | |
+| SCRIPT-10 | Low    | — | — | |
 
+**Progress:** 20 fixed, 2 in progress (BOOK-1, NET-3), 58 not yet filed.
 **High findings still without an issue:** SEC-1, DOCK-1, DOCK-2, SCRIPT-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
