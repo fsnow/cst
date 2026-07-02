@@ -21,9 +21,13 @@ namespace CST.Avalonia.Services;
 /// </summary>
 public sealed class DictionaryService : IDictionaryService
 {
-    // Separator inserted between the definitions of a repeated headword within a file. (CST4's English
-    // loader used a malformed "</p><hr/<p>"; this emits valid markup.)
-    private const string MeaningSeparator = "<hr/>";
+    /// <summary>
+    /// Sentinel inserted between the definitions of a repeated headword within a file (a merged entry).
+    /// The dictionary renderer splits on this and shows a visual break; it is not HTML that any WebView
+    /// renders. Shared here so the loader and the renderer (<c>MeaningParser</c>) cannot drift.
+    /// (CST4's English loader used a malformed <c>"&lt;/p&gt;&lt;hr/&lt;p&gt;"</c>.)
+    /// </summary>
+    public const string MeaningSeparator = "<hr/>";
 
     private readonly ILogger<DictionaryService> _logger;
     private readonly string _dictionariesDirectory;

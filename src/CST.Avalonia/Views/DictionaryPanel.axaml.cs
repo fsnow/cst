@@ -43,7 +43,14 @@ public partial class DictionaryPanel : UserControl
         text.Inlines.Clear();
         foreach (var seg in segments)
         {
-            if (seg.IsLink)
+            if (seg.IsSeparator)
+            {
+                // Break between the definitions of a merged (duplicate) headword: a blank line, so the
+                // separator reads as a boundary instead of showing the raw sentinel (DICT-1).
+                text.Inlines.Add(new LineBreak());
+                text.Inlines.Add(new LineBreak());
+            }
+            else if (seg.IsLink)
             {
                 var link = new TextBlock { Text = seg.Text };
                 link.Classes.Add("dict-link");
