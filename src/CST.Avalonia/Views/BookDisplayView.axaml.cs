@@ -1396,7 +1396,8 @@ public partial class BookDisplayView : UserControl
                 if (messageTabId == _tabId)
                 {
                     _logger.Debug("*** COPY REQUESTED FROM JAVASCRIPT ***");
-                    ExecuteCopy();
+                    // OnTitleChanged runs on the CEF thread; marshal UI/edit work to the UI thread. (BOOK-2)
+                    Dispatcher.UIThread.Post(() => ExecuteCopy());
                 }
             }
             catch (Exception ex)
@@ -1415,18 +1416,22 @@ public partial class BookDisplayView : UserControl
                 if (messageTabId == _tabId)
                 {
                     _logger.Debug("*** SELECT ALL REQUESTED FROM JAVASCRIPT ***");
-                    if (_webView != null)
+                    // OnTitleChanged runs on the CEF thread; run EditCommands on the UI thread. (BOOK-2)
+                    Dispatcher.UIThread.Post(() =>
                     {
-                        try
+                        if (_webView != null)
                         {
-                            _webView.EditCommands.SelectAll();
-                            _logger.Debug("WebView SelectAll executed successfully from JavaScript request");
+                            try
+                            {
+                                _webView.EditCommands.SelectAll();
+                                _logger.Debug("WebView SelectAll executed successfully from JavaScript request");
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Error executing SelectAll from JavaScript request");
+                            }
                         }
-                        catch (Exception ex)
-                        {
-                            _logger.Error(ex, "Error executing SelectAll from JavaScript request");
-                        }
-                    }
+                    });
                 }
             }
             catch (Exception ex)
@@ -1445,7 +1450,9 @@ public partial class BookDisplayView : UserControl
                 if (messageTabId == _tabId)
                 {
                     _logger.Debug("*** VIEW SOURCE 1957 REQUESTED FROM JAVASCRIPT ***");
-                    _viewModel?.ShowSource1957Command.Execute().Subscribe();
+                    // OnTitleChanged runs on the CEF thread; the command mutates the dock layout, so it
+                    // must run on the UI thread. (BOOK-2)
+                    Dispatcher.UIThread.Post(() => _viewModel?.ShowSource1957Command.Execute().Subscribe());
                 }
             }
             catch (Exception ex)
@@ -1464,7 +1471,9 @@ public partial class BookDisplayView : UserControl
                 if (messageTabId == _tabId)
                 {
                     _logger.Debug("*** VIEW SOURCE 2010 REQUESTED FROM JAVASCRIPT ***");
-                    _viewModel?.ShowSource2010Command.Execute().Subscribe();
+                    // OnTitleChanged runs on the CEF thread; the command mutates the dock layout, so it
+                    // must run on the UI thread. (BOOK-2)
+                    Dispatcher.UIThread.Post(() => _viewModel?.ShowSource2010Command.Execute().Subscribe());
                 }
             }
             catch (Exception ex)
