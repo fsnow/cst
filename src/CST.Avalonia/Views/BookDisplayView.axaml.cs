@@ -880,7 +880,7 @@ public partial class BookDisplayView : UserControl
                             // Exclude paragraph anchors (which start with 'para') and page anchors (which start with V, M, P, T)
                             var chapterAnchors = document.querySelectorAll('a[name]');
                             chapterAnchors.forEach(function(anchor) {{
-                                if (anchor.name && anchor.name.match(/^[a-z]+\d+(_\d+)?$/) && 
+                                if (anchor.name && anchor.name.match(/^[a-z]+\d+(_\d+)*$/) &&
                                     !anchor.name.startsWith('para') && 
                                     !anchor.name.match(/^[VMPTO]/)) {{
                                     var rect = anchor.getBoundingClientRect();
@@ -1322,29 +1322,9 @@ public partial class BookDisplayView : UserControl
                 _logger.Error("Error processing atomic status update | {Details}", ex.Message);
             }
         }
-        // Check for current chapter data in title
-        else if (title != null && title.StartsWith("CST_CURRENT_CHAPTER:"))
-        {
-            try
-            {
-                var parts = title.Split('|');
-                var chapterId = parts[0].Substring("CST_CURRENT_CHAPTER:".Length);
-                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
-
-                if (messageTabId == _tabId)
-                {
-                    _logger.Debug("Detected current chapter | {Details}", chapterId);
-                    if (_viewModel != null)
-                    {
-                        _viewModel.UpdateCurrentChapter(chapterId);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Error parsing current chapter | {Details}", ex.Message);
-            }
-        }
+        // (CST_CURRENT_CHAPTER handler removed with the redundant cstChapterTracking JS: the current
+        // chapter now comes solely from CST_STATUS_UPDATE's CHAPTER= field, which also calls
+        // UpdateCurrentChapter. Two competing signals could disagree and flicker the dropdown. (BOOK-5)
         // Check for GetPara result
         else if (title != null && title.StartsWith("CST_GET_PARA_RESULT:"))
         {
@@ -1731,114 +1711,12 @@ public partial class BookDisplayView : UserControl
                     }
                     
                     // Chapter tracking system
-                    window.cstChapterTracking = {
-                        chapterElements: [],
-                        currentChapter: null,
-                        
-                        collectChapterAnchors: function() {
-                            // Collect all anchor elements that could be chapters (with names matching chapter pattern)
-                            var anchors = document.querySelectorAll('a[name]');
-                            this.chapterElements = [];
-                            
-                            anchors.forEach(function(anchor) {
-                                var anchorName = anchor.name;
-                                // Look for anchors with names like 'dn1', 'dn1_1', 'dn1_2', etc.
-                                // But exclude paragraph-level anchors like 'para1', 'para10', etc.
-                                if (anchorName && (anchorName.match(/^[a-z]+\d+(_\d+)*$/)) && !anchorName.startsWith('para')) {
-                                    // THE FIX: Use the same robust position calculation as the anchor cache.
-                                    var rect = anchor.getBoundingClientRect();
-                                    var position = Math.round(rect.top + window.pageYOffset);
-
-                                    this.chapterElements.push({
-                                        id: anchorName,
-                                        element: anchor,
-                                        offsetTop: position
-                                    });
-                                }
-                            }.bind(this));
-                            
-                            // Sort by offset position
-                            this.chapterElements.sort(function(a, b) {
-                                return a.offsetTop - b.offsetTop;
-                            });
-                            
-                            this.chapterElements.forEach(function(ch) {
-                                window.cstLogger.log('DEBUG', 'Chapter anchor:', ch.id, 'at position:', ch.offsetTop);
-                            });
-                        },
-                        
-                        findCurrentChapter: function() {
-                            var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                            var searchStart = scrollTop;
-                            var searchEnd = scrollTop + 200; // Look within top 200px of viewport
-
-                            var bestChapter = null;
-                            var bestDistance = Infinity;
-
-                            // First, look for chapters within the viewport (scrollTop to scrollTop+200px)
-                            for (var i = 0; i < this.chapterElements.length; i++) {
-                                var chapter = this.chapterElements[i];
-                                if (chapter.offsetTop >= searchStart && chapter.offsetTop <= searchEnd) {
-                                    var distance = Math.abs(chapter.offsetTop - scrollTop);
-                                    if (distance < bestDistance) {
-                                        bestDistance = distance;
-                                        bestChapter = chapter.id;
-                                    }
-                                } else if (chapter.offsetTop > searchEnd) {
-                                    break; // Past the viewport, no need to continue
-                                }
-                            }
-
-                            // If we found a chapter within viewport, return it
-                            if (bestChapter) {
-                                return bestChapter;
-                            }
-
-                            // Otherwise, fall back to the closest chapter BEFORE scroll position
-                            for (var i = this.chapterElements.length - 1; i >= 0; i--) {
-                                var chapter = this.chapterElements[i];
-                                if (chapter.offsetTop <= scrollTop) {
-                                    return chapter.id;
-                                }
-                            }
-
-                            return null;
-                        },
-                        
-                        updateCurrentChapter: function() {
-                            var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                            var newChapter = this.findCurrentChapter();
-                            if (newChapter !== this.currentChapter) {
-                                this.currentChapter = newChapter;
-                                if (newChapter) {
-                                    document.title = 'CST_CURRENT_CHAPTER:' + newChapter + '|TAB:{_tabId}';
-                                }
-                            }
-                        },
-                    };
-
-                    function initializeChapterTracking() {
-                        try {
-                            if (window.cstChapterTracking) {
-                                window.cstChapterTracking.collectChapterAnchors();
-                                // Get initial chapter
-                                window.cstChapterTracking.updateCurrentChapter();
-                            } else {
-                                window.cstLogger.log('WARN', 'cstChapterTracking not ready');
-                            }
-                        } catch (error) {
-                            window.cstLogger.log('ERROR', 'Error initializing chapter tracking:', error);
-                        }
-                    }
-
                     if (document.readyState === 'complete') {
                         setTimeout(initializeHighlights, 100);
-                        setTimeout(initializeChapterTracking, 200);
                         setTimeout(function() { window.cstKeyboardCapture.init(); }, 50);
                     } else {
                         document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(initializeHighlights, 100);
-                            setTimeout(initializeChapterTracking, 200);
                             setTimeout(function() { window.cstKeyboardCapture.init(); }, 50);
                         });
                     }
