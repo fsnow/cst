@@ -69,9 +69,8 @@ namespace CST.Avalonia.Tests.Services
             var result = await _service.IsIndexValidAsync();
 
             // Assert
-            // The current implementation only checks for file existence, not validity
-            // This test documents the current behavior - it returns true if files exist
-            Assert.True(result);
+            // Segment files exist but the index isn't readable -> invalid (SRCH-11).
+            Assert.False(result);
         }
 
         [Fact]
@@ -95,34 +94,25 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
-        public async Task BuildIndexAsync_WithCorruptedIndex_RebuildsIndex()
+        public async Task BuildIndexAsync_WithCorruptedIndex_DeletesIndexAndResetsFileDates()
         {
-            // Arrange
+            // Arrange - a present-but-unreadable index (garbage where segment files would be).
             await _service.InitializeAsync();
-            
-            // Create corrupted index files
-            var corruptedFile = Path.Combine(_testIndexDir, "segments.gen");
-            await File.WriteAllTextAsync(corruptedFile, "corrupted");
-            
-            var changedBooks = new List<int> { 0 };
+            var corruptSegments = Path.Combine(_testIndexDir, "segments_1");
+            await File.WriteAllTextAsync(corruptSegments, "corrupted");
+            await File.WriteAllTextAsync(Path.Combine(_testIndexDir, "_0.cfs"), "corrupted");
+
+            // Recovery runs before re-detecting changed books; stop there so the test doesn't need the real
+            // XML corpus to actually rebuild. The point is that corruption triggers recovery, not a skip. (SRCH-11)
             _mockXmlFileDatesService.Setup(x => x.GetChangedBooksAsync())
-                .ReturnsAsync(changedBooks);
+                .ThrowsAsync(new InvalidOperationException("stop after recovery"));
 
-            var progressReports = new List<IndexingProgress>();
-            var progress = new Progress<IndexingProgress>(p => progressReports.Add(p));
+            // Act
+            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.BuildIndexAsync(null!));
 
-            // Act & Assert
-            // This will fail with a Lucene exception because we have corrupted the index
-            var exception = await Assert.ThrowsAnyAsync<Exception>(
-                async () => await _service.BuildIndexAsync(progress));
-            
-            // Verify we get a Lucene-specific exception for corruption
-            Assert.True(exception.GetType().Name.Contains("IndexFormatTooNewException") ||
-                       exception.GetType().Name.Contains("CorruptIndexException") ||
-                       exception.Message.Contains("Format version"));
-
-            // Verify that the service attempted to get changed books (indicating a rebuild)
-            _mockXmlFileDatesService.Verify(x => x.GetChangedBooksAsync(), Times.Once);
+            // Assert - the corrupt index was deleted and the file-dates cache reset (forcing a full rebuild).
+            _mockXmlFileDatesService.Verify(x => x.ResetFileDates(), Times.Once);
+            Assert.False(File.Exists(corruptSegments));
         }
 
         [Fact]
@@ -163,42 +153,35 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
-        public async Task IsIndexValidAsync_WithMixedFileTypes_ReturnsTrue()
+        public async Task IsIndexValidAsync_WithNonIndexFilesPresent_ReturnsFalse()
         {
-            // Arrange
+            // Arrange - stray files that merely share index extensions are not a readable index. (SRCH-11)
             await _service.InitializeAsync();
-            
-            // Create both .cfs and .fdt files to test file type detection
-            var cfsFile = Path.Combine(_testIndexDir, "test.cfs");
-            var fdtFile = Path.Combine(_testIndexDir, "test.fdt");
-            var randomFile = Path.Combine(_testIndexDir, "test.txt");
-            
-            await File.WriteAllTextAsync(cfsFile, "content");
-            await File.WriteAllTextAsync(fdtFile, "content");
-            await File.WriteAllTextAsync(randomFile, "content");
+
+            await File.WriteAllTextAsync(Path.Combine(_testIndexDir, "test.cfs"), "content");
+            await File.WriteAllTextAsync(Path.Combine(_testIndexDir, "test.fdt"), "content");
+            await File.WriteAllTextAsync(Path.Combine(_testIndexDir, "test.txt"), "content");
 
             // Act
             var result = await _service.IsIndexValidAsync();
 
             // Assert
-            Assert.True(result); // Should find the .cfs file first
+            Assert.False(result);
         }
 
         [Fact]
-        public async Task IsIndexValidAsync_WithOnlyFdtFiles_ReturnsTrue()
+        public async Task IsIndexValidAsync_WithOnlyStrayFdtFile_ReturnsFalse()
         {
             // Arrange
             await _service.InitializeAsync();
-            
-            // Create only .fdt files (no .cfs files)
-            var fdtFile = Path.Combine(_testIndexDir, "test.fdt");
-            await File.WriteAllTextAsync(fdtFile, "content");
+
+            await File.WriteAllTextAsync(Path.Combine(_testIndexDir, "test.fdt"), "content");
 
             // Act
             var result = await _service.IsIndexValidAsync();
 
             // Assert
-            Assert.True(result); // Should fall back to checking .fdt files
+            Assert.False(result);
         }
     }
 }

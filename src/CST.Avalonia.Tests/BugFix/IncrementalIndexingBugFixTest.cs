@@ -8,6 +8,7 @@ using CST.Lucene;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit.Abstractions;
 
 namespace CST.Avalonia.Tests.BugFix
@@ -69,8 +70,7 @@ namespace CST.Avalonia.Tests.BugFix
             await indexingService.InitializeAsync();
 
             // Create a fake valid index (this is what was causing the bug)
-            var fakeIndexFile = Path.Combine(_testIndexDir, "test.cfs");
-            await File.WriteAllTextAsync(fakeIndexFile, "fake index content");
+            TestIndex.CreateMinimal(_testIndexDir);
 
             // Verify the index appears valid (this was the condition that triggered the bug)
             var isIndexValid = await indexingService.IsIndexValidAsync();
@@ -112,8 +112,7 @@ namespace CST.Avalonia.Tests.BugFix
             await indexingService.InitializeAsync();
 
             // Create a fake valid index
-            var fakeIndexFile = Path.Combine(_testIndexDir, "test.cfs");
-            await File.WriteAllTextAsync(fakeIndexFile, "fake index content");
+            TestIndex.CreateMinimal(_testIndexDir);
 
             // Set up NO changed books
             var changedBooks = new List<int>(); // No changes

@@ -7,6 +7,7 @@ using CST.Avalonia.Models;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit.Abstractions;
 
 namespace CST.Avalonia.Tests.Performance
@@ -78,20 +79,8 @@ namespace CST.Avalonia.Tests.Performance
             // Arrange
             await _service.InitializeAsync();
             
-            // Create some fake index files to test file system performance
-            var indexFiles = new[]
-            {
-                Path.Combine(_testIndexDir, "segments_1"),
-                Path.Combine(_testIndexDir, "test1.cfs"),
-                Path.Combine(_testIndexDir, "test1.fdt"),
-                Path.Combine(_testIndexDir, "test2.cfs"),
-                Path.Combine(_testIndexDir, "test2.fdt")
-            };
-            
-            foreach (var file in indexFiles)
-            {
-                await File.WriteAllTextAsync(file, "test content");
-            }
+            // A real index so validity (which now actually opens the index) passes. (SRCH-11)
+            TestIndex.CreateMinimal(_testIndexDir);
 
             var stopwatch = Stopwatch.StartNew();
 
@@ -113,8 +102,7 @@ namespace CST.Avalonia.Tests.Performance
         {
             // Arrange
             await _service.InitializeAsync();
-            var indexFile = Path.Combine(_testIndexDir, "test.cfs");
-            await File.WriteAllTextAsync(indexFile, "test content");
+            TestIndex.CreateMinimal(_testIndexDir);
 
             var times = new long[10];
 

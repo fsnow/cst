@@ -164,9 +164,9 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
-        public async Task IsIndexValidAsync_WithCfsFiles_ReturnsTrue()
+        public async Task IsIndexValidAsync_WithStrayCfsFile_ReturnsFalse()
         {
-            // Arrange
+            // A file that merely has an index extension is not a readable Lucene index. (SRCH-11)
             await _service.InitializeAsync();
             var testFile = Path.Combine(_testIndexDir, "test.cfs");
             await File.WriteAllTextAsync(testFile, "test content");
@@ -175,13 +175,12 @@ namespace CST.Avalonia.Tests.Services
             var result = await _service.IsIndexValidAsync();
 
             // Assert
-            Assert.True(result);
+            Assert.False(result);
         }
 
         [Fact]
-        public async Task IsIndexValidAsync_WithFdtFiles_ReturnsTrue()
+        public async Task IsIndexValidAsync_WithStrayFdtFile_ReturnsFalse()
         {
-            // Arrange
             await _service.InitializeAsync();
             var testFile = Path.Combine(_testIndexDir, "test.fdt");
             await File.WriteAllTextAsync(testFile, "test content");
@@ -190,7 +189,7 @@ namespace CST.Avalonia.Tests.Services
             var result = await _service.IsIndexValidAsync();
 
             // Assert
-            Assert.True(result);
+            Assert.False(result);
         }
 
         [Fact]
@@ -219,10 +218,9 @@ namespace CST.Avalonia.Tests.Services
         {
             // Arrange
             await _service.InitializeAsync();
-            
-            // Create a fake index file to make the index appear valid
-            var testFile = Path.Combine(_testIndexDir, "test.cfs");
-            await File.WriteAllTextAsync(testFile, "test content");
+
+            // A real Lucene index so the validity check actually passes. (SRCH-11)
+            CreateMinimalIndex(1);
 
             _mockXmlFileDatesService.Setup(x => x.GetChangedBooksAsync())
                 .ReturnsAsync(new List<int>());

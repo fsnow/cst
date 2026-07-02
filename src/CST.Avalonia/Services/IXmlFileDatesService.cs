@@ -16,6 +16,14 @@ namespace CST.Avalonia.Services
         /// indexing succeeds so a failed index never marks a book up-to-date (SRCH-1).
         /// </summary>
         void MarkBooksIndexed(IEnumerable<int> bookIndexes);
+
+        /// <summary>
+        /// Clear the in-memory file-date cache so every book is reported changed on the next
+        /// <see cref="GetChangedBooksAsync"/> — used to force a full re-index after the search index is
+        /// found corrupt and deleted (SRCH-11). The persisted file is overwritten on the next save.
+        /// </summary>
+        void ResetFileDates();
+
         Task InitializeAsync();
         
         // Enhanced format methods for XmlUpdateService

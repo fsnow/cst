@@ -65,35 +65,52 @@ namespace CST.Avalonia.Services
             _logger.LogInformation("IndexingService.InitializeAsync() completed successfully");
         }
 
-        public async Task<bool> IsIndexValidAsync()
+        public Task<bool> IsIndexValidAsync()
         {
+            // Validity means the index is actually readable, not merely that segment files exist. A torn or
+            // half-written index has files but throws on open; the old file-existence check reported it valid,
+            // so indexing was skipped and every search then failed with no recovery. (SRCH-11)
             try
             {
-                _logger.LogInformation("Checking index validity in directory: {IndexDirectory}", _indexDirectory);
-                
                 if (!System.IO.Directory.Exists(_indexDirectory))
+                    return Task.FromResult(false);
+
+                using var dir = FSDirectory.Open(_indexDirectory);
+                if (!DirectoryReader.IndexExists(dir))
                 {
-                    _logger.LogInformation("Index directory does not exist, index is invalid");
-                    return false;
+                    _logger.LogInformation("No readable index in {IndexDirectory}", _indexDirectory);
+                    return Task.FromResult(false);
                 }
 
-                var indexFiles = System.IO.Directory.GetFiles(_indexDirectory, "*.cfs");
-                _logger.LogInformation("Found {Count} .cfs files", indexFiles.Length);
-                
-                if (indexFiles.Length == 0)
-                {
-                    indexFiles = System.IO.Directory.GetFiles(_indexDirectory, "*.fdt");
-                    _logger.LogInformation("Found {Count} .fdt files", indexFiles.Length);
-                }
-
-                bool isValid = indexFiles.Length > 0;
-                _logger.LogInformation("Index validity check result: {IsValid}", isValid);
-                return isValid;
+                // A cheap open confirms readability; a corrupt index throws here.
+                using var reader = DirectoryReader.Open(dir);
+                _logger.LogInformation("Index is present and readable ({Count} docs)", reader.NumDocs);
+                return Task.FromResult(true);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking index validity");
-                return false;
+                _logger.LogWarning(ex, "Index in {IndexDirectory} is missing or corrupt", _indexDirectory);
+                return Task.FromResult(false);
+            }
+        }
+
+        // True if the index directory contains any files (so an invalid index here means corrupt, not absent).
+        private bool IndexDirectoryHasFiles()
+            => System.IO.Directory.Exists(_indexDirectory)
+               && System.IO.Directory.GetFiles(_indexDirectory).Length > 0;
+
+        // Delete the contents of a corrupt index so it can be rebuilt from scratch. Closes any open reader
+        // first so the files aren't held. (SRCH-11)
+        private void DeleteCorruptIndex()
+        {
+            Dispose(); // release _indexReader / _directory handles
+            if (!System.IO.Directory.Exists(_indexDirectory))
+                return;
+
+            foreach (var file in System.IO.Directory.GetFiles(_indexDirectory))
+            {
+                try { System.IO.File.Delete(file); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Could not delete corrupt index file {File}", file); }
             }
         }
 
@@ -103,12 +120,23 @@ namespace CST.Avalonia.Services
             {
                 _logger.LogInformation("BuildIndexAsync() started");
 
-                // Get changed books (all books on first run)
+                // Recover from a corrupt/torn index: if index files are present but not readable, delete the
+                // index and reset the file-dates cache so every book is re-indexed from scratch — rather than
+                // skipping indexing (because "files exist") and leaving every search to throw. (SRCH-11)
+                var indexValid = await IsIndexValidAsync();
+                if (!indexValid && IndexDirectoryHasFiles())
+                {
+                    _logger.LogWarning("Search index is present but not readable (corrupt) - deleting and rebuilding from scratch");
+                    DeleteCorruptIndex();
+                    _xmlFileDatesService.ResetFileDates();
+                }
+
+                // Get changed books (all books on first run, or after a corrupt-index reset)
                 _logger.LogInformation("Getting changed books from XmlFileDatesService...");
                 var changedBooks = await _xmlFileDatesService.GetChangedBooksAsync();
                 _logger.LogInformation("Found {Count} changed books to index", changedBooks.Count);
 
-                if (changedBooks.Count == 0 && await IsIndexValidAsync())
+                if (changedBooks.Count == 0 && indexValid)
                 {
                     _logger.LogInformation("No changed books and index is valid - index is up to date");
                     progress?.Report(new IndexingProgress
