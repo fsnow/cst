@@ -169,9 +169,12 @@ namespace CST.Avalonia.ViewModels
                 Enum.GetValues<Script>().Where(s => s != Script.Unknown && s != Script.Ipe));
             Chapters = new ObservableCollection<DivTag>();
             
-            // Initialize properties
-            _totalHits = searchTerms?.Count ?? 0;
-            _hasSearchHighlights = _totalHits > 0;
+            // Initialize properties. TotalHits/HasSearchHighlights start at 0/false and are set from the
+            // ACTUAL highlight-application result (ApplyHighlighting) or restored state — not the search
+            // *term* count. Seeding from term count meant a failed highlight (no term vectors / index
+            // mismatch) left the toolbar showing e.g. "1 of 3" with zero highlights and dead nav. (BOOK-9)
+            _totalHits = 0;
+            _hasSearchHighlights = false;
             _bookInfoText = GetBookInfoDisplayName(book);
             
             // Hit-navigation commands: First/Previous enabled only when not at the
