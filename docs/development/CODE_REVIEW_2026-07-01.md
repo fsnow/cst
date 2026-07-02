@@ -45,7 +45,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-11 | Low    | [#144](https://github.com/fsnow/cst/issues/144) | [#149](https://github.com/fsnow/cst/pull/149) | ✅ Fixed |
 | SRCH-12 | Low    | — | — | |
 | SRCH-13 | Low    | [#148](https://github.com/fsnow/cst/issues/148) | — | ✅ Fixed |
-| SRCH-14 | Low    | — | — | |
+| SRCH-14 | Low    | [#151](https://github.com/fsnow/cst/issues/151) | [#152](https://github.com/fsnow/cst/pull/152) | ✅ Fixed |
 | STATE-1 | High   | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed |
 | STATE-2 | High   | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed |
 | STATE-3 | Medium | — | — | |
@@ -77,7 +77,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | CORE-8  | Low    | — | — | |
 | BOOK-1  | High   | [#136](https://github.com/fsnow/cst/issues/136) | — | 🔧 In progress |
 | BOOK-2  | High   | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed |
-| BOOK-3  | Medium | — | — | |
+| BOOK-3  | Medium | [#153](https://github.com/fsnow/cst/issues/153) | — | ✅ Fixed |
 | BOOK-4  | Medium | — | — | |
 | BOOK-5  | Medium | — | — | |
 | BOOK-6  | Medium | — | — | |
@@ -104,7 +104,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | |
 | SCRIPT-10 | Low    | — | — | |
 
-**Progress:** 28 fixed, 1 in progress (BOOK-1), 51 not yet filed (SRCH-9 among them, assessed not-a-defect).
+**Progress:** 30 fixed, 1 in progress (BOOK-1), 49 not yet filed (SRCH-9 among them, assessed not-a-defect).
 **High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
