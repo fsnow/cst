@@ -147,7 +147,7 @@ namespace CST.Conversion
                 if (Char.IsLetter(c))
                 {
                     if (lastWasLetter == false)
-                        c = Char.ToUpper(c);
+                        c = Char.ToUpperInvariant(c); // invariant: 'i' -> 'I', not tr/az 'İ' (CORE-4)
 
                     lastWasLetter = true;
                 }

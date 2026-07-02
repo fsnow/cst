@@ -106,7 +106,9 @@ namespace CST.Conversion
         public static string ConvertReference(string latn)
         {
             StringBuilder sb = new StringBuilder();
-            char[] arr = latn.ToLower().ToCharArray();
+            // Culture-invariant lower-casing: on tr/az locales the default ToLower maps 'I' to the dotless
+            // 'ı' (U+0131), which has no latn2Ipe entry and would corrupt the term. (CORE-4)
+            char[] arr = latn.ToLowerInvariant().ToCharArray();
             for (int i = 0; i < arr.Length; i++)
             {
                 char c = arr[i];
@@ -130,14 +132,14 @@ namespace CST.Conversion
         }
 
         // Optimized single pass (#86): byte-identical to ConvertReference (verified by tests). Replaces the
-        // per-char c.ToString() dictionary lookups and the aspiratable HashSet with char[] tables. Keeps the
-        // reference's ToLower() so casing behaviour is identical.
+        // per-char c.ToString() dictionary lookups and the aspiratable HashSet with char[] tables. Uses the
+        // same culture-invariant lower-casing as the reference so casing behaviour is identical. (CORE-4)
         public static string Convert(string latn)
         {
             if (string.IsNullOrEmpty(latn))
                 return latn;
 
-            string lower = latn.ToLower();
+            string lower = latn.ToLowerInvariant();
             int n = lower.Length;
             var buf = new char[n]; // each input char -> at most 1 IPE char; an aspirate consumes 2 -> 1
             int k = 0;
