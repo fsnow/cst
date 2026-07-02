@@ -1,12 +1,12 @@
 # Chaṭṭha Saṅgāyana Tipiṭaka (CST) Reader
 
-CST Reader is a cross-platform application for reading and searching Pali texts. The current main branch contains CST 5.0 built on modern .NET 9 and Avalonia UI, representing a complete ground-up rewrite from the legacy Windows-only CST4 versions.
+CST Reader is a cross-platform application for reading and searching Pali texts. The current main branch contains CST 5.0 built on modern .NET 10 and Avalonia UI, representing a complete ground-up rewrite from the legacy Windows-only CST4 versions.
 
 ## Branch Overview
 
 This repository contains multiple branches representing different stages of CST development:
 
-- **`main`** (current): CST 5.0 - Modern cross-platform reader built on .NET 9 and Avalonia UI with advanced search capabilities
+- **`main`** (current): CST 5.0 - Modern cross-platform reader built on .NET 10 and Avalonia UI with advanced search capabilities
 - **`cst_4_2`**: CST 4.2 development branch featuring Lucene.NET 4.8 upgrade work (never released, but provided foundation for current search system)
 - **`cst_4_1`**: CST 4.1 - The currently released Windows version (tagged as v4.1.0.3-2022-04-05) built on .NET Framework with WinForms
 - **`cst_4_0`**: CST 4.0 - Previous stable Windows release (tagged as v4.0.0.15-2020-05-07) also using .NET Framework and WinForms
@@ -19,7 +19,7 @@ The legacy CST4 branches (4.0, 4.1, 4.2) were Windows-only applications requirin
 CST Reader 5.0 is a modern, cross-platform Pali text reader featuring:
 
 ### Core Application
-- **Cross-Platform**: Built on .NET 9 and Avalonia UI, supporting macOS (tested) with Windows and Linux compatibility
+- **Cross-Platform**: Built on .NET 10 and Avalonia UI, supporting macOS (tested) with Windows and Linux compatibility
 - **IDE-Style Interface**: Dock-based layout with resizable panels, tab management, and persistent session state
 - **Complete Session Restoration**: Saves and restores open books, search highlights, window positions, and scroll positions across sessions
 - **Floating Windows**: Book and PDF tabs can be floated into separate windows (button-based, to stay crash-safe with CEF on macOS)
@@ -45,7 +45,7 @@ CST Reader 5.0 is a modern, cross-platform Pali text reader featuring:
 - **Context-Aware Navigation**: Opens the PDF to the page matching the current page in the rendered book
 
 ### Technical Architecture
-- **Modern Stack**: .NET 9, Avalonia UI 11.x, ReactiveUI, Dependency Injection
+- **Modern Stack**: .NET 10, Avalonia UI 11.x, ReactiveUI, Dependency Injection
 - **WebView Rendering**: Uses WebViewControl-Avalonia for book content with search highlighting
 - **Comprehensive Testing**: 200+ tests covering unit, integration, and performance scenarios
 - **Advanced Logging**: Structured Serilog logging across all components
@@ -55,7 +55,7 @@ CST Reader 5.0 is a modern, cross-platform Pali text reader featuring:
 **Note**: All development and testing has been performed on macOS. Cross-platform compatibility is designed-in but not yet tested on Windows/Linux.
 
 ### Prerequisites
-- .NET 9 SDK
+- .NET 10 SDK
 - macOS development environment
 - Git access to this repository
 
@@ -88,7 +88,7 @@ Create production packages using the included script:
 ```
 
 The packaging script creates:
-- Self-contained .NET 9 app bundles with all dependencies
+- Self-contained .NET 10 app bundles with all dependencies
 - Proper macOS application structure with Info.plist and icons
 - DMG installer files (requires `brew install create-dmg`)
 - Support for both Apple Silicon and Intel architectures
