@@ -2,12 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Net;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Services;
@@ -26,8 +24,6 @@ namespace CST.Avalonia.ViewModels;
 /// </summary>
 public class DictionaryViewModel : ReactiveTool, IDisposable
 {
-    private static readonly Regex SeeTag = new(@"<see>(.*?)</see>", RegexOptions.Compiled | RegexOptions.Singleline);
-
     private readonly IDictionaryService _dictionaryService;
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
@@ -187,36 +183,8 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     private void UpdateMeaning()
     {
-        var meaning = SelectedWord?.Source.Meaning;
-        MeaningSegments = string.IsNullOrEmpty(meaning)
-            ? Array.Empty<MeaningSegment>()
-            : ParseMeaning(meaning);
+        MeaningSegments = MeaningParser.Parse(SelectedWord?.Source.Meaning, PaliToDisplay);
     }
-
-    // Split an HTML definition fragment into plain-text runs and <see>word</see> link runs.
-    private IReadOnlyList<MeaningSegment> ParseMeaning(string html)
-    {
-        var segments = new List<MeaningSegment>();
-        int pos = 0;
-        foreach (Match m in SeeTag.Matches(html))
-        {
-            if (m.Index > pos)
-                segments.Add(new MeaningSegment(Decode(html.Substring(pos, m.Index - pos)), false, null));
-
-            var target = m.Groups[1].Value.Trim();
-            segments.Add(new MeaningSegment(PaliToDisplay(target), true, target));
-            pos = m.Index + m.Length;
-        }
-        if (pos < html.Length)
-            segments.Add(new MeaningSegment(Decode(html.Substring(pos)), false, null));
-
-        // Some source definitions carry a leading space (e.g. the "a" entry); don't render it as an indent.
-        if (segments.Count > 0 && !segments[0].IsLink)
-            segments[0] = segments[0] with { Text = segments[0].Text.TrimStart() };
-        return segments;
-    }
-
-    private static string Decode(string s) => WebUtility.HtmlDecode(s);
 
     // A stored IPE headword -> the user's current display script.
     private string IpeToDisplay(string ipe)
@@ -286,5 +254,13 @@ public sealed class DictionaryEntryViewModel
     public string DisplayWord { get; }
 }
 
-/// <summary>A piece of a rendered definition: literal text, or a clickable <c>&lt;see&gt;</c> cross-reference.</summary>
-public sealed record MeaningSegment(string Text, bool IsLink, string? Target);
+/// <summary>
+/// A piece of a rendered definition: literal text, a clickable <c>&lt;see&gt;</c> cross-reference
+/// (<see cref="IsLink"/>), or a break between the definitions of a merged headword
+/// (<see cref="IsSeparator"/>).
+/// </summary>
+public sealed record MeaningSegment(string Text, bool IsLink, string? Target, bool IsSeparator = false)
+{
+    /// <summary>A break rendered between the definitions of a merged (duplicate) headword.</summary>
+    public static readonly MeaningSegment Separator = new(string.Empty, false, null, true);
+}

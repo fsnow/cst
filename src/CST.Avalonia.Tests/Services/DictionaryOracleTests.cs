@@ -57,9 +57,10 @@ public class DictionaryOracleTests
         if (!DataPresent) return;
         var (words, meaning) = await LookupLatn("en", "abbhuto");
         Assert.Equal("abbhuto", words[0]);
-        // Both definitions of the repeated headword, joined by the separator.
+        // Both definitions of the repeated headword, joined by the separator sentinel (the renderer
+        // turns that sentinel into a visual break — see MeaningParserTests, DICT-1).
         Assert.Contains("Mysterious", meaning);
         Assert.Contains("Marvellous", meaning);
-        Assert.Contains("<hr/>", meaning);
+        Assert.Contains(DictionaryService.MeaningSeparator, meaning);
     }
 }
