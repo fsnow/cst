@@ -36,7 +36,6 @@ namespace CST.Avalonia.ViewModels
         private readonly CompositeDisposable _disposables = new();
         private bool _disposed;
 
-        private readonly ScriptService _scriptService;
         private readonly ChapterListsService? _chapterListsService;
         private readonly ISettingsService? _settingsService;
         private readonly IFontService? _fontService;
@@ -107,11 +106,9 @@ namespace CST.Avalonia.ViewModels
         private string? _pendingAnchorNavigation = null; // Anchor to navigate to when View becomes available
         private int? _pendingHitNavigation = null; // Search hit to scroll to when View becomes available
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null, CstDockFactory? dockFactory = null, int? initialCurrentHitIndex = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null, CstDockFactory? dockFactory = null, int? initialCurrentHitIndex = null, Script? initialBookScript = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
-            // For now, create ScriptService without logger
-            _scriptService = new ScriptService();
             _chapterListsService = chapterListsService;
             _settingsService = settingsService;
             _fontService = fontService;
@@ -122,7 +119,11 @@ namespace CST.Avalonia.ViewModels
             _initialAnchor = initialAnchor;
             _initialCurrentHitIndex = initialCurrentHitIndex;
             _docId = docId;
-            _bookScript = _scriptService.CurrentScript;
+            // Seed the per-tab script to the target the factory will use, so its post-construction
+            // "BookScript = target" is a value-equal no-op instead of firing the .Skip(1) reload — which
+            // ran the whole XML→convert→XSLT pipeline a second time on every non-Devanagari open. The old
+            // code seeded from a throwaway `new ScriptService()` (always Devanagari). (BOOK-3)
+            _bookScript = initialBookScript ?? Script.Devanagari;
 
             // Configure Dock properties - CRITICAL: Unique GUID per instance to prevent ControlRecycling cache conflicts
             // This ensures each book window instance gets a unique ID, preventing CEF crashes when floating/unfloating

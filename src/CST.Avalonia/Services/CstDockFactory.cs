@@ -408,10 +408,11 @@ namespace CST.Avalonia.Services
                 book.DocId,   // Pass DocId for Lucene offset lookup
                 positions,    // NEW: Pass positions with IsFirstTerm flags for two-color highlighting
                 windowId,     // Pass unique ID for search results
-                this          // Pass factory for float/unfloat operations
+                this,         // Pass factory for float/unfloat operations
+                initialBookScript: scriptService?.CurrentScript  // seed so the set below is a no-op (BOOK-3)
             );
 
-            // Set the correct script after construction
+            // Set the correct script after construction (a no-op given the seed; kept as a safety net)
             if (scriptService != null)
             {
                 bookDisplayViewModel.BookScript = scriptService.CurrentScript;
@@ -521,12 +522,14 @@ namespace CST.Avalonia.Services
             var settingsService = App.ServiceProvider?.GetRequiredService<ISettingsService>();
             var fontService = App.ServiceProvider?.GetRequiredService<IFontService>();
 
-            // Pass search data if available (for state restoration with highlighting)
-            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex);
-            
-            // Set the correct script after construction (bookDisplayViewModel was just newed).
-            // Use provided script or fall back to current application setting
+            // Use the provided script or fall back to the current application setting. Computed BEFORE
+            // construction so we can seed it into the VM and avoid the double load. (BOOK-3)
             Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
+
+            // Pass search data if available (for state restoration with highlighting)
+            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex, targetScript);
+
+            // No-op given the seed above (avoids the second full pipeline run); kept as a safety net.
             bookDisplayViewModel.BookScript = targetScript;
             _logger.Debug("Set book script to: {ActualScript} (requested: {RequestedScript})", targetScript, bookScript?.ToString() ?? "null");
 
@@ -1382,10 +1385,11 @@ namespace CST.Avalonia.Services
                     docId: docId,
                     searchPositions: searchPositions,
                     windowId: null,  // CRITICAL: null = generates fresh GUID
-                    dockFactory: this
+                    dockFactory: this,
+                    initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
                 );
 
-                // Restore additional state
+                // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
                 newVm.BookScript = bookScript;
                 newVm.CurrentHitIndex = currentHitIndex;
                 newVm.TotalHits = totalHits;
@@ -1513,10 +1517,11 @@ namespace CST.Avalonia.Services
                     docId: docId,
                     searchPositions: searchPositions,
                     windowId: null,  // CRITICAL: null = generates fresh GUID
-                    dockFactory: this
+                    dockFactory: this,
+                    initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
                 );
 
-                // Restore additional state
+                // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
                 newVm.BookScript = bookScript;
                 newVm.CurrentHitIndex = currentHitIndex;
                 newVm.TotalHits = totalHits;
