@@ -1814,34 +1814,6 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        /// <summary>
-        /// Get current paragraph anchor asynchronously - implementation via JavaScript bridge
-        /// Port of CST4's GetPara() method with async/await pattern - ONLY for book linking, not position restoration
-        /// </summary>
-        private async Task<string?> GetCurrentParagraphAnchorAsync()
-        {
-            if (BookDisplayControl == null)
-            {
-                _logger.Warning("BookDisplayControl is null in GetCurrentParagraphAnchorAsync");
-                return null;
-            }
-                
-            _logger.Debug("Calling BookDisplayControl.GetCurrentParagraphAnchorAsync()");
-            // This is ONLY used for book linking navigation, not for script position restoration
-            
-            try
-            {
-                var result = await BookDisplayControl.GetCurrentParagraphAnchorAsync();
-                _logger.Debug("GetCurrentParagraphAnchorAsync returned: {Result}", result ?? "null");
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "GetCurrentParagraphAnchorAsync failed");
-                return null;
-            }
-        }
-
         // REMOVED: GetParaWithBookCode() - dead code, never called
         // This method wrapped GetCurrentParagraphAnchorWithBookCode() but was not used
 

@@ -69,8 +69,6 @@ public partial class BookDisplayView : UserControl
     private string _lastKnownPara = "*";
 
     // Cache the last successfully captured anchor for shutdown save
-    // This is populated by GetCurrentParagraphAnchorAsync() when JavaScript succeeds
-    private string? _lastCapturedAnchor = null;
 
     // Timer-based drag monitoring fields
     private System.Timers.Timer? _dragMonitoringTimer;
@@ -212,9 +210,9 @@ public partial class BookDisplayView : UserControl
 
     /// <summary>
     /// Returns the text the user has selected inside the book WebView (or null/empty if none). Used by
-    /// the "Look Up in Dictionary" command (Cmd+D). Unlike GetSelectedTextAsync (which routes via the
-    /// title channel and returns null), EvaluateScript returns the value directly as a Task, so this is
-    /// async and never blocks the UI thread on CEF.
+    /// the "Look Up in Dictionary" command (Cmd+D). Routes the selection back through the document.title
+    /// channel (EvaluateScript returns null in this WebView build) and awaits the round-trip, so it never
+    /// blocks the UI thread on CEF.
     /// </summary>
     public async Task<string?> GetWebViewSelectionAsync()
     {
@@ -595,35 +593,6 @@ public partial class BookDisplayView : UserControl
             // If WebView fails, mark it as unavailable and fall back to text display
             _logger.Error("Exception occurred | {Details}", ex.Message);
             _viewModel?.SetWebViewAvailability(false, $"WebView error, using fallback: {ex.Message}");
-        }
-    }
-
-    private void OnBrowserInitialized(object? sender, EventArgs e)
-    {
-        _isBrowserInitialized = true;
-
-        if (_viewModel != null)
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                // Browser is now ready - no need to change availability since we started optimistically
-                _logger.Debug("Browser initialized successfully");
-                _viewModel.PageStatusText = "Browser ready";
-
-                // Load content if it's ready
-                if (!string.IsNullOrEmpty(_viewModel.HtmlContent))
-                {
-                    _logger.Debug("Loading content immediately - HTML length: {Length}", _viewModel.HtmlContent.Length);
-                    LoadHtmlContent();
-                }
-                else
-                {
-                    _logger.Debug("No HTML content ready yet - will load when content is generated");
-                }
-
-                // Set up C# scroll tracking for reliable status bar updates
-                // SetupCSharpScrollTracking(); // This is now called from OnLoaded
-            });
         }
     }
 
@@ -2101,47 +2070,6 @@ public partial class BookDisplayView : UserControl
     }
 
     // Public method to toggle footnote visibility
-    public void SetFootnoteVisibility(bool visible)
-    {
-        if (_webView == null) return;
-
-        if (!Dispatcher.UIThread.CheckAccess())
-        {
-            Dispatcher.UIThread.Post(() => SetFootnoteVisibility(visible));
-            return;
-        }
-
-        _logger.Debug("SetFootnoteVisibility attempting to acquire JS lock");
-        if (_jsExecutionLock.Wait(0))
-        {
-            _logger.Debug("SetFootnoteVisibility acquired JS lock successfully");
-            try
-            {
-                var script = $"window.cstSearchHighlights?.showFootnotes({visible.ToString().ToLower()});";
-                _webView.ExecuteScript(script);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Failed to set footnote visibility | {Details}", ex.Message);
-            }
-            finally
-            {
-                _logger.Debug("SetFootnoteVisibility releasing JS lock");
-                _jsExecutionLock.Release();
-                _logger.Debug("SetFootnoteVisibility released JS lock");
-            }
-        }
-        else
-        {
-            _logger.Debug("SetFootnoteVisibility failed to acquire JS lock - retrying after delay");
-            Dispatcher.UIThread.Post(async () =>
-            {
-                await Task.Delay(100);
-                SetFootnoteVisibility(visible);
-            }, DispatcherPriority.Background);
-        }
-    }
-
     /// <summary>
     /// Get current paragraph anchor asynchronously - port of CST4's GetPara() method with async/await pattern
     /// Returns the paragraph anchor at the top of the viewport (e.g., "para123")
@@ -2234,46 +2162,6 @@ public partial class BookDisplayView : UserControl
     }
 
     // Alternative approach: Poll the JavaScript for selected text and provide copy functionality
-    public async Task<string?> GetSelectedTextAsync()
-    {
-        if (_webView == null || !_isBrowserInitialized)
-        {
-            return null;
-        }
-
-        try
-        {
-            await _jsExecutionLock.WaitAsync();
-            try
-            {
-                var getSelectedTextScript = @"
-                    try {
-                        var selectedText = window.getSelection().toString();
-                        document.title = 'CST_SELECTED_TEXT:' + (selectedText ? selectedText.substring(0, 500) : 'NONE') + '|TAB:' + window.cstTabId;
-                    } catch (err) {
-                        document.title = 'CST_SELECTED_TEXT:ERROR:' + err.message + '|TAB:' + window.cstTabId;
-                    }";
-
-                _webView.ExecuteScript(getSelectedTextScript);
-                
-                // Wait a moment for the result
-                await Task.Delay(100);
-                
-                // The result will be processed in OnTitleChanged
-                return null; // We'll handle this differently
-            }
-            finally
-            {
-                _jsExecutionLock.Release();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Error("Error in GetSelectedTextAsync | {Details}", ex.Message);
-            return null;
-        }
-    }
-
     private Task HandleCopySelectedText()
     {
         if (_webView == null)
@@ -2534,32 +2422,6 @@ public partial class BookDisplayView : UserControl
                 HideWebViewForDrag();
             }
         }
-    }
-
-    /// <summary>
-    /// Get the current anchor for scroll position restoration (synchronous fallback)
-    /// This method is used during shutdown when WebView may not be available for async JavaScript execution
-    /// Returns the last successfully captured anchor from GetCurrentParagraphAnchorAsync()
-    /// </summary>
-    public string? GetCurrentAnchorSync()
-    {
-        // Return the cached anchor from last successful JavaScript query
-        // This is populated during tab switches when the browser is active
-        if (!string.IsNullOrEmpty(_lastCapturedAnchor))
-        {
-            _logger.Information("GetCurrentAnchorSync: Using cached anchor = {Anchor}", _lastCapturedAnchor);
-            return _lastCapturedAnchor;
-        }
-
-        // Fallback: Use the last known VRI anchor from status updates
-        if (!string.IsNullOrEmpty(_lastKnownVri) && _lastKnownVri != "*")
-        {
-            _logger.Information("GetCurrentAnchorSync: Using VRI fallback = {Anchor}", _lastKnownVri);
-            return _lastKnownVri;
-        }
-
-        _logger.Debug("GetCurrentAnchorSync: No anchor available");
-        return null;
     }
 
 }
