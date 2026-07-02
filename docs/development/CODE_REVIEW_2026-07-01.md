@@ -36,11 +36,11 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-2  | High   | [#113](https://github.com/fsnow/cst/issues/113) | — | ✅ Fixed |
 | SRCH-3  | High   | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed |
 | SRCH-4  | High   | [#114](https://github.com/fsnow/cst/issues/114) | — | ✅ Fixed |
-| SRCH-5  | Medium | — | — | |
+| SRCH-5  | Medium | [#150](https://github.com/fsnow/cst/issues/150) | — | ✅ Fixed |
 | SRCH-6  | Medium | — | — | |
 | SRCH-7  | Medium | [#145](https://github.com/fsnow/cst/issues/145) | — | ✅ Fixed |
 | SRCH-8  | Medium | [#146](https://github.com/fsnow/cst/issues/146) | — | ✅ Fixed |
-| SRCH-9  | Medium | — | — | ⚠️ Not a defect for Telugu/Thai/Tibetan/Khmer (assessed against the old CST4 file; the `CST.Core` parsers work). Cyrillic portion → CORE-3. |
+| SRCH-9  | Medium | — | — | ⚠️ Not a defect — verified 2026-07-02: `CST.Core/Any2Ipe.Convert` has real reverse-converter branches for Myanmar/Sinhala/Thai/Khmer/Tibetan/Telugu/Cyrillic (`X2Deva`→`Deva2Ipe`), and Cyrillic detection landed in CORE-3 (fixed). The finding was assessed against the legacy `src/CST/` file. |
 | SRCH-10 | Medium | [#147](https://github.com/fsnow/cst/issues/147) | — | ✅ Fixed |
 | SRCH-11 | Low    | [#144](https://github.com/fsnow/cst/issues/144) | [#149](https://github.com/fsnow/cst/pull/149) | ✅ Fixed |
 | SRCH-12 | Low    | — | — | |
@@ -104,7 +104,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | |
 | SCRIPT-10 | Low    | — | — | |
 
-**Progress:** 27 fixed, 1 in progress (BOOK-1), 52 not yet filed.
+**Progress:** 28 fixed, 1 in progress (BOOK-1), 51 not yet filed (SRCH-9 among them, assessed not-a-defect).
 **High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
