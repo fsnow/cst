@@ -37,7 +37,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-3  | High   | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed |
 | SRCH-4  | High   | [#114](https://github.com/fsnow/cst/issues/114) | — | ✅ Fixed |
 | SRCH-5  | Medium | [#150](https://github.com/fsnow/cst/issues/150) | — | ✅ Fixed |
-| SRCH-6  | Medium | — | — | |
+| SRCH-6  | Medium | [#157](https://github.com/fsnow/cst/issues/157) | [#158](https://github.com/fsnow/cst/pull/158) | ✅ Fixed |
 | SRCH-7  | Medium | [#145](https://github.com/fsnow/cst/issues/145) | — | ✅ Fixed |
 | SRCH-8  | Medium | [#146](https://github.com/fsnow/cst/issues/146) | — | ✅ Fixed |
 | SRCH-9  | Medium | — | — | ⚠️ Not a defect — verified 2026-07-02: `CST.Core/Any2Ipe.Convert` has real reverse-converter branches for Myanmar/Sinhala/Thai/Khmer/Tibetan/Telugu/Cyrillic (`X2Deva`→`Deva2Ipe`), and Cyrillic detection landed in CORE-3 (fixed). The finding was assessed against the legacy `src/CST/` file. |
@@ -57,9 +57,9 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed |
 | NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | ✅ Fixed |
 | NET-4   | Low    | — | — | |
-| NET-5   | Low    | — | — | |
+| NET-5   | Low    | [#162](https://github.com/fsnow/cst/issues/162) | [#163](https://github.com/fsnow/cst/pull/163) | ✅ Fixed |
 | NET-6   | Low    | — | — | |
-| NET-7   | Low    | — | — | |
+| NET-7   | Low    | [#160](https://github.com/fsnow/cst/issues/160) | [#161](https://github.com/fsnow/cst/pull/161) | ✅ Fixed |
 | NET-8   | Low    | — | — | |
 | DICT-1  | High   | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed |
 | DICT-2  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) |
@@ -79,7 +79,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-2  | High   | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed |
 | BOOK-3  | Medium | [#153](https://github.com/fsnow/cst/issues/153) | — | ✅ Fixed |
 | BOOK-4  | Medium | [#156](https://github.com/fsnow/cst/issues/156) | — | ✅ Fixed |
-| BOOK-5  | Medium | — | — | |
+| BOOK-5  | Medium | [#159](https://github.com/fsnow/cst/issues/159) | — | ✅ Fixed |
 | BOOK-6  | Medium | — | — | |
 | BOOK-7  | Medium | — | — | |
 | BOOK-8  | Low    | — | — | |
@@ -104,7 +104,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | |
 | SCRIPT-10 | Low    | — | — | |
 
-**Progress:** 32 fixed, 1 in progress (BOOK-1), 47 not yet filed (SRCH-9 among them, assessed not-a-defect).
+**Progress:** 36 fixed, 1 in progress (BOOK-1), 43 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings are now resolved (SRCH-9 = not-a-defect).
 **High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
