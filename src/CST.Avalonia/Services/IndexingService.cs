@@ -188,6 +188,11 @@ namespace CST.Avalonia.Services
 
             await _bookIndexer.IndexAllAsync(progress, changedBooks);
 
+            // Indexing succeeded (IndexAllAsync did not throw) → commit the detected file timestamps for
+            // these books so SaveFileDatesAsync persists them. If it had thrown, nothing is committed and
+            // the books are re-detected as changed next run. (SRCH-1)
+            _xmlFileDatesService.MarkBooksIndexed(changedBooks);
+
             progress?.Report(new IndexingProgress
             {
                 StatusMessage = "Indexing complete",

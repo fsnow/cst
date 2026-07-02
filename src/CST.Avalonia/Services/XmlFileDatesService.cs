@@ -15,6 +15,9 @@ namespace CST.Avalonia.Services
         private readonly ILogger<XmlFileDatesService> _logger;
         private readonly ISettingsService _settingsService;
         private Dictionary<string, DateTime> _fileDates = new();
+        // Timestamps observed during the last GetChangedBooksAsync detection pass, held out of the
+        // persisted cache until the corresponding books are confirmed indexed via MarkBooksIndexed (SRCH-1).
+        private readonly Dictionary<string, DateTime> _pendingFileDates = new();
         private FileDatesWithCommits? _fileDatesData;
         private string _fileDatesPath = string.Empty;
 
@@ -146,8 +149,10 @@ namespace CST.Avalonia.Services
                         _logger.LogInformation("Book {BookIndex} ({FileName}) not in cache, needs indexing", i, book.FileName);
                     }
                     
-                    // Update the cache with current time
-                    _fileDates[book.FileName] = lastWriteTime;
+                    // Record the observed time as pending; it is only promoted into the persisted cache
+                    // once the book is confirmed indexed (MarkBooksIndexed), so a failed index can't mark
+                    // a book up-to-date. (SRCH-1)
+                    _pendingFileDates[book.FileName] = lastWriteTime;
                 }
                 else
                 {
@@ -224,6 +229,22 @@ namespace CST.Avalonia.Services
             {
                 var book = books[bookIndex];
                 _fileDates[book.FileName] = lastWriteTime;
+            }
+        }
+
+        public void MarkBooksIndexed(IEnumerable<int> bookIndexes)
+        {
+            var books = Books.Inst;
+            foreach (var bookIndex in bookIndexes)
+            {
+                if (bookIndex < 0 || bookIndex >= books.Count)
+                    continue;
+
+                var fileName = books[bookIndex].FileName;
+                // Promote the detection-time timestamp (not a re-read now) so we record exactly the version
+                // that was indexed, even if the file changed again since detection. (SRCH-1)
+                if (_pendingFileDates.TryGetValue(fileName, out var ts))
+                    _fileDates[fileName] = ts;
             }
         }
         
