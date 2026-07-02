@@ -12,6 +12,7 @@ using Lucene.Net.Util;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using CST.Avalonia.Tests.TestSupport;
 
 namespace CST.Avalonia.Tests.Integration
 {
@@ -133,23 +134,20 @@ namespace CST.Avalonia.Tests.Integration
         {
             // Arrange
             await _service.InitializeAsync();
-            
-            // Create a corrupted index file
-            var corruptedFile = Path.Combine(_testIndexDir, "segments.gen");
-            await File.WriteAllTextAsync(corruptedFile, "corrupted content");
 
-            // Act & Assert
-            // The IsIndexValidAsync method only checks for file existence, not corruption
-            // For actual corruption detection, we'd need to try opening the index
-            var isValidByFileCheck = await _service.IsIndexValidAsync();
-            Assert.False(isValidByFileCheck); // No .cfs or .fdt files, so invalid
+            // Garbage that isn't a readable index -> invalid (SRCH-11: validity means openable, not
+            // merely that files exist).
+            await File.WriteAllTextAsync(Path.Combine(_testIndexDir, "segments.gen"), "corrupted content");
+            Assert.False(await _service.IsIndexValidAsync());
 
-            // Add a fake index file to make it appear valid
-            var fakeIndexFile = Path.Combine(_testIndexDir, "test.cfs");
-            await File.WriteAllTextAsync(fakeIndexFile, "fake content");
-            
-            var isValidWithFiles = await _service.IsIndexValidAsync();
-            Assert.True(isValidWithFiles); // Now has files, so appears valid
+            // A stray file with an index extension is still not a real index.
+            await File.WriteAllTextAsync(Path.Combine(_testIndexDir, "test.cfs"), "fake content");
+            Assert.False(await _service.IsIndexValidAsync());
+
+            // A real index is valid.
+            foreach (var f in System.IO.Directory.GetFiles(_testIndexDir)) File.Delete(f);
+            TestIndex.CreateMinimal(_testIndexDir);
+            Assert.True(await _service.IsIndexValidAsync());
         }
 
         [Fact]

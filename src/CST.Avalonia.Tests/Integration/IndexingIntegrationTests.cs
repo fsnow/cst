@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using CST.Avalonia.Tests.TestSupport;
 
 namespace CST.Avalonia.Tests.Integration
 {
@@ -116,9 +117,8 @@ namespace CST.Avalonia.Tests.Integration
             // Act
             var isValidEmpty = await indexingService.IsIndexValidAsync();
 
-            // Create a fake index file
-            var fakeIndexFile = Path.Combine(_testIndexDir, "test.cfs");
-            await File.WriteAllTextAsync(fakeIndexFile, "fake index content");
+            // A real (minimal) index so the validity check passes. (SRCH-11)
+            TestIndex.CreateMinimal(_testIndexDir);
 
             var isValidWithFiles = await indexingService.IsIndexValidAsync();
 

@@ -247,7 +247,17 @@ namespace CST.Avalonia.Services
                     _fileDates[fileName] = ts;
             }
         }
-        
+
+        public void ResetFileDates()
+        {
+            // Drop all cached dates so GetChangedBooksAsync reports every book as changed; the persisted
+            // enhanced-format timestamps are cleared too and overwritten on the next SaveFileDatesAsync. (SRCH-11)
+            _fileDates.Clear();
+            _pendingFileDates.Clear();
+            _fileDatesData?.Files.Clear();
+            _logger.LogInformation("File-date cache reset; all books will be re-indexed");
+        }
+
         // Enhanced format methods for XmlUpdateService
         public async Task<FileDatesWithCommits?> GetFileDatesDataAsync()
         {
