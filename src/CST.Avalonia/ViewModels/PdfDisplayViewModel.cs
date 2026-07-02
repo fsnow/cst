@@ -203,9 +203,9 @@ namespace CST.Avalonia.ViewModels
                 int pdfPage = _targetPage;
                 if (pdfPage < 1) pdfPage = 1;
 
-                // Build the file:// URL with page fragment
-                // CEF's PDFium supports #page=N fragments
-                PdfUrl = $"file://{localPath}#page={pdfPage}";
+                // CEF/PDFium honors a #page=N fragment. Build the file:// URL via Uri.AbsoluteUri so the
+                // path is escaped correctly (spaces, '#', Windows drive letters) — string concat was not. (NET-5)
+                PdfUrl = BuildPdfUrl(localPath, pdfPage);
 
                 Title = $"{Path.GetFileNameWithoutExtension(localPath)} - Page {pdfPage}";
                 StatusText = $"{SourceTypeName} - Page {pdfPage}";
@@ -236,6 +236,12 @@ namespace CST.Avalonia.ViewModels
             // Float/unfloat for PDF not yet implemented
             _logger.Warning("Unfloat not yet implemented for PDF windows");
         }
+
+        // Build the browser URL for a local PDF at a given page: a properly-escaped file:// URI plus the
+        // PDFium #page=N fragment. Uri.AbsoluteUri escapes spaces / '#' and emits file:///C:/... on Windows;
+        // the old $"file://{path}#page=N" produced malformed, unescaped URLs. (NET-5)
+        internal static string BuildPdfUrl(string localPath, int page)
+            => new Uri(localPath).AbsoluteUri + $"#page={page}";
 
         private static string GetSourceTypeName(Sources.SourceType sourceType)
         {
