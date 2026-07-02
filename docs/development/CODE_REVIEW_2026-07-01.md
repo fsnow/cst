@@ -23,7 +23,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 
 | Finding | Level | Issue | PR | Status |
 |---------|-------|-------|----|--------|
-| SEC-1   | High   | — | — | |
+| SEC-1   | High   | — | — | ⚠️ Won't fix. This "secret" needs to be obscured but not protected |
 | DOCK-1  | High   | — | — | |
 | DOCK-2  | High   | — | — | |
 | DOCK-3  | Medium | — | — | |
@@ -55,7 +55,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | STATE-7 | Low    | — | — | |
 | NET-1   | High   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed |
 | NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed |
-| NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | 🔧 In progress |
+| NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | ✅ Fixed |
 | NET-4   | Low    | — | — | |
 | NET-5   | Low    | — | — | |
 | NET-6   | Low    | — | — | |
@@ -94,7 +94,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | XCUT-6  | Low    | — | — | |
 | XCUT-7  | Low    | — | — | |
 | SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed |
-| SCRIPT-2  | High   | — | — | |
+| SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed |
 | SCRIPT-3  | Medium | — | — | |
 | SCRIPT-4  | Medium | — | — | |
 | SCRIPT-5  | Medium | — | — | |
@@ -104,8 +104,8 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | |
 | SCRIPT-10 | Low    | — | — | |
 
-**Progress:** 20 fixed, 2 in progress (BOOK-1, NET-3), 58 not yet filed.
-**High findings still without an issue:** SEC-1, DOCK-1, DOCK-2, SCRIPT-2.
+**Progress:** 22 fixed, 1 in progress (BOOK-1), 57 not yet filed.
+**High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
 
