@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -887,50 +888,51 @@ public partial class App : Application
         }
     }
 
+    private static LogEventLevel ParseLogLevel(string? name) => name?.ToLowerInvariant() switch
+    {
+        "debug" => LogEventLevel.Debug,
+        "information" => LogEventLevel.Information,
+        "warning" => LogEventLevel.Warning,
+        "error" => LogEventLevel.Error,
+        "fatal" => LogEventLevel.Fatal,
+        _ => LogEventLevel.Information
+    };
+
+    // Peek the persisted log level straight from settings.json. This runs before DI is built, and we
+    // deliberately don't use SettingsService: its ctor never reads disk (so .Settings would just be
+    // defaults), and LoadSettingsAsync() has side effects (migration saves, default-directory creation)
+    // that must not fire from a throwaway probe. Returns null (-> default Information) on any failure. (STATE-1)
+    private static string? ReadSavedLogLevel()
+    {
+        try
+        {
+            var settingsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                AppConstants.AppDataDirectoryName,
+                "settings.json");
+            if (!File.Exists(settingsPath))
+                return null;
+
+            var json = File.ReadAllText(settingsPath);
+            var settings = JsonSerializer.Deserialize<Settings>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return settings?.DeveloperSettings?.LogLevel;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private void ConfigureServices(IServiceCollection services)
     {
-        // Configure logging with priority: Environment Variable > Saved Setting > Default
-        LogEventLevel logLevel;
-        
-        // First check environment variable (highest priority for debugging)
-        var envLogLevel = Environment.GetEnvironmentVariable("CST_LOG_LEVEL")?.ToLowerInvariant();
-        if (!string.IsNullOrEmpty(envLogLevel))
-        {
-            logLevel = envLogLevel switch
-            {
-                "debug" => LogEventLevel.Debug,
-                "information" => LogEventLevel.Information,
-                "warning" => LogEventLevel.Warning,
-                "error" => LogEventLevel.Error,
-                "fatal" => LogEventLevel.Fatal,
-                _ => LogEventLevel.Information
-            };
-        }
-        else
-        {
-            // Check saved setting (will load defaults if no saved setting exists)
-            try
-            {
-                // Create a temporary settings service to load saved log level
-                var tempSettingsService = new SettingsService();
-                var savedLogLevel = tempSettingsService.Settings.DeveloperSettings.LogLevel;
-                logLevel = savedLogLevel.ToLowerInvariant() switch
-                {
-                    "debug" => LogEventLevel.Debug,
-                    "information" => LogEventLevel.Information,
-                    "warning" => LogEventLevel.Warning,
-                    "error" => LogEventLevel.Error,
-                    "fatal" => LogEventLevel.Fatal,
-                    _ => LogEventLevel.Information // Default fallback
-                };
-            }
-            catch
-            {
-                // Fallback to default if settings loading fails
-                logLevel = LogEventLevel.Information;
-            }
-        }
-        
+        // Configure logging with priority: Environment Variable > Saved Setting > Default.
+        // Env var wins (debugging); otherwise use the persisted DeveloperSettings.LogLevel. (STATE-1)
+        var envLogLevel = Environment.GetEnvironmentVariable("CST_LOG_LEVEL");
+        var logLevel = !string.IsNullOrEmpty(envLogLevel)
+            ? ParseLogLevel(envLogLevel)
+            : ParseLogLevel(ReadSavedLogLevel());
+
         // Get the logs directory in user's Application Support
         var appSupportDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
