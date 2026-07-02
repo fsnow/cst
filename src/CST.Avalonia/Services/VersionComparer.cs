@@ -77,10 +77,10 @@ namespace CST.Avalonia.Services
     /// </summary>
     public static class VersionComparer
     {
-        // Regex pattern for semantic versioning with optional pre-release
-        // Matches: 1.0.0, 5.0.0-beta.1, 4.5.0-alpha, etc.
+        // Regex pattern for semantic versioning with optional pre-release.
+        // Matches: 1.0.0, 5.0.0-beta.1, 5.0.0-beta1 (dot before the build is optional), 4.5.0-alpha, etc.
         private static readonly Regex VersionPattern = new Regex(
-            @"^v?(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z]+)(?:\.(\d+))?)?",
+            @"^v?(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z]+)(?:\.?(\d+))?)?",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>
@@ -160,28 +160,14 @@ namespace CST.Avalonia.Services
                 return VersionComparison.PreReleaseToStable;
             }
 
-            // Same major.minor.patch, both are pre-release, different pre-release versions
-            // e.g., 5.0.0-beta.1 vs 5.0.0-beta.2
-            if (current.IsPreRelease && latest.IsPreRelease &&
-                current.Major == latest.Major &&
-                current.Minor == latest.Minor &&
-                current.Patch == latest.Patch)
-            {
-                // If pre-release identifiers are the same, check build numbers
-                if (string.Equals(current.PreRelease, latest.PreRelease, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (current.PreReleaseBuild.HasValue && latest.PreReleaseBuild.HasValue &&
-                        current.PreReleaseBuild.Value < latest.PreReleaseBuild.Value)
-                    {
-                        return VersionComparison.PatchOutdated; // Pre-release build update
-                    }
-                }
-                // Different pre-release identifiers (e.g., alpha vs beta)
-                else if (string.Compare(current.PreRelease, latest.PreRelease, StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    return VersionComparison.PatchOutdated;
-                }
-            }
+            // At this point comparison < 0 (current is older per SemanticVersion.CompareTo) and
+            // major.minor.patch are equal (the outdated-major/minor/patch and pre-release→stable cases
+            // returned above), so both are pre-release and current is the older pre-release — e.g.
+            // 5.0.0-alpha vs 5.0.0-alpha.1, 5.0.0-beta vs 5.0.0-beta.2, or alpha vs beta. Surface a
+            // pre-release/patch update rather than falling through to "Current", which contradicted
+            // CompareTo and offered no update. (NET-3)
+            if (current.IsPreRelease && latest.IsPreRelease)
+                return VersionComparison.PatchOutdated;
 
             return VersionComparison.Current;
         }
