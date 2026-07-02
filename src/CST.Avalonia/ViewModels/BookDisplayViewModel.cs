@@ -963,6 +963,7 @@ namespace CST.Avalonia.ViewModels
                 return xmlContent;
             }
 
+            DirectoryReader? indexReader = null;
             try
             {
                 // NEW: If we have pre-computed positions (from phrase/proximity search), use them directly
@@ -978,7 +979,7 @@ namespace CST.Avalonia.ViewModels
                     return xmlContent;
                 }
 
-                var indexReader = indexingService.GetIndexReader();
+                indexReader = indexingService.GetIndexReader();
                 if (indexReader == null)
                 {
                     _logger.Warning("Could not get index reader for highlighting");
@@ -1122,6 +1123,10 @@ namespace CST.Avalonia.ViewModels
                 _logger.Error(ex, "Failed to apply search highlighting");
                 Log.Error(ex, "[BookDisplay] Error applying highlights");
                 return xmlContent; // Return original content on error
+            }
+            finally
+            {
+                indexReader?.DecRef(); // release the counted reference (SRCH-6, mirrors SRCH-2)
             }
         }
 

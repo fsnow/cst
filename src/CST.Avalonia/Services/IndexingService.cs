@@ -256,35 +256,40 @@ namespace CST.Avalonia.Services
             return indexPath;
         }
 
+        // Returns a reference-counted DirectoryReader for highlighting; the caller MUST release it with
+        // DecRef() in a finally. Refreshes when the index has changed (IsCurrent), so a mid-session
+        // re-index doesn't leave highlighting reading stale term vectors against new-generation docIds.
+        // Reference counting lets the refresh open a fresh reader without disposing one an in-flight
+        // caller is still enumerating. Mirrors SearchService's reader (SRCH-2). (SRCH-6)
         public DirectoryReader? GetIndexReader()
         {
             lock (_readerLock)
             {
                 try
                 {
-                    // If reader is null or closed, open a new one
-                    if (_indexReader == null || _indexReader.RefCount <= 0)
+                    if (_indexReader == null || !_indexReader.IsCurrent())
                     {
-                        if (System.IO.Directory.Exists(_indexDirectory))
-                        {
-                            // Reuse a single FSDirectory; only (re)open it when missing or the
-                            // index path changes. Opening a new directory each time without
-                            // disposing it leaked native handles.
-                            if (_directory == null || _directoryPath != _indexDirectory)
-                            {
-                                _directory?.Dispose();
-                                _directory = FSDirectory.Open(_indexDirectory);
-                                _directoryPath = _indexDirectory;
-                            }
-                            _indexReader = DirectoryReader.Open(_directory);
-                            _logger.LogDebug("Opened new index reader for highlighting");
-                        }
-                        else
+                        if (!System.IO.Directory.Exists(_indexDirectory))
                         {
                             _logger.LogWarning("Index directory does not exist: {IndexDirectory}", _indexDirectory);
                             return null;
                         }
+
+                        // Reuse a single FSDirectory; only (re)open it when missing or the index path
+                        // changes (a new directory per call without disposing leaked native handles).
+                        if (_directory == null || _directoryPath != _indexDirectory)
+                        {
+                            _directory?.Dispose();
+                            _directory = FSDirectory.Open(_indexDirectory);
+                            _directoryPath = _indexDirectory;
+                        }
+
+                        var newReader = DirectoryReader.Open(_directory);
+                        _indexReader?.DecRef();   // release the owner ref; closes once in-flight callers DecRef too
+                        _indexReader = newReader;
+                        _logger.LogDebug("Opened fresh index reader for highlighting ({DocCount} docs)", _indexReader.NumDocs);
                     }
+                    _indexReader.IncRef();   // hand out a counted reference; caller DecRefs in a finally
                     return _indexReader;
                 }
                 catch (Exception ex)
@@ -299,7 +304,7 @@ namespace CST.Avalonia.Services
         {
             lock (_readerLock)
             {
-                _indexReader?.Dispose();
+                _indexReader?.DecRef();   // release the owner ref (closes once any in-flight callers DecRef) - SRCH-6
                 _indexReader = null;
                 _directory?.Dispose();
                 _directory = null;

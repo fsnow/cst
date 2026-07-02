@@ -84,9 +84,32 @@ namespace CST.Avalonia.Tests.Services
             var reader = _service.GetIndexReader();
             Assert.NotNull(reader);
             Assert.Equal(3, reader!.NumDocs);
+            reader.DecRef(); // GetIndexReader hands out a counted reference (SRCH-6)
 
-            // Dispose releases the reader/FSDirectory and must be safe to call more than once.
+            // Dispose releases the owner ref/FSDirectory and must be safe to call more than once.
             _service.Dispose();
+            _service.Dispose();
+        }
+
+        [Fact]
+        public async Task GetIndexReader_RefreshesAfterReindex()
+        {
+            // SRCH-6: after the index changes, the highlighting reader must reflect the new content, not a
+            // stale generation (which would give wrong term vectors / out-of-range docIds).
+            CreateMinimalIndex(2);
+            await _service.InitializeAsync();
+
+            var reader1 = _service.GetIndexReader();
+            Assert.Equal(2, reader1!.NumDocs);
+            reader1.DecRef();
+
+            // Simulate a mid-session re-index that adds documents (CreateMinimalIndex appends + commits).
+            CreateMinimalIndex(3);
+
+            var reader2 = _service.GetIndexReader();
+            Assert.True(reader2!.NumDocs > 2, $"reader was not refreshed after re-index (still {reader2.NumDocs} docs)");
+            reader2.DecRef();
+
             _service.Dispose();
         }
 
