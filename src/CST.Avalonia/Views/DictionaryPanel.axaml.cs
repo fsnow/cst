@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.LogicalTree;
 using CST.Avalonia.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
@@ -17,10 +18,30 @@ public partial class DictionaryPanel : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
-        DataContext = App.ServiceProvider?.GetService<DictionaryViewModel>() ?? new DictionaryViewModel();
+        // Resolve the singleton VM. No `?? new DictionaryViewModel()` fallback: that ctor dereferences
+        // App.ServiceProvider and would throw (also breaking the XAML previewer), never yielding a usable
+        // instance. (DICT-6)
+        DataContext = App.ServiceProvider?.GetService<DictionaryViewModel>();
     }
 
-    private void OnDataContextChanged(object? sender, EventArgs e)
+    protected override void OnAttachedToLogicalTree(LogicalTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToLogicalTree(e);
+        WireMeaning();
+    }
+
+    protected override void OnDetachedFromLogicalTree(LogicalTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromLogicalTree(e);
+        // Drop the subscription when the panel leaves the tree (e.g. per float/unfloat) so a discarded
+        // panel isn't kept alive by the app-lifetime singleton VM. Re-wired on re-attach. (DICT-5)
+        _meaningSub?.Dispose();
+        _meaningSub = null;
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e) => WireMeaning();
+
+    private void WireMeaning()
     {
         _meaningSub?.Dispose();
         _meaningSub = null;

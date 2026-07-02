@@ -31,6 +31,10 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private readonly ILogger<DictionaryViewModel> _logger;
     private readonly CompositeDisposable _disposables = new();
 
+    // Live script/font-change handlers, so the panel re-renders in the new script/font (DICT-2).
+    private Action<Script>? _scriptChangedHandler;
+    private EventHandler? _fontChangedHandler;
+
     // <see>-link navigation history (manual typing does NOT push history; only followed links do).
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
@@ -109,6 +113,23 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
                 _ = _stateService.SaveStateAsync();
             })
             .DisposeWith(_disposables);
+
+        // Re-render headwords + meaning when the global script or font settings change (mirrors the
+        // Search tool). Unsubscribed in Dispose. (DICT-2)
+        _scriptChangedHandler = script => Dispatcher.UIThread.Post(() =>
+        {
+            this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+            this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+            _ = LookupAsync(SearchText);   // rebuild DisplayWords + <see> links in the new script
+        });
+        _scriptService.ScriptChanged += _scriptChangedHandler;
+
+        _fontChangedHandler = (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+            this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+        });
+        _fontService.FontSettingsChanged += _fontChangedHandler;
     }
 
     public IReadOnlyList<string> AvailableLanguages { get; }
@@ -162,11 +183,18 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     private async Task LookupAsync(string query)
     {
+        var lang = SelectedLanguage;   // capture: results are only valid if these still hold on completion
         try
         {
-            var results = await _dictionaryService.LookupAsync(SelectedLanguage, query ?? "");
+            var results = await _dictionaryService.LookupAsync(lang, query ?? "");
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                // Ignore a stale completion: a newer query/language has superseded this lookup, so its
+                // results must not clobber the current ones (e.g. a slow first-time Hindi load finishing
+                // after a fast cached English lookup). (DICT-3)
+                if (query != SearchText || lang != SelectedLanguage)
+                    return;
+
                 Words.Clear();
                 foreach (var w in results)
                     Words.Add(new DictionaryEntryViewModel(w, IpeToDisplay(w.Word)));
@@ -177,7 +205,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Lang})", query, SelectedLanguage);
+            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Lang})", query, lang);
         }
     }
 
@@ -237,6 +265,10 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     public void Dispose()
     {
+        if (_scriptChangedHandler != null)
+            _scriptService.ScriptChanged -= _scriptChangedHandler;
+        if (_fontChangedHandler != null)
+            _fontService.FontSettingsChanged -= _fontChangedHandler;
         _disposables.Dispose();
     }
 }
