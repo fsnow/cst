@@ -8,7 +8,6 @@ namespace CST
     public class DevaXmlAnalyzer : Analyzer
     {
         private readonly LuceneVersion matchVersion;
-        private DevaXmlTokenizer tokenizer = null!;
 
         public DevaXmlAnalyzer(LuceneVersion matchVersion)
         {
@@ -17,20 +16,9 @@ namespace CST
 
         protected override TokenStreamComponents CreateComponents(string fieldName, TextReader reader)
         {
-            tokenizer = new DevaXmlTokenizer(matchVersion, reader);
-            //WhitespaceTokenizer tokenizer = new WhitespaceTokenizer(matchVersion, reader);
-            //DummyTokenizer tokenizer = new DummyTokenizer(matchVersion, reader);
-            return new TokenStreamComponents(tokenizer);
-        }
-
-        protected override TextReader InitReader(string fieldName, TextReader reader)
-        {
-            TextReader reader2 = base.InitReader(fieldName, reader);
-            if (tokenizer != null)
-            {
-                tokenizer.InitPerBook(reader2);
-            }
-            return reader2;
+            // No shared state: each (per-thread) TokenStreamComponents gets its own tokenizer, and the
+            // tokenizer buffers the document in its Reset() from its own reader. (SRCH-14)
+            return new TokenStreamComponents(new DevaXmlTokenizer(matchVersion, reader));
         }
     }
 }

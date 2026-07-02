@@ -37,7 +37,7 @@ namespace CST
             : base(input)
         {
             //Init(input);
-            InitInstance(input);
+            InitInstance();
         }
 
         /// <summary>
@@ -47,10 +47,10 @@ namespace CST
             : base(factory, input)
         {
             //Init(input);
-            InitInstance(input);
+            InitInstance();
         }
 
-        private void InitInstance(TextReader input)
+        private void InitInstance()
         {
             termAtt = AddAttribute<ICharTermAttribute>();
             posIncrAtt = AddAttribute<IPositionIncrementAttribute>();
@@ -133,16 +133,19 @@ namespace CST
                 '_' // placeholder for <hi rend="bold"> and </hi>, which can occur inside words
             };
             wordChars = tempHashSet.ToImmutableHashSet<char>();
-
-            InitPerBook(input);
         }
 
-        public void InitPerBook(TextReader input)
+        /// <summary>
+        /// Buffers the whole document from the current reader (<c>m_input</c>) and strips XML/non-token
+        /// characters. Lucene calls this at the start of every token stream — i.e. once per book — so the
+        /// per-document state lives entirely on the tokenizer instance, with nothing shared through the
+        /// analyzer. (SRCH-14)
+        /// </summary>
+        public override void Reset()
         {
-            text = new StringBuilder(input.ReadToEnd());
-
+            base.Reset(); // makes m_input the active reader (the one passed to the ctor or SetReader)
+            text = new StringBuilder(m_input.ReadToEnd());
             FirstPass();
-
             pos = 0;
         }
 
