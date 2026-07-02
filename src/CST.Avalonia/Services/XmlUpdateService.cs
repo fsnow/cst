@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia;
@@ -568,7 +566,7 @@ namespace CST.Avalonia.Services
                             filesFound++;
                             // Hash-compare existing file against remote SHA
                             _logger.LogDebug("Hash-comparing existing file: {FileName}", book.FileName);
-                            var localSha = CalculateGitBlobSha(localPath);
+                            var localSha = GitBlobHash.Compute(File.ReadAllBytes(localPath));
                             needsUpdate = localSha != repoFile.Sha;
                             if (!needsUpdate) shaMatches++;
                             
@@ -761,24 +759,6 @@ namespace CST.Avalonia.Services
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             return Path.Combine(appDataPath, AppConstants.AppDataDirectoryName);
-        }
-
-        /// <summary>
-        /// Calculates the Git blob SHA for a file, which matches the SHA returned by GitHub's Tree API.
-        /// Git blob SHA = SHA1("blob " + filesize + "\0" + content)
-        /// </summary>
-        private static string CalculateGitBlobSha(string filePath)
-        {
-            var content = File.ReadAllBytes(filePath);
-            var header = Encoding.UTF8.GetBytes($"blob {content.Length}\0");
-            var combined = new byte[header.Length + content.Length];
-            
-            Array.Copy(header, 0, combined, 0, header.Length);
-            Array.Copy(content, 0, combined, header.Length, content.Length);
-            
-            using var sha1 = SHA1.Create();
-            var hash = sha1.ComputeHash(combined);
-            return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
         public void Dispose()
