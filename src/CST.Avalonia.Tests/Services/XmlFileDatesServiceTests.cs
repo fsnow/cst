@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using CST;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
 using Microsoft.Extensions.Logging;
@@ -202,6 +203,54 @@ namespace CST.Avalonia.Tests.Services
             Assert.True(data!.Files.TryGetValue("e0801n.nrf.xml", out var info));
             Assert.Equal(indexedTime, info!.LastIndexedTimestamp);
             Assert.Equal("def456", info.CommitHash);
+        }
+
+        [Fact]
+        public async Task GetChangedBooksAsync_DoesNotCommitDates_UntilMarkedIndexed()
+        {
+            // SRCH-1: detection must be read-only. A changed book stays "changed" across repeated
+            // detection passes until it is explicitly marked indexed.
+            var (service, bookIndex) = await SeedChangedBookAsync();
+
+            var first = await service.GetChangedBooksAsync();
+            var second = await service.GetChangedBooksAsync();
+
+            Assert.Contains(bookIndex, first);
+            Assert.Contains(bookIndex, second); // still changed - detection did not commit the new timestamp
+        }
+
+        [Fact]
+        public async Task MarkBooksIndexed_CommitsPendingDate_SoBookNoLongerDetectedChanged()
+        {
+            // SRCH-1: after a successful index, MarkBooksIndexed promotes the detection-time timestamp so
+            // the book is no longer reported as changed.
+            var (service, bookIndex) = await SeedChangedBookAsync();
+
+            Assert.Contains(bookIndex, await service.GetChangedBooksAsync());
+
+            service.MarkBooksIndexed(new[] { bookIndex });
+
+            Assert.DoesNotContain(bookIndex, await service.GetChangedBooksAsync());
+        }
+
+        // Seed a persisted cache with an old timestamp for the first book, then drop an XML file with a
+        // newer write time so the book is detected as changed. Returns an initialized service + the index.
+        private async Task<(TestableXmlFileDatesService service, int bookIndex)> SeedChangedBookAsync()
+        {
+            var fileName = Books.Inst[0].FileName;
+            var oldTime = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(_testAppDataDir, "file-dates.json"),
+                JsonSerializer.Serialize(new Dictionary<string, DateTime> { [fileName] = oldTime }));
+
+            var xmlPath = Path.Combine(_testXmlDir, fileName);
+            await File.WriteAllTextAsync(xmlPath, "<x/>");
+            File.SetLastWriteTimeUtc(xmlPath, oldTime.AddDays(10));
+
+            var service = new TestableXmlFileDatesService(_mockLogger.Object, _mockSettingsService.Object, _testAppDataDir);
+            await service.InitializeAsync();
+            return (service, 0);
         }
 
         // Testable version that allows us to override the app data directory
