@@ -95,6 +95,33 @@ public class DictionaryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Lookup_DecomposedDiacritics_MatchPrecomposedHeadword()
+    {
+        // DICT-4: headword stored precomposed (NFC) as "g\u0101th\u0101" (ā = U+0101); query pasted with the
+        // macron decomposed ("a" + U+0304). Without NFC normalization these produce different IPE keys
+        // and the exact match is silently lost.
+        WriteLang("en", "d.txt", "g\u0101th\u0101", "<p>a verse</p>");
+
+        var r = await Service().LookupAsync("en", "ga\u0304tha\u0304");
+
+        Assert.Single(r);
+        Assert.Contains("a verse", r[0].Meaning);
+    }
+
+    [Fact]
+    public async Task Lookup_PastedZeroWidthJoiners_StillMatches()
+    {
+        // DICT-4 (same class as SRCH-3): ZWNJ/ZWJ pasted into a Latin query would survive into the IPE
+        // key and match nothing unless stripped.
+        WriteLang("en", "d.txt", "dhamma", "<p>the teaching</p>");
+
+        var r = await Service().LookupAsync("en", "dha\u200Cm\u200Dma");
+
+        Assert.Single(r);
+        Assert.Contains("the teaching", r[0].Meaning);
+    }
+
+    [Fact]
     public async Task Lookup_RepeatedHeadword_MergesDefinitions()
     {
         WriteLang("en", "d.txt", "eva", "<p>indeed</p>", "eva", "<p>emphatic particle</p>");

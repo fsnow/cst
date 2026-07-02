@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Constants;
 using CST.Avalonia.Models;
+using CST.Avalonia.Search;
 using CST.Conversion;
 using Microsoft.Extensions.Logging;
 
@@ -133,9 +135,12 @@ public sealed class DictionaryService : IDictionaryService
         if (index == null)
             return Array.Empty<DictionaryWord>();
 
-        // Normalize the query the same way headwords were normalized: lower-case (CST4 lower-cased the
-        // input box) then convert any script to IPE.
-        var ipeQuery = Any2Ipe.Convert(query.ToLowerInvariant());
+        // Normalize the pasted query so it matches the (NFC-clean) headwords: drop zero-width joiners
+        // (same class as SRCH-3 — reuse its stripper so the joiner set stays single-sourced), lower-case
+        // (CST4 lower-cased the input box), and compose to NFC so decomposed diacritics (e.g. a + U+0304
+        // instead of ā) don't produce a different IPE key. Then convert any script to IPE. (DICT-4)
+        var normalized = MultiWordSearch.StripJoiners(query).ToLowerInvariant().Normalize(NormalizationForm.FormC);
+        var ipeQuery = Any2Ipe.Convert(normalized);
         return index.Lookup(ipeQuery);
     }
 
