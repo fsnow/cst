@@ -119,7 +119,9 @@ namespace CST.Avalonia.ViewModels
         {
             if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                desktop.Shutdown();
+                // TryShutdown (not Shutdown) so the ShutdownRequested handler runs the graceful
+                // save+dispose sequence; a bare Shutdown() would exit with no state save at all. (XCUT-1)
+                desktop.TryShutdown();
             }
         }
 

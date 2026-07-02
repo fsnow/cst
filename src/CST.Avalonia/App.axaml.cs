@@ -263,10 +263,10 @@ public partial class App : Application
 
             openBookViewModel.CloseRequested += () =>
             {
-                // For now, just close the application when Open Book is closed
-                // Later this could hide the dialog and show a menu instead
-                _ = SaveApplicationStateAsync();
-                desktop.Shutdown();
+                // Route through TryShutdown so the ShutdownRequested handler runs the graceful
+                // sequence (await state save -> dispose services). The old path fired the save
+                // fire-and-forget and then hard-Shutdown()'d, racing the save against process exit. (XCUT-1)
+                desktop.TryShutdown();
             };
 
             // Handle application shutdown to save state
