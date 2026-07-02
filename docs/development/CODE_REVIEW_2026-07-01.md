@@ -81,7 +81,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-4  | Medium | [#156](https://github.com/fsnow/cst/issues/156) | — | ✅ Fixed |
 | BOOK-5  | Medium | [#159](https://github.com/fsnow/cst/issues/159) | — | ✅ Fixed |
 | BOOK-6  | Medium | [#164](https://github.com/fsnow/cst/issues/164) | — | ✅ Fixed |
-| BOOK-7  | Medium | — | — | |
+| BOOK-7  | Medium | [#167](https://github.com/fsnow/cst/issues/167) | — | ⏸️ Deferred — needs GUI verification (restoration timing; touches #36) |
 | BOOK-8  | Low    | — | — | |
 | BOOK-9  | Low    | — | — | |
 | BOOK-10 | Low    | — | — | |
