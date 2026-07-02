@@ -143,7 +143,8 @@ namespace CST.Conversion
 
         public string CapitalReplacer(Match m)
         {
-            return m.Value.Substring(1).ToUpper();
+            // Invariant upper-casing: on tr/az the default ToUpper maps 'i' to the dotted 'İ' (U+0130). (CORE-4)
+            return m.Value.Substring(1).ToUpperInvariant();
         }
 
         public string DebugRegex(Match m)
