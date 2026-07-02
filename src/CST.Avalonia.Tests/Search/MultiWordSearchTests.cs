@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CST.Avalonia.Models;
 using CST.Avalonia.Search;
+using CST.Conversion;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Search
@@ -31,6 +32,36 @@ namespace CST.Avalonia.Tests.Search
 
         private static List<UnitOccurrence> PhraseUnit(params List<TermPosition>[] slots) =>
             MultiWordSearch.FindUnitOccurrences(slots);
+
+        // ---- StripJoiners (SRCH-3) ------------------------------------------
+
+        [Fact]
+        public void StripJoiners_RemovesZeroWidthJoinerAndNonJoiner()
+        {
+            // "dhamma" with a ZWNJ (U+200C) and a ZWJ (U+200D) embedded
+            Assert.Equal("dhamma", MultiWordSearch.StripJoiners("dha\u200Cm\u200Dma"));
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        public void StripJoiners_NullOrEmpty_ReturnsEmpty(string? input)
+        {
+            Assert.Equal(string.Empty, MultiWordSearch.StripJoiners(input));
+        }
+
+        [Fact]
+        public void StripJoiners_PastedRomanQuery_ConvertsToSameIpeAsClean()
+        {
+            // The SRCH-3 bug: a pasted joiner survives into the IPE term (index terms are joiner-free),
+            // so the query matches nothing. Stripping first makes it convert identically to the clean form.
+            var pasted = "dhamma".Insert(3, "\u200C");   // "dham<ZWNJ>ma"
+            var cleanIpe = Any2Ipe.Convert("dhamma");
+
+            Assert.Equal(cleanIpe, Any2Ipe.Convert(MultiWordSearch.StripJoiners(pasted)));
+            // And confirm the bug is real without the strip (raw pasted query yields a different IPE term).
+            Assert.NotEqual(cleanIpe, Any2Ipe.Convert(pasted));
+        }
 
         // ---- ParseUnits -----------------------------------------------------
 

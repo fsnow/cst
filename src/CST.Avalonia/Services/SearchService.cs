@@ -109,8 +109,9 @@ public class SearchService : ISearchService
             // Ensure all books have DocIds
             await EnsureDocIdsAsync(reader, books);
 
-            // Convert search text to IPE
-            var ipeTerm = Any2Ipe.Convert(query.QueryText);
+            // Convert search text to IPE (strip pasted zero-width joiners first, or they'd survive into
+            // the IPE term and match no index term — SRCH-3).
+            var ipeTerm = Any2Ipe.Convert(MultiWordSearch.StripJoiners(query.QueryText));
             ipeTerm = ipeTerm.Replace("  ", " ").Trim();
 
             // Normalize smart double-quotes to ASCII so pasted text still triggers phrase parsing.

@@ -51,6 +51,19 @@ public class UnitOccurrence
 public static class MultiWordSearch
 {
     /// <summary>
+    /// Remove zero-width joiner/non-joiner (U+200C/U+200D) from a query. Pasted text often carries
+    /// these; Any2Ipe classifies them as Unknown and Latn2Ipe passes them through, so a roman-script
+    /// query keeps them in the IPE term and matches nothing (index terms are joiner-free). Strip them
+    /// from the query before conversion/parsing so pasted queries match. (SRCH-3)
+    /// </summary>
+    public static string StripJoiners(string? query)
+    {
+        if (string.IsNullOrEmpty(query))
+            return query ?? string.Empty;
+        return query.Replace("\u200C", "").Replace("\u200D", "");
+    }
+
+    /// <summary>
     /// Parse an (already IPE-converted) query string into units, honoring quoted phrases.
     /// Examples: <c>a b c</c> => three word units; <c>"a b" c</c> => phrase(a,b) + word(c);
     /// <c>"a b" "c d"</c> => two phrase units. An unbalanced trailing quote closes at end of input.

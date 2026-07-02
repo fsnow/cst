@@ -404,7 +404,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     // units => the proximity window. So with multi-phrase support these are no longer mutually
     // exclusive: e.g. `"evam me" sutam` is BOTH a phrase and a proximity search.
     private List<SearchUnit> ParsedUnits =>
-        MultiWordSearch.ParseUnits((SearchText ?? string.Empty).Replace("\u201C", "\"").Replace("\u201D", "\""));
+        MultiWordSearch.ParseUnits(MultiWordSearch.StripJoiners(SearchText ?? string.Empty).Replace("\u201C", "\"").Replace("\u201D", "\""));
 
     // True when any quoted multi-word group is present (=> "exact word order" applies to it).
     public bool IsPhraseSearch => ParsedUnits.Any(u => u.IsPhrase);
