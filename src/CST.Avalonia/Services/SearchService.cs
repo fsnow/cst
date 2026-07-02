@@ -185,60 +185,74 @@ public class SearchService : ISearchService
         // Get all matching terms
         var matchingTerms = await GetMatchingTermsAsync(reader, termMatcher, cancellationToken);
 
-        var termsToProcess = matchingTerms.Take(query.PageSize).ToList();
-        if (matchingTerms.Count > termsToProcess.Count)
+        // Apply the page budget to terms that SURVIVE the book filter. Truncating matchingTerms up
+        // front (before checking occurrences) spent the budget on terms not in the selected books, dropping
+        // legitimate results past the page size when the filter was narrow. (SRCH-12)
+        var conversionStopwatch = Stopwatch.StartNew();
+        var (selectedTerms, totalOccurrences, truncated) = await SelectTermsWithinBudgetAsync(
+            matchingTerms,
+            query.PageSize,
+            term => GetTermOccurrencesAsync(reader, term, bookBits, books, cancellationToken),
+            ConvertToDisplayScript,
+            cancellationToken);
+        conversionStopwatch.Stop();
+
+        result.Terms.AddRange(selectedTerms);
+        result.TotalOccurrenceCount += totalOccurrences;
+        if (truncated)
         {
             result.ResultsTruncated = true;
-            result.TruncationMessage = $"Showing the first {termsToProcess.Count:N0} of {matchingTerms.Count:N0} matching words — refine your search to narrow the results.";
+            result.TruncationMessage = $"Showing the first {query.PageSize:N0} matching words \u2014 refine your search to narrow the results.";
         }
-        _logger.LogInformation("Processing {Count} terms for display conversion", termsToProcess.Count);
-        
-        // Debug: Log first and last few terms to understand the order
-        if (termsToProcess.Count > 0)
-        {
-            var firstTerms = string.Join(", ", termsToProcess.Take(5));
-            var lastTerms = string.Join(", ", termsToProcess.TakeLast(5));
-            _logger.LogInformation("First 5 terms: {FirstTerms}", firstTerms);
-            _logger.LogInformation("Last 5 terms: {LastTerms}", lastTerms);
-        }
-        
-        var conversionStopwatch = Stopwatch.StartNew();
-        foreach (var term in termsToProcess)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var convertedTerm = ConvertToDisplayScript(term);
-            var matchingTerm = new MatchingTerm
-            {
-                Term = term,
-                DisplayTerm = convertedTerm
-            };
-
-            // Get occurrences for this term
-            var occurrences = await GetTermOccurrencesAsync(reader, term, bookBits, books, cancellationToken);
-            
-            // Only add the term if it has occurrences in the selected books
-            if (occurrences.Any())
-            {
-                matchingTerm.Occurrences = occurrences;
-                matchingTerm.TotalCount = occurrences.Sum(o => o.Count);
-                result.Terms.Add(matchingTerm);
-            }
-            else
-            {
-                _logger.LogDebug("Skipping term '{Term}' - no occurrences in selected books", term);
-            }
-            result.TotalOccurrenceCount += matchingTerm.TotalCount;
-        }
-        
-        conversionStopwatch.Stop();
-        _logger.LogInformation("Script conversion completed in {Elapsed}ms for {Count} terms", 
-            conversionStopwatch.ElapsedMilliseconds, termsToProcess.Count);
+        _logger.LogInformation("Script conversion completed in {Elapsed}ms for {Count} terms",
+            conversionStopwatch.ElapsedMilliseconds, result.Terms.Count);
 
         result.TotalTermCount = result.Terms.Count;
         result.TotalBookCount = result.Terms.SelectMany(t => t.Occurrences).Select(o => o.Book).Distinct().Count();
 
         return result;
+    }
+
+    /// <summary>
+    /// From an ordered list of index terms that matched the query, build up to <paramref name="pageSize"/>
+    /// <see cref="MatchingTerm"/>s that actually occur in the selected books, preserving order. Terms with
+    /// no occurrences in the selected books do NOT consume the page budget, so a narrow book filter can't
+    /// drop legitimate terms past the page size (SRCH-12). Returns the built terms, their total occurrence
+    /// count, and whether a filter-surviving term was left off the page.
+    /// </summary>
+    internal static async Task<(List<MatchingTerm> terms, int totalOccurrences, bool truncated)> SelectTermsWithinBudgetAsync(
+        IReadOnlyList<string> matchingTerms,
+        int pageSize,
+        Func<string, Task<List<BookOccurrence>>> getOccurrences,
+        Func<string, string> toDisplay,
+        CancellationToken cancellationToken)
+    {
+        var terms = new List<MatchingTerm>();
+        int totalOccurrences = 0;
+
+        foreach (var term in matchingTerms)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var occurrences = await getOccurrences(term).ConfigureAwait(false);
+            if (occurrences.Count == 0)
+                continue; // not in the selected books - doesn't count toward the page budget
+
+            if (terms.Count >= pageSize)
+                return (terms, totalOccurrences, true); // a filter-surviving term exists beyond the page
+
+            var totalCount = occurrences.Sum(o => o.Count);
+            terms.Add(new MatchingTerm
+            {
+                Term = term,
+                DisplayTerm = toDisplay(term),
+                Occurrences = occurrences,
+                TotalCount = totalCount
+            });
+            totalOccurrences += totalCount;
+        }
+
+        return (terms, totalOccurrences, false);
     }
 
     /// <summary>
