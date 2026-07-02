@@ -31,6 +31,7 @@ public partial class BookDisplayView : UserControl
 
     private BookDisplayViewModel? _viewModel;
     private WebView? _webView;
+    private bool _isShutDown;   // set once the tab is really closed; prevents WebView resurrection (BOOK-1)
     // Completes when OnTitleChanged receives the CST_LOOKUP_SEL selection pushed for a Cmd+D lookup. (#25)
     private TaskCompletionSource<string?>? _lookupSelectionTcs;
     private ScrollViewer? _fallbackBrowser;
@@ -161,6 +162,11 @@ public partial class BookDisplayView : UserControl
 
     private void TryCreateWebView()
     {
+        if (_isShutDown)
+        {
+            _logger.Debug("TryCreateWebView skipped: View has been shut down (closed tab)");
+            return;
+        }
         try
         {
             _webView = this.FindControl<WebView>("webView");
@@ -252,6 +258,19 @@ public partial class BookDisplayView : UserControl
                 _webView = null;
             }
         }
+    }
+
+    /// <summary>
+    /// Permanently release this View's CEF WebView. The dock factory calls this only when the book tab
+    /// is really closed (CloseDockable) — NOT on the recycled tab-switch/float detach paths — because a
+    /// closed tab's View + its live browser would otherwise sit in the app-wide ControlRecycling cache
+    /// (keyed per-open, never reused, never evicted) for the rest of the session, leaking a CEF browser
+    /// and the multi-MB rendered DOM per open/close cycle. (BOOK-1)
+    /// </summary>
+    public void Shutdown()
+    {
+        _isShutDown = true;
+        DisposeWebView();
     }
 
     protected override void OnLoaded(RoutedEventArgs e)

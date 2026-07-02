@@ -38,12 +38,13 @@ Findings that have been converted to GitHub issues and worked. **Closed** issues
 | CORE-3  | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | 🔧 In review |
 | CORE-4  | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed |
 | NET-1   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed |
+| BOOK-1  | [#136](https://github.com/fsnow/cst/issues/136) | — | 🔧 In progress |
 | BOOK-2  | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed |
 | SCRIPT-1| [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed |
-| STATE-1 | [#130](https://github.com/fsnow/cst/issues/130) | — | 🔧 In progress |
-| STATE-2 | [#132](https://github.com/fsnow/cst/issues/132) | — | 🔧 In progress |
+| STATE-1 | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed |
+| STATE-2 | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed |
 
-**High findings still without an issue:** SEC-1, DOCK-1, DOCK-2, BOOK-1, XCUT-1, SCRIPT-2.
+**High findings still without an issue:** SEC-1, DOCK-1, DOCK-2, XCUT-1, SCRIPT-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
 

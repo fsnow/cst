@@ -1,12 +1,15 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Recycling.Model;
 using Avalonia.Threading;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
@@ -1679,6 +1682,65 @@ namespace CST.Avalonia.Services
         }
         
         // Override to prevent accidental closes during drag operations
+        // The app-wide ControlRecycling instance (App.axaml resource, shared by every DockControl).
+        private IControlRecycling? GetControlRecycling()
+        {
+            try
+            {
+                if (Application.Current?.TryGetResource("ControlRecyclingKey", null, out var res) == true
+                    && res is IControlRecycling recycling)
+                    return recycling;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Could not resolve the ControlRecycling resource");
+            }
+            return null;
+        }
+
+        // On a real tab close, dispose the closed book's recycled View (its CEF WebView) and evict it
+        // from the app-wide recycling cache. Dock 11.3.6.5 exposes no per-key removal (only Clear(),
+        // which would nuke every other tab's cached View and orphan their live browsers), so we remove
+        // this single entry from the private _cache by value — guarded, so a Dock upgrade that renames
+        // the field degrades to "WebView disposed (CEF freed), empty View shell retained". (BOOK-1)
+        private void DisposeAndEvictRecycledView(BookDisplayViewModel vm)
+        {
+            var recycling = GetControlRecycling();
+            if (recycling == null)
+                return;
+
+            try
+            {
+                object? cachedControl = recycling.TryGetValue(vm, out var control) ? control : null;
+
+                if (cachedControl is BookDisplayView view)
+                    view.Shutdown();   // release the CEF WebView — the actual leak
+
+                var cacheField = recycling.GetType().GetField("_cache", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (cachedControl != null && cacheField?.GetValue(recycling) is IDictionary cache)
+                {
+                    object? keyToRemove = null;
+                    foreach (DictionaryEntry entry in cache)
+                    {
+                        if (ReferenceEquals(entry.Value, cachedControl))
+                        {
+                            keyToRemove = entry.Key;
+                            break;
+                        }
+                    }
+                    if (keyToRemove != null)
+                    {
+                        cache.Remove(keyToRemove);
+                        Log.Debug("Evicted recycled View for closed book {Id} from ControlRecycling", vm.Id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to dispose/evict recycled View for closed book {Id}", vm.Id);
+            }
+        }
+
         public override void CloseDockable(IDockable dockable)
         {
             Log.Debug("*** CloseDockable called for: {DockableType} (ID: {DockableId}) ***", dockable?.GetType().Name, dockable?.Id);
@@ -1710,6 +1772,9 @@ namespace CST.Avalonia.Services
                 if (dockable is BookDisplayViewModel closedBookVm)
                 {
                     _goToSubscribedBooks.Remove(closedBookVm.Id);
+                    // Release the recycled View's CEF WebView and drop the cache entry, or the closed
+                    // tab leaks a live browser + its rendered DOM + HtmlContent for the session. (BOOK-1)
+                    DisposeAndEvictRecycledView(closedBookVm);
                     closedBookVm.Dispose();
                 }
             }
