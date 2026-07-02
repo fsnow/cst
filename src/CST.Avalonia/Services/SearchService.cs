@@ -954,6 +954,11 @@ public class SearchService : ISearchService
         sb.Append(query.Filter.IncludeAttha);
         sb.Append(query.Filter.IncludeTika);
         sb.Append(query.Filter.IncludeOther);
+        sb.Append('|');
+        // The cached SearchResult bakes its DisplayTerms in the script current at build time, so the
+        // display script is part of the result's identity: without it, changing script and re-running
+        // the same query returns the previous script's display terms. (SRCH-5)
+        sb.Append(_scriptService.CurrentScript);
         return sb.ToString();
     }
 
