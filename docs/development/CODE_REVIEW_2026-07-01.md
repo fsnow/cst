@@ -83,7 +83,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-6  | Medium | [#164](https://github.com/fsnow/cst/issues/164) | — | ✅ Fixed |
 | BOOK-7  | Medium | [#167](https://github.com/fsnow/cst/issues/167) | — | ⏸️ Deferred — needs GUI verification (restoration timing; touches #36) |
 | BOOK-8  | Low    | [#168](https://github.com/fsnow/cst/issues/168) | — | ✅ Fixed |
-| BOOK-9  | Low    | — | — | |
+| BOOK-9  | Low    | [#169](https://github.com/fsnow/cst/issues/169) | — | ✅ Fixed |
 | BOOK-10 | Low    | — | — | |
 | BOOK-11 | Low    | — | — | |
 | XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed |
@@ -104,7 +104,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | |
 | SCRIPT-10 | Low    | — | — | |
 
-**Progress:** 39 fixed, 1 in progress (BOOK-1), 1 deferred (BOOK-7, needs GUI verification), 39 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings are now resolved (SRCH-9 = not-a-defect).
+**Progress:** 40 fixed, 1 in progress (BOOK-1), 1 deferred (BOOK-7, needs GUI verification), 38 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings are now resolved (SRCH-9 = not-a-defect).
 **High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
