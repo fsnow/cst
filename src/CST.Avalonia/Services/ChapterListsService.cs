@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Xml;
 using CST.Avalonia.Models;
 using CST.Avalonia.Constants;
@@ -203,12 +202,19 @@ public class ChapterListsService
         var headElement = divNode.SelectSingleNode(".//head");
         if (headElement != null)
         {
-            string heading = headElement.InnerText?.Trim() ?? "";
-            
-            // Strip footnote tags like CST4 does
-            heading = Regex.Replace(heading, "<note>(.+?)</note>", "", RegexOptions.IgnoreCase);
-            
-            return heading;
+            // Drop any <note> (footnote) descendants BEFORE reading the text. InnerText already strips
+            // markup, so the old "read InnerText, then regex-strip <note>...</note>" was a no-op — the
+            // tags were gone and the footnote's *text* stayed merged into the heading. Clone first so we
+            // don't mutate the shared source tree. (BOOK-6)
+            var headClone = headElement.CloneNode(true);
+            var notes = headClone.SelectNodes(".//note");
+            if (notes != null)
+            {
+                foreach (var note in notes.Cast<XmlNode>().ToList())
+                    note.ParentNode?.RemoveChild(note);
+            }
+
+            return headClone.InnerText?.Trim() ?? "";
         }
 
         return "";
