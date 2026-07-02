@@ -350,8 +350,7 @@ namespace CST.Avalonia.Services
                 
                 // STEP 3: Download each file via direct HTTPS (no API calls)
                 var downloadedFiles = new Dictionary<string, FileCommitInfo>();
-                var tempDir = Path.Combine(Path.GetTempPath(), $"cst-download-{Guid.NewGuid()}");
-                Directory.CreateDirectory(tempDir);
+                var tempDir = CreateStagingDirectory(xmlDir);
                 
                 try
                 {
@@ -397,7 +396,7 @@ namespace CST.Avalonia.Services
                     {
                         var fileName = Path.GetFileName(file);
                         var destPath = Path.Combine(xmlDir, fileName);
-                        File.Move(file, destPath, overwrite: true);
+                        await MoveIntoPlaceAsync(file, destPath);
                     }
                     
                     // Save file dates with commit hashes
@@ -664,8 +663,7 @@ namespace CST.Avalonia.Services
                 _logger.LogInformation("Downloading {Count} updated files via direct HTTPS", filesToUpdate.Count);
                 UpdateStatusChanged?.Invoke($"Downloading {filesToUpdate.Count} updated files...");
                 
-                var tempDir = Path.Combine(Path.GetTempPath(), $"cst-update-{Guid.NewGuid()}");
-                Directory.CreateDirectory(tempDir);
+                var tempDir = CreateStagingDirectory(xmlDir);
                 
                 try
                 {
@@ -716,7 +714,7 @@ namespace CST.Avalonia.Services
                     {
                         var fileName = Path.GetFileName(file);
                         var destPath = Path.Combine(xmlDir, fileName);
-                        File.Move(file, destPath, overwrite: true);
+                        await MoveIntoPlaceAsync(file, destPath);
                     }
                     
                     // Trigger incremental indexing BEFORE persisting file dates. The
@@ -754,6 +752,40 @@ namespace CST.Avalonia.Services
             }
         }
 
+
+        // Create a staging directory as a SIBLING of the XML directory, so it's on the same volume and the
+        // final File.Move into place is an atomic same-volume rename. Path.GetTempPath() is often a different
+        // filesystem, where Move degrades to a non-atomic copy+delete that can leave a truncated XML file on
+        // a crash. (NET-4)
+        internal static string CreateStagingDirectory(string xmlDir)
+        {
+            var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(xmlDir));
+            if (string.IsNullOrEmpty(parent))
+                parent = xmlDir; // fall back to inside the XML dir if it has no parent
+            var staging = Path.Combine(parent, $".cst-staging-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(staging);
+            return staging;
+        }
+
+        // Move a staged file into place, retrying briefly. On Windows File.Move over a file an open book tab
+        // is reading throws a sharing violation; the read is short, so a few retries let it finish rather than
+        // aborting the apply and leaving a mixed-commit corpus. (NET-4)
+        internal static async Task MoveIntoPlaceAsync(string source, string dest)
+        {
+            const int maxAttempts = 5;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    File.Move(source, dest, overwrite: true);
+                    return;
+                }
+                catch (IOException) when (attempt < maxAttempts)
+                {
+                    await Task.Delay(100 * attempt);
+                }
+            }
+        }
 
         private string GetAppDataDirectory()
         {
