@@ -13,7 +13,9 @@ namespace CST.Avalonia.Services
         MinorOutdated,
         MajorOutdated,
         PreReleaseToStable,
-        NewerThanLatest
+        NewerThanLatest,
+        /// <summary>Either version was missing or unparseable — status can't be determined. (NET-2)</summary>
+        Unknown
     }
 
     /// <summary>
@@ -124,8 +126,10 @@ namespace CST.Avalonia.Services
             var current = ParseVersion(currentVersion);
             var latest = ParseVersion(latestVersion);
 
+            // A missing/unparseable version is not a match — surface "unknown" rather than a false
+            // "you're on the latest version". (NET-2)
             if (current == null || latest == null)
-                return VersionComparison.Current;
+                return VersionComparison.Unknown;
 
             var comparison = current.CompareTo(latest);
 
@@ -228,6 +232,7 @@ namespace CST.Avalonia.Services
                 VersionComparison.MajorOutdated => $"A major update is available ({latestVersion})",
                 VersionComparison.PreReleaseToStable => $"The stable version is now available ({latestVersion})",
                 VersionComparison.NewerThanLatest => "You're running a development version",
+                VersionComparison.Unknown => "Version status unknown",
                 _ => "Version status unknown"
             };
         }

@@ -255,8 +255,12 @@ namespace CST.Avalonia.Services
 
             // Determine which channel to check based on current version
             var currentVersion = VersionComparer.ParseVersion(CurrentAppVersion);
+            // A pre-release user checks the beta channel, but if it's been removed (e.g. post-GA) fall back
+            // to Stable so they still see the stable upgrade rather than a false "up to date". (NET-2)
             var latestVersion = currentVersion?.IsPreRelease == true
-                ? updates.CurrentVersion.Beta
+                ? (string.IsNullOrWhiteSpace(updates.CurrentVersion.Beta)
+                    ? updates.CurrentVersion.Stable
+                    : updates.CurrentVersion.Beta)
                 : updates.CurrentVersion.Stable;
 
             _logger.Information("Version check - Latest version for channel: '{LatestVersion}' (using {Channel} channel)",
@@ -285,13 +289,17 @@ namespace CST.Avalonia.Services
                     _logger.Information("Version check - Found version-specific message for '{Version}' (stripped build metadata from '{OriginalVersion}')", versionWithoutBuildMetadata, CurrentAppVersion);
                 }
             }
-            if (message == null && comparison != VersionComparison.Current && updates.Messages.ContainsKey("default"))
+            if (message == null && comparison != VersionComparison.Current
+                && comparison != VersionComparison.Unknown && updates.Messages.ContainsKey("default"))
             {
                 message = updates.Messages["default"];
                 _logger.Information("Version check - Using default message");
             }
 
-            var isUpdateAvailable = comparison != VersionComparison.Current && comparison != VersionComparison.NewerThanLatest;
+            // Unknown (missing/unparseable latest) is not an update — don't prompt, and don't claim latest. (NET-2)
+            var isUpdateAvailable = comparison != VersionComparison.Current
+                && comparison != VersionComparison.NewerThanLatest
+                && comparison != VersionComparison.Unknown;
 
             _logger.Information("Version check - Update available: {IsUpdateAvailable} (comparison: {Comparison})",
                 isUpdateAvailable, comparison);

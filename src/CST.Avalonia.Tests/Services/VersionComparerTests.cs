@@ -22,6 +22,18 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Theory]
+        [InlineData("5.0.0-beta.1", null)]         // NET-2: beta channel removed post-GA -> null latest
+        [InlineData(null, "5.0.0")]
+        [InlineData("5.0.0", "")]
+        [InlineData("5.0.0", "not-a-version")]
+        [InlineData("garbage", "5.0.0")]
+        public void Compare_MissingOrUnparseable_ReturnsUnknown(string? current, string? latest)
+        {
+            // Must NOT be Current: that would render as a false "you're on the latest version". (NET-2)
+            Assert.Equal(VersionComparison.Unknown, VersionComparer.Compare(current, latest));
+        }
+
+        [Theory]
         [InlineData("5.0.0", 5, 0, 0, null, null)]
         [InlineData("5.0.0-beta.1", 5, 0, 0, "beta", 1)]
         [InlineData("5.0.0-alpha", 5, 0, 0, "alpha", null)]
@@ -73,6 +85,7 @@ namespace CST.Avalonia.Tests.Services
         [InlineData(VersionComparison.MajorOutdated, "6.0.0", "A major update is available (6.0.0)")]
         [InlineData(VersionComparison.PreReleaseToStable, "5.0.0", "The stable version is now available (5.0.0)")]
         [InlineData(VersionComparison.NewerThanLatest, "5.0.0", "You're running a development version")]
+        [InlineData(VersionComparison.Unknown, "5.0.0", "Version status unknown")]
         public void GetComparisonDescription_VariousComparisons_ReturnsCorrectDescription(VersionComparison comparison, string latestVersion, string expectedStart)
         {
             var description = VersionComparer.GetComparisonDescription(comparison, latestVersion);
