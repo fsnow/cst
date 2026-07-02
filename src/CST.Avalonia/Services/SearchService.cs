@@ -44,7 +44,11 @@ public class SearchService : ISearchService
         _settingsService = settingsService;
     }
 
-    private DirectoryReader GetIndexReader()
+    // Returns a reference-counted DirectoryReader; the caller MUST release it with DecRef() in a
+    // finally. Reference counting (Lucene IncRef/DecRef) lets a mid-session re-index open a fresh
+    // reader without disposing one an in-flight search is still enumerating (which threw
+    // AlreadyClosedException) - the old reader closes only once its last in-flight search DecRefs. (SRCH-2)
+    private DirectoryReader AcquireReader()
     {
         lock (_readerLock)
         {
@@ -67,13 +71,14 @@ public class SearchService : ISearchService
                 }
 
                 var newReader = DirectoryReader.Open(_directory);
-                _indexReader?.Dispose();   // dispose the superseded (stale) reader
+                _indexReader?.DecRef();   // release our owner ref; closes once in-flight searches DecRef too
                 _indexReader = newReader;
                 _logger.LogInformation("Opened index reader with {DocCount} documents", _indexReader.NumDocs);
 
                 // The index changed: drop cached search results so we never serve stale hits.
                 _searchCache.Clear();
             }
+            _indexReader.IncRef();   // hand out a counted reference; caller DecRefs in a finally
             return _indexReader;
         }
     }
@@ -81,15 +86,15 @@ public class SearchService : ISearchService
     public async Task<SearchResult> SearchAsync(SearchQuery query, CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
-        
+        DirectoryReader? reader = null;
         try
         {
             _logger.LogInformation("Searching for: {Query} with mode {Mode}", query.QueryText, query.Mode);
 
             // Refresh the reader first so a mid-session re-index clears stale cache entries
-            // (the cache is cleared inside GetIndexReader when the reader is reopened)
+            // (the cache is cleared inside AcquireReader when the reader is reopened)
             // before we consult the cache below.
-            var reader = GetIndexReader();
+            reader = AcquireReader();
 
             // Check cache
             var cacheKey = GenerateCacheKey(query);
@@ -149,6 +154,10 @@ public class SearchService : ISearchService
         {
             _logger.LogError(ex, "Search failed for query: {Query}", query.QueryText);
             throw;
+        }
+        finally
+        {
+            reader?.DecRef();   // release the counted reference (SRCH-2)
         }
     }
 
@@ -264,7 +273,7 @@ public class SearchService : ISearchService
                 var w = unit.Words[s];
                 if (query.Mode == SearchMode.Wildcard && (w.Contains("*") || w.Contains("?")))
                 {
-                    slots[s] = ExpandWildcard(w, out var wasTruncated);
+                    slots[s] = ExpandWildcard(w, reader, out var wasTruncated);
                     if (wasTruncated) truncatedTermCount++;
                 }
                 else if (query.Mode == SearchMode.Regex)
@@ -272,7 +281,7 @@ public class SearchService : ISearchService
                     // Each unit of a multi-word regex must be expanded to its matching terms, just like the
                     // single-term path uses RegexTermMatcher. Previously regex units fell through to the
                     // literal branch below and matched nothing. (#60)
-                    slots[s] = ExpandRegex(w, out var wasTruncated);
+                    slots[s] = ExpandRegex(w, reader, out var wasTruncated);
                     if (wasTruncated) truncatedTermCount++;
                 }
                 else
@@ -590,12 +599,11 @@ public class SearchService : ISearchService
     // The matcher is position-based, not cartesian, so this bounds postings work, not E^N.
     private const int WildcardExpansionLimit = 5000;
 
-    private List<string> ExpandWildcard(string pattern, out bool truncated, int maxResults = WildcardExpansionLimit)
+    // Uses the caller's own (ref-counted) reader, not the mutable _indexReader field, so a concurrent
+    // reader refresh can't make a single multi-word search mix two index generations. (SRCH-2)
+    private List<string> ExpandWildcard(string pattern, DirectoryReader reader, out bool truncated, int maxResults = WildcardExpansionLimit)
     {
         truncated = false;
-        var reader = _indexReader;
-        if (reader == null)
-            return new List<string>();
 
         // Convert wildcard to regex: "bhikkhu*" → "^bhikkhu.*$"
         var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
@@ -663,12 +671,9 @@ public class SearchService : ISearchService
     // (^lit...), seek to its literal prefix to avoid scanning all ~500K terms; otherwise full-scan. An
     // invalid pattern throws RegexParseException, surfaced upstream as the quiet "Invalid regex pattern"
     // hint (#59). (#60)
-    private List<string> ExpandRegex(string pattern, out bool truncated, int maxResults = WildcardExpansionLimit)
+    private List<string> ExpandRegex(string pattern, DirectoryReader reader, out bool truncated, int maxResults = WildcardExpansionLimit)
     {
         truncated = false;
-        var reader = _indexReader;
-        if (reader == null)
-            return new List<string>();
 
         var regex = new System.Text.RegularExpressions.Regex(pattern);
 
@@ -741,9 +746,10 @@ public class SearchService : ISearchService
 
     public async Task<List<string>> GetAllTermsAsync(string prefix = "", int limit = 100, CancellationToken cancellationToken = default)
     {
+        DirectoryReader? reader = null;
         try
         {
-            var reader = GetIndexReader();
+            reader = AcquireReader();
             var allTerms = new List<string>();
             var fields = MultiFields.GetFields(reader);
             var terms = fields.GetTerms("text");
@@ -771,6 +777,10 @@ public class SearchService : ISearchService
             _logger.LogError(ex, "Failed to get all terms with prefix: {Prefix}", prefix);
             throw;
         }
+        finally
+        {
+            reader?.DecRef();   // release the counted reference (SRCH-2)
+        }
     }
 
     public async Task<SearchResult> GetNextPageAsync(string continuationToken, CancellationToken cancellationToken = default)
@@ -781,9 +791,10 @@ public class SearchService : ISearchService
 
     public async Task<List<TermPosition>> GetTermPositionsAsync(string bookFileName, string term, CancellationToken cancellationToken = default)
     {
+        DirectoryReader? reader = null;
         try
         {
-            var reader = GetIndexReader();
+            reader = AcquireReader();
             var books = Books.Inst;
             var book = books[bookFileName];
             
@@ -830,6 +841,10 @@ public class SearchService : ISearchService
         {
             _logger.LogError(ex, "Failed to get term positions for book: {Book}, term: {Term}", bookFileName, term);
             throw;
+        }
+        finally
+        {
+            reader?.DecRef();   // release the counted reference (SRCH-2)
         }
     }
 
