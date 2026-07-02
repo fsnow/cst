@@ -110,7 +110,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             .Subscribe(lang =>
             {
                 _stateService.Current.DictionaryDialog.Language = lang;
-                _ = _stateService.SaveStateAsync();
+                _stateService.MarkDirty();   // persist via the timer/shutdown save, not a full off-thread save per change (STATE-2)
             })
             .DisposeWith(_disposables);
 

@@ -50,9 +50,10 @@ public class ScriptService : IScriptService
                 {
                     _stateService.Current.Preferences.CurrentScript = value;
                     _logger?.LogDebug("Updated current script in application state: {Script}", value);
-                    
-                    // Trigger state save to persist the change
-                    _ = _stateService.SaveStateAsync();
+
+                    // Mark dirty so the timer/shutdown save persists it, instead of firing a full
+                    // off-thread save (backup + serialize + replace) on every script change. (STATE-2)
+                    _stateService.MarkDirty();
                 }
                 
                 ScriptChanged?.Invoke(value);

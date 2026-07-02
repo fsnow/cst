@@ -79,7 +79,7 @@ public class ScriptServiceTests
     }
 
     [Fact]
-    public void SettingScript_WritesToState_Saves_AndFires()
+    public void SettingScript_WritesToState_MarksDirty_AndFires()
     {
         var (svc, state, mock) = Create();
         Script? fired = null;
@@ -90,7 +90,7 @@ public class ScriptServiceTests
         Assert.Equal(Script.Bengali, svc.CurrentScript);
         Assert.Equal(Script.Bengali, state.Preferences.CurrentScript); // written back into state
         Assert.Equal(Script.Bengali, fired);
-        mock.Verify(s => s.SaveStateAsync(), Times.Once);
+        mock.Verify(s => s.MarkDirty(), Times.Once); // persisted via dirty flag, not a forced save (STATE-2)
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class ScriptServiceTests
         svc.CurrentScript = Script.Devanagari; // unchanged from default
 
         Assert.False(fired);
-        mock.Verify(s => s.SaveStateAsync(), Times.Never);
+        mock.Verify(s => s.MarkDirty(), Times.Never);
     }
 
     [Fact]
