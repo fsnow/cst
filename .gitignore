@@ -34,3 +34,6 @@ src/CST.ScriptValidation/obj/
 screenshots/
 
 src/CST.MAUI/obj/
+
+# Agent worktrees (isolated subagent workspaces) must never be committed
+.claude/worktrees/
