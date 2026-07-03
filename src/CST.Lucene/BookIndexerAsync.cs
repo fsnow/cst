@@ -71,13 +71,13 @@ namespace CST.Lucene
             };
 
             // Parse messages like "Building search index. (Book 1 of 217)"
-            if (message.Contains("Book ") && message.Contains(" of "))
+            if (message.Contains("Book ", StringComparison.Ordinal) && message.Contains(" of ", StringComparison.Ordinal))
             {
                 try
                 {
-                    var startIdx = message.IndexOf("Book ") + 5;
-                    var ofIdx = message.IndexOf(" of ", startIdx);
-                    var endIdx = message.IndexOf(")", ofIdx);
+                    var startIdx = message.IndexOf("Book ", StringComparison.Ordinal) + 5;
+                    var ofIdx = message.IndexOf(" of ", startIdx, StringComparison.Ordinal);
+                    var endIdx = message.IndexOf(")", ofIdx, StringComparison.Ordinal);
 
                     if (startIdx > 4 && ofIdx > startIdx && endIdx > ofIdx)
                     {
@@ -96,11 +96,11 @@ namespace CST.Lucene
                     // If parsing fails, just use the message as-is
                 }
             }
-            else if (message.Contains("Optimizing search index"))
+            else if (message.Contains("Optimizing search index", StringComparison.Ordinal))
             {
                 progress.StatusMessage = "Optimizing index...";
             }
-            else if (message.Contains("Checking search index"))
+            else if (message.Contains("Checking search index", StringComparison.Ordinal))
             {
                 progress.StatusMessage = "Verifying index...";
             }

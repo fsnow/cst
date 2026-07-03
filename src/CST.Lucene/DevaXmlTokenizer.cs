@@ -221,7 +221,9 @@ namespace CST
                 string foo = token;
 
                 // chop off leading underscores and change the start offset
-                while (token.StartsWith("_"))
+                // (StringComparison.Ordinal so ZWJ/ZWNJ in the token can't be treated as
+                // ignorable by the current culture/ICU — indexing must be locale-independent)
+                while (token.StartsWith("_", StringComparison.Ordinal))
                 {
                     token = token.Substring(1);
                     startPos++;
@@ -235,7 +237,9 @@ namespace CST
                 int endPos = pos;
                 // chop off any final hyphens, right single quotes or underscores and shrink the end
                 // offset accordingly (endPos-- keeps the exclusive end of the shortened token).
-                while (token.EndsWith("-") || token.EndsWith("\x2019") || token.EndsWith("_"))
+                // StringComparison.Ordinal so a trailing ZWJ/ZWNJ can't make the current
+                // culture/ICU match (and then trim) the wrong char — indexing must be deterministic.
+                while (token.EndsWith("-", StringComparison.Ordinal) || token.EndsWith("\x2019", StringComparison.Ordinal) || token.EndsWith("_", StringComparison.Ordinal))
                 {
                     token = token.Substring(0, token.Length - 1);
                     endPos--;
