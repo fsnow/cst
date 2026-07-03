@@ -24,14 +24,14 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | Finding | Level | Issue | PR | Status | Verified |
 |---------|-------|-------|----|--------|----------|
 | SEC-1   | High   | — | — | ⚠️ Won't fix. This "secret" needs to be obscured but not protected | |
-| DOCK-1  | High   | — | — | | |
-| DOCK-2  | High   | — | — | | |
-| DOCK-3  | Medium | — | — | | |
-| DOCK-4  | Medium | — | — | | |
-| DOCK-5  | Medium | — | — | | |
-| DOCK-6  | Low    | — | — | | |
-| DOCK-7  | Low    | — | — | | |
-| DOCK-8  | Low    | — | — | | |
+| DOCK-1  | High   | [#176](https://github.com/fsnow/cst/issues/176) | — | ✅ Fixed (8e4982c) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-2  | High   | [#177](https://github.com/fsnow/cst/issues/177) | — | ✅ Fixed (f8be2ab) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-3  | Medium | [#179](https://github.com/fsnow/cst/issues/179) | — | ✅ Fixed (b89344d) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-4  | Medium | [#180](https://github.com/fsnow/cst/issues/180) | — | ✅ Fixed (0a6e6cf) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-5  | Medium | [#182](https://github.com/fsnow/cst/issues/182) | — | ✅ Fixed (da282fb) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-6  | Low    | [#183](https://github.com/fsnow/cst/issues/183) | — | ✅ Fixed (7341480) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-7  | Low    | [#184](https://github.com/fsnow/cst/issues/184) | — | ✅ Fixed (ab87b13) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-8  | Low    | [#185](https://github.com/fsnow/cst/issues/185) | — | ✅ Fixed (fd272d0) | author self-review (Fable, fix author); GUI verification pending |
 | SRCH-1  | High   | [#126](https://github.com/fsnow/cst/issues/126) | [#128](https://github.com/fsnow/cst/pull/128) | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-2  | High   | [#113](https://github.com/fsnow/cst/issues/113) | — | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-3  | High   | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed | ✅ 2026-07-02 |
@@ -41,7 +41,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-7  | Medium | [#145](https://github.com/fsnow/cst/issues/145) | — | ✅ Fixed | ✅ 2026-07-02 (re-verified after 5bad9bd closed the reopen gap) |
 | SRCH-8  | Medium | [#146](https://github.com/fsnow/cst/issues/146) | — | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-9  | Medium | — | — | ⚠️ Not a defect — `CST.Core/Any2Ipe.Convert` has real reverse-converter branches for all five scripts; the finding was assessed against the legacy `src/CST/` file (not in the app dependency graph). | ✅ 2026-07-02 assessment confirmed |
-| SRCH-10 | Medium | [#147](https://github.com/fsnow/cst/issues/147) | — | ✅ Fixed | Reopen half closed 2026-07-02 (GUI-verified): OnSearchResultsReady now pushes the visual selection for a fresh search too, so the auto-selected term renders selected. |
+| SRCH-10 | Medium | [#147](https://github.com/fsnow/cst/issues/147) | — | ✅ Fixed | ✅ 2026-07-02 (re-verified after 1bd8bbe closed the visual-selection half) |
 | SRCH-11 | Low    | [#144](https://github.com/fsnow/cst/issues/144) | [#149](https://github.com/fsnow/cst/pull/149) | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-12 | Low    | [#154](https://github.com/fsnow/cst/issues/154) | [#155](https://github.com/fsnow/cst/pull/155) | ✅ Fixed | ✅ 2026-07-02 (residual note: multi-word per-slot expansion cap still pre-filter — low risk, on the table only) |
 | SRCH-13 | Low    | [#148](https://github.com/fsnow/cst/issues/148) | — | ✅ Fixed | ✅ 2026-07-02 |
@@ -104,9 +104,9 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | | |
 | SCRIPT-10 | Low    | — | — | | |
 
-**Progress:** 44 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 35 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect).
-**Verification progress:** 12 verified + SRCH-9 assessment confirmed (all of SRCH except SRCH-10), 1 incomplete (SRCH-10 → #147); 30 fixed-but-unverified remaining, proceeding 4 at a time with a pause after each batch.
-**High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
+**Progress:** 52 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 27 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
+**Verification progress:** 13 verified + SRCH-9 assessment confirmed — the whole SRCH subsystem is verified; 30 fixed-but-unverified remaining, proceeding 4 at a time with a pause after each batch.
+**High findings still without an issue:** SEC-1 (won't fix).
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
 
