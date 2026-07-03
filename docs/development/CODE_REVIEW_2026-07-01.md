@@ -87,9 +87,9 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-10 | Low    | [#170](https://github.com/fsnow/cst/issues/170) | — | ✅ Fixed | |
 | BOOK-11 | Low    | [#173](https://github.com/fsnow/cst/issues/173) | — | ✅ Fixed | |
 | XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed | ✅ 2026-07-03 (hardening candidate: no double-run guard at handler entry) |
-| XCUT-2  | Medium | — | — | | |
+| XCUT-2  | Medium | [#210](https://github.com/fsnow/cst/issues/210) | — | ✅ Fixed | ⏳ pending Fable verification (lock + atomic write; 492/492) |
 | XCUT-3  | Medium | — | — | | |
-| XCUT-4  | Medium | — | — | | |
+| XCUT-4  | Medium | [#211](https://github.com/fsnow/cst/issues/211) | — | ✅ Fixed | ⏳ pending Fable verification (atomic writes; chapter-lists via #210, settings.json via STATE-3) |
 | XCUT-5  | Low    | — | — | | |
 | XCUT-6  | Low    | — | — | | |
 | XCUT-7  | Low    | — | — | | |
