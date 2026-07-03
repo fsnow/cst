@@ -58,7 +58,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | ✅ Fixed | ✅ 2026-07-03 (numeric-only pre-release tags deliberately unsupported — documented in f151202) |
 | NET-4   | Low    | [#165](https://github.com/fsnow/cst/issues/165) | [#166](https://github.com/fsnow/cst/pull/166) | ✅ Fixed | |
 | NET-5   | Low    | [#162](https://github.com/fsnow/cst/issues/162) | [#163](https://github.com/fsnow/cst/pull/163) | ✅ Fixed | |
-| NET-6   | Low    | — | — | | |
+| NET-6   | Low    | [#217](https://github.com/fsnow/cst/issues/217) | — | ✅ Fixed | ⏳ pending Fable verification (119 dead lines removed) |
 | NET-7   | Low    | [#160](https://github.com/fsnow/cst/issues/160) | [#161](https://github.com/fsnow/cst/pull/161) | ✅ Fixed | |
 | NET-8   | Low    | [#171](https://github.com/fsnow/cst/issues/171) | [#172](https://github.com/fsnow/cst/pull/172) | ✅ Fixed | |
 | DICT-1  | High   | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed | ✅ 2026-07-03 |
