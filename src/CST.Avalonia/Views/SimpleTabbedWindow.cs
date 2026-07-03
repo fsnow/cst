@@ -643,6 +643,11 @@ public partial class SimpleTabbedWindow : Window
             if (dockControl?.DataContext is not LayoutViewModel layoutViewModel)
                 return;
 
+            if (App.ServiceProvider?.GetService(typeof(DictionaryViewModel)) is not DictionaryViewModel dictionary)
+                return;
+
+            // If a book is active AND has a selection, look that word up; otherwise we still open the pane.
+            // Cmd+D (and the menu item) must reveal the Dictionary regardless of selection or book focus. (#175)
             string? selection = null;
             if (layoutViewModel.Layout is RootDock rootDock)
             {
@@ -655,18 +660,18 @@ public partial class SimpleTabbedWindow : Window
             }
 
             var word = ExtractLookupWord(selection);
-            if (string.IsNullOrEmpty(word))
+            if (!string.IsNullOrEmpty(word))
             {
-                _logger.Debug("Look Up in Dictionary: no word selected in the active book");
-                return;
+                dictionary.SearchText = word;
+                _logger.Information("Looked up '{Word}' in the dictionary", word);
+            }
+            else
+            {
+                _logger.Debug("Look Up in Dictionary: no selection — just opening the Dictionary pane");
             }
 
-            if (App.ServiceProvider?.GetService(typeof(DictionaryViewModel)) is not DictionaryViewModel dictionary)
-                return;
-
-            dictionary.SearchText = word;
-            layoutViewModel.Factory?.SetActiveDockable(dictionary);   // reveal the Dictionary tab
-            _logger.Information("Looked up '{Word}' in the dictionary", word);
+            // Always bring the Dictionary tab forward, whether or not a word was found. (#175)
+            layoutViewModel.Factory?.SetActiveDockable(dictionary);
         }
         catch (Exception ex)
         {
