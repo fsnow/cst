@@ -88,11 +88,6 @@ public interface IApplicationStateService
     void SetExpandedNodeKeys(List<string> expandedNodeKeys);
 
     /// <summary>
-    /// Add book to recent books list
-    /// </summary>
-    void AddRecentBook(int bookIndex, string fileName, string displayName);
-
-    /// <summary>
     /// Clear all state (equivalent to deleting app-state.dat)
     /// </summary>
     Task ClearStateAsync();

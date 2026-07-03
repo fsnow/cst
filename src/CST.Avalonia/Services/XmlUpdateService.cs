@@ -80,7 +80,6 @@ namespace CST.Avalonia.Services
                 {
                     _logger.LogInformation("No local XML data found - starting initial download");
                     UpdateStatusChanged?.Invoke("No XML data found - downloading Tipitaka files...");
-                    SplashScreen.SetStatus("Downloading Tipitaka XML files for first time setup...");
 
                     // Automatically download the XML files on first run
                     await PerformInitialDownloadAsync();

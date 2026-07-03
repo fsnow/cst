@@ -57,30 +57,6 @@ public partial class App : Application
     private List<NativeMenuItem> _searchMenuItems = new List<NativeMenuItem>();
     private List<NativeMenuItem> _dictionaryMenuItems = new List<NativeMenuItem>();
 
-    // Simple debug logging that works before Serilog is initialized
-    private static void DebugLog(string message)
-    {
-        try
-        {
-            var debugLogPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "CSTReader",
-                "debug-splash.log"
-            );
-            var directory = Path.GetDirectoryName(debugLogPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            File.AppendAllText(debugLogPath, $"{timestamp} {message}\n");
-        }
-        catch
-        {
-            // Silently fail if we can't write to the debug log
-        }
-    }
-
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -311,56 +287,6 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
-    }
-
-    /// <summary>
-    /// Check if splash screen should be shown based on user settings
-    /// This reads only the specific setting we need without loading the full settings system
-    /// </summary>
-    private bool ShouldShowSplashScreen()
-    {
-        try
-        {
-            var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppConstants.AppDataDirectoryName, "settings.json");
-            
-            if (!File.Exists(settingsPath))
-            {
-                // If settings file doesn't exist, default to showing splash screen
-                return true;
-            }
-
-            var settingsJson = File.ReadAllText(settingsPath);
-            
-            // Parse just the ShowWelcomeOnStartup setting
-            if (settingsJson.Contains("\"ShowWelcomeOnStartup\""))
-            {
-                // Simple JSON parsing to avoid loading full settings system
-                var startIndex = settingsJson.IndexOf("\"ShowWelcomeOnStartup\":");
-                if (startIndex >= 0)
-                {
-                    var valueStart = settingsJson.IndexOf(':', startIndex) + 1;
-                    var valueEnd = settingsJson.IndexOfAny(new[] { ',', '}' }, valueStart);
-                    if (valueEnd > valueStart)
-                    {
-                        var valueStr = settingsJson.Substring(valueStart, valueEnd - valueStart).Trim();
-                        if (bool.TryParse(valueStr, out bool showSplash))
-                        {
-                            return showSplash;
-                        }
-                    }
-                }
-            }
-            
-            // Default to showing splash screen if parsing fails
-            return true;
-        }
-        catch (Exception)
-        {
-            // Log.Warning not available yet since Serilog isn't configured, but that's OK
-            // This happens very early in startup, before DI is configured
-            // Default to showing splash screen on error
-            return true;
-        }
     }
 
     /// <summary>

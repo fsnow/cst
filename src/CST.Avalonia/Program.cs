@@ -78,7 +78,6 @@ sealed class Program
             // Build the Avalonia app without starting it yet
             var app = BuildAvaloniaApp();
 
-            // Start the application with special handling for splash screen
             app.StartWithClassicDesktopLifetime(args);
         }
         finally

@@ -384,32 +384,6 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         MarkDirty(); // #62
     }
 
-    public void AddRecentBook(int bookIndex, string fileName, string displayName)
-    {
-        var recent = Current.Preferences.RecentBooks;
-        
-        // Remove existing entry if present
-        var existing = recent.FirstOrDefault(r => r.BookIndex == bookIndex);
-        if (existing != null)
-            recent.Remove(existing);
-
-        // Add to front
-        recent.Insert(0, new RecentBookItem
-        {
-            BookIndex = bookIndex,
-            BookFileName = fileName,
-            DisplayName = displayName,
-            LastOpened = DateTime.UtcNow
-        });
-
-        // Trim to max size
-        while (recent.Count > Current.Preferences.MaxRecentBooks)
-        {
-            recent.RemoveAt(recent.Count - 1);
-        }
-
-        FireStateChangedEvent();
-    }
 
     public async Task ClearStateAsync()
     {
