@@ -215,75 +215,84 @@ namespace CST.Avalonia.ViewModels
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
                 .Skip(1) // Skip initial value
-                .Subscribe(async script => 
+                .Subscribe(async script =>
                 {
-                    _logger.Debug("Script changed - reloading from source files: {Script}", script.ToString());
-                    
-                    // Update font properties when script changes
-                    this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
-                    this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
-                    
-                    // Save current page anchor for position preservation
-                    string savedPageAnchor = "";
-                    if (BookDisplayControl != null)
+                    // Guard the whole async-void body: an exception here (e.g. a script change
+                    // racing tab teardown) would otherwise be an unhandled crash, not a logged error.
+                    try
                     {
-                        savedPageAnchor = BookDisplayControl.GetCurrentPageAnchor();
-                        if (!string.IsNullOrEmpty(savedPageAnchor))
+                        _logger.Debug("Script changed - reloading from source files: {Script}", script.ToString());
+
+                        // Update font properties when script changes
+                        this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                        this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+
+                        // Save current page anchor for position preservation
+                        string savedPageAnchor = "";
+                        if (BookDisplayControl != null)
                         {
-                            _logger.Debug("Saved page anchor: {Anchor}", savedPageAnchor);
-                        }
-                        else
-                        {
-                            _logger.Warning("No page anchor available, won't restore position");
-                        }
-                    }
-                    
-                    // Ensure property updates happen on UI thread
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        // Update book info text with new script
-                        BookInfoText = GetBookInfoDisplayName(_book);
-                        // Notify that DisplayTitle has changed (for tab updates)
-                        this.RaisePropertyChanged(nameof(DisplayTitle));
-                        
-                        // Preserve the current selected chapter
-                        var currentSelectedChapter = SelectedChapter;
-                        
-                        // Update all chapters to use the new script
-                        foreach (var chapter in Chapters)
-                        {
-                            chapter.BookScript = script;
-                        }
-                        
-                        // Force the chapters dropdown to refresh its display
-                        var temp = Chapters.ToList();
-                        Chapters.Clear();
-                        foreach (var chapter in temp)
-                        {
-                            Chapters.Add(chapter);
-                        }
-                        
-                        // Restore the selected chapter
-                        if (currentSelectedChapter != null)
-                        {
-                            var matchingChapter = Chapters.FirstOrDefault(c => c.Id == currentSelectedChapter.Id);
-                            if (matchingChapter != null)
+                            savedPageAnchor = BookDisplayControl.GetCurrentPageAnchor();
+                            if (!string.IsNullOrEmpty(savedPageAnchor))
                             {
-                                _updatingChapterFromScroll = true;
-                                SelectedChapter = matchingChapter;
-                                _updatingChapterFromScroll = false;
+                                _logger.Debug("Saved page anchor: {Anchor}", savedPageAnchor);
+                            }
+                            else
+                            {
+                                _logger.Warning("No page anchor available, won't restore position");
                             }
                         }
-                    });
-                    // Queue the position restore BEFORE reloading: the View executes it from
-                    // OnNavigationCompleted when the re-rendered document is actually ready, instead
-                    // of a 1000ms delay-then-hope timer racing the load. (BOOK-7)
-                    if (!string.IsNullOrEmpty(savedPageAnchor))
-                    {
-                        _pendingAnchorNavigation = savedPageAnchor;
-                        _logger.Debug("Queued position restore to page anchor: {Anchor}", savedPageAnchor);
+
+                        // Ensure property updates happen on UI thread
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            // Update book info text with new script
+                            BookInfoText = GetBookInfoDisplayName(_book);
+                            // Notify that DisplayTitle has changed (for tab updates)
+                            this.RaisePropertyChanged(nameof(DisplayTitle));
+
+                            // Preserve the current selected chapter
+                            var currentSelectedChapter = SelectedChapter;
+
+                            // Update all chapters to use the new script
+                            foreach (var chapter in Chapters)
+                            {
+                                chapter.BookScript = script;
+                            }
+
+                            // Force the chapters dropdown to refresh its display
+                            var temp = Chapters.ToList();
+                            Chapters.Clear();
+                            foreach (var chapter in temp)
+                            {
+                                Chapters.Add(chapter);
+                            }
+
+                            // Restore the selected chapter
+                            if (currentSelectedChapter != null)
+                            {
+                                var matchingChapter = Chapters.FirstOrDefault(c => c.Id == currentSelectedChapter.Id);
+                                if (matchingChapter != null)
+                                {
+                                    _updatingChapterFromScroll = true;
+                                    SelectedChapter = matchingChapter;
+                                    _updatingChapterFromScroll = false;
+                                }
+                            }
+                        });
+                        // Queue the position restore BEFORE reloading: the View executes it from
+                        // OnNavigationCompleted when the re-rendered document is actually ready, instead
+                        // of a 1000ms delay-then-hope timer racing the load. (BOOK-7)
+                        if (!string.IsNullOrEmpty(savedPageAnchor))
+                        {
+                            _pendingAnchorNavigation = savedPageAnchor;
+                            _logger.Debug("Queued position restore to page anchor: {Anchor}", savedPageAnchor);
+                        }
+                        await LoadBookContentAsync();
                     }
-                    await LoadBookContentAsync();
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Error handling script change to {Script}", script.ToString());
+                    }
                 })
                 .DisposeWith(_disposables);
 
@@ -852,8 +861,10 @@ namespace CST.Avalonia.ViewModels
                     }
 
                     // Read raw XML content as string first
+                    // The corpus XML is UTF-16-LE, so decode with Unicode (the FF FE BOM would
+                    // override this anyway, but a BOM-less file must not decode as mojibake).
                     _logger.Debug("Reading raw XML content as string");
-                    string xmlContent = File.ReadAllText(xmlPath, System.Text.Encoding.UTF8);
+                    string xmlContent = File.ReadAllText(xmlPath, System.Text.Encoding.Unicode);
                     
                     // Apply search highlighting to raw XML string if needed
                     if (_searchTerms?.Any() == true)
