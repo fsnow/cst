@@ -478,7 +478,7 @@ public partial class App : Application
                 stateService.StateChanged += OnApplicationStateChanged;
                 
                 await stateService.LoadStateAsync();
-                
+
                 // Manually handle initial state restoration without StateChanged events
                 await InitializeFromLoadedState(stateService.Current);
             }
@@ -486,6 +486,17 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to load application state");
+        }
+        finally
+        {
+            // Deterministic replacement for the Open Book panel's old ctor Task.Delay(100) guess: build its
+            // tree only after the state load has settled, so restore reads the real ExpandedNodeKeys and the
+            // user's first expand/collapse can't clobber the persisted expansion. In finally (not the try)
+            // so a failed load still builds the panel against the default empty state rather than leaving it
+            // blank. Idempotent. (SCRIPT-5)
+            var openBookViewModel = ServiceProvider?.GetService<OpenBookDialogViewModel>();
+            if (openBookViewModel != null)
+                await Dispatcher.UIThread.InvokeAsync(() => openBookViewModel.InitializeFromState());
         }
     }
     

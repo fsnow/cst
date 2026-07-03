@@ -70,13 +70,29 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
         // Subscribe to font changes
         _fontService.FontSettingsChanged += OnFontSettingsChanged;
 
-        // Delay tree initialization to allow state to load first
-        _ = Task.Run(async () =>
-        {
-            // Give the application state time to load
-            await Task.Delay(100);
-            Dispatcher.UIThread.Post(async () => await InitializeAsync());
-        });
+        // Tree initialization is deferred until application state has finished loading; App calls
+        // InitializeFromState() once the load settles. See that method and SCRIPT-5. (The old approach
+        // was a ctor Task.Delay(100) guess that raced the state load — on a slow load the tree built
+        // against empty ExpandedNodeKeys, the restore skipped, and the user's first expand/collapse then
+        // clobbered the persisted expansion.)
+    }
+
+    // Guards InitializeFromState so the deterministic startup build runs exactly once. Refresh and
+    // script-change rebuilds call BuildBookTreeAsync directly and are unaffected.
+    private bool _initializeStarted;
+
+    /// <summary>
+    /// Deterministic initialization entry point. Called by <c>App.LoadApplicationStateAsync</c> once the
+    /// application state load has settled (success or failure), so the tree builds and restores against the
+    /// real loaded ExpandedNodeKeys instead of racing a fixed delay. Idempotent; must be called on the UI
+    /// thread. (SCRIPT-5)
+    /// </summary>
+    public void InitializeFromState()
+    {
+        if (_initializeStarted)
+            return;
+        _initializeStarted = true;
+        _ = InitializeAsync();
     }
 
     // Properties

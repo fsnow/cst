@@ -97,7 +97,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed | ✅ 2026-07-03 (incomplete on first pass — docs still had the term; reworded in 4037efc; review-doc quote + VRI dictionary data exempt, see #143) |
 | SCRIPT-3  | Medium | [#201](https://github.com/fsnow/cst/issues/201) | — | ✅ Fixed | ⏳ pending Fable verification (has regression tests) |
 | SCRIPT-4  | Medium | [#203](https://github.com/fsnow/cst/issues/203) | — | ✅ Fixed | 🔧 committed; GUI-confirm counts show (52) |
-| SCRIPT-5  | Medium | — | — | | |
+| SCRIPT-5  | Medium | — | — | ✅ Fixed | ⏳ pending Fable verification — deterministic init: ctor `Task.Delay(100)` replaced by `OpenBookDialogViewModel.InitializeFromState()` called from `App.LoadApplicationStateAsync`'s `finally` after the load settles (mirrors #81/#87). GUI-glance: expand categories, relaunch, expansion restored |
 | SCRIPT-6  | Low    | — | — | ✅ Fixed | ⏳ pending Fable verification (already done by STATE-2 5906973) |
 | SCRIPT-7  | Low    | [#202](https://github.com/fsnow/cst/issues/202) | — | ✅ Fixed | ⏳ pending Fable verification (6/6 tests) |
 | SCRIPT-8  | Low    | — | — | ✅ Fixed (latent-trap removal) | ⏳ pending Fable verification — inert stub: `DefaultThreadCurrentUICulture` + `zh-Hans`/`zh-Hant` applied; RESX fallback deferred to real localization work (no satellite resources exist) |
