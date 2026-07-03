@@ -33,7 +33,6 @@ namespace CST.Avalonia.ViewModels
             _factory.InitializeHostWindows();
             
             // Initialize commands
-            ResetLayoutCommand = ReactiveCommand.Create(ResetLayout);
             ExitCommand = ReactiveCommand.Create(ExitApplication);
             AboutCommand = ReactiveCommand.Create(ShowAbout);
             
@@ -52,7 +51,6 @@ namespace CST.Avalonia.ViewModels
         public CstDockFactory Factory => _factory;
 
         // Commands for menu items
-        public ReactiveCommand<Unit, Unit> ResetLayoutCommand { get; }
         public ReactiveCommand<Unit, Unit> ExitCommand { get; }
         public ReactiveCommand<Unit, Unit> AboutCommand { get; }
 
@@ -106,14 +104,11 @@ namespace CST.Avalonia.ViewModels
             _factory.HideWelcomeScreen();
         }
 
-        private void ResetLayout()
-        {
-            // Recreate the entire layout
-            Layout = _factory.CreateLayout();
-            _factory.InitLayout(Layout);
-            IsBookPanelVisible = true;
-            Log.Information("[Layout] Layout reset to default");
-        }
+        // ResetLayout/ResetLayoutCommand deleted (DOCK-8): bound nowhere, and if ever invoked it
+        // would drop all open book VMs without Dispose() (per-tab FontService subscription leak)
+        // and orphan existing floating windows against the discarded layout tree. A safe layout
+        // reset needs to close books through the factory paths first; build that when the feature
+        // is actually wanted.
 
         private void ExitApplication()
         {

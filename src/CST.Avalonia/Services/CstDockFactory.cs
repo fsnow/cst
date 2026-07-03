@@ -1885,55 +1885,10 @@ namespace CST.Avalonia.Services
                 (layout as RootDock)?.VisibleDockables?.Count ?? 0);
         }
         
-        // CreateWindowFrom - called by host window locator when floating windows are needed
-        public IHostWindow CreateWindowFrom(IDockWindow? source)
-        {
-            Log.Debug("*** CreateWindowFrom called for IDockWindow: {WindowId} ***", source?.Id);
-            
-            try
-            {
-                // Create our custom host window
-                var hostWindow = CreateCstHostWindow();
-                
-                // Customize the window based on source
-                if (source != null && hostWindow is CstHostWindow customWindow)
-                {
-                    customWindow.Title = $"CST - {source.Title ?? "Floating Window"}";
-                    
-                    if (source.Layout != null)
-                    {
-                        customWindow.SetLayout(source.Layout);
-                        Log.Debug("*** Layout set on floating window: {LayoutType} ***", source.Layout.GetType().Name);
-                        
-                        // Set up collection monitoring for floating window document docks
-                        SetupFloatingWindowMonitoring(source.Layout);
-                    }
-                    
-                    // Set position if specified
-                    if (source.X != 0 || source.Y != 0)
-                    {
-                        customWindow.SetPosition(source.X, source.Y);
-                        Log.Debug("*** Window position set: {X}, {Y} ***", source.X, source.Y);
-                    }
-                    
-                    // Set size if specified
-                    if (source.Width > 0 && source.Height > 0)
-                    {
-                        customWindow.SetSize(source.Width, source.Height);
-                        Log.Debug("*** Window size set: {Width}x{Height} ***", source.Width, source.Height);
-                    }
-                }
-                
-                Log.Debug("*** CreateWindowFrom completed successfully ***");
-                return hostWindow;
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "*** CreateWindowFrom failed, creating basic window ***");
-                // Fallback to basic implementation
-                return CreateCstHostWindow();
-            }
-        }
+        // CreateWindowFrom(IDockWindow?) deleted (DOCK-8): it was not an override and had no
+        // callers — floating windows are created via DefaultHostWindowLocator = CreateCstHostWindow —
+        // so its title/position/size customization never ran, and its catch-fallback would have
+        // leaked the first, already-tracked window as an untracked zombie while returning a second.
 
         // Create host window for floating documents - fallback approach
         private IHostWindow CreateCstHostWindow()
