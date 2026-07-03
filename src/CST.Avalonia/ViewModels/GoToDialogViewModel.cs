@@ -135,8 +135,10 @@ namespace CST.Avalonia.ViewModels
             switch (SelectedType)
             {
                 case NavigationType.Paragraph:
-                    // Paragraph number = the leading run of digits (e.g. "123").
-                    var paraDigits = new string(input.TakeWhile(char.IsDigit).ToArray());
+                    // Paragraph number = the leading run of ASCII digits (e.g. "123"). ASCII-only so it
+                    // stays consistent with int.TryParse-based page parsing, which rejects non-ASCII Unicode
+                    // digits (e.g. Devanagari) that would otherwise build a dead anchor. (SCRIPT-3)
+                    var paraDigits = new string(input.TakeWhile(c => c >= '0' && c <= '9').ToArray());
                     if (paraDigits.Length == 0)
                     {
                         _logger.Warning("No paragraph number found in input: {Input}", InputNumber);
@@ -172,8 +174,10 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        private static readonly Regex ParagraphInputPattern = new(@"^\s*\d+\s*$", RegexOptions.Compiled);
-        private static readonly Regex PageInputPattern = new(@"^\s*\d+(\.\d+)?\s*$", RegexOptions.Compiled);
+        // [0-9] (not \d) so validation is ASCII-only, matching int.TryParse-based parsing which rejects
+        // non-ASCII Unicode digits. \d would accept e.g. Devanagari digits and then parse to a dead anchor. (SCRIPT-3)
+        private static readonly Regex ParagraphInputPattern = new(@"^\s*[0-9]+\s*$", RegexOptions.Compiled);
+        private static readonly Regex PageInputPattern = new(@"^\s*[0-9]+(\.[0-9]+)?\s*$", RegexOptions.Compiled);
 
         /// <summary>
         /// Whether the input is a valid target for the given navigation type: a paragraph number ("123")

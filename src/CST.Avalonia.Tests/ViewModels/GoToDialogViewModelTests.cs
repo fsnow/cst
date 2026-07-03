@@ -32,6 +32,22 @@ public class GoToDialogViewModelTests
         Assert.True(GoToDialogViewModel.IsValidInput(input, NavigationType.VriPage));
     }
 
+    /// <summary>
+    /// SCRIPT-3: validation must be ASCII-only. \d / char.IsDigit match any Unicode Nd digit (e.g. Devanagari
+    /// digits pasted from a book), but page parsing uses ASCII-only int.TryParse - so a non-ASCII digit that
+    /// passed validation built a dead paragraph anchor or an empty page anchor with the dialog still closing.
+    /// </summary>
+    [Theory]
+    [InlineData("\u0967\u0968\u0969")]  // Devanagari 123
+    [InlineData("12\u0969")]            // ASCII "12" + Devanagari 3
+    [InlineData("\u0662\u0663")]        // Arabic-Indic 23
+    [InlineData("\uFF11\uFF12\uFF13")]  // fullwidth 123
+    public void IsValidInput_RejectsNonAsciiDigits(string input)
+    {
+        Assert.False(GoToDialogViewModel.IsValidInput(input, NavigationType.Paragraph));
+        Assert.False(GoToDialogViewModel.IsValidInput(input, NavigationType.VriPage));
+    }
+
     [Fact]
     public void IsValidInput_VolumeDotPage_IsForPagesNotParagraphs()
     {
