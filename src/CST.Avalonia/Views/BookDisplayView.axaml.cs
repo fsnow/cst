@@ -225,12 +225,16 @@ public partial class BookDisplayView : UserControl
             var tcs = new TaskCompletionSource<string?>();
             _lookupSelectionTcs = tcs;
 
+            // |SEQ makes a repeated identical response a *distinct* title so TitleChanged fires again —
+            // without it, a second Cmd+D on the SAME selection wrote a byte-identical title, no event
+            // fired, and the lookup silently ate its 700ms timeout. SEQ goes AFTER TAB (parsers read
+            // TAB positionally/by scan and ignore trailing parts). (BOOK-4 / #156)
             var script = @"
                 try {
                     var sel = window.getSelection ? window.getSelection().toString() : '';
-                    document.title = 'CST_LOOKUP_SEL:' + encodeURIComponent(sel) + '|TAB:__TAB_ID_PLACEHOLDER__';
+                    document.title = 'CST_LOOKUP_SEL:' + encodeURIComponent(sel) + '|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                 } catch (e) {
-                    document.title = 'CST_LOOKUP_SEL:|TAB:__TAB_ID_PLACEHOLDER__';
+                    document.title = 'CST_LOOKUP_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                 }";
             script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
             _webView.ExecuteScript(script);
@@ -2265,9 +2269,9 @@ public partial class BookDisplayView : UserControl
                         if (window.cstAnchorCache && window.cstAnchorCache.getCurrentAnchor) {
                             result = window.cstAnchorCache.getCurrentAnchor(scrollY);
                         }
-                        document.title = 'CST_GET_PARA_RESULT:' + (result || 'null') + '|TAB:{_tabId}';
+                        document.title = 'CST_GET_PARA_RESULT:' + (result || 'null') + '|TAB:{_tabId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                     } catch (error) {
-                        document.title = 'CST_GET_PARA_RESULT:error:' + error.message + '|TAB:{_tabId}';
+                        document.title = 'CST_GET_PARA_RESULT:error:' + error.message + '|TAB:{_tabId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                     }
                 })();";
 
