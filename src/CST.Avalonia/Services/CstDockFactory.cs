@@ -12,6 +12,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Recycling.Model;
 using Avalonia.Threading;
 using Dock.Model.Core;
+using Dock.Model.Controls;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using CST.Avalonia.ViewModels;
@@ -1245,15 +1246,36 @@ namespace CST.Avalonia.Services
                 Log.Error(ex, "*** FLOATING FAILED - Exception during FloatDockable operation ***");
                 Log.Error(ex, "*** This might be why tabs disappear - floating failed but document was already removed from original dock ***");
 
-                // The document might have been removed from the original dock but the floating window creation failed
-                // We need to add it back to prevent data loss
+                // The dockable might have been removed from the original dock but the floating window
+                // creation failed - we need to add it back to prevent data loss. Restore by TYPE:
+                // AddDocumentToLayout puts things into MainDocumentDock, and a Tool restored there is
+                // the exact forbidden state the collection-changed guard fights (it would remove the
+                // tool and call FloatDockable again - a 50ms retry loop ending with the tool nowhere).
+                // Tools go back to the left tool dock instead. (DOCK-7)
                 if (dockable != null)
                 {
                     Log.Debug("*** Attempting to restore dockable to original dock after failed float ***");
                     try
                     {
-                        AddDocumentToLayout(dockable);
-                        Log.Debug("*** Dockable restored to original dock ***");
+                        if (dockable is ITool)
+                        {
+                            var toolDock = EnsureLeftToolDock();
+                            if (toolDock != null)
+                            {
+                                AddDockable(toolDock, dockable);
+                                SetActiveDockable(dockable);
+                                Log.Debug("*** Tool restored to left tool dock ***");
+                            }
+                            else
+                            {
+                                Log.Error("*** CRITICAL: No tool dock available to restore tool after failed float ***");
+                            }
+                        }
+                        else
+                        {
+                            AddDocumentToLayout(dockable);
+                            Log.Debug("*** Document restored to original dock ***");
+                        }
                     }
                     catch (Exception restoreEx)
                     {
