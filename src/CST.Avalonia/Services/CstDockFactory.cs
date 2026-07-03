@@ -422,6 +422,13 @@ namespace CST.Avalonia.Services
             // Add search icon to title for search results
             bookDisplayViewModel.Title = $"🔍 {bookDisplayViewModel.DisplayTitle}";
 
+            // Prevent drag-to-float, same as the regular open path (OpenBook): dragging a tab with a
+            // live CEF WebView across windows SIGSEGVs on macOS; floating goes through the button
+            // paths instead. The VM constructor defaults CanFloat to true, so without this a
+            // search-opened book was drag-floatable. (DOCK-1)
+            bookDisplayViewModel.CanDrag = true;   // Allow tab reordering
+            bookDisplayViewModel.CanFloat = false; // Prevent drag-to-float (use the float button instead)
+
             // Search terms are already passed to BookDisplayViewModel constructor for highlighting
 
             // Subscribe to OpenBookRequested event for Attha/Tika button functionality
