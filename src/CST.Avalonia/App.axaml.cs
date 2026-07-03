@@ -42,6 +42,14 @@ public partial class App : Application
 {
     public static ServiceProvider? ServiceProvider { get; private set; }
     public static Window? MainWindow { get; private set; }
+    /// <summary>
+    /// True once application shutdown has begun. Floating windows close as part of shutdown too;
+    /// consumers (e.g. CstDockFactory.CloseHostWindow's book rescue) use this to distinguish
+    /// "user closed this window" from "everything is closing" — after ShutdownRequested the saved
+    /// state is already written and ServiceProvider may be disposed, so per-window rescue work
+    /// must be skipped. (DOCK-2)
+    /// </summary>
+    public static bool IsShuttingDown { get; private set; }
     private bool _hasRestoredInitialBooks = false;
 
     // Menu items for updating checkmarks across all windows
@@ -273,7 +281,10 @@ public partial class App : Application
             desktop.ShutdownRequested += async (sender, args) =>
             {
                 Log.Information("SHUTDOWN: ShutdownRequested event triggered");
-                
+
+                // From here on, window Closing events are part of shutdown, not user actions. (DOCK-2)
+                IsShuttingDown = true;
+
                 // Cancel shutdown temporarily to allow async save to complete
                 args.Cancel = true;
                 

@@ -2892,36 +2892,19 @@ namespace CST.Avalonia.Services
         public void CloseHostWindow(CstHostWindow hostWindow)
         {
             Log.Debug("*** CloseHostWindow called for: {WindowId} ***", hostWindow.Id);
-            
-            // Move any remaining documents back to the main window
-            if (hostWindow.Layout is DocumentDock floatingDock && floatingDock.VisibleDockables != null)
-            {
-                var mainDocumentDock = FindDocumentDock();
-                if (mainDocumentDock != null)
-                {
-                    var documentsToMove = floatingDock.VisibleDockables.OfType<Document>().ToList();
-                    
-                    if (documentsToMove.Any())
-                    {
-                        Log.Debug("*** Moving {DocumentCount} documents back to main window ***", documentsToMove.Count);
-                        
-                        foreach (var document in documentsToMove)
-                        {
-                            floatingDock.VisibleDockables.Remove(document);
-                            mainDocumentDock.VisibleDockables?.Add(document);
-                            mainDocumentDock.ActiveDockable = document;
-                            Log.Debug("*** Moved document {DocumentId} back to main window ***", document.Id);
-                        }
-                    }
-                    else
-                    {
-                        Log.Debug("*** No documents to move - window was already empty ***");
-                    }
-                }
-            }
-            
+
+            // Untrack FIRST: the rescue below empties this window's dock, and the collection-changed
+            // monitor reacts to that by closing any empty window it finds in HostWindows — running
+            // that against a window already inside its own Closing event would re-enter Close().
+            // (Idempotent: CloseEmptyHostWindow untracks before Close(), so this is often a no-op.)
             HostWindows.Remove(hostWindow);
             Log.Debug("*** Host window removed from tracking. Remaining host windows: {Count} ***", HostWindows.Count);
+
+            // The old rescue was doubly dead code: hostWindow.Layout is a RootDock (never a
+            // DocumentDock), and books are ReactiveDocument, which OfType<Document>() never matched —
+            // so closing a floating window silently dropped its books (leaked VMs, ghost tabs on next
+            // launch). Rescue them for real now. (DOCK-2)
+            RescueBooksFromClosingWindow(hostWindow);
 
             // Update panel visibility state after removing window
             // This ensures menu checkmarks update correctly when panels were in the closed window
@@ -2930,6 +2913,119 @@ namespace CST.Avalonia.Services
                 layoutViewModel.UpdatePanelVisibility();
                 Log.Debug("*** Panel visibility updated after window close ***");
             }
+        }
+
+        // Move any books left in a closing floating window back into the main document dock. (DOCK-2)
+        private void RescueBooksFromClosingWindow(CstHostWindow hostWindow)
+        {
+            // During app shutdown every floating window closes as a matter of course: the books'
+            // states are already saved (they restore next launch) and ServiceProvider may already be
+            // disposed, so recreating tabs — which spins up fresh CEF browsers mid-teardown — would
+            // be wasted work at best and a crash at worst.
+            if (App.IsShuttingDown)
+            {
+                Log.Information("*** Skipping book rescue for {WindowId} - application is shutting down ***", hostWindow.Id);
+                return;
+            }
+
+            try
+            {
+                var floatingDock = FindDocumentDockInLayout(hostWindow.Layout);
+                var mainDocDock = FindDocumentDock();
+                var booksToRescue = floatingDock?.VisibleDockables?.OfType<BookDisplayViewModel>().ToList();
+
+                if (booksToRescue == null || booksToRescue.Count == 0)
+                {
+                    Log.Debug("*** No books to rescue - window was already empty ***");
+                    return;
+                }
+                if (mainDocDock == null)
+                {
+                    Log.Error("*** Cannot rescue {Count} book(s) from {WindowId} - main document dock not found ***",
+                        booksToRescue.Count, hostWindow.Id);
+                    return;
+                }
+
+                Log.Information("*** Rescuing {Count} book(s) from closing floating window {WindowId} ***",
+                    booksToRescue.Count, hostWindow.Id);
+
+                foreach (var oldVm in booksToRescue)
+                {
+                    try
+                    {
+                        RescueBookToMainDock(oldVm, mainDocDock);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "*** ERROR rescuing book {BookFile} from closing window ***", oldVm.Book.FileName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "*** ERROR rescuing books from closing window {WindowId} ***", hostWindow.Id);
+            }
+        }
+
+        // Recreate one book from a closing floating window inside the main dock. Same discipline as
+        // UnfloatDockableWithoutRecycling: the View (and its live CEF WebView) dies with the closing
+        // window and must never be re-parented — capture state, dispose the old VM, create a fresh VM
+        // (fresh GUID => fresh View + browser). The window is mid-Close, so no async WebView query is
+        // possible; CurrentVriAnchor (from the last scroll status update) is the best available
+        // scroll position. (DOCK-2)
+        private void RescueBookToMainDock(BookDisplayViewModel oldVm, DocumentDock mainDocDock)
+        {
+            var book = oldVm.Book;
+            var searchTerms = oldVm.SearchTerms?.ToList();
+            var searchPositions = oldVm.SearchPositions?.ToList();
+            var bookScript = oldVm.BookScript;
+            var docId = oldVm.DocId;
+            var currentHitIndex = oldVm.CurrentHitIndex;
+            var totalHits = oldVm.TotalHits;
+            var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
+            var anchor = oldVm.CurrentVriAnchor;
+
+            // Old id's persisted state and subscriptions go away with the old VM (the collection-changed
+            // monitor also removes the state on RemoveDockable; this keeps the ordering explicit).
+            RemoveBookWindowState(oldVm.Id);
+            RemoveDockable(oldVm, false);
+            _goToSubscribedBooks.Remove(oldVm.Id);
+            oldVm.Dispose();
+
+            var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
+            var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
+            var fontService = App.ServiceProvider?.GetService<IFontService>();
+
+            var newVm = new BookDisplayViewModel(
+                book: book,
+                searchTerms: searchTerms,
+                initialAnchor: anchor,
+                chapterListsService: chapterListsService,
+                settingsService: settingsService,
+                fontService: fontService,
+                docId: docId,
+                searchPositions: searchPositions,
+                windowId: null,  // CRITICAL: null = generates fresh GUID
+                dockFactory: this,
+                initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
+            );
+
+            // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
+            newVm.BookScript = bookScript;
+            newVm.CurrentHitIndex = currentHitIndex;
+            newVm.TotalHits = totalHits;
+            newVm.IsFloating = false;
+            newVm.CanFloat = false; // Restore drag-to-float block (CEF crash mitigation); matches the open + float paths
+            newVm.Title = title;
+
+            // Wire Go To / Attha-Tika / View Source for the fresh instance
+            EnsureBookEventSubscription(newVm);
+
+            AddDockable(mainDocDock, newVm);
+            SetActiveDockable(newVm);
+            SetFocusedDockable(mainDocDock, newVm);
+
+            Log.Information("*** Rescued book {BookFile} into main window as {NewId} ***", book.FileName, newVm.Id);
         }
 
         // Find which window contains a specific book instance
