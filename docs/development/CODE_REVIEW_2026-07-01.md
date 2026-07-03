@@ -48,7 +48,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-14 | Low    | [#151](https://github.com/fsnow/cst/issues/151) | [#152](https://github.com/fsnow/cst/pull/152) | ✅ Fixed | ✅ 2026-07-02 |
 | STATE-1 | High   | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed | ✅ 2026-07-03 |
 | STATE-2 | High   | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed | ✅ 2026-07-03 (non-blocking residuals noted: lock disposal race at exit, unlocked zero-caller CreateBackupAsync/ClearStateAsync) |
-| STATE-3 | Medium | — | — | | |
+| STATE-3 | Medium | [#199](https://github.com/fsnow/cst/issues/199) | — | ✅ Fixed (17e4457) | ✅ 2026-07-03 (atomic write + corrupt-file defaulting; 3 regression tests) |
 | STATE-4 | Medium | — | — | | |
 | STATE-5 | Low    | — | — | | |
 | STATE-6 | Low    | — | — | | |
