@@ -113,7 +113,11 @@ Verification-found work fixed this cycle: SCRIPT-2 docs (4037efc), DOCK-2 rescue
 
 ### GUI test checklist (DOCK + WebView fixes — author-self-reviewed, need a human pass)
 
-Renderer-process count between steps (macOS): `ps ax | grep "CST Reader Helper (Renderer)" | grep -v grep | wc -l`
+Renderer-process count between steps (macOS). The process name differs by how you launch:
+- **`dotnet run` (dev):** `ps ax -o args | grep "Xilium.CefGlue.BrowserProcess" | grep -- "--type=renderer" | grep -v grep | wc -l`
+- **packaged `.app`:** `ps ax | grep "CST Reader Helper (Renderer)" | grep -v grep | wc -l`
+
+Observed dev baseline (Welcome page + 1 restored book tab) = **3 renderers** (one per live WebView). Track the *delta* across a float/unfloat or close cycle, not the absolute number — a leak shows as the count climbing and never returning after the browser should be gone.
 
 1. **DOCK-1 — search tab can't drag-float.** Search → double-click an occurrence (opens a `🔍` tab) → drag that tab out of the dock. Expected: it refuses to float (no separate window, no crash). Before the fix this SIGSEGV'd.
 2. **#193 — float/unfloat doesn't leak browsers.** Open a book; note renderer count. Float it (button) → unfloat it (button); repeat ~5×. Expected: renderer count stays flat (roughly baseline), not +1 per cycle. Log should show `Disposing WebView…` + `Evicted recycled View…` each cycle.
