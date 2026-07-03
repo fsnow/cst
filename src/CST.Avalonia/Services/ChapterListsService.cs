@@ -22,6 +22,15 @@ public class ChapterListsService
     private readonly string _dataFilePath;
     private Dictionary<int, List<DivTag>> _chapterLists;
 
+    // Guards _chapterLists and the JSON file. GetChapterList/Generate run inside Task.Run per book
+    // (BookDisplayViewModel.LoadChaptersAsync), so a session restore of several chaptered books hit
+    // this concurrently: unsynchronized Dictionary writes corrupt/throw, and overlapping SaveToFile
+    // calls raced on the same path. Monitor is reentrant, so GetChapterList -> Generate -> SaveToFile
+    // nesting is fine. (XCUT-2) Held across GenerateChapterListForBook (an XML parse) so concurrent
+    // first-run generation is serialized — correct over the previous racing parallelism; the result
+    // is cached, so steady state does no generation at all.
+    private readonly object _lock = new object();
+
     public ChapterListsService(ILogger<ChapterListsService> logger, ISettingsService? settingsService = null)
     {
         _logger = logger;
@@ -29,8 +38,11 @@ public class ChapterListsService
         _dataFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                                     AppConstants.AppDataDirectoryName, "chapter-lists.json");
         _chapterLists = new Dictionary<int, List<DivTag>>();
-        
-        LoadFromFile();
+
+        lock (_lock)
+        {
+            LoadFromFile();
+        }
     }
 
     /// <summary>
@@ -38,6 +50,8 @@ public class ChapterListsService
     /// </summary>
     public List<DivTag>? GetChapterList(int bookIndex)
     {
+      lock (_lock)
+      {
         // Debug: Check what the book's ChapterListTypes is set to
         try
         {
@@ -67,8 +81,9 @@ public class ChapterListsService
         {
             _logger.LogError(ex, "Error checking book {Index} for chapter data", bookIndex);
         }
-        
+
         return _chapterLists.TryGetValue(bookIndex, out var chapters) ? chapters : null;
+      }
     }
 
     /// <summary>
@@ -77,6 +92,8 @@ public class ChapterListsService
     /// </summary>
     public void Generate(List<int> changedBookIndices, string xmlDirectory)
     {
+      lock (_lock)
+      {
         _logger.LogInformation("Generating chapter lists for {Count} changed books", changedBookIndices.Count);
 
         foreach (int bookIndex in changedBookIndices)
@@ -125,6 +142,7 @@ public class ChapterListsService
 
         // Save the updated chapter lists
         SaveToFile();
+      }
     }
 
     /// <summary>
@@ -285,8 +303,17 @@ public class ChapterListsService
             };
             
             string jsonContent = JsonSerializer.Serialize(data, options);
-            File.WriteAllText(_dataFilePath, jsonContent);
-            
+
+            // Atomic write: temp file + replace, so a crash mid-write can't leave a torn
+            // chapter-lists.json (which would then fail to load and lose all cached chapters).
+            // Same pattern as ApplicationStateService / SettingsService. (XCUT-4)
+            var tempPath = _dataFilePath + ".tmp";
+            File.WriteAllText(tempPath, jsonContent);
+            if (File.Exists(_dataFilePath))
+                File.Replace(tempPath, _dataFilePath, null);
+            else
+                File.Move(tempPath, _dataFilePath);
+
             _logger.LogInformation("Saved chapter lists to {FilePath}", _dataFilePath);
         }
         catch (Exception ex)
@@ -300,8 +327,11 @@ public class ChapterListsService
     /// </summary>
     public void ClearAll()
     {
-        _chapterLists.Clear();
-        SaveToFile();
+        lock (_lock)
+        {
+            _chapterLists.Clear();
+            SaveToFile();
+        }
     }
     
     /// <summary>
