@@ -10,6 +10,7 @@ CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform P
 ## Hard rules — do not violate
 - **Never use the word "Buddhist"** anywhere — app UI or documentation. Use "Pāli", "Tipiṭaka", "VRI texts", etc.
 - **Commit/push only when explicitly asked.** The user reviews changes first.
+- **Never `git add -A`, `git add .`, or `git add -u`** — always stage explicit paths. The working tree routinely holds the user's pending files (docs, screenshots, reports) and isolated agent worktrees; a blanket add sweeps those into the commit. Stage only the files you changed for the commit at hand.
 - **Script-conversion code uses `\uXXXX` escapes** — never paste literal/invisible non-Latin characters into source.
 - **The corpus XML is UTF-16-LE** — byte-level `grep`/`sed` is unreliable; decode first. (Repo *source* files are UTF-8 + LF, enforced by `.gitattributes` — only the corpus is UTF-16.)
 - **The docking UI is non-negotiable** — never remove, replace, or "simplify away" the dock-based interface.
