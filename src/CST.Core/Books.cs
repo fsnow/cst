@@ -722,7 +722,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Mula;
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
-			book.TikaIndex = 99999;
+			book.TikaIndex = -1;  // TODO: real ṭīkā linking here is complex (many-to-many); 99999 was a placeholder that left the ṭīkā button enabled-but-dead (HasTika is TikaIndex >= 0). -1 disables it until the linking is revisited. (CORE-2)
 			bookList.Add(book);
 
 			book = new Book();
@@ -766,7 +766,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Mula;
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
-			book.TikaIndex = 99999;
+			book.TikaIndex = -1;  // TODO: real ṭīkā linking here is complex (many-to-many); 99999 was a placeholder that left the ṭīkā button enabled-but-dead (HasTika is TikaIndex >= 0). -1 disables it until the linking is revisited. (CORE-2)
 			bookList.Add(book);
 
 			book = new Book();
@@ -799,7 +799,7 @@ namespace CST
 			book.Matn = CommentaryLevel.Mula;
 			book.Pitaka = Pitaka.Abhidhamma;
 			book.AtthakathaIndex = 107;
-			book.TikaIndex = 99999;
+			book.TikaIndex = -1;  // TODO: real ṭīkā linking here is complex (many-to-many); 99999 was a placeholder that left the ṭīkā button enabled-but-dead (HasTika is TikaIndex >= 0). -1 disables it until the linking is revisited. (CORE-2)
 			bookList.Add(book);
 
 			book = new Book();
