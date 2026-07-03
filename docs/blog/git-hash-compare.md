@@ -1,10 +1,10 @@
 # Avoiding Unnecessary Downloads: Using Git Blob SHA Comparison to Sync Files Efficiently
 
-*I'm currently developing CST Reader, a cross-platform successor to CST4 (a Buddhist text reader), initially targeting Mac. While working with Claude to implement an efficient file synchronization system, we co-developed this technique for avoiding unnecessary downloads from GitHub repositories. The solution turned out to be quite elegant, so I asked Claude to write this blog post to share the approach with the broader developer community.*
+*I'm currently developing CST Reader, a cross-platform successor to CST4 (a Pāli text reader), initially targeting Mac. While working with Claude to implement an efficient file synchronization system, we co-developed this technique for avoiding unnecessary downloads from GitHub repositories. The solution turned out to be quite elegant, so I asked Claude to write this blog post to share the approach with the broader developer community.*
 
 When building applications that sync files from GitHub repositories, you often face a common challenge: how do you know which files have changed without downloading everything? GitHub's API rate limits make it expensive to check each file individually, and downloading entire repositories wastes bandwidth on unchanged files.
 
-Recently, while working on an update system for a Buddhist text reader application that syncs 217 XML files (~220MB) from a GitHub repository, I discovered an elegant solution using Git blob SHA comparison. The key insight? **More than half of our files hadn't been updated in 18 years** - downloading them repeatedly was pure waste.
+Recently, while working on an update system for a Pāli text reader application that syncs 217 XML files (~220MB) from a GitHub repository, I discovered an elegant solution using Git blob SHA comparison. The key insight? **More than half of our files hadn't been updated in 18 years** - downloading them repeatedly was pure waste.
 
 ## The Problem
 
@@ -54,7 +54,7 @@ The complete workflow uses a "hybrid approach":
 
 ## Real-World Performance
 
-Here's a test with two files from our Buddhist text collection:
+Here's a test with two files from our Pāli text collection:
 
 | File | Age | Local SHA | Remote SHA | Match? | Action |
 |------|-----|-----------|------------|---------|---------|
@@ -126,7 +126,7 @@ This technique could be valuable for:
 
 ## Code Repository
 
-The complete implementation is part of an open-source Buddhist text reader application. The hybrid approach combines GitHub's Tree API with direct HTTPS downloads to achieve both efficiency and rate-limit compliance.
+The complete implementation is part of an open-source Pāli text reader application. The hybrid approach combines GitHub's Tree API with direct HTTPS downloads to achieve both efficiency and rate-limit compliance.
 
 ---
 

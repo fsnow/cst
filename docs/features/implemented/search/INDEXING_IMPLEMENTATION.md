@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This plan outlines the implementation of Lucene.NET indexing functionality for CST.Avalonia, recreating the core search infrastructure from CST4. The implementation will enable fast, position-based text search across 217 Buddhist XML texts with support for wildcard, regex, and proximity searches.
+This plan outlines the implementation of Lucene.NET indexing functionality for CST.Avalonia, recreating the core search infrastructure from CST4. The implementation will enable fast, position-based text search across 217 Tipiṭaka XML texts with support for wildcard, regex, and proximity searches.
 
 ## Architecture Overview
 

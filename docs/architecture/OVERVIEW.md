@@ -2,14 +2,14 @@
 
 ## Project Structure
 
-This repository contains two main applications for reading and searching Buddhist Pali texts:
+This repository contains two main applications for reading and searching Pāli texts:
 
 ### CST4 (Original WinForms Application)
 - **Location**: `/src/Cst4/`
 - **Technology**: .NET Framework 4.8, WinForms, MDI architecture
 - **Platform**: Windows only
 - **Key Features**:
-  - Hierarchical book tree with 217 Buddhist texts
+  - Hierarchical book tree with 217 Tipiṭaka texts
   - Multi-script support (Devanagari, Latin, Thai, Myanmar, etc.)
   - Full-text search using Lucene.NET
   - Page reference tracking (VRI, Myanmar, PTS, Thai editions)
@@ -54,7 +54,7 @@ This repository contains two main applications for reading and searching Buddhis
 ## Key Technical Concepts
 
 ### Page References
-- Buddhist texts have multiple edition page numbers (VRI, Myanmar, PTS, Thai)
+- The Tipiṭaka texts have multiple edition page numbers (VRI, Myanmar, PTS, Thai)
 - Page anchors in HTML: `<a name="V1.0023">`, `<a name="M0.0001">`
 - Dynamic tracking of current page based on scroll position
 - Format: "VRI: 1.23   Myanmar: 1.1   PTS: 1.5   Thai: 1.10"
