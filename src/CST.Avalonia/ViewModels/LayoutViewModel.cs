@@ -284,7 +284,8 @@ namespace CST.Avalonia.ViewModels
             // Try to find in main layout first
             var parentDock = FindParentDock(Layout, tool);
 
-            // If not in main layout, search floating windows
+            // If not in main layout, search floating windows — remembering WHICH window contains it
+            CstHostWindow? sourceHostWindow = null;
             if (parentDock == null && _factory is CstDockFactory factory)
             {
                 foreach (var hostWindow in factory.HostWindows)
@@ -294,6 +295,7 @@ namespace CST.Avalonia.ViewModels
                         parentDock = FindParentDock(cstHostWindow.Layout, tool);
                         if (parentDock != null)
                         {
+                            sourceHostWindow = cstHostWindow;
                             Log.Debug("[Layout] Found tool {ToolId} in floating window {WindowId}",
                                 tool.Id, cstHostWindow.Id);
                             break;
@@ -308,37 +310,31 @@ namespace CST.Avalonia.ViewModels
                 Log.Information("[Layout] Removed tool {ToolId} from parent dock {ParentId}",
                     tool.Id, parentDock.Id);
 
-                // If the parent dock is now empty
-                if (parentDock.VisibleDockables.Count == 0)
+                // If the parent dock is now empty, collapse what the removal left behind
+                if (parentDock.VisibleDockables.Count == 0 && _factory is CstDockFactory cstFactory)
                 {
-                    // Check if it's in a floating window - if so, close the window
-                    if (_factory is CstDockFactory cstFactory)
+                    if (sourceHostWindow != null)
                     {
-                        foreach (var hostWindow in cstFactory.HostWindows.ToList())
+                        // Close the SOURCE window if IT is now empty. The old loop closed the FIRST
+                        // window in HostWindows whose layout was empty, without checking it contained
+                        // parentDock — hiding a panel could close an unrelated window and leave the
+                        // real one behind as a ghost. (DOCK-5)
+                        if (IsLayoutEmpty(sourceHostWindow.Layout))
                         {
-                            if (hostWindow is CstHostWindow cstHostWindow && cstHostWindow.Layout != null)
-                            {
-                                // Check if parentDock is contained within this window's layout
-                                if (IsLayoutEmpty(cstHostWindow.Layout))
-                                {
-                                    Log.Information("[Layout] Closing empty floating window {WindowId}", cstHostWindow.Id);
-                                    cstHostWindow.Close();
-                                    return; // Window closed, we're done
-                                }
-                            }
+                            Log.Information("[Layout] Closing empty floating window {WindowId}", sourceHostWindow.Id);
+                            sourceHostWindow.Close();
+                            return; // Window closed, nothing left to clean up
                         }
                     }
 
-                    // If we get here, it's in the main window - remove the empty ToolDock from main layout
-                    if (parentDock.Id == "LeftToolDock")
-                    {
-                        var mainDock = Layout?.VisibleDockables?.FirstOrDefault(d => d.Id == "MainDock") as ProportionalDock;
-                        if (mainDock?.VisibleDockables != null)
-                        {
-                            mainDock.VisibleDockables.Remove(parentDock);
-                            Log.Information("[Layout] Removed empty LeftToolDock from main layout");
-                        }
-                    }
+                    // Collapse the now-empty tool dock (and any empty splits/splitters around it) via
+                    // the factory's standard cleanup, which covers main + floating layouts. The old
+                    // code special-cased "LeftToolDock" by removing it from a "MainDock" found among
+                    // Layout's direct children — but MainDock isn't a direct child of Root and
+                    // LeftToolDock's parent is LeftTools, so it never fired, leaving a dead ~25%-wide
+                    // strip until an unrelated dock operation ran the cleanup. EnsureLeftToolDock
+                    // recreates the dock on demand when a panel is shown again. (DOCK-5)
+                    cstFactory.CleanupEmptySplits();
                 }
             }
             else

@@ -2094,9 +2094,10 @@ namespace CST.Avalonia.Services
         }
         
         /// <summary>
-        /// Recursively traverse all dock layouts (main + floating windows) and clean up empty splits after drag operations
+        /// Recursively traverse all dock layouts (main + floating windows) and clean up empty splits after drag operations.
+        /// Internal so LayoutViewModel.RemoveToolFromLayout can collapse the empty dock left by hiding a panel. (DOCK-5)
         /// </summary>
-        private void CleanupEmptySplits()
+        internal void CleanupEmptySplits()
         {
             try
             {
