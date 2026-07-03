@@ -431,33 +431,12 @@ namespace CST.Avalonia.Services
 
             // Search terms are already passed to BookDisplayViewModel constructor for highlighting
 
-            // Subscribe to OpenBookRequested event for Attha/Tika button functionality
-            bookDisplayViewModel!.OpenBookRequested += (linkedBook, anchorForLinked) =>
-            {
-                _logger.Debug("Opening linked book: {BookFile} with anchor: {Anchor}", linkedBook.FileName, anchorForLinked ?? "null");
-                // Open the linked book with anchor navigation for positioning
-                OpenBook(linkedBook, anchorForLinked);
-            };
-
-            // Subscribe to OpenGoToDialogRequested event
-            _logger.Debug("Subscribing to OpenGoToDialogRequested for book: {BookFile} (ID: {BookId})",
-                bookDisplayViewModel.Book.FileName, bookDisplayViewModel.Id);
-            bookDisplayViewModel.OpenGoToDialogRequested += () =>
-            {
-                _logger.Information("OpenGoToDialogRequested event fired for book: {BookFile}", bookDisplayViewModel.Book.FileName);
-                Dispatcher.UIThread.Post(async () =>
-                {
-                    try
-                    {
-                        await ShowGoToDialog(bookDisplayViewModel);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error showing Go To dialog");
-                    }
-                });
-            };
-            _goToSubscribedBooks.Add(bookDisplayViewModel.Id);
+            // Wire ALL per-book handlers (Go To / Attha-Tika / View Source / title sync / script state)
+            // through the one shared wiring point. The old inline copy here wired only a subset and
+            // pre-added the id to _goToSubscribedBooks, permanently blocking the repair mechanism from
+            // completing the wiring — View Source silently no-oped and titles went stale on script
+            // change for search-opened books. (DOCK-4)
+            EnsureBookEventSubscription(bookDisplayViewModel);
 
             _logger.Debug("Creating search document with ID: {DocumentId}", bookDisplayViewModel.Id);
 
@@ -549,67 +528,15 @@ namespace CST.Avalonia.Services
             _logger.Debug("Book docking capabilities set: CanDrag={CanDrag}, CanFloat={CanFloat}",
                 bookDisplayViewModel.CanDrag, bookDisplayViewModel.CanFloat);
 
-            // Subscribe to OpenBookRequested event for Attha/Tika button functionality
-            bookDisplayViewModel!.OpenBookRequested += (linkedBook, anchorForLinked) =>
-            {
-                _logger.Debug("Opening linked book: {BookFile} with anchor: {Anchor}", linkedBook.FileName, anchorForLinked ?? "null");
-                // Open the linked book with anchor navigation for positioning
-                OpenBook(linkedBook, anchorForLinked);
-            };
-
-            // Subscribe to OpenGoToDialogRequested event
-            _logger.Debug("Subscribing to OpenGoToDialogRequested for book: {BookFile} (ID: {BookId})",
-                bookDisplayViewModel.Book.FileName, bookDisplayViewModel.Id);
-            bookDisplayViewModel.OpenGoToDialogRequested += () =>
-            {
-                _logger.Information("OpenGoToDialogRequested event fired for book: {BookFile}", bookDisplayViewModel.Book.FileName);
-                Dispatcher.UIThread.Post(async () =>
-                {
-                    try
-                    {
-                        await ShowGoToDialog(bookDisplayViewModel);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error showing Go To dialog");
-                    }
-                });
-            };
-            _goToSubscribedBooks.Add(bookDisplayViewModel.Id);
-
-            // Subscribe to OpenPdfRequested event for View Source feature
-            bookDisplayViewModel.OpenPdfRequested += (bookFilename, sourceType, targetPage) =>
-            {
-                _logger.Information("OpenPdfRequested event fired for book: {BookFile}, source: {SourceType}, page: {Page}",
-                    bookFilename, sourceType, targetPage);
-                OpenPdf(bookFilename, sourceType, targetPage);
-            };
-
-            // BookDisplayViewModel is now a ReactiveDocument - use it directly (no Document wrapper)
-            // Subscribe to DisplayTitle changes to update the Title for tab updates
-            bookDisplayViewModel.PropertyChanged += (sender, e) =>
-            {
-                if (e.PropertyName == nameof(BookDisplayViewModel.DisplayTitle))
-                {
-                    _logger.Information("DisplayTitle changed for document {DocumentId}: {OldTitle} -> {NewTitle}",
-                        bookDisplayViewModel.Id, bookDisplayViewModel.Title, bookDisplayViewModel.DisplayTitle);
-                    bookDisplayViewModel.Title = bookDisplayViewModel.DisplayTitle;
-                }
-            };
+            // Wire ALL per-book handlers (Go To / Attha-Tika / View Source / title sync / script state)
+            // through the one shared wiring point, replacing this path's inline copy that had drifted
+            // from the search path's. (DOCK-4)
+            EnsureBookEventSubscription(bookDisplayViewModel);
 
             // Add to the document dock
             AddDocumentToLayout(bookDisplayViewModel);
 
             // Don't save state immediately - let tab changes trigger state saving
-
-            // Subscribe to script changes to update state when script changes
-            bookDisplayViewModel.PropertyChanged += (sender, e) =>
-            {
-                if (e.PropertyName == nameof(BookDisplayViewModel.BookScript))
-                {
-                    UpdateBookScriptInState(bookDisplayViewModel.Id, bookDisplayViewModel.BookScript);
-                }
-            };
 
             _logger.Debug("Book document created: {DocumentId} with title: {Title}", bookDisplayViewModel.Id, bookDisplayViewModel.Title);
         }
@@ -3125,13 +3052,21 @@ namespace CST.Avalonia.Services
             _logger.Information("Event subscriptions ensured for {Count} books", subscriptionCount);
         }
 
-        // Ensure a single book has event subscriptions (idempotent - won't duplicate subscriptions)
+        // Prefix carried by search-result tab titles; must survive title refreshes on script change. (DOCK-4)
+        internal const string SearchTitlePrefix = "🔍 ";
+
+        // Ensure a single book has ALL its per-book wiring (idempotent - won't duplicate subscriptions).
+        // This is the ONE wiring point shared by the regular open path, the search open path, and
+        // float/unfloat/rescue recreation — the two open paths previously wired slightly different
+        // subsets inline and had drifted (search-opened books had no View Source, no title sync, and
+        // no script-state handler; worse, they pre-added their id to _goToSubscribedBooks, which made
+        // this method skip them forever). (DOCK-4)
         private void EnsureBookEventSubscription(BookDisplayViewModel bookViewModel)
         {
             // Check if already subscribed using the book's unique ID
             if (!_goToSubscribedBooks.Contains(bookViewModel.Id))
             {
-                _logger.Debug("Adding book-action event subscriptions (Go To / Attha-Tika / View Source) for book: {BookFile} (ID: {BookId})",
+                _logger.Debug("Adding book-action event subscriptions (Go To / Attha-Tika / View Source / title+script sync) for book: {BookFile} (ID: {BookId})",
                     bookViewModel.Book.FileName, bookViewModel.Id);
 
                 bookViewModel.OpenGoToDialogRequested += () =>
@@ -3165,6 +3100,24 @@ namespace CST.Avalonia.Services
                     _logger.Information("OpenPdfRequested event fired for book: {BookFile}, source: {SourceType}, page: {Page}",
                         bookFilename, sourceType, targetPage);
                     OpenPdf(bookFilename, sourceType, targetPage);
+                };
+
+                // Keep the tab title in sync when a script change regenerates DisplayTitle, preserving
+                // the search-result prefix; and persist per-tab script changes into application state.
+                bookViewModel.PropertyChanged += (sender, e) =>
+                {
+                    if (e.PropertyName == nameof(BookDisplayViewModel.DisplayTitle))
+                    {
+                        var prefix = bookViewModel.Title?.StartsWith(SearchTitlePrefix) == true
+                            ? SearchTitlePrefix : string.Empty;
+                        _logger.Information("DisplayTitle changed for document {DocumentId}: {OldTitle} -> {NewTitle}",
+                            bookViewModel.Id, bookViewModel.Title, prefix + bookViewModel.DisplayTitle);
+                        bookViewModel.Title = prefix + bookViewModel.DisplayTitle;
+                    }
+                    else if (e.PropertyName == nameof(BookDisplayViewModel.BookScript))
+                    {
+                        UpdateBookScriptInState(bookViewModel.Id, bookViewModel.BookScript);
+                    }
                 };
 
                 _goToSubscribedBooks.Add(bookViewModel.Id);
