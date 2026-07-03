@@ -67,11 +67,15 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
-                <!-- Chapter Navigation -->
+                <!-- Chapter Navigation. FIXED width (not Min/Max): Avalonia sizes a ComboBox to its
+                     SELECTED item, so as the current chapter changes during hit navigation the combo
+                     would grow/shrink across the old 150-220 range, reflowing the toolbar to a second
+                     row and shifting the WebView viewport mid-navigation. A constant width (within the
+                     old envelope, so never wider than before) keeps the toolbar stable; long chapter
+                     names ellipsize via the item template. (#196) -->
                 <ComboBox ItemsSource="{Binding Chapters}"
                           SelectedItem="{Binding SelectedChapter}"
-                          MinWidth="150"
-                          MaxWidth="220"
+                          Width="200"
                           Margin="5"
                           VerticalAlignment="Center"
                           IsVisible="{Binding HasChapters}"
