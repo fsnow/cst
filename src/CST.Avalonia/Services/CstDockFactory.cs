@@ -2893,11 +2893,14 @@ namespace CST.Avalonia.Services
         }
 
         // Recreate one book from a closing floating window inside the main dock. Same discipline as
-        // UnfloatDockableWithoutRecycling: the View (and its live CEF WebView) dies with the closing
-        // window and must never be re-parented — capture state, dispose the old VM, create a fresh VM
-        // (fresh GUID => fresh View + browser). The window is mid-Close, so no async WebView query is
-        // possible; CurrentVriAnchor (from the last scroll status update) is the best available
-        // scroll position. (DOCK-2)
+        // UnfloatDockableWithoutRecycling: the old View's live CEF WebView must never be re-parented —
+        // capture state, shut down + evict the old View, dispose the old VM, create a fresh VM
+        // (fresh GUID => fresh View + browser). NOTE the WebView does NOT die with the closing window:
+        // WebViewControl auto-disposes only on detach with the window's PlatformImpl already null, and
+        // this runs inside Window.Closing while it is still live — the explicit
+        // DisposeAndEvictRecycledView below is what actually releases the browser (#177 reopen).
+        // The window is mid-Close, so no async WebView query is possible; CurrentVriAnchor (from the
+        // last scroll status update) is the best available scroll position. (DOCK-2)
         private void RescueBookToMainDock(BookDisplayViewModel oldVm, DocumentDock mainDocDock)
         {
             var book = oldVm.Book;
@@ -2915,6 +2918,7 @@ namespace CST.Avalonia.Services
             RemoveBookWindowState(oldVm.Id);
             RemoveDockable(oldVm, false);
             _goToSubscribedBooks.Remove(oldVm.Id);
+            DisposeAndEvictRecycledView(oldVm);
             oldVm.Dispose();
 
             var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
