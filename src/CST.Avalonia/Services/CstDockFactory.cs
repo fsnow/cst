@@ -1694,18 +1694,28 @@ namespace CST.Avalonia.Services
         // which would nuke every other tab's cached View and orphan their live browsers), so we remove
         // this single entry from the private _cache by value — guarded, so a Dock upgrade that renames
         // the field degrades to "WebView disposed (CEF freed), empty View shell retained". (BOOK-1)
+        //
+        // Releasing the CEF browser is the load-bearing half; do it via the VM's own live View
+        // reference too, not only via the cache lookup. The cache hit relies on recycling keying by
+        // VM instance (TryToUseIdAsKey stays false in App.axaml) and on the View having been built
+        // through the recycling template — flip either and the cache lookup would silently miss and
+        // re-leak the browser. vm.BookDisplayControl is a direct, always-correct fallback. (F1)
         private void DisposeAndEvictRecycledView(BookDisplayViewModel vm)
         {
             var recycling = GetControlRecycling();
-            if (recycling == null)
-                return;
 
             try
             {
-                object? cachedControl = recycling.TryGetValue(vm, out var control) ? control : null;
+                object? cachedControl = recycling != null && recycling.TryGetValue(vm, out var control) ? control : null;
 
-                if (cachedControl is BookDisplayView view)
-                    view.Shutdown();   // release the CEF WebView — the actual leak
+                // Shut down whichever View we can reach — the cached one, or the VM's live reference
+                // if the cache missed (resource-lookup failure, non-recycled build, key-mode change).
+                // Shutdown is idempotent, so hitting the same View twice is harmless.
+                var viewToShutdown = (cachedControl as BookDisplayView) ?? vm.BookDisplayControl;
+                viewToShutdown?.Shutdown();   // release the CEF WebView — the actual leak
+
+                if (recycling == null)
+                    return;
 
                 var cacheField = recycling.GetType().GetField("_cache", BindingFlags.NonPublic | BindingFlags.Instance);
                 if (cachedControl != null && cacheField?.GetValue(recycling) is IDictionary cache)
