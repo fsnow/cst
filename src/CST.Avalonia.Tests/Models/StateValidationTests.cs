@@ -337,6 +337,44 @@ public class StateValidationTests
     public void Settings_DefaultIsClean()
         => Assert.Empty(SettingsValidator.Sanitize(new Settings()));
 
+    // STATE-4: every level the UI offers is a level the validator accepts (one canonical list), so a
+    // chosen level survives a load/save round-trip instead of being sanitized back to Information.
+    [Theory]
+    [InlineData("Debug")]
+    [InlineData("Information")]
+    [InlineData("Warning")]
+    [InlineData("Error")]
+    [InlineData("Fatal")]   // regressed before STATE-4: not in the validator's MEL-name whitelist
+    public void Settings_Sanitize_KeepsSupportedLogLevel(string level)
+    {
+        var s = new Settings();
+        s.DeveloperSettings.LogLevel = level;
+        SettingsValidator.Sanitize(s);
+        Assert.Equal(level, s.DeveloperSettings.LogLevel);
+    }
+
+    [Fact]
+    public void Settings_Sanitize_RevertsUnknownLogLevel()
+    {
+        var s = new Settings();
+        s.DeveloperSettings.LogLevel = "Critical"; // an MEL name the parsers never understood
+        SettingsValidator.Sanitize(s);
+        Assert.Equal("Information", s.DeveloperSettings.LogLevel);
+    }
+
+    [Fact]
+    public void SettingsValidator_LogLevels_IsTheValidatedSet()
+    {
+        // The UI binds to SettingsValidator.LogLevels; each must pass Sanitize unchanged.
+        foreach (var level in SettingsValidator.LogLevels)
+        {
+            var s = new Settings();
+            s.DeveloperSettings.LogLevel = level;
+            SettingsValidator.Sanitize(s);
+            Assert.Equal(level, s.DeveloperSettings.LogLevel);
+        }
+    }
+
     [Fact]
     public void FontSettings_TryGetFont_TypedLookup()
     {

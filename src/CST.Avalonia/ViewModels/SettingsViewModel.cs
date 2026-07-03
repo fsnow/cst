@@ -806,8 +806,9 @@ namespace CST.Avalonia.ViewModels
             _logger = Log.ForContext<DeveloperSettingsViewModel>();
             _logLevel = _settingsService.Settings.DeveloperSettings.LogLevel;
 
-            // Available log levels
-            LogLevels = new[] { "Debug", "Information", "Warning", "Error", "Fatal" };
+            // Available log levels — the single canonical set the validator accepts and the parsers
+            // understand, so a chosen level (e.g. "Fatal") can't be sanitized away on restart. (STATE-4)
+            LogLevels = SettingsValidator.LogLevels;
 
             // Open logs folder command
             OpenLogsCommand = ReactiveCommand.Create(OpenLogsFolder);

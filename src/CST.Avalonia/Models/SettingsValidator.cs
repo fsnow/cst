@@ -14,10 +14,16 @@ public static class SettingsValidator
     /// <summary>Current settings-file schema version. Bump + add a step in <see cref="Migrate"/> on a breaking change.</summary>
     public const string CurrentVersion = "1.0";
 
-    private static readonly HashSet<string> ValidLogLevels = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"
-    };
+    // The single canonical set of log levels the app supports, in increasing severity. These are
+    // Serilog LogEventLevel names — exactly what the startup parser (App.ParseLogLevel) and the live
+    // reconfigure (SettingsViewModel.ReconfigureLogger) actually parse — and the Settings UI presents
+    // this same list. Keeping one source prevents the STATE-4 drift where the validator whitelisted
+    // Microsoft.Extensions.Logging names ("Critical"/"Trace"/"None") that neither the UI nor the
+    // parsers used, so a user-chosen "Fatal" failed validation and reverted to Information every
+    // restart. (STATE-4)
+    public static readonly string[] LogLevels = { "Debug", "Information", "Warning", "Error", "Fatal" };
+
+    private static readonly HashSet<string> ValidLogLevels = new(LogLevels, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Upgrade an older / missing-version settings object to <see cref="CurrentVersion"/>. Returns notes.</summary>
     public static IReadOnlyList<string> Migrate(Settings settings)
