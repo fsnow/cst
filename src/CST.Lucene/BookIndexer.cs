@@ -190,7 +190,19 @@ namespace CST
                 // Honor 'create': a fresh directory starts a new index; an existing one is appended to.
                 config.OpenMode = create ? OpenMode.CREATE : OpenMode.CREATE_OR_APPEND;
                 indexDirectory = FSDirectory.Open(IndexDirectory);
-                indexWriter = new IndexWriter(indexDirectory, config);
+                try
+                {
+                    indexWriter = new IndexWriter(indexDirectory, config);
+                }
+                catch
+                {
+                    // The writer ctor threw; otherwise this FSDirectory handle leaks and is overwritten on
+                    // the next OpenIndexWriter call. Dispose it and clear the field so CloseIndexWriter has
+                    // nothing left to do. (SRCH-4 reopen)
+                    indexDirectory.Dispose();
+                    indexDirectory = null;
+                    throw;
+                }
             }
         }
 
@@ -207,8 +219,21 @@ namespace CST
                 {
                     if (commit)
                     {
-                        writer.Commit();
-                        writer.Dispose(true);
+                        try
+                        {
+                            writer.Commit();
+                            writer.Dispose(true);
+                        }
+                        catch
+                        {
+                            // Commit failed (e.g. disk full during the final merge). The field is already
+                            // null, so IndexAll's catch -> CloseIndexWriter(commit:false) can't reach this
+                            // writer to roll it back; do it here, or the abandoned writer keeps write.lock
+                            // and every in-session retry throws LockObtainFailedException. Best-effort so the
+                            // original commit exception still surfaces. (SRCH-4 reopen)
+                            try { writer.Rollback(); } catch { /* ignore secondary failure */ }
+                            throw;
+                        }
                     }
                     else
                     {
