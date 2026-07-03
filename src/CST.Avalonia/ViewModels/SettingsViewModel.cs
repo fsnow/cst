@@ -589,8 +589,9 @@ namespace CST.Avalonia.ViewModels
             }
             catch (Exception)
             {
-                // If conversion fails, use original text capitalized
-                PreviewText = basePaliText.ToUpper();
+                // If conversion fails, use original text capitalized. Invariant casing: this is Pāli
+                // romanization, and a Turkish/Azerbaijani locale would map 'i' -> 'İ'. (CORE-4)
+                PreviewText = basePaliText.ToUpperInvariant();
             }
         }
         
