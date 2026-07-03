@@ -54,18 +54,18 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | STATE-6 | Low    | — | — | | |
 | STATE-7 | Low    | — | — | | |
 | NET-1   | High   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed | ✅ 2026-07-03 (caveat: pre-fix truncated PDFs never re-validated → follow-up #194) |
-| NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed | |
-| NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | ✅ Fixed | |
+| NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed (+7a3c572) | ✅ 2026-07-03 (incomplete on first pass — Unknown still rendered the green badge; renderer fixed + 2 tests in 7a3c572) |
+| NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | ✅ Fixed | ✅ 2026-07-03 (numeric-only pre-release tags deliberately unsupported — documented in f151202) |
 | NET-4   | Low    | [#165](https://github.com/fsnow/cst/issues/165) | [#166](https://github.com/fsnow/cst/pull/166) | ✅ Fixed | |
 | NET-5   | Low    | [#162](https://github.com/fsnow/cst/issues/162) | [#163](https://github.com/fsnow/cst/pull/163) | ✅ Fixed | |
 | NET-6   | Low    | — | — | | |
 | NET-7   | Low    | [#160](https://github.com/fsnow/cst/issues/160) | [#161](https://github.com/fsnow/cst/pull/161) | ✅ Fixed | |
 | NET-8   | Low    | [#171](https://github.com/fsnow/cst/issues/171) | [#172](https://github.com/fsnow/cst/pull/172) | ✅ Fixed | |
 | DICT-1  | High   | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed | ✅ 2026-07-03 |
-| DICT-2  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) | |
-| DICT-3  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | |
-| DICT-4  | Medium | [#120](https://github.com/fsnow/cst/issues/120) | [#122](https://github.com/fsnow/cst/pull/122) | ✅ Fixed | |
-| DICT-5  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | |
+| DICT-2  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) | ✅ 2026-07-03 |
+| DICT-3  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | ✅ 2026-07-03 |
+| DICT-4  | Medium | [#120](https://github.com/fsnow/cst/issues/120) | [#122](https://github.com/fsnow/cst/pull/122) | ✅ Fixed | ✅ 2026-07-03 |
+| DICT-5  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | ✅ 2026-07-03 |
 | DICT-6  | Low    | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | |
 | CORE-1  | High   | [#127](https://github.com/fsnow/cst/issues/127) | — | ✅ Fixed | ✅ 2026-07-03 |
 | CORE-2  | Medium | — | — | | |
@@ -105,7 +105,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-10 | Low    | — | — | | |
 
 **Progress:** 52 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 27 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
-**Verification progress:** 23 verified + SRCH-9 assessment confirmed (all SRCH; all review Highs). Remaining to verify: NET (6), DICT (5), CORE (2), BOOK (8); DOCK-1..8 author-self-reviewed pending GUI checks. New issues from verification: #193 (float/unfloat browser leak, fixed), #194 (pre-fix truncated PDFs, open). Proceeding single-threaded by severity.
+**Verification progress:** 29 verified + SRCH-9 assessment confirmed (all SRCH, all Highs, all DICT except DICT-6, NET-2/3). Remaining to verify: NET-4/5/7/8, DICT-6, CORE-3/4, BOOK-3..6, 8..11; DOCK-1..8 author-self-reviewed pending GUI checks (adversarial review of the leak fixes in flight). New issues from verification: #193 (fixed), #194 (open). Proceeding single-threaded by severity.
 **High findings still without an issue:** SEC-1 (won't fix).
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
