@@ -30,7 +30,6 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
     private readonly IApplicationStateService _stateService;
     private readonly TreeStateService _treeStateService;
     private readonly ILogger<OpenBookDialogViewModel> _logger;
-    private readonly Dictionary<string, BookTreeNode> _nodeCache = new();
 
     public OpenBookDialogViewModel(
         ILocalizationService localizationService,
@@ -331,8 +330,15 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
 
     private async Task RefreshTreeAsync()
     {
-        _logger.LogInformation("Refreshing book tree");
-        await BuildBookTreeAsync();
+        try
+        {
+            _logger.LogInformation("Refreshing book tree");
+            await BuildBookTreeAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh book tree");
+        }
     }
 
     private void ExpandAll()
@@ -552,13 +558,7 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
     /// </summary>
     private string GetNodeText(string devanagariText)
     {
-        var result = _scriptService.ConvertToCurrentScript(devanagariText);
-        if (!_nodeCache.ContainsKey(devanagariText))
-        {
-            _logger.LogDebug("GetNodeText converting '{Text}' using script {Script}, result: '{Result}'", 
-                devanagariText, _scriptService.CurrentScript, result);
-        }
-        return result;
+        return _scriptService.ConvertToCurrentScript(devanagariText);
     }
     
     /// <summary>
