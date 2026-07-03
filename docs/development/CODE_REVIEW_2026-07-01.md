@@ -105,8 +105,25 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-10 | Low    | — | — | | |
 
 **Progress:** 52 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 27 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
-**Verification progress:** 29 verified + SRCH-9 assessment confirmed (all SRCH, all Highs, all DICT except DICT-6, NET-2/3). Remaining to verify: NET-4/5/7/8, DICT-6, CORE-3/4, BOOK-3..6, 8..11; DOCK-1..8 author-self-reviewed pending GUI checks (adversarial review of the leak fixes in flight). New issues from verification: #193 (fixed), #194 (open). Proceeding single-threaded by severity.
+**Verification progress (paused 2026-07-03):** 34 verified + SRCH-9 assessment confirmed. Remaining to verify next session: **NET-4, NET-5, NET-7, NET-8, DICT-6, BOOK-8, BOOK-9, BOOK-10, BOOK-11** (the nine Lows). Also outstanding: BOOK-7 (deferred, scroll-restoration GUI work); DOCK-1..8 (author-self-reviewed, need the GUI checklist below); BOOK-4 reopened (#156, CEF-bridge SEQ, needs a GUI session).
+
+Verification-found work fixed this cycle: SCRIPT-2 docs (4037efc), DOCK-2 rescue WebView leak (0aa1f93), float/unfloat WebView leak #193 (65b67cb), BOOK-1 cache-miss hardening (2adea4c), NET-2 badge (7a3c572), CORE-4 4th site (213a65c). Open follow-ups: **#194** (pre-fix truncated PDFs — design decision), **#195** (float/unfloat in-flight guard + rescue-failure eviction — pre-existing), **#156** (BOOK-4 reopened). The two WebView-leak fixes passed an independent adversarial review (both SOUND).
+
 **High findings still without an issue:** SEC-1 (won't fix).
+
+### GUI test checklist (DOCK + WebView fixes — author-self-reviewed, need a human pass)
+
+Renderer-process count between steps (macOS): `ps ax | grep "CST Reader Helper (Renderer)" | grep -v grep | wc -l`
+
+1. **DOCK-1 — search tab can't drag-float.** Search → double-click an occurrence (opens a `🔍` tab) → drag that tab out of the dock. Expected: it refuses to float (no separate window, no crash). Before the fix this SIGSEGV'd.
+2. **#193 — float/unfloat doesn't leak browsers.** Open a book; note renderer count. Float it (button) → unfloat it (button); repeat ~5×. Expected: renderer count stays flat (roughly baseline), not +1 per cycle. Log should show `Disposing WebView…` + `Evicted recycled View…` each cycle.
+3. **DOCK-2 / #177 — closing a floating window rescues its books.** Float one or more books into a window, then close that window with its red button. Expected: each book reappears as a tab in the main window (near its prior scroll position, same title/script/highlights), does NOT vanish, and does NOT ghost-reappear on next launch. Renderer count returns to the pre-float value.
+4. **DOCK-4 — search-opened book is fully wired.** From a `🔍` search tab: click View Source (PDF) → the PDF opens (was silently dead before). Change that tab's script → the tab title updates (keeps the `🔍` prefix), doesn't go stale.
+5. **DOCK-5 — hiding a panel collapses cleanly.** Hide the Search (or Select Book) panel via the View menu. Expected: the left strip collapses (no dead ~25%-wide gap); no unrelated floating window closes; re-showing the panel restores it.
+6. **DOCK-6 — window move persists.** Move the main window (don't resize) → quit (Cmd+Q) and relaunch. Expected: it reopens at the moved position. Repeat resizing then quickly quitting: final size restores (no ~500ms staleness).
+7. **BOOK-1 (regression re-confirm) — closing a tab frees its browser.** Open several books, close them one by one. Expected: renderer count drops by one per close, back to baseline.
+
+If all pass, mark DOCK-1..8 + #177/#193 verified in the table and note "GUI-verified <date>".
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
 
