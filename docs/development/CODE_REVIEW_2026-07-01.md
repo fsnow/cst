@@ -46,8 +46,8 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-12 | Low    | [#154](https://github.com/fsnow/cst/issues/154) | [#155](https://github.com/fsnow/cst/pull/155) | ✅ Fixed | ✅ 2026-07-02 (residual note: multi-word per-slot expansion cap still pre-filter — low risk, on the table only) |
 | SRCH-13 | Low    | [#148](https://github.com/fsnow/cst/issues/148) | — | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-14 | Low    | [#151](https://github.com/fsnow/cst/issues/151) | [#152](https://github.com/fsnow/cst/pull/152) | ✅ Fixed | ✅ 2026-07-02 |
-| STATE-1 | High   | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed | |
-| STATE-2 | High   | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed | |
+| STATE-1 | High   | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed | ✅ 2026-07-03 |
+| STATE-2 | High   | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed | ✅ 2026-07-03 (non-blocking residuals noted: lock disposal race at exit, unlocked zero-caller CreateBackupAsync/ClearStateAsync) |
 | STATE-3 | Medium | — | — | | |
 | STATE-4 | Medium | — | — | | |
 | STATE-5 | Low    | — | — | | |
@@ -86,15 +86,15 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-9  | Low    | [#169](https://github.com/fsnow/cst/issues/169) | — | ✅ Fixed | |
 | BOOK-10 | Low    | [#170](https://github.com/fsnow/cst/issues/170) | — | ✅ Fixed | |
 | BOOK-11 | Low    | [#173](https://github.com/fsnow/cst/issues/173) | — | ✅ Fixed | |
-| XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed | |
+| XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed | ✅ 2026-07-03 (hardening candidate: no double-run guard at handler entry) |
 | XCUT-2  | Medium | — | — | | |
 | XCUT-3  | Medium | — | — | | |
 | XCUT-4  | Medium | — | — | | |
 | XCUT-5  | Low    | — | — | | |
 | XCUT-6  | Low    | — | — | | |
 | XCUT-7  | Low    | — | — | | |
-| SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed | |
-| SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed | |
+| SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed | ✅ 2026-07-03 |
+| SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed | ✅ 2026-07-03 (incomplete on first pass — docs still had the term; reworded in 4037efc; review-doc quote + VRI dictionary data exempt, see #143) |
 | SCRIPT-3  | Medium | — | — | | |
 | SCRIPT-4  | Medium | — | — | | |
 | SCRIPT-5  | Medium | — | — | | |
@@ -105,7 +105,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-10 | Low    | — | — | | |
 
 **Progress:** 52 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 27 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
-**Verification progress:** 13 verified + SRCH-9 assessment confirmed — the whole SRCH subsystem is verified; 30 fixed-but-unverified remaining, proceeding 4 at a time with a pause after each batch.
+**Verification progress:** 18 verified + SRCH-9 assessment confirmed (all SRCH; STATE-1/2, XCUT-1, SCRIPT-1/2). Remaining to verify: NET (7), DICT (6), CORE (3), BOOK (10); DOCK-1..8 are author-self-reviewed pending GUI checks. Proceeding single-threaded by severity.
 **High findings still without an issue:** SEC-1 (won't fix).
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
