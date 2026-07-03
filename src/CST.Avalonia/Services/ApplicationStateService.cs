@@ -409,6 +409,33 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         return Task.FromResult(ApplicationStateValidator.Validate(Current));
     }
 
+    // How many of the most recent backups to always keep (fine-grained recent recovery).
+    private const int RecentBackupsToKeep = 8;
+    // How many distinct recent days to keep one backup for (older recovery: "I broke it yesterday").
+    private const int DailyBackupsToKeep = 14;
+
+    // Pure retention policy (no I/O, so it's unit-testable): given backups newest-first with their
+    // timestamps, return the paths to DELETE — keep the RecentBackupsToKeep newest, plus the newest
+    // backup of each of the most recent DailyBackupsToKeep days. (STATE-7)
+    internal static List<string> SelectBackupsToDelete(IReadOnlyList<(string path, DateTime when)> backupsNewestFirst)
+    {
+        var keep = new HashSet<string>();
+
+        for (int i = 0; i < backupsNewestFirst.Count && i < RecentBackupsToKeep; i++)
+            keep.Add(backupsNewestFirst[i].path);
+
+        var seenDays = new HashSet<string>();
+        foreach (var (path, when) in backupsNewestFirst)
+        {
+            if (seenDays.Count >= DailyBackupsToKeep && !seenDays.Contains(when.ToString("yyyy-MM-dd")))
+                break;
+            if (seenDays.Add(when.ToString("yyyy-MM-dd")))
+                keep.Add(path); // first (newest) backup seen for this day
+        }
+
+        return backupsNewestFirst.Where(b => !keep.Contains(b.path)).Select(b => b.path).ToList();
+    }
+
     public string[] GetBackupFilePaths()
     {
         try
@@ -438,14 +465,17 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
 
             await File.WriteAllTextAsync(backupPath, json).ConfigureAwait(false);
 
-            // Keep only last 10 backups
-            var backups = GetBackupFilePaths();
-            if (backups.Length > 10)
+            // Tiered retention. A backup is written before EVERY save (60s timer, script changes,
+            // shutdown), so a flat "keep newest 10" was fully churned out within ~10 minutes of use —
+            // leaving no way to recover a state from earlier today or a previous session. Keep the newest
+            // few for fine-grained recent recovery PLUS the newest backup of each recent day, so the set
+            // spans days, not minutes. (STATE-7)
+            var backups = GetBackupFilePaths()
+                .Select(p => (path: p, when: File.GetLastWriteTime(p)))
+                .ToList();
+            foreach (var stale in SelectBackupsToDelete(backups))
             {
-                foreach (var oldBackup in backups.Skip(10))
-                {
-                    File.Delete(oldBackup);
-                }
+                try { File.Delete(stale); } catch { /* best effort */ }
             }
 
             _logger.LogDebug("Created state backup: {BackupPath}", backupPath);
