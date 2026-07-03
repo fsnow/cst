@@ -24,6 +24,7 @@ namespace CST.Avalonia.ViewModels
         private bool _isBookPanelVisible = true; // Start with panel visible
         private bool _isSelectBookPanelVisible = true; // Track Select a Book panel visibility
         private bool _isSearchPanelVisible = true; // Track Search panel visibility
+        private bool _isDictionaryPanelVisible = true; // Track Dictionary panel visibility
 
         public LayoutViewModel()
         {
@@ -72,6 +73,12 @@ namespace CST.Avalonia.ViewModels
         {
             get => _isSearchPanelVisible;
             private set => this.RaiseAndSetIfChanged(ref _isSearchPanelVisible, value);
+        }
+
+        public bool IsDictionaryPanelVisible
+        {
+            get => _isDictionaryPanelVisible;
+            private set => this.RaiseAndSetIfChanged(ref _isDictionaryPanelVisible, value);
         }
 
         // Event for notifying when panel visibility changes (for menu updates)
@@ -193,6 +200,18 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
+        public void ToggleDictionaryPanel()
+        {
+            if (IsDictionaryPanelVisible)
+            {
+                HideDictionaryPanel();
+            }
+            else
+            {
+                ShowDictionaryPanel();
+            }
+        }
+
         public void ShowSearchPanel()
         {
             Log.Information("[Layout] ShowSearchPanel requested");
@@ -253,6 +272,64 @@ namespace CST.Avalonia.ViewModels
             IsSelectBookPanelVisible = false;
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
             Log.Information("[Layout] Select a Book panel hidden");
+        }
+
+        // Ensure the Dictionary tool exists in the layout and mark it visible, recreating it under the
+        // LeftToolDock if it was closed — same recreate-on-demand pattern as ShowSearchPanel. Used by the
+        // View menu toggle and by Cmd+D (Look Up in Dictionary), which must be able to reopen a closed pane.
+        public void ShowDictionaryPanel()
+        {
+            Log.Information("[Layout] ShowDictionaryPanel requested");
+
+            if (FindTool("DictionaryTool") != null)
+            {
+                Log.Information("[Layout] Dictionary panel already exists (possibly in floating window)");
+                IsDictionaryPanelVisible = true;
+                PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            var dictionaryViewModel = App.ServiceProvider?.GetRequiredService<DictionaryViewModel>();
+            if (dictionaryViewModel == null)
+            {
+                Log.Error("[Layout] Cannot add Dictionary panel - DictionaryViewModel not available");
+                return;
+            }
+
+            var leftToolDock = _factory.EnsureLeftToolDock();
+            if (leftToolDock == null)
+            {
+                Log.Error("[Layout] Cannot add Dictionary panel - MainDock unavailable.");
+                return;
+            }
+
+            dictionaryViewModel.Factory = _factory;
+            _factory.AddDockable(leftToolDock, dictionaryViewModel);
+            _factory.SetActiveDockable(dictionaryViewModel);
+            _factory.SetFocusedDockable(leftToolDock, dictionaryViewModel);
+
+            Log.Information("[Layout] Dictionary panel added to LeftToolDock");
+
+            IsDictionaryPanelVisible = true;
+            PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void HideDictionaryPanel()
+        {
+            Log.Information("[Layout] HideDictionaryPanel requested");
+
+            var dictionaryTool = FindTool("DictionaryTool");
+            if (dictionaryTool == null)
+            {
+                Log.Information("[Layout] Dictionary panel already hidden");
+                return;
+            }
+
+            RemoveToolFromLayout(dictionaryTool);
+
+            IsDictionaryPanelVisible = false;
+            PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
+            Log.Information("[Layout] Dictionary panel hidden");
         }
 
         public void HideSearchPanel()
@@ -364,9 +441,10 @@ namespace CST.Avalonia.ViewModels
             // Check actual visibility state in layout
             IsSelectBookPanelVisible = FindTool("OpenBookTool") != null;
             IsSearchPanelVisible = FindTool("SearchTool") != null;
+            IsDictionaryPanelVisible = FindTool("DictionaryTool") != null;
 
-            Log.Debug("[Layout] Panel visibility updated - SelectBook: {SelectBook}, Search: {Search}",
-                IsSelectBookPanelVisible, IsSearchPanelVisible);
+            Log.Debug("[Layout] Panel visibility updated - SelectBook: {SelectBook}, Search: {Search}, Dictionary: {Dictionary}",
+                IsSelectBookPanelVisible, IsSearchPanelVisible, IsDictionaryPanelVisible);
 
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
         }

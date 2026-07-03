@@ -17,6 +17,7 @@
                 <NativeMenu>
                     <NativeMenuItem Header="Select a Book" />
                     <NativeMenuItem Header="Search" />
+                    <NativeMenuItem Header="Dictionary" />
                 </NativeMenu>
             </NativeMenuItem>
 

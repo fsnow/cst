@@ -55,6 +55,7 @@ public partial class App : Application
     // Menu items for updating checkmarks across all windows
     private List<NativeMenuItem> _selectBookMenuItems = new List<NativeMenuItem>();
     private List<NativeMenuItem> _searchMenuItems = new List<NativeMenuItem>();
+    private List<NativeMenuItem> _dictionaryMenuItems = new List<NativeMenuItem>();
 
     // Simple debug logging that works before Serilog is initialized
     private static void DebugLog(string message)
@@ -1074,6 +1075,17 @@ public partial class App : Application
                                             ToggleSearchPanel();
                                         };
                                     }
+                                    else if (viewSubItem.Header?.ToString() == "Dictionary")
+                                    {
+                                        _dictionaryMenuItems.Add(viewSubItem);
+                                        viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
+                                        viewSubItem.IsChecked = true; // Start checked since panels are visible by default
+                                        viewSubItem.Click += (s, e) =>
+                                        {
+                                            Log.Information("Toggle Dictionary panel clicked via View menu (main window)");
+                                            ToggleDictionaryPanel();
+                                        };
+                                    }
                                 }
                             }
                         }
@@ -1104,9 +1116,14 @@ public partial class App : Application
                 menuItem.IsChecked = layoutViewModel.IsSearchPanelVisible;
             }
 
-            Log.Debug("Updated menu checkmarks across {SelectBookCount} + {SearchCount} menu items - SelectBook: {SelectBook}, Search: {Search}",
-                _selectBookMenuItems.Count, _searchMenuItems.Count,
-                layoutViewModel.IsSelectBookPanelVisible, layoutViewModel.IsSearchPanelVisible);
+            foreach (var menuItem in _dictionaryMenuItems)
+            {
+                menuItem.IsChecked = layoutViewModel.IsDictionaryPanelVisible;
+            }
+
+            Log.Debug("Updated menu checkmarks across {SelectBookCount} + {SearchCount} + {DictionaryCount} menu items - SelectBook: {SelectBook}, Search: {Search}, Dictionary: {Dictionary}",
+                _selectBookMenuItems.Count, _searchMenuItems.Count, _dictionaryMenuItems.Count,
+                layoutViewModel.IsSelectBookPanelVisible, layoutViewModel.IsSearchPanelVisible, layoutViewModel.IsDictionaryPanelVisible);
         }
     }
 
@@ -1153,9 +1170,23 @@ public partial class App : Application
             };
             _searchMenuItems.Add(searchItem);
 
+            var dictionaryItem = new NativeMenuItem
+            {
+                Header = "Dictionary",
+                ToggleType = NativeMenuItemToggleType.CheckBox,
+                IsChecked = layoutViewModel?.IsDictionaryPanelVisible ?? false
+            };
+            dictionaryItem.Click += (s, e) =>
+            {
+                Log.Information("Toggle Dictionary panel clicked via View menu (floating window)");
+                ToggleDictionaryPanel();
+            };
+            _dictionaryMenuItems.Add(dictionaryItem);
+
             var viewMenu = new NativeMenu();
             viewMenu.Add(selectBookItem);
             viewMenu.Add(searchItem);
+            viewMenu.Add(dictionaryItem);
 
             // Tools menu: Go To...
             var goToItem = new NativeMenuItem { Header = "Go To...", Gesture = KeyGesture.Parse("Cmd+G") };
@@ -1283,6 +1314,25 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to toggle Search panel");
+        }
+    }
+
+    private void ToggleDictionaryPanel()
+    {
+        try
+        {
+            if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+            {
+                layoutViewModel.ToggleDictionaryPanel();
+            }
+            else
+            {
+                Log.Warning("Cannot toggle Dictionary panel - LayoutViewModel not available");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to toggle Dictionary panel");
         }
     }
 

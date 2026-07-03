@@ -659,6 +659,10 @@ public partial class SimpleTabbedWindow : Window
             if (App.ServiceProvider?.GetService(typeof(DictionaryViewModel)) is not DictionaryViewModel dictionary)
                 return;
 
+            // Recreate the Dictionary pane if it was closed (float+close leaves it out of the layout, so
+            // SetActiveDockable below would no-op). Cmd+D must always be able to reopen it. (#175 follow-up)
+            layoutViewModel.ShowDictionaryPanel();
+
             // If a book is active AND has a selection, look that word up; otherwise we still open the pane.
             // Cmd+D (and the menu item) must reveal the Dictionary regardless of selection or book focus. (#175)
             string? selection = null;
