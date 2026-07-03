@@ -81,7 +81,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-4  | Medium | [#156](https://github.com/fsnow/cst/issues/156) | — | 🔧 Reopened | ⚠️ Incomplete 2026-07-03: SEQ not applied to CST_LOOKUP_SEL / CST_GET_PARA_RESULT title writes — identical-consecutive still drops (2nd Cmd+D on same selection no-ops). Fragile CEF bridge; deferred to a GUI session. Details on #156. |
 | BOOK-5  | Medium | [#159](https://github.com/fsnow/cst/issues/159) | — | ✅ Fixed | ✅ 2026-07-03 |
 | BOOK-6  | Medium | [#164](https://github.com/fsnow/cst/issues/164) | — | ✅ Fixed | ✅ 2026-07-03 (corpus-confirmed on s0503m) |
-| BOOK-7  | Medium | [#167](https://github.com/fsnow/cst/issues/167) | — | ⏸️ Deferred — needs GUI verification (restoration timing; touches #36) | |
+| BOOK-7  | Medium | [#167](https://github.com/fsnow/cst/issues/167) | — | ✅ Fixed | ✅ 2026-07-03 GUI-verified (event-driven restoration; accepted cosmetic blink on reattach) |
 | BOOK-8  | Low    | [#168](https://github.com/fsnow/cst/issues/168) | — | ✅ Fixed | |
 | BOOK-9  | Low    | [#169](https://github.com/fsnow/cst/issues/169) | — | ✅ Fixed | |
 | BOOK-10 | Low    | [#170](https://github.com/fsnow/cst/issues/170) | — | ✅ Fixed | |
@@ -104,7 +104,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | [#204](https://github.com/fsnow/cst/issues/204) | — | ✅ Fixed | ⏳ pending Fable verification |
 | SCRIPT-10 | Low    | [#205](https://github.com/fsnow/cst/issues/205) | — | ✅ Fixed | ⏳ pending Fable verification |
 
-**Progress:** 52 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 27 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
+**Progress:** 53 fixed, 0 reopened, 0 deferred, 26 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
 **Verification progress (paused 2026-07-03):** 34 verified + SRCH-9 assessment confirmed. Remaining to verify next session: **NET-4, NET-5, NET-7, NET-8, DICT-6, BOOK-8, BOOK-9, BOOK-10, BOOK-11** (the nine Lows). Also outstanding: BOOK-7 (deferred, scroll-restoration GUI work); DOCK-1..8 (author-self-reviewed, need the GUI checklist below); BOOK-4 reopened (#156, CEF-bridge SEQ, needs a GUI session).
 
 Verification-found work fixed this cycle: SCRIPT-2 docs (4037efc), DOCK-2 rescue WebView leak (0aa1f93), float/unfloat WebView leak #193 (65b67cb), BOOK-1 cache-miss hardening (2adea4c), NET-2 badge (7a3c572), CORE-4 4th site (213a65c). Open follow-ups: **#194** (pre-fix truncated PDFs — design decision), **#195** (float/unfloat in-flight guard + rescue-failure eviction — pre-existing), **#156** (BOOK-4 reopened). The two WebView-leak fixes passed an independent adversarial review (both SOUND).
