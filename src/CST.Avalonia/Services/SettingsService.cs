@@ -19,16 +19,20 @@ namespace CST.Avalonia.Services
         public Settings Settings => _settings;
 
         public SettingsService()
+            : this(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                AppConstants.AppDataDirectoryName))
+        {
+        }
+
+        // Test seam: lets tests point the service at a temp directory instead of the real user
+        // settings file. (InternalsVisibleTo CST.Avalonia.Tests)
+        internal SettingsService(string settingsDirectory)
         {
             _logger = Log.ForContext<SettingsService>();
             _settings = new Settings();
 
-            // Determine settings directory based on platform
-            _settingsDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                AppConstants.AppDataDirectoryName
-            );
-
+            _settingsDirectory = settingsDirectory;
             _settingsFilePath = Path.Combine(_settingsDirectory, "settings.json");
 
             _jsonOptions = new JsonSerializerOptions
@@ -68,34 +72,48 @@ namespace CST.Avalonia.Services
                     }
                     else
                     {
+                        // Deserialize returned null (empty/whitespace file) — treat as first run so the
+                        // XML directory default still gets applied, not left blank. (STATE-3)
                         _logger.Warning("Settings file was empty or invalid, using defaults");
+                        ApplyFirstRunDefaults();
                     }
                 }
                 else
                 {
                     _logger.Information("No settings file found, using defaults");
-                    // Set default XML directory if not exists
-                    if (string.IsNullOrEmpty(_settings.XmlBooksDirectory))
-                    {
-                        // Set the default XML directory in the app data folder
-                        var xmlPath = Path.Combine(_settingsDirectory, "xml");
-
-                        // Create the directory if it doesn't exist
-                        if (!Directory.Exists(xmlPath))
-                        {
-                            Directory.CreateDirectory(xmlPath);
-                            _logger.Information("Created default XML directory: {Path}", xmlPath);
-                        }
-
-                        _settings.XmlBooksDirectory = xmlPath;
-                        _logger.Information("Set default XML directory: {Path}", xmlPath);
-                    }
+                    ApplyFirstRunDefaults();
                 }
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to load settings from {Path}", _settingsFilePath);
+                // A corrupt/torn settings.json lands here. Previously we only logged and returned, so the
+                // app ran with an EMPTY XmlBooksDirectory (the default was set only in the no-file branch)
+                // — changing update/indexing behavior. Fall through to first-run defaulting instead, and
+                // persist it (the atomic save replaces the corrupt file). (STATE-3)
+                _logger.Error(ex, "Failed to load settings from {Path} - reverting to defaults", _settingsFilePath);
+                _settings = new Settings();
+                ApplyFirstRunDefaults();
+                RequestSave();
             }
+        }
+
+        // Set the default XML books directory (creating it) when it isn't already set. Runs on a true
+        // first run (no file) and whenever the file is empty/corrupt, so the app never operates with a
+        // blank XmlBooksDirectory. (STATE-3)
+        private void ApplyFirstRunDefaults()
+        {
+            if (!string.IsNullOrEmpty(_settings.XmlBooksDirectory))
+                return;
+
+            var xmlPath = Path.Combine(_settingsDirectory, "xml");
+            if (!Directory.Exists(xmlPath))
+            {
+                Directory.CreateDirectory(xmlPath);
+                _logger.Information("Created default XML directory: {Path}", xmlPath);
+            }
+
+            _settings.XmlBooksDirectory = xmlPath;
+            _logger.Information("Set default XML directory: {Path}", xmlPath);
         }
 
         public async Task SaveSettingsAsync()
@@ -110,8 +128,21 @@ namespace CST.Avalonia.Services
                 }
 
                 var json = JsonSerializer.Serialize(_settings, _jsonOptions);
-                await File.WriteAllTextAsync(_settingsFilePath, json);
-                
+
+                // Write to a temp file then atomically replace, so a crash/power-loss mid-write can't
+                // leave a torn settings.json (which would then load as corrupt and lose first-run
+                // defaults). Same pattern as ApplicationStateService. (STATE-3)
+                var tempPath = _settingsFilePath + ".tmp";
+                await File.WriteAllTextAsync(tempPath, json);
+                if (File.Exists(_settingsFilePath))
+                {
+                    File.Replace(tempPath, _settingsFilePath, null);
+                }
+                else
+                {
+                    File.Move(tempPath, _settingsFilePath);
+                }
+
                 _logger.Information("Settings saved successfully to {Path}", _settingsFilePath);
             }
             catch (Exception ex)
