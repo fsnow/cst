@@ -275,19 +275,15 @@ namespace CST.Avalonia.ViewModels
                             }
                         }
                     });
-                    await LoadBookContentAsync();
-                    
-                    // Restore page position after content loads
-                    if (!string.IsNullOrEmpty(savedPageAnchor) && BookDisplayControl != null)
+                    // Queue the position restore BEFORE reloading: the View executes it from
+                    // OnNavigationCompleted when the re-rendered document is actually ready, instead
+                    // of a 1000ms delay-then-hope timer racing the load. (BOOK-7)
+                    if (!string.IsNullOrEmpty(savedPageAnchor))
                     {
-                        // Wait a bit for content to render and page references to be calculated
-                        await Task.Delay(1000);
-                        await Dispatcher.UIThread.InvokeAsync(() =>
-                        {
-                            BookDisplayControl.ScrollToPageAnchor(savedPageAnchor);
-                            _logger.Debug("Restored position to page anchor: {Anchor}", savedPageAnchor);
-                        });
+                        _pendingAnchorNavigation = savedPageAnchor;
+                        _logger.Debug("Queued position restore to page anchor: {Anchor}", savedPageAnchor);
                     }
+                    await LoadBookContentAsync();
                 })
                 .DisposeWith(_disposables);
 
@@ -412,15 +408,20 @@ namespace CST.Avalonia.ViewModels
         /// <summary>
         /// Updates the cached anchor for scroll position restoration.
         /// Called by BookDisplayView scroll timer every 200ms.
-        /// Also clears any pending anchor navigation since user has now scrolled.
+        /// Clears any pending anchor navigation when the user has actually scrolled.
         /// </summary>
         public void UpdateLastCapturedAnchor(string? anchor)
         {
+            var previous = _lastCapturedAnchor;
             _lastCapturedAnchor = anchor;
 
-            // Clear pending navigation - user has scrolled manually, so we shouldn't
-            // jump to the old pending position when tab reattaches
-            if (_pendingAnchorNavigation != null)
+            // Clear pending navigation only when the anchor actually CHANGED (real user scrolling —
+            // don't yank the view away from them). An idle 200ms tick reporting the same position
+            // must NOT clear it: during a script-change reload the browser stays initialized and the
+            // timer keeps ticking against the old document, and an unconditional clear here would
+            // cancel the queued restore before the new document's OnNavigationCompleted could
+            // execute it. (BOOK-7)
+            if (_pendingAnchorNavigation != null && previous != null && anchor != previous)
             {
                 _logger.Debug("Clearing pending anchor navigation {PendingAnchor} - user has scrolled to {CurrentAnchor}",
                     _pendingAnchorNavigation, anchor);
@@ -429,33 +430,24 @@ namespace CST.Avalonia.ViewModels
         }
 
         /// <summary>
-        /// Called by BookDisplayView when it becomes attached to visual tree.
-        /// Executes any pending anchor navigation that was deferred because View wasn't ready.
+        /// Take-and-clear accessors for the queued restoration intent, consumed by the View at the
+        /// two moments the DOM is actually ready: OnNavigationCompleted (fresh load / reload) and
+        /// reattach with a live browser (recycled tab). Consuming synchronously inside those callbacks
+        /// also wins the race against the 200ms scroll-status tick, whose UpdateLastCapturedAnchor
+        /// clears pending intent as "user scrolled". Replaces the delay-based OnViewAttached. (BOOK-7)
         /// </summary>
-        public void OnViewAttached()
+        internal string? TakePendingAnchorNavigation()
         {
-            if (!string.IsNullOrEmpty(_pendingAnchorNavigation) && BookDisplayControl != null)
-            {
-                _logger.Information("View now attached - executing pending anchor navigation: {Anchor}", _pendingAnchorNavigation);
-                Dispatcher.UIThread.Post(async () =>
-                {
-                    // Wait for content to fully render
-                    await Task.Delay(500);
-                    BookDisplayControl?.ScrollToPageAnchor(_pendingAnchorNavigation);
-                    _pendingAnchorNavigation = null; // Clear after navigation
-                });
-            }
+            var anchor = _pendingAnchorNavigation;
+            _pendingAnchorNavigation = null;
+            return anchor;
+        }
 
-            if (_pendingHitNavigation is int pendingHit && BookDisplayControl != null)
-            {
-                _logger.Information("View now attached - executing pending hit navigation: {Hit}", pendingHit);
-                Dispatcher.UIThread.Post(async () =>
-                {
-                    await Task.Delay(500);
-                    NavigateToHighlightRequested?.Invoke(pendingHit);
-                    _pendingHitNavigation = null; // Clear after navigation
-                });
-            }
+        internal int? TakePendingHitNavigation()
+        {
+            var hit = _pendingHitNavigation;
+            _pendingHitNavigation = null;
+            return hit;
         }
 
         /// <summary>
@@ -660,69 +652,46 @@ namespace CST.Avalonia.ViewModels
                 // Check for linked books (must run on UI thread due to ReactiveUI property updates)
                 await Dispatcher.UIThread.InvokeAsync(() => CheckLinkedBooks());
                 
-                _logger.Debug("Step 4: Loading book content");
-                // Load book content
-                await LoadBookContentAsync();
-                
-                _logger.Debug("Step 5: Handling initial navigation");
-                // Navigate to initial position if specified.
+                _logger.Debug("Step 4: Queuing initial navigation intent");
+                // Record the restoration intent BEFORE loading content: navigation can only complete
+                // after the load begins, so OnNavigationCompleted — the one signal that knows the DOM
+                // is actually ready — is guaranteed to see the intent and execute it. This replaces
+                // three racing fixed-delay attempts (1000ms here, 500ms on attach, 300ms on nav
+                // complete) that silently no-opped when the browser wasn't initialized yet, leaving
+                // the book at the top on slow loads. (BOOK-7)
+                //
                 // A search-restored book has BOTH a saved scroll anchor and a saved hit index; prefer
-                // scrolling to the exact hit (the search branch below) over the anchor, which only lands at
-                // the paragraph start and can leave the highlighted term off-screen in a long paragraph. (#36)
+                // the exact hit over the anchor, which only lands at the paragraph start and can leave
+                // the highlighted term off-screen in a long paragraph. (#36)
                 bool restoreSearchHit = _searchTerms?.Any() == true && _initialCurrentHitIndex.HasValue;
                 if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
                 {
-                    _logger.Debug("Navigating to initial anchor: {Anchor}", _initialAnchor);
-                    // Wait a bit for content to render, then navigate to anchor
-                    await Task.Delay(1000);
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        if (BookDisplayControl != null)
-                        {
-                            BookDisplayControl.ScrollToPageAnchor(_initialAnchor);
-                            _logger.Debug("Scrolled to initial anchor: {Anchor}", _initialAnchor);
-                        }
-                        else
-                        {
-                            // View not created yet (inactive tab with ControlRecycling)
-                            // Store for later navigation when tab becomes active
-                            _pendingAnchorNavigation = _initialAnchor;
-                            _logger.Information("View not ready - stored pending anchor navigation: {Anchor}", _initialAnchor);
-                        }
-                    });
+                    _pendingAnchorNavigation = _initialAnchor;
+                    _logger.Debug("Queued initial anchor navigation: {Anchor}", _initialAnchor);
                 }
                 else if (_searchTerms?.Any() == true)
                 {
                     _logger.Debug("Setting up search navigation: {TermCount} terms", _searchTerms.Count);
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        CurrentHitIndex = ResolveRestoreHitIndex(TotalHits);
+                        // Seed the live position directly from the saved hit — it CANNOT be resolved
+                        // against TotalHits here, because highlights haven't been applied yet and
+                        // TotalHits is still 0 (ResolveRestoreHitIndex(0) collapses any saved hit to 1,
+                        // which made a "hit 10 of 13" session restore as "1 of 13"). The highlight
+                        // pipeline validates/clamps this once the real total is known. (BOOK-7)
+                        if (_initialCurrentHitIndex is int savedHit && savedHit >= 1)
+                        {
+                            CurrentHitIndex = savedHit;
+                            _pendingHitNavigation = savedHit;
+                            _logger.Debug("Queued hit navigation: {Hit}", savedHit);
+                        }
                         UpdateHitStatusText();
                     });
-
-                    // On state restoration, scroll to the EXACT hit the user was viewing - not just the
-                    // paragraph (a long paragraph can leave the highlighted term off-screen). Queue it via
-                    // _pendingHitNavigation so it still fires if the view/highlights render later. (#36)
-                    if (_initialCurrentHitIndex is int savedHit && savedHit >= 1)
-                    {
-                        _pendingHitNavigation = savedHit;
-                        if (BookDisplayControl != null && TotalHits > 0)
-                        {
-                            await Task.Delay(1000); // let highlighted content render
-                            await Dispatcher.UIThread.InvokeAsync(() =>
-                            {
-                                NavigateToHighlightRequested?.Invoke(Math.Min(savedHit, TotalHits));
-                                _pendingHitNavigation = null;
-                                _logger.Debug("Restored scroll to hit {Hit}", savedHit);
-                            });
-                        }
-                        else
-                        {
-                            _logger.Information("View/highlights not ready - pending hit navigation: {Hit}", savedHit);
-                        }
-                    }
                 }
-                
+
+                _logger.Debug("Step 5: Loading book content");
+                await LoadBookContentAsync();
+
                 _logger.Debug("InitializeAsync completed successfully");
             }
             catch (Exception ex)
@@ -1114,7 +1083,11 @@ namespace CST.Avalonia.ViewModels
                     HasSearchHighlights = totalHits > 0;
                     if (totalHits > 0)
                     {
-                        CurrentHitIndex = 1;
+                        // Seed only when there is no live position: this pipeline re-runs on every
+                        // re-render (script change), and resetting would clobber the hit the user
+                        // navigated to ("4 of 4" snapping back). (BOOK-7 follow-up)
+                        if (CurrentHitIndex < 1 || CurrentHitIndex > totalHits)
+                            CurrentHitIndex = 1;
                         UpdateHitStatusText();
                     }
                 });
@@ -1215,8 +1188,13 @@ namespace CST.Avalonia.ViewModels
                     HasSearchHighlights = totalHits > 0;
                     if (totalHits > 0)
                     {
-                        // Restore the hit the user was on (or 1 for a fresh open).
-                        CurrentHitIndex = ResolveRestoreHitIndex(totalHits);
+                        // Restore the hit the user was on (or 1 for a fresh open) — but ONLY when
+                        // there is no live position yet: this pipeline re-runs on every re-render
+                        // (script change), and ResolveRestoreHitIndex returns the launch-time saved
+                        // index, which would clobber the hit the user has since navigated to
+                        // ("4 of 4" snapping back to the restored "3 of 4"). (BOOK-7 follow-up)
+                        if (CurrentHitIndex < 1 || CurrentHitIndex > totalHits)
+                            CurrentHitIndex = ResolveRestoreHitIndex(totalHits);
                         UpdateHitStatusText();
                     }
                 });

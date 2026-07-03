@@ -360,8 +360,10 @@ public partial class BookDisplayView : UserControl
                 _logger.Information("    Book: {BookFile}, ViewModel: {ViewModelId}",
                     _viewModel?.Book?.FileName ?? "null", _viewModel?.Id ?? "null");
 
-                // Notify ViewModel that View is now attached - executes any pending anchor navigation
-                _viewModel?.OnViewAttached();
+                // Execute queued restoration if the browser is already live (recycled tab —
+                // no new navigation will fire); a fresh/recreated browser is handled by
+                // OnNavigationCompleted instead. (BOOK-7)
+                ExecutePendingRestoration();
             }
             else
             {
@@ -378,8 +380,10 @@ public partial class BookDisplayView : UserControl
                 _logger.Information("    Tab reattached - ViewModel page numbers: VRI={Vri}, Para={Para}",
                     _viewModel?.VriPage ?? "*", _viewModel?.CurrentParagraph ?? "*");
 
-                // Notify ViewModel that View is now attached - executes any pending anchor navigation
-                _viewModel?.OnViewAttached();
+                // Execute queued restoration if the browser is already live (recycled tab —
+                // no new navigation will fire); a fresh/recreated browser is handled by
+                // OnNavigationCompleted instead. (BOOK-7)
+                ExecutePendingRestoration();
             }
         }
         _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -1196,22 +1200,109 @@ public partial class BookDisplayView : UserControl
                     await BuildAnchorPositionCache();
                 });
 
-                // Navigate to current highlight if we have search results
-                // Add delay to allow JavaScript initializeHighlights() to complete (runs with 100ms delay)
-                if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
-                {
-                    _logger.Debug("Scheduling navigation to first search hit after JS initialization");
-                    Task.Run(async () =>
-                    {
-                        await Task.Delay(300); // Wait for JS initialization (100ms) + buffer
-                        await Dispatcher.UIThread.InvokeAsync(() =>
-                        {
-                            _logger.Debug("Navigating to first search hit: {HitIndex}", _viewModel.CurrentHitIndex);
-                            NavigateToHighlight(_viewModel.CurrentHitIndex);
-                        });
-                    });
-                }
+                // The document is ready — execute any queued restoration (saved anchor or saved
+                // search hit) NOW, from the one signal that knows the DOM exists. (BOOK-7)
+                ExecutePendingRestoration();
             });
+        }
+    }
+
+    // Mark a hit as the CURRENT one (red styling) without scrolling to it. Used when a reload's
+    // scroll position is owned by a saved anchor but the JS highlight state (which hit is current)
+    // was reset by the reload. Mirrors NavigateToHighlight's JS-lock discipline. (BOOK-7)
+    private void SyncCurrentHitStyle(int hitIndex)
+    {
+        if (_webView == null || !_isBrowserInitialized || hitIndex < 1)
+            return;
+
+        if (_jsExecutionLock.Wait(0))
+        {
+            try
+            {
+                // If highlights aren't collected yet (document still initializing), queue the intent
+                // for init() to apply — never silently lost. (BOOK-7)
+                var script = "if (window.cstSearchHighlights && window.cstSearchHighlights.hits.length > 0) { " +
+                             $"window.cstSearchHighlights.currentIndex = Math.min({hitIndex}, window.cstSearchHighlights.hits.length) - 1; " +
+                             "window.cstSearchHighlights.updateHighlightStyles(); " +
+                             "} else { " +
+                             $"window.__cstPendingHit = {{ index: {hitIndex}, scroll: false }}; " +
+                             "}";
+                _webView.ExecuteScript(script);
+                _logger.Debug("Synced current-hit styling to hit {HitIndex} (no scroll)", hitIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error syncing current-hit styling");
+            }
+            finally
+            {
+                _jsExecutionLock.Release();
+            }
+        }
+        else
+        {
+            // Lock busy (e.g. the anchor scroll is executing) - retry shortly.
+            Task.Run(async () =>
+            {
+                await Task.Delay(100);
+                await Dispatcher.UIThread.InvokeAsync(() => SyncCurrentHitStyle(hitIndex));
+            });
+        }
+    }
+
+    // Execute any queued restoration (saved anchor / saved search hit) now that the document is
+    // actually ready. Called from OnNavigationCompleted (fresh load and reloads, e.g. script change)
+    // and from the attach handler when a recycled tab reattaches with a live browser. Precedence:
+    // saved hit > saved anchor > re-anchor to the current hit after a reload of a search book —
+    // mirroring InitializeAsync's #36 preference for the exact hit over its paragraph anchor.
+    // Replaces three racing fixed-delay attempts (1000/500/300 ms) that silently no-opped when the
+    // browser wasn't ready, leaving the book at the top on slow loads. (BOOK-7)
+    private void ExecutePendingRestoration()
+    {
+        if (_viewModel == null || _webView == null || !_isBrowserInitialized)
+            return;
+
+        var pendingHit = _viewModel.TakePendingHitNavigation();
+        var pendingAnchor = _viewModel.TakePendingAnchorNavigation();
+
+        if (pendingHit is int savedHit && savedHit >= 1)
+        {
+            // Inject IMMEDIATELY: cstSearchHighlights exists (the JS bridge was set up earlier in
+            // this same callback) but its hits aren't collected yet, so the script queues the intent
+            // and init() applies it BEFORE its first styling pass — a single correct paint. Waiting
+            // (the old +300ms) let init() paint defaults first, causing a visible blue→red flash on
+            // reattach. (BOOK-7)
+            var total = _viewModel.TotalHits;
+            var target = total > 0 ? Math.Min(savedHit, total) : savedHit;
+            _logger.Information("Restoring scroll to saved search hit {Hit}", target);
+            NavigateToHighlight(target);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(pendingAnchor))
+        {
+            _logger.Information("Restoring scroll to saved anchor {Anchor}", pendingAnchor);
+            ScrollToPageAnchor(pendingAnchor);
+
+            // A reload resets the JS highlight state, so re-mark the CURRENT hit (red styling)
+            // WITHOUT scrolling — the anchor above owns the position; this keeps the red highlight
+            // matching the "N of M" counter after a script change. Injected immediately: the JS
+            // queues the intent if hits aren't collected yet and init() applies it before its first
+            // styling pass (no flash). (BOOK-7)
+            if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
+            {
+                SyncCurrentHitStyle(_viewModel.CurrentHitIndex);
+            }
+            return;
+        }
+
+        // No queued intent: a (re)load of a search book still lands on the current hit once the
+        // highlights initialize (e.g. a fresh search-result open, tab reattach) — injected
+        // immediately, queued by the JS if hits aren't collected yet (no flash). (BOOK-7)
+        if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
+        {
+            _logger.Debug("Navigating to current search hit: {HitIndex}", _viewModel.CurrentHitIndex);
+            NavigateToHighlight(_viewModel.CurrentHitIndex);
         }
     }
 
@@ -1684,8 +1775,27 @@ public partial class BookDisplayView : UserControl
                             if (this.hits.length > 0) {
                                 window.cstLogger.log('DEBUG', 'Found hits:', this.hits.length);
                             }
-                            
+
+                            // Apply any navigation C# requested BEFORE highlights were ready (tab
+                            // reattach / reload: the shared JS lock can delay the injected call past
+                            // document readiness, or run it before init - either way the intent waits
+                            // here instead of being silently lost). Consume it BEFORE the first
+                            // styling pass so the correct hit is red in the initial paint - painting
+                            // defaults first caused a visible blue->red flash on reattach. (BOOK-7)
+                            var pendingScroll = false;
+                            if (window.__cstPendingHit && this.hits.length > 0) {
+                                var pending = window.__cstPendingHit;
+                                window.__cstPendingHit = null;
+                                this.currentIndex = Math.min(pending.index, this.hits.length) - 1;
+                                pendingScroll = pending.scroll;
+                            }
+
                             this.updateHighlightStyles();
+
+                            if (pendingScroll) {
+                                var hit = this.hits[this.currentIndex];
+                                if (hit) { hit.scrollIntoView({ behavior: 'instant', block: 'center' }); }
+                            }
                         },
                         
                         navigateToHit: function(index) {
@@ -1829,7 +1939,14 @@ public partial class BookDisplayView : UserControl
             _logger.Debug("NavigateToHighlight acquired JS lock successfully");
             try
             {
-                var script = $"window.cstSearchHighlights?.navigateToHit({hitIndex});";
+                // If highlights aren't collected yet (reload in flight, init not run), queue the
+                // intent for init() to apply — the old optional-chaining call was a silent no-op in
+                // that window, losing the red current-hit styling on tab reattach. (BOOK-7)
+                var script = "if (window.cstSearchHighlights && window.cstSearchHighlights.hits.length > 0) { " +
+                             $"window.cstSearchHighlights.navigateToHit({hitIndex}); " +
+                             "} else { " +
+                             $"window.__cstPendingHit = {{ index: {hitIndex}, scroll: true }}; " +
+                             "}";
                 _webView.ExecuteScript(script);
             }
             catch (Exception ex)
