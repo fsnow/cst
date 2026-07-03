@@ -5,15 +5,9 @@ using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Layout;
-using Avalonia.Media;
-using Avalonia.Threading;
 using CST;
 using CST.Avalonia.Models;
 using CST.Avalonia.Constants;
-using CST.Avalonia.Views;
 using CST.Lucene;
 using Microsoft.Extensions.Logging;
 using Octokit;
@@ -124,119 +118,6 @@ namespace CST.Avalonia.Services
             }
             
             return false;
-        }
-
-        private async Task<bool> PromptForInitialDataAsync()
-        {
-            // Check if main window is available (not during startup)
-            if (App.MainWindow == null)
-            {
-                _logger.LogInformation("Skipping initial download prompt - main window not ready");
-                return false;
-            }
-
-            // This will be called on the UI thread
-            var result = false;
-
-            await Dispatcher.UIThread.InvokeAsync(async () =>
-            {
-                var window = App.MainWindow;
-                if (window == null) return;
-                
-                var dialog = new Window
-                {
-                    Title = "Download Tipitaka Data",
-                    Width = 500,
-                    Height = 200,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner
-                };
-                
-                var panel = new StackPanel
-                {
-                    Margin = new Thickness(20)
-                };
-                
-                panel.Children.Add(new TextBlock
-                {
-                    Text = "No Tipitaka XML data found. Would you like to download it now?",
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 0, 0, 10)
-                });
-                
-                panel.Children.Add(new TextBlock
-                {
-                    Text = $"This will download {Books.Inst.Count()} Tipitaka book files from GitHub.",
-                    FontSize = 12,
-                    Foreground = Brushes.Gray,
-                    Margin = new Thickness(0, 0, 0, 20)
-                });
-                
-                var buttonPanel = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                };
-                
-                var downloadButton = new Button
-                {
-                    Content = "Download Data",
-                    Margin = new Thickness(0, 0, 10, 0),
-                    IsDefault = true
-                };
-                
-                var browseButton = new Button
-                {
-                    Content = "Browse for Existing Data",
-                    Margin = new Thickness(0, 0, 10, 0)
-                };
-                
-                var cancelButton = new Button
-                {
-                    Content = "Cancel",
-                    IsCancel = true
-                };
-                
-                downloadButton.Click += (s, e) =>
-                {
-                    result = true;
-                    dialog.Close();
-                };
-                
-                browseButton.Click += async (s, e) =>
-                {
-                    var folderDialog = await window.StorageProvider.OpenFolderPickerAsync(new global::Avalonia.Platform.Storage.FolderPickerOpenOptions
-                    {
-                        Title = "Select XML Data Directory",
-                        AllowMultiple = false
-                    });
-                    
-                    if (folderDialog != null && folderDialog.Any())
-                    {
-                        var selectedPath = folderDialog[0].Path.LocalPath;
-                        _settingsService.Settings.XmlBooksDirectory = selectedPath;
-                        await _settingsService.SaveSettingsAsync();
-                        result = false; // Don't download, user provided existing data
-                        dialog.Close();
-                    }
-                };
-                
-                cancelButton.Click += (s, e) =>
-                {
-                    result = false;
-                    dialog.Close();
-                };
-                
-                buttonPanel.Children.Add(downloadButton);
-                buttonPanel.Children.Add(browseButton);
-                buttonPanel.Children.Add(cancelButton);
-                
-                panel.Children.Add(buttonPanel);
-                dialog.Content = panel;
-                
-                await dialog.ShowDialog(window);
-            });
-            
-            return result;
         }
 
         /// <summary>
