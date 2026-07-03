@@ -352,9 +352,15 @@ public partial class SimpleTabbedWindow : Window
                     _logger.Information("Restored window position (unvalidated): {X},{Y}", savedPos.Value.X, savedPos.Value.Y);
                 }
 
-                // Restore window state (Normal, Maximized, Minimized)
-                WindowState = (global::Avalonia.Controls.WindowState)mainWindowState.WindowState;
-                _logger.Information("Restored window state: {WindowState}", WindowState);
+                // Restore window state, but never launch minimized: a window saved while minimized
+                // (e.g. quit via Cmd+Q while minimized) would otherwise reopen minimized and look like
+                // the app failed to start. Coerce Minimized -> Normal; keep Maximized. (STATE-5)
+                var savedState = (global::Avalonia.Controls.WindowState)mainWindowState.WindowState;
+                WindowState = savedState == global::Avalonia.Controls.WindowState.Minimized
+                    ? global::Avalonia.Controls.WindowState.Normal
+                    : savedState;
+                _logger.Information("Restored window state: {WindowState}{Note}", WindowState,
+                    savedState == global::Avalonia.Controls.WindowState.Minimized ? " (coerced from Minimized)" : "");
             }
             else
             {
