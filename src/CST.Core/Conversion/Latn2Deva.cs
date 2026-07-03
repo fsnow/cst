@@ -154,6 +154,10 @@ namespace CST.Conversion
         /// </summary>
         public static string ConvertReference(string latin)
 		{
+			// Fold case so title-cased Latin converts cleanly through the Deva pivot; the tables are
+			// lowercase-only. Invariant per CORE-4. No-op for already-lowercase input (frozen oracle). (CORE-5)
+			latin = latin.ToLowerInvariant();
+
 			StringBuilder book = new StringBuilder();
 			StringBuilder word = new StringBuilder();
 
@@ -198,6 +202,10 @@ namespace CST.Conversion
         {
             if (string.IsNullOrEmpty(latin))
                 return latin;
+
+            // Fold case so title-cased Latin converts cleanly through the Deva pivot; the tables are
+            // lowercase-only. Invariant per CORE-4. No-op for already-lowercase input (frozen oracle). (CORE-5)
+            latin = latin.ToLowerInvariant();
 
             int n = latin.Length;
             var buf = new char[n * 3 + 4]; // consonant -> virama + consonant + ZWJ; plus per-word final halanta
@@ -333,14 +341,6 @@ namespace CST.Conversion
         public static bool IsPaliAspiratable(char c)
 		{
 			return paliAspiratables.Contains(c);
-		}
-
-        public static string GetDevConsonants(string consonants)
-		{
-			if (devConsonants[consonants] == null)
-				return "";
-			else
-				return (string)devConsonants[consonants];
 		}
 
         public static string ToDevanagari(string latin)

@@ -7,30 +7,31 @@ namespace CST.Conversion
     {
         public static string Convert(string str)
         {
-            string deva = "";
-            string run = "";
+            // StringBuilder to avoid O(n^2) string concatenation; output is byte-identical. (CORE-8)
+            var deva = new StringBuilder();
+            var run = new StringBuilder();
             Script lastScript = Script.Latin;
-            
+
             foreach (char c in str.ToCharArray())
             {
                 Script cScript = GetScript(c);
                 // Zero-width joiners (Unknown) belong to the surrounding run; they must not split it,
                 // or a script's contextual conjunct handling breaks at the boundary. Mirrors Any2Ipe.
                 if (cScript == lastScript || cScript == Script.Unknown)
-                    run += c;
+                    run.Append(c);
                 else
                 {
                     if (run.Length > 0)
-                        deva += Convert(run, lastScript);
+                        deva.Append(Convert(run.ToString(), lastScript));
 
-                    run = "" + c;
+                    run.Clear().Append(c);
                     lastScript = cScript;
                 }
             }
 
-            deva += Convert(run, lastScript);
+            deva.Append(Convert(run.ToString(), lastScript));
 
-            return deva;
+            return deva.ToString();
         }
 
         public static string Convert(string str, Script script)

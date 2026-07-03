@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
+namespace CST;
+
 public class Sources
 {
 	// Thread-safe lazy init: an unlocked "if (sources == null) sources = new Sources()" could
@@ -108,7 +110,7 @@ public class Sources
 
 	// Vinaya Atthakatha
 	private const string Att_Vin_Parajika1_1957 = "Pārājikakaṇḍa-aṭṭhakathā-1.pdf";
-	private const string Att_Vin_Parajika2_1957 = "Pārājikakaṇḍa-aṭṭhakathā-2.pdf";
+	private const string Att_Vin_Parajika2_1957 = "Pārājikakaṇḍa-aṭṭhakathā-2.pdf"; // TODO(#76): vol-2 mapping pending upstream pagination redesign; the multi-volume book currently opens vol.1
 	private const string Att_Vin_Pacittiyadi_1957 = "Pācityādi-aṭṭhakathā.pdf";
 	private const string Att_Vin_Culavagga_1957 = "Cūḷavaggādi-aṭṭhakathā.pdf";
 
@@ -119,7 +121,7 @@ public class Sources
 
 	// MN Atthakatha
 	private const string Att_MN_Mulapannasa1_1957 = "Mūlapaṇṇāsa-aṭṭhakathā -1.pdf";
-	private const string Att_MN_Mulapannasa2_1957 = "Mūlapaṇṇāsa-aṭṭhakathā -2.pdf";
+	private const string Att_MN_Mulapannasa2_1957 = "Mūlapaṇṇāsa-aṭṭhakathā -2.pdf"; // TODO(#76): vol-2 mapping pending upstream pagination redesign; the multi-volume book currently opens vol.1
 	private const string Att_MN_Majjhimapannasa_1957 = "Majjhimapaṇṇāsa-aṭṭhakathā.pdf";
 	private const string Att_MN_Uparipannasa_1957 = "Uparipaṇṇāsa-aṭṭhakathā.pdf";
 
@@ -136,18 +138,18 @@ public class Sources
 	// KN Atthakatha
 	private const string Att_KN_Khuddakapatha_1957 = "Khuddakapāṭha-aṭṭhakathā.pdf";
 	private const string Att_KN_Dhammapada1_1957 = "Dhammapada-aṭṭhakathā-1.pdf";
-	private const string Att_KN_Dhammapada2_1957 = "Dhammapada-aṭṭhakathā-2.pdf";
+	private const string Att_KN_Dhammapada2_1957 = "Dhammapada-aṭṭhakathā-2.pdf"; // TODO(#76): vol-2 mapping pending upstream pagination redesign; the multi-volume book currently opens vol.1
 	private const string Att_KN_Udana_1957 = "Udāna-aṭṭhakathā.pdf";
 	private const string Att_KN_Itivuttaka_1957 = "Itivuttaka-aṭṭhakathā.pdf";
 	private const string Att_KN_Suttanipata1_1957 = "Suttanipāta-aṭṭhakathā - 1.pdf";
-	private const string Att_KN_Suttanipata2_1957 = "Suttanipāta-aṭṭhakathā - 2.pdf";
+	private const string Att_KN_Suttanipata2_1957 = "Suttanipāta-aṭṭhakathā - 2.pdf"; // TODO(#76): vol-2 mapping pending upstream pagination redesign; the multi-volume book currently opens vol.1
 	private const string Att_KN_Vimanavatthu_1957 = "Vimānavatthu-aṭṭhakathā.pdf";
 	private const string Att_KN_Petavatthu_1957 = "Petavatthu-aṭṭhakathā.pdf";
 	private const string Att_KN_Theragatha1_1957 = "Theragāthā-aṭṭhakathā-1.pdf";
 	private const string Att_KN_Theragatha2_1957 = "Theragāthā-aṭṭhakathā-2.pdf";
 	private const string Att_KN_Therigatha_1957 = "Therīgāthā-aṭṭhakathā.pdf";
 	private const string Att_KN_Apadana1_1957 = "Apadāna-aṭṭhakathā-1.pdf";
-	private const string Att_KN_Apadana2_1957 = "Apadāna-aṭṭhakathā-2.pdf";
+	private const string Att_KN_Apadana2_1957 = "Apadāna-aṭṭhakathā-2.pdf"; // TODO(#76): vol-2 mapping pending upstream pagination redesign; the multi-volume book currently opens vol.1
 	private const string Att_KN_Buddhavamsa_1957 = "Buddhavaṃsa-aṭṭhakathā.pdf";
 	private const string Att_KN_Cariyapitaka_1957 = "Cariyāpiṭaka-aṭṭhakathā.pdf";
 	private const string Att_KN_Jataka1_1957 = "Jātaka-aṭṭhakathā-1.pdf";
@@ -160,7 +162,7 @@ public class Sources
 	private const string Att_KN_Mahaniddesa_1957 = "Mahāniddesa-aṭṭhakathā.pdf";
 	private const string Att_KN_CulaniddesaNetti_1957 = "Cūḷaniddesa-aṭṭhakathā Netti-aṭṭhakathā.pdf";
 	private const string Att_KN_Patisambhida1_1957 = "Paṭisambhidāmagga-aṭṭhakathā-1.pdf";
-	private const string Att_KN_Patisambhida2_1957 = "Paṭisambhidāmagga-aṭṭhakathā-2.pdf";
+	private const string Att_KN_Patisambhida2_1957 = "Paṭisambhidāmagga-aṭṭhakathā-2.pdf"; // TODO(#76): vol-2 mapping pending upstream pagination redesign; the multi-volume book currently opens vol.1
 
 	// Abhidhamma Atthakatha
 	private const string Att_Abh_Dhammasangani_1957 = "Dhammasaṅgaṇī-aṭṭhakathā.pdf";

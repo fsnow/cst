@@ -56,26 +56,35 @@ namespace CST.Conversion
                 else if (node.NodeType == XmlNodeType.Text)
                 {
                     string str = node.Value ?? "";
-                    string val = "";
-                    foreach (char c in str.ToCharArray())
+                    // Build lazily with a StringBuilder, materializing only when a capital marker is
+                    // actually inserted; unchanged text nodes are left untouched. Byte-identical to the
+                    // old char-by-char rebuild-and-compare. (CORE-8)
+                    StringBuilder? val = null;
+                    for (int idx = 0; idx < str.Length; idx++)
                     {
+                        char c = str[idx];
                         int ccode = Convert.ToInt32(c);
                         // if c is a Devanagari letter
-                        if (nextIsCap && ccode >= 0x0901 && ccode <= 0x094B && nextIsCap)
+                        if (nextIsCap && ccode >= 0x0901 && ccode <= 0x094B)
                         {
                             // mark it for capitalization
-                            val += this.capitalMarker;
+                            if (val == null)
+                            {
+                                val = new StringBuilder(str.Length + 8);
+                                val.Append(str, 0, idx);
+                            }
+                            val.Append(this.capitalMarker);
                             nextIsCap = false;
                         }
                         else if (c == '\x0964' || c == '?' || c == '!')
                         {
                             nextIsCap = true;
                         }
-                        val += c;
+                        val?.Append(c);
                     }
 
-                    if (str.Equals(val) == false)
-                        node.Value = val;
+                    if (val != null)
+                        node.Value = val.ToString();
                 }
 
                 bool nodeFound = false;
@@ -145,12 +154,6 @@ namespace CST.Conversion
         {
             // Invariant upper-casing: on tr/az the default ToUpper maps 'i' to the dotted 'İ' (U+0130). (CORE-4)
             return m.Value.Substring(1).ToUpperInvariant();
-        }
-
-        public string DebugRegex(Match m)
-        {
-            string foo = m.Value;
-            return foo;
         }
     }
 }

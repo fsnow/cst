@@ -65,7 +65,7 @@ namespace CST
 			return GetEnumerator();
 		}
 
-		public void PopulateBookList()
+		private void PopulateBookList()
 		{
 			Book book;
 
@@ -2515,49 +2515,49 @@ namespace CST
 		public BitArray MulaBits
 		{
 			get { return mulaBits; }
-			set { mulaBits = value; }
+			private set { mulaBits = value; }
 		}
 		private BitArray mulaBits = null!;
 
 		public BitArray AtthaBits
 		{
 			get { return atthaBits; }
-			set { atthaBits = value; }
+			private set { atthaBits = value; }
 		}
 		private BitArray atthaBits = null!;
 
 		public BitArray TikaBits
 		{
 			get { return tikaBits; }
-			set { tikaBits = value; }
+			private set { tikaBits = value; }
 		}
 		private BitArray tikaBits = null!;
 
 		public BitArray SuttaBits
 		{
 			get { return suttaBits; }
-			set { suttaBits = value; }
+			private set { suttaBits = value; }
 		}
 		private BitArray suttaBits = null!;
 
 		public BitArray VinayaBits
 		{
 			get { return vinayaBits; }
-			set { vinayaBits = value; }
+			private set { vinayaBits = value; }
 		}
 		private BitArray vinayaBits = null!;
 
 		public BitArray AbhiBits
 		{
 			get { return abhiBits; }
-			set { abhiBits = value; }
+			private set { abhiBits = value; }
 		}
 		private BitArray abhiBits = null!;
 
 		public BitArray OtherBits
 		{
 			get { return otherBits; }
-			set { otherBits = value; }
+			private set { otherBits = value; }
 		}
 		private BitArray otherBits = null!;
 
