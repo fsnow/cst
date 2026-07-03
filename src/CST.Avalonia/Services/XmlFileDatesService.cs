@@ -164,6 +164,19 @@ namespace CST.Avalonia.Services
             return changedBooks;
         }
 
+        // Atomic write: temp + replace so a crash/power-loss mid-write can't leave a torn
+        // file-dates.json — a truncated cache fails to load and forces a full 217-book re-index.
+        // Same pattern as ApplicationStateService / SettingsService. (XCUT-4)
+        private async Task WriteFileDatesAtomicAsync(string json)
+        {
+            var tempPath = _fileDatesPath + ".tmp";
+            await File.WriteAllTextAsync(tempPath, json);
+            if (File.Exists(_fileDatesPath))
+                File.Replace(tempPath, _fileDatesPath, null);
+            else
+                File.Move(tempPath, _fileDatesPath);
+        }
+
         public async Task SaveFileDatesAsync()
         {
             try
@@ -213,7 +226,7 @@ namespace CST.Avalonia.Services
                     WriteIndented = true 
                 });
                 
-                await File.WriteAllTextAsync(_fileDatesPath, json);
+                await WriteFileDatesAtomicAsync(json);
                 _logger.LogInformation($"Saved {_fileDates.Count} file dates to enhanced cache format");
             }
             catch (Exception ex)
@@ -324,7 +337,7 @@ namespace CST.Avalonia.Services
                     WriteIndented = true
                 });
                 
-                await File.WriteAllTextAsync(_fileDatesPath, json);
+                await WriteFileDatesAtomicAsync(json);
                 _logger.LogInformation("Saved {Count} file dates with commit hashes to {Path}", files.Count, _fileDatesPath);
             }
             catch (Exception ex)
