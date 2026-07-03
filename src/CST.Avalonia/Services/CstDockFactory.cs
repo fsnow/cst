@@ -1342,8 +1342,13 @@ namespace CST.Avalonia.Services
                 }
 
                 // The old ViewModel is permanently replaced by newVm below; its state was already
-                // captured above, so release its subscriptions and GoTo id now (avoids the leak).
+                // captured above, so release its subscriptions and GoTo id now (avoids the leak) —
+                // and shut down + evict its recycled View: "dispose-before-move" is the documented
+                // discipline, but nothing implemented it (the PrepareForFloat/PrepareForUnfloat
+                // handler is dead code for books), so the detached View's live CEF browser survived
+                // in the app-lifetime ControlRecycling cache on every float/unfloat. (#193)
                 _goToSubscribedBooks.Remove(oldVm.Id);
+                DisposeAndEvictRecycledView(oldVm);
                 oldVm.Dispose();
 
                 // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
@@ -1474,8 +1479,13 @@ namespace CST.Avalonia.Services
                 }
 
                 // The old ViewModel is permanently replaced by newVm below; its state was already
-                // captured above, so release its subscriptions and GoTo id now (avoids the leak).
+                // captured above, so release its subscriptions and GoTo id now (avoids the leak) —
+                // and shut down + evict its recycled View: "dispose-before-move" is the documented
+                // discipline, but nothing implemented it (the PrepareForFloat/PrepareForUnfloat
+                // handler is dead code for books), so the detached View's live CEF browser survived
+                // in the app-lifetime ControlRecycling cache on every float/unfloat. (#193)
                 _goToSubscribedBooks.Remove(oldVm.Id);
+                DisposeAndEvictRecycledView(oldVm);
                 oldVm.Dispose();
 
                 // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
