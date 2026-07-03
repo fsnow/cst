@@ -71,10 +71,10 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | CORE-2  | Medium | [#213](https://github.com/fsnow/cst/issues/213) | — | ✅ Fixed | ⏳ pending Fable verification (99999→-1; real linking a TODO) |
 | CORE-3  | Medium | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | ✅ Fixed | ✅ 2026-07-03 |
 | CORE-4  | Medium | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed (+213a65c) | ✅ 2026-07-03 (3 sites first pass; 4th site SettingsViewModel.cs:593 completed in 213a65c) |
-| CORE-5  | Low    | — | — | | |
-| CORE-6  | Low    | — | — | | |
-| CORE-7  | Low    | — | — | | |
-| CORE-8  | Low    | — | — | | |
+| CORE-5  | Low    | [#218](https://github.com/fsnow/cst/issues/218) | — | ✅ Fixed | ⏳ pending Fable verification (case-fold; 128 oracle tests) |
+| CORE-6  | Low    | [#219](https://github.com/fsnow/cst/issues/219) | — | ✅ Fixed | ⏳ pending Fable verification (6 TODOs; comments only) |
+| CORE-7  | Low    | [#220](https://github.com/fsnow/cst/issues/220) | — | ✅ Fixed | ⏳ pending Fable verification (dead members removed) |
+| CORE-8  | Low    | [#221](https://github.com/fsnow/cst/issues/221) | — | ✅ Fixed | ⏳ pending Fable verification (StringBuilder; 128 oracle tests) |
 | BOOK-1  | High   | [#136](https://github.com/fsnow/cst/issues/136) | — | ✅ Fixed (GUI-verified: renderer count returns to baseline across open/close) | ✅ 2026-07-03 (static + GUI; composition gaps found on rescue/float paths, fixed via #177 reopen + #193) |
 | BOOK-2  | High   | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed | ✅ 2026-07-03 (copy/select-all branches confirmed addressed too) |
 | BOOK-3  | Medium | [#153](https://github.com/fsnow/cst/issues/153) | — | ✅ Fixed | ✅ 2026-07-03 (all 5 construction sites seed the script) |
