@@ -69,18 +69,18 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | DICT-6  | Low    | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | |
 | CORE-1  | High   | [#127](https://github.com/fsnow/cst/issues/127) | — | ✅ Fixed | ✅ 2026-07-03 |
 | CORE-2  | Medium | — | — | | |
-| CORE-3  | Medium | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | ✅ Fixed | |
-| CORE-4  | Medium | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed | |
+| CORE-3  | Medium | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | ✅ Fixed | ✅ 2026-07-03 |
+| CORE-4  | Medium | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed (+213a65c) | ✅ 2026-07-03 (3 sites first pass; 4th site SettingsViewModel.cs:593 completed in 213a65c) |
 | CORE-5  | Low    | — | — | | |
 | CORE-6  | Low    | — | — | | |
 | CORE-7  | Low    | — | — | | |
 | CORE-8  | Low    | — | — | | |
 | BOOK-1  | High   | [#136](https://github.com/fsnow/cst/issues/136) | — | ✅ Fixed (GUI-verified: renderer count returns to baseline across open/close) | ✅ 2026-07-03 (static + GUI; composition gaps found on rescue/float paths, fixed via #177 reopen + #193) |
 | BOOK-2  | High   | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed | ✅ 2026-07-03 (copy/select-all branches confirmed addressed too) |
-| BOOK-3  | Medium | [#153](https://github.com/fsnow/cst/issues/153) | — | ✅ Fixed | |
-| BOOK-4  | Medium | [#156](https://github.com/fsnow/cst/issues/156) | — | ✅ Fixed | |
-| BOOK-5  | Medium | [#159](https://github.com/fsnow/cst/issues/159) | — | ✅ Fixed | |
-| BOOK-6  | Medium | [#164](https://github.com/fsnow/cst/issues/164) | — | ✅ Fixed | |
+| BOOK-3  | Medium | [#153](https://github.com/fsnow/cst/issues/153) | — | ✅ Fixed | ✅ 2026-07-03 (all 5 construction sites seed the script) |
+| BOOK-4  | Medium | [#156](https://github.com/fsnow/cst/issues/156) | — | 🔧 Reopened | ⚠️ Incomplete 2026-07-03: SEQ not applied to CST_LOOKUP_SEL / CST_GET_PARA_RESULT title writes — identical-consecutive still drops (2nd Cmd+D on same selection no-ops). Fragile CEF bridge; deferred to a GUI session. Details on #156. |
+| BOOK-5  | Medium | [#159](https://github.com/fsnow/cst/issues/159) | — | ✅ Fixed | ✅ 2026-07-03 |
+| BOOK-6  | Medium | [#164](https://github.com/fsnow/cst/issues/164) | — | ✅ Fixed | ✅ 2026-07-03 (corpus-confirmed on s0503m) |
 | BOOK-7  | Medium | [#167](https://github.com/fsnow/cst/issues/167) | — | ⏸️ Deferred — needs GUI verification (restoration timing; touches #36) | |
 | BOOK-8  | Low    | [#168](https://github.com/fsnow/cst/issues/168) | — | ✅ Fixed | |
 | BOOK-9  | Low    | [#169](https://github.com/fsnow/cst/issues/169) | — | ✅ Fixed | |
