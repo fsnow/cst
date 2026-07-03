@@ -658,8 +658,28 @@ namespace CST.Avalonia.Services
                     if (dockable is BookDisplayViewModel bookDisplayViewModel &&
                         bookDisplayViewModel.Book != null)
                     {
+                        // The snapshot can contain books closed since we started; don't touch their
+                        // (possibly disposed) WebView state. (DOCK-3)
+                        if (!documentDock.VisibleDockables.Contains(dockable))
+                        {
+                            Log.Debug("*** Skipping state save for {BookFileName} - closed before capture ***",
+                                bookDisplayViewModel.Book.FileName);
+                            continue;
+                        }
+
                         // Capture final position before saving (ensures very latest scroll position is saved)
                         await bookDisplayViewModel.CaptureCurrentPositionAsync();
+
+                        // The await above can span a tab close: RemoveBookWindowStateByWindowId has
+                        // already run for that book, and saving now would re-ADD the removed state
+                        // (UpdateBookWindowState is add-if-missing) — a ghost tab on next launch.
+                        // Re-check against the LIVE collection, not the snapshot. (DOCK-3)
+                        if (!documentDock.VisibleDockables.Contains(dockable))
+                        {
+                            Log.Debug("*** Skipping state save for {BookFileName} - closed during save loop ***",
+                                bookDisplayViewModel.Book.FileName);
+                            continue;
+                        }
 
                         // Only the active document gets IsSelected = true
                         var isSelected = dockable == activeDocument;
