@@ -100,7 +100,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-5  | Medium | — | — | | |
 | SCRIPT-6  | Low    | — | — | ✅ Fixed | ⏳ pending Fable verification (already done by STATE-2 5906973) |
 | SCRIPT-7  | Low    | [#202](https://github.com/fsnow/cst/issues/202) | — | ✅ Fixed | ⏳ pending Fable verification (6/6 tests) |
-| SCRIPT-8  | Low    | — | — | | |
+| SCRIPT-8  | Low    | — | — | ✅ Fixed (latent-trap removal) | ⏳ pending Fable verification — inert stub: `DefaultThreadCurrentUICulture` + `zh-Hans`/`zh-Hant` applied; RESX fallback deferred to real localization work (no satellite resources exist) |
 | SCRIPT-9  | Low    | [#204](https://github.com/fsnow/cst/issues/204) | — | ✅ Fixed | ⏳ pending Fable verification |
 | SCRIPT-10 | Low    | [#205](https://github.com/fsnow/cst/issues/205) | — | ✅ Fixed | ⏳ pending Fable verification |
 

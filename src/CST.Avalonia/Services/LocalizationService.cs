@@ -46,9 +46,12 @@ public class LocalizationService : ILocalizationService, IDisposable
         {
             _logger.LogInformation("Changing culture to: {Culture}", culture.Name);
             
+            // Set the process-wide default so threads created AFTER this call also pick up the culture
+            // (setting only Thread.CurrentThread would leave the UI thread and any pooled threads stale).
             Thread.CurrentThread.CurrentUICulture = culture;
             CultureInfo.CurrentUICulture = culture;
-            
+            CultureInfo.DefaultThreadCurrentUICulture = culture;
+
             _currentCulture.OnNext(culture);
             
             _logger.LogInformation("Culture changed successfully to: {Culture}", culture.Name);
@@ -64,9 +67,10 @@ public class LocalizationService : ILocalizationService, IDisposable
     {
         try
         {
-            // This would use the actual resource managers to get localized strings
-            // For now, return the key as placeholder
-            return key;  // TODO: Implement actual resource lookup
+            // This would use the actual resource managers to get localized strings.
+            // TODO(SCRIPT-8): implement real lookup with a key→parent-culture→invariant fallback
+            // chain once RESX satellite resources exist. For now, return the key as placeholder.
+            return key;
         }
         catch (Exception ex)
         {
@@ -87,8 +91,10 @@ public class LocalizationService : ILocalizationService, IDisposable
             new(new CultureInfo("de"), "Deutsch"),
             new(new CultureInfo("es"), "Español"),
             new(new CultureInfo("fr"), "Français"),
-            new(new CultureInfo("zh-CHS"), "简体中文"),
-            new(new CultureInfo("zh-CHT"), "繁體中文")
+            // Use the modern BCP-47 names; the legacy zh-CHS/zh-CHT synthetic cultures won't match
+            // zh-Hans/zh-Hant satellite resources when localization is eventually wired up.
+            new(new CultureInfo("zh-Hans"), "简体中文"),
+            new(new CultureInfo("zh-Hant"), "繁體中文")
         };
 
         return languages.ToArray();
