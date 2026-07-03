@@ -68,7 +68,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | DICT-5  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | ✅ 2026-07-03 |
 | DICT-6  | Low    | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | |
 | CORE-1  | High   | [#127](https://github.com/fsnow/cst/issues/127) | — | ✅ Fixed | ✅ 2026-07-03 |
-| CORE-2  | Medium | — | — | | |
+| CORE-2  | Medium | [#213](https://github.com/fsnow/cst/issues/213) | — | ✅ Fixed | ⏳ pending Fable verification (99999→-1; real linking a TODO) |
 | CORE-3  | Medium | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | ✅ Fixed | ✅ 2026-07-03 |
 | CORE-4  | Medium | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed (+213a65c) | ✅ 2026-07-03 (3 sites first pass; 4th site SettingsViewModel.cs:593 completed in 213a65c) |
 | CORE-5  | Low    | — | — | | |
@@ -88,11 +88,11 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-11 | Low    | [#173](https://github.com/fsnow/cst/issues/173) | — | ✅ Fixed | |
 | XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed | ✅ 2026-07-03 (hardening candidate: no double-run guard at handler entry) |
 | XCUT-2  | Medium | [#210](https://github.com/fsnow/cst/issues/210) | — | ✅ Fixed | ⏳ pending Fable verification (lock + atomic write; 492/492) |
-| XCUT-3  | Medium | — | — | | |
+| XCUT-3  | Medium | [#212](https://github.com/fsnow/cst/issues/212) | — | ✅ Fixed | ⏳ pending Fable verification (UI writes marshaled; 492/492) |
 | XCUT-4  | Medium | [#211](https://github.com/fsnow/cst/issues/211) | — | ✅ Fixed | ⏳ pending Fable verification (atomic writes; chapter-lists via #210, settings.json via STATE-3) |
-| XCUT-5  | Low    | — | — | | |
-| XCUT-6  | Low    | — | — | | |
-| XCUT-7  | Low    | — | — | | |
+| XCUT-5  | Low    | [#214](https://github.com/fsnow/cst/issues/214) | — | ✅ Fixed | ⏳ pending Fable verification |
+| XCUT-6  | Low    | [#215](https://github.com/fsnow/cst/issues/215) | — | ✅ Fixed | ⏳ pending Fable verification |
+| XCUT-7  | Low    | [#216](https://github.com/fsnow/cst/issues/216) | — | ✅ Fixed | ⏳ pending Fable verification (43 tokenizer tests) |
 | SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed | ✅ 2026-07-03 |
 | SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed | ✅ 2026-07-03 (incomplete on first pass — docs still had the term; reworded in 4037efc; review-doc quote + VRI dictionary data exempt, see #143) |
 | SCRIPT-3  | Medium | [#201](https://github.com/fsnow/cst/issues/201) | — | ✅ Fixed | ⏳ pending Fable verification (has regression tests) |
