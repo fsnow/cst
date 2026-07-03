@@ -1700,19 +1700,28 @@ namespace CST.Avalonia.Services
         // VM instance (TryToUseIdAsKey stays false in App.axaml) and on the View having been built
         // through the recycling template — flip either and the cache lookup would silently miss and
         // re-leak the browser. vm.BookDisplayControl is a direct, always-correct fallback. (F1)
-        private void DisposeAndEvictRecycledView(BookDisplayViewModel vm)
+        // Handles both BookDisplayView and PdfDisplayView — both host a live CEF WebView that outlives
+        // detach and must be torn down explicitly on close, or the closed tab strands a browser +
+        // renderer for the session. (BookDisplayViewModel also exposes a live-view backref as a
+        // cache-miss fallback; PdfDisplayViewModel has none, so it relies on the cache lookup.)
+        private void DisposeAndEvictRecycledView(IDockable dockable)
         {
             var recycling = GetControlRecycling();
 
             try
             {
-                object? cachedControl = recycling != null && recycling.TryGetValue(vm, out var control) ? control : null;
+                object? cachedControl = recycling != null && recycling.TryGetValue(dockable, out var control) ? control : null;
 
-                // Shut down whichever View we can reach — the cached one, or the VM's live reference
-                // if the cache missed (resource-lookup failure, non-recycled build, key-mode change).
-                // Shutdown is idempotent, so hitting the same View twice is harmless.
-                var viewToShutdown = (cachedControl as BookDisplayView) ?? vm.BookDisplayControl;
-                viewToShutdown?.Shutdown();   // release the CEF WebView — the actual leak
+                // Shut down whichever View we can reach — the cached one, or (for books) the VM's live
+                // reference if the cache missed (resource-lookup failure, non-recycled build, key-mode
+                // change). Shutdown is idempotent, so hitting the same View twice is harmless.
+                object? viewToShutdown = cachedControl
+                    ?? (dockable is BookDisplayViewModel bookVm ? bookVm.BookDisplayControl : null);
+                switch (viewToShutdown)
+                {
+                    case BookDisplayView bookView: bookView.Shutdown(); break;  // release the CEF WebView — the actual leak
+                    case PdfDisplayView pdfView: pdfView.Shutdown(); break;
+                }
 
                 if (recycling == null)
                     return;
@@ -1732,13 +1741,13 @@ namespace CST.Avalonia.Services
                     if (keyToRemove != null)
                     {
                         cache.Remove(keyToRemove);
-                        Log.Debug("Evicted recycled View for closed book {Id} from ControlRecycling", vm.Id);
+                        Log.Debug("Evicted recycled View for closed dockable {Id} from ControlRecycling", dockable.Id);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Failed to dispose/evict recycled View for closed book {Id}", vm.Id);
+                Log.Warning(ex, "Failed to dispose/evict recycled View for closed dockable {Id}", dockable.Id);
             }
         }
 
@@ -1777,6 +1786,15 @@ namespace CST.Avalonia.Services
                     // tab leaks a live browser + its rendered DOM + HtmlContent for the session. (BOOK-1)
                     DisposeAndEvictRecycledView(closedBookVm);
                     closedBookVm.Dispose();
+                }
+                else if (dockable is PdfDisplayViewModel closedPdfVm)
+                {
+                    // PDFs render in a CEF WebView (PDFium) too, and the close path never disposed it —
+                    // so every opened-then-closed PDF stranded a live browser + renderer for the session.
+                    // Same treatment as books. (PDF close leak; missed by the BOOK-1 review, which only
+                    // covered book views.)
+                    DisposeAndEvictRecycledView(closedPdfVm);
+                    (closedPdfVm as IDisposable)?.Dispose();
                 }
             }
             else

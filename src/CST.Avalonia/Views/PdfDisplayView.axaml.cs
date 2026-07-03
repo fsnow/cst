@@ -70,6 +70,12 @@ public partial class PdfDisplayView : UserControl
         }
     }
 
+    // Called by the dock factory when the PDF tab is permanently closed, to release the CEF WebView.
+    // Like BookDisplayView.Shutdown: the WebView deliberately survives tab-switch/detach (so it isn't
+    // torn down on recycling), so it must be disposed explicitly on close or the closed PDF tab leaks
+    // a live browser + renderer for the session. Idempotent (DisposeWebView null-guards). (PDF close leak)
+    public void Shutdown() => DisposeWebView();
+
     protected override void OnLoaded(RoutedEventArgs e)
     {
         base.OnLoaded(e);
