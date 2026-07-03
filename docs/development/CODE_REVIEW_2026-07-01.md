@@ -51,7 +51,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | STATE-3 | Medium | [#199](https://github.com/fsnow/cst/issues/199) | — | ✅ Fixed | ⏳ pending Fable verification (has 3 regression tests) |
 | STATE-4 | Medium | [#200](https://github.com/fsnow/cst/issues/200) | — | ✅ Fixed | ⏳ pending Fable verification (has 7 tests) |
 | STATE-5 | Low    | [#207](https://github.com/fsnow/cst/issues/207) | — | ✅ Fixed | ⏳ pending Fable verification (GUI) |
-| STATE-6 | Low    | — | — | | |
+| STATE-6 | Low    | [#](https://github.com/fsnow/cst/issues/) | — | ✅ Fixed | ⏳ pending Fable verification (splash experiment + LoggingService + AddRecentBook removed; 488/488) |
 | STATE-7 | Low    | — | — | | |
 | NET-1   | High   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed | ✅ 2026-07-03 (caveat: pre-fix truncated PDFs never re-validated → follow-up #194) |
 | NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed (+7a3c572) | ✅ 2026-07-03 (incomplete on first pass — Unknown still rendered the green badge; renderer fixed + 2 tests in 7a3c572) |
