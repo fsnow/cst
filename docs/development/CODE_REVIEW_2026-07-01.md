@@ -35,10 +35,10 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-1  | High   | [#126](https://github.com/fsnow/cst/issues/126) | [#128](https://github.com/fsnow/cst/pull/128) | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-2  | High   | [#113](https://github.com/fsnow/cst/issues/113) | — | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-3  | High   | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed | ✅ 2026-07-02 |
-| SRCH-4  | High   | [#114](https://github.com/fsnow/cst/issues/114) | — | ✅ Fixed | Reopen gaps closed 2026-07-02: commit-failure now rolls back (releases write.lock); FSDirectory disposed on writer-ctor throw. |
+| SRCH-4  | High   | [#114](https://github.com/fsnow/cst/issues/114) | — | ✅ Fixed | ✅ 2026-07-02 (re-verified after 4cc4621 closed the reopen gaps) |
 | SRCH-5  | Medium | [#150](https://github.com/fsnow/cst/issues/150) | — | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-6  | Medium | [#157](https://github.com/fsnow/cst/issues/157) | [#158](https://github.com/fsnow/cst/pull/158) | ✅ Fixed | ✅ 2026-07-02 |
-| SRCH-7  | Medium | [#145](https://github.com/fsnow/cst/issues/145) | — | 🔧 Reopened | ⚠️ Incomplete 2026-07-02: CTS supersede not atomic; two concurrent triggers can both survive. Interlocked.Exchange fix on #145. |
+| SRCH-7  | Medium | [#145](https://github.com/fsnow/cst/issues/145) | — | ✅ Fixed | Reopen gap closed 2026-07-02: CTS supersede is now an atomic Interlocked.Exchange, so two concurrent triggers can't both survive. |
 | SRCH-8  | Medium | [#146](https://github.com/fsnow/cst/issues/146) | — | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-9  | Medium | — | — | ⚠️ Not a defect — verified 2026-07-02: `CST.Core/Any2Ipe.Convert` has real reverse-converter branches for Myanmar/Sinhala/Thai/Khmer/Tibetan/Telugu/Cyrillic (`X2Deva`→`Deva2Ipe`), and Cyrillic detection landed in CORE-3 (fixed). The finding was assessed against the legacy `src/CST/` file. | |
 | SRCH-10 | Medium | [#147](https://github.com/fsnow/cst/issues/147) | — | ✅ Fixed | |
@@ -104,8 +104,8 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | | |
 | SCRIPT-10 | Low    | — | — | | |
 
-**Progress:** 43 fixed, 1 reopened (SRCH-7 → #145 — residual gap found in verification), 1 deferred (BOOK-7, needs GUI verification), 35 not yet filed (SRCH-9 among them, assessed not-a-defect).
-**Verification progress:** 8 verified (SRCH-1, 2, 3, 5, 6, 8, 11, 14), 2 incomplete (SRCH-4 → #114, SRCH-7 → #145); 34 fixed-but-unverified remaining, proceeding 4 at a time with a pause after each batch.
+**Progress:** 44 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 35 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect).
+**Verification progress:** 9 verified (SRCH-1, 2, 3, 4, 5, 6, 8, 11, 14), 1 incomplete (SRCH-7 → #145); 34 fixed-but-unverified remaining, proceeding 4 at a time with a pause after each batch.
 **High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
