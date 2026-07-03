@@ -601,10 +601,15 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
     private async Task ExecuteSearchAsync()
     {
         // Supersede any in-flight search and capture THIS search's token, so a stale completion can't
-        // clobber the newer search's results or its IsSearching flag. (SRCH-7)
-        _searchCancellation?.Cancel();
+        // clobber the newer search's results or its IsSearching flag. Swap the CTS ATOMICALLY: both
+        // pipelines (typing + filter/mode) enter here on thread-pool threads via Throttle+SelectMany,
+        // which don't serialize, so a plain "Cancel(); _searchCancellation = cts" could interleave such
+        // that two triggers each cancel an OLDER source and both keep a live token — both would pass the
+        // gates below and double the results. Interlocked.Exchange makes each trigger cancel exactly the
+        // source it replaced, leaving a single survivor. (SRCH-7)
         var cts = new CancellationTokenSource();
-        _searchCancellation = cts;
+        var previous = System.Threading.Interlocked.Exchange(ref _searchCancellation, cts);
+        previous?.Cancel();
         var token = cts.Token;
 
         try
