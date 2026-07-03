@@ -52,7 +52,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | STATE-4 | Medium | [#200](https://github.com/fsnow/cst/issues/200) | — | ✅ Fixed | ⏳ pending Fable verification (has 7 tests) |
 | STATE-5 | Low    | [#207](https://github.com/fsnow/cst/issues/207) | — | ✅ Fixed | ⏳ pending Fable verification (GUI) |
 | STATE-6 | Low    | [#208](https://github.com/fsnow/cst/issues/208) | — | ✅ Fixed | ⏳ pending Fable verification (splash experiment + LoggingService + AddRecentBook removed; 488/488) |
-| STATE-7 | Low    | — | — | | |
+| STATE-7 | Low    | [#209](https://github.com/fsnow/cst/issues/209) | — | ✅ Fixed | ⏳ pending Fable verification (tiered retention; 4 tests) |
 | NET-1   | High   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed | ✅ 2026-07-03 (caveat: pre-fix truncated PDFs never re-validated → follow-up #194) |
 | NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed (+7a3c572) | ✅ 2026-07-03 (incomplete on first pass — Unknown still rendered the green badge; renderer fixed + 2 tests in 7a3c572) |
 | NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | ✅ Fixed | ✅ 2026-07-03 (numeric-only pre-release tags deliberately unsupported — documented in f151202) |
