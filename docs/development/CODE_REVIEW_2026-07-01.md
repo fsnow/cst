@@ -75,7 +75,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | CORE-6  | Low    | — | — | |
 | CORE-7  | Low    | — | — | |
 | CORE-8  | Low    | — | — | |
-| BOOK-1  | High   | [#136](https://github.com/fsnow/cst/issues/136) | — | 🔧 In progress |
+| BOOK-1  | High   | [#136](https://github.com/fsnow/cst/issues/136) | — | ✅ Fixed (GUI-verified: renderer count returns to baseline across open/close) |
 | BOOK-2  | High   | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed |
 | BOOK-3  | Medium | [#153](https://github.com/fsnow/cst/issues/153) | — | ✅ Fixed |
 | BOOK-4  | Medium | [#156](https://github.com/fsnow/cst/issues/156) | — | ✅ Fixed |
@@ -104,7 +104,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-9  | Low    | — | — | |
 | SCRIPT-10 | Low    | — | — | |
 
-**Progress:** 43 fixed, 1 in progress (BOOK-1), 1 deferred (BOOK-7, needs GUI verification), 35 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved; BOOK subsystem complete except BOOK-1 (open) and BOOK-7 (deferred).
+**Progress:** 44 fixed, 0 in progress, 1 deferred (BOOK-7, needs GUI verification), 35 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved; BOOK subsystem complete except BOOK-7 (deferred).
 **High findings still without an issue:** SEC-1 (won't fix), DOCK-1, DOCK-2.
 
 Once the remaining findings are either fixed or filed as issues, this document should be archived/deleted per the hand-off note at the bottom.
