@@ -222,8 +222,18 @@ namespace CST.Avalonia.ViewModels
             return html;
         }
 
-        private string InjectVersionBanner(string html, VersionCheckResult versionCheck)
+        // internal for tests (NET-2 / #137)
+        internal string InjectVersionBanner(string html, VersionCheckResult versionCheck)
         {
+            // Unknown means a version string didn't parse (malformed updates JSON, blank channel
+            // fields, unparseable app version). We can't honestly claim "latest" OR "update
+            // available", so show no badge at all rather than the false green one. (NET-2 / #137)
+            if (versionCheck.Comparison == VersionComparison.Unknown)
+            {
+                Log.Warning("Version comparison is Unknown - skipping version badge");
+                return html;
+            }
+
             string banner;
 
             if (!versionCheck.IsUpdateAvailable)
