@@ -830,7 +830,7 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         IncludeOther = false;
     }
     
-    // Pumped whenever a book-type filter toggles; throttled in WhenActivated to re-run the search live.
+    // Pumped whenever a book-type filter toggles; a ctor-level throttled subscription re-runs the search live.
     private readonly System.Reactive.Subjects.Subject<Unit> _filterChanged = new();
 
     private void SetupFilterChangeNotifications()
@@ -838,7 +838,8 @@ public class SearchViewModel : ReactiveTool, IActivatableViewModel, IDisposable
         // The 7-property WhenAnyValue tuple overload used here previously did not fire on toggle, so
         // the summary labels never refreshed and results didn't re-filter until the next manual search
         // (#52). Drive off the raw PropertyChanged event instead — it is guaranteed to fire for every
-        // Include* change. Labels update immediately here; the debounced live re-search is in WhenActivated.
+        // Include* change. Labels update immediately here; the debounced live re-search is the ctor-level
+        // _filterChanged subscription below.
         this.PropertyChanged += (_, e) =>
         {
             if (IsFilterProperty(e.PropertyName))

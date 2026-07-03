@@ -135,25 +135,33 @@ public partial class SearchPanel : UserControl
     {
         if (DataContext is not SearchViewModel vm)
             return;
-        var pending = vm.PendingSelectedTerms;
-        if (pending is not { Count: > 0 })
-            return;
         if (vm.Terms.Count == 0)
-            return; // results not in yet - don't consume the pending selection; the event will fire again
+            return; // results not in yet - the event fires again once the term list is populated
 
         var termsList = this.FindControl<ListBox>("TermsList");
         if (termsList?.SelectedItems == null)
             return;
 
+        // The ListBox has no SelectedItems binding, so push the visual selection here to match the VM:
+        // the saved restore set (#87) when a restore is pending, otherwise whatever the VM auto-selected
+        // for a fresh search (e.g. the single-term match). Without the fresh-search case the auto-selected
+        // term filled the Books pane but rendered UNselected, and a stray tap on the list then cleared it. (SRCH-10)
+        var pending = vm.PendingSelectedTerms;
+        var toSelect = pending is { Count: > 0 }
+            ? vm.Terms.Where(t => pending.Contains(t.Term)).ToList()
+            : vm.SelectedTerms.ToList();
+
         termsList.SelectedItems.Clear();
-        foreach (var term in vm.Terms.Where(t => pending.Contains(t.Term)))
+        foreach (var term in toSelect)
             termsList.SelectedItems.Add(term);
 
-        vm.ClearPendingSelectedTerms();
-        Log.Information("[SearchPanel] Restored {Count} selected term(s) into the list box", termsList.SelectedItems.Count);
+        if (pending is { Count: > 0 })
+            vm.ClearPendingSelectedTerms();
+
+        Log.Information("[SearchPanel] Selected {Count} term(s) in the list box", termsList.SelectedItems.Count);
 
         // Selecting items auto-scrolls to the last selected one; bring the list back to the top so the
-        // restored term list opens at the top rather than scrolled down. (#87)
+        // term list opens at the top rather than scrolled down. (#87)
         if (termsList.ItemCount > 0)
             Dispatcher.UIThread.Post(() => termsList.ScrollIntoView(0), DispatcherPriority.Background);
     }
