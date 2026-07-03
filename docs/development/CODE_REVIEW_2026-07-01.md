@@ -48,9 +48,9 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-14 | Low    | [#151](https://github.com/fsnow/cst/issues/151) | [#152](https://github.com/fsnow/cst/pull/152) | ✅ Fixed | ✅ 2026-07-02 |
 | STATE-1 | High   | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed | ✅ 2026-07-03 |
 | STATE-2 | High   | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed | ✅ 2026-07-03 (non-blocking residuals noted: lock disposal race at exit, unlocked zero-caller CreateBackupAsync/ClearStateAsync) |
-| STATE-3 | Medium | [#199](https://github.com/fsnow/cst/issues/199) | — | ✅ Fixed (17e4457) | ✅ 2026-07-03 (atomic write + corrupt-file defaulting; 3 regression tests) |
-| STATE-4 | Medium | [#200](https://github.com/fsnow/cst/issues/200) | — | ✅ Fixed | ✅ 2026-07-03 (one canonical log-level list; 7 tests) |
-| STATE-5 | Low    | [#207](https://github.com/fsnow/cst/issues/207) | — | ✅ Fixed | ✅ 2026-07-03 (Minimized→Normal on restore) |
+| STATE-3 | Medium | [#199](https://github.com/fsnow/cst/issues/199) | — | ✅ Fixed | ⏳ pending Fable verification (has 3 regression tests) |
+| STATE-4 | Medium | [#200](https://github.com/fsnow/cst/issues/200) | — | ✅ Fixed | ⏳ pending Fable verification (has 7 tests) |
+| STATE-5 | Low    | [#207](https://github.com/fsnow/cst/issues/207) | — | ✅ Fixed | ⏳ pending Fable verification (GUI) |
 | STATE-6 | Low    | — | — | | |
 | STATE-7 | Low    | — | — | | |
 | NET-1   | High   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed | ✅ 2026-07-03 (caveat: pre-fix truncated PDFs never re-validated → follow-up #194) |
@@ -95,14 +95,14 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | XCUT-7  | Low    | — | — | | |
 | SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed | ✅ 2026-07-03 |
 | SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed | ✅ 2026-07-03 (incomplete on first pass — docs still had the term; reworded in 4037efc; review-doc quote + VRI dictionary data exempt, see #143) |
-| SCRIPT-3  | Medium | [#201](https://github.com/fsnow/cst/issues/201) | — | ✅ Fixed | ✅ 2026-07-03 (ASCII-only digit validation; regression tests) |
+| SCRIPT-3  | Medium | [#201](https://github.com/fsnow/cst/issues/201) | — | ✅ Fixed | ⏳ pending Fable verification (has regression tests) |
 | SCRIPT-4  | Medium | [#203](https://github.com/fsnow/cst/issues/203) | — | ✅ Fixed | 🔧 committed; GUI-confirm counts show (52) |
 | SCRIPT-5  | Medium | — | — | | |
-| SCRIPT-6  | Low    | — | — | ✅ Fixed | ✅ 2026-07-03 (already fixed by STATE-2 5906973; ScriptService uses MarkDirty) |
-| SCRIPT-7  | Low    | [#202](https://github.com/fsnow/cst/issues/202) | — | ✅ Fixed | ✅ 2026-07-03 (CFArray released in finally; 6/6 tests) |
+| SCRIPT-6  | Low    | — | — | ✅ Fixed | ⏳ pending Fable verification (already done by STATE-2 5906973) |
+| SCRIPT-7  | Low    | [#202](https://github.com/fsnow/cst/issues/202) | — | ✅ Fixed | ⏳ pending Fable verification (6/6 tests) |
 | SCRIPT-8  | Low    | — | — | | |
-| SCRIPT-9  | Low    | [#204](https://github.com/fsnow/cst/issues/204) | — | ✅ Fixed | ✅ 2026-07-03 (dead _nodeCache + log spam removed) |
-| SCRIPT-10 | Low    | [#205](https://github.com/fsnow/cst/issues/205) | — | ✅ Fixed | ✅ 2026-07-03 (RefreshTreeAsync guarded) |
+| SCRIPT-9  | Low    | [#204](https://github.com/fsnow/cst/issues/204) | — | ✅ Fixed | ⏳ pending Fable verification |
+| SCRIPT-10 | Low    | [#205](https://github.com/fsnow/cst/issues/205) | — | ✅ Fixed | ⏳ pending Fable verification |
 
 **Progress:** 52 fixed, 0 reopened, 1 deferred (BOOK-7, needs GUI verification), 27 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
 **Verification progress (paused 2026-07-03):** 34 verified + SRCH-9 assessment confirmed. Remaining to verify next session: **NET-4, NET-5, NET-7, NET-8, DICT-6, BOOK-8, BOOK-9, BOOK-10, BOOK-11** (the nine Lows). Also outstanding: BOOK-7 (deferred, scroll-restoration GUI work); DOCK-1..8 (author-self-reviewed, need the GUI checklist below); BOOK-4 reopened (#156, CEF-bridge SEQ, needs a GUI session).
