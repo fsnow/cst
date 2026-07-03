@@ -873,6 +873,12 @@ public partial class App : Application
                 {
                     Log.Information("SHUTDOWN: Re-capturing live book window states before save");
                     await factory.SaveAllBookWindowStatesAsync();
+
+                    // Final main-window geometry capture (bypasses the debounce). On Cmd+Q this
+                    // handler runs BEFORE the window's Closing event, so without this the state
+                    // file was written with geometry up to 500ms stale — and window MOVES were
+                    // previously never captured at all. (DOCK-6)
+                    mainWindow.SaveWindowState(force: true);
                 }
 
                 // Force immediate save on shutdown

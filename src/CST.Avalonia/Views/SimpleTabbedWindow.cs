@@ -113,6 +113,11 @@ public partial class SimpleTabbedWindow : Window
 
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        // Final geometry capture, bypassing the debounce: the 500ms leading-edge throttle drops the
+        // trailing events of a resize/move, so without this the last ~500ms of geometry changes were
+        // lost when the window was closed with the red button. (DOCK-6)
+        SaveWindowState(force: true);
+
         // Clean up drag monitoring timer
         if (_dragMonitoringTimer != null)
         {
@@ -250,6 +255,9 @@ public partial class SimpleTabbedWindow : Window
     {
         // Subscribe to window events to save state when window changes
         PropertyChanged += OnWindowPropertyChanged;
+        // Window MOVES don't raise any styled-property change (Position isn't a StyledProperty),
+        // so without this a move-then-quit restored at the old position. (DOCK-6)
+        PositionChanged += (_, _) => { if (_isInitialized) SaveWindowState(); };
         Opened += OnWindowOpened;
         
         // Don't restore window state here - it will be done after application state is loaded
@@ -359,13 +367,18 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    private void SaveWindowState()
+    // Internal + force so the shutdown path (App.SaveApplicationStateAsync) can capture the final
+    // geometry bypassing the debounce — the Cmd+Q sequence writes the state file BEFORE this window's
+    // Closing event fires, so the OnWindowClosing capture alone doesn't reach disk on that path. (DOCK-6)
+    internal void SaveWindowState(bool force = false)
     {
         try
         {
-            // Debounce saves to prevent excessive file I/O during window resizing
+            // Debounce saves to prevent excessive updates during window resizing; the debounce is
+            // leading-edge, so the trailing events are covered by the forced captures at closing
+            // and shutdown. (DOCK-6)
             var now = DateTime.Now;
-            if ((now - _lastSaveTime).TotalMilliseconds < 500) // Only save every 500ms
+            if (!force && (now - _lastSaveTime).TotalMilliseconds < 500) // Only save every 500ms
             {
                 return;
             }
