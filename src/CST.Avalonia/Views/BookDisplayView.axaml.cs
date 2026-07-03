@@ -299,6 +299,9 @@ public partial class BookDisplayView : UserControl
         base.OnLoaded(e);
         this.PropertyChanged += OnIsVisibleChanged;
         _logger.Information("BookDisplayView OnLoaded called");
+        // Now attached and styled, so the counter's font is resolved — size its reserve. Covers a
+        // recycled view whose ViewModel already has TotalHits set (no fresh PropertyChanged). (#196)
+        UpdateHitCounterWidth();
         SetupCSharpScrollTracking();
 
         // Monitor drag operations to temporarily hide WebView for drop indicators
@@ -516,6 +519,43 @@ public partial class BookDisplayView : UserControl
         {
             Dispatcher.UIThread.Post(() => LoadHtmlContent());
         }
+        else if (e.PropertyName == nameof(BookDisplayViewModel.TotalHits) ||
+                 e.PropertyName == nameof(BookDisplayViewModel.HasSearchHighlights))
+        {
+            UpdateHitCounterWidth();
+        }
+    }
+
+    // Reserve a fixed width for the search hit counter equal to the widest string this search can
+    // produce ("{total} of {total}"), MEASURED in the counter's own font — so its width never changes
+    // as the current index gains digits during navigation. A changing width reflows the toolbar
+    // WrapPanel to a second row, which shrinks the WebView viewport and can scroll the just-navigated
+    // hit out of view. Measuring (not estimating px) is what makes this robust at a tuned window
+    // width where a few stray pixels would tip it into a wrap. (#196)
+    private void UpdateHitCounterWidth()
+    {
+        var counter = HitCounterText;
+        if (counter == null) return;
+
+        var total = _viewModel?.TotalHits ?? 0;
+        if (total <= 0)
+        {
+            counter.MinWidth = 0;
+            return;
+        }
+
+        var fontSize = double.IsNaN(counter.FontSize) || counter.FontSize <= 0 ? 14.0 : counter.FontSize;
+        var typeface = new global::Avalonia.Media.Typeface(counter.FontFamily, counter.FontStyle, counter.FontWeight);
+
+        double Measure(string s) => new global::Avalonia.Media.FormattedText(
+            s, System.Globalization.CultureInfo.CurrentCulture,
+            global::Avalonia.Media.FlowDirection.LeftToRight, typeface, fontSize,
+            global::Avalonia.Media.Brushes.Black).Width;
+
+        // Widest string is "{total} of {total}"; pad by one digit's width so a different-digit current
+        // index of the same length (e.g. "19 of 20" vs "20 of 20") can't render a hair wider than the
+        // reserve. Round up so we never under-reserve by a sub-pixel.
+        counter.MinWidth = Math.Ceiling(Measure($"{total} of {total}") + Measure("0"));
     }
 
     private void LoadHtmlContent()

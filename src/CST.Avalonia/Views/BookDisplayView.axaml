@@ -96,14 +96,14 @@
                     <Button Command="{Binding PreviousHitCommand}" ToolTip.Tip="Previous search result" Margin="2">
                         <Image Source="avares://CST.Avalonia/Assets/Images/ArrowPrevious.png" Width="16" Height="16"/>
                     </Button>
-                    <!-- Stable width so the counter's digit count ("9 of 5" -> "10 of 5" -> "100 of 5")
-                         can't change the WrapPanel's layout and reflow the buttons to a second row —
-                         a taller toolbar shrinks the WebView viewport and can scroll the target hit out
-                         of view. Reserve is per-book (sized to TotalHits' digit count), so small
-                         searches don't over-pad the toolbar and make a 2nd row more likely. (#196) -->
-                    <TextBlock Text="{Binding HitStatusText}" VerticalAlignment="Center" Margin="5,0"
-                               TextAlignment="Center"
-                               MinWidth="{Binding TotalHits, Converter={x:Static converters:HitCounterWidthConverter.Instance}}"/>
+                    <!-- MinWidth is set in code-behind (UpdateHitCounterWidth) by MEASURING the widest
+                         string this search can produce ("{total} of {total}") in this control's actual
+                         font, so the counter's width is stable as the current-index digit count grows.
+                         A stable width stops the WrapPanel reflowing the buttons to a second row (which
+                         would shrink the WebView viewport and scroll the target hit out of view). We
+                         measure rather than estimate px so a tuned window width can't tip into a wrap. (#196) -->
+                    <TextBlock x:Name="HitCounterText" Text="{Binding HitStatusText}"
+                               VerticalAlignment="Center" Margin="5,0" TextAlignment="Center"/>
                     <Button Command="{Binding NextHitCommand}" ToolTip.Tip="Next search result" Margin="2">
                         <Image Source="avares://CST.Avalonia/Assets/Images/ArrowNext.png" Width="16" Height="16"/>
                     </Button>
