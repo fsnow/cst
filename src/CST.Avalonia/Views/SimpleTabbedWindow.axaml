@@ -27,6 +27,8 @@
                     <NativeMenuItem Header="Go To..." Click="OnGoToMenuItemClick" Gesture="cmd+g" />
                     <NativeMenuItem Header="Look Up in Dictionary" Click="OnLookUpInDictionaryClick" Gesture="cmd+d" />
                     <NativeMenuItem Header="Search for Selection" Click="OnSearchForSelectionClick" Gesture="cmd+f" />
+                    <NativeMenuItem Header="View Source (1957 ed.)" Click="OnViewSource1957Click" Gesture="cmd+e" />
+                    <NativeMenuItem Header="View Source (2010 ed.)" Click="OnViewSource2010Click" Gesture="cmd+shift+e" />
                 </NativeMenu>
             </NativeMenuItem>
         </NativeMenu>

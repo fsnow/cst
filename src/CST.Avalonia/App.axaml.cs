@@ -1188,15 +1188,24 @@ public partial class App : Application
             viewMenu.Add(searchItem);
             viewMenu.Add(dictionaryItem);
 
-            // Tools menu: Go To...
+            // Tools menu: Go To... + View Source (floating windows are book-centric)
             var goToItem = new NativeMenuItem { Header = "Go To...", Gesture = KeyGesture.Parse("Cmd+G") };
             goToItem.Click += (s, e) =>
             {
                 Log.Information("Go To menu item clicked via Tools menu (floating window)");
                 OnGoToMenuItemClickFromFloatingWindow(window);
             };
+
+            // View Source as app-level shortcuts so they work without the WebView having focus. (Cmd+E/Shift+Cmd+E)
+            var viewSource1957Item = new NativeMenuItem { Header = "View Source (1957 ed.)", Gesture = KeyGesture.Parse("Cmd+E") };
+            viewSource1957Item.Click += (s, e) => OnViewSourceFromFloatingWindow(window, source2010: false);
+            var viewSource2010Item = new NativeMenuItem { Header = "View Source (2010 ed.)", Gesture = KeyGesture.Parse("Cmd+Shift+E") };
+            viewSource2010Item.Click += (s, e) => OnViewSourceFromFloatingWindow(window, source2010: true);
+
             var toolsMenu = new NativeMenu();
             toolsMenu.Add(goToItem);
+            toolsMenu.Add(viewSource1957Item);
+            toolsMenu.Add(viewSource2010Item);
 
             var nativeMenu = new NativeMenu();
             nativeMenu.Add(new NativeMenuItem { Header = "View", Menu = viewMenu });
@@ -1276,6 +1285,30 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Error(ex, "Error handling Go To from floating window");
+        }
+    }
+
+    // View Source (Cmd+E = 1957, Shift+Cmd+E = 2010) for the active book in a floating window, so the
+    // shortcut works without the book's WebView having focus (previously only a JS keydown handled it).
+    private void OnViewSourceFromFloatingWindow(Window floatingWindow, bool source2010)
+    {
+        try
+        {
+            if (floatingWindow is CstHostWindow hostWindow && hostWindow.Layout != null)
+            {
+                var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
+                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel)
+                {
+                    var command = source2010 ? bookViewModel.ShowSource2010Command : bookViewModel.ShowSource1957Command;
+                    Log.Information("View Source ({Edition}) via floating-window menu for book: {BookFile}",
+                        source2010 ? "2010" : "1957", bookViewModel.Book.FileName);
+                    command.Execute().Subscribe(_ => { }, ex => Log.Debug(ex, "View Source command not available"));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error handling View Source from floating window");
         }
     }
 

@@ -711,6 +711,38 @@ public partial class SimpleTabbedWindow : Window
         return s.Trim().Trim('.', ',', ';', ':', '!', '?', '"', '\'', '(', ')', '\u0964', '\u0965');
     }
 
+    // View Source (Cmd+E = 1957, Cmd+Shift+E = 2010) as app-level native-menu shortcuts, so they work
+    // regardless of whether the book's WebView has focus. Previously only a JS keydown INSIDE the WebView
+    // handled these, so they required browser focus.
+    private void OnViewSource1957Click(object? sender, EventArgs e) => TriggerViewSource(source2010: false);
+    private void OnViewSource2010Click(object? sender, EventArgs e) => TriggerViewSource(source2010: true);
+
+    private void TriggerViewSource(bool source2010)
+    {
+        try
+        {
+            // Resolve the active book in THIS window (main or floating), same as the Go To handler.
+            var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
+            if (dockControl?.DataContext is not LayoutViewModel layoutViewModel ||
+                layoutViewModel.Layout is not RootDock rootDock)
+                return;
+
+            var documentDock = FindDocumentDockInLayout(rootDock);
+            if (documentDock?.ActiveDockable is not BookDisplayViewModel bookViewModel)
+                return;
+
+            var command = source2010 ? bookViewModel.ShowSource2010Command : bookViewModel.ShowSource1957Command;
+            _logger.Information("View Source ({Edition}) via menu/shortcut for book: {BookFile}",
+                source2010 ? "2010" : "1957", bookViewModel.Book.FileName);
+            // Swallow the CanExecute-false case (book has no source PDF) instead of faulting.
+            command.Execute().Subscribe(_ => { }, ex => _logger.Debug(ex, "View Source command not available"));
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "View Source shortcut failed");
+        }
+    }
+
     // "Search for Selection" (Cmd+F): take the word or phrase selected in the active book and run it
     // through the Search tool, bringing the Search tab forward. Multi-word selections are quoted so they
     // search as an exact phrase. (#25 adjacent feature)
