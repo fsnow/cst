@@ -325,7 +325,8 @@ namespace CST.Avalonia.Services.Platform.Mac
             IntPtr characterStringRef = IntPtr.Zero;
             IntPtr characterSetRef = IntPtr.Zero;
             IntPtr attributesDictRef = IntPtr.Zero;
-            
+            IntPtr matchingDescriptorsRef = IntPtr.Zero;
+
             try
             {
                 // Step 1: Get sample characters for the script
@@ -399,7 +400,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                 _logger.LogDebug("CHARACTER-SET APPROACH: Step 4 SUCCESS - Created template descriptor");
                 
                 // Step 6: Find matching font descriptors using Swift approach
-                IntPtr matchingDescriptorsRef = CoreText.CTFontDescriptorCreateMatchingFontDescriptors(templateDescriptorRef, IntPtr.Zero);
+                matchingDescriptorsRef = CoreText.CTFontDescriptorCreateMatchingFontDescriptors(templateDescriptorRef, IntPtr.Zero);
                 CoreFoundation.CFRelease(templateDescriptorRef);
                 
                 if (matchingDescriptorsRef == IntPtr.Zero)
@@ -430,9 +431,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                         CoreFoundation.CFRelease(familyNameRef);
                     }
                 }
-                
-                CoreFoundation.CFRelease(matchingDescriptorsRef);
-                
+
                 var sortedFonts = uniqueFamilies.OrderBy(f => f).ToList();
                 _logger.LogDebug("CHARACTER-SET APPROACH: Step 6 SUCCESS - Found {Count} unique font families for script {Script}", sortedFonts.Count, script);
                 
