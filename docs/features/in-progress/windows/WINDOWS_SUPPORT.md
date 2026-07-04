@@ -1,418 +1,160 @@
-# Windows Support Planning Document
+# Windows Support — Plan & Reality Check
 
-**Created**: October 22, 2025
-**Target**: Post-Beta 3
-**Status**: Analysis Complete
-
-## Executive Summary
-
-CST Reader is built on .NET 9 and Avalonia UI, which are inherently cross-platform. The codebase is **well-structured for Windows support** with most platform-specific code already isolated.
-
-**MAJOR DISCOVERY** ✅: The WebView package (`WebViewControl-Avalonia`) **ALREADY SUPPORTS WINDOWS!** Our project file incorrectly limits it to macOS only. This eliminates the main perceived blocker.
-
-**Estimated Effort**: **Low** (3-5 days, down from 2-4 weeks!)
-**Complexity**: **Low** (mostly project file updates)
-**Risk Level**: **Low**
+**Rewritten:** 2026-07-04 (supersedes the Oct 2025 draft, which was written early in the project and was over-optimistic — see "How this doc changed").
+**Target:** Beta 5 goal; a focused-weekend MVP is plausible **if the two POCs below pass**.
+**Status:** Not started in code. Two make-or-break POCs must run first.
+**Stack:** .NET 10 + Avalonia 11 + WebViewControl-Avalonia (CefGlue/Chromium).
 
 ---
 
-## Current Platform-Specific Code
+## TL;DR
 
-### ✅ Already Cross-Platform Compatible
+The codebase *is* reasonably well-isolated for cross-platform, but two things the original draft dismissed are the actual work, and both are unproven on Windows:
 
-Most of the codebase uses platform-agnostic .NET APIs:
+1. **WebView/CEF lifecycle** — not just "does it render," but does **float/unfloat/dock re-parenting** survive? The whole dock subsystem is built around **macOS-specific SIGSEGV-on-reparent workarounds**. "Same CefGlue package" does not imply "same native window-reparenting behavior." → **POC-1.**
+2. **Menus & keyboard shortcuts are 100% macOS `NativeMenu`, gated by `OperatingSystem.IsMacOS()`.** On Windows today there is **no menu bar and no shortcuts** — meaning no way to open the book tree, search, dictionary, Go To, or View Source. This is real UI work, not a project-file tweak. → **POC-2 / build item.**
 
-1. **File Paths**: All services use `Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)` which maps correctly on Windows
-   - macOS: `~/Library/Application Support/CSTReader`
-   - Windows: `%APPDATA%\CSTReader`
+Everything else (paths, fonts, packaging, project file) is genuinely low-risk plumbing. **WindowsFontService (#29) is NOT needed for MVP** — the existing `FontManager.Current.SystemFonts` fallback is fine; defer it.
 
-2. **Font Service**: Already has fallback implementation for non-macOS platforms
-   - `FontService.cs` uses `#if MACOS` conditional compilation
-   - Lines 132-146: Falls back to `FontManager.Current.SystemFonts` on Windows
-   - Lines 149-164: Returns `null` for system default on Windows (acceptable)
-
-3. **Dependency Injection**: Platform-specific services registered conditionally
-   - `App.axaml.cs:855`: `if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))`
-   - Only `MacFontService` is registered on macOS
-
-4. **Project File**: Build system already supports conditional compilation
-   - `CST.Avalonia.csproj:24-26`: `MACOS` define constant set per platform
-   - Line 32: `Info.plist` only copied on macOS (correct)
+**Honest estimate:** if both POCs pass, a single-window MVP (launch → open a book → search → persist state) is a weekend. If POC-1 reveals reparenting SIGSEGVs like macOS had, that alone is a multi-day investigation and the weekend goal slips.
 
 ---
 
-## Required Changes
+## How this doc changed (why the old draft was wrong)
 
-### 1. **WebView Support** ✅ **SOLVED - NO BLOCKER!**
+The Oct 2025 draft was written weeks into the project (which began 2025-06-29 as a Claude Code learning exercise) by models that were, frankly, not up to the task — the same provenance as much of the code we've spent recent weeks fixing. Treat its confident ✅/🎉 claims with suspicion. Concrete corrections:
 
-**Current State**:
-```xml
-<!-- Lines 65-68 in CST.Avalonia.csproj -->
-<PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9"
-    Condition="'$(RuntimeIdentifier)' == 'osx-arm64'" />
-<PackageReference Include="WebViewControl-Avalonia" Version="3.120.9"
-    Condition="'$(RuntimeIdentifier)' == 'osx-x64'" />
-```
-
-**GOOD NEWS**: WebViewControl-Avalonia **ALREADY SUPPORTS WINDOWS!** ✅
-
-**Research Findings** (October 22, 2025):
-
-The `WebViewControl-Avalonia` package (by OutSystems) is **fully cross-platform**:
-- **Windows**: ✅ x64 and ARM64 (both WPF and Avalonia)
-- **macOS**: ✅ x64 and ARM64 (Avalonia only)
-- **Linux**: ✅ x64 (ARM64 works with issues)
-
-**Package Details**:
-- **Latest Version**: 3.120.10 (we're using 3.120.9)
-- **Based on**: CefGlue (Chromium Embedded Framework)
-- **Single Package**: No platform-specific variants needed
-- **Dependencies**: Avalonia ≥ 11.0.10, CefGlue.Avalonia ≥ 120.6099.207
-- **NuGet**: https://www.nuget.org/packages/WebViewControl-Avalonia/
-- **GitHub**: https://github.com/OutSystems/WebView
-
-**Why Our .csproj Has macOS Conditions**:
-
-Our current project file **incorrectly limits** WebViewControl-Avalonia to macOS:
-```xml
-Condition="'$(RuntimeIdentifier)' == 'osx-arm64'"  <!-- ❌ Too restrictive -->
-Condition="'$(RuntimeIdentifier)' == 'osx-x64'"    <!-- ❌ Too restrictive -->
-```
-
-**Solution - Update .csproj**:
-```xml
-<!-- Remove macOS-only conditions, add platform-appropriate packages -->
-<PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.10"
-    Condition="'$(RuntimeIdentifier)' == 'osx-arm64' OR '$(RuntimeIdentifier)' == 'win-arm64'" />
-<PackageReference Include="WebViewControl-Avalonia" Version="3.120.10"
-    Condition="'$(RuntimeIdentifier)' == 'osx-x64' OR '$(RuntimeIdentifier)' == 'win-x64'" />
-```
-
-**Alternative - Simpler Approach**:
-```xml
-<!-- Use unconditional reference, let NuGet handle platform -->
-<PackageReference Include="WebViewControl-Avalonia" Version="3.120.10" />
-```
-
-**Effort Required**: Minimal - just update project file conditions!
-
-**Alternative Options** (For Reference):
-
-If WebViewControl-Avalonia doesn't work for some reason, alternatives exist:
-
-- **WebView.Avalonia.Windows**: Uses Microsoft WebView2 (requires Edge WebView2 runtime)
-  - Version: 11.0.0.1
-  - Different API than WebViewControl-Avalonia
-  - Would require code changes in BookDisplayView
-
-**Recommendation**: ✅ **Use WebViewControl-Avalonia** - Already in use, just fix .csproj conditions!
+- Said **.NET 9**; we're on **.NET 10**.
+- Claimed **"WebView works as-is, no code changes, blocker eliminated."** Half-true: the *managed API* is the same, but the fragile part is native window re-parenting under the dock, which is untested on Windows and was the single hardest thing to get right on macOS.
+- Claimed **"all paths are cross-platform ✅."** In this session alone we fixed **two** Windows-breaking `file://` URL bugs (#162 PDF, #222 book HTML). Assume more lurk.
+- **Never mentioned that menus/shortcuts are macOS-only.** This is arguably the biggest functional gap.
+- Marked **WindowsFontService HIGH priority** while also admitting the fallback works — contradictory. It's a post-MVP enhancement (#29).
+- "Phase 1 done ✅" — none of the csproj work has actually been done.
 
 ---
 
-### 2. **macOS Helper Apps** (App.axaml.cs)
+## The two POCs — do these FIRST, before any other work
 
-**Current Code** (Lines 97-120):
-```csharp
-if (exePath != null && exePath.Contains(".app/Contents/MacOS/"))
-{
-    // CEF helper app detection for macOS app bundles
-    var helperPath = Path.Combine(bundlePath,
-        "Contents/Frameworks/CST Reader Helper.app/Contents/MacOS/CST Reader Helper");
+### POC-1 — CEF renders **and re-parents** on Windows  ⭐ make-or-break
+**Question:** Does WebViewControl-Avalonia initialize its CEF subprocess on Windows, render a book, **and** survive the dock's float→unfloat→re-dock cycle without crashing?
 
-    if (File.Exists(helperPath))
-    {
-        CefSettings.BrowserSubprocessPath = helperPath;
-    }
-}
-```
+**Why it's the crux:** On macOS, carrying a live WebView across a re-parent SIGSEGVs; the fix was the controlled dispose-before-move + fresh-browser dance in the float/unfloat button paths (see `docs/architecture/DOCK_WEBVIEW_WORKAROUNDS.md`). Windows CEF may (a) just work, (b) work but need different disposal ordering, or (c) fail in a new way. We won't know until we try.
 
-**Required Change**: Wrap in `#if MACOS` or `RuntimeInformation.IsOSPlatform(OSPlatform.OSX)`
+**Steps:**
+1. Apply the csproj changes (below) for `win-x64`.
+2. `dotnet run` on a Windows 11 machine/VM; confirm the CEF subprocess starts (watch logs / Task Manager for the CefGlue browser subprocess).
+3. Open one book — confirm it paints, script conversion renders, search highlight works.
+4. **Float the book window, unfloat it, re-dock it, drag-rearrange tabs.** Watch for crashes/blank WebViews.
 
-**Windows Equivalent**: Depends on chosen WebView solution (Option B/C above)
-- CEF on Windows uses different helper process structure
-- WebView2 doesn't require helper apps
+**Pass:** book renders and the float/unfloat/re-dock cycle is stable (or stable enough that remaining glitches are cosmetic).
+**Fail/partial:** any SIGSEGV-equivalent or blank-after-reparent → this becomes the project. Capture the exact repro and stop; don't paper over it.
 
----
+**Unknowns to research alongside:** how WebViewControl-Avalonia locates/ships its **browser subprocess** on Windows (macOS uses a helper `.app` + `browser-subprocess-path` switch — see `App.axaml.cs:88-115`). On Windows the CefGlue native assets normally come from NuGet; verify they land in the publish output and that no equivalent of the helper-path switch is required.
 
-### 3. **Platform-Specific Font Detection** ⭐ **EARLY TESTING PRIORITY**
+### POC-2 — a usable menu/shortcut surface on Windows  ⭐ required for any usable build
+**Question:** With native menus macOS-only, what's the minimum Windows menu/shortcut layer?
 
-**Current State**: Windows falls back to `FontManager.Current.SystemFonts` (shows all fonts)
+**Why:** `App.axaml.cs` builds the **View** menu (Select a Book / Search / Dictionary toggles) and **Tools/Book** menu (Go To `Cmd+G`, View Source 1957 `Cmd+E` / 2010 `Cmd+Shift+E`, Look Up `Cmd+D`, Search Selection `Cmd+F`) entirely as `NativeMenu`/`NativeMenuItem`, and calls `SetupNativeMenuEvents()` / `SetupWindowMenuEvents()` **only under `OperatingSystem.IsMacOS()`** (`App.axaml.cs:73-76, 153-158`). On Windows: nothing.
 
-**Windows 11 Font Coverage** ✅ **EXCELLENT NEWS**:
+**Options to prototype:**
+- **A — in-window `NativeMenuBar`:** Avalonia can render a `NativeMenu` as an in-window menu bar on Windows via a `<NativeMenuBar/>` in the window chrome. Lowest-churn if it works: reuse the same menu model, drop the `IsMacOS()` gate, render the bar in-window on Windows. Verify toggle/check state and gestures behave.
+- **B — a Windows `<Menu>`** built in XAML, bound to the same commands. More code, full control.
+- **Shortcuts:** the gestures are hardcoded `Cmd+…`. Windows needs `Ctrl+…`. Either switch to Avalonia's platform "primary modifier" or branch the gesture strings. Audit for any other hardcoded `Cmd`/meta assumptions.
 
-Based on research (October 22, 2025), Windows 11 includes **default fonts for all 14 Pali scripts**:
-
-| Script | Default Font | Notes |
-|--------|--------------|-------|
-| Latin | Segoe UI Variable | New Windows 11 system font |
-| Cyrillic | Segoe UI Variable | New Windows 11 system font |
-| Devanagari | Nirmala UI | Multi-script powerhouse |
-| Bengali | Nirmala UI | Multi-script powerhouse |
-| Gujarati | Nirmala UI | Multi-script powerhouse |
-| Gurmukhi | Nirmala UI | Multi-script powerhouse |
-| Kannada | Nirmala UI | Multi-script powerhouse |
-| Malayalam | Nirmala UI | Multi-script powerhouse |
-| Sinhala | Nirmala UI | Multi-script powerhouse |
-| Telugu | Nirmala UI | Multi-script powerhouse |
-| Myanmar | Myanmar Text | Dedicated font |
-| Khmer | Nirmala UI / Leelawadee UI | Sans Serif Collection |
-| Thai | Leelawadee UI | Sans Serif Collection |
-| Tibetan | Microsoft Himalaya | Sans Serif Collection |
-
-**Key Finding**: **Nirmala UI** supports 8 of the 14 Pali scripts - similar to macOS's excellent default font coverage!
-
-**WindowsFontService Implementation**:
-- Use Windows DirectWrite APIs to detect script-compatible fonts
-- Similar to `MacFontService.cs` but using Windows DirectWrite/GDI+
-- Location: `Services/Platform/Windows/WindowsFontService.cs`
-- **Priority**: **HIGH** - implement early to enable comprehensive font testing in Phase 1
-
-**Testing Strategy**:
-- Test on "base" Windows 11 install (no additional languages or fonts installed)
-- Verify all 14 Pali scripts display correctly without user intervention
-- This matches macOS experience where no font installation was required
+**Pass:** on Windows you can open the book tree, search, dictionary, Go To, and View Source via menu and/or keyboard.
 
 ---
 
-### 4. **Build & Packaging System**
+## Platform-seam inventory (the concrete touchpoints)
 
-**Current**: `package-macos.sh` - creates DMG with signing/notarization
+Every place that needs a Windows branch or verification. This is the real map — work from it.
 
-**Required for Windows**:
-1. **Create `package-windows.ps1` or `package-windows.sh`**:
-   - Build self-contained executable (`dotnet publish -c Release -r win-x64 --self-contained`)
-   - Create installer (MSI, MSIX, or Inno Setup)
-   - Optional: Code sign with certificate
+### 1. Project file — `src/CST.Avalonia/CST.Avalonia.csproj`
+- `TargetFramework` is `net10.0` (fine).
+- **WebView refs are macOS-only and stale** (`:76-79`): pinned `3.120.9`, conditioned on `osx-arm64`/`osx-x64`, and the **dev fallback (`RuntimeIdentifier == ''`) pulls the macOS ARM64 package** — so a plain Windows build resolves the wrong native. Fix:
+  - Add a `win-x64` (and optionally `win-arm64`) condition pulling `WebViewControl-Avalonia` (the non-ARM64 package id; confirm the correct Windows package id/variant on NuGet).
+  - Bump to the current version (was going to be 3.120.10 — check latest).
+  - Fix the empty-RID fallback so Windows dev builds don't grab the mac package.
+- Add a `WINDOWS` `DefineConstants` block mirroring the `MACOS` one (`:24-25`), for future `#if WINDOWS`.
+- Add `win-x64;win-arm64` to `RuntimeIdentifiers`.
+- `Assets\cst.ico` already exists for the Windows app icon.
+- **Line endings:** repo enforces LF via `.gitattributes`; set `git config core.autocrlf input` on the Windows dev box so you don't commit CRLF.
 
-2. **Update `.csproj`**:
-   ```xml
-   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-     <DefineConstants>WINDOWS</DefineConstants>
-     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
-   </PropertyGroup>
-   ```
+### 2. CEF init — `App.axaml.cs:79-121`
+- macOS-only keychain switches (`use-mock-keychain`, etc.) under `IsMacOS()` — leave as-is.
+- macOS-only `browser-subprocess-path` helper detection (`:88-115`) — harmless on Windows (the `.app/Contents/MacOS/` string check just fails), but confirm Windows doesn't need its own subprocess-path handling (POC-1).
+- `WebView.Settings.PersistCache = false` (`:120`) is cross-platform.
 
-3. **Windows Application Icon**:
-   - Already present: `Assets\cst.ico` (Line 9 in csproj)
-   - ✅ Ready to use
+### 3. Menus & shortcuts — `App.axaml.cs` (POC-2 above)
+- `SetupNativeMenuEvents` (`:953`), `SetupWindowMenuEvents` (`:973`), the programmatic View/Tools menu construction (`~:1084-1140`), and the `_selectBook/_search/_dictionary` menu-item lists (`:56-58`) are all macOS-shaped and macOS-gated. Needs a Windows path.
 
----
+### 4. Fonts — `Services/FontService.cs` (`#if MACOS` at `:9,21,25,33,135,156`)
+- On non-macOS, already falls back to `FontManager.Current.SystemFonts` and returns `null` for system-default. **Good enough for MVP.**
+- `MacFontService` is registered only on macOS (`App.axaml.cs:920`); `IFontService → FontService` is always registered (`:928`). A future `WindowsFontService` (DirectWrite) would follow the same DI seam — **that's #29, deferred.**
+- Validate on a **base Windows 11** install that all 14 scripts render via defaults (Nirmala UI covers ~8 Indic; Myanmar Text; Leelawadee UI for Thai/Khmer; Microsoft Himalaya for Tibetan; Segoe UI for Latin/Cyrillic). Likely fine; confirm, don't assume.
 
-### 5. **Testing Requirements**
+### 5. Paths & URLs — audit, don't trust
+- Fixed this session: `file://` concat in `PdfDisplayViewModel` (#162) and `BookDisplayView` (#222) → both now `new Uri(path).AbsoluteUri`.
+- `XmlUpdateService` `targetPath + "/"` (`:193,373`) compares **GitHub API** paths (always `/`) — not a filesystem bug.
+- **Action:** grep the app for remaining `"file://"`, string-built paths, and `'/'`/`'\\'` assumptions; anything feeding a WebView `LoadUrl` or a filesystem call on Windows is suspect. Corpus XML read is UTF-16-LE via `Encoding.Unicode` (cross-platform, already hardened).
 
-**Platforms to Test**:
-- ✅ **Windows 11 (x64)** - Primary target (Windows 10 EOL Oct 2025)
-- ⚠️ Windows 11 ARM64 (optional - Snapdragon X Elite/Plus devices)
+### 6. Already platform-aware (no work)
+- `WelcomeView.axaml.cs:148-156` already branches Windows/OSX/Linux.
+- `Environment.GetFolderPath(SpecialFolder.ApplicationData)` → `%APPDATA%\CSTReader` on Windows. Verify the Lucene index, logs (Serilog sink path), and downloaded XML all land there and are writable.
 
-**Test Machine**:
-- **"Base" Windows 11 install** (no additional languages/fonts) - ideal for validating default font support
-- Tests whether all 14 Pali scripts work out-of-the-box without user intervention
-
-**Test Scenarios** (in priority order):
-
-1. **Font System** ⭐ **TEST FIRST**:
-   - All 14 Pali scripts display correctly (Latin, Devanagari, Bengali, Cyrillic, Gujarati, Gurmukhi, Kannada, Khmer, Malayalam, Myanmar, Sinhala, Telugu, Thai, Tibetan)
-   - WindowsFontService detects appropriate fonts for each script
-   - Font settings persist across sessions
-   - UI fonts apply correctly to tree views, search results, dropdowns
-
-2. **Application Launch**:
-   - First run (no settings)
-   - Subsequent runs (restore state)
-   - From different installation locations
-
-3. **File Paths**:
-   - Settings saved to `%APPDATA%\CSTReader`
-   - XML files download correctly
-   - Lucene index creation
-   - Logs written to correct location
-
-4. **WebView Rendering**:
-   - Book content displays correctly
-   - Search highlights work
-   - Dark mode support
-   - Script conversion in WebView for all 14 scripts
-
-5. **Search & Indexing**:
-   - Lucene.NET works (should be cross-platform)
-   - Incremental indexing
-   - Position-based highlighting
+### 7. Packaging — new `package-windows.ps1`
+- Mirror `package-macos.sh` (clean RID-arg bash script): `dotnet publish -c Release -r win-x64 --self-contained` → zip a **portable folder/EXE** for the first release. Confirm the CefGlue native subprocess + assets are included in publish output (ties to POC-1). Installer (MSIX/Inno/WiX) and code signing are post-MVP.
 
 ---
 
-## Migration Path ⚡ **SIMPLIFIED!**
+## Sequenced plan
 
-### Phase 1: Project File Updates + Font Testing (1-2 days) ✅
-- [x] ~~Research WebView packages~~ **DONE** - WebViewControl-Avalonia supports Windows!
-- [x] ~~Research Windows 11 font support~~ **DONE** - All 14 Pali scripts supported by default!
-- [ ] Update CST.Avalonia.csproj:
-  - Remove macOS-only conditions from WebView package references
-  - Add Windows RuntimeIdentifier support (win-x64, win-arm64)
-  - Update to version 3.120.10
-- [ ] Add WINDOWS define constant (like MACOS)
-- [ ] **Implement WindowsFontService** (Services/Platform/Windows/WindowsFontService.cs):
-  - Use DirectWrite APIs for script-compatible font detection
-  - Implement GetAvailableFontsForScriptAsync() and GetSystemDefaultFontForScriptAsync()
-  - Follow MacFontService architecture
-- [ ] Test compilation on Windows 11 machine
-- [ ] **Test all 14 Pali scripts on base Windows 11 install** ⭐ **CRITICAL**:
-  - Verify fonts display correctly without installing additional fonts
-  - Test UI font system (tree views, search results, dropdowns)
-  - Document any missing fonts or issues
+**Gate 0 — POCs (do first):** POC-1 (CEF render + reparent) and POC-2 (menu/shortcut layer). If POC-1 fails, stop and reassess scope; the weekend goal is off.
 
-### Phase 2: Platform-Specific Code (1 day)
-- [ ] Wrap macOS helper app code in `#if MACOS` (App.axaml.cs lines 97-120)
-- [ ] Test that WebView initializes correctly on Windows
-- [ ] Verify CEF helper processes work on Windows
-- [ ] Fix any Windows-specific compilation errors
-- [ ] Verify font fixes from Phase 1 testing
+**MVP (single-window, if gates pass):**
+1. csproj: win RID + WebView win ref + `WINDOWS` constant + fix empty-RID fallback.
+2. Build & launch on Windows 11; Welcome page shows.
+3. Menu/shortcut layer from POC-2 (at least: open book tree, search, dictionary, Go To).
+4. Open a book, read it, script-switch, search + highlight.
+5. State persistence to `%APPDATA%\CSTReader` across restart.
+6. Font sanity on base Win11 (fallback).
+7. Portable `package-windows.ps1`.
 
-### Phase 3: Packaging & Distribution (1-2 days)
-- [ ] Create `package-windows.ps1` build script
-- [ ] Test self-contained deployment (win-x64)
-- [ ] Create portable EXE distribution
-- [ ] Optional: Create installer (MSI/MSIX/Inno Setup)
-- [ ] Optional: Code signing setup
+**MVP success =** compiles, launches, opens/reads a book, search works, state persists — **single window**. Do **not** gate MVP on flawless float/unfloat/dock-tearing.
 
-### Phase 4: Comprehensive Testing & Validation (1-2 days)
-- [ ] Test on Windows 11 x64 (Windows 10 EOL Oct 2025)
-- [ ] Test on "base" Windows 11 install (no additional languages/fonts)
-- [ ] Verify all features work:
-  - [ ] Book opening and display
-  - [ ] Search with highlighting
-  - [ ] Font settings (all 14 Pali scripts - already tested in Phase 1)
-  - [ ] State persistence
-  - [ ] Dark mode
-  - [ ] Script conversion in book content
-- [ ] Performance testing (compare with macOS baseline)
-- [ ] Fix any Windows-specific bugs
-
-### Phase 5: Documentation & Release (1 day)
-- [ ] Update README with Windows build instructions
-- [ ] Update CLAUDE.md with Windows support status
-- [ ] Create Windows installation guide
-- [ ] Release Windows binaries
-
-**Total Estimated Time**: 3-5 days (down from 2-4 weeks!)
+**Explicitly deferred:** WindowsFontService/#29 (use fallback) · float/unfloat & multi-window dock robustness (expect follow-up work; track separately) · installer + code signing · Windows ARM64 · Linux.
 
 ---
 
-## Risk Assessment ⚡ **GREATLY REDUCED**
+## Research / POC checklist
+- [ ] **POC-1:** CEF renders a book on Windows 11 **and** survives float/unfloat/re-dock. Capture repro if it fails.
+- [ ] How WebViewControl-Avalonia ships/locates its **browser subprocess** on Windows; confirm it's in `dotnet publish` output.
+- [ ] Correct **NuGet package id/version** for the Windows WebView (variant vs the `-ARM64` mac package; latest version).
+- [ ] **POC-2:** in-window `NativeMenuBar` (Option A) vs a Windows `<Menu>` (Option B); pick one.
+- [ ] `Cmd+…` → `Ctrl+…` gesture strategy (platform primary-modifier vs branched strings); audit for other hardcoded `Cmd`/meta.
+- [ ] Base-Windows-11 font validation across all 14 scripts (no manual font install).
+- [ ] Path/URL audit for remaining Windows-hostile string building.
+- [ ] Verify `%APPDATA%\CSTReader` writability for index/logs/XML; Lucene index builds and reads on Windows.
 
-### ~~High Risk~~ → **ELIMINATED** ✅
-- ~~**WebView Compatibility**~~ - **RESOLVED**: WebViewControl-Avalonia supports Windows natively
-  - No API changes needed
-  - No abstraction layer required
-  - Same package works across all platforms
+## Risk table (honest)
+| Area | Risk | Why |
+|---|---|---|
+| WebView reparenting (float/unfloat/dock) | **High** | macOS needed bespoke SIGSEGV workarounds; Windows untested — POC-1 |
+| Menu/shortcut surface | **Medium-High** | 100% macOS-native today; real UI work, but well-understood |
+| Windows path/URL bugs | **Medium** | 2 found & fixed this session; more likely lurk |
+| CEF init / subprocess packaging | **Medium** | Different from macOS helper model; verify in publish output |
+| Fonts | **Low** | Fallback works; Win11 defaults likely cover all 14 scripts |
+| File paths / state dir | **Low** | `SpecialFolder` maps cleanly; just verify writability |
+| Build system / Lucene | **Low** | .NET 10 + Lucene.NET are cross-platform |
 
-### Low Risk
-- **Windows-Specific Bugs**: File paths, permissions, rendering
-  - **Mitigation**: Comprehensive testing on multiple Windows versions
-  - **Likelihood**: Low - code already uses cross-platform APIs
-  - **Impact**: Minor - easy to fix during testing
+## Open questions
+1. Installer: portable EXE first (recommended), MSIX/Inno/WiX later?
+2. Code signing: skip for MVP; ~$100-400/yr cert for v1.0.
+3. Min OS: Windows 11 primary (Win10 EOL Oct 2025); Win10 21H2+ best-effort.
+4. Windows ARM64: defer unless requested.
 
-### Very Low Risk
-- **Font System**: Fallback already works perfectly on Windows
-- **Build System**: .NET 9 is fully cross-platform
-- **Lucene.NET**: Already cross-platform (Java port)
-- **File Paths**: All use `Environment.SpecialFolder` (cross-platform)
-
-**Overall Risk**: **LOW** - Most work is testing and packaging, not code changes
-
----
-
-## Dependencies
-
-### External Packages ✅ **VERIFIED**
-1. **WebViewControl-Avalonia** v3.120.10 ✅
-   - Already in use, supports Windows
-   - NuGet: https://www.nuget.org/packages/WebViewControl-Avalonia/
-   - GitHub: https://github.com/OutSystems/WebView
-
-### Alternative Packages (Backup Options)
-- **WebView.Avalonia.Windows** - Uses WebView2 (requires Edge runtime)
-- **Microsoft.Web.WebView2** - Native Windows WebView2
-
-### Build Tools Required
-- **Visual Studio 2022** or **Rider** (for Windows development)
-- **.NET 9 SDK** (already installed)
-- Optional: **Advanced Installer**, **Inno Setup**, or **WiX** for MSI creation
-
----
-
-## Open Questions
-
-1. ~~**WebView Control**~~ ✅ **ANSWERED**: Use WebViewControl-Avalonia (already works!)
-
-2. **Windows Installer**: MSI, MSIX, or portable EXE?
-   - **Recommendation**: Start with portable EXE, add MSI later
-   - Portable allows users to run without installation
-   - MSI for enterprise deployment (v1.0+)
-
-3. **Code Signing**: Do we need a Windows code signing certificate?
-   - **Optional** for initial release
-   - **Recommended** for v1.0 stable
-   - Cost: ~$100-400/year for certificate
-
-4. **Target Windows Versions**:
-   - **Minimum**: Windows 10 21H2+ (recommended)
-   - **Preferred**: Windows 11
-   - CEF/Chromium should work on both
-
-5. **ARM64 Support**: Should we build for Windows ARM64?
-   - **Low priority** unless users request
-   - WebViewControl-Avalonia supports it
-   - Snapdragon X Elite/Plus laptops (2024+)
-
----
-
-## Success Criteria
-
-**MVP (Minimum Viable Product)**:
-- ✅ Compiles on Windows without errors
-- ✅ Launches and shows welcome page
-- ✅ Can open and display books
-- ✅ Search works with highlighting
-- ✅ Settings persist across sessions
-- ✅ All 14 Pali scripts render correctly
-
-**Full Feature Parity**:
-- ✅ All macOS features work on Windows
-- ✅ Installer available
-- ✅ Code signed (optional)
-- ✅ Dark mode support
-- ✅ Script conversion identical to macOS
-- ✅ Performance matches macOS
-
----
-
-## Conclusion 🎉 **WINDOWS SUPPORT IS ACHIEVABLE!**
-
-**The codebase is EXTREMELY well-prepared for Windows support.** The architecture already isolates platform-specific code, uses cross-platform APIs, and has conditional compilation infrastructure in place.
-
-**BREAKTHROUGH DISCOVERY** ✅: `WebViewControl-Avalonia` **ALREADY SUPPORTS WINDOWS!** The perceived "main blocker" was actually a misconfiguration in our project file that limited the package to macOS only. The package natively supports Windows x64 and ARM64 using the same CefGlue/Chromium engine.
-
-**This changes everything:**
-- **No API changes required** - WebView code works as-is
-- **No abstraction layer needed** - Same package, different platform
-- **Minimal code changes** - Just project file and platform checks
-- **Low risk** - Most work is testing and packaging
-
-**Revised Timeline**: **3-5 days** post-Beta 3 release (down from 2-4 weeks!)
-
-**Immediate Next Steps**:
-1. ✅ ~~Research WebView options~~ **COMPLETE** - WebViewControl-Avalonia confirmed!
-2. ✅ ~~Research Windows 11 font support~~ **COMPLETE** - All 14 Pali scripts supported by default!
-3. Implement WindowsFontService (Services/Platform/Windows/WindowsFontService.cs)
-4. Update CST.Avalonia.csproj to remove macOS-only conditions
-5. Add WINDOWS define constant for conditional compilation
-6. Test all 14 Pali scripts on base Windows 11 install ⭐ **CRITICAL**
-7. Wrap macOS helper app code in platform checks
-8. Test build on Windows 11 machine
-
-**Font Coverage is EXCELLENT** ✅:
-- Windows 11 includes default fonts for all 14 Pali scripts (Nirmala UI, Myanmar Text, Leelawadee UI, Microsoft Himalaya, Segoe UI Variable)
-- Similar to macOS, no font installation should be required
-- "Base" Windows 11 install will validate this assumption
-
-**Windows support is now a SHORT-TERM goal, not a MEDIUM-TERM project!** 🚀
+## Related
+- `docs/architecture/DOCK_WEBVIEW_WORKAROUNDS.md` — the macOS reparenting workarounds POC-1 stress-tests.
+- `docs/architecture/DOCK_SUBSYSTEM.md` — dock lifecycle constraints.
+- #29 — WindowsFontService (DirectWrite), deferred.
+- `WINDOWS_FONT_SERVICE.md` (this folder) — design notes for that deferred service.
