@@ -1994,7 +1994,7 @@ public partial class BookDisplayView : UserControl
                 var script = $@"
                 (function() {{
                     try {{
-                        var element = document.getElementById({anchorJson}) || document.querySelector('a[name=' + {anchorJson} + ']');
+                        var element = document.getElementById({anchorJson}) || document.querySelector('a[name=' + JSON.stringify({anchorJson}) + ']');
                         if (element) {{
                             element.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
                         }}
@@ -2155,8 +2155,11 @@ public partial class BookDisplayView : UserControl
                 var script = $@"
                     (function() {{
                         var __a = {anchorJson};
-                        var anchor = document.querySelector('a[name=' + __a + ']') ||
-                                    document.querySelector('a[id=' + __a + ']') ||
+                        // JSON.stringify quotes the attribute value: unquoted selectors throw a
+                        // SyntaxError on dotted anchors (every VRI page anchor, e.g. V1.0001),
+                        // which killed the whole script before the getElementById fallback.
+                        var anchor = document.querySelector('a[name=' + JSON.stringify(__a) + ']') ||
+                                    document.querySelector('a[id=' + JSON.stringify(__a) + ']') ||
                                     document.getElementById(__a);
 
                         if (anchor) {{
