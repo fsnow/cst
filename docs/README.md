@@ -114,6 +114,7 @@ External resources and CST4 feature references:
 ### 🧪 **testing/** - Test Plans & Results
 - [Beta 3 Testing](testing/BETA_3_TESTING.md) - Beta 3 test results and notes
 - [Dictionary CST4 Capture Plan](testing/DICTIONARY_CST4_CAPTURE_PLAN.md) - CST4 Dictionary lookups to screenshot as regression oracles (#25)
+- [CST4 Parity Checklist](testing/CST4_PARITY_CHECKLIST.md) - CST4↔Avalonia feature-by-feature comparison to drive a side-by-side review
 
 ### 📝 **blog/** - Blog Posts & Articles
 - [Git Hash Comparison for File Sync](blog/git-hash-compare.md) - Blog post on efficient GitHub file syncing
