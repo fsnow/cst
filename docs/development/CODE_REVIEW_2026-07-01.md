@@ -23,7 +23,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 
 | Finding | Level | Issue | PR | Status | Verified |
 |---------|-------|-------|----|--------|----------|
-| SEC-1   | High   | — | — | ⚠️ Won't fix. This "secret" needs to be obscured but not protected | |
+| SEC-1   | High   | — | — | ⚠️ Won't fix. This "secret" needs to be obscured but not protected | n/a (won't fix by maintainer decision) |
 | DOCK-1  | High   | [#176](https://github.com/fsnow/cst/issues/176) | — | ✅ Fixed (8e4982c) | author self-review (Fable, fix author); GUI verification pending |
 | DOCK-2  | High   | [#177](https://github.com/fsnow/cst/issues/177) | — | ✅ Fixed (f8be2ab + 0aa1f93) | author self-review; verification found the rescue leaked the old WebView — fixed in 0aa1f93; GUI check pending |
 | DOCK-3  | Medium | [#179](https://github.com/fsnow/cst/issues/179) | — | ✅ Fixed (b89344d) | author self-review (Fable, fix author); GUI verification pending |
@@ -48,33 +48,33 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SRCH-14 | Low    | [#151](https://github.com/fsnow/cst/issues/151) | [#152](https://github.com/fsnow/cst/pull/152) | ✅ Fixed | ✅ 2026-07-02 |
 | STATE-1 | High   | [#130](https://github.com/fsnow/cst/issues/130) | — | ✅ Fixed | ✅ 2026-07-03 |
 | STATE-2 | High   | [#132](https://github.com/fsnow/cst/issues/132) | — | ✅ Fixed | ✅ 2026-07-03 (non-blocking residuals noted: lock disposal race at exit, unlocked zero-caller CreateBackupAsync/ClearStateAsync) |
-| STATE-3 | Medium | [#199](https://github.com/fsnow/cst/issues/199) | — | ✅ Fixed | ⏳ pending Fable verification (has 3 regression tests) |
-| STATE-4 | Medium | [#200](https://github.com/fsnow/cst/issues/200) | — | ✅ Fixed | ⏳ pending Fable verification (has 7 tests) |
-| STATE-5 | Low    | [#207](https://github.com/fsnow/cst/issues/207) | — | ✅ Fixed | ⏳ pending Fable verification (GUI) |
-| STATE-6 | Low    | [#208](https://github.com/fsnow/cst/issues/208) | — | ✅ Fixed | ⏳ pending Fable verification (splash experiment + LoggingService + AddRecentBook removed; 488/488) |
-| STATE-7 | Low    | [#209](https://github.com/fsnow/cst/issues/209) | — | ✅ Fixed | ⏳ pending Fable verification (tiered retention; 4 tests) |
+| STATE-3 | Medium | [#199](https://github.com/fsnow/cst/issues/199) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (all 3 load paths default correctly; atomic write; 5/5 tests. Note: settings save has no save-lock à la STATE-2 — benign today, follow-up if saves ever go concurrent) |
+| STATE-4 | Medium | [#200](https://github.com/fsnow/cst/issues/200) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (one canonical list, both parsers accept all 5 levels, no duplicate lists remain; 7/7 new + 50/50 class tests) |
+| STATE-5 | Low    | [#207](https://github.com/fsnow/cst/issues/207) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (Minimized→Normal coercion on restore, Maximized preserved, single call site, save side honest; GUI flow manually checked per #207) |
+| STATE-6 | Low    | [#208](https://github.com/fsnow/cst/issues/208) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (all artifacts gone, zero dangling symbols, item 4 covered via XCUT-1 TryShutdown, add -A fallout fully cleaned; 492/492) |
+| STATE-7 | Low    | [#209](https://github.com/fsnow/cst/issues/209) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (tiered 8-newest + 14-day policy under save lock, edge cases immune to foreign filenames, expected counts re-derived; 4/4 tests) |
 | NET-1   | High   | [#129](https://github.com/fsnow/cst/issues/129) | [#131](https://github.com/fsnow/cst/pull/131) | ✅ Fixed | ✅ 2026-07-03 (caveat: pre-fix truncated PDFs never re-validated → follow-up #194) |
 | NET-2   | Medium | [#137](https://github.com/fsnow/cst/issues/137) | [#139](https://github.com/fsnow/cst/pull/139) | ✅ Fixed (+7a3c572) | ✅ 2026-07-03 (incomplete on first pass — Unknown still rendered the green badge; renderer fixed + 2 tests in 7a3c572) |
 | NET-3   | Medium | [#140](https://github.com/fsnow/cst/issues/140) | [#141](https://github.com/fsnow/cst/pull/141) | ✅ Fixed | ✅ 2026-07-03 (numeric-only pre-release tags deliberately unsupported — documented in f151202) |
-| NET-4   | Low    | [#165](https://github.com/fsnow/cst/issues/165) | [#166](https://github.com/fsnow/cst/pull/166) | ✅ Fixed | |
-| NET-5   | Low    | [#162](https://github.com/fsnow/cst/issues/162) | [#163](https://github.com/fsnow/cst/pull/163) | ✅ Fixed | |
-| NET-6   | Low    | [#217](https://github.com/fsnow/cst/issues/217) | — | ✅ Fixed | ⏳ pending Fable verification (119 dead lines removed) |
-| NET-7   | Low    | [#160](https://github.com/fsnow/cst/issues/160) | [#161](https://github.com/fsnow/cst/pull/161) | ✅ Fixed | |
-| NET-8   | Low    | [#171](https://github.com/fsnow/cst/issues/171) | [#172](https://github.com/fsnow/cst/pull/172) | ✅ Fixed | |
+| NET-4   | Low    | [#165](https://github.com/fsnow/cst/issues/165) | [#166](https://github.com/fsnow/cst/pull/166) | ✅ Fixed | ✅ 2026-07-03 Fable-verified (same-volume staging → atomic rename, retry loop on both paths, staging cleaned in finally; 2/2 tests) |
+| NET-5   | Low    | [#162](https://github.com/fsnow/cst/issues/162) | [#163](https://github.com/fsnow/cst/pull/163) | ✅ Fixed | ✅ 2026-07-03 Fable-verified (Uri.AbsoluteUri verbatim, all 3 defect modes test-pinned; sibling `file://` concat in BookDisplayView fixed as follow-up) |
+| NET-6   | Low    | [#217](https://github.com/fsnow/cst/issues/217) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (pure 119-line deletion, hunk boundaries exact, zero references remain, both cited latent bugs were inside the deleted method) |
+| NET-7   | Low    | [#160](https://github.com/fsnow/cst/issues/160) | [#161](https://github.com/fsnow/cst/pull/161) | ✅ Fixed | ✅ 2026-07-03 Fable-verified (duplicate gone, caller rewired, output equivalence proven byte-level, one-copy invariant holds; 10/10 tests) |
+| NET-8   | Low    | [#171](https://github.com/fsnow/cst/issues/171) | [#172](https://github.com/fsnow/cst/pull/172) | ✅ Fixed | ✅ 2026-07-03 Fable-verified (static shared client, no disposal path can kill it, sole construction site, sibling XmlUpdateService client correctly DI+disposed; 2/2 tests) |
 | DICT-1  | High   | [#117](https://github.com/fsnow/cst/issues/117) | [#119](https://github.com/fsnow/cst/pull/119) | ✅ Fixed | ✅ 2026-07-03 |
 | DICT-2  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed (DICT-2/3/5/6 bundle) | ✅ 2026-07-03 |
 | DICT-3  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | ✅ 2026-07-03 |
 | DICT-4  | Medium | [#120](https://github.com/fsnow/cst/issues/120) | [#122](https://github.com/fsnow/cst/pull/122) | ✅ Fixed | ✅ 2026-07-03 |
 | DICT-5  | Medium | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | ✅ 2026-07-03 |
-| DICT-6  | Low    | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | |
+| DICT-6  | Low    | [#124](https://github.com/fsnow/cst/issues/124) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (fallback dropped verbatim, zero production `new DictionaryViewModel()`, no sibling DI-fallback pattern remains; stale parameterless ctor deleted as follow-up; 13/13 tests) |
 | CORE-1  | High   | [#127](https://github.com/fsnow/cst/issues/127) | — | ✅ Fixed | ✅ 2026-07-03 |
-| CORE-2  | Medium | [#213](https://github.com/fsnow/cst/issues/213) | — | ✅ Fixed | ⏳ pending Fable verification (99999→-1; real linking a TODO) |
+| CORE-2  | Medium | [#213](https://github.com/fsnow/cst/issues/213) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (3 sites -1+TODO, every consumer guards <0 so button properly disables, follow-up is open #174; legacy src/CST copy out of scope) |
 | CORE-3  | Medium | [#133](https://github.com/fsnow/cst/issues/133) | [#134](https://github.com/fsnow/cst/pull/134) | ✅ Fixed | ✅ 2026-07-03 |
 | CORE-4  | Medium | [#123](https://github.com/fsnow/cst/issues/123) | [#125](https://github.com/fsnow/cst/pull/125) | ✅ Fixed (+213a65c) | ✅ 2026-07-03 (3 sites first pass; 4th site SettingsViewModel.cs:593 completed in 213a65c) |
-| CORE-5  | Low    | [#218](https://github.com/fsnow/cst/issues/218) | — | ✅ Fixed | ⏳ pending Fable verification (case-fold; 128 oracle tests) |
-| CORE-6  | Low    | [#219](https://github.com/fsnow/cst/issues/219) | — | ✅ Fixed | ⏳ pending Fable verification (6 TODOs; comments only) |
-| CORE-7  | Low    | [#220](https://github.com/fsnow/cst/issues/220) | — | ✅ Fixed | ⏳ pending Fable verification (dead members removed) |
-| CORE-8  | Low    | [#221](https://github.com/fsnow/cst/issues/221) | — | ✅ Fixed | ⏳ pending Fable verification (StringBuilder; 128 oracle tests) |
+| CORE-5  | Low    | [#218](https://github.com/fsnow/cst/issues/218) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (ToLowerInvariant at top of both Convert+ConvertReference; behavioral spot-check clean; 128/128 oracle tests) |
+| CORE-6  | Low    | [#219](https://github.com/fsnow/cst/issues/219) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (all 6 vol-2 constants carry TODO(#76); independent sweep confirms no unmapped constant undocumented; diff comment-only) |
+| CORE-7  | Low    | [#220](https://github.com/fsnow/cst/issues/220) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (all 6 items on HEAD: BookHit gone, PopulateBookList+7 setters private, GetDevConsonants/DebugRegex gone, nextIsCap term removed; zero dangling refs in active projects) |
+| CORE-8  | Low    | [#221](https://github.com/fsnow/cst/issues/221) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (all 3 sites StringBuilder, zero `+=` left, run-splitter semantics byte-identical, no literal glyphs; 128/128 + 12/12 oracle) |
 | BOOK-1  | High   | [#136](https://github.com/fsnow/cst/issues/136) | — | ✅ Fixed (GUI-verified: renderer count returns to baseline across open/close) | ✅ 2026-07-03 (static + GUI; composition gaps found on rescue/float paths, fixed via #177 reopen + #193) |
 | BOOK-2  | High   | [#118](https://github.com/fsnow/cst/issues/118) | — | ✅ Fixed | ✅ 2026-07-03 (copy/select-all branches confirmed addressed too) |
 | BOOK-3  | Medium | [#153](https://github.com/fsnow/cst/issues/153) | — | ✅ Fixed | ✅ 2026-07-03 (all 5 construction sites seed the script) |
@@ -82,27 +82,27 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | BOOK-5  | Medium | [#159](https://github.com/fsnow/cst/issues/159) | — | ✅ Fixed | ✅ 2026-07-03 |
 | BOOK-6  | Medium | [#164](https://github.com/fsnow/cst/issues/164) | — | ✅ Fixed | ✅ 2026-07-03 (corpus-confirmed on s0503m) |
 | BOOK-7  | Medium | [#167](https://github.com/fsnow/cst/issues/167) | — | ✅ Fixed | ✅ 2026-07-03 GUI-verified (event-driven restoration; accepted cosmetic blink on reattach) |
-| BOOK-8  | Low    | [#168](https://github.com/fsnow/cst/issues/168) | — | ✅ Fixed | |
-| BOOK-9  | Low    | [#169](https://github.com/fsnow/cst/issues/169) | — | ✅ Fixed | |
-| BOOK-10 | Low    | [#170](https://github.com/fsnow/cst/issues/170) | — | ✅ Fixed | |
-| BOOK-11 | Low    | [#173](https://github.com/fsnow/cst/issues/173) | — | ✅ Fixed | |
+| BOOK-8  | Low    | [#168](https://github.com/fsnow/cst/issues/168) | — | ✅ Fixed (2 of 3 remedies; off-thread write deferred, see #168) | ✅ 2026-07-03 Fable-verified (dispose deletion on all teardown paths + startup sweep; no cross-session accumulation) |
+| BOOK-9  | Low    | [#169](https://github.com/fsnow/cst/issues/169) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (ctor seeds 0/false, both counters set only from applied-highlight results, failure paths leave nav disabled, sibling sweep clean; 14/14 tests) |
+| BOOK-10 | Low    | [#170](https://github.com/fsnow/cst/issues/170) | — | ✅ Fixed (completed 95dce4e) | ❌→✅ 2026-07-03 INCOMPLETE on first pass (unreachable branch + 2 residuals survived bd43407); completed 95dce4e, Fable re-verified (all 3 gone, zero refs remain, live path unchanged) |
+| BOOK-11 | Low    | [#173](https://github.com/fsnow/cst/issues/173) | — | ✅ Fixed (refixed 633322b) | ❌→✅ 2026-07-03 REGRESSION on first pass (913ba6e un-quoted the CSS attribute selectors — threw on every dotted/VRI page anchor, silently breaking page-anchor restore); refixed 633322b, Fable re-verified (encodings compose incl. quote/backslash cases, empirically checked; full-file selector sweep clean) |
 | XCUT-1  | High   | [#138](https://github.com/fsnow/cst/issues/138) | — | ✅ Fixed | ✅ 2026-07-03 (hardening candidate: no double-run guard at handler entry) |
-| XCUT-2  | Medium | [#210](https://github.com/fsnow/cst/issues/210) | — | ✅ Fixed | ⏳ pending Fable verification (lock + atomic write; 492/492) |
-| XCUT-3  | Medium | [#212](https://github.com/fsnow/cst/issues/212) | — | ✅ Fixed | ⏳ pending Fable verification (UI writes marshaled; 492/492) |
-| XCUT-4  | Medium | [#211](https://github.com/fsnow/cst/issues/211) | — | ✅ Fixed | ⏳ pending Fable verification (atomic writes; chapter-lists via #210, settings.json via STATE-3) |
-| XCUT-5  | Low    | [#214](https://github.com/fsnow/cst/issues/214) | — | ✅ Fixed | ⏳ pending Fable verification |
-| XCUT-6  | Low    | [#215](https://github.com/fsnow/cst/issues/215) | — | ✅ Fixed | ⏳ pending Fable verification |
-| XCUT-7  | Low    | [#216](https://github.com/fsnow/cst/issues/216) | — | ✅ Fixed | ⏳ pending Fable verification (43 tokenizer tests) |
+| XCUT-2  | Medium | [#210](https://github.com/fsnow/cst/issues/210) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (all 3 public entry points locked, ctor load locked, no await-under-lock, no deadlock path, atomic write handles first-write; 492/492) |
+| XCUT-3  | Medium | [#212](https://github.com/fsnow/cst/issues/212) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (zero async void left in file, all UI-bound writes marshaled incl. catch blocks, no .Wait/.Result, crash vector closed; 492/492) |
+| XCUT-4  | Medium | [#211](https://github.com/fsnow/cst/issues/211) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (full inventory covered: XmlFileDates both sites + chapter-lists + settings.json all temp+Replace/Move; repo sweep found no missed config write; 11/11 tests. Note: WelcomeUpdateService cache write non-atomic but out of scope + self-healing) |
+| XCUT-5  | Low    | [#214](https://github.com/fsnow/cst/issues/214) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (entire async lambda body inside try, catch logs with context, only async subscription lambda in file) |
+| XCUT-6  | Low    | [#215](https://github.com/fsnow/cst/issues/215) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (Encoding.Unicode at fixed site; all 217 corpus files BOM-checked; ChapterLists via XmlDocument correct; BookIndexer StreamReader hardened as follow-up same day) |
+| XCUT-7  | Low    | [#216](https://github.com/fsnow/cst/issues/216) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (all named sites Ordinal, whole-CST.Lucene sweep clean, IpeFilter fully commented-out not just dead; 26/26 tokenizer-related tests) |
 | SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed | ✅ 2026-07-03 |
 | SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed | ✅ 2026-07-03 (incomplete on first pass — docs still had the term; reworded in 4037efc; review-doc quote + VRI dictionary data exempt, see #143) |
-| SCRIPT-3  | Medium | [#201](https://github.com/fsnow/cst/issues/201) | — | ✅ Fixed | ⏳ pending Fable verification (has regression tests) |
+| SCRIPT-3  | Medium | [#201](https://github.com/fsnow/cst/issues/201) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (ASCII-only regexes + TakeWhile scan agree, OK-gate closes the no-op vector, sibling sweep clean; 24/24 tests incl. 4 non-ASCII-digit cases) |
 | SCRIPT-4  | Medium | [#203](https://github.com/fsnow/cst/issues/203) | — | ✅ Fixed | 🔧 committed; GUI-confirm counts show (52) |
-| SCRIPT-5  | Medium | — | — | ✅ Fixed | ⏳ pending Fable verification — deterministic init: ctor `Task.Delay(100)` replaced by `OpenBookDialogViewModel.InitializeFromState()` called from `App.LoadApplicationStateAsync`'s `finally` after the load settles (mirrors #81/#87). GUI-glance: expand categories, relaunch, expansion restored |
-| SCRIPT-6  | Low    | — | — | ✅ Fixed | ⏳ pending Fable verification (already done by STATE-2 5906973) |
-| SCRIPT-7  | Low    | [#202](https://github.com/fsnow/cst/issues/202) | — | ✅ Fixed | ⏳ pending Fable verification (6/6 tests) |
-| SCRIPT-8  | Low    | — | — | ✅ Fixed (latent-trap removal) | ⏳ pending Fable verification — inert stub: `DefaultThreadCurrentUICulture` + `zh-Hans`/`zh-Hant` applied; RESX fallback deferred to real localization work (no satellite resources exist) |
-| SCRIPT-9  | Low    | [#204](https://github.com/fsnow/cst/issues/204) | — | ✅ Fixed | ⏳ pending Fable verification |
-| SCRIPT-10 | Low    | [#205](https://github.com/fsnow/cst/issues/205) | — | ✅ Fixed | ⏳ pending Fable verification |
+| SCRIPT-5  | Medium | — | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified by independent agent (delay gone, finally fires exactly once on UI thread incl. failure path, guard race-free, ordering proven, no earlier-tree dependents) |
+| SCRIPT-6  | Low    | — | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (MarkDirty() verbatim per prescription, both defect halves gone, sibling DictionaryViewModel same treatment; 9/9 tests) |
+| SCRIPT-7  | Low    | [#202](https://github.com/fsnow/cst/issues/202) | — | ✅ Fixed (refixed 7f9eb31) | ✅ 2026-07-03 Fable-verified after refix (REGRESSION in 301dbd7 caught: leaked every call; 7f9eb31 re-verified — all 5 refs released exactly once on all paths, matches sibling pattern; 6/6. Micro-note: per-iteration familyNameRef could leak one CFString on a mid-loop throw — cosmetic, not fixed) |
+| SCRIPT-8  | Low    | — | — | ✅ Fixed (latent-trap removal) | ✅ 2026-07-03 Fable-verified by independent agent (all 3 UICulture sites set, zh-Hans/zh-Hant, stub confirmed inert, zero .resx exists so deferral legitimate) |
+| SCRIPT-9  | Low    | [#204](https://github.com/fsnow/cst/issues/204) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (_nodeCache deleted cleanly, zero refs remain, conversion behavior identical; 2/2 tests) |
+| SCRIPT-10 | Low    | [#205](https://github.com/fsnow/cst/issues/205) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (whole body guarded, catch logs, no state inconsistency possible, only async-void SimpleCommand in project) |
 
 **Progress:** 54 fixed, 0 reopened, 0 deferred, 26 not yet filed (SRCH-9 among them, assessed not-a-defect). All 14 SRCH findings resolved (SRCH-9 = not-a-defect); all 8 DOCK findings fixed 2026-07-03 (#176-#185, committed per issue).
 **Verification progress (paused 2026-07-03):** 34 verified + SRCH-9 assessment confirmed. Remaining to verify next session: **NET-4, NET-5, NET-7, NET-8, DICT-6, BOOK-8, BOOK-9, BOOK-10, BOOK-11** (the nine Lows). Also outstanding: BOOK-7 (deferred, scroll-restoration GUI work); DOCK-1..8 (author-self-reviewed, need the GUI checklist below); BOOK-4 reopened (#156, CEF-bridge SEQ, needs a GUI session).
