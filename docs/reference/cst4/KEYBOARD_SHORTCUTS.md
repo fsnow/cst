@@ -113,6 +113,6 @@ the odd shape of the code.
   will likely need its own focus/keybinding handling.
 - **Already surfaced:** the dictionary feature work (#25) confirmed **Ctrl+D on a
   single-word selection** as CST4's selected-word→dictionary shortcut; see
-  [../../features/planned/DICTIONARIES.md](../../features/planned/DICTIONARIES.md).
+  [../../features/in-progress/DICTIONARIES.md](../../features/in-progress/DICTIONARIES.md).
 - Related source-PDF feature (Ctrl+Q / Ctrl+E): see
-  [../../features/planned/SHOW_SOURCE_PDF.md](../../features/planned/SHOW_SOURCE_PDF.md).
+  [../../features/in-progress/SHOW_SOURCE_PDF.md](../../features/in-progress/SHOW_SOURCE_PDF.md).

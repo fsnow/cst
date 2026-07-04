@@ -2,7 +2,7 @@
 
 **Status**: Planning
 **Date**: November 23, 2025
-**Related CST4 Documentation**: `docs/features/planned/SHOW_SOURCE_PDF.md`
+**Related CST4 Documentation**: `docs/features/in-progress/SHOW_SOURCE_PDF.md`
 
 ## 1. Executive Summary
 
@@ -584,7 +584,7 @@ After implementation, update:
 
 ## 11. References
 
-- **CST4 Implementation**: `docs/features/planned/SHOW_SOURCE_PDF.md`
+- **CST4 Implementation**: `docs/features/in-progress/SHOW_SOURCE_PDF.md`
 - **BookDisplayViewModel**: `src/CST.Avalonia/ViewModels/BookDisplayViewModel.cs:76-120`
 - **ReactiveDocument**: `src/CST.Avalonia/ViewModels/Dock/ReactiveDocument.cs`
 - **Float/Unfloat Logic**: BookDisplayViewModel implements CEF crash prevention

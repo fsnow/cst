@@ -198,5 +198,5 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
 
 - **#41** — App Intents / Siri & Apple Intelligence (surface **A**).
 - **#27** — Vector / semantic search + RAG (surface **D**).
-- `docs/features/planned/DICTIONARIES.md` — dictionary feature (§9 prerequisite).
+- `docs/features/in-progress/DICTIONARIES.md` — dictionary feature (§9 prerequisite).
 - Auto-update work (#178/#181) — shares the offline/disconnected-user constraint (§11).

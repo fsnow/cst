@@ -61,7 +61,7 @@ Historical planning documents for implemented features. Actual implementation ma
   - [Chapter Lists](features/implemented/navigation/CHAPTER_LISTS.md)
 
 - **ui/** - User interface features
-  - [View Menu Panel Management](features/implemented/ui/view-menu-panel-management.md)
+  - [View Menu Panel Management](features/implemented/ui/VIEW_MENU_PANEL_MANAGEMENT.md)
 
 #### **features/in-progress/** - Current Development
 Active work happening now:
@@ -69,6 +69,8 @@ Active work happening now:
 - [Go To Implementation](features/in-progress/GO_TO_IMPLEMENTATION.md) - Navigate to page/paragraph dialog
 - [PDF Cleanup and Verification](features/in-progress/PDF_CLEANUP_AND_VERIFICATION.md) - PDF surgery and page marker validation
 - [View Source PDF Implementation](features/in-progress/VIEW_SOURCE_PDF_IMPLEMENTATION.md) - Burmese PDF viewing
+- [Show Source PDF](features/in-progress/SHOW_SOURCE_PDF.md) - View Burmese CST PDFs (core ships; mapping model #76 deferred)
+- [Dictionaries](features/in-progress/DICTIONARIES.md) - Pali-English and Pali-Hindi dictionaries (core ships; #25/#109 open)
 
 - **windows/** - Windows 11 port
   - [Windows Support Plan](features/in-progress/windows/WINDOWS_SUPPORT.md)
@@ -77,9 +79,7 @@ Active work happening now:
 #### **features/planned/** - Future Features
 Features planned for future implementation (from CST4 analysis):
 
-- [Dictionaries](features/planned/DICTIONARIES.md) - Pali-English and Pali-Hindi dictionaries
 - [Go To](features/planned/GO_TO.md) - Navigate to page/paragraph
-- [Show Source PDF](features/planned/SHOW_SOURCE_PDF.md) - View Burmese CST PDFs
 - [Localization Strategy](features/planned/LOCALIZATION_STRATEGY.md) - Multi-language UI
 - [Vector Search](features/planned/VECTOR_SEARCH.md) - Semantic search (future exploration)
 - [App Intents / Siri & Apple Intelligence](features/planned/APP_INTENTS_SUPPORT.md) - macOS assistant integration (research/feasibility)
@@ -117,7 +117,7 @@ External resources and CST4 feature references:
 - [CST4 Parity Checklist](testing/CST4_PARITY_CHECKLIST.md) - CST4↔Avalonia feature-by-feature comparison to drive a side-by-side review
 
 ### 📝 **blog/** - Blog Posts & Articles
-- [Git Hash Comparison for File Sync](blog/git-hash-compare.md) - Blog post on efficient GitHub file syncing
+- [Git Hash Comparison for File Sync](blog/GIT_HASH_COMPARE.md) - Blog post on efficient GitHub file syncing
 
 ## Workflow: Feature Document Lifecycle
 
