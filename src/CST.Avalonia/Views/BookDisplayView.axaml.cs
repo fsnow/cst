@@ -611,7 +611,9 @@ public partial class BookDisplayView : UserControl
                     File.WriteAllText(tempFilePath, _viewModel.HtmlContent, System.Text.Encoding.UTF8);
                     _tempHtmlFilePath = tempFilePath;   // remember it so DisposeWebView can delete it (BOOK-8)
 
-                    var fileUrl = $"file://{tempFilePath}";
+                    // Uri.AbsoluteUri, not string concat: Windows backslashes and spaces in the temp
+                    // path would otherwise malform the URL (same defect as NET-5 / #162).
+                    var fileUrl = new Uri(tempFilePath).AbsoluteUri;
                     _logger.Debug("Loading from file URL | {Details}", fileUrl);
 
                     _webView.LoadUrl(fileUrl);
