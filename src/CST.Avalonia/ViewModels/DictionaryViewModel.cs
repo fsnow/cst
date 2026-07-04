@@ -46,16 +46,6 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private bool _canGoBack;
     private bool _canGoForward;
 
-    // Parameterless ctor so the DataTemplate/dock can materialize it; resolves deps from the container.
-    public DictionaryViewModel() : this(
-        App.ServiceProvider?.GetService(typeof(IDictionaryService)) as IDictionaryService ?? throw new InvalidOperationException("DictionaryService not available"),
-        App.ServiceProvider?.GetService(typeof(IScriptService)) as IScriptService ?? throw new InvalidOperationException("ScriptService not available"),
-        App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService ?? throw new InvalidOperationException("FontService not available"),
-        App.ServiceProvider?.GetService(typeof(IApplicationStateService)) as IApplicationStateService ?? throw new InvalidOperationException("ApplicationStateService not available"),
-        App.ServiceProvider?.GetService(typeof(ILogger<DictionaryViewModel>)) as ILogger<DictionaryViewModel> ?? throw new InvalidOperationException("Logger not available"))
-    {
-    }
-
     public DictionaryViewModel(
         IDictionaryService dictionaryService,
         IScriptService scriptService,
