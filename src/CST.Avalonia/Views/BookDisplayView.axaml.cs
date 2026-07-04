@@ -1837,13 +1837,6 @@ public partial class BookDisplayView : UserControl
                             this.hits.forEach(hit => {
                                 hit.style.display = visible ? 'inline' : 'none';
                             });
-                        },
-                        
-                        showFootnotes: function(visible) {
-                            var footnotes = document.querySelectorAll('.footnote');
-                            footnotes.forEach(fn => {
-                                fn.style.display = visible ? 'block' : 'none';
-                            });
                         }
                     };
                     
@@ -2239,7 +2232,6 @@ public partial class BookDisplayView : UserControl
         }
     }
 
-    // Public method to toggle footnote visibility
     /// <summary>
     /// Get current paragraph anchor asynchronously - port of CST4's GetPara() method with async/await pattern
     /// Returns the paragraph anchor at the top of the viewport (e.g., "para123")

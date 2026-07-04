@@ -1752,19 +1752,8 @@ namespace CST.Avalonia.ViewModels
                 }
                 else
                 {
-                    _logger.Debug("Still no continuously tracked paragraph available");
-                    // No fallback available since GetCurrentParagraphAnchorAsync was removed
-                    currentAnchor = null;
-                    
-                    if (!string.IsNullOrEmpty(currentAnchor))
-                    {
-                        _logger.Information("Fallback detection got paragraph anchor: {Anchor}", currentAnchor);
-                    }
-                    else
-                    {
-                        _logger.Warning("No paragraph anchor available - unable to calculate navigation anchor");
-                        return null;
-                    }
+                    _logger.Warning("No paragraph anchor available - unable to calculate navigation anchor");
+                    return null;
                 }
 
                 _logger.Debug("Current position anchor: {Anchor}", currentAnchor);
