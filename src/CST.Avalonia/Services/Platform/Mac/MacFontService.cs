@@ -325,6 +325,7 @@ namespace CST.Avalonia.Services.Platform.Mac
             IntPtr characterStringRef = IntPtr.Zero;
             IntPtr characterSetRef = IntPtr.Zero;
             IntPtr attributesDictRef = IntPtr.Zero;
+            IntPtr templateDescriptorRef = IntPtr.Zero;
             IntPtr matchingDescriptorsRef = IntPtr.Zero;
 
             try
@@ -390,7 +391,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                 _logger.LogDebug("CHARACTER-SET APPROACH: Step 3 SUCCESS - Created attributes dictionary");
                 
                 // Step 5: Create template descriptor
-                IntPtr templateDescriptorRef = CoreText.CTFontDescriptorCreateWithAttributes(attributesDictRef);
+                templateDescriptorRef = CoreText.CTFontDescriptorCreateWithAttributes(attributesDictRef);
                 if (templateDescriptorRef == IntPtr.Zero)
                 {
                     _logger.LogError("CHARACTER-SET APPROACH: Failed to create template descriptor");
@@ -401,8 +402,7 @@ namespace CST.Avalonia.Services.Platform.Mac
                 
                 // Step 6: Find matching font descriptors using Swift approach
                 matchingDescriptorsRef = CoreText.CTFontDescriptorCreateMatchingFontDescriptors(templateDescriptorRef, IntPtr.Zero);
-                CoreFoundation.CFRelease(templateDescriptorRef);
-                
+
                 if (matchingDescriptorsRef == IntPtr.Zero)
                 {
                     _logger.LogWarning("CHARACTER-SET APPROACH: No matching fonts found for script {Script}", script);
@@ -444,6 +444,10 @@ namespace CST.Avalonia.Services.Platform.Mac
             }
             finally
             {
+                if (matchingDescriptorsRef != IntPtr.Zero)
+                    CoreFoundation.CFRelease(matchingDescriptorsRef);
+                if (templateDescriptorRef != IntPtr.Zero)
+                    CoreFoundation.CFRelease(templateDescriptorRef);
                 if (attributesDictRef != IntPtr.Zero)
                     CoreFoundation.CFRelease(attributesDictRef);
                 if (characterSetRef != IntPtr.Zero)
