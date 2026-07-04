@@ -20,6 +20,23 @@ Everything else (paths, fonts, packaging, project file) is genuinely low-risk pl
 
 ---
 
+## Prior art — issue #20 (existence proof + the exact csproj fix)
+
+[#20](https://github.com/fsnow/cst/issues/20) (2025-09-25, still open, labeled `windows`) documents a VRI volunteer getting the app to **build and launch the GUI on Windows**. It identifies the *same* root cause this doc does — WebView packages macOS-only + the empty-`RuntimeIdentifier` fallback pulling the ARM64 mac package — and gives the fix:
+
+```xml
+<!-- ADD, alongside the existing osx conditions (do NOT remove them) -->
+<PackageReference Include="WebViewControl-Avalonia" Version="3.120.10" Condition="'$(RuntimeIdentifier)' == 'win-x64'" />
+<PackageReference Include="WebViewControl-Avalonia" Version="3.120.10" Condition="'$(RuntimeIdentifier)' == 'win-arm64'" />
+```
+
+**This meaningfully de-risks POC-1's core:** CEF rendering on Windows is *reported working*, not hypothetical. Three caveats keep us honest:
+1. **The fix was never merged.** The current `.csproj` still has only the macOS conditions (`:76-79`); #20 is documentation, not a committed change.
+2. **"Full functionality" was a Sept-2025 build that predates the menu and dock work** (maintainer-confirmed). This is the key insight: the macOS-`NativeMenu` conversion (`IsMacOS()`-gated menus/shortcuts, POC-2) and the dock float/unfloat SIGSEGV workarounds both landed **after** #20's working build. So they're best understood as **post-#20 regressions to Windows compatibility**, not greenfield unknowns — the core (CEF render) worked; the later macOS-specific changes are what to check. #20 does **not** retire POC-2 or the reparent question; verify against today's HEAD.
+3. **Don't copy #20's "updated fallback" verbatim.** It swapped the empty-RID fallback from the `-ARM64` package to the plain package. On an Apple-Silicon dev box, `dotnet run` with no explicit RID resolves the `-ARM64` native — a straight swap can break macOS dev builds. **Add** the Windows conditions; leave the macOS-ARM64 fallback intact (or make it platform-aware).
+
+---
+
 ## How this doc changed (why the old draft was wrong)
 
 The Oct 2025 draft was written weeks into the project (which began 2025-06-29 as a Claude Code learning exercise) by models that were, frankly, not up to the task — the same provenance as much of the code we've spent recent weeks fixing. Treat its confident ✅/🎉 claims with suspicion. Concrete corrections:
@@ -129,7 +146,7 @@ Every place that needs a Windows branch or verification. This is the real map �
 ## Research / POC checklist
 - [ ] **POC-1:** CEF renders a book on Windows 11 **and** survives float/unfloat/re-dock. Capture repro if it fails.
 - [ ] How WebViewControl-Avalonia ships/locates its **browser subprocess** on Windows; confirm it's in `dotnet publish` output.
-- [ ] Correct **NuGet package id/version** for the Windows WebView (variant vs the `-ARM64` mac package; latest version).
+- [x] ~~Correct **NuGet package id/version**~~ — per #20: plain `WebViewControl-Avalonia` **3.120.10** for both `win-x64` and `win-arm64`. Confirm 3.120.10 is still current before pinning.
 - [ ] **POC-2:** in-window `NativeMenuBar` (Option A) vs a Windows `<Menu>` (Option B); pick one.
 - [ ] `Cmd+…` → `Ctrl+…` gesture strategy (platform primary-modifier vs branched strings); audit for other hardcoded `Cmd`/meta.
 - [ ] Base-Windows-11 font validation across all 14 scripts (no manual font install).
@@ -142,7 +159,7 @@ Every place that needs a Windows branch or verification. This is the real map �
 | WebView reparenting (float/unfloat/dock) | **High** | macOS needed bespoke SIGSEGV workarounds; Windows untested — POC-1 |
 | Menu/shortcut surface | **Medium-High** | 100% macOS-native today; real UI work, but well-understood |
 | Windows path/URL bugs | **Medium** | 2 found & fixed this session; more likely lurk |
-| CEF init / subprocess packaging | **Medium** | Different from macOS helper model; verify in publish output |
+| CEF init / render on Windows | **Low-Med** | #20 reports a working Windows GUI; still verify subprocess ships in publish output + works on current HEAD |
 | Fonts | **Low** | Fallback works; Win11 defaults likely cover all 14 scripts |
 | File paths / state dir | **Low** | `SpecialFolder` maps cleanly; just verify writability |
 | Build system / Lucene | **Low** | .NET 10 + Lucene.NET are cross-platform |
