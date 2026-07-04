@@ -24,14 +24,14 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | Finding | Level | Issue | PR | Status | Verified |
 |---------|-------|-------|----|--------|----------|
 | SEC-1   | High   | — | — | ⚠️ Won't fix. This "secret" needs to be obscured but not protected | n/a (won't fix by maintainer decision) |
-| DOCK-1  | High   | [#176](https://github.com/fsnow/cst/issues/176) | — | ✅ Fixed (8e4982c) | author self-review (Fable, fix author); GUI verification pending |
-| DOCK-2  | High   | [#177](https://github.com/fsnow/cst/issues/177) | — | ✅ Fixed (f8be2ab + 0aa1f93) | author self-review; verification found the rescue leaked the old WebView — fixed in 0aa1f93; GUI check pending |
-| DOCK-3  | Medium | [#179](https://github.com/fsnow/cst/issues/179) | — | ✅ Fixed (b89344d) | author self-review (Fable, fix author); GUI verification pending |
-| DOCK-4  | Medium | [#180](https://github.com/fsnow/cst/issues/180) | — | ✅ Fixed (0a6e6cf) | author self-review (Fable, fix author); GUI verification pending |
-| DOCK-5  | Medium | [#182](https://github.com/fsnow/cst/issues/182) | — | ✅ Fixed (da282fb) | author self-review (Fable, fix author); GUI verification pending |
-| DOCK-6  | Low    | [#183](https://github.com/fsnow/cst/issues/183) | — | ✅ Fixed (7341480) | author self-review (Fable, fix author); GUI verification pending |
-| DOCK-7  | Low    | [#184](https://github.com/fsnow/cst/issues/184) | — | ✅ Fixed (ab87b13) | author self-review (Fable, fix author); GUI verification pending |
-| DOCK-8  | Low    | [#185](https://github.com/fsnow/cst/issues/185) | — | ✅ Fixed (fd272d0) | author self-review (Fable, fix author); GUI verification pending |
+| DOCK-1  | High   | [#176](https://github.com/fsnow/cst/issues/176) | — | ✅ Fixed (8e4982c) | author self-review (Fable, fix author); ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
+| DOCK-2  | High   | [#177](https://github.com/fsnow/cst/issues/177) | — | ✅ Fixed (f8be2ab + 0aa1f93) | author self-review; verification found the rescue leaked the old WebView — fixed in 0aa1f93; ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
+| DOCK-3  | Medium | [#179](https://github.com/fsnow/cst/issues/179) | — | ✅ Fixed (b89344d) | author self-review (Fable, fix author); ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
+| DOCK-4  | Medium | [#180](https://github.com/fsnow/cst/issues/180) | — | ✅ Fixed (0a6e6cf) | author self-review (Fable, fix author); ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
+| DOCK-5  | Medium | [#182](https://github.com/fsnow/cst/issues/182) | — | ✅ Fixed (da282fb) | author self-review (Fable, fix author); ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
+| DOCK-6  | Low    | [#183](https://github.com/fsnow/cst/issues/183) | — | ✅ Fixed (7341480) | author self-review (Fable, fix author); ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
+| DOCK-7  | Low    | [#184](https://github.com/fsnow/cst/issues/184) | — | ✅ Fixed (ab87b13) | author self-review (Fable, fix author); ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
+| DOCK-8  | Low    | [#185](https://github.com/fsnow/cst/issues/185) | — | ✅ Fixed (fd272d0) | author self-review (Fable, fix author); ✅ 2026-07-03 maintainer GUI-verified (full DOCK checklist run in the UI) |
 | SRCH-1  | High   | [#126](https://github.com/fsnow/cst/issues/126) | [#128](https://github.com/fsnow/cst/pull/128) | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-2  | High   | [#113](https://github.com/fsnow/cst/issues/113) | — | ✅ Fixed | ✅ 2026-07-02 |
 | SRCH-3  | High   | [#115](https://github.com/fsnow/cst/issues/115) | — | ✅ Fixed | ✅ 2026-07-02 |
@@ -96,7 +96,7 @@ All 80 findings, with severity, and the GitHub issue/PR when one exists. **✅ F
 | SCRIPT-1  | High   | [#116](https://github.com/fsnow/cst/issues/116) | — | ✅ Fixed | ✅ 2026-07-03 |
 | SCRIPT-2  | High   | [#143](https://github.com/fsnow/cst/issues/143) | — | ✅ Fixed | ✅ 2026-07-03 (incomplete on first pass — docs still had the term; reworded in 4037efc; review-doc quote + VRI dictionary data exempt, see #143) |
 | SCRIPT-3  | Medium | [#201](https://github.com/fsnow/cst/issues/201) | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (ASCII-only regexes + TakeWhile scan agree, OK-gate closes the no-op vector, sibling sweep clean; 24/24 tests incl. 4 non-ASCII-digit cases) |
-| SCRIPT-4  | Medium | [#203](https://github.com/fsnow/cst/issues/203) | — | ✅ Fixed | 🔧 committed; GUI-confirm counts show (52) |
+| SCRIPT-4  | Medium | [#203](https://github.com/fsnow/cst/issues/203) | — | ✅ Fixed | ✅ 2026-07-03 maintainer GUI-verified (category counts render correctly in earlier testing) |
 | SCRIPT-5  | Medium | — | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified by independent agent (delay gone, finally fires exactly once on UI thread incl. failure path, guard race-free, ordering proven, no earlier-tree dependents) |
 | SCRIPT-6  | Low    | — | — | ✅ Fixed | ✅ 2026-07-03 Fable-verified (MarkDirty() verbatim per prescription, both defect halves gone, sibling DictionaryViewModel same treatment; 9/9 tests) |
 | SCRIPT-7  | Low    | [#202](https://github.com/fsnow/cst/issues/202) | — | ✅ Fixed (refixed 7f9eb31) | ✅ 2026-07-03 Fable-verified after refix (REGRESSION in 301dbd7 caught: leaked every call; 7f9eb31 re-verified — all 5 refs released exactly once on all paths, matches sibling pattern; 6/6. Micro-note: per-iteration familyNameRef could leak one CFString on a mid-loop throw — cosmetic, not fixed) |
