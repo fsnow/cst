@@ -255,7 +255,9 @@ namespace CST
             indexWriter.DeleteDocuments(new Term("file", book.FileName));
 
             // read text of document
-            StreamReader sr = new StreamReader(XmlDirectory + Path.DirectorySeparatorChar + book.FileName);
+            // The corpus XML is UTF-16-LE; be explicit rather than relying on BOM sniffing over
+            // the UTF-8 default (a BOM-less file would silently index mojibake). (#215 follow-up)
+            StreamReader sr = new StreamReader(XmlDirectory + Path.DirectorySeparatorChar + book.FileName, System.Text.Encoding.Unicode);
             string deva = sr.ReadToEnd();
             sr.Close();
 
