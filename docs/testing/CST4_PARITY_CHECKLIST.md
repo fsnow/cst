@@ -59,7 +59,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | Tree expansion-state persistence | Save/restore expanded nodes | PRESENT | (SCRIPT-5 made restore deterministic) — verify across restart |
 | Go To dialog | Para/page jump | PRESENT | GoToDialog |
 | Go To radios: Paragraph / VRI / Myanmar / PTS / Thai / Other Page | Navigate by number, disabled if unavailable | PRESENT | Availability flags per book |
-| Go To number box + V/M/P/T prefix auto-switch | Typing a letter prefix switches the radio | PARTIAL/UNKNOWN | Number entry present; the single-letter prefix auto-switch not evident — **check live** |
+| Go To number box + V/M/P/T prefix auto-switch | Typing a letter prefix switches the radio | PRESENT | ✅ maintainer-verified 2026-07-04 — all working (number entry + letter-prefix radio auto-switch) |
 | OK / Cancel | Confirm / dismiss | PRESENT | IsDefault / IsCancel |
 
 ## 3. Reading window (CST4 `FormBookDisplay`)
@@ -136,11 +136,12 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 ---
 
 ## Live-check queue (UNKNOWN/PARTIAL to resolve side-by-side)
-1. Go To — does typing a V/M/P/T letter prefix auto-switch the page-type radio?
-2. Search Words list — does Ctrl+A select-all + occurrence-merge behave like CST4?
-3. Word Search from selection (Cmd+F) — confirm it matches CST4's Ctrl+W behavior.
-4. Dictionary — does the Definition Language list match CST4's English/Hindi?
-5. Tree expansion state — does it survive an app restart? (should, post-SCRIPT-5)
+1. Search Words list — does Ctrl+A select-all + occurrence-merge behave like CST4?
+2. Word Search from selection (Cmd+F) — confirm it matches CST4's Ctrl+W behavior.
+3. Dictionary — does the Definition Language list match CST4's English/Hindi?
+4. Tree expansion state — does it survive an app restart? (should, post-SCRIPT-5)
+
+_Resolved: Go To V/M/P/T prefix auto-switch (✅ 2026-07-04); global-script re-scripts open books (#225, ✅ 2026-07-04)._
 
 ## Gaps that need an issue filed (maintainer decision on priority)
 Print family · Book Collections + editor + search scoping · Search Reports · Recently Viewed (MRU) · About box · Ctrl+B bad-word checker (minor).
