@@ -11,7 +11,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | Gap | Tracker | Notes |
 |---|---|---|
 | UI localization — 24 languages, runtime switch | **[#26](https://github.com/fsnow/cst/issues/26)** | Avalonia has zero satellite `.resx` + inert stub (SCRIPT-8). Authoritative language list posted to #26. |
-| Per-book **View** menu: Show Footnotes / Show Search Terms | **[#224](https://github.com/fsnow/cst/issues/224)** | XSL JS + state fields exist; only the UI + wiring missing. |
+| ~~Per-book Show Footnotes / Show Search Terms~~ | **[#224](https://github.com/fsnow/cst/issues/224)** ✅ | **Done 2026-07-04** — toolbar toggles (footnotes permanent; highlight in hit-nav cluster), per-book persistence. |
 | ~~Global "Pali Script" should re-script open books~~ | **[#225](https://github.com/fsnow/cst/issues/225)** ✅ | **Done 2026-07-04** — global re-scripts all open books (CST4 parity). |
 | Print / Page Setup / Print Preview (book + main) | _needs issue_ | No print anywhere in Avalonia. |
 | Book **Collections** (custom book sets) + editor + search scoping | _needs issue_ | `comboBookSet`, FormBookCollEditor — no Avalonia concept. |
@@ -70,7 +70,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | Per-book "Pali Script:" | 14 scripts, re-render book | PRESENT | BookScript combo (learning tool) |
 | First / Previous / Next / Last Result | Navigate search hits | PRESENT | Hit commands + N-of-M counter (new) |
 | Mūla / Aṭṭhakathā / Ṭīkā | Open linked text at matching paragraph | PRESENT | HasMula/HasAttha/HasTika |
-| **View** dropdown → Show Search Terms / Show Footnotes | Toggle hit highlight / footnote visibility | MISSING | XSL JS + state fields exist — **[#224](https://github.com/fsnow/cst/issues/224)** |
+| **View** dropdown → Show Search Terms / Show Footnotes | Toggle hit highlight / footnote visibility | PRESENT | ✅ #224 (2026-07-04): toolbar toggles — Footnotes permanent; Highlight in the hit-nav cluster (contextual, CST4 parity). Highlight-off overrides the CSS to plain text (all hits, dark-mode-correct). Per-book persistence + float/unfloat carry. |
 | Page-numbers status bar | V/M/P/T/O page refs tracked to scroll | PRESENT | PageReferencesText |
 | Print / Page Setup / Print Preview | Browser print dialogs | MISSING | No print |
 | Go To (Ctrl+G) | Para/page jump | PRESENT | Cmd+G |
