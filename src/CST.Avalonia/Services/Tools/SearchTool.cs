@@ -46,7 +46,6 @@ namespace CST.Avalonia.Services.Tools
 
             var terms = result.Terms.Select(t => new SearchTermResult(
                 Term: ScriptConverter.Convert(t.Term, Script.Ipe, request.OutputScript),
-                TermIpe: t.Term,
                 TotalCount: t.TotalCount,
                 Books: t.Occurrences.Select(o => new BookHitSummary(
                     BookId: o.Book?.FileName ?? string.Empty,
@@ -74,7 +73,7 @@ namespace CST.Avalonia.Services.Tools
         public async Task<IReadOnlyList<Occurrence>> GetOccurrencesAsync(
             OccurrenceRequest request, CancellationToken ct = default)
         {
-            var positions = await _search.GetTermPositionsAsync(request.BookId, request.TermIpe, ct)
+            var positions = await _search.GetTermPositionsAsync(request.BookId, request.Term, ct)
                 .ConfigureAwait(false);
             if (positions.Count == 0) return Array.Empty<Occurrence>();
 

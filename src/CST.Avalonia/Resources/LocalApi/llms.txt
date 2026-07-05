@@ -18,8 +18,11 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 
 - Pali output is ROMANIZED (Latin / IAST, with diacritics) by DEFAULT. Pass `outputScript` to override,
   e.g. "Devanagari", "Thai", "Myanmar", "Sinhala" (14 scripts are supported).
-- Every Pali term and headword also carries a stable internal encoding (`termIpe`, `headwordIpe`). Use it as
-  an unambiguous cross-script key when calling follow-up endpoints - it does not change with `outputScript`.
+- You work entirely in readable Pali (romanized by default). To read a search hit in context, pass the
+  term's `term` value (exactly as `/v1/search` returned it, in whatever script you requested) back to
+  `/v1/occurrences` as `term`. There is no opaque id to round-trip - the server handles the internal encoding.
+- An empty result array means NO MATCHES, not an error. Errors use HTTP status codes (400 bad request,
+  401 missing/invalid token, 404 unknown path); a 2xx with `[]` or empty fields is simply "nothing found".
 - Books are identified by file name (e.g. `s0101m.mul.xml`). Get the list from `GET /v1/books`.
 - References: the paragraph number is the primary citation unit; page numbers exist per edition
   (VRI / Myanmar / PTS / Thai). Search occurrences report both.
@@ -29,23 +32,25 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 
 - `GET  /v1/status` - app version, API version, readiness.
 - `GET  /v1/books` - the catalog. Each: `{ bookId, name, shortName, pitaka, commentaryLevel, bookType, indexed }`.
+  `name`/`shortName` are romanized by default; add `?script=Devanagari` (etc.) to change.
 - `POST /v1/search` - matching terms (a wildcard/regex expands to many inflected forms).
   Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, proximityDistance?, outputScript? }`.
   Returns terms, each with the books it occurs in and counts.
 - `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one term in one
-  book. Body: `{ bookId, termIpe, includeVariantReadings?, outputScript?, skip?, take?, minChars?, maxChars? }`.
+  book. Body: `{ bookId, term, includeVariantReadings?, outputScript?, skip?, take?, minChars?, maxChars? }`
+  where `term` is a `term` value from a prior `/v1/search`.
   Each occurrence: a hit-centered snippet, the paragraph number, and the per-edition page numbers.
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeVariantReadings? }`.
   Page forward/backward by passing back `prevCursor` / `nextCursor`.
 - `GET  /v1/dictionary/languages` - available dictionary language codes (e.g. "en", "hi").
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
-  -> entries `{ headword, headwordIpe, meaningHtml }`.
+  -> entries `{ headword, meaningHtml }`.
 
 ## A typical research flow
 
-1. `POST /v1/search` for a word -> pick the inflected form(s) you want (keep each `termIpe`).
-2. `POST /v1/occurrences` for that `termIpe` in a book -> scan the concordance snippets; cite by paragraph
+1. `POST /v1/search` for a word -> pick the inflected form(s) you want (keep each `term`).
+2. `POST /v1/occurrences` for that `term` in a book -> scan the concordance snippets; cite by paragraph
    and per-edition page.
 3. `POST /v1/passage` at a paragraph -> read the surrounding text, paging with the cursor if you need more.
 4. `POST /v1/dictionary/lookup` -> gloss unfamiliar words.

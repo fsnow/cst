@@ -92,7 +92,6 @@ namespace CST.Avalonia.Tests.Tools
             Assert.Equal("capped", result.Note);
 
             var term = Assert.Single(result.Terms);
-            Assert.Equal("abc", term.TermIpe);
             Assert.Equal(ScriptConverter.Convert("abc", Script.Ipe, Script.Latin), term.Term);
 
             var hit = Assert.Single(term.Books);
