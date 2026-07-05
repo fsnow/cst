@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Conversion;
+using CST.Search;
 using CST.Tools;
 
 namespace CST.Avalonia.Services.Tools
@@ -11,14 +15,20 @@ namespace CST.Avalonia.Services.Tools
     /// <summary>
     /// <see cref="ISearchTool"/> over the app's <see cref="ISearchService"/> (AI_INTEGRATION.md surface C).
     /// Maps the transport-agnostic tool request/response to/from the internal search models and projects IPE
-    /// terms to the requested output script. Headless — <see cref="ISearchService"/> is reference-counted and
-    /// thread-safe (SRCH-6/11), so this is safe to call from a local HTTP handler.
+    /// terms to the requested output script. <see cref="GetOccurrencesAsync"/> adds "search results in
+    /// context" — snippets + citation refs — by reading the book XML and running the snippet engine. Headless —
+    /// <see cref="ISearchService"/> is reference-counted and thread-safe (SRCH-6/11), safe from an HTTP handler.
     /// </summary>
     public sealed class SearchTool : ISearchTool
     {
         private readonly ISearchService _search;
+        private readonly ISettingsService _settings;
 
-        public SearchTool(ISearchService search) => _search = search;
+        public SearchTool(ISearchService search, ISettingsService settings)
+        {
+            _search = search;
+            _settings = settings;
+        }
 
         public async Task<SearchToolResult> SearchAsync(SearchToolRequest request, CancellationToken ct = default)
         {
@@ -61,16 +71,46 @@ namespace CST.Avalonia.Services.Tools
             return terms.Select(t => ScriptConverter.Convert(t, Script.Unknown, outputScript)).ToList();
         }
 
-        public async Task<IReadOnlyList<TermHit>> GetTermHitsAsync(
-            string bookId, string termIpe, CancellationToken ct = default)
+        public async Task<IReadOnlyList<Occurrence>> GetOccurrencesAsync(
+            OccurrenceRequest request, CancellationToken ct = default)
         {
-            var positions = await _search.GetTermPositionsAsync(bookId, termIpe, ct).ConfigureAwait(false);
-            return positions.Select(p => new TermHit(
-                WordIndex: p.WordIndex,
-                StartOffset: p.StartOffset,
-                EndOffset: p.EndOffset,
-                IsPrimaryTerm: p.IsFirstTerm,
-                WordIpe: p.Word)).ToList();
+            var positions = await _search.GetTermPositionsAsync(request.BookId, request.TermIpe, ct)
+                .ConfigureAwait(false);
+            if (positions.Count == 0) return Array.Empty<Occurrence>();
+
+            var dir = _settings.Settings?.XmlBooksDirectory;
+            if (string.IsNullOrEmpty(dir)) return Array.Empty<Occurrence>();
+            var path = Path.Combine(dir, request.BookId);
+            if (!File.Exists(path)) return Array.Empty<Occurrence>();
+
+            // Char offsets index the decoded (BOM-stripped) UTF-16 text — read it the same way.
+            string xml = await File.ReadAllTextAsync(path, Encoding.Unicode, ct).ConfigureAwait(false);
+            var markers = BookMarkers.Build(xml);
+            var opts = new SnippetOptions(
+                OutputScript: request.OutputScript,
+                IncludeVariantReadings: request.IncludeVariantReadings,
+                MinChars: request.MinChars ?? 60,
+                MaxChars: request.MaxChars ?? 320);
+
+            string bookName = Books.Inst
+                .FirstOrDefault(b => string.Equals(b.FileName, request.BookId, StringComparison.OrdinalIgnoreCase))
+                ?.LongNavPath ?? request.BookId;
+
+            var occurrences = new List<Occurrence>();
+            foreach (var p in positions.OrderBy(p => p.StartOffset).Skip(request.Skip).Take(request.Take))
+            {
+                ct.ThrowIfCancellationRequested();
+                var s = TeiSnippetExtractor.Extract(xml, p.StartOffset, p.EndOffset - p.StartOffset, markers, opts);
+                occurrences.Add(new Occurrence(
+                    BookId: request.BookId,
+                    BookName: bookName,
+                    Snippet: s.Snippet,
+                    HitStart: s.HitStart,
+                    HitLength: s.HitLength,
+                    Refs: new OccurrenceRefs(s.ParagraphNumber, s.ParagraphBookCode, s.Pages),
+                    IncludedVariants: s.IncludedVariants));
+            }
+            return occurrences;
         }
 
         private static SearchMode MapMode(SearchToolMode mode) => mode switch
