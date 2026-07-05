@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Conversion;
+using CST.Search;
 
 namespace CST.Tools
 {
@@ -22,11 +23,12 @@ namespace CST.Tools
             string prefix, int limit = 50, Script outputScript = Script.Latin, CancellationToken ct = default);
 
         /// <summary>
-        /// Opt-in, heavier: the individual hit positions of a term within one book (for highlighting or
-        /// offset-level work). Keyed by the stable <paramref name="termIpe"/> from a prior search.
+        /// "Search results in context" (the concordance/KWIC bridge): each occurrence of a term in one book
+        /// as a hit-centered <b>snippet</b> plus citation refs (paragraph number + per-edition pages), paged.
+        /// Keyed by the stable <paramref name="OccurrenceRequest.TermIpe"/> from a prior search. This is the
+        /// data behind both the agent loop (scan → cite/fetch) and the human concordance panel.
         /// </summary>
-        Task<IReadOnlyList<TermHit>> GetTermHitsAsync(
-            string bookId, string termIpe, CancellationToken ct = default);
+        Task<IReadOnlyList<Occurrence>> GetOccurrencesAsync(OccurrenceRequest request, CancellationToken ct = default);
     }
 
     /// <summary>How the query text is interpreted.</summary>
@@ -70,25 +72,48 @@ namespace CST.Tools
 
     /// <summary>One matching term and the books it occurs in.</summary>
     /// <param name="Term">The term in the requested output script.</param>
-    /// <param name="TermIpe">The stable IPE form — use this as the key for <c>GetTermHitsAsync</c>.</param>
+    /// <param name="TermIpe">The stable IPE form — use this as the key for <c>GetOccurrencesAsync</c>.</param>
     public sealed record SearchTermResult(
         string Term,
         string TermIpe,
         int TotalCount,
         IReadOnlyList<BookHitSummary> Books);
 
-    /// <summary>A term's occurrence count within one book (no positions — call <c>GetTermHitsAsync</c> for those).</summary>
+    /// <summary>A term's occurrence count within one book (call <c>GetOccurrencesAsync</c> for the snippets).</summary>
     public sealed record BookHitSummary(
         string BookId,
         string BookName,
         int Count);
 
-    /// <summary>A single hit position of a term within a book.</summary>
-    /// <param name="IsPrimaryTerm">True for the main term; false for context words (two-color highlighting).</param>
-    public sealed record TermHit(
-        int WordIndex,
-        int StartOffset,
-        int EndOffset,
-        bool IsPrimaryTerm,
-        string? WordIpe);
+    /// <summary>A request for a term's in-context occurrences within one book, paged.</summary>
+    /// <param name="MinChars">Prose snippet floor (rendered chars); null uses the engine default.</param>
+    /// <param name="MaxChars">Prose snippet ceiling (rendered chars); null uses the engine default.</param>
+    public sealed record OccurrenceRequest(
+        string BookId,
+        string TermIpe,
+        bool IncludeVariantReadings = false,
+        Script OutputScript = Script.Latin,
+        int Skip = 0,
+        int Take = 50,
+        int? MinChars = null,
+        int? MaxChars = null);
+
+    /// <summary>Citation refs at a hit: the paragraph (with Multi sub-book code) and the page in each edition.</summary>
+    public sealed record OccurrenceRefs(
+        int? ParagraphNumber,
+        string? ParagraphBookCode,
+        IReadOnlyList<SnippetPageRef> Pages);
+
+    /// <summary>
+    /// One occurrence of a term, shown in context: a hit-centered snippet (term at
+    /// <c>[HitStart, HitStart+HitLength)</c>, romanized) plus its citation refs.
+    /// </summary>
+    public sealed record Occurrence(
+        string BookId,
+        string BookName,
+        string Snippet,
+        int HitStart,
+        int HitLength,
+        OccurrenceRefs Refs,
+        bool IncludedVariants);
 }
