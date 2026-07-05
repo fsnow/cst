@@ -474,7 +474,7 @@ namespace CST.Avalonia.Services
         
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
             List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null,
-            int? initialCurrentHitIndex = null)
+            int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true)
         {
             _logger.Information("Opening book: {BookFile} with anchor: {Anchor}, SearchTerms: {TermCount}, Positions: {PosCount}",
                 book.FileName, anchor ?? "null", searchTerms?.Count ?? 0, searchPositions?.Count ?? 0);
@@ -519,6 +519,11 @@ namespace CST.Avalonia.Services
             // No-op given the seed above (avoids the second full pipeline run); kept as a safety net.
             bookDisplayViewModel.BookScript = targetScript;
             _logger.Debug("Set book script to: {ActualScript} (requested: {RequestedScript})", targetScript, bookScript?.ToString() ?? "null");
+
+            // #224: apply restored per-book View toggles (default on for fresh opens). Set before the View
+            // attaches, so ExecutePendingRestoration applies them on the first paint (no shown-then-hidden flash).
+            bookDisplayViewModel.ShowFootnotes = showFootnotes;
+            bookDisplayViewModel.ShowSearchTerms = showSearchTerms;
 
             // Phase 1: Prevent drag-to-float for documents with CEF WebView
             // CanDrag = true allows tab reordering within same window
@@ -669,8 +674,8 @@ namespace CST.Avalonia.Services
                     TotalHits = bookDisplayViewModel.TotalHits,
                     TabIndex = 0, // TODO: Get actual tab index from dock
                     IsSelected = isSelectedValue,
-                    ShowFootnotes = true, // Default for now
-                    ShowSearchTerms = bookDisplayViewModel.HasSearchHighlights
+                    ShowFootnotes = bookDisplayViewModel.ShowFootnotes,
+                    ShowSearchTerms = bookDisplayViewModel.ShowSearchTerms
                 };
 
                 // Update the state
@@ -698,6 +703,24 @@ namespace CST.Avalonia.Services
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to update book script in state for window {WindowId}", windowId);
+            }
+        }
+
+        // #224: persist the per-book Footnotes / search-highlight toggles when they change.
+        private void UpdateBookViewFlagsInState(string windowId, bool showFootnotes, bool showSearchTerms)
+        {
+            try
+            {
+                var stateService = App.ServiceProvider?.GetRequiredService<IApplicationStateService>();
+                if (stateService != null)
+                {
+                    stateService.UpdateBookWindowViewFlags(windowId, showFootnotes, showSearchTerms);
+                    Log.Information("Updated book view flags in state for window {WindowId}: Footnotes={Foot} SearchTerms={Search}", windowId, showFootnotes, showSearchTerms);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to update book view flags in state for window {WindowId}", windowId);
             }
         }
 
@@ -1325,6 +1348,8 @@ namespace CST.Avalonia.Services
                 var docId = oldVm.DocId;
                 var currentHitIndex = oldVm.CurrentHitIndex;
                 var totalHits = oldVm.TotalHits;
+                var showFootnotes = oldVm.ShowFootnotes;       // #224: carry View toggles across float/unfloat
+                var showSearchTerms = oldVm.ShowSearchTerms;
                 var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
 
                 Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
@@ -1374,6 +1399,8 @@ namespace CST.Avalonia.Services
                 newVm.BookScript = bookScript;
                 newVm.CurrentHitIndex = currentHitIndex;
                 newVm.TotalHits = totalHits;
+                newVm.ShowFootnotes = showFootnotes;
+                newVm.ShowSearchTerms = showSearchTerms;
                 newVm.IsFloating = true;
                 // Setting BookScript doesn't refresh the dockable Title (the tab binds to Title, not
                 // DisplayTitle), so carry the old tab title over — else it reverts to Devanagari (#6).
@@ -1454,6 +1481,8 @@ namespace CST.Avalonia.Services
                 var docId = oldVm.DocId;
                 var currentHitIndex = oldVm.CurrentHitIndex;
                 var totalHits = oldVm.TotalHits;
+                var showFootnotes = oldVm.ShowFootnotes;       // #224: carry View toggles across float/unfloat
+                var showSearchTerms = oldVm.ShowSearchTerms;
                 var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
 
                 Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
@@ -1511,6 +1540,8 @@ namespace CST.Avalonia.Services
                 newVm.BookScript = bookScript;
                 newVm.CurrentHitIndex = currentHitIndex;
                 newVm.TotalHits = totalHits;
+                newVm.ShowFootnotes = showFootnotes;
+                newVm.ShowSearchTerms = showSearchTerms;
                 newVm.IsFloating = false;
                 newVm.CanFloat = false; // Restore drag-to-float block (CEF crash mitigation); matches the open + float paths
                 // Carry the exact tab title across recreation (BookScript change doesn't refresh Title) — #6.
@@ -2948,6 +2979,8 @@ namespace CST.Avalonia.Services
             var docId = oldVm.DocId;
             var currentHitIndex = oldVm.CurrentHitIndex;
             var totalHits = oldVm.TotalHits;
+            var showFootnotes = oldVm.ShowFootnotes;       // #224: carry View toggles across float/unfloat
+            var showSearchTerms = oldVm.ShowSearchTerms;
             var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
             var anchor = oldVm.CurrentVriAnchor;
 
@@ -2981,6 +3014,8 @@ namespace CST.Avalonia.Services
             newVm.BookScript = bookScript;
             newVm.CurrentHitIndex = currentHitIndex;
             newVm.TotalHits = totalHits;
+            newVm.ShowFootnotes = showFootnotes;
+            newVm.ShowSearchTerms = showSearchTerms;
             newVm.IsFloating = false;
             newVm.CanFloat = false; // Restore drag-to-float block (CEF crash mitigation); matches the open + float paths
             newVm.Title = title;
@@ -3137,6 +3172,12 @@ namespace CST.Avalonia.Services
                     else if (e.PropertyName == nameof(BookDisplayViewModel.BookScript))
                     {
                         UpdateBookScriptInState(bookViewModel.Id, bookViewModel.BookScript);
+                    }
+                    // #224: persist the Footnotes / search-highlight toggles as the user flips them.
+                    else if (e.PropertyName == nameof(BookDisplayViewModel.ShowFootnotes) ||
+                             e.PropertyName == nameof(BookDisplayViewModel.ShowSearchTerms))
+                    {
+                        UpdateBookViewFlagsInState(bookViewModel.Id, bookViewModel.ShowFootnotes, bookViewModel.ShowSearchTerms);
                     }
                 };
 

@@ -629,7 +629,7 @@ public partial class App : Application
                                         bookWindowState.CurrentAnchor ?? "null");
                                     mainWindow.OpenBook(book, bookWindowState.SearchTerms, bookWindowState.BookScript, bookWindowState.WindowId,
                                         bookWindowState.DocId, bookWindowState.SearchPositions, bookWindowState.CurrentAnchor,
-                                        bookWindowState.CurrentHitIndex);
+                                        bookWindowState.CurrentHitIndex, bookWindowState.ShowFootnotes, bookWindowState.ShowSearchTerms);
                                     Log.Debug("Book restored: {BookFile} with script: {Script}, anchor: {Anchor}",
                                         book.FileName, bookWindowState.BookScript, bookWindowState.CurrentAnchor ?? "null");
                                 }

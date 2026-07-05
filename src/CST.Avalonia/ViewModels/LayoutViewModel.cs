@@ -86,9 +86,9 @@ namespace CST.Avalonia.ViewModels
 
         public void OpenBook(CST.Book book, List<string>? searchTerms = null, Script? bookScript = null, string? windowId = null,
             int? docId = null, List<TermPosition>? searchPositions = null, string? initialAnchor = null,
-            int? initialCurrentHitIndex = null)
+            int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true)
         {
-            _factory.OpenBook(book, initialAnchor, bookScript, windowId, searchTerms, docId, searchPositions, initialCurrentHitIndex);
+            _factory.OpenBook(book, initialAnchor, bookScript, windowId, searchTerms, docId, searchPositions, initialCurrentHitIndex, showFootnotes, showSearchTerms);
         }
 
         public void CloseBook(string bookId)

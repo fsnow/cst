@@ -333,8 +333,22 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         {
             existing.BookScript = newScript;
             FireStateChangedEvent();
-            
+
             // Mark dirty for timer-based saving
+            MarkDirty();
+        }
+    }
+
+    // #224: persist the per-book Footnotes / search-highlight toggles when the user flips them, so saved
+    // state stays in sync with the VM (otherwise the toggle is only captured at book-open time).
+    public void UpdateBookWindowViewFlags(string windowId, bool showFootnotes, bool showSearchTerms)
+    {
+        var existing = Current.BookWindows.FirstOrDefault(w => w.WindowId == windowId);
+        if (existing != null)
+        {
+            existing.ShowFootnotes = showFootnotes;
+            existing.ShowSearchTerms = showSearchTerms;
+            FireStateChangedEvent();
             MarkDirty();
         }
     }

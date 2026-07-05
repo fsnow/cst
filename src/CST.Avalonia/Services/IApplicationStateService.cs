@@ -62,6 +62,9 @@ public interface IApplicationStateService
     /// </summary>
     void UpdateBookWindowScript(string windowId, Script newScript);
 
+    // #224: persist the per-book Footnotes / search-highlight toggles when the user flips them.
+    void UpdateBookWindowViewFlags(string windowId, bool showFootnotes, bool showSearchTerms);
+
     /// <summary>
     /// Remove book window state by window ID
     /// </summary>

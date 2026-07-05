@@ -173,10 +173,14 @@ public class BookWindowState
     public WindowState WindowState { get; set; } = WindowState.Normal;
 
     /// <summary>
-    /// Display options
+    /// Display options (#224). Forced to always serialize: the global DefaultIgnoreCondition is
+    /// WhenWritingDefault, which would DROP the type-default false — and since ShowFootnotes' initializer is
+    /// true, an omitted false round-trips back to true, so "footnotes off" would never persist.
     /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.Never)]
     public bool ShowFootnotes { get; set; } = true;
-    public bool ShowSearchTerms { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.Never)]
+    public bool ShowSearchTerms { get; set; } = true;
 
     /// <summary>
     /// Search terms for highlighting (if any) - IPE encoded
