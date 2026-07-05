@@ -29,6 +29,11 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
   </ItemGroup>
 
+  <!-- Needed to run LocalApiServer (hosts ASP.NET Core) in tests. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\CST.Avalonia\CST.Avalonia.csproj" />
     <ProjectReference Include="..\CST.Lucene\CST.Lucene.csproj" />

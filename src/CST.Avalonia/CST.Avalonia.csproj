@@ -48,6 +48,11 @@
     <ProjectReference Include="..\CST.Lucene\CST.Lucene.csproj" />
   </ItemGroup>
 
+  <!-- Local AI-tool API server (loopback, opt-in). Hosts a minimal ASP.NET Core API in-process. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="CST.Avalonia.Tests" />
   </ItemGroup>
