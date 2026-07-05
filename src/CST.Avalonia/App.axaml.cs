@@ -975,6 +975,7 @@ public partial class App : Application
         services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
         services.AddSingleton<CST.Tools.IDictionaryTool, Services.Tools.DictionaryTool>();
         services.AddSingleton<CST.Tools.IPassageTool, Services.Tools.PassageTool>();
+        services.AddSingleton<CST.Tools.IScriptTool, Services.Tools.ScriptTool>();
         services.AddTransient<TreeStateService>();
         
         // Indexing services

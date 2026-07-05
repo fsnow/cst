@@ -46,6 +46,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `GET  /v1/dictionary/languages` - available dictionary language codes (e.g. "en", "hi").
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
   -> entries `{ headword, meaningHtml }`.
+- `POST /v1/convert` - convert Pali text to another script. Body `{ text, outputScript }` -> `{ text, outputScript }`.
+  Input script is auto-detected and mixed-script input is handled in one pass.
+- `GET  /v1/scripts` - the valid script names for `outputScript` and the `?script=` params.
 
 ## A typical research flow
 
