@@ -56,7 +56,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | Select a Book tree | Hierarchical collections/books tree | PRESENT | OpenBookPanel + BookTreeNode (icons + counts) |
 | Double-click / Enter opens book | Opens in current script | PRESENT | TreeView double-tap |
 | Live re-script of tree labels | On Pali Script change | PRESENT | Script/font bindings |
-| Tree expansion-state persistence | Save/restore expanded nodes | PRESENT | (SCRIPT-5 made restore deterministic) — verify across restart |
+| Tree expansion-state persistence | Save/restore expanded nodes | PRESENT | ✅ verified 2026-07-04 — survives restart (SCRIPT-5 deterministic restore) |
 | Go To dialog | Para/page jump | PRESENT | GoToDialog |
 | Go To radios: Paragraph / VRI / Myanmar / PTS / Thai / Other Page | Navigate by number, disabled if unavailable | PRESENT | Availability flags per book |
 | Go To number box + V/M/P/T prefix auto-switch | Typing a letter prefix switches the radio | PRESENT | ✅ maintainer-verified 2026-07-04 — all working (number entry + letter-prefix radio auto-switch) |
@@ -88,7 +88,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 |---|---|---|---|
 | Modeless dictionary | Hidden not closed on X | PRESENT (changed) | Dockable DictionaryPanel |
 | Word entry box | Live lookup per keystroke; script font per first char | PRESENT | SearchText live lookup |
-| Definition Language combo (English / Hindi) | Choose En/Hi dictionary | PARTIAL | Data-driven from DictionaryService; verify list matches En/Hi |
+| Definition Language combo (English / Hindi) | Choose En/Hi dictionary | PRESENT | ✅ verified 2026-07-04 — English + Hindi both present |
 | Words list | Prefix/nearest-match in current script | PRESENT | Words ListBox |
 | Meaning pane | Render meaning HTML; `<see>` cross-refs clickable | PRESENT | Native TextBlock + MeaningParser |
 | See-also / Back navigation | Follow `<see>`, "Back to" return | PRESENT | Back/Forward buttons |
@@ -135,11 +135,8 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 
 ---
 
-## Live-check queue (UNKNOWN/PARTIAL to resolve side-by-side)
-1. Dictionary — does the Definition Language list match CST4's English/Hindi?
-2. Tree expansion state — does it survive an app restart? (should, post-SCRIPT-5)
-
-_Resolved: Go To V/M/P/T prefix auto-switch, cmd-A select-all + occurrence-merge, Cmd+F word-search-from-selection (all ✅ 2026-07-04); global-script re-scripts open books (#225, ✅ 2026-07-04)._
+## Live-check queue — ✅ all resolved (2026-07-04)
+Every UNKNOWN/PARTIAL row has been maintainer-verified: Go To V/M/P/T prefix auto-switch; cmd-A select-all + occurrence-merge (Books list single-select in both, correct); Cmd+F word-search-from-selection; Dictionary English/Hindi language list; tree-expansion restore across restart; and global-script re-scripts open books (#225). Nothing left to check live.
 
 ## Gaps that need an issue filed (maintainer decision on priority)
 Print family · Book Collections + editor + search scoping · Search Reports · Recently Viewed (MRU) · About box · Ctrl+B bad-word checker (minor).
