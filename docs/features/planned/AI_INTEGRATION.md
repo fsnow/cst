@@ -57,7 +57,8 @@ Everything in §2 is an adapter over one or both of:
    `ambiguous-reference` + candidate list, `reference-out-of-range`). The agent needs this to confirm the
    user is looking at the right passage. **Decided: ambiguity resolves agent-side** — the API returns the
    candidates and the agent asks its user; the app never pops its own pick-list for an API-initiated
-   navigation, and never silently best-guess jumps.
+   navigation, and never silently best-guess jumps. **Its highlight/anchor payload is expressed in source
+   coordinates** — see the coordinate model in §6.1.
 2. **The app's read services exposed as tools** — search, fetch-passage, resolve-reference, **dictionary
    lookup** — each already encapsulating its format (Lucene / TEI XML / binary dict). Backs **C** (and **B**).
    Result shapes are **token-frugal by design**: paragraph-granularity by default, explicit size limits +
@@ -126,6 +127,61 @@ Do not think of HTTP *vs* MCP *vs* URL scheme — **layer them on the shared cor
 - **Lifecycle** — starts with the app (if enabled), stops on shutdown; cold-start is the URL scheme's job (§5).
   URL-scheme registration is itself a **packaging change** (macOS: `CFBundleURLTypes` in Info.plist +
   re-sign/notarize; Windows: registry; Linux: `.desktop` file) — schedule it with phase 1 (§13).
+
+### 6.1 Highlighting & anchors — the coordinate model
+
+The concordance/passage **reads** (C) and the present-in-context **command** (E) share one primitive: an
+ordered **highlight set with a single navigable anchor**. It has two producers — search *computes* it (a hit,
+or the multi-span set of a proximity match), and the agent *supplies* it (to show the user a span it chose) —
+over **one coordinate space**. Get that space right and E is nearly free; get it wrong and nothing maps.
+
+**Three coordinate spaces; only one is contractual for highlighting.**
+- **Source char offsets** — into the decoded, BOM-stripped UTF-16 corpus XML (markup and all). Script- and
+  render-independent. This is already what `cursor` and search `StartOffset`/`EndOffset` are, and what the
+  reader's WebView highlighter consumes. **This is the highlight coordinate space.**
+- **Rendered-text offsets** — into the script-converted, markup-stripped `text` a read returns. Depends on
+  `script` and `includeVariantReadings`; a Latin offset ≠ a Devanagari offset. **Display-only — never a
+  highlight coordinate.** The snippet's `HitStart`/`HitLength` live here: they mark the *returned string*, nothing more.
+- **WebView/DOM offsets** — internal to the reader; the app owns the source→DOM mapping.
+
+**Invariant: every offset the agent hands to a highlight/anchor command is a *source* offset that originated
+from us.** No agent-invented coordinates. This is what makes it robust: the forward render
+(`Clean` strip markup → `Convert` script → `Collapse` whitespace) is non-linear and **one-way** — we discard
+the mapping, so a rendered offset *cannot* be inverted back to XML. The agent therefore cannot point at the
+flat prose blob; it can only reference offsets we labelled for it. (Corollary: the read surface must stop
+handing out anonymous prose and start handing out *offset-anchored* data when the agent intends to act.)
+
+**Tiered escalation — pay for precision only when acting:**
+1. **Anchor + navigate — free, works today.** `cursor` (the hit's source offset) → drop an anchor, scroll
+   into view. No new data; the agent already holds it.
+2. **Coarse highlight — a few more fields.** "Highlight the hit word" / "highlight the whole snippet" is a
+   single source *span*. Today's returns mix spaces (`cursor` = source start, but `HitLength` = *rendered*
+   length), so this tier means **also surfacing the hit's source end/length and the snippet window's source
+   bounds** (`winStart`/`winEnd` — the extractor already computes them).
+3. **Granular highlight — opt-in token offsets.** `includeTokenOffsets: true` → `tokens: [{ text, start,
+   length }]`, where `text` is in the requested `script` but `start`/`length` are **source** offsets. The
+   agent composes arbitrary highlight/anchor sets word-by-word. These offsets already exist — the Lucene
+   index stores per-term `StartOffset`/`EndOffset`; we are *exposing* them, not inventing a system.
+
+**The flag: `includeTokenOffsets` (default false), on both `/v1/occurrences` and `/v1/passage`** — same
+option name, same token shape. Default-off keeps the read/scan path token-frugal (§4.2); the agent flips it
+only on the one call where it has decided to *display*, not merely *read*. Read cheap; highlight precise.
+
+**Multi-word / proximity is the forcing case.** A proximity match is inherently multi-span — the blue anchor
+(first unit) plus the green context units scattered across the window — so a single `HitStart`/`HitLength`
+cannot represent it; the KWIC would mark only one of the co-occurring words. The snippet model therefore
+carries an ordered `highlights: [{ start, length, isAnchor }]`, of which the single-term hit is the
+degenerate one-range case (one implementation, not two). This also removes the dead end where a multi-word
+result's `~`-joined composite `term` is round-tripped through the *single*-term occurrences lookup: instead,
+occurrences accepts the multi-word/proximity query (spaces = units, quotes = phrase, `proximityDistance` =
+window) and returns one occurrence per window with the full highlight set and the anchor `cursor`.
+
+**Surface-E command** (E) then takes a highlight/anchor request in **source coordinates** —
+`{ book, ranges: [{ start, length }], anchor: <index into ranges> }` — fed only by offsets from tiers 1–3.
+A **content-addressed** fallback ("highlight term T in paragraph P, anchor the first") is worth keeping for
+when the agent never fetched offsets: the app resolves it exactly like search, fully script-independent, no
+offset math — less flexible (only findable spans) but bulletproof. This composes with §4.1's structured
+outcome/error contract.
 
 ## 7. Why not MCP-first
 
@@ -270,7 +326,10 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
 
 - Exact tool/endpoint set and result shapes (paragraph granularity, hit offsets). *(Script of returned text:
   **decided** — romanized default with per-request `script` override; possible future preferred-script
-  setting. §11.)*
+  setting. §11. Highlight/anchor coordinate model: **decided** — source-offset coordinate space, tiered
+  cursor → source span → opt-in token offsets, `includeTokenOffsets` on occurrences + passage. §6.1.)*
+- Highlight-command residuals (§6.1): token granularity (word tokens; punctuation/danda not independently
+  addressable), and whether the surface-E command also accepts the content-addressed fallback from day one.
 - *(Local API default: **decided — off**; user opts in from Settings. §6.)*
 - *(Disambiguation: **decided — candidates back to the agent**, which asks its user; no app-side pick-list
   for API-initiated navigation. §4.1.)*
@@ -316,3 +375,17 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
   agent-facing default confirmed**, per-request `script` override first, possible preferred-script setting
   later; **disambiguation resolves agent-side** (candidates returned, agent asks its user); planned
   **anchor catalog** — precomputed lookups of valid navigation targets, faster than parsing the data files.
+
+**2026-07-05 (fsnow + Opus 4.8)** — new **§6.1 highlight/anchor coordinate model**, worked out while
+watching cold-agent iteration 7 struggle with proximity. Key realizations, now decided:
+- The read surface hands the agent script-converted, markup-stripped prose plus one lonely `cursor`; the
+  forward render is lossy/one-way, so a rendered offset can't be mapped back to XML. Highlighting must live
+  in the **source-offset** space (what `cursor`/search offsets/the WebView highlighter already use), and
+  **every offset the agent hands back must have originated from us** — no invented coordinates.
+- **Tiered escalation**: `cursor` anchor+navigate (free today) → hit/snippet **source spans** (a few more
+  fields; today's `HitLength` is *rendered*, not source) → **`includeTokenOffsets`** opt-in token array
+  `[{ text, start, length }]` for word-level control. Flag lives on **both** occurrences and passage.
+- **Proximity forced it**: a multi-span hit can't be one `HitStart/HitLength`, so the snippet model becomes
+  an ordered `highlights: [{ start, length, isAnchor }]` (single-term = degenerate one-range case), and
+  occurrences accepts the multi-word/proximity query directly instead of round-tripping the `~`-composite
+  term through the single-term lookup. Implementation deferred pending the iteration-7 friction report.
