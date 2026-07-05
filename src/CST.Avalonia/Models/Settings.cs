@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using CST.Conversion;
 
 namespace CST.Avalonia.Models
@@ -15,6 +16,43 @@ namespace CST.Avalonia.Models
         public FontSettings FontSettings { get; set; } = new();
         public DeveloperSettings DeveloperSettings { get; set; } = new();
         public XmlUpdateSettings XmlUpdateSettings { get; set; } = new();
+        public AiSettings Ai { get; set; } = new();
+    }
+
+    /// <summary>
+    /// The "AI" settings area. <see cref="Enabled"/> is the master "Enable AI Features" switch (default OFF);
+    /// the sub-permissions default ON, so enabling the master turns everything on and the user can then pare
+    /// back. Effective state is always master AND the specific permission, so unchecking the master disables
+    /// everything at once. Secrets (the local-API port + bearer token) are never stored here — they are
+    /// written to <c>local-api.json</c> at runtime.
+    /// </summary>
+    public class AiSettings
+    {
+        /// <summary>Master switch — "Enable AI Features". Default OFF (opt-in); nothing AI-related runs while false.</summary>
+        public bool Enabled { get; set; } = false;
+
+        public LocalApiSettings LocalApi { get; set; } = new();
+
+        /// <summary>The local API server should run only when the master and the local-API permission are both on.</summary>
+        [JsonIgnore]
+        public bool LocalApiEnabled => Enabled && LocalApi.Enabled;
+
+        /// <summary>Agents may drive the reader only when the local API is enabled and remote control is permitted.</summary>
+        [JsonIgnore]
+        public bool RemoteControlAllowed => LocalApiEnabled && LocalApi.AllowRemoteControl;
+    }
+
+    /// <summary>Permissions for the loopback API server that exposes the corpus tools to agents (surface C).</summary>
+    public class LocalApiSettings
+    {
+        /// <summary>Run the local API (corpus data access). On by default under the master switch.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Let agents drive the reader (navigate/highlight) vs. read-only. On by default under the master.</summary>
+        public bool AllowRemoteControl { get; set; } = true;
+
+        /// <summary>Loopback port; 0 = ephemeral (recommended, advertised via local-api.json). Fixed only for debugging.</summary>
+        public int Port { get; set; } = 0;
     }
     
     public class DeveloperSettings
