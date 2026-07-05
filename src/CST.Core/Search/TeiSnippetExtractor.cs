@@ -1,8 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Text.RegularExpressions;
-using CST.Conversion;
 
 namespace CST.Search
 {
@@ -13,13 +10,10 @@ namespace CST.Search
     /// verse (<c>rend="gatha..."</c>) includes the hit's line plus one line each side. Footnotes
     /// (<c>&lt;note&gt;</c>) and the paragraph-number marker are stripped by default; text is romanized to the
     /// requested script and the matched term's range within the snippet is recomputed after conversion.
+    /// Low-level rendering/cleaning lives in <see cref="TeiText"/>.
     /// </summary>
     public static class TeiSnippetExtractor
     {
-        private const char Danda = '\u0964';        // Devanagari danda - sentence end
-        private const char DoubleDanda = '\u0965';  // Devanagari double danda - verse/gatha end
-        private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
-
         public static SnippetResult Extract(string xml, int hitStart, int hitLength, BookMarkers markers, SnippetOptions opts)
         {
             hitStart = Math.Clamp(hitStart, 0, xml.Length);
@@ -37,11 +31,10 @@ namespace CST.Search
                 (winStart, winEnd, ellipsisStart, ellipsisEnd) =
                     ProseWindow(xml, pStart, pEnd, hitStart, hitEnd, opts);
 
-            string before = Collapse(Convert(Clean(xml, winStart, hitStart, opts.IncludeVariantReadings), opts.OutputScript));
-            string hit = Convert(Clean(xml, hitStart, hitEnd, opts.IncludeVariantReadings), opts.OutputScript).Trim();
-            string after = Collapse(Convert(Clean(xml, hitEnd, winEnd, opts.IncludeVariantReadings), opts.OutputScript));
+            string before = TeiText.Collapse(TeiText.Convert(TeiText.Clean(xml, winStart, hitStart, opts.IncludeVariantReadings), opts.OutputScript));
+            string hit = TeiText.Convert(TeiText.Clean(xml, hitStart, hitEnd, opts.IncludeVariantReadings), opts.OutputScript).Trim();
+            string after = TeiText.Collapse(TeiText.Convert(TeiText.Clean(xml, hitEnd, winEnd, opts.IncludeVariantReadings), opts.OutputScript));
 
-            // Keep exactly one space between context and the hit; drop stray edge whitespace.
             before = before.TrimStart();
             after = after.TrimEnd();
             string prefix = ellipsisStart ? "... " : "";
@@ -54,18 +47,15 @@ namespace CST.Search
             return new SnippetResult(snippet, markStart, hit.Length, num, code, pages, opts.IncludeVariantReadings);
         }
 
-        // --- window selection -----------------------------------------------
-
         private static (int start, int end, bool ellStart, bool ellEnd) ProseWindow(
             string xml, int pStart, int pEnd, int hitStart, int hitEnd, SnippetOptions opts)
         {
-            var notes = NoteRegions(xml, pStart, pEnd);
+            var notes = TeiText.NoteRegions(xml, pStart, pEnd);
 
             int start = SentenceStart(xml, pStart, hitStart, notes);
             int end = SentenceEnd(xml, hitEnd, pEnd, notes);
 
-            // Floor: widen to neighboring sentences until enough rendered text.
-            while (VisibleLen(xml, start, end) < opts.MinChars)
+            while (TeiText.VisibleLen(xml, start, end) < opts.MinChars)
             {
                 int ns = start > pStart ? SentenceStart(xml, pStart, start - 1, notes) : start;
                 int ne = end < pEnd ? SentenceEnd(xml, end, pEnd, notes) : end;
@@ -73,9 +63,8 @@ namespace CST.Search
                 start = ns; end = ne;
             }
 
-            // Ceiling: a single long sentence gets trimmed toward the hit, with ellipses.
             bool ellStart = false, ellEnd = false;
-            if (VisibleLen(xml, start, end) > opts.MaxChars)
+            if (TeiText.VisibleLen(xml, start, end) > opts.MaxChars)
             {
                 int half = opts.MaxChars / 2;
                 int ns = SnapToSpace(xml, Math.Max(pStart, hitStart - half), +1, hitStart);
@@ -103,63 +92,19 @@ namespace CST.Search
             return (start, end);
         }
 
-        // --- sentence boundaries (raw, note-aware) --------------------------
-
         private static int SentenceStart(string xml, int lo, int from, List<(int s, int e)> notes)
         {
             for (int i = Math.Min(from, xml.Length) - 1; i >= lo; i--)
-                if (IsBoundary(xml[i]) && !InNote(i, notes)) return i + 1;
+                if (TeiText.IsBoundary(xml[i]) && !TeiText.InNote(i, notes)) return i + 1;
             return lo;
         }
 
         private static int SentenceEnd(string xml, int from, int hi, List<(int s, int e)> notes)
         {
             for (int i = from; i < hi; i++)
-                if (IsBoundary(xml[i]) && !InNote(i, notes)) return i + 1;
+                if (TeiText.IsBoundary(xml[i]) && !TeiText.InNote(i, notes)) return i + 1;
             return hi;
         }
-
-        private static bool IsBoundary(char c) => c == Danda || c == DoubleDanda;
-
-        // --- cleaning: raw range -> rendered text ---------------------------
-
-        private static string Clean(string xml, int start, int end, bool includeNotes)
-        {
-            if (start >= end) return "";
-            var sb = new StringBuilder(end - start);
-            int i = start;
-            while (i < end)
-            {
-                char c = xml[i];
-                if (c == '<')
-                {
-                    int gt = xml.IndexOf('>', i);
-                    if (gt < 0 || gt >= end) break;
-                    string tag = xml.Substring(i, gt - i + 1);
-                    string name = TagName(tag);
-                    if (name == "note" && !includeNotes && !tag.EndsWith("/>", StringComparison.Ordinal))
-                        i = SkipSubtree(xml, gt + 1, "note", end);
-                    else if (name == "hi" && IsStructuralHi(tag) && !tag.EndsWith("/>", StringComparison.Ordinal))
-                        i = SkipSubtree(xml, gt + 1, "hi", end);
-                    else
-                    {
-                        if (sb.Length > 0 && sb[sb.Length - 1] != ' ') sb.Append(' ');
-                        i = gt + 1;
-                    }
-                }
-                else { sb.Append(c); i++; }
-            }
-            return sb.ToString();
-        }
-
-        private static int VisibleLen(string xml, int start, int end) => Clean(xml, start, end, false).Length;
-
-        // --- helpers --------------------------------------------------------
-
-        private static string Convert(string deva, Script output) =>
-            deva.Length == 0 ? "" : ScriptConverter.Convert(deva, Script.Devanagari, output);
-
-        private static string Collapse(string s) => Whitespace.Replace(s, " ");
 
         private static (int openIdx, int contentStart, int pEnd, string rend) FindEnclosingP(string xml, int hitStart)
         {
@@ -170,7 +115,7 @@ namespace CST.Search
             if (gt < 0) return (-1, -1, -1, "");
             int pEnd = xml.IndexOf("</p>", gt + 1, StringComparison.Ordinal);
             if (pEnd < 0) pEnd = xml.Length;
-            return (open, gt + 1, pEnd, Attr(xml.Substring(open, gt - open + 1), "rend"));
+            return (open, gt + 1, pEnd, TeiText.Attr(xml.Substring(open, gt - open + 1), "rend"));
         }
 
         private static int FindLastPOpen(string xml, int before)
@@ -196,72 +141,11 @@ namespace CST.Search
             return -1;
         }
 
-        private static List<(int s, int e)> NoteRegions(string xml, int lo, int hi)
-        {
-            var list = new List<(int, int)>();
-            int i = lo;
-            while ((i = xml.IndexOf("<note", i, StringComparison.Ordinal)) >= 0 && i < hi)
-            {
-                int gt = xml.IndexOf('>', i);
-                if (gt < 0) break;
-                if (xml[gt - 1] == '/') { i = gt + 1; continue; }        // self-closing
-                int e = SkipSubtree(xml, gt + 1, "note", xml.Length);
-                list.Add((i, e));
-                i = e;
-            }
-            return list;
-        }
-
-        private static bool InNote(int pos, List<(int s, int e)> notes)
-        {
-            foreach (var (s, e) in notes) if (pos >= s && pos < e) return true;
-            return false;
-        }
-
-        // Position just past the matching close tag for an already-open element.
-        private static int SkipSubtree(string xml, int from, string name, int limit)
-        {
-            int depth = 1, i = from;
-            string open = "<" + name, close = "</" + name;
-            while (i < limit && depth > 0)
-            {
-                int lt = xml.IndexOf('<', i);
-                if (lt < 0 || lt >= limit) return limit;
-                if (xml.AsSpan(lt).StartsWith(close)) { depth--; i = xml.IndexOf('>', lt); i = i < 0 ? limit : i + 1; }
-                else if (xml.AsSpan(lt).StartsWith(open) && (lt + open.Length >= xml.Length ||
-                         xml[lt + open.Length] is ' ' or '>' or '\t' or '\n' or '\r'))
-                { int gt = xml.IndexOf('>', lt); if (gt >= 0 && xml[gt - 1] != '/') depth++; i = gt < 0 ? limit : gt + 1; }
-                else i = lt + 1;
-            }
-            return i;
-        }
-
         private static int SnapToSpace(string xml, int pos, int dir, int stopAt)
         {
             for (int i = pos; dir > 0 ? i < stopAt : i > stopAt; i += dir)
                 if (xml[i] == ' ' || xml[i] == '\n') return i + (dir > 0 ? 1 : 0);
             return pos;
-        }
-
-        private static string TagName(string tag)
-        {
-            int i = 1;
-            if (i < tag.Length && tag[i] == '/') i++;
-            int start = i;
-            while (i < tag.Length && (char.IsLetterOrDigit(tag[i]) || tag[i] == ':')) i++;
-            return tag.Substring(start, i - start);
-        }
-
-        private static bool IsStructuralHi(string tag)
-        {
-            string rend = Attr(tag, "rend");
-            return rend == "paranum" || rend == "dot";
-        }
-
-        private static string Attr(string tag, string name)
-        {
-            var m = Regex.Match(tag, name + "\\s*=\\s*\"([^\"]*)\"");
-            return m.Success ? m.Groups[1].Value : "";
         }
     }
 }

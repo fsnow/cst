@@ -58,6 +58,15 @@ namespace CST.Search
             return m;
         }
 
+        /// <summary>The character position of a numbered paragraph (optionally within a Multi sub-book), or -1.</summary>
+        public int PositionOfParagraph(int number, string? bookCode = null)
+        {
+            foreach (var p in _paras)
+                if (p.Number == number && (bookCode == null || p.BookCode == bookCode))
+                    return p.Pos;
+            return -1;
+        }
+
         /// <summary>The paragraph number (and Multi-book sub-code) and per-edition pages in effect at <paramref name="pos"/>.</summary>
         public (int? Number, string? BookCode, IReadOnlyList<SnippetPageRef> Pages) RefsAt(int pos)
         {
