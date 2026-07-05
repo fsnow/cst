@@ -43,6 +43,7 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly ISearchTool? _search;
         private readonly IDictionaryTool? _dictionary;
         private readonly IPassageTool? _passage;
+        private readonly IScriptTool? _script;
 
         private WebApplication? _app;
 
@@ -56,7 +57,8 @@ namespace CST.Avalonia.Services.LocalApi
 
         public LocalApiServer(
             string appVersion, string handshakeDirectory, Serilog.ILogger logger,
-            ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null)
+            ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null,
+            IScriptTool? script = null)
         {
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
@@ -64,6 +66,7 @@ namespace CST.Avalonia.Services.LocalApi
             _search = search;
             _dictionary = dictionary;
             _passage = passage;
+            _script = script;
         }
 
         public async Task StartAsync(CancellationToken ct = default)
@@ -230,6 +233,13 @@ namespace CST.Avalonia.Services.LocalApi
                         req.OutputScript, req.IncludeVariantReadings);
                     return Results.Json(await passage.FetchPassageAsync(pr, ct));
                 });
+            }
+
+            if (_script is { } scriptTool)
+            {
+                app.MapGet(v + "/scripts", () => Results.Json(scriptTool.Scripts));
+                app.MapPost(v + "/convert",
+                    (ConvertRequest req) => Results.Json(scriptTool.Convert(req)));
             }
 
             // Book catalog — agents need book ids to call the other tools. Always available (no service

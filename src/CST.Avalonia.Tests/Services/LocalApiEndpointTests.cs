@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Services.LocalApi;
+using CST.Avalonia.Services.Tools;
 using CST.Tools;
 using Moq;
 using Xunit;
@@ -34,7 +35,8 @@ namespace CST.Avalonia.Tests.Services
                     new List<SearchTermResult> { new("dhamma", 5, new List<BookHitSummary>()) },
                     TotalTermCount: 1, TotalOccurrenceCount: 5, TotalBookCount: 1, Truncated: false, Note: null));
 
-            _server = new LocalApiServer("5.0.0-test", _dir, Serilog.Log.Logger, search.Object);
+            _server = new LocalApiServer("5.0.0-test", _dir, Serilog.Log.Logger,
+                search.Object, dictionary: null, passage: null, script: new ScriptTool());
             await _server.StartAsync();
         }
 
@@ -82,6 +84,29 @@ namespace CST.Avalonia.Tests.Services
             var body = await resp.Content.ReadAsStringAsync();
             Assert.Contains(".xml", body);                                    // real book file names
             Assert.DoesNotContain(body, c => c >= '\u0900' && c <= '\u097F'); // names romanized, no Devanagari leaked
+        }
+
+        [Fact]
+        public async Task Scripts_endpoint_lists_script_names()
+        {
+            using var http = Authed();
+            var resp = await http.GetAsync("/v1/scripts");
+
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+            Assert.Contains("Latin", await resp.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task Convert_endpoint_converts_to_the_requested_script()
+        {
+            using var http = Authed();
+            // Devanagari "dhamma" -> Latin: response must carry no Devanagari.
+            var resp = await http.PostAsync("/v1/convert",
+                Json("{\"text\":\"\\u0927\\u092e\\u094d\\u092e\",\"outputScript\":\"Latin\"}"));
+
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.DoesNotContain(body, c => c >= '\u0900' && c <= '\u097F');
         }
 
         [Fact]
