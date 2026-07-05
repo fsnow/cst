@@ -354,6 +354,18 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
   §11.1 already covers local runners), or stays cloud-first + local-runner.
 - Grounding/citation strategy to keep generated output faithful to the corpus (§11): how much context to
   retrieve, how citations are rendered, how translation presets constrain output.
+- **Cross-model / cross-harness validation — prerequisite before freezing doc shape + scaffolding level.**
+  All cold-agent validation so far is a **single cell** of the matrix: the Claude Code harness driving latest
+  Opus (a strong coding agent with shell + filesystem). That is the ceiling, not the median, and it risks
+  **in-family overfitting** — Claude writing docs that Claude then reads and rates well. The doc shape
+  (monolith vs pointer index, §8), how prescriptive `llms.txt` must be, and past calls like Latin-over-IPE are
+  really calibrated to the **weakest agent we intend to support**, so cross-model testing *sets* the spec
+  rather than confirming it. Test a small matrix — `{a non-Claude frontier model, a small/cheap model} ×
+  {coding agent, MCP chat client}` — watching four signals: **pointer discipline** (fetches the right
+  `/docs/*` or reads inline only → monolith vs index), **invention rate** (hallucinated endpoints/params →
+  how prescriptive the docs must be), **multi-step tool-loop hold** (`search → occurrences → passage`, or
+  collapse to one call + a guess), and **script compliance** (honors romanized default / `outputScript`).
+  Tracked in the cold-test plan (`docs/testing/LOCAL_API_COLD_TESTS.md`).
 
 ## 15. Related
 
