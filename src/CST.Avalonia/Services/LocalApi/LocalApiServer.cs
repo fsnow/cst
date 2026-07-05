@@ -106,6 +106,11 @@ namespace CST.Avalonia.Services.LocalApi
                 await next();
             });
 
+            // Unauthenticated root pointer, so an agent that connects via local-api.json isn't left staring at
+            // an empty "/" — it names where the docs and status live. (Cold-agent test finding.)
+            app.MapGet("/", () => Results.Json(
+                new RootResponse("CST Reader local API", _appVersion, ApiVersion, "/llms.txt", "/" + ApiVersion + "/status")));
+
             app.MapGet("/" + ApiVersion + "/status",
                 () => Results.Json(new StatusResponse(_appVersion, ApiVersion, "ok")));
 
@@ -150,7 +155,8 @@ namespace CST.Avalonia.Services.LocalApi
             host is "127.0.0.1" or "localhost" or "[::1]" or "::1";
 
         private static bool IsDiscoveryPath(PathString path) =>
-            path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
+            !path.HasValue || path == "/"
+            || path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/docs", StringComparison.OrdinalIgnoreCase);
 
         private static string? ReadResource(string endsWith)
@@ -228,6 +234,8 @@ namespace CST.Avalonia.Services.LocalApi
                 Books.Inst.Select(b => new BookSummary(
                     b.FileName, b.LongNavPath, b.ShortNavPath, b.Pitaka, b.Matn, b.BookType, b.DocId >= 0)).ToList()));
         }
+
+        private sealed record RootResponse(string Name, string App, string Api, string Docs, string Status);
 
         private sealed record StatusResponse(string App, string Api, string Status);
 
