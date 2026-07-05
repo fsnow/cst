@@ -20,6 +20,10 @@ namespace CST.Avalonia.Services.LocalApi
     {
         public const string FileName = "local-api.json";
 
+        /// <summary>Where the (unauthenticated) orientation doc lives, so a client needn't guess. Relative to the base URL.</summary>
+        [JsonPropertyName("docs")]
+        public string Docs => "/llms.txt";
+
         private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
         public static string PathIn(string directory) => Path.Combine(directory, FileName);

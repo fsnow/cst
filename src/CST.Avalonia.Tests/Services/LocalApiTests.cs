@@ -26,6 +26,9 @@ namespace CST.Avalonia.Tests.Services
                 Assert.Equal("tok-abc", read.Token);
                 Assert.Equal(4242, read.Pid);
 
+                Assert.Contains("\"docs\"", File.ReadAllText(LocalApiInfo.PathIn(dir)));   // points to the orientation doc
+                Assert.Equal("/llms.txt", read.Docs);
+
                 if (!OperatingSystem.IsWindows())
                     Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite,
                         File.GetUnixFileMode(LocalApiInfo.PathIn(dir)));
@@ -100,6 +103,18 @@ namespace CST.Avalonia.Tests.Services
             using var http = Client(origin: "http://evil.example");
             var resp = await http.GetAsync("/v1/status");
             Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+        }
+
+        [Fact]
+        public async Task Root_points_to_the_docs_without_a_token()
+        {
+            using var http = Client(withToken: false);
+            var resp = await http.GetAsync("/");
+
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.Contains("/llms.txt", body);       // names where the orientation doc lives
+            Assert.Contains("/v1/status", body);
         }
 
         [Fact]
