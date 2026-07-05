@@ -332,7 +332,8 @@ public partial class App : Application
                 version, dir, Log.Logger,
                 ServiceProvider?.GetService<CST.Tools.ISearchTool>(),
                 ServiceProvider?.GetService<CST.Tools.IDictionaryTool>(),
-                ServiceProvider?.GetService<CST.Tools.IPassageTool>());
+                ServiceProvider?.GetService<CST.Tools.IPassageTool>(),
+                ServiceProvider?.GetService<CST.Tools.IScriptTool>());
             await _localApiServer.StartAsync();
         }
         catch (Exception ex)
