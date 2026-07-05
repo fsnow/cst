@@ -49,7 +49,8 @@ namespace CST.Avalonia.Services.Tools
                 TotalCount: t.TotalCount,
                 Books: t.Occurrences.Select(o => new BookHitSummary(
                     BookId: o.Book?.FileName ?? string.Empty,
-                    BookName: o.Book?.LongNavPath ?? string.Empty,
+                    // Nav paths are stored Devanagari; romanize to the requested script like everything else. (#186 cold test)
+                    BookName: ScriptConverter.Convert(o.Book?.LongNavPath ?? string.Empty, Script.Devanagari, request.OutputScript),
                     Count: o.Count)).ToList())).ToList();
 
             return new SearchToolResult(
@@ -91,9 +92,11 @@ namespace CST.Avalonia.Services.Tools
                 MinChars: request.MinChars ?? 60,
                 MaxChars: request.MaxChars ?? 320);
 
-            string bookName = Books.Inst
+            string rawBookName = Books.Inst
                 .FirstOrDefault(b => string.Equals(b.FileName, request.BookId, StringComparison.OrdinalIgnoreCase))
                 ?.LongNavPath ?? request.BookId;
+            // Nav paths are stored Devanagari; romanize to the requested script. (#186 cold test)
+            string bookName = ScriptConverter.Convert(rawBookName, Script.Devanagari, request.OutputScript);
 
             var occurrences = new List<Occurrence>();
             foreach (var p in positions.OrderBy(p => p.StartOffset).Skip(request.Skip).Take(request.Take))

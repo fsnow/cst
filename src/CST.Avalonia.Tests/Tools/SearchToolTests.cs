@@ -33,7 +33,8 @@ namespace CST.Avalonia.Tests.Tools
 
         private static SearchResult OneTermResult(out Book book)
         {
-            book = new Book { FileName = "s0101m.mul.xml", LongNavPath = "Sutta > Digha > Silakkhandhavagga" };
+            // Nav path stored in Devanagari (as the real catalog is), to verify bookName is romanized on output.
+            book = new Book { FileName = "s0101m.mul.xml", LongNavPath = "\u0938\u0941\u0924\u094d\u0924" };
             return new SearchResult
             {
                 Terms = new List<MatchingTerm>
@@ -96,7 +97,8 @@ namespace CST.Avalonia.Tests.Tools
 
             var hit = Assert.Single(term.Books);
             Assert.Equal(book.FileName, hit.BookId);
-            Assert.Equal(book.LongNavPath, hit.BookName);
+            Assert.False(string.IsNullOrEmpty(hit.BookName));
+            Assert.DoesNotContain(hit.BookName, c => c >= '\u0900' && c <= '\u097F'); // bookName romanized, not Devanagari
             Assert.Equal(7, hit.Count);
         }
 
