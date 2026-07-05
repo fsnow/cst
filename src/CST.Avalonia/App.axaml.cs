@@ -328,7 +328,11 @@ public partial class App : Application
             System.IO.Directory.CreateDirectory(dir);
 
             var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
-            _localApiServer = new CST.Avalonia.Services.LocalApi.LocalApiServer(version, dir, Log.Logger);
+            _localApiServer = new CST.Avalonia.Services.LocalApi.LocalApiServer(
+                version, dir, Log.Logger,
+                ServiceProvider?.GetService<CST.Tools.ISearchTool>(),
+                ServiceProvider?.GetService<CST.Tools.IDictionaryTool>(),
+                ServiceProvider?.GetService<CST.Tools.IPassageTool>());
             await _localApiServer.StartAsync();
         }
         catch (Exception ex)
@@ -966,6 +970,11 @@ public partial class App : Application
         // services.AddSingleton<IBookService, BookService>();
         services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<IDictionaryService, DictionaryService>();
+
+        // Surface-C tool wrappers (exposed over the local API). (#186)
+        services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
+        services.AddSingleton<CST.Tools.IDictionaryTool, Services.Tools.DictionaryTool>();
+        services.AddSingleton<CST.Tools.IPassageTool, Services.Tools.PassageTool>();
         services.AddTransient<TreeStateService>();
         
         // Indexing services

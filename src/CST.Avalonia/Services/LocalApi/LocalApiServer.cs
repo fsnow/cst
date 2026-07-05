@@ -12,6 +12,12 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CST;
+using CST.Conversion;
+using CST.Navigation;
+using CST.Tools;
 using Serilog;
 
 namespace CST.Avalonia.Services.LocalApi
@@ -32,6 +38,9 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly string _appVersion;
         private readonly string _handshakeDirectory;
         private readonly Serilog.ILogger _logger;
+        private readonly ISearchTool? _search;
+        private readonly IDictionaryTool? _dictionary;
+        private readonly IPassageTool? _passage;
 
         private WebApplication? _app;
 
@@ -43,11 +52,16 @@ namespace CST.Avalonia.Services.LocalApi
 
         public bool IsRunning => _app != null;
 
-        public LocalApiServer(string appVersion, string handshakeDirectory, Serilog.ILogger logger)
+        public LocalApiServer(
+            string appVersion, string handshakeDirectory, Serilog.ILogger logger,
+            ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null)
         {
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
             _logger = logger.ForContext<LocalApiServer>();
+            _search = search;
+            _dictionary = dictionary;
+            _passage = passage;
         }
 
         public async Task StartAsync(CancellationToken ct = default)
@@ -59,6 +73,11 @@ namespace CST.Avalonia.Services.LocalApi
             var builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders(); // don't spam stdout; the app logs via Serilog
             builder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, 0)); // 127.0.0.1:ephemeral
+            builder.Services.ConfigureHttpJsonOptions(o =>
+            {
+                o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // "Latin" not 3
+            });
 
             var app = builder.Build();
 
@@ -85,6 +104,8 @@ namespace CST.Avalonia.Services.LocalApi
 
             app.MapGet("/" + ApiVersion + "/status",
                 () => Results.Json(new StatusResponse(_appVersion, ApiVersion, "ok")));
+
+            MapToolEndpoints(app);
 
             await app.StartAsync(ct);
 
@@ -138,6 +159,57 @@ namespace CST.Avalonia.Services.LocalApi
             return new Uri(addresses.First()).Port;
         }
 
+        // Map the surface-C tool endpoints for whichever tools were provided. Each is a thin adapter over an
+        // already-tested tool; the tools themselves keep the corpus formats behind the boundary.
+        private void MapToolEndpoints(WebApplication app)
+        {
+            string v = "/" + ApiVersion;
+
+            if (_search is { } search)
+            {
+                app.MapPost(v + "/search",
+                    async (SearchToolRequest req, CancellationToken ct) => Results.Json(await search.SearchAsync(req, ct)));
+                app.MapPost(v + "/occurrences",
+                    async (OccurrenceRequest req, CancellationToken ct) => Results.Json(await search.GetOccurrencesAsync(req, ct)));
+            }
+
+            if (_dictionary is { } dictionary)
+            {
+                app.MapGet(v + "/dictionary/languages", () => Results.Json(dictionary.Languages));
+                app.MapPost(v + "/dictionary/lookup",
+                    async (DictionaryRequest req, CancellationToken ct) => Results.Json(await dictionary.LookupAsync(req, ct)));
+            }
+
+            if (_passage is { } passage)
+            {
+                app.MapPost(v + "/passage", async (PassageHttpRequest req, CancellationToken ct) =>
+                {
+                    NavigationReference reference = req.Paragraph is int n
+                        ? new NavigationReference.Paragraph(n, req.BookCode)
+                        : new NavigationReference.WholeBook();
+                    var pr = new PassageRequest(req.BookId, reference, req.Cursor, req.MaxChars,
+                        req.OutputScript, req.IncludeVariantReadings);
+                    return Results.Json(await passage.FetchPassageAsync(pr, ct));
+                });
+            }
+
+            // Book catalog — agents need book ids to call the other tools. Always available (no service needed).
+            app.MapGet(v + "/books", () => Results.Json(
+                Books.Inst.Select(b => new BookSummary(
+                    b.FileName, b.LongNavPath, b.ShortNavPath, b.Pitaka, b.Matn, b.BookType, b.DocId >= 0)).ToList()));
+        }
+
         private sealed record StatusResponse(string App, string Api, string Status);
+
+        // Flat request for /v1/passage — avoids polymorphic JSON for NavigationReference. Paragraph (or none =
+        // whole book) unless a Cursor from a prior response is supplied to page forward/backward.
+        private sealed record PassageHttpRequest(
+            string BookId,
+            int? Paragraph = null,
+            string? BookCode = null,
+            int? Cursor = null,
+            int MaxChars = 1200,
+            Script OutputScript = Script.Latin,
+            bool IncludeVariantReadings = false);
     }
 }
