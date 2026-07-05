@@ -75,7 +75,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | Print / Page Setup / Print Preview | Browser print dialogs | MISSING | No print |
 | Go To (Ctrl+G) | Para/page jump | PRESENT | Cmd+G |
 | Dictionary lookup on selection (Ctrl+D) | Look up selected word | PRESENT | Cmd+D via WebView selection |
-| Word Search on selection (Ctrl+W) | Send selected word to Search | PRESENT | Rebound to Tools > Search for Selection (Cmd+F) — confirm live |
+| Word Search on selection (Ctrl+W) | Send selected word to Search | PRESENT | ✅ verified 2026-07-04 — Tools > Search for Selection (Cmd+F) |
 | Show 1957 / 2010 source edition (Ctrl+Q / Ctrl+E) | Open matching source at current page | PRESENT (changed) | Internal PDF viewer (Cmd+E / Shift+Cmd+E) not external browser |
 | Translate (Ctrl+T) | External translation link | N/A | Undocumented Easter egg (shipped in CST4 but unpublicized) — not a target |
 | Search-term highlighting | Wrap matches in hit anchors, scroll to hit0 | PRESENT | showHits JS |
@@ -115,7 +115,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | Limit Search: 7 book-type checkboxes | Vinaya/Sutta/Abhi + Mūla/Aṭṭha/Ṭīkā + Other | PRESENT | Identical bit logic |
 | "All" checkbox | Toggle all types | PARTIAL | Select All / Select None buttons instead |
 | Book Collection combo + Edit/Delete | Scope search to a saved custom collection | MISSING | No collection concept — _needs issue_ |
-| Words list + Ctrl+A select-all | Matching terms, multi-select | PARTIAL | Multi-select ListBox; native Ctrl+A likely works — confirm merge |
+| Words list + Ctrl+A select-all | Matching terms, multi-select | PRESENT | ✅ verified 2026-07-04 — cmd-A selects all terms + occurrences merge (`UpdateOccurrences`). Books/Occurrences list is single-select in both CST4 and Avalonia (no cmd-A there is correct) |
 | Word stats ("Words:"/"Word Combinations:") | Term/selection counts | PARTIAL | Always "Words:"; no "Word Combinations" wording for multi-word |
 | Occurrences–Books list + stats | Books with per-book hit counts | PRESENT | Occurrences + OccurrenceStats |
 | Double-click occurrence → open + highlight | Open book at hits | PRESENT | Opens with Positions |
@@ -136,12 +136,10 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 ---
 
 ## Live-check queue (UNKNOWN/PARTIAL to resolve side-by-side)
-1. Search Words list — does Ctrl+A select-all + occurrence-merge behave like CST4?
-2. Word Search from selection (Cmd+F) — confirm it matches CST4's Ctrl+W behavior.
-3. Dictionary — does the Definition Language list match CST4's English/Hindi?
-4. Tree expansion state — does it survive an app restart? (should, post-SCRIPT-5)
+1. Dictionary — does the Definition Language list match CST4's English/Hindi?
+2. Tree expansion state — does it survive an app restart? (should, post-SCRIPT-5)
 
-_Resolved: Go To V/M/P/T prefix auto-switch (✅ 2026-07-04); global-script re-scripts open books (#225, ✅ 2026-07-04)._
+_Resolved: Go To V/M/P/T prefix auto-switch, cmd-A select-all + occurrence-merge, Cmd+F word-search-from-selection (all ✅ 2026-07-04); global-script re-scripts open books (#225, ✅ 2026-07-04)._
 
 ## Gaps that need an issue filed (maintainer decision on priority)
 Print family · Book Collections + editor + search scoping · Search Reports · Recently Viewed (MRU) · About box · Ctrl+B bad-word checker (minor).
