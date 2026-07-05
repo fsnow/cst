@@ -38,6 +38,7 @@ namespace CST.Avalonia.ViewModels
             var fontSettings = new AppearanceSettingsViewModel(_settingsService);
             var configurationSettings = new ConfigurationSettingsViewModel(_settingsService);
             var xmlUpdateSettings = new XmlUpdateSettingsViewModel(_settingsService);
+            var aiSettings = new AiSettingsViewModel(_settingsService);
             var loggingSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
 
             // Order: most-adjusted settings first, informational ones last (#100).
@@ -46,6 +47,7 @@ namespace CST.Avalonia.ViewModels
                 new SettingsCategoryViewModel("Pali Script Fonts", fontSettings),
                 new SettingsCategoryViewModel("Logging", loggingSettings),
                 new SettingsCategoryViewModel("XML Data Updates", xmlUpdateSettings),
+                new SettingsCategoryViewModel("AI", aiSettings),
                 new SettingsCategoryViewModel("Directories", directoriesSettings),
                 new SettingsCategoryViewModel("Configuration", configurationSettings)
             };
@@ -795,6 +797,86 @@ namespace CST.Avalonia.ViewModels
                 _settingsService.RequestSave();
             }
         }
+    }
+
+    // AI category (#186): the opt-in "Enable AI Features" master switch and the local-API sub-permissions.
+    public class AiSettingsViewModel : ViewModelBase
+    {
+        private readonly ISettingsService _settingsService;
+        private bool _aiEnabled;
+        private bool _localApiEnabled;
+        private bool _allowRemoteControl;
+        private int _port;
+
+        public AiSettingsViewModel(ISettingsService settingsService)
+        {
+            _settingsService = settingsService;
+
+            var ai = _settingsService.Settings.Ai;
+            _aiEnabled = ai.Enabled;
+            _localApiEnabled = ai.LocalApi.Enabled;
+            _allowRemoteControl = ai.LocalApi.AllowRemoteControl;
+            _port = ai.LocalApi.Port;
+        }
+
+        /// <summary>Master switch — "Enable AI Features". Everything AI-related is gated behind this (default OFF).</summary>
+        public bool AiEnabled
+        {
+            get => _aiEnabled;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _aiEnabled, value);
+                _settingsService.Settings.Ai.Enabled = value;
+                _settingsService.RequestSave();
+                // The two enable-gates below both depend on the master.
+                this.RaisePropertyChanged(nameof(SubPermissionsEnabled));
+                this.RaisePropertyChanged(nameof(RemoteControlEnabled));
+            }
+        }
+
+        /// <summary>Run the loopback corpus-API server. Effective only while the master is also on.</summary>
+        public bool LocalApiEnabled
+        {
+            get => _localApiEnabled;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _localApiEnabled, value);
+                _settingsService.Settings.Ai.LocalApi.Enabled = value;
+                _settingsService.RequestSave();
+                // Remote control is only reachable when the local API is on.
+                this.RaisePropertyChanged(nameof(RemoteControlEnabled));
+            }
+        }
+
+        /// <summary>Let agents drive the reader (navigate/highlight) vs. read-only.</summary>
+        public bool AllowRemoteControl
+        {
+            get => _allowRemoteControl;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _allowRemoteControl, value);
+                _settingsService.Settings.Ai.LocalApi.AllowRemoteControl = value;
+                _settingsService.RequestSave();
+            }
+        }
+
+        /// <summary>Loopback port; 0 = ephemeral (recommended). Fixed only for debugging.</summary>
+        public int Port
+        {
+            get => _port;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _port, value);
+                _settingsService.Settings.Ai.LocalApi.Port = value;
+                _settingsService.RequestSave();
+            }
+        }
+
+        /// <summary>The local-API sub-permissions are editable only when the master switch is on.</summary>
+        public bool SubPermissionsEnabled => AiEnabled;
+
+        /// <summary>"Allow remote control" is editable only when the master AND the local API are both on.</summary>
+        public bool RemoteControlEnabled => AiEnabled && LocalApiEnabled;
     }
 
     public class DeveloperSettingsViewModel : ViewModelBase

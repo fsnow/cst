@@ -79,11 +79,21 @@
             <!-- Settings Content -->
             <!-- Explicit scroll config + top-aligned content so a tab taller than the window scrolls
                  instead of being clipped by the window frame (#100). -->
-            <ScrollViewer Grid.Column="1" Padding="20"
+            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1"
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
+                <!-- Cap content to the scroll viewport width so long wrapping text (e.g. setting
+                     descriptions) wraps at the visible edge. The viewer measures content with
+                     unbounded width, so without this cap a panel sizes to its content's natural
+                     (unwrapped) width and overflows off the right of the window. The 20px padding
+                     lives on this ContentControl (inside its MaxWidth box), NOT on the ScrollViewer:
+                     the viewport width does not subtract the ScrollViewer's own padding, so padding
+                     there would push the capped content right and re-introduce the clip. -->
                 <ContentControl Content="{Binding SelectedCategory.Content}"
-                                VerticalAlignment="Top">
+                                VerticalAlignment="Top"
+                                HorizontalAlignment="Left"
+                                Padding="20"
+                                MaxWidth="{Binding #SettingsScroll.Viewport.Width}">
                     <ContentControl.DataTemplates>
                         
                         <!-- General Settings Template -->
@@ -291,6 +301,58 @@
                                                Margin="0,15,0,0"
                                                HorizontalAlignment="Left"
                                                ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+
+                        <!-- AI Settings Template (#186) -->
+                        <DataTemplate DataType="vm:AiSettingsViewModel">
+                            <StackPanel>
+                                <Border Classes="SettingGroup">
+                                    <StackPanel>
+                                        <TextBlock Text="AI Features" Classes="SettingLabel"/>
+                                        <TextBlock Text="Let AI agents access the Tipitaka corpus through a local, loopback-only API. All AI features are off by default and opt-in."
+                                                  Classes="SettingDescription"/>
+
+                                        <CheckBox IsChecked="{Binding AiEnabled}"
+                                                 Content="Enable AI Features"
+                                                 Margin="0,10,0,0"/>
+                                        <TextBlock Text="Master switch. When off, nothing AI-related runs."
+                                                  Classes="SettingDescription"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Classes="SettingGroup">
+                                    <StackPanel>
+                                        <TextBlock Text="Local API Server" Classes="SettingLabel"/>
+                                        <TextBlock Text="A loopback-only HTTP server that exposes read access to the corpus (search, dictionary, passages) to local agents."
+                                                  Classes="SettingDescription"/>
+
+                                        <CheckBox IsChecked="{Binding LocalApiEnabled}"
+                                                 IsEnabled="{Binding SubPermissionsEnabled}"
+                                                 Content="Run the local API server"
+                                                 Margin="0,10,0,0"/>
+
+                                        <CheckBox IsChecked="{Binding AllowRemoteControl}"
+                                                 IsEnabled="{Binding RemoteControlEnabled}"
+                                                 Content="Allow agents to drive the reader (navigate and highlight)"
+                                                 Margin="0,5,0,0"/>
+                                        <TextBlock Text="When off, agents can read the corpus but cannot control the reader window."
+                                                  Classes="SettingDescription"/>
+
+                                        <Grid ColumnDefinitions="120,*" RowDefinitions="Auto" Margin="0,10,0,0">
+                                            <TextBlock Grid.Column="0" Text="Port:"
+                                                      VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <NumericUpDown Grid.Column="1"
+                                                          Value="{Binding Port}"
+                                                          IsEnabled="{Binding SubPermissionsEnabled}"
+                                                          Minimum="0" Maximum="65535" Increment="1"
+                                                          FormatString="0"
+                                                          Width="160" HorizontalAlignment="Left"/>
+                                        </Grid>
+                                        <TextBlock Text="0 = automatic (recommended). The chosen port is advertised to local agents via local-api.json. Set a fixed port only for debugging."
+                                                  Classes="SettingDescription"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
