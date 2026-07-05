@@ -218,6 +218,19 @@ build, whatever tools it exposes. It can't drift from the running surface.
 - **Layered, curated (not a dump):** `GET /llms.txt` = overview + auth handshake + curated links;
   `GET /docs/{search,references,dictionary,navigation}.md` = deep detail pulled on demand; optional
   `/llms-full.txt` for one-shot ingestion. Mind the token budget — the index is read into context.
+- **Index-vs-monolith — for future evaluation.** The canonical `llms.txt` form is an *annotated index of
+  pointers* (token-efficient: an agent reads a lean map, then fetches only the `/docs/*` subset its task
+  needs — research vs remote-control, etc.). The **current served file is effectively `llms-full` under the
+  `llms.txt` name**: one self-contained doc. Keep it that way *for now* — the cold-agent tests showed the
+  self-contained file is exactly why fresh agents succeeded unaided (everything in one place, no missed
+  fetch), and at its current size a pointer index would add round-trips to save almost nothing. **Flip to
+  index + `/docs/*` subdocs when the file gets heavy** (the highlighting/token-offset §6.1 material and the
+  remote-control surface are what will tip it). Two guardrails when we do: (a) the pointer **annotations must
+  be strong enough to pick the right subdoc *without* fetching it** — a weak index makes a cheap agent either
+  flail or fetch everything, worse than the monolith; (b) **keep `llms-full.txt`** for agents that prefer one
+  gulp. Ideally the index, the `/docs/*` subdocs, and `llms-full.txt` are all **generated from one source**
+  (the single-source pipeline in §14) so they can't drift. The served `/docs/*` tree mirrors the human
+  `docs/` split (spine + per-surface specs).
 - **Especially necessary for CST:** the tools are unusable without domain orientation — the 14 scripts + **IPE
   encoding**, the **reference grammar** (Myanmar/PTS/VRI/Thai page + paragraph), the **book taxonomy**
   (mūla/aṭṭhakathā/ṭīkā, nikāya structure). This is its home.
