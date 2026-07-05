@@ -353,6 +353,23 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _bookScript, value);
         }
 
+        // #224: per-book "Footnotes" (variant readings) and search-term highlight toggles. Default on
+        // (notes shown / hits highlighted, as in CST4). The View observes these and applies them to the
+        // WebView, re-applying after each reload. Persisted per book in application state.
+        private bool _showFootnotes = true;
+        public bool ShowFootnotes
+        {
+            get => _showFootnotes;
+            set => this.RaiseAndSetIfChanged(ref _showFootnotes, value);
+        }
+
+        private bool _showSearchTerms = true;
+        public bool ShowSearchTerms
+        {
+            get => _showSearchTerms;
+            set => this.RaiseAndSetIfChanged(ref _showSearchTerms, value);
+        }
+
         public bool IsLoading
         {
             get => _isLoading;

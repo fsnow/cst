@@ -114,6 +114,13 @@
                     <Button Command="{Binding LastHitCommand}" ToolTip.Tip="Last search result" Margin="2">
                         <Image Source="avares://CST.Avalonia/Assets/Images/ArrowLast.png" Width="16" Height="16"/>
                     </Button>
+                    <!-- #224: highlight on/off — lives with the hit-nav cluster, so it only appears when the
+                         book was opened from search (CST4 hides Show Search Terms when totalHits == 0). -->
+                    <ToggleButton IsChecked="{Binding ShowSearchTerms}"
+                                  ToolTip.Tip="Highlight search terms"
+                                  Margin="6,2,2,2" VerticalAlignment="Center">
+                        <TextBlock Text="Highlight"/>
+                    </ToggleButton>
                 </StackPanel>
 
                 <!-- Book Type Navigation (Mula/Atthakatha/Tika) -->
@@ -134,6 +141,15 @@
                             ToolTip.Tip="Open sub-commentary" Margin="2">
                         <TextBlock Text="Ṭīkā"/>
                     </Button>
+                </StackPanel>
+
+                <!-- #224: Footnotes (variant readings) toggle — permanent, every book has notes -->
+                <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
+                    <ToggleButton IsChecked="{Binding ShowFootnotes}"
+                                  ToolTip.Tip="Show footnotes (variant readings)"
+                                  Margin="2" VerticalAlignment="Center">
+                        <TextBlock Text="Footnotes"/>
+                    </ToggleButton>
                 </StackPanel>
 
                 <!-- View Source PDF buttons -->
