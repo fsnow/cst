@@ -56,9 +56,13 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one term in one
   book. Body: `{ bookId, term, includeVariantReadings?, outputScript?, skip?, take?, minChars?, maxChars? }`
   where `term` is a `term` value from a prior `/v1/search`.
-  Each occurrence: a hit-centered snippet, the paragraph number, the per-edition page numbers, and a
-  `cursor` - pass that cursor to `/v1/passage` to read the exact passage around THIS hit (paragraph numbers
-  repeat within a book, so the paragraph number alone is not a unique locator).
+  Each occurrence is `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedVariants, cursor }`.
+  `snippet` is hit-centered with the term at `[hitStart, hitStart+hitLength)`. Citation data is NESTED
+  under `refs` (NOT top-level as on `/v1/passage`): `refs.paragraphNumber`, `refs.paragraphBookCode`
+  (the Multi sub-book code, e.g. "kn17"), and `refs.pages[]` where each page is `{ edition, volume, number }`
+  (editions: VRI / Myanmar / PTS / Thai). `cursor` is the hit's unique locator - pass it to `/v1/passage`
+  as `cursor` to read the exact passage around THIS hit (paragraph numbers repeat within a book, so the
+  paragraph number alone is not a unique locator).
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeVariantReadings? }`.
   Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, ... }`. Page by passing back the
