@@ -38,16 +38,27 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `GET  /v1/status` - app version, API version, readiness.
 - `GET  /v1/books` - the catalog. Each: `{ bookId, name, shortName, pitaka, commentaryLevel, bookType, indexed }`.
   `name`/`shortName` are romanized by default; add `?script=Devanagari` (etc.) to change.
-- `POST /v1/search` - matching terms. Wildcard/regex match LITERAL character patterns, not grammatical
-  inflections: a trailing `*` is a prefix match, so it will not catch inflected endings unless the stem
-  before the `*` already covers them - broaden the stem or use a regex for full inflectional coverage.
+- `POST /v1/search` - matching terms. Search is over WHOLE-WORD tokens matched as LITERAL character
+  patterns, not grammatical inflections. To cover a stem's inflected endings, reach FIRST for a trailing
+  `*` WILDCARD (`dhamm*`): the `*` absorbs the case/number endings, so you do NOT need to hand-write a
+  regex enumerating declension suffixes. Use `mode: "Regex"` only for patterns a wildcard can't express.
+  Sandhi caveat: the VRI edition faithfully preserves Pali sandhi (with few exceptions), so a "word" is
+  often a long euphonic compound and your target stem can sit in the MIDDLE of a token, not at its start -
+  a prefix `stem*` will miss those. Regex is .NET syntax (System.Text.RegularExpressions) and matches
+  ANYWHERE in a token (substring), so it catches those interior occurrences; anchor with `^...$` for
+  whole-word forms (else e.g. `mett` also matches inside `alamettavata`). Handy middle ground: a
+  length-bounded anchored regex like `^dhamm.{1,6}$` catches a stem's inflectional endings while
+  EXCLUDING longer sandhi compounds - `.{1,6}` allows 1-6 trailing chars, `$` stops it running into the
+  next word.
   Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, proximityDistance?, outputScript? }`.
   Returns `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, truncated, note }`; when `truncated`
   is true (e.g. `maxTerms` was reached), `note` explains and more forms exist beyond the cap.
 - `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one term in one
   book. Body: `{ bookId, term, includeVariantReadings?, outputScript?, skip?, take?, minChars?, maxChars? }`
   where `term` is a `term` value from a prior `/v1/search`.
-  Each occurrence: a hit-centered snippet, the paragraph number, and the per-edition page numbers.
+  Each occurrence: a hit-centered snippet, the paragraph number, the per-edition page numbers, and a
+  `cursor` - pass that cursor to `/v1/passage` to read the exact passage around THIS hit (paragraph numbers
+  repeat within a book, so the paragraph number alone is not a unique locator).
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeVariantReadings? }`.
   Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, ... }`. Page by passing back the
@@ -64,5 +75,6 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 1. `POST /v1/search` for a word -> pick the inflected form(s) you want (keep each `term`).
 2. `POST /v1/occurrences` for that `term` in a book -> scan the concordance snippets; cite by paragraph
    and per-edition page.
-3. `POST /v1/passage` at a paragraph -> read the surrounding text, paging with the cursor if you need more.
+3. `POST /v1/passage` with an occurrence's `cursor` -> read the exact passage around that hit; page with
+   `prevCursor` / `nextCursor` for more. (Open by paragraph only when you don't have a cursor.)
 4. `POST /v1/dictionary/lookup` -> gloss unfamiliar words.

@@ -110,6 +110,9 @@ namespace CST.Tools
     /// One occurrence of a term, shown in context: a hit-centered snippet (term at
     /// <c>[HitStart, HitStart+HitLength)</c>, romanized) plus its citation refs.
     /// </summary>
+    /// <param name="Cursor">The hit's unique locator — pass it to <c>/v1/passage</c> as <c>cursor</c> to read
+    /// the exact passage around <em>this</em> occurrence. (Paragraph numbers repeat within a book, so they are
+    /// not a unique locator.)</param>
     public sealed record Occurrence(
         string BookId,
         string BookName,
@@ -117,5 +120,6 @@ namespace CST.Tools
         int HitStart,
         int HitLength,
         OccurrenceRefs Refs,
-        bool IncludedVariants);
+        bool IncludedVariants,
+        int Cursor);
 }
