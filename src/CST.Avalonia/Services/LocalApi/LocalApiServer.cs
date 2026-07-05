@@ -262,6 +262,12 @@ namespace CST.Avalonia.Services.LocalApi
                     ScriptConverter.Convert(b.ShortNavPath, Script.Devanagari, outputScript),
                     b.Pitaka, b.Matn, b.BookType, b.DocId >= 0)).ToList());
             });
+
+            // Surface which tool groups got wired, so a missing DI hand-off (e.g. a null IScriptTool leaving
+            // /v1/scripts + /v1/convert unmapped -> 404) is visible in the log instead of only at call time.
+            _logger.Information(
+                "Local API tools wired: search={Search} dictionary={Dictionary} passage={Passage} script={Script}",
+                _search != null, _dictionary != null, _passage != null, _script != null);
         }
 
         private sealed record RootResponse(string Name, string App, string Api, string Docs, string Status);
