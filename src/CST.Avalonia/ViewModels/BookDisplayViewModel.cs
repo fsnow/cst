@@ -39,6 +39,10 @@ namespace CST.Avalonia.ViewModels
         private readonly ChapterListsService? _chapterListsService;
         private readonly ISettingsService? _settingsService;
         private readonly IFontService? _fontService;
+        // #225: a global "Pali Script" change re-scripts every open book (CST4 parity). Resolved from the
+        // service locator (this VM is constructed directly, not via DI); handler unsubscribed in Dispose.
+        private readonly IScriptService? _scriptService;
+        private Action<Script>? _globalScriptChangedHandler;
         private readonly Book _book;
         private readonly List<string>? _searchTerms;
         private readonly List<TermPosition>? _searchPositions;  // NEW: Store positions with IsFirstTerm flags
@@ -302,6 +306,19 @@ namespace CST.Avalonia.ViewModels
             if (_fontService != null)
             {
                 _fontService.FontSettingsChanged += OnFontSettingsChanged;
+            }
+
+            // #225: match CST4 — a global "Pali Script" change re-scripts every open book. ScriptService is a
+            // singleton, so each open book subscribes to the same event; on change we set BookScript, which
+            // drives the existing re-render pipeline above. Setting it is a value-equal no-op when this book is
+            // already in the new script, so unchanged books don't reload. The per-book dropdown still overrides
+            // afterward (until the next global change re-applies, as in CST4). Unsubscribed in Dispose.
+            _scriptService = App.ServiceProvider?.GetService<IScriptService>();
+            if (_scriptService != null)
+            {
+                _globalScriptChangedHandler = newScript =>
+                    Dispatcher.UIThread.Post(() => BookScript = newScript);
+                _scriptService.ScriptChanged += _globalScriptChangedHandler;
             }
 
             this.WhenAnyValue(x => x.SelectedChapter)
@@ -2099,6 +2116,9 @@ namespace CST.Avalonia.ViewModels
 
             if (_fontService != null)
                 _fontService.FontSettingsChanged -= OnFontSettingsChanged;
+
+            if (_scriptService != null && _globalScriptChangedHandler != null)
+                _scriptService.ScriptChanged -= _globalScriptChangedHandler;
 
             _disposables.Dispose();
         }
