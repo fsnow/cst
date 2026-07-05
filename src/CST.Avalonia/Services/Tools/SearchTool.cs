@@ -53,13 +53,21 @@ namespace CST.Avalonia.Services.Tools
                     BookName: ScriptConverter.Convert(o.Book?.LongNavPath ?? string.Empty, Script.Devanagari, request.OutputScript),
                     Count: o.Count)).ToList())).ToList();
 
+            // Guard the silent-empty footgun: '*'/'?' are literal outside Wildcard mode, so an Exact query
+            // containing them matches no term and returns [] with no hint. Surface it in the note. (#186 cold test)
+            var q = request.Query ?? string.Empty;
+            string? modeNote = request.Mode == SearchToolMode.Exact && (q.Contains('*') || q.Contains('?'))
+                ? "Query contains wildcard characters ('*'/'?') but mode is Exact, so they were matched literally "
+                  + "(and match no term). Set mode:\"Wildcard\" to expand them."
+                : null;
+
             return new SearchToolResult(
                 Terms: terms,
                 TotalTermCount: result.TotalTermCount,
                 TotalOccurrenceCount: result.TotalOccurrenceCount,
                 TotalBookCount: result.TotalBookCount,
                 Truncated: result.ResultsTruncated,
-                Note: result.TruncationMessage);
+                Note: modeNote ?? result.TruncationMessage);
         }
 
         public async Task<IReadOnlyList<string>> CompleteTermsAsync(

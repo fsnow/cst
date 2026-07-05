@@ -41,8 +41,22 @@ namespace CST.Search
                     if (gt < 0 || gt >= end) break;
                     string tag = xml.Substring(i, gt - i + 1);
                     string name = TagName(tag);
-                    if (name == "note" && !includeNotes && !tag.EndsWith("/>", System.StringComparison.Ordinal))
-                        i = SkipSubtree(xml, gt + 1, "note", end);
+                    if (name == "note" && !tag.EndsWith("/>", System.StringComparison.Ordinal))
+                    {
+                        if (!includeNotes)
+                            i = SkipSubtree(xml, gt + 1, "note", end);
+                        else
+                        {
+                            // Delimit an included note with curly braces (which never occur in the corpus - 0
+                            // across all 217 files) so a consumer can tell injected footnote/variant apparatus
+                            // from the base text; the parentheses the notes carry are otherwise indistinguishable
+                            // from the text's own. Open tag => '{', close tag => '}'; inside stays `reading (sigla)`.
+                            bool isClose = tag.StartsWith("</", System.StringComparison.Ordinal);
+                            if (!isClose && sb.Length > 0 && sb[sb.Length - 1] != ' ') sb.Append(' ');
+                            sb.Append(isClose ? '}' : '{');
+                            i = gt + 1;
+                        }
+                    }
                     else if (name == "hi" && IsStructuralHi(tag) && !tag.EndsWith("/>", System.StringComparison.Ordinal))
                         i = SkipSubtree(xml, gt + 1, "hi", end);
                     else

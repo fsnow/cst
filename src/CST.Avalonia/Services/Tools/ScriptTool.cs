@@ -13,8 +13,12 @@ namespace CST.Avalonia.Services.Tools
     /// </summary>
     public sealed class ScriptTool : IScriptTool
     {
+        // Exclude Unknown (the auto-detect sentinel) and Ipe (a legacy CSCD *font* encoding that emits
+        // non-Unicode glyph bytes, useless to an agent) from the advertised output scripts. (#186 cold test)
         private static readonly IReadOnlyList<string> AllScripts =
-            Enum.GetNames<Script>().Where(n => n != nameof(Script.Unknown)).ToList();
+            Enum.GetNames<Script>()
+                .Where(n => n != nameof(Script.Unknown) && n != nameof(Script.Ipe))
+                .ToList();
 
         public IReadOnlyList<string> Scripts => AllScripts;
 

@@ -110,6 +110,40 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
+        public async Task Search_with_unknown_filter_key_returns_400_not_silent_unfiltered()
+        {
+            // A misnamed filter key (the agent's guessed shape) must fail loud, not bind to all-defaults and
+            // silently return the unfiltered corpus. JsonUnmappedMemberHandling.Disallow -> 400.
+            using var http = Authed();
+            var resp = await http.PostAsync("/v1/search",
+                Json("{\"query\":\"x\",\"filter\":{\"commentaryLevel\":\"Mula\"}}"));
+
+            Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        }
+
+        [Fact]
+        public async Task Search_with_valid_filter_keys_still_works()
+        {
+            using var http = Authed();
+            var resp = await http.PostAsync("/v1/search",
+                Json("{\"query\":\"x\",\"filter\":{\"mula\":false,\"atthakatha\":true,\"tika\":true}}"));
+
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        }
+
+        [Fact]
+        public async Task Convert_to_Ipe_outputScript_is_rejected_400()
+        {
+            // IPE is a legacy internal font encoding and must never be exposed to clients: requesting it as an
+            // outputScript is a 400, not glyph bytes.
+            using var http = Authed();
+            var resp = await http.PostAsync("/v1/convert",
+                Json("{\"text\":\"dhamma\",\"outputScript\":\"Ipe\"}"));
+
+            Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        }
+
+        [Fact]
         public async Task Occurrences_with_unknown_book_returns_404_not_500()
         {
             using var http = Authed();

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Conversion;
@@ -43,7 +44,15 @@ namespace CST.Tools
         Regex
     }
 
-    /// <summary>Which parts of the corpus to search. Defaults include everything.</summary>
+    /// <summary>
+    /// Which parts of the corpus to search. Defaults include everything. The pitaka flags
+    /// (<see cref="Vinaya"/>/<see cref="Sutta"/>/<see cref="Abhidhamma"/>) OR within their group, the text-class
+    /// flags (<see cref="Mula"/>/<see cref="Atthakatha"/>/<see cref="Tika"/>) OR within theirs, and the two groups
+    /// AND together — so e.g. commentaries-only is <c>{ mula:false, atthakatha:true, tika:true }</c>.
+    /// <c>Disallow</c> unmapped members so a misnamed key (e.g. a guessed <c>commentaryLevel</c>) fails with a
+    /// 400 rather than binding to all-defaults and silently returning the unfiltered corpus. (#186 cold test)
+    /// </summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     public sealed record ToolBookFilter(
         bool Vinaya = true,
         bool Sutta = true,

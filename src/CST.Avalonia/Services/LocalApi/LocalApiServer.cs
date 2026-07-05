@@ -81,7 +81,8 @@ namespace CST.Avalonia.Services.LocalApi
             builder.Services.ConfigureHttpJsonOptions(o =>
             {
                 o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-                o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // "Latin" not 3
+                o.SerializerOptions.Converters.Add(new ScriptJsonConverter()); // reject Ipe/Unknown outputScript (before the enum factory)
+                o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // "Latin" not 3, for other enums
             });
 
             var app = builder.Build();
@@ -158,7 +159,9 @@ namespace CST.Avalonia.Services.LocalApi
             host is "127.0.0.1" or "localhost" or "[::1]" or "::1";
 
         private static Script ParseScript(string? name) =>
-            Enum.TryParse<Script>(name, ignoreCase: true, out var script) ? script : Script.Latin;
+            Enum.TryParse<Script>(name, ignoreCase: true, out var script)
+                && script is not (Script.Ipe or Script.Unknown)   // never expose the internal IPE font encoding
+                ? script : Script.Latin;
 
         private static bool BookExists(string? bookId) =>
             !string.IsNullOrEmpty(bookId) &&

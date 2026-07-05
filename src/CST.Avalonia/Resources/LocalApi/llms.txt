@@ -31,13 +31,25 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - Books are identified by file name (e.g. `s0101m.mul.xml`). Get the list from `GET /v1/books`.
 - References: the paragraph number is the primary citation unit; page numbers exist per edition
   (VRI / Myanmar / PTS / Thai). Search occurrences report both.
+- Variant readings / apparatus (`includeVariantReadings: true` on `/v1/occurrences` and `/v1/passage`): the
+  texts carry the print editions' FOOTNOTES (Myanmar 1955-57 / VRI 1995-96), rendered INLINE and wrapped in
+  curly braces `{...}`. Curly braces occur nowhere else in the corpus, so they reliably delimit apparatus from
+  base text - split on `{...}` to extract each note. Inside a note, position disambiguates: a `(...)` group
+  names the WITNESS edition(s) attesting the reading; a short token FOLLOWED BY A NUMBER is a CROSS-REFERENCE
+  to another text. (Same token can differ by position: `(ka)` = the Cambodian edition, but `ka 2` = a
+  cross-reference, the Kaccayana grammar.) Witness sigla, romanized (diacritics dropped here; they arrive
+  script-converted to your `outputScript`): `sya`=Thai (Syama), `si`=Sinhala, `kam`/`ka`=Cambodian, `pi`=PTS.
+  These are digitized print footnotes - mostly variant readings, but also editorial notes and cross-refs, with
+  NO structural type marker, so any "variant vs footnote" split is your interpretation, not the data's.
 - Terminology: when writing about the texts, call them "Pali", "the Tipitaka", or "VRI texts".
 
 ## Endpoints
 
 - `GET  /v1/status` - app version, API version, readiness.
 - `GET  /v1/books` - the catalog. Each: `{ bookId, name, shortName, pitaka, commentaryLevel, bookType, indexed }`.
-  `name`/`shortName` are romanized by default; add `?script=Devanagari` (etc.) to change.
+  `name`/`shortName` are romanized by default; add `?script=Devanagari` (etc.) to change. Classify with
+  `commentaryLevel` (`Mula`/`Atthakatha`/`Tika`) and `pitaka`; `bookType` is a legacy field, often
+  `Unknown` - do not rely on it.
 - `POST /v1/search` - matching terms. Search is over WHOLE-WORD tokens matched as LITERAL character
   patterns, not grammatical inflections. To cover a stem's inflected endings, reach FIRST for a trailing
   `*` WILDCARD (`dhamm*`): the `*` absorbs the case/number endings, so you do NOT need to hand-write a
@@ -50,6 +62,16 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   length-bounded anchored regex like `^dhamm.{1,6}$` catches a stem's inflectional endings while
   EXCLUDING longer sandhi compounds - `.{1,6}` allows 1-6 trailing chars, `$` stops it running into the
   next word.
+  MODE MATTERS: `*`/`?` expand ONLY with `mode:"Wildcard"`, and regex patterns ONLY with `mode:"Regex"`; in
+  the default `Exact` mode those characters are LITERAL and match nothing (the response `note` flags this).
+  PROXIMITY: a multi-word `query` (space-separated) plus `proximityDistance` finds those words co-occurring
+  within N words; quote a run - `"a b"` - for an exact adjacent phrase; combine with `mode:"Wildcard"`/`"Regex"`
+  to expand each word before matching.
+  FILTER: `filter` is an object of booleans, all default true -
+  `{ vinaya, sutta, abhidhamma, mula, atthakatha, tika, other }`. The pitaka flags OR within their group, the
+  text-class flags OR within theirs, and the two groups AND together - so commentaries-only is
+  `{ "mula": false, "atthakatha": true, "tika": true }`. Unknown filter keys are REJECTED with 400 (so a
+  misnamed key can't silently return the unfiltered corpus).
   Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, proximityDistance?, outputScript? }`.
   Returns `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, truncated, note }`; when `truncated`
   is true (e.g. `maxTerms` was reached), `note` explains and more forms exist beyond the cap.
@@ -63,7 +85,8 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   - e.g. `{ "edition": "Vri", "volume": 3, "number": 196 }`, conventionally cited "VRI 3:196" (edition
   values: `Vri`, `Myanmar`, `Pts`, `Thai`). `cursor` is the hit's unique locator - pass it to `/v1/passage`
   as `cursor` to read the exact passage around THIS hit (paragraph numbers repeat within a book, so the
-  paragraph number alone is not a unique locator).
+  paragraph number alone is not a unique locator). `includedVariants` echoes your request flag (whether
+  variant readings were rendered), NOT whether this particular hit has any; see the apparatus note above.
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeVariantReadings? }`.
   Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, ... }`. Page by passing back the

@@ -103,6 +103,24 @@ namespace CST.Avalonia.Tests.Tools
         }
 
         [Fact]
+        public async Task SearchAsync_flags_wildcard_chars_used_in_Exact_mode()
+        {
+            var mock = new Mock<ISearchService>();
+            mock.Setup(s => s.SearchAsync(It.IsAny<SearchQuery>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SearchResult());
+            var tool = new SearchTool(mock.Object, Settings());
+
+            // Exact mode + '*' -> literal, matches nothing: the note must warn instead of silently returning [].
+            var flagged = await tool.SearchAsync(new SearchToolRequest("dhamm*", SearchToolMode.Exact));
+            Assert.NotNull(flagged.Note);
+            Assert.Contains("Wildcard", flagged.Note);
+
+            // Wildcard mode: no footgun note.
+            var clean = await tool.SearchAsync(new SearchToolRequest("dhamm*", SearchToolMode.Wildcard));
+            Assert.Null(clean.Note);
+        }
+
+        [Fact]
         public async Task SearchAsync_null_filter_defaults_to_include_all()
         {
             SearchQuery? captured = null;
