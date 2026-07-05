@@ -15,11 +15,11 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | ~~Global "Pali Script" should re-script open books~~ | **[#225](https://github.com/fsnow/cst/issues/225)** ✅ | **Done 2026-07-04** — global re-scripts all open books (CST4 parity). |
 | Print / Page Setup / Print Preview (book + main) | _needs issue_ | No print anywhere in Avalonia. |
 | Book **Collections** (custom book sets) + editor + search scoping | _needs issue_ | `comboBookSet`, FormBookCollEditor — no Avalonia concept. |
-| Search **Reports** (Choose Report → Report viewer) | _needs issue_ | Only "All Words" was implemented in CST4. |
+| ~~Search **Reports** (Choose Report → Report viewer)~~ | **Won't implement** | Barely-there in CST4 (only "All Words" was implemented; other report radios disabled). Maintainer decision 2026-07-04. |
 | **Recently Viewed** (MRU) | _needs issue_ | `RecentBooks` model exists but never populated/surfaced. |
 | **About** box | _needs issue_ | `LayoutViewModel.ShowAbout()` is a TODO stub, unwired. |
 
-**Not parity targets** (confirmed with maintainer): Ctrl+T *Translate* (an undocumented **Easter egg** — it shipped in CST4 but was never documented or publicized); FormAdvancedSearch (was "under development" / incomplete in CST4); Book > Save (no-op stub in CST4).
+**Not parity targets** (confirmed with maintainer): Ctrl+T *Translate* (an undocumented **Easter egg** — it shipped in CST4 but was never documented or publicized); FormAdvancedSearch (was "under development" / incomplete in CST4); Book > Save (no-op stub in CST4); **Search Reports** (barely-there in CST4 — only "All Words" implemented; won't implement, 2026-07-04).
 
 ---
 
@@ -119,7 +119,7 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 | Word stats ("Words:"/"Word Combinations:") | Term/selection counts | PARTIAL | Always "Words:"; no "Word Combinations" wording for multi-word |
 | Occurrences–Books list + stats | Books with per-book hit counts | PRESENT | Occurrences + OccurrenceStats |
 | Double-click occurrence → open + highlight | Open book at hits | PRESENT | Opens with Positions |
-| Report… button | Open report chooser | MISSING | _needs issue_ |
+| Report… button | Open report chooser | Won't implement | Search Reports dropped (barely-there in CST4) — 2026-07-04 |
 | Ctrl+B bad-word checker | Scan index for malformed terms | MISSING | IpeWordChecker unported (minor) |
 | Live re-script | Re-render term/book lists | PRESENT | |
 | Results-truncated warning / pane state persistence | | PRESENT (new) | Avalonia-only (#87) |
@@ -128,8 +128,8 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 
 | CST4 feature | CST4 behavior | Avalonia status | Notes / hint |
 |---|---|---|---|
-| Choose Report (All Words / Selected / Occurrences ×2) | Pick report; only "All Words" implemented | MISSING | _needs issue_ |
-| Report viewer | XSL→HTML report + print | MISSING | _needs issue_ |
+| Choose Report (All Words / Selected / Occurrences ×2) | Pick report; only "All Words" implemented | Won't implement | Barely-there in CST4 (3 of 4 radios disabled) — maintainer decision 2026-07-04 |
+| Report viewer | XSL→HTML report + print | Won't implement | Dropped with Search Reports — 2026-07-04 |
 | Advanced Search | Multi-word into results box | MISSING | CST4 "under development" — not a target |
 | Book Collection Editor | Dual-list custom book-set builder | MISSING | _needs issue_ (pairs with search scoping) |
 
@@ -139,4 +139,4 @@ _Assembled 2026-07-03 from a 3-agent CST4 source inventory._
 Every UNKNOWN/PARTIAL row has been maintainer-verified: Go To V/M/P/T prefix auto-switch; cmd-A select-all + occurrence-merge (Books list single-select in both, correct); Cmd+F word-search-from-selection; Dictionary English/Hindi language list; tree-expansion restore across restart; and global-script re-scripts open books (#225). Nothing left to check live.
 
 ## Gaps that need an issue filed (maintainer decision on priority)
-Print family · Book Collections + editor + search scoping · Search Reports · Recently Viewed (MRU) · About box · Ctrl+B bad-word checker (minor).
+Print family · Book Collections + editor + search scoping · Recently Viewed (MRU) · About box · Ctrl+B bad-word checker (minor). _(Search Reports dropped as won't-implement, 2026-07-04.)_
