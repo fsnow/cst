@@ -42,6 +42,9 @@ public partial class App : Application
 {
     public static ServiceProvider? ServiceProvider { get; private set; }
     public static Window? MainWindow { get; private set; }
+
+    // Opt-in loopback API server for AI tools; gated on settings at launch (restart to apply). (#186)
+    private CST.Avalonia.Services.LocalApi.LocalApiServer? _localApiServer;
     /// <summary>
     /// True once application shutdown has begun. Floating windows close as part of shutdown too;
     /// consumers (e.g. CstDockFactory.CloseHostWindow's book rescue) use this to distinguish
@@ -300,11 +303,37 @@ public partial class App : Application
             if (settingsService != null)
             {
                 await settingsService.LoadSettingsAsync();
+                await StartLocalApiIfEnabledAsync(settingsService);
             }
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to load settings");
+        }
+    }
+
+    /// <summary>
+    /// Start the opt-in loopback API server if AI features + the local API are enabled. Gated at launch:
+    /// changes to the setting take effect on restart (live toggle is a later iteration). (#186)
+    /// </summary>
+    private async Task StartLocalApiIfEnabledAsync(ISettingsService settingsService)
+    {
+        try
+        {
+            if (!settingsService.Settings.Ai.LocalApiEnabled) return;
+
+            var dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
+            System.IO.Directory.CreateDirectory(dir);
+
+            var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
+            _localApiServer = new CST.Avalonia.Services.LocalApi.LocalApiServer(version, dir, Log.Logger);
+            await _localApiServer.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to start local API server");
         }
     }
 
@@ -835,6 +864,12 @@ public partial class App : Application
             {
                 await settingsService.FlushPendingSaveAsync();
                 Log.Information("SHUTDOWN: Pending settings save flushed");
+            }
+
+            if (_localApiServer != null)
+            {
+                await _localApiServer.StopAsync();
+                Log.Information("SHUTDOWN: Local API server stopped");
             }
         }
         catch (Exception ex)
