@@ -10,8 +10,9 @@ namespace CST.Tools
     /// The search tool exposed to agents (AI_INTEGRATION.md surface C). A transport-agnostic, headless
     /// wrapper over the app's search service: an agent gets clean terms → book hits, never Lucene segments.
     /// Implementations live in the app layer and map internal results to these DTOs. All Pāli text is
-    /// returned in <see cref="SearchToolRequest.OutputScript"/> (default romanized Latin); every term also
-    /// carries its stable IPE form as an unambiguous cross-script key.
+    /// returned in <see cref="SearchToolRequest.OutputScript"/> (default romanized Latin); a term returned by
+    /// search is passed back verbatim (in that same script) to read it in context — the caller never handles
+    /// the internal encoding.
     /// </summary>
     public interface ISearchTool
     {
@@ -25,8 +26,8 @@ namespace CST.Tools
         /// <summary>
         /// "Search results in context" (the concordance/KWIC bridge): each occurrence of a term in one book
         /// as a hit-centered <b>snippet</b> plus citation refs (paragraph number + per-edition pages), paged.
-        /// Keyed by the stable <paramref name="OccurrenceRequest.TermIpe"/> from a prior search. This is the
-        /// data behind both the agent loop (scan → cite/fetch) and the human concordance panel.
+        /// Pass the <c>Term</c> from a prior search (in whatever script it came back). This is the data behind
+        /// both the agent loop (scan → cite/fetch) and the human concordance panel.
         /// </summary>
         Task<IReadOnlyList<Occurrence>> GetOccurrencesAsync(OccurrenceRequest request, CancellationToken ct = default);
     }
@@ -71,11 +72,10 @@ namespace CST.Tools
         string? Note = null);
 
     /// <summary>One matching term and the books it occurs in.</summary>
-    /// <param name="Term">The term in the requested output script.</param>
-    /// <param name="TermIpe">The stable IPE form — use this as the key for <c>GetOccurrencesAsync</c>.</param>
+    /// <param name="Term">The term in the requested output script — pass it back verbatim as
+    /// <c>OccurrenceRequest.Term</c> to read it in context.</param>
     public sealed record SearchTermResult(
         string Term,
-        string TermIpe,
         int TotalCount,
         IReadOnlyList<BookHitSummary> Books);
 
@@ -86,11 +86,13 @@ namespace CST.Tools
         int Count);
 
     /// <summary>A request for a term's in-context occurrences within one book, paged.</summary>
+    /// <param name="Term">The term to locate, in any script (e.g. the romanized <c>Term</c> from a prior
+    /// search). Converted to the internal encoding for lookup — the caller never handles it.</param>
     /// <param name="MinChars">Prose snippet floor (rendered chars); null uses the engine default.</param>
     /// <param name="MaxChars">Prose snippet ceiling (rendered chars); null uses the engine default.</param>
     public sealed record OccurrenceRequest(
         string BookId,
-        string TermIpe,
+        string Term,
         bool IncludeVariantReadings = false,
         Script OutputScript = Script.Latin,
         int Skip = 0,

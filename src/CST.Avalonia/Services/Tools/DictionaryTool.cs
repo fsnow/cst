@@ -31,7 +31,6 @@ namespace CST.Avalonia.Services.Tools
                 .Take(request.MaxEntries)
                 .Select(w => new DictionaryEntry(
                     Headword: ScriptConverter.Convert(w.Word, Script.Ipe, request.OutputScript),
-                    HeadwordIpe: w.Word,
                     MeaningHtml: w.Meaning))
                 .ToList();
         }

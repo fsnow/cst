@@ -31,10 +31,8 @@ namespace CST.Tools
 
     /// <summary>One dictionary entry.</summary>
     /// <param name="Headword">The headword in the requested output script.</param>
-    /// <param name="HeadwordIpe">The stable IPE form of the headword.</param>
     /// <param name="MeaningHtml">The definition as an HTML fragment (the source format).</param>
     public sealed record DictionaryEntry(
         string Headword,
-        string HeadwordIpe,
         string MeaningHtml);
 }

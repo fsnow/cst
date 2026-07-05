@@ -154,6 +154,9 @@ namespace CST.Avalonia.Services.LocalApi
         private static bool IsLoopbackHost(string host) =>
             host is "127.0.0.1" or "localhost" or "[::1]" or "::1";
 
+        private static Script ParseScript(string? name) =>
+            Enum.TryParse<Script>(name, ignoreCase: true, out var script) ? script : Script.Latin;
+
         private static bool IsDiscoveryPath(PathString path) =>
             !path.HasValue || path == "/"
             || path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
@@ -229,10 +232,18 @@ namespace CST.Avalonia.Services.LocalApi
                 });
             }
 
-            // Book catalog — agents need book ids to call the other tools. Always available (no service needed).
-            app.MapGet(v + "/books", () => Results.Json(
-                Books.Inst.Select(b => new BookSummary(
-                    b.FileName, b.LongNavPath, b.ShortNavPath, b.Pitaka, b.Matn, b.BookType, b.DocId >= 0)).ToList()));
+            // Book catalog — agents need book ids to call the other tools. Always available (no service
+            // needed). Nav-path names are stored Devanagari; romanize to the requested script (Latin default,
+            // like every other endpoint) via ?script=. (#186 cold-agent test: names came back Devanagari.)
+            app.MapGet(v + "/books", (string? script) =>
+            {
+                var outputScript = ParseScript(script);
+                return Results.Json(Books.Inst.Select(b => new BookSummary(
+                    b.FileName,
+                    ScriptConverter.Convert(b.LongNavPath, Script.Devanagari, outputScript),
+                    ScriptConverter.Convert(b.ShortNavPath, Script.Devanagari, outputScript),
+                    b.Pitaka, b.Matn, b.BookType, b.DocId >= 0)).ToList());
+            });
         }
 
         private sealed record RootResponse(string Name, string App, string Api, string Docs, string Status);

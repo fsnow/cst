@@ -42,7 +42,6 @@ namespace CST.Avalonia.Tests.Tools
             var entries = await tool.LookupAsync(new DictionaryRequest("en", "metta")); // OutputScript = Latin
 
             var e = Assert.Single(entries);
-            Assert.Equal("abc", e.HeadwordIpe);                                          // stable IPE preserved
             Assert.Equal(ScriptConverter.Convert("abc", Script.Ipe, Script.Latin), e.Headword);
             Assert.Equal("<b>loving-kindness</b>", e.MeaningHtml);                       // HTML pass-through
         }

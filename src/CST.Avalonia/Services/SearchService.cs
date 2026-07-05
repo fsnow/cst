@@ -818,6 +818,8 @@ public class SearchService : ISearchService
                 return new List<TermPosition>();
             }
 
+            // term is a display-script term (e.g. the romanized Latin term from a prior search); convert it
+            // to IPE for the index lookup. Any2Ipe auto-detects the input script.
             var ipeTerm = Any2Ipe.Convert(term);
             var termBytes = new BytesRef(Encoding.UTF8.GetBytes(ipeTerm));
             var liveDocs = MultiFields.GetLiveDocs(reader);

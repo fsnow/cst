@@ -31,7 +31,7 @@ namespace CST.Avalonia.Tests.Services
             var search = new Mock<ISearchTool>();
             search.Setup(t => t.SearchAsync(It.IsAny<SearchToolRequest>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new SearchToolResult(
-                    new List<SearchTermResult> { new("dhamma", "dhamma-ipe", 5, new List<BookHitSummary>()) },
+                    new List<SearchTermResult> { new("dhamma", 5, new List<BookHitSummary>()) },
                     TotalTermCount: 1, TotalOccurrenceCount: 5, TotalBookCount: 1, Truncated: false, Note: null));
 
             _server = new LocalApiServer("5.0.0-test", _dir, Serilog.Log.Logger, search.Object);
@@ -73,13 +73,15 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
-        public async Task Books_endpoint_lists_the_catalog()
+        public async Task Books_endpoint_lists_the_catalog_romanized()
         {
             using var http = Authed();
             var resp = await http.GetAsync("/v1/books");
 
             Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-            Assert.Contains(".xml", await resp.Content.ReadAsStringAsync()); // real book file names
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.Contains(".xml", body);                                    // real book file names
+            Assert.DoesNotContain(body, c => c >= '\u0900' && c <= '\u097F'); // names romanized, no Devanagari leaked
         }
 
         [Fact]
