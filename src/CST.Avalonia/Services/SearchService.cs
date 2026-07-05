@@ -810,9 +810,11 @@ public class SearchService : ISearchService
         try
         {
             reader = AcquireReader();
-            var books = Books.Inst;
-            var book = books[bookFileName];
-            
+            // Books' string indexer throws on an unknown file name; use a safe lookup so a bad bookId can't
+            // become an unhandled 500 in the occurrences endpoint. (#186 cold test)
+            var book = Books.Inst.FirstOrDefault(b =>
+                string.Equals(b.FileName, bookFileName, StringComparison.OrdinalIgnoreCase));
+
             if (book == null || book.DocId < 0)
             {
                 return new List<TermPosition>();

@@ -110,7 +110,10 @@ namespace CST.Avalonia.Services.Tools
                     HitStart: s.HitStart,
                     HitLength: s.HitLength,
                     Refs: new OccurrenceRefs(s.ParagraphNumber, s.ParagraphBookCode, s.Pages),
-                    IncludedVariants: s.IncludedVariants));
+                    IncludedVariants: s.IncludedVariants,
+                    // The hit's char offset — a unique locator to read the exact passage via /v1/passage
+                    // (paragraph numbers repeat within a book). (#186 cold test)
+                    Cursor: p.StartOffset));
             }
             return occurrences;
         }

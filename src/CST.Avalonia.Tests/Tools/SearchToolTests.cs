@@ -157,6 +157,7 @@ namespace CST.Avalonia.Tests.Tools
                 Assert.Contains(o.Refs.Pages, p => p.Edition == PageEdition.Vri && p.Volume == 1 && p.Number == 3);
                 Assert.Equal(book, o.BookId);
                 Assert.False(string.IsNullOrEmpty(o.BookName));
+                Assert.Equal(hit, o.Cursor);   // unique locator = the hit's char offset (for /v1/passage)
             }
             finally
             {

@@ -110,6 +110,16 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
+        public async Task Occurrences_with_unknown_book_returns_404_not_500()
+        {
+            using var http = Authed();
+            var resp = await http.PostAsync("/v1/occurrences",
+                Json("{\"bookId\":\"no-such-book.xml\",\"term\":\"x\"}"));
+
+            Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        }
+
+        [Fact]
         public async Task Unprovided_tool_endpoint_is_not_mapped()
         {
             // No dictionary tool was supplied, so its endpoint doesn't exist.

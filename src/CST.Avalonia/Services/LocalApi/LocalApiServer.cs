@@ -160,6 +160,10 @@ namespace CST.Avalonia.Services.LocalApi
         private static Script ParseScript(string? name) =>
             Enum.TryParse<Script>(name, ignoreCase: true, out var script) ? script : Script.Latin;
 
+        private static bool BookExists(string? bookId) =>
+            !string.IsNullOrEmpty(bookId) &&
+            Books.Inst.Any(b => string.Equals(b.FileName, bookId, StringComparison.OrdinalIgnoreCase));
+
         private static bool IsDiscoveryPath(PathString path) =>
             !path.HasValue || path == "/"
             || path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
@@ -211,8 +215,10 @@ namespace CST.Avalonia.Services.LocalApi
             {
                 app.MapPost(v + "/search",
                     async (SearchToolRequest req, CancellationToken ct) => Results.Json(await search.SearchAsync(req, ct)));
-                app.MapPost(v + "/occurrences",
-                    async (OccurrenceRequest req, CancellationToken ct) => Results.Json(await search.GetOccurrencesAsync(req, ct)));
+                app.MapPost(v + "/occurrences", async (OccurrenceRequest req, CancellationToken ct) =>
+                    BookExists(req.BookId)
+                        ? Results.Json(await search.GetOccurrencesAsync(req, ct))
+                        : Results.NotFound(new { error = $"Unknown book '{req.BookId}'." }));
             }
 
             if (_dictionary is { } dictionary)
@@ -226,6 +232,8 @@ namespace CST.Avalonia.Services.LocalApi
             {
                 app.MapPost(v + "/passage", async (PassageHttpRequest req, CancellationToken ct) =>
                 {
+                    if (!BookExists(req.BookId))
+                        return Results.NotFound(new { error = $"Unknown book '{req.BookId}'." });
                     NavigationReference reference = req.Paragraph is int n
                         ? new NavigationReference.Paragraph(n, req.BookCode)
                         : new NavigationReference.WholeBook();
