@@ -1,0 +1,51 @@
+# CST Reader - Local Corpus API
+
+CST Reader (CST = Chattha Sangayana Tipitaka) exposes its Pali corpus, full-text search, and dictionaries
+as read-only tools over this loopback HTTP API, for AI agents such as Claude Code. The app owns all storage
+formats; you get clean JSON and never touch the underlying files.
+
+## Connecting
+
+This document is served WITHOUT authentication. Every other endpoint requires a token.
+
+1. Read the handshake file `local-api.json` in the app-support directory
+   (macOS: `~/Library/Application Support/CSTReader/local-api.json`). It is `{ "port", "token", "pid" }`.
+2. Base URL is `http://127.0.0.1:<port>` (loopback only).
+3. Send `Authorization: Bearer <token>` on every request.
+4. Do NOT send an `Origin` header - browser-origin requests are rejected by design.
+
+## Conventions
+
+- Pali output is ROMANIZED (Latin / IAST, with diacritics) by DEFAULT. Pass `outputScript` to override,
+  e.g. "Devanagari", "Thai", "Myanmar", "Sinhala" (14 scripts are supported).
+- Every Pali term and headword also carries a stable internal encoding (`termIpe`, `headwordIpe`). Use it as
+  an unambiguous cross-script key when calling follow-up endpoints - it does not change with `outputScript`.
+- Books are identified by file name (e.g. `s0101m.mul.xml`). Get the list from `GET /v1/books`.
+- References: the paragraph number is the primary citation unit; page numbers exist per edition
+  (VRI / Myanmar / PTS / Thai). Search occurrences report both.
+- Terminology: when writing about the texts, call them "Pali", "the Tipitaka", or "VRI texts".
+
+## Endpoints
+
+- `GET  /v1/status` - app version, API version, readiness.
+- `GET  /v1/books` - the catalog. Each: `{ bookId, name, shortName, pitaka, commentaryLevel, bookType, indexed }`.
+- `POST /v1/search` - matching terms (a wildcard/regex expands to many inflected forms).
+  Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, proximityDistance?, outputScript? }`.
+  Returns terms, each with the books it occurs in and counts.
+- `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one term in one
+  book. Body: `{ bookId, termIpe, includeVariantReadings?, outputScript?, skip?, take?, minChars?, maxChars? }`.
+  Each occurrence: a hit-centered snippet, the paragraph number, and the per-edition page numbers.
+- `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
+  Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeVariantReadings? }`.
+  Page forward/backward by passing back `prevCursor` / `nextCursor`.
+- `GET  /v1/dictionary/languages` - available dictionary language codes (e.g. "en", "hi").
+- `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
+  -> entries `{ headword, headwordIpe, meaningHtml }`.
+
+## A typical research flow
+
+1. `POST /v1/search` for a word -> pick the inflected form(s) you want (keep each `termIpe`).
+2. `POST /v1/occurrences` for that `termIpe` in a book -> scan the concordance snippets; cite by paragraph
+   and per-edition page.
+3. `POST /v1/passage` at a paragraph -> read the surrounding text, paging with the cursor if you need more.
+4. `POST /v1/dictionary/lookup` -> gloss unfamiliar words.

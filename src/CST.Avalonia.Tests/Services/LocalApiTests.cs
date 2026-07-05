@@ -103,6 +103,27 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
+        public async Task Llms_txt_is_served_without_a_token_and_is_version_stamped()
+        {
+            using var http = Client(withToken: false);
+            var resp = await http.GetAsync("/llms.txt");
+
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.Contains("/v1/search", body);       // endpoint orientation
+            Assert.Contains("Bearer", body);           // auth handshake
+            Assert.Contains("5.0.0-test", body);       // version stamp
+        }
+
+        [Fact]
+        public async Task Llms_txt_still_rejects_an_origin_header()
+        {
+            using var http = Client(withToken: false, origin: "http://evil.example");
+            var resp = await http.GetAsync("/llms.txt");
+            Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+        }
+
+        [Fact]
         public void Handshake_file_advertises_port_and_token()
         {
             var info = LocalApiInfo.Read(_dir);

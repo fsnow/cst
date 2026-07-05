@@ -41,6 +41,7 @@
     </None>
     <EmbeddedResource Include="Resources\welcome-content.html" />
     <EmbeddedResource Include="Resources\buddha-transparent.png" />
+    <EmbeddedResource Include="Resources\LocalApi\llms.txt" />
   </ItemGroup>
 
   <ItemGroup>

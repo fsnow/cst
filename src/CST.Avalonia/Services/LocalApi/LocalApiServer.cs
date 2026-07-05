@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -94,7 +96,9 @@ namespace CST.Avalonia.Services.LocalApi
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     return;
                 }
-                if (!IsAuthorized(context, token))
+                // Discovery (llms.txt / docs) is unauthenticated so an agent can bootstrap: read the docs,
+                // learn the handshake, then authenticate. It carries no secrets. Everything else needs the token.
+                if (!IsDiscoveryPath(context.Request.Path) && !IsAuthorized(context, token))
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     return;
@@ -104,6 +108,16 @@ namespace CST.Avalonia.Services.LocalApi
 
             app.MapGet("/" + ApiVersion + "/status",
                 () => Results.Json(new StatusResponse(_appVersion, ApiVersion, "ok")));
+
+            // Unauthenticated front door: the agent's orientation (endpoints, conventions, auth handshake).
+            // Version-stamped so it can't be mistaken for a different build's surface.
+            app.MapGet("/llms.txt", () =>
+            {
+                var body = ReadResource("LocalApi.llms.txt")
+                    ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
+                var stamped = $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + body;
+                return Results.Text(stamped, "text/markdown; charset=utf-8");
+            });
 
             MapToolEndpoints(app);
 
@@ -134,6 +148,22 @@ namespace CST.Avalonia.Services.LocalApi
 
         private static bool IsLoopbackHost(string host) =>
             host is "127.0.0.1" or "localhost" or "[::1]" or "::1";
+
+        private static bool IsDiscoveryPath(PathString path) =>
+            path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWithSegments("/docs", StringComparison.OrdinalIgnoreCase);
+
+        private static string? ReadResource(string endsWith)
+        {
+            var assembly = typeof(LocalApiServer).Assembly;
+            var name = assembly.GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith(endsWith, StringComparison.OrdinalIgnoreCase));
+            if (name is null) return null;
+            using var stream = assembly.GetManifestResourceStream(name);
+            if (stream is null) return null;
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
 
         private static bool IsAuthorized(HttpContext context, string token)
         {
