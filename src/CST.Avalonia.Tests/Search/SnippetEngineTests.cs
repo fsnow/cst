@@ -56,6 +56,7 @@ namespace CST.Avalonia.Tests.Search
             Assert.DoesNotContain("aaa", r.Snippet);   // neighbor sentence, floor off
             Assert.DoesNotContain("ggg", r.Snippet);   // neighbor sentence
             Assert.DoesNotContain("VAR", r.Snippet);   // footnote excluded by default
+            Assert.DoesNotContain("{", r.Snippet);     // ...and no apparatus braces when notes are off
             Assert.DoesNotContain("Q", r.Snippet);     // paranum marker not in window
         }
 
@@ -77,6 +78,12 @@ namespace CST.Avalonia.Tests.Search
             var with = TeiSnippetExtractor.Extract(Prose, hs, 6, markers, Deva(min: 1, notes: true));
 
             Assert.Contains("VAR", with.Snippet);
+            // Included apparatus is delimited by curly braces (absent from the corpus) so a consumer can tell
+            // it from base text; the note content sits inside a `{...}`.
+            int open = with.Snippet.IndexOf('{');
+            int close = with.Snippet.IndexOf('}');
+            Assert.True(open >= 0 && close > open, "note should be wrapped in { }");
+            Assert.Contains("VAR", with.Snippet.Substring(open, close - open));
         }
 
         [Fact]

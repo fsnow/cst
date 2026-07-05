@@ -18,8 +18,8 @@ namespace CST.Avalonia.Tests.Tools
 
             Assert.Contains("Latin", scripts);
             Assert.Contains("Devanagari", scripts);
-            Assert.Contains("Ipe", scripts);
             Assert.DoesNotContain("Unknown", scripts);   // Unknown is the auto-detect input sentinel, not an output
+            Assert.DoesNotContain("Ipe", scripts);       // Ipe is a legacy non-Unicode font encoding, useless to an agent
         }
 
         [Fact]

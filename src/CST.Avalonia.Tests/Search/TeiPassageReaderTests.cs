@@ -41,6 +41,30 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void ReadWindow_wraps_included_notes_in_braces()
+        {
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<pb ed=\"V\" n=\"1.0001\"/>" +
+                "<p rend=\"bodytext\" n=\"5\">alpha bravo <note>VAR (si)</note> charlie</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int start = markers.PositionOfParagraph(5);
+
+            var off = TeiPassageReader.ReadWindow(xml, start, maxChars: 10000, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+            Assert.DoesNotContain("VAR", off.Text);   // note stripped by default
+            Assert.DoesNotContain("{", off.Text);
+
+            var on = TeiPassageReader.ReadWindow(xml, start, maxChars: 10000, includeVariants: true,
+                outputScript: Script.Devanagari, markers);
+            int open = on.Text.IndexOf('{');
+            int close = on.Text.IndexOf('}');
+            Assert.True(open >= 0 && close > open, "note should be wrapped in { }");
+            Assert.Contains("VAR", on.Text.Substring(open, close - open));
+        }
+
+        [Fact]
         public void ReadWindow_large_budget_reaches_end()
         {
             var markers = BookMarkers.Build(Xml);
