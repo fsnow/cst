@@ -57,7 +57,8 @@ Everything in §2 is an adapter over one or both of:
    `ambiguous-reference` + candidate list, `reference-out-of-range`). The agent needs this to confirm the
    user is looking at the right passage. **Decided: ambiguity resolves agent-side** — the API returns the
    candidates and the agent asks its user; the app never pops its own pick-list for an API-initiated
-   navigation, and never silently best-guess jumps.
+   navigation, and never silently best-guess jumps. **Its highlight/anchor payload is expressed in source
+   coordinates** — see the coordinate model in §6.1.
 2. **The app's read services exposed as tools** — search, fetch-passage, resolve-reference, **dictionary
    lookup** — each already encapsulating its format (Lucene / TEI XML / binary dict). Backs **C** (and **B**).
    Result shapes are **token-frugal by design**: paragraph-granularity by default, explicit size limits +
@@ -127,6 +128,77 @@ Do not think of HTTP *vs* MCP *vs* URL scheme — **layer them on the shared cor
   URL-scheme registration is itself a **packaging change** (macOS: `CFBundleURLTypes` in Info.plist +
   re-sign/notarize; Windows: registry; Linux: `.desktop` file) — schedule it with phase 1 (§13).
 
+### 6.1 Highlighting & anchors — the coordinate model
+
+The concordance/passage **reads** (C) and the present-in-context **command** (E) share one primitive: an
+ordered **highlight set with a single navigable anchor**. It has two producers — search *computes* it (a hit,
+or the multi-span set of a proximity match), and the agent *supplies* it (to show the user a span it chose) —
+over **one coordinate space**. Get that space right and E is nearly free; get it wrong and nothing maps.
+
+**Three coordinate spaces; only one is contractual for highlighting.**
+- **Source char offsets** — into the decoded, BOM-stripped UTF-16 corpus XML (markup and all). Script- and
+  render-independent. This is already what `cursor` and search `StartOffset`/`EndOffset` are, and what the
+  reader's WebView highlighter consumes. **This is the highlight coordinate space.**
+- **Rendered-text offsets** — into the script-converted, markup-stripped `text` a read returns. Depends on
+  `script` and `includeVariantReadings`; a Latin offset ≠ a Devanagari offset. **Display-only — never a
+  highlight coordinate.** The snippet's `HitStart`/`HitLength` live here: they mark the *returned string*, nothing more.
+- **WebView/DOM offsets** — internal to the reader; the app owns the source→DOM mapping.
+
+**Invariant: every offset the agent hands to a highlight/anchor command is a *source* offset that originated
+from us.** No agent-invented coordinates. This is what makes it robust: the forward render
+(`Clean` strip markup → `Convert` script → `Collapse` whitespace) is non-linear and **one-way** — we discard
+the mapping, so a rendered offset *cannot* be inverted back to XML. The agent therefore cannot point at the
+flat prose blob; it can only reference offsets we labelled for it. (Corollary: the read surface must stop
+handing out anonymous prose and start handing out *offset-anchored* data when the agent intends to act.)
+
+**Tiered escalation — pay for precision only when acting:**
+1. **Anchor + navigate — free, works today.** `cursor` (the hit's source offset) → drop an anchor, scroll
+   into view. No new data; the agent already holds it.
+2. **Coarse highlight — a few more fields.** "Highlight the hit word" / "highlight the whole snippet" is a
+   single source *span*. Today's returns mix spaces (`cursor` = source start, but `HitLength` = *rendered*
+   length), so this tier means **also surfacing the hit's source end/length and the snippet window's source
+   bounds** (`winStart`/`winEnd` — the extractor already computes them).
+3. **Granular highlight — opt-in token offsets.** `includeTokenOffsets: true` → `tokens: [{ text, start,
+   length }]`, where `text` is in the requested `script` but `start`/`length` are **source** offsets. The
+   agent composes arbitrary highlight/anchor sets word-by-word. These offsets already exist — the Lucene
+   index stores per-term `StartOffset`/`EndOffset`; we are *exposing* them, not inventing a system.
+
+**The flag: `includeTokenOffsets` (default false), on both `/v1/occurrences` and `/v1/passage`** — same
+option name, same token shape. Default-off keeps the read/scan path token-frugal (§4.2); the agent flips it
+only on the one call where it has decided to *display*, not merely *read*. Read cheap; highlight precise.
+
+**Multi-word / proximity is the forcing case.** A proximity match is inherently multi-span — the blue anchor
+(first unit) plus the green context units scattered across the window — so a single `HitStart`/`HitLength`
+cannot represent it; the KWIC would mark only one of the co-occurring words. The snippet model therefore
+carries an ordered `highlights: [{ start, length, isAnchor }]`, of which the single-term hit is the
+degenerate one-range case (one implementation, not two). This also removes the dead end where a multi-word
+result's `~`-joined composite `term` is round-tripped through the *single*-term occurrences lookup: instead,
+occurrences accepts the multi-word/proximity query (spaces = units, quotes = phrase, `proximityDistance` =
+window) and returns one occurrence per window with the full highlight set and the anchor `cursor`.
+
+**Surface-E command** (E) then takes a highlight/anchor request in **source coordinates** —
+`{ book, ranges: [{ start, length, color? }], anchor: <index into ranges> }` — fed only by offsets from
+tiers 1–3. Each range may carry an optional **`color` from a small NAMED palette** (e.g. yellow / green /
+blue / pink / orange), not raw hex: the app owns the actual rendering (contrast, dark mode, accessibility),
+and — the point — the agent can then refer to a span **by its color** while narrating ("the compound
+highlighted in green"), giving the user a shared visual vocabulary for the walkthrough. Defaults follow the
+house convention (the anchor-vs-context blue/green of search highlighting); a walkthrough overrides per range.
+Color is presentational only — it never touches the source-offset coordinates. (Color alone can fail
+color-blind users, so the agent should still cite by paragraph/position too.)
+A **content-addressed** fallback ("highlight term T in paragraph P, anchor the first") is worth keeping for
+when the agent never fetched offsets: the app resolves it exactly like search, fully script-independent, no
+offset math — less flexible (only findable spans) but bulletproof. This composes with §4.1's structured
+outcome/error contract.
+
+**Two verbs, not one — *set* vs. *reveal*.** *present-in-context* (above / §4.1) opens the book, sets the
+highlight set, and scrolls to the anchor. A separate **reveal / go-to-anchor** verb moves the viewport to an
+anchor in the **already-open** book while **preserving its current custom highlights** — no re-open, no
+re-highlight. Its target is either a placed highlight (by index/id in the set the agent set) or a fresh
+source-offset anchor. This is what makes a *walkthrough* cheap: the agent sets several colored highlights
+once, then steps the user's attention through them ("now scroll to the yellow passage") with lightweight
+reveal calls that never disturb what was placed. Keeping *reveal* distinct from *present* is the guarantee a
+walkthrough can't lose the highlights it just laid down mid-tour.
+
 ## 7. Why not MCP-first
 
 The token critique of MCP is real: a classic MCP server **front-loads every tool's schema** into context at
@@ -162,6 +234,19 @@ build, whatever tools it exposes. It can't drift from the running surface.
 - **Layered, curated (not a dump):** `GET /llms.txt` = overview + auth handshake + curated links;
   `GET /docs/{search,references,dictionary,navigation}.md` = deep detail pulled on demand; optional
   `/llms-full.txt` for one-shot ingestion. Mind the token budget — the index is read into context.
+- **Index-vs-monolith — for future evaluation.** The canonical `llms.txt` form is an *annotated index of
+  pointers* (token-efficient: an agent reads a lean map, then fetches only the `/docs/*` subset its task
+  needs — research vs remote-control, etc.). The **current served file is effectively `llms-full` under the
+  `llms.txt` name**: one self-contained doc. Keep it that way *for now* — the cold-agent tests showed the
+  self-contained file is exactly why fresh agents succeeded unaided (everything in one place, no missed
+  fetch), and at its current size a pointer index would add round-trips to save almost nothing. **Flip to
+  index + `/docs/*` subdocs when the file gets heavy** (the highlighting/token-offset §6.1 material and the
+  remote-control surface are what will tip it). Two guardrails when we do: (a) the pointer **annotations must
+  be strong enough to pick the right subdoc *without* fetching it** — a weak index makes a cheap agent either
+  flail or fetch everything, worse than the monolith; (b) **keep `llms-full.txt`** for agents that prefer one
+  gulp. Ideally the index, the `/docs/*` subdocs, and `llms-full.txt` are all **generated from one source**
+  (the single-source pipeline in §14) so they can't drift. The served `/docs/*` tree mirrors the human
+  `docs/` split (spine + per-surface specs).
 - **Especially necessary for CST:** the tools are unusable without domain orientation — the 14 scripts + **IPE
   encoding**, the **reference grammar** (Myanmar/PTS/VRI/Thai page + paragraph), the **book taxonomy**
   (mūla/aṭṭhakathā/ṭīkā, nikāya structure). This is its home.
@@ -270,7 +355,10 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
 
 - Exact tool/endpoint set and result shapes (paragraph granularity, hit offsets). *(Script of returned text:
   **decided** — romanized default with per-request `script` override; possible future preferred-script
-  setting. §11.)*
+  setting. §11. Highlight/anchor coordinate model: **decided** — source-offset coordinate space, tiered
+  cursor → source span → opt-in token offsets, `includeTokenOffsets` on occurrences + passage. §6.1.)*
+- Highlight-command residuals (§6.1): token granularity (word tokens; punctuation/danda not independently
+  addressable), and whether the surface-E command also accepts the content-addressed fallback from day one.
 - *(Local API default: **decided — off**; user opts in from Settings. §6.)*
 - *(Disambiguation: **decided — candidates back to the agent**, which asks its user; no app-side pick-list
   for API-initiated navigation. §4.1.)*
@@ -282,6 +370,18 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
   §11.1 already covers local runners), or stays cloud-first + local-runner.
 - Grounding/citation strategy to keep generated output faithful to the corpus (§11): how much context to
   retrieve, how citations are rendered, how translation presets constrain output.
+- **Cross-model / cross-harness validation — prerequisite before freezing doc shape + scaffolding level.**
+  All cold-agent validation so far is a **single cell** of the matrix: the Claude Code harness driving latest
+  Opus (a strong coding agent with shell + filesystem). That is the ceiling, not the median, and it risks
+  **in-family overfitting** — Claude writing docs that Claude then reads and rates well. The doc shape
+  (monolith vs pointer index, §8), how prescriptive `llms.txt` must be, and past calls like Latin-over-IPE are
+  really calibrated to the **weakest agent we intend to support**, so cross-model testing *sets* the spec
+  rather than confirming it. Test a small matrix — `{a non-Claude frontier model, a small/cheap model} ×
+  {coding agent, MCP chat client}` — watching four signals: **pointer discipline** (fetches the right
+  `/docs/*` or reads inline only → monolith vs index), **invention rate** (hallucinated endpoints/params →
+  how prescriptive the docs must be), **multi-step tool-loop hold** (`search → occurrences → passage`, or
+  collapse to one call + a guess), and **script compliance** (honors romanized default / `outputScript`).
+  Tracked in the cold-test plan (`docs/testing/LOCAL_API_COLD_TESTS.md`).
 
 ## 15. Related
 
@@ -316,3 +416,25 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
   agent-facing default confirmed**, per-request `script` override first, possible preferred-script setting
   later; **disambiguation resolves agent-side** (candidates returned, agent asks its user); planned
   **anchor catalog** — precomputed lookups of valid navigation targets, faster than parsing the data files.
+
+**2026-07-05 (fsnow + Opus 4.8)** — new **§6.1 highlight/anchor coordinate model**, worked out while
+watching cold-agent iteration 7 struggle with proximity. Key realizations, now decided:
+- The read surface hands the agent script-converted, markup-stripped prose plus one lonely `cursor`; the
+  forward render is lossy/one-way, so a rendered offset can't be mapped back to XML. Highlighting must live
+  in the **source-offset** space (what `cursor`/search offsets/the WebView highlighter already use), and
+  **every offset the agent hands back must have originated from us** — no invented coordinates.
+- **Tiered escalation**: `cursor` anchor+navigate (free today) → hit/snippet **source spans** (a few more
+  fields; today's `HitLength` is *rendered*, not source) → **`includeTokenOffsets`** opt-in token array
+  `[{ text, start, length }]` for word-level control. Flag lives on **both** occurrences and passage.
+- **Proximity forced it**: a multi-span hit can't be one `HitStart/HitLength`, so the snippet model becomes
+  an ordered `highlights: [{ start, length, isAnchor }]` (single-term = degenerate one-range case), and
+  occurrences accepts the multi-word/proximity query directly instead of round-tripping the `~`-composite
+  term through the single-term lookup. Implementation deferred pending the iteration-7 friction report.
+
+**2026-07-06 (fsnow)** — two surface-E additions to §6.1 after reviewing the branch:
+- **Per-highlight color** — each highlight range takes an optional `color` from a small NAMED palette (not
+  hex), so the agent can refer to a span *by its color* while narrating ("the compound in green") and the
+  app keeps control of contrast/dark-mode/accessibility. Presentational only; never affects coordinates.
+- **A distinct *reveal / go-to-anchor* verb** — jump the viewport to an anchor in an *already-open,
+  custom-highlighted* book **without** re-opening or clearing the highlights, so the agent can choreograph a
+  walkthrough (set colored highlights once, then step attention through them) without losing what it placed.
