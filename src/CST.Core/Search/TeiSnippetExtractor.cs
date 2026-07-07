@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 namespace CST.Search
 {
@@ -14,12 +16,34 @@ namespace CST.Search
     /// </summary>
     public static class TeiSnippetExtractor
     {
+        /// <summary>Single-term convenience overload — the degenerate one-mark case.</summary>
         public static SnippetResult Extract(string xml, int hitStart, int hitLength, BookMarkers markers, SnippetOptions opts)
-        {
-            hitStart = Math.Clamp(hitStart, 0, xml.Length);
-            int hitEnd = Math.Clamp(hitStart + hitLength, hitStart, xml.Length);
+            => Extract(xml, new[] { new SnippetMark(hitStart, hitStart + hitLength, true) }, markers, opts);
 
-            var (openIdx, pStart, pEnd, rend) = FindEnclosingP(xml, hitStart);
+        /// <summary>
+        /// Extract a snippet marking one or more spans (a single term, or the several co-occurring words of a
+        /// proximity/phrase hit). The window spans all marks; each mark's rendered range is reported in
+        /// snippet-local coordinates via <see cref="SnippetResult.Highlights"/>, exactly one flagged as the anchor.
+        /// </summary>
+        public static SnippetResult Extract(string xml, IReadOnlyList<SnippetMark> marks, BookMarkers markers, SnippetOptions opts)
+        {
+            // Clamp + sort marks; drop any that clamp to empty. Fall back to a zero-width mark at 0 if none remain.
+            var ms = marks
+                .Select(m =>
+                {
+                    int s = Math.Clamp(m.Start, 0, xml.Length);
+                    int e = Math.Clamp(m.End, s, xml.Length);
+                    return new SnippetMark(s, e, m.IsAnchor);
+                })
+                .OrderBy(m => m.Start).ThenBy(m => m.End)
+                .ToList();
+            if (ms.Count == 0) ms.Add(new SnippetMark(0, 0, true));
+
+            int spanStart = ms[0].Start;
+            int spanEnd = ms[ms.Count - 1].End;
+            var anchor = ms.FirstOrDefault(m => m.IsAnchor) ?? ms[0];
+
+            var (openIdx, pStart, pEnd, rend) = FindEnclosingP(xml, spanStart);
             if (pStart < 0) { openIdx = -1; pStart = 0; pEnd = xml.Length; rend = ""; }
 
             int winStart, winEnd;
@@ -29,22 +53,41 @@ namespace CST.Search
                 (winStart, winEnd) = VerseWindow(xml, openIdx, pStart, pEnd);
             else
                 (winStart, winEnd, ellipsisStart, ellipsisEnd) =
-                    ProseWindow(xml, pStart, pEnd, hitStart, hitEnd, opts);
+                    ProseWindow(xml, pStart, pEnd, spanStart, spanEnd, opts);
 
-            string before = TeiText.Collapse(TeiText.Convert(TeiText.Clean(xml, winStart, hitStart, opts.IncludeVariantReadings), opts.OutputScript));
-            string hit = TeiText.Convert(TeiText.Clean(xml, hitStart, hitEnd, opts.IncludeVariantReadings), opts.OutputScript).Trim();
-            string after = TeiText.Collapse(TeiText.Convert(TeiText.Clean(xml, hitEnd, winEnd, opts.IncludeVariantReadings), opts.OutputScript));
+            // Render as segments: prefix . before . [mark . gap]* . mark . after . suffix, tracking each mark's
+            // snippet-local start as the cumulative rendered length before it. Same length rule as the single-mark
+            // markStart, accumulated over the marks.
+            var sb = new StringBuilder();
+            var highlights = new List<SnippetHighlight>(ms.Count);
 
-            before = before.TrimStart();
-            after = after.TrimEnd();
-            string prefix = ellipsisStart ? "... " : "";
-            string suffix = ellipsisEnd ? " ..." : "";
+            sb.Append(ellipsisStart ? "... " : "");
+            sb.Append(TeiText.Collapse(TeiText.Convert(
+                TeiText.Clean(xml, winStart, ms[0].Start, opts.IncludeVariantReadings), opts.OutputScript)).TrimStart());
 
-            string snippet = prefix + before + hit + after + suffix;
-            int markStart = prefix.Length + before.Length;
+            for (int i = 0; i < ms.Count; i++)
+            {
+                string markText = TeiText.Convert(
+                    TeiText.Clean(xml, ms[i].Start, ms[i].End, opts.IncludeVariantReadings), opts.OutputScript).Trim();
+                highlights.Add(new SnippetHighlight(sb.Length, markText.Length, ms[i].IsAnchor));
+                sb.Append(markText);
 
-            var (num, code, pages) = markers.RefsAt(hitStart);
-            return new SnippetResult(snippet, markStart, hit.Length, num, code, pages, opts.IncludeVariantReadings);
+                if (i < ms.Count - 1)
+                {
+                    string gap = TeiText.Collapse(TeiText.Convert(
+                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, opts.IncludeVariantReadings), opts.OutputScript));
+                    sb.Append(gap.Length == 0 ? " " : gap); // never fuse two distinct marked words
+                }
+            }
+
+            sb.Append(TeiText.Collapse(TeiText.Convert(
+                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, opts.IncludeVariantReadings), opts.OutputScript)).TrimEnd());
+            sb.Append(ellipsisEnd ? " ..." : "");
+
+            var (num, code, pages) = markers.RefsAt(anchor.Start);
+            var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];
+            return new SnippetResult(
+                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeVariantReadings, highlights);
         }
 
         private static (int start, int end, bool ellStart, bool ellEnd) ProseWindow(

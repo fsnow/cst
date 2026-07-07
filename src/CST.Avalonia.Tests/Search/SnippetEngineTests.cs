@@ -1,3 +1,4 @@
+using System.Linq;
 using CST.Conversion;
 using CST.Navigation;
 using CST.Search;
@@ -68,6 +69,30 @@ namespace CST.Avalonia.Tests.Search
             var r = TeiSnippetExtractor.Extract(Prose, hs, 6, markers, Deva(min: 1));
 
             Assert.Equal("TARGET", r.Snippet.Substring(r.HitStart, r.HitLength));
+        }
+
+        [Fact]
+        public void Multi_mark_reports_each_span_with_a_single_anchor()
+        {
+            var markers = BookMarkers.Build(Prose);
+            int ddd = HitStart(Prose, "ddd");
+            int tgt = HitStart(Prose, "TARGET");
+            var marks = new[]
+            {
+                new SnippetMark(ddd, ddd + 3, true),    // anchor
+                new SnippetMark(tgt, tgt + 6, false),   // context (same sentence)
+            };
+            var r = TeiSnippetExtractor.Extract(Prose, marks, markers, Deva(min: 1));
+
+            Assert.Equal(2, r.Highlights.Count);
+            Assert.Equal(1, r.Highlights.Count(h => h.IsAnchor));
+            // each highlight's local range points at its own word
+            Assert.Equal("ddd", r.Snippet.Substring(r.Highlights[0].Start, r.Highlights[0].Length));
+            Assert.Equal("TARGET", r.Snippet.Substring(r.Highlights[1].Start, r.Highlights[1].Length));
+            // HitStart/HitLength mirror the anchor for continuity
+            var anchor = r.Highlights.Single(h => h.IsAnchor);
+            Assert.Equal(anchor.Start, r.HitStart);
+            Assert.Equal("ddd", r.Snippet.Substring(r.HitStart, r.HitLength));
         }
 
         [Fact]

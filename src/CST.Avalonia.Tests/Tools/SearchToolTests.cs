@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -176,6 +177,54 @@ namespace CST.Avalonia.Tests.Tools
                 Assert.Equal(book, o.BookId);
                 Assert.False(string.IsNullOrEmpty(o.BookName));
                 Assert.Equal(hit, o.Cursor);   // unique locator = the hit's char offset (for /v1/passage)
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task GetOccurrencesAsync_multiword_marks_each_cooccurring_word()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "cst-occ-mw-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                const string book = "s0101m.mul.xml";
+                string xml =
+                    "<body><div id=\"dn1\" type=\"book\">" +
+                    "<pb ed=\"V\" n=\"1.0003\"/>" +
+                    "<p rend=\"bodytext\" n=\"12\">aaa AVIJJA bbb ccc SANKHARA ddd\u0964</p>" +
+                    "</div></body>";
+                await File.WriteAllTextAsync(Path.Combine(dir, book), xml, Encoding.Unicode);
+
+                int a = xml.IndexOf("AVIJJA", StringComparison.Ordinal);
+                int sk = xml.IndexOf("SANKHARA", StringComparison.Ordinal);
+                // A proximity hit: two co-occurring words, the first flagged as the navigable anchor.
+                var hit = new List<TermPosition>
+                {
+                    new TermPosition { StartOffset = a, EndOffset = a + 6, IsFirstTerm = true, Word = "avijja" },
+                    new TermPosition { StartOffset = sk, EndOffset = sk + 8, IsFirstTerm = false, Word = "sankhara" },
+                };
+                var search = new Mock<ISearchService>();
+                search.Setup(s => s.GetMultiWordPositionsAsync(book, "avijja sankhara",
+                        It.IsAny<SearchMode>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new List<List<TermPosition>> { hit });
+
+                var tool = new SearchTool(search.Object, Settings(dir));
+                var occ = await tool.GetOccurrencesAsync(new OccurrenceRequest(
+                    book, "avijja sankhara", OutputScript: Script.Devanagari, MinChars: 1, ProximityDistance: 5));
+
+                var o = Assert.Single(occ);
+                Assert.Equal(2, o.Highlights.Count);
+                Assert.Equal(1, o.Highlights.Count(h => h.IsAnchor));   // exactly one navigable anchor
+                Assert.True(o.Highlights[0].IsAnchor);                  // AVIJJA (first by offset) is the anchor
+                // each highlight's snippet-local range points at its own word
+                Assert.Equal("AVIJJA", o.Snippet.Substring(o.Highlights[0].Start, o.Highlights[0].Length));
+                Assert.Equal("SANKHARA", o.Snippet.Substring(o.Highlights[1].Start, o.Highlights[1].Length));
+                // cursor is the anchor's SOURCE offset (for /v1/passage)
+                Assert.Equal(a, o.Cursor);
             }
             finally
             {

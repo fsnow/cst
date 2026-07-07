@@ -79,11 +79,18 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, proximityDistance?, outputScript? }`.
   Returns `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, truncated, note }`; when `truncated`
   is true (e.g. `maxTerms` was reached), `note` explains and more forms exist beyond the cap.
-- `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one term in one
-  book. Body: `{ bookId, term, includeVariantReadings?, outputScript?, skip?, take?, minChars?, maxChars? }`
-  where `term` is a `term` value from a prior `/v1/search`.
-  Each occurrence is `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedVariants, cursor }`.
-  `snippet` is hit-centered with the term at `[hitStart, hitStart+hitLength)`. Citation data is NESTED
+- `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one query in one
+  book. Body: `{ bookId, term, mode?, proximityDistance?, includeVariantReadings?, outputScript?, skip?, take?,
+  minChars?, maxChars? }`. `term` is EITHER a single `term` from a prior `/v1/search`, OR a MULTI-WORD /
+  PROXIMITY query - space-separated words that co-occur within `proximityDistance`, or a quoted run for an
+  adjacent phrase (`mode` expands wildcard/regex per word, same as `/v1/search`). This is how you read a
+  PROXIMITY search in context: its `~`-joined search `term` does NOT round-trip here, so pass the ORIGINAL
+  multi-word query instead.
+  Each occurrence is `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedVariants, cursor,
+  highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
+  offsets - `[{ start, length, isAnchor }]`: a single-term hit has one, a proximity/phrase hit has one PER
+  co-occurring word with exactly one `isAnchor:true` (the navigable word; the rest are the co-occurring
+  context). `hitStart`/`hitLength` mirror the anchor. Citation data is NESTED
   under `refs` (NOT top-level as on `/v1/passage`): `refs.paragraphNumber`, `refs.paragraphBookCode`
   (the Multi sub-book code, e.g. "kn17"), and `refs.pages[]` where each page is `{ edition, volume, number }`
   - e.g. `{ "edition": "Vri", "volume": 3, "number": 196 }`, conventionally cited "VRI 3:196" (edition
