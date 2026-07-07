@@ -94,9 +94,13 @@ namespace CST.Tools
         string BookName,
         int Count);
 
-    /// <summary>A request for a term's in-context occurrences within one book, paged.</summary>
-    /// <param name="Term">The term to locate, in any script (e.g. the romanized <c>Term</c> from a prior
-    /// search). Converted to the internal encoding for lookup — the caller never handles it.</param>
+    /// <summary>A request for a term's (or a multi-word/proximity query's) in-context occurrences within one book, paged.</summary>
+    /// <param name="Term">The query to locate, in any script. A single word (e.g. the romanized <c>Term</c> from a
+    /// prior search), OR a multi-word/proximity query — space-separated words co-occur within
+    /// <see cref="ProximityDistance"/>, a quoted run is an adjacent phrase. This is how a proximity hit is read in
+    /// context (its <c>~</c>-joined search term does not round-trip). Converted to the internal encoding for lookup.</param>
+    /// <param name="Mode">How to interpret <see cref="Term"/> — Exact / Wildcard / Regex (wildcard and regex expand per word).</param>
+    /// <param name="ProximityDistance">For a multi-word <see cref="Term"/>, the co-occurrence window in words.</param>
     /// <param name="MinChars">Prose snippet floor (rendered chars); null uses the engine default.</param>
     /// <param name="MaxChars">Prose snippet ceiling (rendered chars); null uses the engine default.</param>
     public sealed record OccurrenceRequest(
@@ -107,7 +111,9 @@ namespace CST.Tools
         int Skip = 0,
         int Take = 50,
         int? MinChars = null,
-        int? MaxChars = null);
+        int? MaxChars = null,
+        SearchToolMode Mode = SearchToolMode.Exact,
+        int ProximityDistance = 10);
 
     /// <summary>Citation refs at a hit: the paragraph (with Multi sub-book code) and the page in each edition.</summary>
     public sealed record OccurrenceRefs(
@@ -115,11 +121,18 @@ namespace CST.Tools
         string? ParagraphBookCode,
         IReadOnlyList<SnippetPageRef> Pages);
 
+    /// <summary>One marked span within a snippet, in snippet-local char offsets: <c>[Start, Start+Length)</c>.
+    /// A single-word hit has one; a proximity/phrase hit has one per matched word, exactly one with
+    /// <see cref="IsAnchor"/> (the navigable word — the others are the co-occurring context).</summary>
+    public sealed record OccurrenceHighlight(int Start, int Length, bool IsAnchor);
+
     /// <summary>
-    /// One occurrence of a term, shown in context: a hit-centered snippet (term at
-    /// <c>[HitStart, HitStart+HitLength)</c>, romanized) plus its citation refs.
+    /// One occurrence shown in context: a hit-centered snippet plus its citation refs. For a single term the
+    /// snippet marks one span; for a proximity/phrase hit it marks every co-occurring word, and
+    /// <see cref="Highlights"/> gives all of them (with the one anchor flagged). <see cref="HitStart"/>/
+    /// <see cref="HitLength"/> mirror the anchor for continuity.
     /// </summary>
-    /// <param name="Cursor">The hit's unique locator — pass it to <c>/v1/passage</c> as <c>cursor</c> to read
+    /// <param name="Cursor">The anchor's unique locator — pass it to <c>/v1/passage</c> as <c>cursor</c> to read
     /// the exact passage around <em>this</em> occurrence. (Paragraph numbers repeat within a book, so they are
     /// not a unique locator.)</param>
     public sealed record Occurrence(
@@ -130,5 +143,6 @@ namespace CST.Tools
         int HitLength,
         OccurrenceRefs Refs,
         bool IncludedVariants,
-        int Cursor);
+        int Cursor,
+        IReadOnlyList<OccurrenceHighlight> Highlights);
 }

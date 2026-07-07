@@ -23,8 +23,23 @@ namespace CST.Search
     public sealed record SnippetPageRef(PageEdition Edition, int Volume, int Number);
 
     /// <summary>
+    /// One matched span to mark in a snippet, as source-XML char offsets. <see cref="IsAnchor"/> flags the
+    /// single navigable span (the first unit of a proximity/phrase hit, or the lone term of a single-word hit);
+    /// the rest are context. Input to <see cref="TeiSnippetExtractor.Extract(string, IReadOnlyList{SnippetMark}, BookMarkers, SnippetOptions)"/>.
+    /// </summary>
+    public sealed record SnippetMark(int Start, int End, bool IsAnchor);
+
+    /// <summary>
+    /// One highlight within a rendered snippet, in SNIPPET-LOCAL char offsets (into <see cref="SnippetResult.Snippet"/>):
+    /// the span occupies <c>[Start, Start+Length)</c>. A single-term hit yields one; a proximity/phrase hit yields
+    /// one per matched word, exactly one of which has <see cref="IsAnchor"/> true.
+    /// </summary>
+    public sealed record SnippetHighlight(int Start, int Length, bool IsAnchor);
+
+    /// <summary>
     /// A rendered snippet plus the citation refs at the hit. <see cref="Snippet"/> is the concordance line
-    /// (term-centered, romanized); the matched term occupies <c>[HitStart, HitStart+HitLength)</c> within it.
+    /// (term-centered, romanized). <see cref="Highlights"/> is the ordered set of marked spans; for a single-term
+    /// hit it has one entry and <see cref="HitStart"/>/<see cref="HitLength"/> mirror the anchor for continuity.
     /// </summary>
     public sealed record SnippetResult(
         string Snippet,
@@ -33,5 +48,6 @@ namespace CST.Search
         int? ParagraphNumber,
         string? ParagraphBookCode,
         IReadOnlyList<SnippetPageRef> Pages,
-        bool IncludedVariants);
+        bool IncludedVariants,
+        IReadOnlyList<SnippetHighlight> Highlights);
 }

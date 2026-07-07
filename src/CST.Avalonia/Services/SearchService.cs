@@ -867,6 +867,81 @@ public class SearchService : ISearchService
         }
     }
 
+    /// <summary>
+    /// Book-scoped multi-word / proximity hits — the book-scoped sibling of <see cref="GetTermPositionsAsync"/>
+    /// for reading a multi-word search in context (AI_INTEGRATION.md §6.1). Reuses the pure matcher
+    /// (<see cref="MultiWordSearch"/>) over positions gathered for one book only.
+    /// </summary>
+    public Task<List<List<TermPosition>>> GetMultiWordPositionsAsync(
+        string bookFileName, string query, SearchMode mode, int proximityDistance, CancellationToken cancellationToken = default)
+    {
+        var empty = new List<List<TermPosition>>();
+        DirectoryReader? reader = null;
+        try
+        {
+            reader = AcquireReader();
+            var book = Books.Inst.FirstOrDefault(b =>
+                string.Equals(b.FileName, bookFileName, StringComparison.OrdinalIgnoreCase));
+            if (book == null || book.DocId < 0) return Task.FromResult(empty);
+            int docId = book.DocId;
+            var liveDocs = MultiFields.GetLiveDocs(reader);
+
+            // Same query normalization as SearchAsync: strip pasted joiners, collapse spaces, normalize quotes.
+            var ipe = Any2Ipe.Convert(MultiWordSearch.StripJoiners(query ?? string.Empty));
+            ipe = ipe.Replace("  ", " ").Trim().Replace("\u201C", "\"").Replace("\u201D", "\"");
+            var units = MultiWordSearch.ParseUnits(ipe);
+            if (units.Count == 0) return Task.FromResult(empty);
+
+            var unitOccurrences = new List<List<UnitOccurrence>>(units.Count);
+            foreach (var unit in units)
+            {
+                var wordSlots = new List<TermPosition>[unit.Words.Count];
+                for (int s = 0; s < unit.Words.Count; s++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var w = unit.Words[s];
+                    List<string> expansions =
+                        mode == SearchMode.Wildcard && (w.Contains('*') || w.Contains('?')) ? ExpandWildcard(w, reader, out _)
+                        : mode == SearchMode.Regex ? ExpandRegex(w, reader, out _)
+                        : new List<string> { w };
+
+                    var positions = new List<TermPosition>();
+                    foreach (var term in expansions)
+                    {
+                        var dape = MultiFields.GetTermPositionsEnum(reader, liveDocs, "text",
+                            new BytesRef(Encoding.UTF8.GetBytes(term)));
+                        if (dape == null || dape.Advance(docId) != docId) continue;
+                        int freq = dape.Freq;
+                        for (int i = 0; i < freq; i++)
+                        {
+                            int pos = dape.NextPosition();
+                            int so = dape.StartOffset, eo = dape.EndOffset;
+                            if (so < 0 || eo <= so) continue;
+                            positions.Add(new TermPosition { Position = pos, StartOffset = so, EndOffset = eo, Word = term });
+                        }
+                    }
+                    if (positions.Count == 0) return Task.FromResult(empty); // a slot unmatched in this book -> no hits
+                    positions.Sort();
+                    wordSlots[s] = positions;
+                }
+                var occs = MultiWordSearch.FindUnitOccurrences(wordSlots);
+                if (occs.Count == 0) return Task.FromResult(empty);
+                unitOccurrences.Add(occs);
+            }
+
+            return Task.FromResult(MultiWordSearch.FindHits(unitOccurrences, proximityDistance));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get multi-word positions for book: {Book}, query: {Query}", bookFileName, query);
+            throw;
+        }
+        finally
+        {
+            reader?.DecRef();
+        }
+    }
+
     private BitArray CalculateBookBits(BookFilter filter, Books books)
     {
         int bookCount = books.Count;

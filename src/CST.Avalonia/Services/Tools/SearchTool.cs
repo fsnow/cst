@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
+using CST.Avalonia.Search;
 using CST.Conversion;
 using CST.Search;
 using CST.Tools;
@@ -82,14 +83,36 @@ namespace CST.Avalonia.Services.Tools
         public async Task<IReadOnlyList<Occurrence>> GetOccurrencesAsync(
             OccurrenceRequest request, CancellationToken ct = default)
         {
-            var positions = await _search.GetTermPositionsAsync(request.BookId, request.Term, ct)
-                .ConfigureAwait(false);
-            if (positions.Count == 0) return Array.Empty<Occurrence>();
-
             var dir = _settings.Settings?.XmlBooksDirectory;
             if (string.IsNullOrEmpty(dir)) return Array.Empty<Occurrence>();
             var path = Path.Combine(dir, request.BookId);
             if (!File.Exists(path)) return Array.Empty<Occurrence>();
+
+            // Route: a quoted phrase or 2+ space-separated units => proximity/phrase (each occurrence is a set of
+            // co-occurring words); else a single term (each occurrence is one word). This is the bridge a
+            // proximity search needs — its ~-joined term does not round-trip. (AI_INTEGRATION.md §6.1)
+            var units = MultiWordSearch.ParseUnits(request.Term ?? string.Empty);
+            bool multiWord = units.Count > 1 || (units.Count == 1 && units[0].IsPhrase);
+
+            List<List<SnippetMark>> perOccurrence;
+            if (multiWord)
+            {
+                var hits = await _search.GetMultiWordPositionsAsync(
+                    request.BookId, request.Term ?? string.Empty, MapMode(request.Mode), request.ProximityDistance, ct).ConfigureAwait(false);
+                perOccurrence = hits
+                    .Select(h => h.Select(tp => new SnippetMark(tp.StartOffset, tp.EndOffset, tp.IsFirstTerm)).ToList())
+                    .OrderBy(AnchorStart)
+                    .ToList();
+            }
+            else
+            {
+                var positions = await _search.GetTermPositionsAsync(request.BookId, request.Term ?? string.Empty, ct).ConfigureAwait(false);
+                perOccurrence = positions
+                    .OrderBy(p => p.StartOffset)
+                    .Select(p => new List<SnippetMark> { new SnippetMark(p.StartOffset, p.EndOffset, true) })
+                    .ToList();
+            }
+            if (perOccurrence.Count == 0) return Array.Empty<Occurrence>();
 
             // Char offsets index the decoded (BOM-stripped) UTF-16 text — read it the same way.
             string xml = await File.ReadAllTextAsync(path, Encoding.Unicode, ct).ConfigureAwait(false);
@@ -107,10 +130,10 @@ namespace CST.Avalonia.Services.Tools
             string bookName = ScriptConverter.Convert(rawBookName, Script.Devanagari, request.OutputScript);
 
             var occurrences = new List<Occurrence>();
-            foreach (var p in positions.OrderBy(p => p.StartOffset).Skip(request.Skip).Take(request.Take))
+            foreach (var marks in perOccurrence.Skip(request.Skip).Take(request.Take))
             {
                 ct.ThrowIfCancellationRequested();
-                var s = TeiSnippetExtractor.Extract(xml, p.StartOffset, p.EndOffset - p.StartOffset, markers, opts);
+                var s = TeiSnippetExtractor.Extract(xml, marks, markers, opts);
                 occurrences.Add(new Occurrence(
                     BookId: request.BookId,
                     BookName: bookName,
@@ -119,11 +142,19 @@ namespace CST.Avalonia.Services.Tools
                     HitLength: s.HitLength,
                     Refs: new OccurrenceRefs(s.ParagraphNumber, s.ParagraphBookCode, s.Pages),
                     IncludedVariants: s.IncludedVariants,
-                    // The hit's char offset — a unique locator to read the exact passage via /v1/passage
+                    // The anchor's char offset — a unique locator to read the exact passage via /v1/passage
                     // (paragraph numbers repeat within a book). (#186 cold test)
-                    Cursor: p.StartOffset));
+                    Cursor: AnchorStart(marks),
+                    Highlights: s.Highlights
+                        .Select(h => new OccurrenceHighlight(h.Start, h.Length, h.IsAnchor)).ToList()));
             }
             return occurrences;
+
+            static int AnchorStart(List<SnippetMark> m)
+            {
+                var a = m.FirstOrDefault(x => x.IsAnchor);
+                return a?.Start ?? (m.Count > 0 ? m[0].Start : 0);
+            }
         }
 
         private static SearchMode MapMode(SearchToolMode mode) => mode switch
