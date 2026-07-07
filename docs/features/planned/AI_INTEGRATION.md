@@ -177,11 +177,27 @@ occurrences accepts the multi-word/proximity query (spaces = units, quotes = phr
 window) and returns one occurrence per window with the full highlight set and the anchor `cursor`.
 
 **Surface-E command** (E) then takes a highlight/anchor request in **source coordinates** —
-`{ book, ranges: [{ start, length }], anchor: <index into ranges> }` — fed only by offsets from tiers 1–3.
+`{ book, ranges: [{ start, length, color? }], anchor: <index into ranges> }` — fed only by offsets from
+tiers 1–3. Each range may carry an optional **`color` from a small NAMED palette** (e.g. yellow / green /
+blue / pink / orange), not raw hex: the app owns the actual rendering (contrast, dark mode, accessibility),
+and — the point — the agent can then refer to a span **by its color** while narrating ("the compound
+highlighted in green"), giving the user a shared visual vocabulary for the walkthrough. Defaults follow the
+house convention (the anchor-vs-context blue/green of search highlighting); a walkthrough overrides per range.
+Color is presentational only — it never touches the source-offset coordinates. (Color alone can fail
+color-blind users, so the agent should still cite by paragraph/position too.)
 A **content-addressed** fallback ("highlight term T in paragraph P, anchor the first") is worth keeping for
 when the agent never fetched offsets: the app resolves it exactly like search, fully script-independent, no
 offset math — less flexible (only findable spans) but bulletproof. This composes with §4.1's structured
 outcome/error contract.
+
+**Two verbs, not one — *set* vs. *reveal*.** *present-in-context* (above / §4.1) opens the book, sets the
+highlight set, and scrolls to the anchor. A separate **reveal / go-to-anchor** verb moves the viewport to an
+anchor in the **already-open** book while **preserving its current custom highlights** — no re-open, no
+re-highlight. Its target is either a placed highlight (by index/id in the set the agent set) or a fresh
+source-offset anchor. This is what makes a *walkthrough* cheap: the agent sets several colored highlights
+once, then steps the user's attention through them ("now scroll to the yellow passage") with lightweight
+reveal calls that never disturb what was placed. Keeping *reveal* distinct from *present* is the guarantee a
+walkthrough can't lose the highlights it just laid down mid-tour.
 
 ## 7. Why not MCP-first
 
@@ -414,3 +430,11 @@ watching cold-agent iteration 7 struggle with proximity. Key realizations, now d
   an ordered `highlights: [{ start, length, isAnchor }]` (single-term = degenerate one-range case), and
   occurrences accepts the multi-word/proximity query directly instead of round-tripping the `~`-composite
   term through the single-term lookup. Implementation deferred pending the iteration-7 friction report.
+
+**2026-07-06 (fsnow)** — two surface-E additions to §6.1 after reviewing the branch:
+- **Per-highlight color** — each highlight range takes an optional `color` from a small NAMED palette (not
+  hex), so the agent can refer to a span *by its color* while narrating ("the compound in green") and the
+  app keeps control of contrast/dark-mode/accessibility. Presentational only; never affects coordinates.
+- **A distinct *reveal / go-to-anchor* verb** — jump the viewport to an anchor in an *already-open,
+  custom-highlighted* book **without** re-opening or clearing the highlights, so the agent can choreograph a
+  walkthrough (set colored highlights once, then step attention through them) without losing what it placed.
