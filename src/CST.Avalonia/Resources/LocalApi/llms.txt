@@ -41,6 +41,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   script-converted to your `outputScript`): `sya`=Thai (Syama), `si`=Sinhala, `kam`/`ka`=Cambodian, `pi`=PTS.
   These are digitized print footnotes - mostly variant readings, but also editorial notes and cross-refs, with
   NO structural type marker, so any "variant vs footnote" split is your interpretation, not the data's.
+  LAYER: apparatus lives almost entirely in MULA (root) texts; the ATTHAKATHA and TIKA (commentary /
+  sub-commentary) layers carry NONE. So `includeVariantReadings` on a commentary is always empty - expected,
+  not a bug (and a commentary-restricted search will never surface variants).
 - Terminology: when writing about the texts, call them "Pali", "the Tipitaka", or "VRI texts".
 
 ## Endpoints
@@ -85,7 +88,8 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   PROXIMITY query - space-separated words that co-occur within `proximityDistance`, or a quoted run for an
   adjacent phrase (`mode` expands wildcard/regex per word, same as `/v1/search`). This is how you read a
   PROXIMITY search in context: its `~`-joined search `term` does NOT round-trip here, so pass the ORIGINAL
-  multi-word query instead.
+  multi-word query instead. Words match LITERALLY (as in search), so reuse the SAME wildcards you searched
+  with - a bare `avijja` will miss the sandhi forms `avijjaya`/`avijjapaccaya`, whereas `avijj*` catches them.
   Each occurrence is `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedVariants, cursor,
   highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
   offsets - `[{ start, length, isAnchor }]`: a single-term hit has one, a proximity/phrase hit has one PER
