@@ -68,15 +68,55 @@ namespace CST.Avalonia.Tests.Tools
             await tool.SearchAsync(new SearchToolRequest(
                 "dhamma", SearchToolMode.Wildcard,
                 new ToolBookFilter(Sutta: true, Abhidhamma: false),
-                MaxTerms: 42, ProximityDistance: 3));
+                MaxTerms: 42, ProximityDistance: 3, Skip: 7));
 
             Assert.NotNull(captured);
             Assert.Equal("dhamma", captured!.QueryText);
             Assert.Equal(SearchMode.Wildcard, captured.Mode);
             Assert.Equal(42, captured.PageSize);
+            Assert.Equal(7, captured.Skip);
             Assert.Equal(3, captured.ProximityDistance);
             Assert.True(captured.Filter.IncludeSutta);
             Assert.False(captured.Filter.IncludeAbhidhamma);
+        }
+
+        [Fact]
+        public async Task SearchAsync_books_opt_in_bookCount_and_hasMore_always_present()
+        {
+            var book1 = new Book { FileName = "s0101m.mul.xml", LongNavPath = "\u0938" };
+            var book2 = new Book { FileName = "s0102m.mul.xml", LongNavPath = "\u0938" };
+            var searchResult = new SearchResult
+            {
+                Terms = new List<MatchingTerm>
+                {
+                    new MatchingTerm
+                    {
+                        Term = "abc", TotalCount = 10,
+                        Occurrences = new List<BookOccurrence>
+                        {
+                            new BookOccurrence { Book = book1, Count = 6 },
+                            new BookOccurrence { Book = book2, Count = 4 },
+                        }
+                    }
+                },
+                TotalTermCount = 1, TotalOccurrenceCount = 10, TotalBookCount = 2,
+                HasMore = true
+            };
+            var mock = new Mock<ISearchService>();
+            mock.Setup(s => s.SearchAsync(It.IsAny<SearchQuery>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            var tool = new SearchTool(mock.Object, Settings());
+
+            // Default: the per-book breakdown is omitted, but bookCount and hasMore are always present.
+            var lean = await tool.SearchAsync(new SearchToolRequest("q"));
+            var t = Assert.Single(lean.Terms);
+            Assert.Empty(t.Books);
+            Assert.Equal(2, t.BookCount);
+            Assert.True(lean.HasMore);
+
+            // Opt in: the full per-book breakdown comes back.
+            var full = await tool.SearchAsync(new SearchToolRequest("q", IncludeBooks: true));
+            Assert.Equal(2, Assert.Single(full.Terms).Books.Count);
         }
 
         [Fact]
@@ -87,7 +127,8 @@ namespace CST.Avalonia.Tests.Tools
                 .ReturnsAsync(OneTermResult(out var book));
 
             var tool = new SearchTool(mock.Object, Settings());
-            var result = await tool.SearchAsync(new SearchToolRequest("q")); // OutputScript defaults to Latin
+            // OutputScript defaults to Latin; opt into the per-book breakdown to verify bookName romanization.
+            var result = await tool.SearchAsync(new SearchToolRequest("q", IncludeBooks: true));
 
             Assert.Equal(1, result.TotalTermCount);
             Assert.True(result.Truncated);

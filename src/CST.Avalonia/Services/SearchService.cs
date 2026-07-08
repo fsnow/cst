@@ -182,15 +182,16 @@ public class SearchService : ISearchService
         
         _logger.LogInformation("Using {Mode} matcher for IPE term: '{IpeTerm}'", query.Mode, ipeTerm);
 
-        // Get all matching terms
-        var matchingTerms = await GetMatchingTermsAsync(reader, termMatcher, cancellationToken);
+        // Lazily enumerate matching terms (IPE-ordinal order); the budget below stops the enumeration early.
+        var matchingTerms = GetMatchingTerms(reader, termMatcher, cancellationToken);
 
-        // Apply the page budget to terms that SURVIVE the book filter. Truncating matchingTerms up
+        // Apply the page budget (Skip + PageSize) to terms that SURVIVE the book filter. Truncating up
         // front (before checking occurrences) spent the budget on terms not in the selected books, dropping
         // legitimate results past the page size when the filter was narrow. (SRCH-12)
         var conversionStopwatch = Stopwatch.StartNew();
-        var (selectedTerms, totalOccurrences, truncated) = await SelectTermsWithinBudgetAsync(
+        var (selectedTerms, totalOccurrences, hasMore) = await SelectTermsWithinBudgetAsync(
             matchingTerms,
+            query.Skip,
             query.PageSize,
             term => GetTermOccurrencesAsync(reader, term, bookBits, books, cancellationToken),
             ConvertToDisplayScript,
@@ -199,7 +200,9 @@ public class SearchService : ISearchService
 
         result.Terms.AddRange(selectedTerms);
         result.TotalOccurrenceCount += totalOccurrences;
-        if (truncated)
+        result.HasMore = hasMore;
+        // Keep the UI's "showing the first N" message for the first page (Skip == 0); the API pages via HasMore.
+        if (hasMore && query.Skip == 0)
         {
             result.ResultsTruncated = true;
             result.TruncationMessage = $"Showing the first {query.PageSize:N0} matching words \u2014 refine your search to narrow the results.";
@@ -220,8 +223,9 @@ public class SearchService : ISearchService
     /// drop legitimate terms past the page size (SRCH-12). Returns the built terms, their total occurrence
     /// count, and whether a filter-surviving term was left off the page.
     /// </summary>
-    internal static async Task<(List<MatchingTerm> terms, int totalOccurrences, bool truncated)> SelectTermsWithinBudgetAsync(
-        IReadOnlyList<string> matchingTerms,
+    internal static async Task<(List<MatchingTerm> terms, int totalOccurrences, bool hasMore)> SelectTermsWithinBudgetAsync(
+        IEnumerable<string> matchingTerms,
+        int skip,
         int pageSize,
         Func<string, Task<List<BookOccurrence>>> getOccurrences,
         Func<string, string> toDisplay,
@@ -229,6 +233,7 @@ public class SearchService : ISearchService
     {
         var terms = new List<MatchingTerm>();
         int totalOccurrences = 0;
+        int survivorsSeen = 0;   // filter-surviving terms seen so far - drives both skip and the hasMore (N+1) test
 
         foreach (var term in matchingTerms)
         {
@@ -236,10 +241,14 @@ public class SearchService : ISearchService
 
             var occurrences = await getOccurrences(term).ConfigureAwait(false);
             if (occurrences.Count == 0)
-                continue; // not in the selected books - doesn't count toward the page budget
+                continue; // not in the selected books - doesn't survive the filter, doesn't count toward the page
+
+            survivorsSeen++;
+            if (survivorsSeen <= skip)
+                continue; // before the requested page
 
             if (terms.Count >= pageSize)
-                return (terms, totalOccurrences, true); // a filter-surviving term exists beyond the page
+                return (terms, totalOccurrences, true); // a filter-surviving term exists AFTER the page -> hasMore
 
             var totalCount = occurrences.Sum(o => o.Count);
             terms.Add(new MatchingTerm
@@ -576,31 +585,27 @@ public class SearchService : ISearchService
         return occurrences;
     }
 
-    private async Task<List<string>> GetMatchingTermsAsync(
+    // Lazily yield every index term matching the pattern, in index (IPE-ordinal) order. LAZY so that paging
+    // over a very broad pattern (e.g. a `.*` regex matching ~500k terms) stops enumerating as soon as the page
+    // is filled, instead of materializing the whole match set. There is NO term cap here — the page budget
+    // (Skip + PageSize) bounds the result and the agent pages via HasMore. (The 5,000-form
+    // WildcardExpansionLimit is a separate UI-latency bound on multi-word slot expansion, not on this path.)
+    private static IEnumerable<string> GetMatchingTerms(
         DirectoryReader reader,
         ITermMatcher matcher,
         CancellationToken cancellationToken)
     {
-        var matchingTerms = new List<string>();
-        var fields = MultiFields.GetFields(reader);
-        var terms = fields.GetTerms("text");
-        
-        if (terms == null) return matchingTerms;
-        
-        var termsEnum = terms.GetEnumerator();
+        var terms = MultiFields.GetFields(reader)?.GetTerms("text");
+        if (terms == null) yield break;
 
+        var termsEnum = terms.GetEnumerator();
         while (termsEnum.MoveNext())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            
             var term = termsEnum.Term.Utf8ToString();
             if (matcher.Matches(term))
-            {
-                matchingTerms.Add(term);
-            }
+                yield return term;
         }
-
-        return matchingTerms;
     }
 
     /// <summary>
