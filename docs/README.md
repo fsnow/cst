@@ -90,10 +90,12 @@ Exploratory research and investigations:
 - [Alternative Rendering Engines](research/ALTERNATIVE_RENDERING_ENGINES.md) - Comparison of rendering approaches
 - [Browser Embedding Options](research/BROWSER_EMBEDDING_OPTIONS.md) - WebView alternatives
 - [Button-Based Float Approach](research/BUTTON_BASED_FLOAT_APPROACH.md) - Manual float/unfloat to prevent CEF crashes
+- [DPD Dictionary Integration Spike](research/DPD_DICTIONARY_INTEGRATION_SPIKE.md) - #109 third-party dictionary support: DPD + external-dictionary import format
 - [Git Integration](research/GIT_INTEGRATION.md) - Git-based features
 - [MAUI Blazor POC Plan](research/MAUI_BLAZOR_POC_PLAN.md) - Cross-platform proof of concept planning
 - [MAUI Blazor POC Results](research/MAUI_BLAZOR_POC_RESULTS.md) - POC findings and conclusions
 - [Rendering Requirements](research/RENDERING_REQUIREMENTS.md) - Content rendering needs analysis
+- [Search Index Shrink Spike](research/SEARCH_INDEX_SHRINK_SPIKE.md) - #55 dropping redundant term vectors / norms / payloads (~135 MB → ~75 MB)
 - [Strategic Technology Options](research/STRATEGIC_TECHNOLOGY_OPTIONS.md) - Technology direction evaluation
 
 ### 📚 **reference/** - Reference Materials
