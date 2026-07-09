@@ -182,20 +182,28 @@ public class SearchService : ISearchService
         
         _logger.LogInformation("Using {Mode} matcher for IPE term: '{IpeTerm}'", query.Mode, ipeTerm);
 
-        // Lazily enumerate matching terms (IPE-ordinal order); the budget below stops the enumeration early.
-        var matchingTerms = GetMatchingTerms(reader, termMatcher, cancellationToken);
-
-        // Apply the page budget (Skip + PageSize) to terms that SURVIVE the book filter. Truncating up
-        // front (before checking occurrences) spent the budget on terms not in the selected books, dropping
-        // legitimate results past the page size when the filter was narrow. (SRCH-12)
+        // Apply the page budget (Skip + PageSize). FAST PATH: when no book filter is applied and the caller
+        // wants counts only (no per-book breakdown), take each term's total-count and book-count straight from
+        // the index (TotalTermFreq/DocFreq) and NEVER read postings. Otherwise walk the filter survivors,
+        // computing per-book occurrences. (SRCH-12: apply the budget to filter survivors, not raw matches.)
         var conversionStopwatch = Stopwatch.StartNew();
-        var (selectedTerms, totalOccurrences, hasMore) = await SelectTermsWithinBudgetAsync(
-            matchingTerms,
-            query.Skip,
-            query.PageSize,
-            term => GetTermOccurrencesAsync(reader, term, bookBits, books, cancellationToken),
-            ConvertToDisplayScript,
-            cancellationToken);
+        List<MatchingTerm> selectedTerms;
+        int totalOccurrences;
+        bool hasMore;
+        if (query.CountsOnly && IsUnfiltered(query.Filter))
+        {
+            (selectedTerms, totalOccurrences, hasMore) = SelectTermsCountsOnly(
+                GetMatchingTermStats(reader, termMatcher, cancellationToken),
+                query.Skip, query.PageSize, ConvertToDisplayScript, cancellationToken);
+        }
+        else
+        {
+            (selectedTerms, totalOccurrences, hasMore) = await SelectTermsWithinBudgetAsync(
+                GetMatchingTerms(reader, termMatcher, cancellationToken),
+                query.Skip, query.PageSize,
+                term => GetTermOccurrencesAsync(reader, term, bookBits, books, cancellationToken),
+                ConvertToDisplayScript, cancellationToken);
+        }
         conversionStopwatch.Stop();
 
         result.Terms.AddRange(selectedTerms);
@@ -607,6 +615,72 @@ public class SearchService : ISearchService
             if (matcher.Matches(term))
                 yield return term;
         }
+    }
+
+    // Term identity plus its cheap index statistics (no postings read): DocFreq = number of books the term
+    // occurs in, TotalTermFreq = its total occurrences across the corpus.
+    private readonly record struct TermStat(string Term, int DocFreq, long TotalTermFreq);
+
+    // Like GetMatchingTerms, but also yields each term's DocFreq/TotalTermFreq - both available straight off the
+    // terms enumerator, without touching postings. Backs the counts-only fast path.
+    private static IEnumerable<TermStat> GetMatchingTermStats(
+        DirectoryReader reader,
+        ITermMatcher matcher,
+        CancellationToken cancellationToken)
+    {
+        var terms = MultiFields.GetFields(reader)?.GetTerms("text");
+        if (terms == null) yield break;
+
+        var termsEnum = terms.GetEnumerator();
+        while (termsEnum.MoveNext())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var term = termsEnum.Term.Utf8ToString();
+            if (matcher.Matches(term))
+                yield return new TermStat(term, termsEnum.DocFreq, termsEnum.TotalTermFreq);
+        }
+    }
+
+    // All books included => no restriction => the counts-only fast path is safe (every matching term survives).
+    private static bool IsUnfiltered(BookFilter f) =>
+        f.IncludeVinaya && f.IncludeSutta && f.IncludeAbhidhamma &&
+        f.IncludeMula && f.IncludeAttha && f.IncludeTika && f.IncludeOther;
+
+    // Counts-only page budget: page over matching terms using ONLY their index stats (no postings, no per-book
+    // Occurrences). Mirrors SelectTermsWithinBudgetAsync's skip/hasMore (fetch-N+1) semantics; there is no
+    // filter, so every matching term is a survivor.
+    private static (List<MatchingTerm> terms, int totalOccurrences, bool hasMore) SelectTermsCountsOnly(
+        IEnumerable<TermStat> stats,
+        int skip,
+        int pageSize,
+        Func<string, string> toDisplay,
+        CancellationToken cancellationToken)
+    {
+        var terms = new List<MatchingTerm>();
+        long totalOccurrences = 0;
+        int seen = 0;
+
+        foreach (var s in stats)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            seen++;
+            if (seen <= skip)
+                continue;
+            if (terms.Count >= pageSize)
+                return (terms, (int)totalOccurrences, true);   // one more term exists after the page -> hasMore
+
+            terms.Add(new MatchingTerm
+            {
+                Term = s.Term,
+                DisplayTerm = toDisplay(s.Term),
+                TotalCount = (int)s.TotalTermFreq,
+                BookCount = s.DocFreq
+                // Occurrences intentionally empty on the counts-only path.
+            });
+            totalOccurrences += s.TotalTermFreq;
+        }
+
+        return (terms, (int)totalOccurrences, false);
     }
 
     /// <summary>
@@ -1045,6 +1119,14 @@ public class SearchService : ISearchService
         // Proximity distance affects multi-word results, so it must be part of the key —
         // otherwise changing the Word Distance and re-running returns the stale cached result.
         sb.Append(query.ProximityDistance);
+        sb.Append('|');
+        // The page window and the counts-only projection change the result, so they are part of its identity -
+        // otherwise paging (Skip += PageSize) would keep returning the cached FIRST page under the same key.
+        sb.Append(query.Skip);
+        sb.Append('/');
+        sb.Append(query.PageSize);
+        sb.Append('/');
+        sb.Append(query.CountsOnly);
         sb.Append('|');
         sb.Append(query.Filter.IncludeVinaya);
         sb.Append(query.Filter.IncludeSutta);

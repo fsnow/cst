@@ -39,6 +39,9 @@ namespace CST.Avalonia.Services.Tools
                 Mode = MapMode(request.Mode),
                 PageSize = request.MaxTerms,
                 Skip = request.Skip,
+                // No per-book breakdown requested => let the engine take counts straight from the index (no
+                // postings) when the search is also unfiltered.
+                CountsOnly = !request.IncludeBooks,
                 ProximityDistance = request.ProximityDistance,
                 Filter = MapFilter(request.Filter)
                 // IsPhrase / IsMultiWord are derived by SearchService from the query text.
@@ -57,7 +60,9 @@ namespace CST.Avalonia.Services.Tools
                         BookName: ScriptConverter.Convert(o.Book?.LongNavPath ?? string.Empty, Script.Devanagari, request.OutputScript),
                         Count: o.Count)).ToList()
                     : (IReadOnlyList<BookHitSummary>)Array.Empty<BookHitSummary>(),
-                BookCount: t.Occurrences.Count)).ToList();
+                // Counts-only path sets BookCount from the index (Occurrences empty); the postings path leaves
+                // BookCount 0, so fall back to the per-book count it computed.
+                BookCount: t.BookCount > 0 ? t.BookCount : t.Occurrences.Count)).ToList();
 
             // Guard the silent-empty footgun: '*'/'?' are literal outside Wildcard mode, so an Exact query
             // containing them matches no term and returns [] with no hint. Surface it in the note. (#186 cold test)
