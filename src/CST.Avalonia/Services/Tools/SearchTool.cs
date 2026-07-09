@@ -38,6 +38,7 @@ namespace CST.Avalonia.Services.Tools
                 QueryText = request.Query ?? string.Empty,
                 Mode = MapMode(request.Mode),
                 PageSize = request.MaxTerms,
+                Skip = request.Skip,
                 ProximityDistance = request.ProximityDistance,
                 Filter = MapFilter(request.Filter)
                 // IsPhrase / IsMultiWord are derived by SearchService from the query text.
@@ -48,11 +49,15 @@ namespace CST.Avalonia.Services.Tools
             var terms = result.Terms.Select(t => new SearchTermResult(
                 Term: ScriptConverter.Convert(t.Term, Script.Ipe, request.OutputScript),
                 TotalCount: t.TotalCount,
-                Books: t.Occurrences.Select(o => new BookHitSummary(
-                    BookId: o.Book?.FileName ?? string.Empty,
-                    // Nav paths are stored Devanagari; romanize to the requested script like everything else. (#186 cold test)
-                    BookName: ScriptConverter.Convert(o.Book?.LongNavPath ?? string.Empty, Script.Devanagari, request.OutputScript),
-                    Count: o.Count)).ToList())).ToList();
+                // Per-book breakdown is opt-in (it's the payload weight); bookCount is always cheap to include.
+                Books: request.IncludeBooks
+                    ? t.Occurrences.Select(o => new BookHitSummary(
+                        BookId: o.Book?.FileName ?? string.Empty,
+                        // Nav paths are stored Devanagari; romanize to the requested script like everything else. (#186 cold test)
+                        BookName: ScriptConverter.Convert(o.Book?.LongNavPath ?? string.Empty, Script.Devanagari, request.OutputScript),
+                        Count: o.Count)).ToList()
+                    : (IReadOnlyList<BookHitSummary>)Array.Empty<BookHitSummary>(),
+                BookCount: t.Occurrences.Count)).ToList();
 
             // Guard the silent-empty footgun: '*'/'?' are literal outside Wildcard mode, so an Exact query
             // containing them matches no term and returns [] with no hint. Surface it in the note. (#186 cold test)
@@ -68,6 +73,7 @@ namespace CST.Avalonia.Services.Tools
                 TotalOccurrenceCount: result.TotalOccurrenceCount,
                 TotalBookCount: result.TotalBookCount,
                 Truncated: result.ResultsTruncated,
+                HasMore: result.HasMore,
                 Note: modeNote ?? result.TruncationMessage);
         }
 

@@ -29,6 +29,9 @@ public class SearchQuery
     public SearchMode Mode { get; set; } = SearchMode.Exact;
     public BookFilter Filter { get; set; } = new BookFilter();
     public int PageSize { get; set; } = 100;
+    /// <summary>How many filter-surviving terms to skip before the page (0 = first page). Paging over the
+    /// single-term enumeration; the UI leaves it 0.</summary>
+    public int Skip { get; set; } = 0;
     public bool IsPhrase { get; set; }
     public bool IsMultiWord { get; set; }
     public int ProximityDistance { get; set; } = 10;
@@ -61,6 +64,10 @@ public class SearchResult
     // Surfaced in the UI so users know the result set may be incomplete.
     public bool ResultsTruncated { get; set; }
     public string? TruncationMessage { get; set; }
+
+    // True when at least one more filter-surviving term exists after this page (Skip + PageSize).
+    // The precise paging signal (fetch-N+1); an agent pages while this is true.
+    public bool HasMore { get; set; }
 }
 
 public class MatchingTerm

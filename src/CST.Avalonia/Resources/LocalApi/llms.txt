@@ -79,9 +79,18 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   canonical result you must set `other:false`. Strictly-canonical commentaries-only is therefore
   `{ "mula": false, "atthakatha": true, "tika": true, "other": false }`. Unknown filter keys are REJECTED
   with 400 (so a misnamed key can't silently return the unfiltered corpus).
-  Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, proximityDistance?, outputScript? }`.
-  Returns `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, truncated, note }`; when `truncated`
-  is true (e.g. `maxTerms` was reached), `note` explains and more forms exist beyond the cap.
+  Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, skip?, includeBooks?,
+  proximityDistance?, outputScript? }`.
+  PAGING: `maxTerms` is the PAGE SIZE, `skip` (default 0) the offset. Page by re-requesting with
+  `skip += maxTerms` WHILE the response's `hasMore` is true - never infer end-of-results from a short page (a
+  full page can also be the last one; `hasMore` is the signal). No fixed upper bound on how far you can page.
+  Each term is `{ term, totalCount, bookCount, books }`. `books` (the per-book `{ bookId, bookName, count }`
+  breakdown) is OMITTED unless you pass `includeBooks: true` - it is the bulk of the payload; `bookCount` (how
+  many books the term is in) is ALWAYS present. Returns
+  `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, hasMore, truncated, note }`. NOTE: the
+  `total*` fields are per-PAGE sums, not whole-result-set totals - for a stem's true footprint, page through
+  and add, or run an Exact query per form. `truncated` is SEPARATE from `hasMore`: it flags that a very broad
+  wildcard/regex overflowed the engine's expansion limit.
 - `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one query in one
   book. Body: `{ bookId, term, mode?, proximityDistance?, includeVariantReadings?, outputScript?, skip?, take?,
   minChars?, maxChars? }`. `term` is EITHER a single `term` from a prior `/v1/search`, OR a MULTI-WORD /
