@@ -19,6 +19,8 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - Pali output is ROMANIZED by DEFAULT. The romanized script token is `"Latin"` (IAST, with diacritics). Pass
   `outputScript` to override (e.g. "Devanagari", "Thai", "Myanmar", "Sinhala"); `GET /v1/scripts` lists every
   valid value.
+- Devanagari output embeds a zero-width non-joiner (U+200C) inside SOME consonant conjuncts (a ligature
+  convention) - normalize/strip U+200C before comparing or matching strings.
 - Cursors (`prevCursor` / `nextCursor` from `/v1/passage`) are INTEGERS, and opaque - pass one back verbatim
   as `cursor` to page; do not interpret them or do arithmetic on them. `null` means the start/end of the book.
 - Response shape is per endpoint: `/v1/search`, `/v1/passage`, `/v1/convert`, `/v1/status` return a JSON
