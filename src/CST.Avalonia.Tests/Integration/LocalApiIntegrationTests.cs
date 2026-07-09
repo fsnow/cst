@@ -1,9 +1,13 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CST.Avalonia.Tests.TestSupport;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Integration
@@ -124,6 +128,42 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             Assert.True(doc.RootElement.GetArrayLength() >= 1, "single-word wildcard should return occurrences");
+        }
+
+        [Fact]
+        public async Task Mcp_endpoint_is_gated_and_serves_the_search_tool()
+        {
+            // Gate: /mcp sits behind the same bearer middleware as /v1 - no token => 401 (it is mounted and
+            // guarded, not a 404). This is what keeps a browser (which also can't set the header) out.
+            using (var noAuth = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) })
+            {
+                var resp = await noAuth.PostAsync("/mcp", Json("{}"));
+                Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+            }
+
+            // Happy path: drive the REAL MCP client over the Streamable HTTP transport with the bearer, exactly
+            // as Claude Desktop's mcp-remote bridge does. Proves the initialize -> list -> call handshake
+            // survives our Origin-reject + bearer gate, and that the one wired tool actually runs.
+            var transport = new HttpClientTransport(new HttpClientTransportOptions
+            {
+                Endpoint = new System.Uri(_api.BaseUrl + "/mcp"),
+                TransportMode = HttpTransportMode.StreamableHttp,
+                AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = "Bearer " + _api.Token },
+            });
+            await using var client = await McpClient.CreateAsync(transport);
+
+            var tools = await client.ListToolsAsync();
+            Assert.Contains(tools, t => t.Name == "search");
+
+            var result = await client.CallToolAsync(
+                "search", new Dictionary<string, object?> { ["query"] = "dhamma" });
+
+            Assert.NotEqual(true, result.IsError);
+            // The matched term round-trips as romanized "dhamma" - assert it in whichever channel the SDK used
+            // (text content block and/or structured content).
+            var text = string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+            var structured = result.StructuredContent?.GetRawText() ?? string.Empty;
+            Assert.Contains("dhamma", text + structured);
         }
     }
 }
