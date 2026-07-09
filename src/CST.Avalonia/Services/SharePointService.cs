@@ -192,11 +192,19 @@ namespace CST.Avalonia.Services
 
             var localPath = GetLocalPdfPath(sharePointPath);
 
-            // Check if file already exists
+            // Use the cached copy only if it's an intact PDF. A pre-NET-1 truncated download left at localPath
+            // would otherwise be trusted forever (these files are the permanent preservation store, never
+            // evicted, so it never heals). A corrupt cached file falls through to a fresh, size-verified
+            // re-download below, which atomically REPLACES the bad file - re-downloading a corrupt file does not
+            // conflict with the preservation rule. (#194, follow-up to NET-1)
             if (File.Exists(localPath))
             {
-                _logger.LogInformation("PDF already cached locally: {Path}", localPath);
-                return localPath;
+                if (IsIntactPdf(localPath))
+                {
+                    _logger.LogInformation("PDF already cached locally: {Path}", localPath);
+                    return localPath;
+                }
+                _logger.LogWarning("Cached PDF failed integrity check (truncated/corrupt); re-downloading: {Path}", localPath);
             }
 
             try
@@ -292,6 +300,42 @@ namespace CST.Avalonia.Services
         {
             try { if (File.Exists(path)) File.Delete(path); }
             catch { /* best-effort cleanup of the partial file */ }
+        }
+
+        /// <summary>
+        /// A cheap, offline structural check that a file is a complete PDF: it must begin with the
+        /// <c>%PDF-</c> header and carry the <c>%%EOF</c> end-of-file marker near its tail. A download
+        /// truncated mid-transfer keeps a valid header but loses the trailing <c>%%EOF</c>, so this catches the
+        /// #194 pre-fix truncation without a network round-trip (the authoritative byte-size check happens on
+        /// (re)download via <see cref="SaveStreamVerifiedAsync"/>). Anything unreadable is treated as not intact
+        /// so it gets re-fetched. (#194)
+        /// </summary>
+        internal static bool IsIntactPdf(string path)
+        {
+            ReadOnlySpan<byte> header = "%PDF-"u8;
+            ReadOnlySpan<byte> eof = "%%EOF"u8;
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                long length = fs.Length;
+                if (length < header.Length + eof.Length) return false;
+
+                Span<byte> headBuf = stackalloc byte[5];
+                fs.ReadExactly(headBuf);
+                if (!headBuf.SequenceEqual(header)) return false;
+
+                // Scan the final chunk for %%EOF (the spec allows trailing whitespace/newlines after it).
+                int tailLength = (int)Math.Min(1024, length);
+                Span<byte> tailBuf = stackalloc byte[1024];
+                tailBuf = tailBuf.Slice(0, tailLength);
+                fs.Seek(-tailLength, SeekOrigin.End);
+                fs.ReadExactly(tailBuf);
+                return tailBuf.IndexOf(eof) >= 0;
+            }
+            catch
+            {
+                return false; // unreadable/locked => treat as not intact and re-fetch rather than trust it
+            }
         }
 
         public string GetLocalPdfPath(string sharePointPath)

@@ -91,6 +91,63 @@ public class SharePointDownloadTests : IDisposable
         Assert.False(File.Exists(PartPath));
     }
 
+    // ---- #194: IsIntactPdf gates the cache hit so a pre-fix truncated PDF is re-fetched, not trusted. ----
+
+    private string WritePdf(string content)
+    {
+        var path = Path.Combine(_dir, "chk-" + Guid.NewGuid().ToString("N") + ".pdf");
+        File.WriteAllBytes(path, Encoding.ASCII.GetBytes(content));
+        return path;
+    }
+
+    private const string ValidPdf = "%PDF-1.4\n1 0 obj\n<< >>\nendobj\ntrailer\n<< >>\nstartxref\n0\n%%EOF";
+
+    [Fact]
+    public void IsIntactPdf_TrueForCompletePdf()
+    {
+        Assert.True(SharePointService.IsIntactPdf(WritePdf(ValidPdf)));
+    }
+
+    [Fact]
+    public void IsIntactPdf_TrueWhenEofFollowedByTrailingWhitespace()
+    {
+        // A real PDF often ends with a newline after %%EOF; the tail scan must still find the marker.
+        Assert.True(SharePointService.IsIntactPdf(WritePdf(ValidPdf + "\r\n")));
+    }
+
+    [Fact]
+    public void IsIntactPdf_TrueForLargePdf_EofBeyondFirstKilobyte()
+    {
+        // The %%EOF lives only in the final chunk; a large file must still validate (proves the tail scan).
+        Assert.True(SharePointService.IsIntactPdf(WritePdf("%PDF-1.5\n" + new string('a', 5000) + "\n%%EOF")));
+    }
+
+    [Fact]
+    public void IsIntactPdf_FalseForTruncatedPdf_NoEofMarker()
+    {
+        // Header present, but the transfer was cut before the trailer/%%EOF - the #194 scenario.
+        Assert.False(SharePointService.IsIntactPdf(WritePdf("%PDF-1.4\n" + new string('a', 4000))));
+    }
+
+    [Fact]
+    public void IsIntactPdf_FalseForWrongHeader_EvenWithEofPresent()
+    {
+        Assert.False(SharePointService.IsIntactPdf(WritePdf("not a pdf at all\n%%EOF")));
+    }
+
+    [Fact]
+    public void IsIntactPdf_FalseForEmptyOrTinyFile()
+    {
+        Assert.False(SharePointService.IsIntactPdf(WritePdf("")));
+        Assert.False(SharePointService.IsIntactPdf(WritePdf("%PDF")));
+    }
+
+    [Fact]
+    public void IsIntactPdf_FalseForMissingFile()
+    {
+        Assert.False(SharePointService.IsIntactPdf(Path.Combine(_dir, "does-not-exist.pdf")));
+    }
+
     // A read-stream that always throws, to simulate a dropped connection mid-download.
     private sealed class ThrowingStream : Stream
     {
