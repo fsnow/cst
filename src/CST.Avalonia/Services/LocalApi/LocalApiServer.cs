@@ -69,6 +69,20 @@ namespace CST.Avalonia.Services.LocalApi
             _script = script;
         }
 
+        /// <summary>
+        /// Build a server by resolving EVERY tool adapter from the DI container. This is the single place the
+        /// tools are gathered, so a forgotten tool (the /v1/scripts-404 class of bug, where a registered tool
+        /// was simply not passed to the server) is caught by one composition test instead of shipping. The app
+        /// and the test both go through here.
+        /// </summary>
+        public static LocalApiServer FromServiceProvider(
+            IServiceProvider services, string appVersion, string handshakeDirectory, Serilog.ILogger logger)
+            => new LocalApiServer(appVersion, handshakeDirectory, logger,
+                services.GetService<ISearchTool>(),
+                services.GetService<IDictionaryTool>(),
+                services.GetService<IPassageTool>(),
+                services.GetService<IScriptTool>());
+
         public async Task StartAsync(CancellationToken ct = default)
         {
             if (_app != null) return;
