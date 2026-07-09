@@ -319,6 +319,7 @@ public class SearchService : ISearchService
         if (truncatedTermCount > 0)
         {
             result.ResultsTruncated = true;
+            result.ExpansionCapped = true;   // genuine overflow of the expansion limit: "narrow the pattern"
             result.TruncationMessage = $"{truncatedTermCount} wildcard word(s) matched more than {WildcardExpansionLimit:N0} forms and were truncated — some results may be missing. Use more specific wildcards for complete results.";
         }
 
