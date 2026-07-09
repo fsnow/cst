@@ -32,6 +32,10 @@ public class SearchQuery
     /// <summary>How many filter-surviving terms to skip before the page (0 = first page). Paging over the
     /// single-term enumeration; the UI leaves it 0.</summary>
     public int Skip { get; set; } = 0;
+    /// <summary>Counts-only fast path: when true AND no book filter is applied, the single-term enumeration
+    /// takes each term's total-count and book-count straight from the index (no per-term postings reads) and
+    /// leaves per-book Occurrences empty. The UI leaves this false (it renders the per-book breakdown).</summary>
+    public bool CountsOnly { get; set; } = false;
     public bool IsPhrase { get; set; }
     public bool IsMultiWord { get; set; }
     public int ProximityDistance { get; set; } = 10;
@@ -81,6 +85,10 @@ public class MatchingTerm
     public string DisplayTerm { get; set; } = string.Empty;  // Current script
     public List<BookOccurrence> Occurrences { get; set; } = new();
     public int TotalCount { get; set; }
+
+    // Number of books the term occurs in. Set from the index (DocFreq) on the counts-only path where
+    // Occurrences is left empty; the postings path leaves it 0 and callers fall back to Occurrences.Count.
+    public int BookCount { get; set; }
 }
 
 public class BookOccurrence

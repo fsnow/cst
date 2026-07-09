@@ -24,6 +24,13 @@ namespace CST.Avalonia.Tests.Integration
 
         private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
 
+        private static async Task<JsonDocument> PostDoc(HttpClient http, string path, string body)
+        {
+            var resp = await http.PostAsync(path, Json(body));
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+            return JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        }
+
         [Fact]
         public async Task All_core_endpoints_respond()
         {
@@ -67,25 +74,43 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
-        public async Task Search_returns_the_indexed_term_with_bookCount_and_books_opt_in()
+        public async Task Search_countsOnly_matches_the_postings_path_and_books_are_opt_in()
         {
             using var http = _api.Http();
-            var resp = await http.PostAsync("/v1/search", Json("{\"query\":\"dhamma\",\"mode\":\"Exact\"}"));
-            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
 
-            var terms = doc.RootElement.GetProperty("terms");
-            Assert.True(terms.GetArrayLength() >= 1, "the indexed term should be found");
-            var t = terms[0];
-            Assert.True(t.GetProperty("totalCount").GetInt32() >= 2);     // dhamma occurs in both fixture books
-            Assert.Equal(2, t.GetProperty("bookCount").GetInt32());       // ...across 2 books
-            Assert.Equal(0, t.GetProperty("books").GetArrayLength());     // per-book breakdown is opt-in
+            // Default request => the COUNTS-ONLY fast path (index stats, no postings, no per-book breakdown).
+            using var lean = await PostDoc(http, "/v1/search", "{\"query\":\"dhamma\",\"mode\":\"Exact\"}");
+            var leanTerm = lean.RootElement.GetProperty("terms")[0];
+            int leanTotal = leanTerm.GetProperty("totalCount").GetInt32();
+            int leanBooks = leanTerm.GetProperty("bookCount").GetInt32();
+            Assert.Equal(2, leanBooks);                                       // dhamma occurs in both fixture books
+            Assert.True(leanTotal >= 2);
+            Assert.Equal(0, leanTerm.GetProperty("books").GetArrayLength());  // per-book breakdown omitted
 
-            // Opt in -> the breakdown appears.
-            var withBooks = await http.PostAsync("/v1/search",
-                Json("{\"query\":\"dhamma\",\"mode\":\"Exact\",\"includeBooks\":true}"));
-            using var doc2 = JsonDocument.Parse(await withBooks.Content.ReadAsStringAsync());
-            Assert.Equal(2, doc2.RootElement.GetProperty("terms")[0].GetProperty("books").GetArrayLength());
+            // includeBooks => the POSTINGS path, with the per-book breakdown. Counts must AGREE across paths.
+            using var full = await PostDoc(http, "/v1/search",
+                "{\"query\":\"dhamma\",\"mode\":\"Exact\",\"includeBooks\":true}");
+            var fullTerm = full.RootElement.GetProperty("terms")[0];
+            Assert.Equal(2, fullTerm.GetProperty("books").GetArrayLength());
+            Assert.Equal(leanTotal, fullTerm.GetProperty("totalCount").GetInt32());
+            Assert.Equal(leanBooks, fullTerm.GetProperty("bookCount").GetInt32());
+        }
+
+        [Fact]
+        public async Task Search_pages_over_terms_without_a_cache_collision()
+        {
+            using var http = _api.Http();
+            // maxTerms:1 => one term per page. Page 2 must be a DIFFERENT term - the regression is that the
+            // cache key now includes skip/pageSize, so page 2 no longer returns the cached page 1.
+            using var p1 = await PostDoc(http, "/v1/search",
+                "{\"query\":\"*\",\"mode\":\"Wildcard\",\"maxTerms\":1,\"skip\":0}");
+            using var p2 = await PostDoc(http, "/v1/search",
+                "{\"query\":\"*\",\"mode\":\"Wildcard\",\"maxTerms\":1,\"skip\":1}");
+
+            Assert.True(p1.RootElement.GetProperty("hasMore").GetBoolean());
+            var term1 = p1.RootElement.GetProperty("terms")[0].GetProperty("term").GetString();
+            var term2 = p2.RootElement.GetProperty("terms")[0].GetProperty("term").GetString();
+            Assert.NotEqual(term1, term2);
         }
 
         [Fact]
