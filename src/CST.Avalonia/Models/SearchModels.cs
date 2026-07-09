@@ -68,6 +68,11 @@ public class SearchResult
     // True when at least one more filter-surviving term exists after this page (Skip + PageSize).
     // The precise paging signal (fetch-N+1); an agent pages while this is true.
     public bool HasMore { get; set; }
+
+    // True ONLY when a wildcard/regex overflowed the engine's expansion limit (WildcardExpansionLimit),
+    // so some matches were never enumerated. Distinct from ResultsTruncated (which also covers the ordinary
+    // "more than one page" case): this means "narrow the pattern", not "page for more". Agent-facing `truncated`.
+    public bool ExpansionCapped { get; set; }
 }
 
 public class MatchingTerm

@@ -72,9 +72,12 @@ namespace CST.Avalonia.Services.Tools
                 TotalTermCount: result.TotalTermCount,
                 TotalOccurrenceCount: result.TotalOccurrenceCount,
                 TotalBookCount: result.TotalBookCount,
-                Truncated: result.ResultsTruncated,
+                // `truncated` means ONLY that the pattern overflowed the expansion cap (narrow it) — a normal
+                // large result is `hasMore:true, truncated:false` (page it). Don't leak the UI's page-cap
+                // "refine your search" message as the note; only the genuine cap message.
+                Truncated: result.ExpansionCapped,
                 HasMore: result.HasMore,
-                Note: modeNote ?? result.TruncationMessage);
+                Note: modeNote ?? (result.ExpansionCapped ? result.TruncationMessage : null));
         }
 
         public async Task<IReadOnlyList<string>> CompleteTermsAsync(
@@ -94,17 +97,19 @@ namespace CST.Avalonia.Services.Tools
             var path = Path.Combine(dir, request.BookId);
             if (!File.Exists(path)) return Array.Empty<Occurrence>();
 
-            // Route: a quoted phrase or 2+ space-separated units => proximity/phrase (each occurrence is a set of
-            // co-occurring words); else a single term (each occurrence is one word). This is the bridge a
-            // proximity search needs — its ~-joined term does not round-trip. (AI_INTEGRATION.md §6.1)
+            // Route to the EXPANDING path (GetMultiWordPositionsAsync) for anything that needs term expansion or
+            // co-occurrence: a phrase, 2+ units, OR a single Wildcard/Regex word — which must be EXPANDED, not
+            // looked up literally (a literal `avijj*` lookup matches no index term and silently returns []). Only
+            // a single EXACT word takes the fast literal single-term path. (AI_INTEGRATION.md §6.1)
+            var mode = MapMode(request.Mode);
             var units = MultiWordSearch.ParseUnits(request.Term ?? string.Empty);
-            bool multiWord = units.Count > 1 || (units.Count == 1 && units[0].IsPhrase);
+            bool multiUnit = units.Count > 1 || (units.Count == 1 && units[0].IsPhrase);
 
             List<List<SnippetMark>> perOccurrence;
-            if (multiWord)
+            if (multiUnit || mode != SearchMode.Exact)
             {
                 var hits = await _search.GetMultiWordPositionsAsync(
-                    request.BookId, request.Term ?? string.Empty, MapMode(request.Mode), request.ProximityDistance, ct).ConfigureAwait(false);
+                    request.BookId, request.Term ?? string.Empty, mode, request.ProximityDistance, ct).ConfigureAwait(false);
                 perOccurrence = hits
                     .Select(h => h.Select(tp => new SnippetMark(tp.StartOffset, tp.EndOffset, tp.IsFirstTerm)).ToList())
                     .OrderBy(AnchorStart)

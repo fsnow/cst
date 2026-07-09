@@ -51,6 +51,7 @@ namespace CST.Avalonia.Tests.Tools
                 TotalOccurrenceCount = 7,
                 TotalBookCount = 1,
                 ResultsTruncated = true,
+                ExpansionCapped = true,   // agent-facing `truncated` maps from ExpansionCapped, not the page cap
                 TruncationMessage = "capped"
             };
         }
@@ -271,6 +272,77 @@ namespace CST.Avalonia.Tests.Tools
             {
                 Directory.Delete(dir, recursive: true);
             }
+        }
+
+        [Fact]
+        public async Task GetOccurrencesAsync_single_word_wildcard_uses_the_expanding_path()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "cst-occ-wc-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                const string book = "s0101m.mul.xml";
+                string xml =
+                    "<body><div id=\"dn1\" type=\"book\">" +
+                    "<pb ed=\"V\" n=\"1.0003\"/>" +
+                    "<p rend=\"bodytext\" n=\"12\">aaa AVIJJA bbb</p>" +
+                    "</div></body>";
+                await File.WriteAllTextAsync(Path.Combine(dir, book), xml, Encoding.Unicode);
+                int a = xml.IndexOf("AVIJJA", StringComparison.Ordinal);
+
+                var search = new Mock<ISearchService>();
+                // A single-word WILDCARD must route to the expanding path (it has to expand `avij*`), NOT the
+                // literal single-term lookup which would match no index term and silently return [].
+                search.Setup(s => s.GetMultiWordPositionsAsync(book, "avij*", SearchMode.Wildcard,
+                        It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new List<List<TermPosition>>
+                    {
+                        new List<TermPosition> { new TermPosition { StartOffset = a, EndOffset = a + 6, IsFirstTerm = true, Word = "avijja" } }
+                    });
+
+                var tool = new SearchTool(search.Object, Settings(dir));
+                var occ = await tool.GetOccurrencesAsync(new OccurrenceRequest(
+                    book, "avij*", OutputScript: Script.Devanagari, MinChars: 1, Mode: SearchToolMode.Wildcard));
+
+                var o = Assert.Single(occ);
+                Assert.Equal("AVIJJA", o.Snippet.Substring(o.HitStart, o.HitLength));
+                search.Verify(s => s.GetTermPositionsAsync(It.IsAny<string>(), It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()), Times.Never);   // NOT the literal path
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task SearchAsync_pageable_result_is_hasMore_not_truncated()
+        {
+            var mock = new Mock<ISearchService>();
+            var tool = new SearchTool(mock.Object, Settings());
+
+            // A normal "more than one page" result: the UI page-cap is set, but it is NOT an expansion overflow.
+            mock.Setup(s => s.SearchAsync(It.IsAny<SearchQuery>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SearchResult
+                {
+                    HasMore = true, ResultsTruncated = true,
+                    TruncationMessage = "Showing the first 100 matching words - refine your search."
+                });
+            var paged = await tool.SearchAsync(new SearchToolRequest("dhamm*", SearchToolMode.Wildcard));
+            Assert.True(paged.HasMore);
+            Assert.False(paged.Truncated);   // paging, not overflow
+            Assert.Null(paged.Note);         // the UI "refine" message is not leaked to the API
+
+            // A genuine expansion overflow: truncated true, with the cap message as the note.
+            mock.Setup(s => s.SearchAsync(It.IsAny<SearchQuery>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SearchResult
+                {
+                    ExpansionCapped = true, ResultsTruncated = true,
+                    TruncationMessage = "matched more than 5,000 forms"
+                });
+            var capped = await tool.SearchAsync(new SearchToolRequest("dhamm*", SearchToolMode.Wildcard));
+            Assert.True(capped.Truncated);
+            Assert.Contains("5,000", capped.Note);
         }
 
         [Fact]

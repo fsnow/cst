@@ -84,13 +84,17 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   PAGING: `maxTerms` is the PAGE SIZE, `skip` (default 0) the offset. Page by re-requesting with
   `skip += maxTerms` WHILE the response's `hasMore` is true - never infer end-of-results from a short page (a
   full page can also be the last one; `hasMore` is the signal). No fixed upper bound on how far you can page.
+  Terms come back in INDEX (ordinal) order, NOT by frequency, so a COMMON form can sit on a LATER page - to
+  gather a stem's COMPLETE family you MUST page while `hasMore`; do not treat page 1 as the whole set.
   Each term is `{ term, totalCount, bookCount, books }`. `books` (the per-book `{ bookId, bookName, count }`
   breakdown) is OMITTED unless you pass `includeBooks: true` - it is the bulk of the payload; `bookCount` (how
   many books the term is in) is ALWAYS present. Returns
   `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, hasMore, truncated, note }`. NOTE: the
   `total*` fields are per-PAGE sums, not whole-result-set totals - for a stem's true footprint, page through
-  and add, or run an Exact query per form. `truncated` is SEPARATE from `hasMore`: it flags that a very broad
-  wildcard/regex overflowed the engine's expansion limit.
+  and add, or run an Exact query per form. `hasMore` and `truncated` are DIFFERENT signals: a normal large
+  result set is `hasMore:true, truncated:false` (just page it) - `truncated:true` means a very broad
+  wildcard/regex overflowed the engine's expansion limit so some forms are UNREACHABLE (NARROW the pattern;
+  paging will not recover them).
 - `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one query in one
   book. Body: `{ bookId, term, mode?, proximityDistance?, includeVariantReadings?, outputScript?, skip?, take?,
   minChars?, maxChars? }`. `term` is EITHER a single `term` from a prior `/v1/search`, OR a MULTI-WORD /
@@ -133,7 +137,11 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
    footprint. To gather a stem's inflectional family (nominative, accusative, instrumental... together),
    follow up with a length-bounded anchored regex - `{ "query": "^metta.{1,4}$", "mode": "Regex" }`
    returns each case-form (`metta`, `mettam`, `mettaya`, `mettena`, ...) as its own `term` with its own
-   count. Use `stem*` (Wildcard) instead when you also WANT the compounds. (See the /v1/search note above.)
+   count. Use `stem*` (Wildcard) instead when you also WANT the compounds. Results are in ordinal order, so
+   PAGE while `hasMore` (with `skip`) to see EVERY form - a common one can be on a later page; a single page
+   is not the complete family. Or, once you know the exact forms you want, get them all in one call with an
+   anchored alternation - `{ "query": "^(metta|mettaya|mettam)$", "mode": "Regex", "includeBooks": true }`.
+   (See the /v1/search note above.)
 2. `POST /v1/occurrences` for that `term` in a book -> scan the concordance snippets; cite by paragraph
    and per-edition page.
 3. `POST /v1/passage` with an occurrence's `cursor` -> read the exact passage around that hit; page with
