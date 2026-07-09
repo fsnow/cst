@@ -348,6 +348,7 @@
                                                           Value="{Binding Port}"
                                                           IsEnabled="{Binding SubPermissionsEnabled}"
                                                           Minimum="0" Maximum="65535" Increment="1"
+                                                          ShowButtonSpinner="False"
                                                           FormatString="0"
                                                           Width="160" HorizontalAlignment="Left"/>
                                         </Grid>
