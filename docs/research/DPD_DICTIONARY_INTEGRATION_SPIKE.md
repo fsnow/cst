@@ -5,7 +5,7 @@
 ## Executive summary
 
 - The Digital Pāḷi Dictionary (DPD) is a large, actively maintained (roughly monthly) Pāli→English dictionary. Latest release at time of writing: **`v0.4.20260531`** with **~89,050 headwords** (~47k fully complete).
-- **The data is licensed CC BY-NC-SA 4.0** — Attribution + **NonCommercial** + **ShareAlike**. This is the single most decision-critical fact in this report. Both the **NC** and **SA** clauses have real implications for a distributed reader and argue for **on-demand download with clear attribution rather than bundling**.
+- **The data is licensed CC BY-NC-SA 4.0** — Attribution + **NonCommercial** + **ShareAlike**. The **NC** clause is **not a concern**: CST Reader is non-commercial by principle, and non-commercial use is itself one of the conditions under which the VRI texts are used — so DPD's NonCommercial term is consonant with the whole project. The live considerations are lighter: **BY** (display attribution) and **SA** (the converted DPD file must itself be marked CC BY-NC-SA and kept separable from the app's own code). Delivery still favors **on-demand download** — driven by size and monthly churn, not license risk.
 - DPD ships many consumer formats plus **machine-readable sources**: the full SQLite `dpd.db` (177 MB compressed), a mobile SQLite db (141 MB), a **plain-text export (`dpd-txt.zip`, ~4.2 MB)**, and — inside the git repo — a canonical **50-column TSV backup** of the headwords table. The TSV/SQLite are the right programmatic import sources.
 - DPD entries are **richly structured** (lemma, POS, grammar, meaning, root, construction, examples, inflection data, etc.), far beyond the current `headword \n definition` shape. Recommendation: import DPD as a **flattened HTML fragment per headword** into a slightly generalized version of the existing model, not DPD's full relational schema.
 - Proposed: a **simple, documented external-dictionary import format** (a `manifest.json` + a 2-column TSV payload) that both a DPD converter and hand-made user dictionaries can target, with IPE normalization of headwords at import time.
@@ -70,7 +70,7 @@ Reported statistics (release `v0.3.20260202`): 88,350 headwords (47,535 complete
 - **Cadence:** roughly **monthly** releases.
 - **Version tags:** `v[MAJOR].[MINOR].[YYYYMMDD]` (e.g. `v0.4.20260531`). The embedded date makes "is my copy stale?" a trivial comparison; `DbInfo` inside the db carries version metadata.
 
-## 3. Licensing & attribution (decision-critical)
+## 3. Licensing & attribution
 
 **The DPD data is licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)** (the repo build code carries its own separate open-source terms; the *content* is CC BY-NC-SA 4.0). From `docs/license.md`:
 
@@ -81,13 +81,13 @@ Implications for CST Reader (a free reader for VRI texts):
 
 1. **BY (Attribution) — required.** Any shipped/derived DPD data must display attribution: creator **Bhikkhu Bodhirāsa**, title **Digital Pāḷi Dictionary**, the **CC BY-NC-SA 4.0** license (with link), the **version** used, and the homepage **https://dpdict.net**. This belongs in the import manifest and somewhere user-visible (credits — a UI concern, flagged for the maintainer). ([citation guidance](https://buddhistuniversity.net/content/reference/dpd))
 
-2. **NC (NonCommercial) — the main constraint.** DPD may not be used "primarily intended for or directed toward commercial advantage." A genuinely free reader distributing DPD at no charge is squarely in the intended use. Grey areas to decide: paid app-store listings, bundling inside a paid/pro tier, or any future monetization would be **incompatible**. Distributing via free channels is generally fine (CC's NC FAQ treats no-charge distribution as non-commercial), but this is a judgment call — **flag for maintainer**.
+2. **NC (NonCommercial) — satisfied by the project's non-commercial principle.** DPD may not be used "primarily intended for or directed toward commercial advantage." CST Reader is non-commercial by design, and non-commercial use is one of the few conditions under which the VRI texts themselves are used — so DPD's NC term aligns with the project rather than constraining it. The only standing implication is that the project remains non-commercial (no paid tier / monetization of DPD), which is already the governing principle. Not a blocker.
 
 3. **SA (ShareAlike) — applies to *adaptations*.** A converted/flattened DPD file **is an adaptation** and must be offered under CC BY-NC-SA 4.0 (or compatible). SA attaches to the **adapted DPD data**, *not* to CST Reader's own source code: bundling a separately-licensed data file alongside independently-licensed application code is a **"mere aggregation / collection,"** which SA does not reach. So the app's own license is unaffected, **but** the shipped DPD-derived file must itself be marked CC BY-NC-SA 4.0.
 
-4. **Bundle vs. download.** Because both NC and SA "travel with" the DPD data, the cleanest posture is to **keep the DPD data physically and licensally separate from the app**: download it **on demand** into the user's asset store, tagged with its own manifest carrying the license, rather than embedding it in the signed app bundle. This keeps the app bundle free of NC-encumbered content, avoids shipping 130–180 MB per release, and makes attribution/versioning explicit per source. See §6.
+4. **Bundle vs. download.** The **SA** clause travels with the DPD data (any converted copy must stay CC BY-NC-SA), so the cleanest posture is to keep that data **separable** from the app's own code: download it **on demand** into the user's asset store, tagged with a manifest carrying its license, rather than embedding it in the signed app bundle. This keeps the adapted-data license explicit per source, avoids shipping 130–180 MB per release, and makes versioning/refresh simple. (NC is satisfied by the project's non-commercial principle — item 2 — so it is not a driver here.) See §6.
 
-> Could not verify with certainty: the precise commercial/non-commercial status of specific distribution channels (e.g. a future paid app-store SKU). That is a judgment for the maintainer; the license text and CC FAQ are the primary sources.
+> **Context:** the DPD author has a collegial relationship with the VRI Tipiṭaka Project, so any attribution or coordination question around DPD integration likely has a direct channel — a further reason the licensing side is low-risk.
 
 ## 4. Mapping DPD → CST
 
@@ -166,9 +166,9 @@ akkhi	<p><b>akkhi</b>, <i>nt.</i> the eye.</p>
 ## 6. Delivery
 
 - **Built-in EN/HI:** stay **bundled** (small, VRI-owned, no NC issue), seeded to app-support on first run as today.
-- **DPD:** **on-demand download**, not bundled — size (130–180 MB machine-readable; even flattened, tens of MB), the NC/SA posture (§3), and monthly churn. Fetch the SQLite/TSV from `releases/latest`, convert locally to the import format, write into the user's dictionary store.
+- **DPD:** **on-demand download**, not bundled — size (130–180 MB machine-readable; even flattened, tens of MB), the ShareAlike posture (§3 — keep the CC BY-NC-SA data separable), and monthly churn. Fetch the SQLite/TSV from `releases/latest`, convert locally to the import format, write into the user's dictionary store.
 - **Where converted dictionaries live:** under app-support `dictionaries/<sourceId>/`. Treat downloaded/converted DPD data as a **preservation asset** (consistent with the project's rule that downloaded source PDFs are a preservation store, not an evictable cache) — never auto-delete.
-- **Conversion location:** ideally a small offline/CI converter (Python or C#) produces a redistributable `dpd/` folder; the app can also download-and-convert at runtime. Converting **outside** the signed app keeps the bundle free of NC content and avoids adding a SQLite dependency if TSV is used.
+- **Conversion location:** ideally a small offline/CI converter (Python or C#) produces a redistributable `dpd/` folder; the app can also download-and-convert at runtime. Converting **outside** the signed app keeps the CC BY-NC-SA data cleanly separable from the app's own code and avoids adding a SQLite dependency if TSV is used.
 - **Versioning / refresh:** the manifest `version` mirrors DPD's `v[MAJOR].[MINOR].[YYYYMMDD]` tag; a refresh check compares stored vs `releases/latest` (GitHub API).
 
 ## 7. Backend model changes (BACKEND ONLY — UI/layout out of scope)
@@ -202,7 +202,7 @@ All additive and unit-testable with `dotnet test` (new tests: manifest parsing, 
 
 ## 9. Risks & open questions
 
-1. **NC license posture (maintainer decision).** Is CST Reader guaranteed to remain free across all distribution channels (incl. app stores, any future pro tier)? NC forbids commercial use of DPD. Recommend on-demand download + explicit attribution to keep DPD cleanly separable. **Blocking design input needed.**
+1. **NC — resolved (not a blocker).** CST Reader is non-commercial by principle, and non-commercial use is one of the conditions on the VRI texts, so DPD's NonCommercial clause aligns with the project. Standing implication: keep the project non-commercial (no monetization of DPD) — already the case. The DPD author's collegial relationship with the VRI Tipiṭaka Project further de-risks the licensing/attribution side.
 2. **SA on the converted file.** The DPD-derived import folder must itself be marked CC BY-NC-SA 4.0. Confirm comfort shipping/hosting a CC-BY-NC-SA data artifact (the app's own code license is unaffected — mere aggregation).
 3. **Inflected-form lookup gap.** DPD's core value includes resolving *inflected forms* (1.4M) and *compound deconstructions* to lemmas via its `Lookup` table. Our IPE prefix/nearest-neighbor search only matches **lemma prefixes**, so a user typing an inflected form may miss. v1–v3 ignore this; v4 should import DPD's `Lookup` mappings. **Biggest UX gap vs. using DPD natively.**
 4. **IPE conversion fidelity for DPD lemmas.** Verify `Any2Ipe.Convert` round-trips all DPD diacritics and niggahita variants; decide homonym-number handling (strip → merge, as recommended).
