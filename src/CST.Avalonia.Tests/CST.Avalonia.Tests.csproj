@@ -27,6 +27,8 @@
     </PackageReference>
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
+    <!-- MCP client, to round-trip the in-app /mcp endpoint the way Claude Desktop's bridge does (#191). -->
+    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
   </ItemGroup>
 
   <!-- Needed to run LocalApiServer (hosts ASP.NET Core) in tests. -->

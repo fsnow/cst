@@ -20,6 +20,7 @@ using CST;
 using CST.Conversion;
 using CST.Navigation;
 using CST.Tools;
+using CST.Avalonia.Services.LocalApi.Mcp;
 using Serilog;
 
 namespace CST.Avalonia.Services.LocalApi
@@ -99,6 +100,18 @@ namespace CST.Avalonia.Services.LocalApi
                 o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // "Latin" not 3, for other enums
             });
 
+            // MCP surface (#191, increment 1): expose the search tool over the Streamable HTTP transport at
+            // /mcp — MCP is just another transport on the same tool layer /v1 uses, not a proxy. A BYO-MCP chat
+            // client (Claude Desktop via the mcp-remote bridge) connects here; code-capable agents keep hitting
+            // /v1 directly. Registered only when the search tool is present, mirroring the /v1 endpoint wiring.
+            if (_search is { } mcpSearch)
+            {
+                builder.Services.AddSingleton(mcpSearch);
+                builder.Services.AddMcpServer()
+                    .WithHttpTransport()
+                    .WithTools<SearchMcpTool>();
+            }
+
             var app = builder.Build();
 
             // Security gate: no browsers, loopback host only, valid bearer token.
@@ -143,6 +156,13 @@ namespace CST.Avalonia.Services.LocalApi
             });
 
             MapToolEndpoints(app);
+
+            // Streamable HTTP MCP endpoint. Sits behind the same security middleware as everything else, so it
+            // requires the bearer token and rejects Origin-bearing (browser) requests. (#191)
+            if (_search != null)
+            {
+                app.MapMcp("/mcp");
+            }
 
             await app.StartAsync(ct);
 
