@@ -79,7 +79,7 @@ Reported statistics (release `v0.3.20260202`): 88,350 headwords (47,535 complete
 
 Implications for CST Reader (a free reader for VRI texts):
 
-1. **BY (Attribution) — required.** Any shipped/derived DPD data must display attribution: creator **Bhikkhu Bodhirāsa**, title **Digital Pāḷi Dictionary**, the **CC BY-NC-SA 4.0** license (with link), the **version** used, and the homepage **https://dpdict.net**. This belongs in the import manifest and somewhere user-visible (credits — a UI concern, flagged for the maintainer).
+1. **BY (Attribution) — required.** Any shipped/derived DPD data must display attribution: creator **Bhikkhu Bodhirāsa**, title **Digital Pāḷi Dictionary**, the **CC BY-NC-SA 4.0** license (with link), the **version** used, and the homepage **https://dpdict.net**. This belongs in the import manifest and somewhere user-visible (credits — a UI concern, flagged for the maintainer). ([citation guidance](https://buddhistuniversity.net/content/reference/dpd))
 
 2. **NC (NonCommercial) — the main constraint.** DPD may not be used "primarily intended for or directed toward commercial advantage." A genuinely free reader distributing DPD at no charge is squarely in the intended use. Grey areas to decide: paid app-store listings, bundling inside a paid/pro tier, or any future monetization would be **incompatible**. Distributing via free channels is generally fine (CC's NC FAQ treats no-charge distribution as non-commercial), but this is a judgment call — **flag for maintainer**.
 
@@ -222,6 +222,8 @@ All additive and unit-testable with `dotnet test` (new tests: manifest parsing, 
 - TSV backup (canonical source columns): https://github.com/digitalpalidictionary/dpd-db/tree/main/db/backup_tsv
 - Plain-text exporter (`exporter/txt/`): https://github.com/digitalpalidictionary/dpd-db/tree/main/exporter/txt
 - Web app: https://www.dpdict.net/
+- Attribution/citation guidance (creator Bhikkhu Bodhirāsa): https://buddhistuniversity.net/content/reference/dpd
+- Release stats example (`v0.3.20260202`): https://github.com/digitalpalidictionary/dpd-db/releases/tag/v0.3.20260202
 
 *Internal ground truth (this repo):* `docs/features/in-progress/DICTIONARIES.md`; `src/CST.Avalonia/Services/{DictionaryService,IDictionaryService,DictionaryIndex}.cs`; `src/CST.Avalonia/Models/DictionaryWord.cs`; `src/CST.Core/Tools/DictionaryToolContracts.cs`.
 
