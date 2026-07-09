@@ -328,12 +328,11 @@ public partial class App : Application
             System.IO.Directory.CreateDirectory(dir);
 
             var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
-            _localApiServer = new CST.Avalonia.Services.LocalApi.LocalApiServer(
-                version, dir, Log.Logger,
-                ServiceProvider?.GetService<CST.Tools.ISearchTool>(),
-                ServiceProvider?.GetService<CST.Tools.IDictionaryTool>(),
-                ServiceProvider?.GetService<CST.Tools.IPassageTool>(),
-                ServiceProvider?.GetService<CST.Tools.IScriptTool>());
+            // Resolve the tools through the shared factory (covered by AppCompositionTests), so a tool that is
+            // registered but forgotten here can't silently 404 an endpoint again.
+            _localApiServer = ServiceProvider is { } sp
+                ? CST.Avalonia.Services.LocalApi.LocalApiServer.FromServiceProvider(sp, version, dir, Log.Logger)
+                : new CST.Avalonia.Services.LocalApi.LocalApiServer(version, dir, Log.Logger);
             await _localApiServer.StartAsync();
         }
         catch (Exception ex)
