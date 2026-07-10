@@ -50,7 +50,11 @@ namespace CST.Avalonia.Services.Tools
             var result = await _search.SearchAsync(query, ct).ConfigureAwait(false);
 
             var terms = result.Terms.Select(t => new SearchTermResult(
-                Term: ScriptConverter.Convert(t.Term, Script.Ipe, request.OutputScript),
+                // A multi-word/phrase match's Term is the internal "~"-joined combo key; render it space-joined
+                // so it reads naturally AND round-trips straight into occurrences. Single terms are unaffected
+                // (no "~"). (Desktop MCP friction report)
+                Term: string.Join(" ", (t.Term ?? string.Empty).Split('~')
+                    .Select(w => ScriptConverter.Convert(w, Script.Ipe, request.OutputScript))),
                 TotalCount: t.TotalCount,
                 // Per-book breakdown is opt-in (it's the payload weight); bookCount is always cheap to include.
                 Books: request.IncludeBooks

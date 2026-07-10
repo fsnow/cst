@@ -17,8 +17,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
     {
         [McpServerTool(Name = "dictionary_lookup")]
         [Description("Look up a Pali headword in a dictionary: returns the exact match plus the surrounding "
-            + "prefix run (or the nearest-neighbor run on a miss), each as a headword + definition (HTML). "
-            + "Query may be in any script; headwords come back in the requested output script.")]
+            + "prefix run, or — on a near miss — the nearest headwords that share a leading prefix with the "
+            + "query (each a headword + definition HTML). A query that shares no leading prefix with any "
+            + "headword returns an empty list. Query may be in any script; headwords come back in the requested "
+            + "output script.")]
         public static async Task<IReadOnlyList<DictionaryEntry>> LookupAsync(
             IDictionaryTool dictionary,
             [Description("The headword to look up, in any script.")]

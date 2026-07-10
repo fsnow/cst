@@ -23,7 +23,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "IMPORTANT: mode:Exact matches the EXACT inflected surface form, not a lemma or stem. The corpus "
             + "uses heavy sandhi, so a dictionary headword (e.g. 'satipatthana') may be rare while its inflected "
             + "forms (e.g. 'satipatthanam') are common. To find a stem's variations, use mode:Wildcard with a "
-            + "trailing '*' (e.g. 'satipatthan*').")]
+            + "trailing '*' (e.g. 'satipatthan*'). PHRASE/PROXIMITY (corpus-wide): a space-separated query "
+            + "(e.g. 'ekayano ayam') finds those words co-occurring; wrap in quotes (e.g. '\"ekayano ayam\"') for "
+            + "an adjacent phrase. Each match's term is the co-occurring words; pass it to 'occurrences' to read it.")]
         public static async Task<SearchToolResult> SearchAsync(
             ISearchTool search,
             [Description("The word or pattern to search for, in any script (romanized Latin accepted).")]

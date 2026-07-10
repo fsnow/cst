@@ -123,6 +123,23 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Search_does_corpus_wide_phrase_and_returns_a_round_trippable_term()
+        {
+            using var http = _api.Http();
+            // "dhamma magga" is adjacent in the attha fixture book. A phrase query on the corpus-wide `search`
+            // tool must find it (not just per-book `occurrences`), and the returned term must be space-joined
+            // ("dhamma magga"), never the internal "~"-combo key. (Desktop MCP friction report)
+            using var doc = await PostDoc(http, "/v1/search",
+                "{\"query\":\"\\\"dhamma magga\\\"\",\"includeBooks\":true}");
+            var term = doc.RootElement.GetProperty("terms")[0];
+            var termText = term.GetProperty("term").GetString();
+            Assert.Equal("dhamma magga", termText);              // readable + round-trippable, no '~'
+            Assert.DoesNotContain("~", termText!);
+            Assert.Equal(1, term.GetProperty("bookCount").GetInt32());
+            Assert.Contains(_api.AtthaBook, term.GetProperty("books")[0].GetProperty("bookId").GetString());
+        }
+
+        [Fact]
         public async Task Occurrences_single_word_wildcard_expands_not_empty()
         {
             // batch-9 regression: a single-word wildcard on /v1/occurrences must EXPAND (dhamm* -> dhamma),

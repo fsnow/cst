@@ -18,8 +18,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         [McpServerTool(Name = "passage")]
         [Description("Read a bounded window of a book's text, in the requested script. Provide a paragraph to "
             + "start there, or a cursor from a prior 'occurrences'/'passage' result to read the exact spot / "
-            + "page forward. The window ends at a sentence boundary; use the returned nextCursor/prevCursor to "
-            + "page. With neither paragraph nor cursor, reads from the book start.")]
+            + "page forward. Both ends snap to sentence boundaries: a cursor (which points AT a hit) is pulled "
+            + "back to the start of its enclosing sentence, and the window extends to the next sentence end — so "
+            + "the hit is read with its full governing clause, never mid-sentence. Use the returned "
+            + "nextCursor/prevCursor to page. With neither paragraph nor cursor, reads from the book start.")]
         public static async Task<PassageResult> PassageAsync(
             IPassageTool passage,
             [Description("The book's id (file name), e.g. from the 'books' tool or a search result.")]
@@ -30,7 +32,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             string? bookCode = null,
             [Description("A page cursor from a prior result; when set, overrides paragraph and reads that exact spot.")]
             int? cursor = null,
-            [Description("Rendered-character budget for the window.")]
+            [Description("Rendered-character budget for the window. May overshoot to reach the next sentence boundary, so the returned text can exceed this.")]
             int maxChars = 1200,
             [Description("Script for the returned text.")]
             OutputScript outputScript = OutputScript.Latin,

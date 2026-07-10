@@ -37,9 +37,12 @@ namespace CST.Avalonia.Services.Tools
             if (startPos < 0) return Empty(request, "reference not found");
             startPos = Math.Clamp(startPos, 0, xml.Length);
 
+            // A cursor points AT a hit (mid-sentence); snap the window start back to the enclosing sentence so
+            // the hit is read with its governing clause. A paragraph reference already starts clean - no snap.
             var w = TeiPassageReader.ReadWindow(
                 xml, startPos, Math.Max(1, request.MaxChars),
-                request.IncludeVariantReadings, request.OutputScript, markers);
+                request.IncludeVariantReadings, request.OutputScript, markers,
+                snapStartToSentence: request.Cursor.HasValue);
 
             return new PassageResult(
                 BookId: request.BookId,
