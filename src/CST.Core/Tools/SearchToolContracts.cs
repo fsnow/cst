@@ -80,7 +80,10 @@ namespace CST.Tools
 
     /// <summary>Search results: matching terms (token-frugal — per-book breakdown and positions are opt-in).</summary>
     /// <param name="TotalOccurrenceCount">Sum over the terms IN THIS PAGE (not the whole result set).</param>
-    /// <param name="TotalBookCount">Distinct books over the terms IN THIS PAGE (not the whole result set).</param>
+    /// <param name="TotalBookCount">Distinct books over the terms IN THIS PAGE (not the whole result set).
+    /// <b>Null when <c>IncludeBooks</c> is false</c></b> — the counts-only fast path does not enumerate books,
+    /// so the distinct-book union is not available and is reported as null (not a misleading 0). Per-term
+    /// <c>BookCount</c> is always present.</param>
     /// <param name="HasMore">True if at least one more matching term exists after this page — request the next
     /// page with <c>Skip += MaxTerms</c>. This, not the page length, is the paging signal.</param>
     /// <param name="Truncated">The pattern overflowed the engine's expansion limit (very broad wildcard/regex);
@@ -89,7 +92,7 @@ namespace CST.Tools
         IReadOnlyList<SearchTermResult> Terms,
         int TotalTermCount,
         int TotalOccurrenceCount,
-        int TotalBookCount,
+        int? TotalBookCount,
         bool Truncated,
         bool HasMore = false,
         string? Note = null);

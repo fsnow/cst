@@ -76,7 +76,9 @@ namespace CST.Avalonia.Services.Tools
                 Terms: terms,
                 TotalTermCount: result.TotalTermCount,
                 TotalOccurrenceCount: result.TotalOccurrenceCount,
-                TotalBookCount: result.TotalBookCount,
+                // The counts-only fast path (IncludeBooks=false) doesn't enumerate books, so its distinct-book
+                // union is 0 — report null instead of a misleading 0. (Desktop MCP friction report)
+                TotalBookCount: request.IncludeBooks ? result.TotalBookCount : (int?)null,
                 // `truncated` means ONLY that the pattern overflowed the expansion cap (narrow it) — a normal
                 // large result is `hasMore:true, truncated:false` (page it). Don't leak the UI's page-cap
                 // "refine your search" message as the note; only the genuine cap message.

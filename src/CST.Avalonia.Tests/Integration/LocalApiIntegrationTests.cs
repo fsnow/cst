@@ -90,6 +90,9 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Equal(2, leanBooks);                                       // dhamma occurs in both fixture books
             Assert.True(leanTotal >= 2);
             Assert.Equal(0, leanTerm.GetProperty("books").GetArrayLength());  // per-book breakdown omitted
+            // Page-level totalBookCount is NULL in the counts-only path (no book union available) - not a
+            // misleading 0. (Desktop MCP friction report)
+            Assert.Equal(JsonValueKind.Null, lean.RootElement.GetProperty("totalBookCount").ValueKind);
 
             // includeBooks => the POSTINGS path, with the per-book breakdown. Counts must AGREE across paths.
             using var full = await PostDoc(http, "/v1/search",
@@ -98,6 +101,8 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Equal(2, fullTerm.GetProperty("books").GetArrayLength());
             Assert.Equal(leanTotal, fullTerm.GetProperty("totalCount").GetInt32());
             Assert.Equal(leanBooks, fullTerm.GetProperty("bookCount").GetInt32());
+            // With includeBooks, totalBookCount is the real distinct-book union over the page.
+            Assert.Equal(2, full.RootElement.GetProperty("totalBookCount").GetInt32());
         }
 
         [Fact]
@@ -144,13 +149,7 @@ namespace CST.Avalonia.Tests.Integration
             // Happy path: drive the REAL MCP client over the Streamable HTTP transport with the bearer, exactly
             // as Claude Desktop's mcp-remote bridge does. Proves the initialize -> list -> call handshake
             // survives our Origin-reject + bearer gate, and that the one wired tool actually runs.
-            var transport = new HttpClientTransport(new HttpClientTransportOptions
-            {
-                Endpoint = new System.Uri(_api.BaseUrl + "/mcp"),
-                TransportMode = HttpTransportMode.StreamableHttp,
-                AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = "Bearer " + _api.Token },
-            });
-            await using var client = await McpClient.CreateAsync(transport);
+            await using var client = await ConnectMcpAsync();
 
             var tools = await client.ListToolsAsync();
             Assert.Contains(tools, t => t.Name == "search");
@@ -164,6 +163,80 @@ namespace CST.Avalonia.Tests.Integration
             var text = string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
             var structured = result.StructuredContent?.GetRawText() ?? string.Empty;
             Assert.Contains("dhamma", text + structured);
+        }
+
+        // Connects the real MCP client over Streamable HTTP with the bearer, as Claude Desktop's mcp-remote
+        // bridge does.
+        private async Task<McpClient> ConnectMcpAsync()
+        {
+            var transport = new HttpClientTransport(new HttpClientTransportOptions
+            {
+                Endpoint = new System.Uri(_api.BaseUrl + "/mcp"),
+                TransportMode = HttpTransportMode.StreamableHttp,
+                AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = "Bearer " + _api.Token },
+            });
+            return await McpClient.CreateAsync(transport);
+        }
+
+        private static string ToolText(ModelContextProtocol.Protocol.CallToolResult r) =>
+            string.Concat(r.Content.OfType<TextContentBlock>().Select(b => b.Text))
+            + (r.StructuredContent?.GetRawText() ?? string.Empty);
+
+        [Fact]
+        public async Task Mcp_lists_the_read_tool_set()
+        {
+            await using var client = await ConnectMcpAsync();
+            var names = (await client.ListToolsAsync()).Select(t => t.Name).ToHashSet();
+            // The read tools wired by the test server (search+occurrences via ISearchTool, passage, script,
+            // books). Dictionary is not wired in the test server, so it is (correctly) absent.
+            foreach (var expected in new[] { "search", "occurrences", "passage", "books", "convert", "scripts" })
+                Assert.Contains(expected, names);
+        }
+
+        [Fact]
+        public async Task Mcp_occurrences_and_passage_read_the_corpus()
+        {
+            await using var client = await ConnectMcpAsync();
+
+            // occurrences: hit-in-context snippet for a term in a specific book. Pass the mode/outputScript
+            // ENUMS as strings to exercise the closed-enum schema binding (Desktop MCP friction: bare strings).
+            var occ = await client.CallToolAsync("occurrences",
+                new Dictionary<string, object?>
+                {
+                    ["bookId"] = _api.MulaBook, ["term"] = "dhamma",
+                    ["mode"] = "Exact", ["outputScript"] = "Latin",
+                });
+            Assert.NotEqual(true, occ.IsError);
+            Assert.Contains("dhamma", ToolText(occ), System.StringComparison.OrdinalIgnoreCase);
+
+            // passage: read the book's text (romanized), turning a bookId + count into readable source.
+            var pass = await client.CallToolAsync("passage",
+                new Dictionary<string, object?> { ["bookId"] = _api.MulaBook });
+            Assert.NotEqual(true, pass.IsError);
+            Assert.Contains("dhamma", ToolText(pass), System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task Mcp_books_tool_resolves_ids_to_names()
+        {
+            await using var client = await ConnectMcpAsync();
+            var books = await client.CallToolAsync("books", new Dictionary<string, object?>());
+            Assert.NotEqual(true, books.IsError);
+            // The fixture's mula book (a real catalog file name) is listed - so an agent can resolve a bookId.
+            Assert.Contains(_api.MulaBook, ToolText(books));
+        }
+
+        [Fact]
+        public async Task Mcp_exposes_the_llms_txt_resource()
+        {
+            await using var client = await ConnectMcpAsync();
+            // An MCP client has no base URL to "fetch /llms.txt" - it must be discoverable + readable as a resource.
+            var resources = await client.ListResourcesAsync();
+            Assert.Contains(resources, r => r.Uri == "cst:///llms.txt");
+
+            var read = await client.ReadResourceAsync("cst:///llms.txt");
+            var body = string.Concat(read.Contents.OfType<TextResourceContents>().Select(c => c.Text));
+            Assert.Contains("CST Reader", body);   // the version stamp / orientation doc
         }
     }
 }
