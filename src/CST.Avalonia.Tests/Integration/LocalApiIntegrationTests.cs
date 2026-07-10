@@ -89,10 +89,10 @@ namespace CST.Avalonia.Tests.Integration
             int leanBooks = leanTerm.GetProperty("bookCount").GetInt32();
             Assert.Equal(2, leanBooks);                                       // dhamma occurs in both fixture books
             Assert.True(leanTotal >= 2);
-            Assert.Equal(0, leanTerm.GetProperty("books").GetArrayLength());  // per-book breakdown omitted
-            // Page-level totalBookCount is NULL in the counts-only path (no book union available) - not a
+            Assert.Equal(JsonValueKind.Null, leanTerm.GetProperty("books").ValueKind);  // null (not []) when omitted
+            // Page-level returnedBookCount is NULL in the counts-only path (no book union available) - not a
             // misleading 0. (Desktop MCP friction report)
-            Assert.Equal(JsonValueKind.Null, lean.RootElement.GetProperty("totalBookCount").ValueKind);
+            Assert.Equal(JsonValueKind.Null, lean.RootElement.GetProperty("returnedBookCount").ValueKind);
 
             // includeBooks => the POSTINGS path, with the per-book breakdown. Counts must AGREE across paths.
             using var full = await PostDoc(http, "/v1/search",
@@ -101,8 +101,8 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Equal(2, fullTerm.GetProperty("books").GetArrayLength());
             Assert.Equal(leanTotal, fullTerm.GetProperty("totalCount").GetInt32());
             Assert.Equal(leanBooks, fullTerm.GetProperty("bookCount").GetInt32());
-            // With includeBooks, totalBookCount is the real distinct-book union over the page.
-            Assert.Equal(2, full.RootElement.GetProperty("totalBookCount").GetInt32());
+            // With includeBooks, returnedBookCount is the real distinct-book union over the page.
+            Assert.Equal(2, full.RootElement.GetProperty("returnedBookCount").GetInt32());
         }
 
         [Fact]
@@ -149,7 +149,11 @@ namespace CST.Avalonia.Tests.Integration
                 Json($"{{\"bookId\":\"{_api.MulaBook}\",\"term\":\"dhamm*\",\"mode\":\"Wildcard\"}}"));
             Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
-            Assert.True(doc.RootElement.GetArrayLength() >= 1, "single-word wildcard should return occurrences");
+            // /v1/occurrences now returns an envelope { occurrences, returnedCount, total, hasMore }, not a bare array.
+            var occ = doc.RootElement.GetProperty("occurrences");
+            Assert.True(occ.GetArrayLength() >= 1, "single-word wildcard should return occurrences");
+            Assert.Equal(occ.GetArrayLength(), doc.RootElement.GetProperty("returnedCount").GetInt32());
+            Assert.True(doc.RootElement.GetProperty("total").GetInt32() >= 1);
         }
 
         [Fact]

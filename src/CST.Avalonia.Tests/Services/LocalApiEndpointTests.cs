@@ -33,7 +33,7 @@ namespace CST.Avalonia.Tests.Services
             search.Setup(t => t.SearchAsync(It.IsAny<SearchToolRequest>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new SearchToolResult(
                     new List<SearchTermResult> { new("dhamma", 5, new List<BookHitSummary>()) },
-                    TotalTermCount: 1, TotalOccurrenceCount: 5, TotalBookCount: 1, Truncated: false, Note: null));
+                    ReturnedTermCount: 1, ReturnedOccurrenceCount: 5, ReturnedBookCount: 1, Truncated: false, Note: null));
 
             _server = new LocalApiServer("5.0.0-test", _dir, Serilog.Log.Logger,
                 search.Object, dictionary: null, passage: null, script: new ScriptTool());

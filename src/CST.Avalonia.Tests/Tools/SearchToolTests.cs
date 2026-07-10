@@ -111,7 +111,7 @@ namespace CST.Avalonia.Tests.Tools
             // Default: the per-book breakdown is omitted, but bookCount and hasMore are always present.
             var lean = await tool.SearchAsync(new SearchToolRequest("q"));
             var t = Assert.Single(lean.Terms);
-            Assert.Empty(t.Books);
+            Assert.Null(t.Books);                      // null (not []) when the per-book breakdown wasn't requested
             Assert.Equal(2, t.BookCount);
             Assert.True(lean.HasMore);
 
@@ -131,7 +131,7 @@ namespace CST.Avalonia.Tests.Tools
             // OutputScript defaults to Latin; opt into the per-book breakdown to verify bookName romanization.
             var result = await tool.SearchAsync(new SearchToolRequest("q", IncludeBooks: true));
 
-            Assert.Equal(1, result.TotalTermCount);
+            Assert.Equal(1, result.ReturnedTermCount);
             Assert.True(result.Truncated);
             Assert.Equal("capped", result.Note);
 
@@ -207,7 +207,7 @@ namespace CST.Avalonia.Tests.Tools
                 var occ = await tool.GetOccurrencesAsync(
                     new OccurrenceRequest(book, "tgt", OutputScript: Script.Devanagari, MinChars: 1));
 
-                var o = Assert.Single(occ);
+                var o = Assert.Single(occ.Occurrences);
                 Assert.Contains("TARGET", o.Snippet);
                 Assert.Contains("ccc", o.Snippet);
                 Assert.Contains("ddd", o.Snippet);
@@ -258,7 +258,7 @@ namespace CST.Avalonia.Tests.Tools
                 var occ = await tool.GetOccurrencesAsync(new OccurrenceRequest(
                     book, "avijja sankhara", OutputScript: Script.Devanagari, MinChars: 1, ProximityDistance: 5));
 
-                var o = Assert.Single(occ);
+                var o = Assert.Single(occ.Occurrences);
                 Assert.Equal(2, o.Highlights.Count);
                 Assert.Equal(1, o.Highlights.Count(h => h.IsAnchor));   // exactly one navigable anchor
                 Assert.True(o.Highlights[0].IsAnchor);                  // AVIJJA (first by offset) is the anchor
@@ -304,7 +304,7 @@ namespace CST.Avalonia.Tests.Tools
                 var occ = await tool.GetOccurrencesAsync(new OccurrenceRequest(
                     book, "avij*", OutputScript: Script.Devanagari, MinChars: 1, Mode: SearchToolMode.Wildcard));
 
-                var o = Assert.Single(occ);
+                var o = Assert.Single(occ.Occurrences);
                 Assert.Equal("AVIJJA", o.Snippet.Substring(o.HitStart, o.HitLength));
                 search.Verify(s => s.GetTermPositionsAsync(It.IsAny<string>(), It.IsAny<string>(),
                     It.IsAny<CancellationToken>()), Times.Never);   // NOT the literal path
@@ -355,7 +355,7 @@ namespace CST.Avalonia.Tests.Tools
             var tool = new SearchTool(search.Object, Settings("/nonexistent"));
             var occ = await tool.GetOccurrencesAsync(new OccurrenceRequest("x.xml", "t"));
 
-            Assert.Empty(occ);
+            Assert.Empty(occ.Occurrences);
         }
     }
 }

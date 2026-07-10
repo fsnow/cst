@@ -63,7 +63,8 @@ namespace CST.Avalonia.Services.Tools
                         // Nav paths are stored Devanagari; romanize to the requested script like everything else. (#186 cold test)
                         BookName: ScriptConverter.Convert(o.Book?.LongNavPath ?? string.Empty, Script.Devanagari, request.OutputScript),
                         Count: o.Count)).ToList()
-                    : (IReadOnlyList<BookHitSummary>)Array.Empty<BookHitSummary>(),
+                    // null (not []) when not requested, so "not asked for" is unambiguous vs an empty result.
+                    : null,
                 // Counts-only path sets BookCount from the index (Occurrences empty); the postings path leaves
                 // BookCount 0, so fall back to the per-book count it computed.
                 BookCount: t.BookCount > 0 ? t.BookCount : t.Occurrences.Count)).ToList();
@@ -78,11 +79,13 @@ namespace CST.Avalonia.Services.Tools
 
             return new SearchToolResult(
                 Terms: terms,
-                TotalTermCount: result.TotalTermCount,
-                TotalOccurrenceCount: result.TotalOccurrenceCount,
+                // Page-scoped counts, named "returned*" so they aren't mistaken for corpus-wide totals
+                // (per-term TotalCount/BookCount ARE corpus-wide). (Desktop MCP friction report)
+                ReturnedTermCount: result.TotalTermCount,
+                ReturnedOccurrenceCount: result.TotalOccurrenceCount,
                 // The counts-only fast path (IncludeBooks=false) doesn't enumerate books, so its distinct-book
                 // union is 0 — report null instead of a misleading 0. (Desktop MCP friction report)
-                TotalBookCount: request.IncludeBooks ? result.TotalBookCount : (int?)null,
+                ReturnedBookCount: request.IncludeBooks ? result.TotalBookCount : (int?)null,
                 // `truncated` means ONLY that the pattern overflowed the expansion cap (narrow it) — a normal
                 // large result is `hasMore:true, truncated:false` (page it). Don't leak the UI's page-cap
                 // "refine your search" message as the note; only the genuine cap message.
@@ -100,13 +103,15 @@ namespace CST.Avalonia.Services.Tools
             return terms.Select(t => ScriptConverter.Convert(t, Script.Unknown, outputScript)).ToList();
         }
 
-        public async Task<IReadOnlyList<Occurrence>> GetOccurrencesAsync(
+        private static readonly OccurrenceResult EmptyOccurrences = new(Array.Empty<Occurrence>(), 0, 0, false);
+
+        public async Task<OccurrenceResult> GetOccurrencesAsync(
             OccurrenceRequest request, CancellationToken ct = default)
         {
             var dir = _settings.Settings?.XmlBooksDirectory;
-            if (string.IsNullOrEmpty(dir)) return Array.Empty<Occurrence>();
+            if (string.IsNullOrEmpty(dir)) return EmptyOccurrences;
             var path = Path.Combine(dir, request.BookId);
-            if (!File.Exists(path)) return Array.Empty<Occurrence>();
+            if (!File.Exists(path)) return EmptyOccurrences;
 
             // Route to the EXPANDING path (GetMultiWordPositionsAsync) for anything that needs term expansion or
             // co-occurrence: a phrase, 2+ units, OR a single Wildcard/Regex word — which must be EXPANDED, not
@@ -134,7 +139,7 @@ namespace CST.Avalonia.Services.Tools
                     .Select(p => new List<SnippetMark> { new SnippetMark(p.StartOffset, p.EndOffset, true) })
                     .ToList();
             }
-            if (perOccurrence.Count == 0) return Array.Empty<Occurrence>();
+            if (perOccurrence.Count == 0) return EmptyOccurrences;
 
             // Char offsets index the decoded (BOM-stripped) UTF-16 text — read it the same way.
             string xml = await File.ReadAllTextAsync(path, Encoding.Unicode, ct).ConfigureAwait(false);
@@ -170,7 +175,12 @@ namespace CST.Avalonia.Services.Tools
                     Highlights: s.Highlights
                         .Select(h => new OccurrenceHighlight(h.Start, h.Length, h.IsAnchor)).ToList()));
             }
-            return occurrences;
+            // Envelope (like search): book-scoped total + hasMore, so an agent paging occurrences isn't blind.
+            return new OccurrenceResult(
+                Occurrences: occurrences,
+                ReturnedCount: occurrences.Count,
+                Total: perOccurrence.Count,
+                HasMore: request.Skip + occurrences.Count < perOccurrence.Count);
 
             static int AnchorStart(List<SnippetMark> m)
             {

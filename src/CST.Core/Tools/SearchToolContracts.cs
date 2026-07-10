@@ -30,7 +30,7 @@ namespace CST.Tools
         /// Pass the <c>Term</c> from a prior search (in whatever script it came back). This is the data behind
         /// both the agent loop (scan → cite/fetch) and the human concordance panel.
         /// </summary>
-        Task<IReadOnlyList<Occurrence>> GetOccurrencesAsync(OccurrenceRequest request, CancellationToken ct = default);
+        Task<OccurrenceResult> GetOccurrencesAsync(OccurrenceRequest request, CancellationToken ct = default);
     }
 
     /// <summary>How the query text is interpreted.</summary>
@@ -79,20 +79,22 @@ namespace CST.Tools
         bool IncludeBooks = false);
 
     /// <summary>Search results: matching terms (token-frugal — per-book breakdown and positions are opt-in).</summary>
-    /// <param name="TotalOccurrenceCount">Sum over the terms IN THIS PAGE (not the whole result set).</param>
-    /// <param name="TotalBookCount">Distinct books over the terms IN THIS PAGE (not the whole result set).
-    /// <b>Null when <c>IncludeBooks</c> is false</c></b> — the counts-only fast path does not enumerate books,
-    /// so the distinct-book union is not available and is reported as null (not a misleading 0). Per-term
-    /// <c>BookCount</c> is always present.</param>
+    /// <param name="ReturnedTermCount">How many matching term-forms are IN THIS PAGE (= <c>Terms.Count</c>), NOT
+    /// the corpus-wide match count. Use <c>HasMore</c> to page; there is no cheap whole-result term total.</param>
+    /// <param name="ReturnedOccurrenceCount">Sum of <c>TotalCount</c> over the terms IN THIS PAGE (not the whole
+    /// result set). Per-term <c>TotalCount</c> is corpus-wide; this page sum is not.</param>
+    /// <param name="ReturnedBookCount">Distinct books over the terms IN THIS PAGE. <b>Null when
+    /// <c>IncludeBooks</c> is false</b> — the counts-only fast path does not enumerate books, so the union is
+    /// unavailable and reported as null (not a misleading 0). Per-term <c>BookCount</c> is always present.</param>
     /// <param name="HasMore">True if at least one more matching term exists after this page — request the next
     /// page with <c>Skip += MaxTerms</c>. This, not the page length, is the paging signal.</param>
     /// <param name="Truncated">The pattern overflowed the engine's expansion limit (very broad wildcard/regex);
     /// distinct from <see cref="HasMore"/>.</param>
     public sealed record SearchToolResult(
         IReadOnlyList<SearchTermResult> Terms,
-        int TotalTermCount,
-        int TotalOccurrenceCount,
-        int? TotalBookCount,
+        int ReturnedTermCount,
+        int ReturnedOccurrenceCount,
+        int? ReturnedBookCount,
         bool Truncated,
         bool HasMore = false,
         string? Note = null);
@@ -101,11 +103,12 @@ namespace CST.Tools
     /// <param name="Term">The term in the requested output script — pass it back verbatim as
     /// <c>OccurrenceRequest.Term</c> to read it in context.</param>
     /// <param name="BookCount">How many books this term occurs in (always present — the spread, without the list).</param>
-    /// <param name="Books">Per-book breakdown; empty unless <c>SearchToolRequest.IncludeBooks</c> was true.</param>
+    /// <param name="Books">Per-book breakdown; <b>null</b> unless <c>SearchToolRequest.IncludeBooks</c> was true
+    /// (null = "not requested", unambiguous vs. an empty result).</param>
     public sealed record SearchTermResult(
         string Term,
         int TotalCount,
-        IReadOnlyList<BookHitSummary> Books,
+        IReadOnlyList<BookHitSummary>? Books,
         int BookCount = 0);
 
     /// <summary>A term's occurrence count within one book (call <c>GetOccurrencesAsync</c> for the snippets).</summary>
@@ -165,4 +168,20 @@ namespace CST.Tools
         bool IncludedVariants,
         int Cursor,
         IReadOnlyList<OccurrenceHighlight> Highlights);
+
+    /// <summary>
+    /// A page of a term's in-context occurrences within one book — the same envelope shape as
+    /// <see cref="SearchToolResult"/>, so the tool family is consistent and an agent isn't left paging blind
+    /// over a bare array. (Desktop MCP friction report)
+    /// </summary>
+    /// <param name="Occurrences">This page of occurrences (after <c>Skip</c>/<c>Take</c>).</param>
+    /// <param name="ReturnedCount">How many occurrences are in this page (= <c>Occurrences.Count</c>).</param>
+    /// <param name="Total">Total occurrences of the term in this book (before paging) — book-scoped.</param>
+    /// <param name="HasMore">True if more occurrences remain after this page; request the next with
+    /// <c>Skip += Take</c>.</param>
+    public sealed record OccurrenceResult(
+        IReadOnlyList<Occurrence> Occurrences,
+        int ReturnedCount,
+        int Total,
+        bool HasMore);
 }
