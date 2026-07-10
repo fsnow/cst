@@ -65,6 +65,30 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void ReadWindow_cursor_snaps_start_back_to_the_enclosing_sentence()
+        {
+            // A cursor from `occurrences` points AT the hit, mid-sentence. The window START must snap back to the
+            // enclosing sentence so the hit is read with its head, not from the hit. (Desktop MCP friction, P1)
+            var markers = BookMarkers.Build(Xml);
+            int cursor = Xml.IndexOf("foxtrot", System.StringComparison.Ordinal);   // mid 3rd sentence "echo foxtrot"
+            Assert.True(cursor > 0);
+
+            // Without snapping, the window opens at the hit - the sentence head "echo" is lost.
+            var raw = TeiPassageReader.ReadWindow(Xml, cursor, maxChars: 100, includeVariants: false,
+                outputScript: Script.Devanagari, markers, snapStartToSentence: false);
+            Assert.Contains("foxtrot", raw.Text);
+            Assert.DoesNotContain("echo", raw.Text);
+
+            // With snapping, the window starts at the sentence start "echo"...
+            var snapped = TeiPassageReader.ReadWindow(Xml, cursor, maxChars: 100, includeVariants: false,
+                outputScript: Script.Devanagari, markers, snapStartToSentence: true);
+            Assert.Contains("echo", snapped.Text);
+            Assert.Contains("foxtrot", snapped.Text);
+            // ...but does NOT bleed back across the sentence boundary into the previous sentence.
+            Assert.DoesNotContain("charlie", snapped.Text);
+        }
+
+        [Fact]
         public void ReadWindow_large_budget_reaches_end()
         {
             var markers = BookMarkers.Build(Xml);
