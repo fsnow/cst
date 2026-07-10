@@ -58,7 +58,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "term returned by 'search' (in the same script it came back) and a bookId from its per-book "
             + "breakdown or the 'books' tool. A space-separated multi-word term co-occurs within a proximity "
             + "window; a quoted run is an adjacent phrase.")]
-        public static async Task<IReadOnlyList<Occurrence>> OccurrencesAsync(
+        public static async Task<OccurrenceResult> OccurrencesAsync(
             ISearchTool search,
             [Description("The book's id (file name), e.g. from a search result's per-book breakdown or the 'books' tool.")]
             string bookId,

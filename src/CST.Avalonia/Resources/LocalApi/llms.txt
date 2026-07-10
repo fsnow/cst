@@ -23,8 +23,8 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   convention) - normalize/strip U+200C before comparing or matching strings.
 - Cursors (`prevCursor` / `nextCursor` from `/v1/passage`) are INTEGERS, and opaque - pass one back verbatim
   as `cursor` to page; do not interpret them or do arithmetic on them. `null` means the start/end of the book.
-- Response shape is per endpoint: `/v1/search`, `/v1/passage`, `/v1/convert`, `/v1/status` return a JSON
-  object; `/v1/occurrences`, `/v1/dictionary/lookup`, `/v1/books`, `/v1/scripts` return a bare JSON array.
+- Response shape is per endpoint: `/v1/search`, `/v1/occurrences`, `/v1/passage`, `/v1/convert`, `/v1/status`
+  return a JSON object; `/v1/dictionary/lookup`, `/v1/books`, `/v1/scripts` return a bare JSON array.
 - You work entirely in readable Pali (romanized by default). To read a search hit in context, pass the
   term's `term` value (exactly as `/v1/search` returned it, in whatever script you requested) back to
   `/v1/occurrences` as `term`. There is no opaque id to round-trip - the server handles the internal encoding.
@@ -88,13 +88,15 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   full page can also be the last one; `hasMore` is the signal). No fixed upper bound on how far you can page.
   Terms come back in INDEX (ordinal) order, NOT by frequency, so a COMMON form can sit on a LATER page - to
   gather a stem's COMPLETE family you MUST page while `hasMore`; do not treat page 1 as the whole set.
-  Each term is `{ term, totalCount, bookCount, books }`. `books` (the per-book `{ bookId, bookName, count }`
-  breakdown) is OMITTED unless you pass `includeBooks: true` - it is the bulk of the payload; `bookCount` (how
-  many books the term is in) is ALWAYS present. Returns
-  `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, hasMore, truncated, note }`. NOTE: the
-  `total*` fields are per-PAGE sums, not whole-result-set totals - for a stem's true footprint, page through
-  and add, or run an Exact query per form. (`totalBookCount` is populated only with `includeBooks:true`; the
-  default fast path returns it as `null` - use the per-term `bookCount` instead.) `hasMore` and `truncated` are DIFFERENT signals: a normal large
+  Each term is `{ term, totalCount, bookCount, books }`. Per-term `totalCount`/`bookCount` are CORPUS-WIDE.
+  `books` (the per-book `{ bookId, bookName, count }` breakdown) is `null` unless you pass `includeBooks: true`
+  (null = "not requested"; it is the bulk of the payload); `bookCount` (how many books the term is in) is
+  ALWAYS present. A multi-word/phrase `term` comes back space-joined (e.g. `ekayano ayam`) - pass it verbatim to
+  `/v1/occurrences`. Returns
+  `{ terms, returnedTermCount, returnedOccurrenceCount, returnedBookCount, hasMore, truncated, note }`. NOTE: the
+  `returned*` fields are THIS PAGE's counts, NOT whole-result-set totals - for a stem's true footprint, page
+  through and add, or run an Exact query per form. (`returnedBookCount` is the page's distinct-book union, and
+  is `null` on the default fast path - use the per-term `bookCount` instead.) `hasMore` and `truncated` are DIFFERENT signals: a normal large
   result set is `hasMore:true, truncated:false` (just page it) - `truncated:true` means a very broad
   wildcard/regex overflowed the engine's expansion limit so some forms are UNREACHABLE (NARROW the pattern;
   paging will not recover them).
@@ -103,18 +105,22 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   minChars?, maxChars? }`. `term` is EITHER a single `term` from a prior `/v1/search`, OR a MULTI-WORD /
   PROXIMITY query - space-separated words that co-occur within `proximityDistance`, or a quoted run for an
   adjacent phrase (`mode` expands wildcard/regex per word, same as `/v1/search`). This is how you read a
-  PROXIMITY search in context: its `~`-joined search `term` does NOT round-trip here, so pass the ORIGINAL
-  multi-word query instead. Words match LITERALLY (as in search), so reuse the SAME wildcards you searched
+  MULTI-WORD / PROXIMITY search in context: `/v1/search` returns a multi-word match's `term` space-joined
+  (e.g. `ekayano ayam`), so pass it straight back here. Words match LITERALLY (as in search), so reuse the SAME wildcards you searched
   with - a bare `avijja` will miss the sandhi forms `avijjaya`/`avijjapaccaya`, whereas `avijj*` catches them.
-  Each occurrence is `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedVariants, cursor,
-  highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
+  The response is an envelope `{ occurrences, returnedCount, total, hasMore }` - `total` is the term's
+  occurrence count in THAT book (before paging), so page with `skip`/`take` while `hasMore`. Each occurrence is
+  `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedVariants, cursor, highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
   offsets - `[{ start, length, isAnchor }]`: a single-term hit has one, a proximity/phrase hit has one PER
   co-occurring word with exactly one `isAnchor:true` (the navigable word; the rest are the co-occurring
-  context). `hitStart`/`hitLength` mirror the anchor. Citation data is NESTED
+  context). `hitStart`/`hitLength` mirror the anchor. All snippet offsets (`hitStart`/`hitLength`/`highlights`)
+  are relative to the RETURNED text in the requested `outputScript` - do not reuse them across a script change.
+  Citation data is NESTED
   under `refs` (NOT top-level as on `/v1/passage`): `refs.paragraphNumber`, `refs.paragraphBookCode`
   (the Multi sub-book code, e.g. "kn17"), and `refs.pages[]` where each page is `{ edition, volume, number }`
   - e.g. `{ "edition": "Vri", "volume": 3, "number": 196 }`, conventionally cited "VRI 3:196" (edition
-  values: `Vri`, `Myanmar`, `Pts`, `Thai`; `volume` is `0` for a single-volume edition). `cursor` is the
+  values: `Vri`, `Myanmar`, `Pts`, `Thai`; `volume` is `0` for a single-volume edition; `pages` CAN be empty,
+  e.g. at a section's first paragraph before any page break). `cursor` is the
   hit's unique locator - pass it to `/v1/passage`
   as `cursor` to read the exact passage around THIS hit (paragraph numbers repeat within a book, so the
   paragraph number alone is not a unique locator). `includedVariants` echoes your request flag (whether
@@ -122,7 +128,10 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeVariantReadings? }`.
   Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, ... }`. Page by passing back the
-  integer `prevCursor` / `nextCursor` as `cursor` (see the cursor note above). NOTE: `paragraph:N` opens at the
+  integer `prevCursor` / `nextCursor` as `cursor` (see the cursor note above). A `cursor` (from occurrences or
+  passage) reads the ENCLOSING SENTENCE: the window start is snapped back so you get the governing clause, not a
+  mid-sentence fragment. `maxChars` is a SOFT budget - the window OVERSHOOTS to the next sentence boundary, so
+  returned text can exceed it. NOTE: `paragraph:N` opens at the
   START of paragraph N but the window is bounded by `maxChars`, so a long paragraph spans several windows and
   `nextCursor` may still be INSIDE the same paragraph - keep paging until `normalizedReference` changes, or
   raise `maxChars`.
@@ -136,7 +145,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 ## A typical research flow
 
 1. `POST /v1/search` for a word -> keep each `term` you want. NOTE: `mode: "Exact"` matches ONE literal
-   whole-word form, so its `totalOccurrenceCount` is that single form's count, NOT the stem's whole
+   whole-word form, so its `returnedOccurrenceCount` is that single form's count, NOT the stem's whole
    footprint. To gather a stem's inflectional family (nominative, accusative, instrumental... together),
    follow up with a length-bounded anchored regex - `{ "query": "^metta.{1,4}$", "mode": "Regex" }`
    returns each case-form (`metta`, `mettam`, `mettaya`, `mettena`, ...) as its own `term` with its own
