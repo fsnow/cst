@@ -21,6 +21,7 @@ using CST.Conversion;
 using CST.Navigation;
 using CST.Tools;
 using CST.Avalonia.Services.LocalApi.Mcp;
+using ModelContextProtocol.Server;
 using Serilog;
 
 namespace CST.Avalonia.Services.LocalApi
@@ -37,6 +38,15 @@ namespace CST.Avalonia.Services.LocalApi
     public sealed class LocalApiServer : IAsyncDisposable
     {
         private const string ApiVersion = "v1";
+
+        // JSON for MCP tool results/params: camelCase + string enums (e.g. page editions, pitaka, scripts),
+        // so results are agent-readable like the /v1 surface.
+        private static readonly JsonSerializerOptions McpJson = new(JsonSerializerDefaults.Web)
+        {
+            // The MCP SDK freezes these options; a reflection-based resolver must be set first (non-AOT app).
+            TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+            Converters = { new JsonStringEnumConverter() }
+        };
 
         private readonly string _appVersion;
         private readonly string _handshakeDirectory;
@@ -100,17 +110,36 @@ namespace CST.Avalonia.Services.LocalApi
                 o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // "Latin" not 3, for other enums
             });
 
-            // MCP surface (#191, increment 1): expose the search tool over the Streamable HTTP transport at
-            // /mcp — MCP is just another transport on the same tool layer /v1 uses, not a proxy. A BYO-MCP chat
-            // client (Claude Desktop via the mcp-remote bridge) connects here; code-capable agents keep hitting
-            // /v1 directly. Registered only when the search tool is present, mirroring the /v1 endpoint wiring.
+            // MCP surface (#191): expose the read tool set over the Streamable HTTP transport at /mcp — MCP is
+            // just another transport on the same tool layer /v1 uses, not a proxy. A BYO-MCP chat client (Claude
+            // Desktop via the mcp-remote bridge) connects here; code-capable agents keep hitting /v1 directly.
+            // Tool groups are registered only when their backing service is present (mirroring the /v1 wiring);
+            // 'books' needs no service, so /mcp is always available when the server runs.
+            var mcp = builder.Services.AddMcpServer().WithHttpTransport();
+            mcp.WithTools<BooksMcpTool>(McpJson);
             if (_search is { } mcpSearch)
             {
                 builder.Services.AddSingleton(mcpSearch);
-                builder.Services.AddMcpServer()
-                    .WithHttpTransport()
-                    .WithTools<SearchMcpTool>();
+                mcp.WithTools<SearchMcpTool>(McpJson);
             }
+            if (_passage is { } mcpPassage)
+            {
+                builder.Services.AddSingleton(mcpPassage);
+                mcp.WithTools<PassageMcpTool>(McpJson);
+            }
+            if (_script is { } mcpScript)
+            {
+                builder.Services.AddSingleton(mcpScript);
+                mcp.WithTools<ScriptMcpTool>(McpJson);
+            }
+            if (_dictionary is { } mcpDictionary)
+            {
+                builder.Services.AddSingleton(mcpDictionary);
+                mcp.WithTools<DictionaryMcpTool>(McpJson);
+            }
+            // Expose llms.txt as an MCP resource — an MCP client has no base URL to "fetch /llms.txt", so give
+            // it the same version-stamped orientation as a readable resource. (Desktop MCP friction report)
+            mcp.WithResources(new[] { BuildLlmsResource() });
 
             var app = builder.Build();
 
@@ -147,22 +176,14 @@ namespace CST.Avalonia.Services.LocalApi
 
             // Unauthenticated front door: the agent's orientation (endpoints, conventions, auth handshake).
             // Version-stamped so it can't be mistaken for a different build's surface.
-            app.MapGet("/llms.txt", () =>
-            {
-                var body = ReadResource("LocalApi.llms.txt")
-                    ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
-                var stamped = $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + body;
-                return Results.Text(stamped, "text/markdown; charset=utf-8");
-            });
+            app.MapGet("/llms.txt", () => Results.Text(BuildLlmsText(), "text/markdown; charset=utf-8"));
 
             MapToolEndpoints(app);
 
-            // Streamable HTTP MCP endpoint. Sits behind the same security middleware as everything else, so it
-            // requires the bearer token and rejects Origin-bearing (browser) requests. (#191)
-            if (_search != null)
-            {
-                app.MapMcp("/mcp");
-            }
+            // Streamable HTTP MCP endpoint (read tool set + llms.txt resource). Behind the same security
+            // middleware as everything else: requires the bearer token and rejects Origin-bearing requests.
+            // Always mapped — the 'books' tool needs no backing service. (#191)
+            app.MapMcp("/mcp");
 
             await app.StartAsync(ct);
 
@@ -205,6 +226,34 @@ namespace CST.Avalonia.Services.LocalApi
             !path.HasValue || path == "/"
             || path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/docs", StringComparison.OrdinalIgnoreCase);
+
+        // The version-stamped llms.txt body, served both at GET /llms.txt and as the MCP llms.txt resource
+        // (single source, so the two can't drift). Version-stamped so it can't be mistaken for another build.
+        private string BuildLlmsText()
+        {
+            var body = ReadResource("LocalApi.llms.txt")
+                ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
+            return $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + body;
+        }
+
+        // The same orientation doc as an MCP resource, so a Streamable-HTTP client (which has no base URL to
+        // "fetch /llms.txt") can read it. Built from a closure over the stamped text — no DI/static needed.
+        private McpServerResource BuildLlmsResource()
+        {
+            string text = BuildLlmsText();
+            return McpServerResource.Create(
+                () => text,
+                new McpServerResourceCreateOptions
+                {
+                    UriTemplate = "cst:///llms.txt",
+                    Name = "llms.txt",
+                    Title = "CST Reader local API — orientation (llms.txt)",
+                    Description = "Orientation for the CST Reader local API: query modes (Exact = exact inflected "
+                        + "form; Wildcard/Regex), sandhi/compound guidance, the output scripts, apparatus "
+                        + "conventions, paging, and the tool set. Read this first.",
+                    MimeType = "text/markdown",
+                });
+        }
 
         private static string? ReadResource(string endsWith)
         {

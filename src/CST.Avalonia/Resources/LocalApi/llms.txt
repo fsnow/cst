@@ -94,7 +94,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   `{ terms, totalTermCount, totalOccurrenceCount, totalBookCount, hasMore, truncated, note }`. NOTE: the
   `total*` fields are per-PAGE sums, not whole-result-set totals - for a stem's true footprint, page through
   and add, or run an Exact query per form. (`totalBookCount` is populated only with `includeBooks:true`; the
-  default fast path leaves it 0 - use the per-term `bookCount` instead.) `hasMore` and `truncated` are DIFFERENT signals: a normal large
+  default fast path returns it as `null` - use the per-term `bookCount` instead.) `hasMore` and `truncated` are DIFFERENT signals: a normal large
   result set is `hasMore:true, truncated:false` (just page it) - `truncated:true` means a very broad
   wildcard/regex overflowed the engine's expansion limit so some forms are UNREACHABLE (NARROW the pattern;
   paging will not recover them).
