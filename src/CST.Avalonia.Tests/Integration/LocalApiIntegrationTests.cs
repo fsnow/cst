@@ -1,13 +1,18 @@
 using System.Collections.Generic;
+using System.IO.Pipelines;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
+using CST.Avalonia.Services.LocalApi.Mcp;
 using CST.Avalonia.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Integration
@@ -307,6 +312,80 @@ namespace CST.Avalonia.Tests.Integration
             using var doc = ToolJson(filtered);
             int bookCount = doc.RootElement.GetProperty("terms")[0].GetProperty("bookCount").GetInt32();
             Assert.Equal(1, bookCount);   // mula only; the attha book is excluded by the filter
+        }
+
+        [Fact]
+        public async Task Mcp_bridge_relays_list_and_call_to_the_real_mcp()
+        {
+            // The --mcp-bridge relay (#278 Phase 1): an MCP client drives the bridge over in-memory pipes; the
+            // bridge transparently forwards to the REAL /mcp. Proves the transport pump handshakes (initialize
+            // through the relay) + round-trips list/call end-to-end.
+            var toServer = new Pipe();   // client writes -> bridge(server) reads
+            var toClient = new Pipe();   // bridge writes -> client reads
+
+            var clientSide = new StreamServerTransport(
+                toServer.Reader.AsStream(), toClient.Writer.AsStream(), "cst-reader-bridge", NullLoggerFactory.Instance);
+
+            var httpOptions = new HttpClientTransportOptions
+            {
+                Endpoint = new System.Uri(_api.BaseUrl + "/mcp"),
+                TransportMode = HttpTransportMode.StreamableHttp,
+                AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = "Bearer " + _api.Token },
+            };
+
+            using var cts = new CancellationTokenSource(System.TimeSpan.FromSeconds(30));
+            var relay = McpBridge.RunAsync(clientSide, httpOptions, httpClient: null, cts.Token);
+
+            var clientTransport = new StreamClientTransport(
+                toServer.Writer.AsStream(), toClient.Reader.AsStream(), NullLoggerFactory.Instance);
+            await using var client = await McpClient.CreateAsync(clientTransport, cancellationToken: cts.Token);
+
+            // Handshake, list, and call all traverse the relay.
+            var tools = await client.ListToolsAsync(cancellationToken: cts.Token);
+            Assert.Contains(tools, t => t.Name == "search");
+
+            var result = await client.CallToolAsync(
+                "search", new Dictionary<string, object?> { ["query"] = "dhamma" }, cancellationToken: cts.Token);
+            Assert.NotEqual(true, result.IsError);
+            Assert.Contains("dhamma",
+                string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text)));
+
+            cts.Cancel();
+            try { await relay; } catch { /* relay unwinds on cancel */ }
+        }
+
+        [Fact]
+        public async Task Mcp_bridge_errors_fast_not_hangs_on_a_bad_token()
+        {
+            // must-have #2: when a forwarded request fails (here a 401 from a wrong token), the relay synthesizes
+            // a JsonRpcError for the waiting client instead of leaving it to hang. (#278)
+            var toServer = new Pipe();
+            var toClient = new Pipe();
+            var clientSide = new StreamServerTransport(
+                toServer.Reader.AsStream(), toClient.Writer.AsStream(), "cst-reader-bridge", NullLoggerFactory.Instance);
+            var httpOptions = new HttpClientTransportOptions
+            {
+                Endpoint = new System.Uri(_api.BaseUrl + "/mcp"),
+                TransportMode = HttpTransportMode.StreamableHttp,
+                AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = "Bearer WRONG-TOKEN" },
+            };
+            using var cts = new CancellationTokenSource(System.TimeSpan.FromSeconds(30));
+            var relay = McpBridge.RunAsync(clientSide, httpOptions, httpClient: null, cts.Token);
+
+            var clientTransport = new StreamClientTransport(
+                toServer.Writer.AsStream(), toClient.Reader.AsStream(), NullLoggerFactory.Instance);
+
+            // The `initialize` request is forwarded, 401s, and comes back as a JsonRpcError -> CreateAsync fails
+            // FAST (not a spawn-timeout hang). Assert it throws well before the 30s guard.
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await Assert.ThrowsAnyAsync<System.Exception>(async () =>
+            {
+                await using var client = await McpClient.CreateAsync(clientTransport, cancellationToken: cts.Token);
+            });
+            Assert.True(sw.Elapsed < System.TimeSpan.FromSeconds(10), $"errored in {sw.Elapsed} — should be fast, not a hang");
+
+            cts.Cancel();
+            try { await relay; } catch { }
         }
 
         [Fact]
