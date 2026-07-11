@@ -176,12 +176,20 @@ namespace CST.Tools
     /// </summary>
     /// <param name="Occurrences">This page of occurrences (after <c>Skip</c>/<c>Take</c>).</param>
     /// <param name="ReturnedCount">How many occurrences are in this page (= <c>Occurrences.Count</c>).</param>
-    /// <param name="Total">Total occurrences of the term in this book (before paging) — book-scoped.</param>
-    /// <param name="HasMore">True if more occurrences remain after this page; request the next with
+    /// <param name="Total">Number of snippet RECORDS you page over — book-scoped. Co-located hits (multiple
+    /// instances sharing one enclosing sentence) are merged into a single record with multiple
+    /// <see cref="Occurrence.Highlights"/>, so this can be LESS than <see cref="InstanceTotal"/>. Page with
+    /// <c>Skip</c>/<c>Take</c> against THIS number, not the raw instance count.</param>
+    /// <param name="InstanceTotal">Total RAW term instances in this book before co-located merging — book-scoped.
+    /// For a single term this equals the search tool's per-book <c>count</c>; the gap <c>InstanceTotal - Total</c>
+    /// is how many hits shared a record. (So an agent that saw <c>count: 7</c> in <c>search</c> and <c>Total: 5</c>
+    /// here isn't looking at 2 dropped hits — they were folded into records.) Invariant: <c>Total ≤ InstanceTotal</c>.</param>
+    /// <param name="HasMore">True if more records remain after this page; request the next with
     /// <c>Skip += Take</c>.</param>
     public sealed record OccurrenceResult(
         IReadOnlyList<Occurrence> Occurrences,
         int ReturnedCount,
         int Total,
+        int InstanceTotal,
         bool HasMore);
 }

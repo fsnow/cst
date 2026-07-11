@@ -32,7 +32,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             string? bookCode = null,
             [Description("A page cursor from a prior result; when set, overrides paragraph and reads that exact spot.")]
             int? cursor = null,
-            [Description("Rendered-character budget for the window. May overshoot to reach the next sentence boundary, so the returned text can exceed this.")]
+            [Description("Rendered-character budget for the window — a SOFT floor, not a ceiling. The window extends "
+                + "past it to the next sentence end, and Pali sentences (with '…pe…' peyyala elisions) can be very "
+                + "long, so the overshoot is unbounded and can be a large fraction over budget (occasionally several-"
+                + "fold). Don't rely on maxChars for fixed-size chunking; page with the returned cursor instead.")]
             int maxChars = 1200,
             [Description("Script for the returned text.")]
             OutputScript outputScript = OutputScript.Latin,
