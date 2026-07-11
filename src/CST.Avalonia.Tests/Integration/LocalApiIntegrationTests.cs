@@ -389,6 +389,39 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Mcp_bridge_answers_initialize_with_an_error_when_the_app_is_not_ready()
+        {
+            // Phase 3 (#278): when CST Reader never becomes ready (not installed / still starting / AI off), the
+            // bridge must NOT exit silently — it answers the client's `initialize` with a JsonRpcError so Desktop
+            // shows a reason instead of a bare "Server disconnected". Here `clientSide` has no server behind it;
+            // AnswerRequestsWithErrorAsync stands in for the not-ready path.
+            var toServer = new Pipe();
+            var toClient = new Pipe();
+            var clientSide = new StreamServerTransport(
+                toServer.Reader.AsStream(), toClient.Writer.AsStream(), "cst-reader-bridge", NullLoggerFactory.Instance);
+
+            using var cts = new CancellationTokenSource(System.TimeSpan.FromSeconds(30));
+            const string message = "CST Reader did not become ready for MCP.";
+            var pump = McpBridge.AnswerRequestsWithErrorAsync(clientSide, message, cts.Token);
+
+            var clientTransport = new StreamClientTransport(
+                toServer.Writer.AsStream(), toClient.Reader.AsStream(), NullLoggerFactory.Instance);
+
+            // `initialize` is answered with a JsonRpcError -> CreateAsync fails FAST (not a spawn-timeout hang),
+            // and the not-ready reason should surface in the error.
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var ex = await Assert.ThrowsAnyAsync<System.Exception>(async () =>
+            {
+                await using var client = await McpClient.CreateAsync(clientTransport, cancellationToken: cts.Token);
+            });
+            Assert.True(sw.Elapsed < System.TimeSpan.FromSeconds(10), $"errored in {sw.Elapsed} — should be fast, not a hang");
+            Assert.Contains("did not become ready", ex.ToString());
+
+            cts.Cancel();
+            try { await pump; } catch { }
+        }
+
+        [Fact]
         public async Task Mcp_exposes_the_llms_txt_resource()
         {
             await using var client = await ConnectMcpAsync();

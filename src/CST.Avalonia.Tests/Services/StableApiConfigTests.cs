@@ -55,6 +55,21 @@ namespace CST.Avalonia.Tests.Services
             Assert.Equal("Bearer TESTTOKEN", opts.AdditionalHeaders!["Authorization"]);
         }
 
+        [Theory]
+        // Inside the signed bundle the bridge exe is …/CST Reader.app/Contents/MacOS/CST.Avalonia -> the .app dir.
+        [InlineData("/Applications/CST Reader.app/Contents/MacOS/CST.Avalonia", "/Applications/CST Reader.app")]
+        [InlineData("/Users/x/Desktop/CST Reader.app/Contents/MacOS/CST.Avalonia", "/Users/x/Desktop/CST Reader.app")]
+        public void AppBundleFromExecutablePath_finds_the_enclosing_app_bundle(string exe, string expected)
+            => Assert.Equal(expected, McpBridge.AppBundleFromExecutablePath(exe));
+
+        [Theory]
+        // Dev / non-bundle layouts (e.g. `dotnet run`) have no .app ancestor -> launch-or-attach can't auto-launch.
+        [InlineData("/Users/x/repo/src/CST.Avalonia/bin/Debug/net10.0/CST.Avalonia")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void AppBundleFromExecutablePath_is_null_outside_a_bundle(string? exe)
+            => Assert.Null(McpBridge.AppBundleFromExecutablePath(exe));
+
         [Fact]
         public void McpClientConfig_is_valid_json_carrying_the_port_and_token()
         {
