@@ -6,6 +6,8 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CST.Avalonia.Services.LocalApi;
+using CST.Avalonia.Services.LocalApi.Mcp;
+using ModelContextProtocol.Client;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services
@@ -39,6 +41,18 @@ namespace CST.Avalonia.Tests.Services
             Assert.DoesNotContain('+', a);   // URL-safe base64
             Assert.DoesNotContain('/', a);
             Assert.DoesNotContain('=', a);
+        }
+
+        [Fact]
+        public void McpBridge_maps_the_handshake_to_the_mcp_endpoint()
+        {
+            // The --mcp-bridge entry reads local-api.json and points the relay at /mcp with the bearer,
+            // explicit Streamable HTTP (not AutoDetect, which can fall back to disabled legacy SSE). (#278)
+            var info = new LocalApiInfo(Port: 51515, Token: "TESTTOKEN", Pid: 999);
+            var opts = McpBridge.BuildHttpOptions(info);
+            Assert.Equal(new System.Uri("http://127.0.0.1:51515/mcp"), opts.Endpoint);
+            Assert.Equal(HttpTransportMode.StreamableHttp, opts.TransportMode);
+            Assert.Equal("Bearer TESTTOKEN", opts.AdditionalHeaders!["Authorization"]);
         }
 
         [Fact]

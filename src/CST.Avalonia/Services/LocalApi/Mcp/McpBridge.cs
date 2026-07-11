@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -7,6 +8,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
+using Serilog;
 
 namespace CST.Avalonia.Services.LocalApi.Mcp
 {
@@ -23,6 +26,51 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         // JSON-RPC "server error" code, synthesized when the bridge can't reach the app so a waiting client
         // request never hangs.
         private const int UnreachableErrorCode = -32000;
+
+        /// <summary>
+        /// Entry point for the <c>--mcp-bridge</c> process: relays this process's STDIO to the running app's
+        /// <c>/mcp</c>, using the port + token from <c>local-api.json</c> in <paramref name="handshakeDirectory"/>.
+        /// Captures the real stdout for the JSON-RPC transport BEFORE redirecting <see cref="Console.Out"/> away
+        /// from fd 1, so stray writes in shared code can't corrupt the stream (must-have #4). Returns on stdin EOF.
+        /// </summary>
+        public static async Task RunFromStdioAsync(string handshakeDirectory, CancellationToken ct)
+        {
+            await using var clientSide = new StdioServerTransport("cst-reader", NullLoggerFactory.Instance);
+            Console.SetOut(Console.Error);   // any stray Console.Out goes to stderr, never onto the JSON-RPC stdout
+
+            var info = await ReadHandshakeWithRetryAsync(handshakeDirectory, ct).ConfigureAwait(false);
+            if (info is null)
+            {
+                // Phase 2: the app must already be running. (Phase 3 adds launch-or-attach; Phase 4 can answer
+                // the client's `initialize` with an error instead of exiting.)
+                Log.Warning("--mcp-bridge: CST Reader is not running (no {File}); exiting.", LocalApiInfo.FileName);
+                return;
+            }
+
+            await RunAsync(clientSide, BuildHttpOptions(info), httpClient: null, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>The Streamable-HTTP transport options for the running app's <c>/mcp</c> — explicit mode
+        /// (not AutoDetect, which can fall back to disabled legacy SSE) + the bearer from the handshake file.</summary>
+        internal static HttpClientTransportOptions BuildHttpOptions(LocalApiInfo info) => new()
+        {
+            Endpoint = new Uri($"http://127.0.0.1:{info.Port}/mcp"),
+            TransportMode = HttpTransportMode.StreamableHttp,
+            AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = "Bearer " + info.Token },
+        };
+
+        // The app may be mid-startup writing a fresh handshake file; give it a short grace window.
+        private static async Task<LocalApiInfo?> ReadHandshakeWithRetryAsync(string dir, CancellationToken ct)
+        {
+            for (int i = 0; i < 12 && !ct.IsCancellationRequested; i++)
+            {
+                var info = LocalApiInfo.Read(dir);
+                if (info is not null) return info;
+                try { await Task.Delay(250, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { return null; }
+            }
+            return LocalApiInfo.Read(dir);
+        }
 
         /// <summary>
         /// Pump <see cref="JsonRpcMessage"/>s between <paramref name="clientSide"/> (stdio in production;
