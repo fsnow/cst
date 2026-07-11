@@ -902,10 +902,10 @@ namespace CST.Avalonia.ViewModels
         /// <summary>Rotate (regenerate) the bearer token (rotate icon). (#275)</summary>
         public ReactiveCommand<Unit, Unit> RotateTokenCommand { get; }
 
-        /// <summary>Pre-populated Claude Desktop MCP config for the current port + token, for a
-        /// "Copy MCP configuration" button. Uses the fixed default port when the port is set to ephemeral. (#275)</summary>
+        /// <summary>Pre-populated Claude Desktop MCP config for the "Copy MCP configuration" button. Emits the
+        /// #278 bridge config (spawn this app with --mcp-bridge); carries no port/token. (#280 reworks the UI.)</summary>
         public string McpClientConfigJson => CST.Avalonia.Services.LocalApi.McpClientConfig.ClaudeDesktop(
-            _port > 0 ? _port : CST.Avalonia.Models.LocalApiSettings.DefaultPort, _token);
+            System.Environment.ProcessPath ?? "CST Reader");
 
         /// <summary>The local-API sub-permissions are editable only when the master switch is on.</summary>
         public bool SubPermissionsEnabled => AiEnabled;

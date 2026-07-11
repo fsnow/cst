@@ -19,9 +19,10 @@ namespace CST.Avalonia.Tests.Models
 
             Assert.False(ai.Enabled);                 // master OFF
             Assert.True(ai.LocalApi.Enabled);         // sub-permissions ON...
+            Assert.True(ai.LocalApi.EnableMcpServer);
             Assert.True(ai.LocalApi.AllowRemoteControl);
-            Assert.Equal(LocalApiSettings.DefaultPort, ai.LocalApi.Port);  // fixed default (stable config, #275)
-            Assert.Null(ai.LocalApi.Token);                                // generated + persisted on first start
+            Assert.Equal(0, ai.LocalApi.Port);        // ephemeral by default (#278 Phase 4 reverted the fixed port)
+            Assert.Null(ai.LocalApi.Token);           // per-session token minted at start; not persisted
         }
 
         [Fact]
@@ -43,7 +44,42 @@ namespace CST.Avalonia.Tests.Models
             var ai = new AiSettings { Enabled = true }; // LocalApi defaults on
 
             Assert.True(ai.LocalApiEnabled);
+            Assert.True(ai.McpEnabled);
+            Assert.True(ai.ServerShouldRun);
             Assert.True(ai.RemoteControlAllowed);
+        }
+
+        [Fact]
+        public void Master_off_disables_mcp_and_the_server()
+        {
+            var ai = new AiSettings { Enabled = false };
+
+            Assert.False(ai.McpEnabled);
+            Assert.False(ai.ServerShouldRun);
+        }
+
+        [Fact]
+        public void Mcp_and_rest_are_independent_surfaces_but_either_runs_the_server()
+        {
+            // REST on, MCP off: server runs (for /v1) but /mcp is not exposed.
+            var restOnly = new AiSettings
+            {
+                Enabled = true,
+                LocalApi = new LocalApiSettings { Enabled = true, EnableMcpServer = false }
+            };
+            Assert.True(restOnly.LocalApiEnabled);
+            Assert.False(restOnly.McpEnabled);
+            Assert.True(restOnly.ServerShouldRun);
+
+            // MCP on, REST off: server still runs (for /mcp) even with the /v1 surface disabled.
+            var mcpOnly = new AiSettings
+            {
+                Enabled = true,
+                LocalApi = new LocalApiSettings { Enabled = false, EnableMcpServer = true }
+            };
+            Assert.False(mcpOnly.LocalApiEnabled);
+            Assert.True(mcpOnly.McpEnabled);
+            Assert.True(mcpOnly.ServerShouldRun);
         }
 
         [Fact]
@@ -92,6 +128,8 @@ namespace CST.Avalonia.Tests.Models
             var json = JsonSerializer.Serialize(new Settings());
 
             Assert.DoesNotContain("localApiEnabled", json, System.StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("mcpEnabled", json, System.StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("serverShouldRun", json, System.StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("remoteControlAllowed", json, System.StringComparison.OrdinalIgnoreCase);
         }
     }
