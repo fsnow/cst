@@ -35,6 +35,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         private const int LaunchPollAttempts = 90;
         private const int LaunchPollDelayMs = 500;   // ~45s total
 
+        // While attached, poll the GUI's liveness this often. When it dies, the bridge exits (see the watcher).
+        private const int AppLivenessPollMs = 1000;
+
         private const string NotReadyMessage =
             "CST Reader did not become ready for MCP. Make sure it is installed and that AI features are enabled " +
             "in CST Reader → Settings → AI. If it was just launched it may still be starting — try again in a moment.";
@@ -72,7 +75,57 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 return;
             }
 
-            await RunAsync(clientSide, BuildHttpOptions(info), httpClient: null, ct).ConfigureAwait(false);
+            // Relay until stdin EOF OR the app's stream ends OR the app PROCESS goes away. The last is the key
+            // case: if the user closes/kills CST Reader, the bridge must NOT dangle as a backend-less process, and
+            // it must NOT resurrect a window the user deliberately closed. So it watches the GUI's pid and, when it
+            // dies (clean quit, crash, or kill -9 — hence pid, not the handshake file which a kill -9 leaves stale),
+            // tears the relay down and exits. Net: it's always zero or two processes, never a lone bridge. (#278)
+            using var appGoneCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var watcher = info.Pid > 0
+                ? WatchProcessLivenessAsync(info.Pid, appGoneCts, AppLivenessPollMs, appGoneCts.Token)
+                : Task.CompletedTask;
+            try
+            {
+                await RunAsync(clientSide, BuildHttpOptions(info), httpClient: null, appGoneCts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                appGoneCts.Cancel();                              // stop the watcher if the relay ended for another reason
+                try { await watcher.ConfigureAwait(false); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Poll <paramref name="pid"/> (the attached CST Reader GUI, from <c>local-api.json</c>); when it is no
+        /// longer running, cancel <paramref name="onGone"/> so the relay unwinds and the bridge process exits.
+        /// Deliberately does NOT relaunch the app — a user closing it is authoritative. Checking the pid (not the
+        /// handshake file) catches every death: clean quit, crash, and <c>kill -9</c> (which leaves the file stale).
+        /// </summary>
+        internal static async Task WatchProcessLivenessAsync(
+            int pid, CancellationTokenSource onGone, int pollMs, CancellationToken ct)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    if (!IsProcessAlive(pid))
+                    {
+                        Log.Information("--mcp-bridge: CST Reader (pid {Pid}) is gone; shutting the bridge down.", pid);
+                        onGone.Cancel();
+                        return;
+                    }
+                    await Task.Delay(pollMs, ct).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) { }
+        }
+
+        /// <summary>True while a process with <paramref name="pid"/> exists. <see cref="Process.GetProcessById(int)"/>
+        /// throws <see cref="ArgumentException"/> when it doesn't — the canonical cross-platform liveness check.</summary>
+        private static bool IsProcessAlive(int pid)
+        {
+            try { using var _ = Process.GetProcessById(pid); return true; }
+            catch (ArgumentException) { return false; }
         }
 
         /// <summary>
