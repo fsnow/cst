@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.RateLimiting;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -156,6 +157,27 @@ namespace CST.Avalonia.Services.LocalApi
                 mcp.WithResources(new[] { BuildLlmsResource() });
             }
 
+            // Concurrency cap (#279): the API runs IN-PROCESS with the Avalonia UI and Kestrel is otherwise
+            // unbounded, so a subagent fan-out (or Chat + Cowork + Code at once) can saturate the thread pool and
+            // starve the UI — and, because Claude Desktop is one-error-and-done, a single load-induced timeout
+            // permanently kills that client's session. Gate the heavy tool CALLS (POSTs to /v1 + /mcp) to
+            // ~ProcessorCount-1 concurrent and QUEUE the rest (FIFO). GETs — discovery, books, and the long-lived
+            // MCP SSE stream — are left unlimited so a stream can't hold a permit forever. Queue is deep because a
+            // 503 rejection would itself be the fatal one-error; we queue rather than reject under realistic load.
+            int toolPermits = Math.Max(1, Environment.ProcessorCount - 1);
+            builder.Services.AddRateLimiter(options =>
+            {
+                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+                    HttpMethods.IsPost(ctx.Request.Method)
+                        ? RateLimitPartition.GetConcurrencyLimiter("tool-calls", _ => new ConcurrencyLimiterOptions
+                        {
+                            PermitLimit = toolPermits,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                            QueueLimit = 1024,
+                        })
+                        : RateLimitPartition.GetNoLimiter<string>("unlimited"));
+            });
+
             var app = builder.Build();
 
             // Security gate: no browsers, loopback host only, valid bearer token.
@@ -180,6 +202,9 @@ namespace CST.Avalonia.Services.LocalApi
                 }
                 await next();
             });
+
+            // Apply the concurrency cap AFTER the security gate, so unauthorized requests never consume a permit.
+            app.UseRateLimiter();
 
             // Unauthenticated root pointer, so an agent that connects via local-api.json isn't left staring at
             // an empty "/" — it names where the docs and status live. (Cold-agent test finding.)

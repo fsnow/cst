@@ -64,6 +64,20 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Concurrent_tool_calls_all_succeed_under_the_limiter()
+        {
+            // #279: the concurrency cap must QUEUE excess tool-call POSTs, not reject them — a 503 would itself be
+            // the fatal one-error for a chat client. Fire well past the permit count at once; every one is 200.
+            using var http = _api.Http();
+            var tasks = Enumerable.Range(0, 32)
+                .Select(_ => http.PostAsync("/v1/search", Json("{\"query\":\"dhamma\"}")))
+                .ToArray();
+            var responses = await Task.WhenAll(tasks);
+            Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+            foreach (var r in responses) r.Dispose();
+        }
+
+        [Fact]
         public async Task Requires_the_bearer_token()
         {
             using var http = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) };
