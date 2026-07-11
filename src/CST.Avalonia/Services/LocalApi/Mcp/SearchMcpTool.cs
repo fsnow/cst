@@ -80,8 +80,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             int skip = 0,
             [Description("How many occurrences to return.")]
             int take = 50,
-            [Description("Include apparatus/variant readings (braced) in the snippet.")]
-            bool includeVariantReadings = false,
+            [Description("Include the print-edition footnotes (the braced {…} apparatus — variant readings, "
+                + "cross-references, editorial notes) in the snippet.")]
+            bool includeFootnotes = false,
             [Description("For a multi-word/proximity term, the co-occurrence window in words (default 10).")]
             int proximityDistance = 10,
             CancellationToken ct = default)
@@ -89,7 +90,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             var request = new OccurrenceRequest(
                 BookId: bookId ?? string.Empty,
                 Term: term ?? string.Empty,
-                IncludeVariantReadings: includeVariantReadings,
+                IncludeFootnotes: includeFootnotes,
                 OutputScript: McpScript.ToScript(outputScript),
                 Skip: skip,
                 Take: take,

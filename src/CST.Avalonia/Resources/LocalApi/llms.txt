@@ -19,8 +19,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - Pali output is ROMANIZED by DEFAULT. The romanized script token is `"Latin"` (IAST, with diacritics). Pass
   `outputScript` to override (e.g. "Devanagari", "Thai", "Myanmar", "Sinhala"); `GET /v1/scripts` lists every
   valid value.
-- Devanagari output embeds a zero-width non-joiner (U+200C) inside SOME consonant conjuncts (a ligature
-  convention) - normalize/strip U+200C before comparing or matching strings.
+- Zero-width format chars in output (per script): DEVANAGARI embeds a zero-width JOINER (U+200D) after the
+  virama in many consonant conjuncts; SINHALA embeds a zero-width NON-joiner (U+200C). Do NOT assume Devanagari
+  uses U+200C - it does not. Strip BOTH U+200C and U+200D before comparing or matching strings.
 - Cursors (`prevCursor` / `nextCursor` from `/v1/passage`) are INTEGERS, and opaque - pass one back verbatim
   as `cursor` to page; do not interpret them or do arithmetic on them. `null` means the start/end of the book.
 - Response shape is per endpoint: `/v1/search`, `/v1/occurrences`, `/v1/books`, `/v1/passage`, `/v1/convert`,
@@ -33,7 +34,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - Books are identified by file name (e.g. `s0101m.mul.xml`). Get the list from `GET /v1/books`.
 - References: the paragraph number is the primary citation unit; page numbers exist per edition
   (VRI / Myanmar / PTS / Thai). Search occurrences report both.
-- Variant readings / apparatus (`includeVariantReadings: true` on `/v1/occurrences` and `/v1/passage`): the
+- Footnotes / apparatus (`includeFootnotes: true` on `/v1/occurrences` and `/v1/passage`): the
   texts carry the print editions' FOOTNOTES (Myanmar 1955-57 / VRI 1995-96), rendered INLINE and wrapped in
   curly braces `{...}`. Curly braces occur nowhere else in the corpus, so they reliably delimit apparatus from
   base text - split on `{...}` to extract each note. Inside a note, position disambiguates: a `(...)` group
@@ -44,7 +45,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   These are digitized print footnotes - mostly variant readings, but also editorial notes and cross-refs, with
   NO structural type marker, so any "variant vs footnote" split is your interpretation, not the data's.
   LAYER: apparatus lives almost entirely in MULA (root) texts; the ATTHAKATHA and TIKA (commentary /
-  sub-commentary) layers carry NONE. So `includeVariantReadings` on a commentary is always empty - expected,
+  sub-commentary) layers carry NONE. So `includeFootnotes` on a commentary is always empty - expected,
   not a bug (and a commentary-restricted search will never surface variants).
 - Terminology: when writing about the texts, call them "Pali", "the Tipitaka", or "VRI texts".
 
@@ -104,7 +105,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   wildcard/regex overflowed the engine's expansion limit so some forms are UNREACHABLE (NARROW the pattern;
   paging will not recover them).
 - `POST /v1/occurrences` - "search results in context": KWIC snippets plus citation refs for one query in one
-  book. Body: `{ bookId, term, mode?, proximityDistance?, includeVariantReadings?, outputScript?, skip?, take?,
+  book. Body: `{ bookId, term, mode?, proximityDistance?, includeFootnotes?, outputScript?, skip?, take?,
   minChars?, maxChars? }`. `term` is EITHER a single `term` from a prior `/v1/search`, OR a MULTI-WORD /
   PROXIMITY query - space-separated words that co-occur within `proximityDistance`, or a quoted run for an
   adjacent phrase (`mode` expands wildcard/regex per word, same as `/v1/search`). This is how you read a
@@ -113,7 +114,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   with - a bare `avijja` will miss the sandhi forms `avijjaya`/`avijjapaccaya`, whereas `avijj*` catches them.
   The response is an envelope `{ occurrences, returnedCount, total, hasMore }` - `total` is the term's
   occurrence count in THAT book (before paging), so page with `skip`/`take` while `hasMore`. Each occurrence is
-  `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedVariants, cursor, highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
+  `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedFootnotes, cursor, highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
   offsets - `[{ start, length, isAnchor }]`: a single-term hit has one, a proximity/phrase hit has one PER
   co-occurring word with exactly one `isAnchor:true` (the navigable word; the rest are the co-occurring
   context). `hitStart`/`hitLength` mirror the anchor. All snippet offsets (`hitStart`/`hitLength`/`highlights`)
@@ -126,10 +127,10 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   e.g. at a section's first paragraph before any page break). `cursor` is the
   hit's unique locator - pass it to `/v1/passage`
   as `cursor` to read the exact passage around THIS hit (paragraph numbers repeat within a book, so the
-  paragraph number alone is not a unique locator). `includedVariants` echoes your request flag (whether
+  paragraph number alone is not a unique locator). `includedFootnotes` echoes your request flag (whether
   variant readings were rendered), NOT whether this particular hit has any; see the apparatus note above.
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
-  Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeVariantReadings? }`.
+  Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeFootnotes? }`.
   Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, ... }`. Page by passing back the
   integer `prevCursor` / `nextCursor` as `cursor` (see the cursor note above). A `cursor` (from occurrences or
   passage) reads the ENCLOSING SENTENCE: the window start is snapped back so you get the governing clause, not a
@@ -138,6 +139,10 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   START of paragraph N but the window is bounded by `maxChars`, so a long paragraph spans several windows and
   `nextCursor` may still be INSIDE the same paragraph - keep paging until `normalizedReference` changes, or
   raise `maxChars`.
+  PARAGRAPH NUMBERS ARE NOT GLOBALLY UNIQUE: in a multi-section book they RESTART per section, so `paragraph:N`
+  can land on a DIFFERENT paragraph N than the one an `occurrences` hit reported. For exact addressing use the
+  hit's `cursor` (unique); if you must go by number, pass the `bookCode` (the sub-book, from the occurrence's
+  `refs.paragraphBookCode`) alongside `paragraph` to disambiguate.
 - `GET  /v1/dictionary/languages` - available dictionary language codes (e.g. "en", "hi").
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
   -> entries `{ headword, meaningHtml }`.

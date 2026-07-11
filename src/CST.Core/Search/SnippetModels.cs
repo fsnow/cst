@@ -10,12 +10,12 @@ namespace CST.Search
     /// excluded, footnotes are transparent and don't count).
     /// </summary>
     /// <param name="OutputScript">Script for the snippet text (default romanized Latin).</param>
-    /// <param name="IncludeVariantReadings">Include <c>&lt;note&gt;</c> (variant-reading) text (default off).</param>
+    /// <param name="IncludeFootnotes">Include <c>&lt;note&gt;</c> (variant-reading) text (default off).</param>
     /// <param name="MinChars">Prose floor: extend to neighboring sentences until at least this many rendered chars.</param>
     /// <param name="MaxChars">Prose ceiling: a longer single sentence is trimmed+ellipsized around the hit.</param>
     public sealed record SnippetOptions(
         Script OutputScript = Script.Latin,
-        bool IncludeVariantReadings = false,
+        bool IncludeFootnotes = false,
         int MinChars = 60,
         int MaxChars = 320);
 
@@ -48,6 +48,6 @@ namespace CST.Search
         int? ParagraphNumber,
         string? ParagraphBookCode,
         IReadOnlyList<SnippetPageRef> Pages,
-        bool IncludedVariants,
+        bool IncludedFootnotes,
         IReadOnlyList<SnippetHighlight> Highlights);
 }

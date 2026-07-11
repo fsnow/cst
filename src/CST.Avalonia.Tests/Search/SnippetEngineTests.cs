@@ -31,7 +31,7 @@ namespace CST.Avalonia.Tests.Search
         private static int HitStart(string xml, string term) => xml.IndexOf(term, System.StringComparison.Ordinal);
 
         private static SnippetOptions Deva(int min = 1, int max = 4000, bool notes = false) =>
-            new(OutputScript: Script.Devanagari, IncludeVariantReadings: notes, MinChars: min, MaxChars: max);
+            new(OutputScript: Script.Devanagari, IncludeFootnotes: notes, MinChars: min, MaxChars: max);
 
         [Fact]
         public void GroupCoLocated_merges_hits_in_the_same_sentence()

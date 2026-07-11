@@ -41,7 +41,7 @@ namespace CST.Avalonia.Services.Tools
             // the hit is read with its governing clause. A paragraph reference already starts clean - no snap.
             var w = TeiPassageReader.ReadWindow(
                 xml, startPos, Math.Max(1, request.MaxChars),
-                request.IncludeVariantReadings, request.OutputScript, markers,
+                request.IncludeFootnotes, request.OutputScript, markers,
                 snapStartToSentence: request.Cursor.HasValue);
 
             return new PassageResult(

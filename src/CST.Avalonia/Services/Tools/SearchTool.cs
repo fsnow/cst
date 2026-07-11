@@ -146,7 +146,7 @@ namespace CST.Avalonia.Services.Tools
             var markers = BookMarkers.Build(xml);
             var opts = new SnippetOptions(
                 OutputScript: request.OutputScript,
-                IncludeVariantReadings: request.IncludeVariantReadings,
+                IncludeFootnotes: request.IncludeFootnotes,
                 MinChars: request.MinChars ?? 60,
                 MaxChars: request.MaxChars ?? 320);
 
@@ -173,7 +173,7 @@ namespace CST.Avalonia.Services.Tools
                     HitStart: s.HitStart,
                     HitLength: s.HitLength,
                     Refs: new OccurrenceRefs(s.ParagraphNumber, s.ParagraphBookCode, s.Pages),
-                    IncludedVariants: s.IncludedVariants,
+                    IncludedFootnotes: s.IncludedFootnotes,
                     // The anchor's char offset — a unique locator to read the exact passage via /v1/passage
                     // (paragraph numbers repeat within a book). (#186 cold test)
                     Cursor: AnchorStart(marks),

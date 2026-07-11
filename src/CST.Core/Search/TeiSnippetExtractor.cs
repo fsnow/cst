@@ -69,31 +69,31 @@ namespace CST.Search
 
             sb.Append(ellipsisStart ? "... " : "");
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, winStart, ms[0].Start, opts.IncludeVariantReadings), opts.OutputScript)).TrimStart());
+                TeiText.Clean(xml, winStart, ms[0].Start, opts.IncludeFootnotes), opts.OutputScript)).TrimStart());
 
             for (int i = 0; i < ms.Count; i++)
             {
                 string markText = TeiText.Convert(
-                    TeiText.Clean(xml, ms[i].Start, ms[i].End, opts.IncludeVariantReadings), opts.OutputScript).Trim();
+                    TeiText.Clean(xml, ms[i].Start, ms[i].End, opts.IncludeFootnotes), opts.OutputScript).Trim();
                 highlights.Add(new SnippetHighlight(sb.Length, markText.Length, ms[i].IsAnchor));
                 sb.Append(markText);
 
                 if (i < ms.Count - 1)
                 {
                     string gap = TeiText.Collapse(TeiText.Convert(
-                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, opts.IncludeVariantReadings), opts.OutputScript));
+                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, opts.IncludeFootnotes), opts.OutputScript));
                     sb.Append(gap.Length == 0 ? " " : gap); // never fuse two distinct marked words
                 }
             }
 
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, opts.IncludeVariantReadings), opts.OutputScript)).TrimEnd());
+                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, opts.IncludeFootnotes), opts.OutputScript)).TrimEnd());
             sb.Append(ellipsisEnd ? " ..." : "");
 
             var (num, code, pages) = markers.RefsAt(anchor.Start);
             var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];
             return new SnippetResult(
-                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeVariantReadings, highlights);
+                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeFootnotes, highlights);
         }
 
         /// <summary>
