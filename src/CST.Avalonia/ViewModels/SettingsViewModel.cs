@@ -807,6 +807,7 @@ namespace CST.Avalonia.ViewModels
         private bool _localApiEnabled;
         private bool _allowRemoteControl;
         private int _port;
+        private string _token = string.Empty;
 
         public AiSettingsViewModel(ISettingsService settingsService)
         {
@@ -817,6 +818,13 @@ namespace CST.Avalonia.ViewModels
             _localApiEnabled = ai.LocalApi.Enabled;
             _allowRemoteControl = ai.LocalApi.AllowRemoteControl;
             _port = ai.LocalApi.Port;
+            _token = ai.LocalApi.Token ?? string.Empty;
+
+            // Rotate icons (password-generator style); both apply on the next API (re)start. (#275)
+            RotatePortCommand = ReactiveCommand.Create(() =>
+                { Port = CST.Avalonia.Services.LocalApi.PortAvailability.PickAvailable(); });
+            RotateTokenCommand = ReactiveCommand.Create(() =>
+                { Token = CST.Avalonia.Services.LocalApi.ApiToken.Generate(); });
         }
 
         /// <summary>Master switch — "Enable AI Features". Everything AI-related is gated behind this (default OFF).</summary>
@@ -860,7 +868,8 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        /// <summary>Loopback port; 0 = ephemeral (recommended). Fixed only for debugging.</summary>
+        /// <summary>Loopback port. A FIXED default so a BYO-MCP config stays valid across restarts; 0 = ephemeral.
+        /// Applies on the next API (re)start.</summary>
         public int Port
         {
             get => _port;
@@ -869,8 +878,34 @@ namespace CST.Avalonia.ViewModels
                 this.RaiseAndSetIfChanged(ref _port, value);
                 _settingsService.Settings.Ai.LocalApi.Port = value;
                 _settingsService.RequestSave();
+                this.RaisePropertyChanged(nameof(McpClientConfigJson));
             }
         }
+
+        /// <summary>The persisted bearer token, reused across launches. Surfaced so it can be copied into an MCP
+        /// client config; rotate to invalidate the old one. Applies on the next API (re)start. (#275)</summary>
+        public string Token
+        {
+            get => _token;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _token, value);
+                _settingsService.Settings.Ai.LocalApi.Token = value;
+                _settingsService.RequestSave();
+                this.RaisePropertyChanged(nameof(McpClientConfigJson));
+            }
+        }
+
+        /// <summary>Rotate to a fresh AVAILABLE loopback port (rotate icon). (#275)</summary>
+        public ReactiveCommand<Unit, Unit> RotatePortCommand { get; }
+
+        /// <summary>Rotate (regenerate) the bearer token (rotate icon). (#275)</summary>
+        public ReactiveCommand<Unit, Unit> RotateTokenCommand { get; }
+
+        /// <summary>Pre-populated Claude Desktop MCP config for the current port + token, for a
+        /// "Copy MCP configuration" button. Uses the fixed default port when the port is set to ephemeral. (#275)</summary>
+        public string McpClientConfigJson => CST.Avalonia.Services.LocalApi.McpClientConfig.ClaudeDesktop(
+            _port > 0 ? _port : CST.Avalonia.Models.LocalApiSettings.DefaultPort, _token);
 
         /// <summary>The local-API sub-permissions are editable only when the master switch is on.</summary>
         public bool SubPermissionsEnabled => AiEnabled;

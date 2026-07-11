@@ -45,6 +45,10 @@ public partial class App : Application
 
     // Opt-in loopback API server for AI tools; gated on settings at launch (restart to apply). (#186)
     private CST.Avalonia.Services.LocalApi.LocalApiServer? _localApiServer;
+
+    /// <summary>The configured local-API port when it was already in use at startup (so the API did NOT bind),
+    /// else null. The Settings UI reads this to prompt the user to rotate the port. (#275)</summary>
+    public int? LocalApiPortInUse { get; private set; }
     /// <summary>
     /// True once application shutdown has begun. Floating windows close as part of shutdown too;
     /// consumers (e.g. CstDockFactory.CloseHostWindow's book rescue) use this to distinguish
@@ -327,12 +331,33 @@ public partial class App : Application
                 CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
             System.IO.Directory.CreateDirectory(dir);
 
+            var localApi = settingsService.Settings.Ai.LocalApi;
+
+            // Persist a stable bearer token on first use, then reuse it across launches so a copied MCP client
+            // config stays valid (#275). Source of truth is settings; it's also copied into local-api.json (0600).
+            if (string.IsNullOrEmpty(localApi.Token))
+            {
+                localApi.Token = CST.Avalonia.Services.LocalApi.ApiToken.Generate();
+                settingsService.RequestSave();
+            }
+
+            int port = localApi.Port;
+            // A FIXED port can already be taken. Check first and, rather than let Kestrel throw and fail the API
+            // silently, warn and skip start so the user can rotate the port in Settings (#275).
+            if (port > 0 && !CST.Avalonia.Services.LocalApi.PortAvailability.IsAvailable(port))
+            {
+                Log.Warning("Local API port {Port} is in use; not starting. Rotate the port in Settings.", port);
+                LocalApiPortInUse = port;   // UI (kestrel) reads this to show a rotate-the-port popup.
+                return;
+            }
+            LocalApiPortInUse = null;
+
             var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
             // Resolve the tools through the shared factory (covered by AppCompositionTests), so a tool that is
             // registered but forgotten here can't silently 404 an endpoint again.
             _localApiServer = ServiceProvider is { } sp
-                ? CST.Avalonia.Services.LocalApi.LocalApiServer.FromServiceProvider(sp, version, dir, Log.Logger)
-                : new CST.Avalonia.Services.LocalApi.LocalApiServer(version, dir, Log.Logger);
+                ? CST.Avalonia.Services.LocalApi.LocalApiServer.FromServiceProvider(sp, version, dir, Log.Logger, port, localApi.Token)
+                : new CST.Avalonia.Services.LocalApi.LocalApiServer(version, dir, Log.Logger, port: port, token: localApi.Token);
             await _localApiServer.StartAsync();
         }
         catch (Exception ex)

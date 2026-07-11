@@ -55,6 +55,8 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly IDictionaryTool? _dictionary;
         private readonly IPassageTool? _passage;
         private readonly IScriptTool? _script;
+        private readonly int _port;              // fixed loopback port, or <= 0 for ephemeral
+        private readonly string? _configuredToken; // persisted bearer token, or null to generate one
 
         private WebApplication? _app;
 
@@ -69,7 +71,7 @@ namespace CST.Avalonia.Services.LocalApi
         public LocalApiServer(
             string appVersion, string handshakeDirectory, Serilog.ILogger logger,
             ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null,
-            IScriptTool? script = null)
+            IScriptTool? script = null, int port = 0, string? token = null)
         {
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
@@ -78,6 +80,8 @@ namespace CST.Avalonia.Services.LocalApi
             _dictionary = dictionary;
             _passage = passage;
             _script = script;
+            _port = port;
+            _configuredToken = token;
         }
 
         /// <summary>
@@ -87,22 +91,25 @@ namespace CST.Avalonia.Services.LocalApi
         /// and the test both go through here.
         /// </summary>
         public static LocalApiServer FromServiceProvider(
-            IServiceProvider services, string appVersion, string handshakeDirectory, Serilog.ILogger logger)
+            IServiceProvider services, string appVersion, string handshakeDirectory, Serilog.ILogger logger,
+            int port = 0, string? token = null)
             => new LocalApiServer(appVersion, handshakeDirectory, logger,
                 services.GetService<ISearchTool>(),
                 services.GetService<IDictionaryTool>(),
                 services.GetService<IPassageTool>(),
-                services.GetService<IScriptTool>());
+                services.GetService<IScriptTool>(), port, token);
 
         public async Task StartAsync(CancellationToken ct = default)
         {
             if (_app != null) return;
 
-            string token = GenerateToken();
+            // Reuse the persisted token when supplied (stable config across launches), else mint one. (#275)
+            string token = string.IsNullOrEmpty(_configuredToken) ? ApiToken.Generate() : _configuredToken!;
 
             var builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders(); // don't spam stdout; the app logs via Serilog
-            builder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, 0)); // 127.0.0.1:ephemeral
+            // Fixed loopback port when configured (so a client config stays valid), else ephemeral. (#275)
+            builder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, _port > 0 ? _port : 0));
             builder.Services.ConfigureHttpJsonOptions(o =>
             {
                 o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -275,13 +282,6 @@ namespace CST.Avalonia.Services.LocalApi
             return CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(header.Substring("Bearer ".Length)),
                 Encoding.UTF8.GetBytes(token));
-        }
-
-        private static string GenerateToken()
-        {
-            Span<byte> bytes = stackalloc byte[32];
-            RandomNumberGenerator.Fill(bytes);
-            return Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
         }
 
         private static int ResolvePort(WebApplication app)
