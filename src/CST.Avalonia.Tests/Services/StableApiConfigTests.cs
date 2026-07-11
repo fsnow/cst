@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Services.LocalApi;
 using CST.Avalonia.Services.LocalApi.Mcp;
@@ -71,6 +72,38 @@ namespace CST.Avalonia.Tests.Services
         [InlineData(null)]
         public void AppBundleFromExecutablePath_is_null_outside_a_bundle(string? exe)
             => Assert.Null(McpBridge.AppBundleFromExecutablePath(exe));
+
+        [Fact]
+        public async Task Liveness_watcher_trips_when_the_watched_process_is_gone()
+        {
+            // The GUI's pid isn't running -> the watcher cancels its token so the relay unwinds and the bridge
+            // exits (one -> zero, never a lone bridge). A pid far above the OS max is guaranteed not running. (#278)
+            const int deadPid = 2_000_000_000;
+            using var onGone = new CancellationTokenSource();
+            var watch = McpBridge.WatchProcessLivenessAsync(deadPid, onGone, pollMs: 20, onGone.Token);
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (!onGone.IsCancellationRequested && sw.Elapsed < System.TimeSpan.FromSeconds(2))
+                await Task.Delay(20);
+
+            Assert.True(onGone.IsCancellationRequested);
+            await watch;
+        }
+
+        [Fact]
+        public async Task Liveness_watcher_stays_quiet_while_the_process_is_alive()
+        {
+            // Our own process is alive -> the watcher must NOT trip. (#278)
+            using var onGone = new CancellationTokenSource();
+            var watch = McpBridge.WatchProcessLivenessAsync(
+                System.Environment.ProcessId, onGone, pollMs: 20, onGone.Token);
+
+            await Task.Delay(300);
+            Assert.False(onGone.IsCancellationRequested);
+
+            onGone.Cancel();   // stop the watcher
+            await watch;
+        }
 
         [Fact]
         public void McpClientConfig_emits_the_bridge_command_with_no_secrets()
