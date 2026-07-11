@@ -2,7 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CST.Avalonia.Services.LocalApi;
@@ -71,15 +73,50 @@ namespace CST.Avalonia.Tests.Services
             => Assert.Null(McpBridge.AppBundleFromExecutablePath(exe));
 
         [Fact]
-        public void McpClientConfig_is_valid_json_carrying_the_port_and_token()
+        public void McpClientConfig_emits_the_bridge_command_with_no_secrets()
         {
-            string json = McpClientConfig.ClaudeDesktop(8765, "TOKEN123");
+            // #278 Phase 4: the Copy-config helper emits the --mcp-bridge config — spawn the app binary, no port,
+            // no token (the relay reads the current local-api.json each spawn).
+            const string command = "/Applications/CST Reader.app/Contents/MacOS/CST";
+            string json = McpClientConfig.ClaudeDesktop(command);
             using var doc = JsonDocument.Parse(json);   // must be valid JSON
-            var args = doc.RootElement.GetProperty("mcpServers").GetProperty("cst-reader").GetProperty("args");
-            string joined = string.Join(" ", args.EnumerateArray().Select(e => e.GetString()));
-            Assert.Contains("mcp-remote", joined);
-            Assert.Contains("http://127.0.0.1:8765/mcp", joined);
-            Assert.Contains("Authorization: Bearer TOKEN123", joined);
+            var server = doc.RootElement.GetProperty("mcpServers").GetProperty("cst-reader");
+            Assert.Equal(command, server.GetProperty("command").GetString());
+            var args = server.GetProperty("args").EnumerateArray().Select(e => e.GetString()).ToArray();
+            Assert.Equal(new[] { "--mcp-bridge" }, args);
+            Assert.DoesNotContain("Bearer", json);      // no bearer token
+            Assert.DoesNotContain("mcp-remote", json);  // not the old npx/mcp-remote snippet
+        }
+
+        [Fact]
+        public async Task Mcp_endpoint_is_mounted_only_when_mcpEnabled()
+        {
+            // #278 Phase 4: /mcp is gated by its own permission. With it off the route is absent (404 past the auth
+            // gate); with it on the route exists (any non-404 — the MCP handler answers/negotiates).
+            var dir = Path.Combine(Path.GetTempPath(), "cst-mcpgate-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            const string token = "gate-token-under-test";
+
+            async Task<HttpStatusCode> PostMcpAsync(bool mcpEnabled)
+            {
+                var server = new LocalApiServer("test", dir, Serilog.Log.Logger, port: 0, token: token, mcpEnabled: mcpEnabled);
+                await server.StartAsync();
+                try
+                {
+                    using var http = new HttpClient { BaseAddress = new Uri(server.BaseUrl!) };
+                    http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    using var body = new StringContent(
+                        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}", Encoding.UTF8, "application/json");
+                    using var resp = await http.PostAsync("/mcp", body);
+                    return resp.StatusCode;
+                }
+                finally { await server.StopAsync(); }
+            }
+
+            Assert.Equal(HttpStatusCode.NotFound, await PostMcpAsync(mcpEnabled: false));     // route not mapped
+            Assert.NotEqual(HttpStatusCode.NotFound, await PostMcpAsync(mcpEnabled: true));   // route mapped (authorized)
+
+            try { Directory.Delete(dir, recursive: true); } catch { }
         }
 
         [Fact]

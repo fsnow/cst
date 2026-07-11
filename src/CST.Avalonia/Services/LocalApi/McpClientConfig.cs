@@ -4,17 +4,19 @@ using System.Text.Json.Nodes;
 namespace CST.Avalonia.Services.LocalApi
 {
     /// <summary>
-    /// Generates a pre-populated MCP client configuration from the current port + token, for a "Copy MCP
-    /// configuration" affordance in Settings (#275). Currently the Claude Desktop snippet (the `mcp-remote`
-    /// stdio bridge over the loopback `/mcp` endpoint).
+    /// Generates a pre-populated MCP client configuration for a "Copy MCP configuration" affordance in Settings.
+    /// Emits the #278 <c>--mcp-bridge</c> config: the chat client spawns CST Reader's own (signed) binary with
+    /// <c>--mcp-bridge</c>, and that relay reads the current <c>local-api.json</c> — so the config carries NO port
+    /// or token and survives every restart while the API stays ephemeral + per-session.
     /// </summary>
     internal static class McpClientConfig
     {
         /// <summary>
-        /// The <c>claude_desktop_config.json</c> snippet that connects Claude Desktop to <c>/mcp</c> via the
-        /// <c>mcp-remote</c> bridge with the given port + bearer token. Paste into that file's <c>mcpServers</c>.
+        /// The <c>claude_desktop_config.json</c> snippet that launches the CST Reader <c>--mcp-bridge</c> relay.
+        /// <paramref name="command"/> is the path to the app executable (e.g. <c>Environment.ProcessPath</c>, or
+        /// the bundle's launch wrapper). Paste into that file's <c>mcpServers</c>.
         /// </summary>
-        public static string ClaudeDesktop(int port, string token, string serverName = "cst-reader")
+        public static string ClaudeDesktop(string command, string serverName = "cst-reader")
         {
             var config = new JsonObject
             {
@@ -22,12 +24,8 @@ namespace CST.Avalonia.Services.LocalApi
                 {
                     [serverName] = new JsonObject
                     {
-                        ["command"] = "npx",
-                        ["args"] = new JsonArray(
-                            "mcp-remote",
-                            $"http://127.0.0.1:{port}/mcp",
-                            "--transport", "http-only",
-                            "--header", $"Authorization: Bearer {token}"),
+                        ["command"] = command,
+                        ["args"] = new JsonArray("--mcp-bridge"),
                     },
                 },
             };

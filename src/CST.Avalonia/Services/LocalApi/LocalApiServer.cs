@@ -57,6 +57,8 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly IScriptTool? _script;
         private readonly int _port;              // fixed loopback port, or <= 0 for ephemeral
         private readonly string? _configuredToken; // persisted bearer token, or null to generate one
+        private readonly bool _restApiEnabled;   // map the /v1 REST tool endpoints
+        private readonly bool _mcpEnabled;       // register + map the /mcp MCP surface
 
         private WebApplication? _app;
 
@@ -71,7 +73,8 @@ namespace CST.Avalonia.Services.LocalApi
         public LocalApiServer(
             string appVersion, string handshakeDirectory, Serilog.ILogger logger,
             ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null,
-            IScriptTool? script = null, int port = 0, string? token = null)
+            IScriptTool? script = null, int port = 0, string? token = null,
+            bool restApiEnabled = true, bool mcpEnabled = true)
         {
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
@@ -82,6 +85,8 @@ namespace CST.Avalonia.Services.LocalApi
             _script = script;
             _port = port;
             _configuredToken = token;
+            _restApiEnabled = restApiEnabled;
+            _mcpEnabled = mcpEnabled;
         }
 
         /// <summary>
@@ -92,12 +97,12 @@ namespace CST.Avalonia.Services.LocalApi
         /// </summary>
         public static LocalApiServer FromServiceProvider(
             IServiceProvider services, string appVersion, string handshakeDirectory, Serilog.ILogger logger,
-            int port = 0, string? token = null)
+            int port = 0, string? token = null, bool restApiEnabled = true, bool mcpEnabled = true)
             => new LocalApiServer(appVersion, handshakeDirectory, logger,
                 services.GetService<ISearchTool>(),
                 services.GetService<IDictionaryTool>(),
                 services.GetService<IPassageTool>(),
-                services.GetService<IScriptTool>(), port, token);
+                services.GetService<IScriptTool>(), port, token, restApiEnabled, mcpEnabled);
 
         public async Task StartAsync(CancellationToken ct = default)
         {
@@ -118,35 +123,38 @@ namespace CST.Avalonia.Services.LocalApi
             });
 
             // MCP surface (#191): expose the read tool set over the Streamable HTTP transport at /mcp — MCP is
-            // just another transport on the same tool layer /v1 uses, not a proxy. A BYO-MCP chat client (Claude
-            // Desktop via the mcp-remote bridge) connects here; code-capable agents keep hitting /v1 directly.
-            // Tool groups are registered only when their backing service is present (mirroring the /v1 wiring);
-            // 'books' needs no service, so /mcp is always available when the server runs.
-            var mcp = builder.Services.AddMcpServer().WithHttpTransport();
-            mcp.WithTools<BooksMcpTool>(McpJson);
-            if (_search is { } mcpSearch)
+            // just another transport on the same tool layer /v1 uses, not a proxy. A chat client connects via the
+            // app's --mcp-bridge relay; code-capable agents keep hitting /v1 directly. Registered only when the
+            // MCP permission is on (#278 Phase 4) — separate from the /v1 surface. Tool groups are registered only
+            // when their backing service is present (mirroring the /v1 wiring); 'books' needs no service.
+            if (_mcpEnabled)
             {
-                builder.Services.AddSingleton(mcpSearch);
-                mcp.WithTools<SearchMcpTool>(McpJson);
+                var mcp = builder.Services.AddMcpServer().WithHttpTransport();
+                mcp.WithTools<BooksMcpTool>(McpJson);
+                if (_search is { } mcpSearch)
+                {
+                    builder.Services.AddSingleton(mcpSearch);
+                    mcp.WithTools<SearchMcpTool>(McpJson);
+                }
+                if (_passage is { } mcpPassage)
+                {
+                    builder.Services.AddSingleton(mcpPassage);
+                    mcp.WithTools<PassageMcpTool>(McpJson);
+                }
+                if (_script is { } mcpScript)
+                {
+                    builder.Services.AddSingleton(mcpScript);
+                    mcp.WithTools<ScriptMcpTool>(McpJson);
+                }
+                if (_dictionary is { } mcpDictionary)
+                {
+                    builder.Services.AddSingleton(mcpDictionary);
+                    mcp.WithTools<DictionaryMcpTool>(McpJson);
+                }
+                // Expose llms.txt as an MCP resource — an MCP client has no base URL to "fetch /llms.txt", so give
+                // it the same version-stamped orientation as a readable resource. (Desktop MCP friction report)
+                mcp.WithResources(new[] { BuildLlmsResource() });
             }
-            if (_passage is { } mcpPassage)
-            {
-                builder.Services.AddSingleton(mcpPassage);
-                mcp.WithTools<PassageMcpTool>(McpJson);
-            }
-            if (_script is { } mcpScript)
-            {
-                builder.Services.AddSingleton(mcpScript);
-                mcp.WithTools<ScriptMcpTool>(McpJson);
-            }
-            if (_dictionary is { } mcpDictionary)
-            {
-                builder.Services.AddSingleton(mcpDictionary);
-                mcp.WithTools<DictionaryMcpTool>(McpJson);
-            }
-            // Expose llms.txt as an MCP resource — an MCP client has no base URL to "fetch /llms.txt", so give
-            // it the same version-stamped orientation as a readable resource. (Desktop MCP friction report)
-            mcp.WithResources(new[] { BuildLlmsResource() });
 
             var app = builder.Build();
 
@@ -185,12 +193,14 @@ namespace CST.Avalonia.Services.LocalApi
             // Version-stamped so it can't be mistaken for a different build's surface.
             app.MapGet("/llms.txt", () => Results.Text(BuildLlmsText(), "text/markdown; charset=utf-8"));
 
-            MapToolEndpoints(app);
+            if (_restApiEnabled)
+                MapToolEndpoints(app);
 
             // Streamable HTTP MCP endpoint (read tool set + llms.txt resource). Behind the same security
             // middleware as everything else: requires the bearer token and rejects Origin-bearing requests.
-            // Always mapped — the 'books' tool needs no backing service. (#191)
-            app.MapMcp("/mcp");
+            // Mapped only when the MCP permission is on (#278 Phase 4). (#191)
+            if (_mcpEnabled)
+                app.MapMcp("/mcp");
 
             await app.StartAsync(ct);
 
@@ -200,7 +210,8 @@ namespace CST.Avalonia.Services.LocalApi
             BaseUrl = $"http://127.0.0.1:{port}";
 
             new LocalApiInfo(port, token, Environment.ProcessId).Write(_handshakeDirectory);
-            _logger.Information("Local API listening on {BaseUrl}", BaseUrl);
+            _logger.Information("Local API listening on {BaseUrl} (rest={Rest}, mcp={Mcp})",
+                BaseUrl, _restApiEnabled, _mcpEnabled);
         }
 
         public async Task StopAsync()

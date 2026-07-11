@@ -334,40 +334,28 @@ public partial class App : Application
     {
         try
         {
-            if (!settingsService.Settings.Ai.LocalApiEnabled) return;
+            var ai = settingsService.Settings.Ai;
+            if (!ai.ServerShouldRun) return;
 
             var dir = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
             System.IO.Directory.CreateDirectory(dir);
 
-            var localApi = settingsService.Settings.Ai.LocalApi;
-
-            // Persist a stable bearer token on first use, then reuse it across launches so a copied MCP client
-            // config stays valid (#275). Source of truth is settings; it's also copied into local-api.json (0600).
-            if (string.IsNullOrEmpty(localApi.Token))
-            {
-                localApi.Token = CST.Avalonia.Services.LocalApi.ApiToken.Generate();
-                settingsService.RequestSave();
-            }
-
-            int port = localApi.Port;
-            // A FIXED port can already be taken. Check first and, rather than let Kestrel throw and fail the API
-            // silently, warn and skip start so the user can rotate the port in Settings (#275).
-            if (port > 0 && !CST.Avalonia.Services.LocalApi.PortAvailability.IsAvailable(port))
-            {
-                Log.Warning("Local API port {Port} is in use; not starting. Rotate the port in Settings.", port);
-                LocalApiPortInUse = port;   // UI (kestrel) reads this to show a rotate-the-port popup.
-                return;
-            }
+            // #278 Phase 4: the loopback API is EPHEMERAL (OS-assigned port) with a PER-SESSION token — no stable
+            // secret is stored and there's no fixed port to collide. MCP clients don't need one either: the app's
+            // --mcp-bridge relay reads the current local-api.json each spawn. So we pass no port/token (server
+            // mints them) and mount each surface per its own permission.
             LocalApiPortInUse = null;
 
             var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
             // Resolve the tools through the shared factory (covered by AppCompositionTests), so a tool that is
             // registered but forgotten here can't silently 404 an endpoint again.
             _localApiServer = ServiceProvider is { } sp
-                ? CST.Avalonia.Services.LocalApi.LocalApiServer.FromServiceProvider(sp, version, dir, Log.Logger, port, localApi.Token)
-                : new CST.Avalonia.Services.LocalApi.LocalApiServer(version, dir, Log.Logger, port: port, token: localApi.Token);
+                ? CST.Avalonia.Services.LocalApi.LocalApiServer.FromServiceProvider(
+                    sp, version, dir, Log.Logger, restApiEnabled: ai.LocalApiEnabled, mcpEnabled: ai.McpEnabled)
+                : new CST.Avalonia.Services.LocalApi.LocalApiServer(
+                    version, dir, Log.Logger, restApiEnabled: ai.LocalApiEnabled, mcpEnabled: ai.McpEnabled);
             await _localApiServer.StartAsync();
         }
         catch (Exception ex)

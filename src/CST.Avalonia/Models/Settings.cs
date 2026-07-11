@@ -33,9 +33,19 @@ namespace CST.Avalonia.Models
 
         public LocalApiSettings LocalApi { get; set; } = new();
 
-        /// <summary>The local API server should run only when the master and the local-API permission are both on.</summary>
+        /// <summary>The REST (/v1) surface runs only when the master and the local-API permission are both on.</summary>
         [JsonIgnore]
         public bool LocalApiEnabled => Enabled && LocalApi.Enabled;
+
+        /// <summary>The MCP (/mcp) surface runs only when the master and the MCP permission are both on. Separate
+        /// from <see cref="LocalApiEnabled"/> so a user can expose the /v1 REST surface (code agents) without the
+        /// /mcp chat-client surface, or vice versa.</summary>
+        [JsonIgnore]
+        public bool McpEnabled => Enabled && LocalApi.EnableMcpServer;
+
+        /// <summary>The loopback Kestrel host runs if EITHER surface is enabled — /v1 and /mcp ride the same server.</summary>
+        [JsonIgnore]
+        public bool ServerShouldRun => LocalApiEnabled || McpEnabled;
 
         /// <summary>Agents may drive the reader only when the local API is enabled and remote control is permitted.</summary>
         [JsonIgnore]
@@ -45,24 +55,23 @@ namespace CST.Avalonia.Models
     /// <summary>Permissions for the loopback API server that exposes the corpus tools to agents (surface C).</summary>
     public class LocalApiSettings
     {
-        /// <summary>Run the local API (corpus data access). On by default under the master switch.</summary>
+        /// <summary>Expose the /v1 REST surface (corpus data access for code-capable agents). On by default under the master.</summary>
         public bool Enabled { get; set; } = true;
+
+        /// <summary>Expose the /mcp MCP surface (for chat clients, via the app's <c>--mcp-bridge</c> relay). On by
+        /// default under the master.</summary>
+        public bool EnableMcpServer { get; set; } = true;
 
         /// <summary>Let agents drive the reader (navigate/highlight) vs. read-only. On by default under the master.</summary>
         public bool AllowRemoteControl { get; set; } = true;
 
-        /// <summary>Loopback port. A FIXED default so a BYO-MCP client can keep a static config across restarts;
-        /// `0` = ephemeral (a fresh OS-assigned port each launch). Rotatable from Settings.</summary>
-        public int Port { get; set; } = DefaultPort;
-
-        /// <summary>The default fixed loopback port (below the OS ephemeral range, so it can't collide with an
-        /// ephemeral allocation). Arbitrary; rotate it if it's already in use.</summary>
-        public const int DefaultPort = 8765;
-
-        /// <summary>The persisted bearer token, reused across launches so a copied MCP config stays valid.
-        /// Null/empty => generate one on first start and persist it here. Rotatable from Settings. NOTE: this is
-        /// a secret living in settings.json - consider tightening that file's permissions.</summary>
-        public string? Token { get; set; }
+        // Deprecated (#278 Phase 4): the API reverted to an EPHEMERAL loopback port + a PER-SESSION token — no
+        // stable secret is stored, and an MCP client no longer needs one (the app's --mcp-bridge relay reads the
+        // current local-api.json each spawn). The runtime ignores these; they remain only so the pre-#280 Settings
+        // UI keeps compiling and #280 removes them.
+        public int Port { get; set; } = 0;                 // 0 => ephemeral (OS-assigned)
+        public const int DefaultPort = 8765;               // legacy fixed default (#276), retained for the UI only
+        public string? Token { get; set; }                 // no longer persisted; per-session token minted at start
     }
     
     public class DeveloperSettings
