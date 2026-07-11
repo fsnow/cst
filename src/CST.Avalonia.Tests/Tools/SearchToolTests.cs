@@ -208,6 +208,8 @@ namespace CST.Avalonia.Tests.Tools
                     new OccurrenceRequest(book, "tgt", OutputScript: Script.Devanagari, MinChars: 1));
 
                 var o = Assert.Single(occ.Occurrences);
+                Assert.Equal(1, occ.Total);          // one record...
+                Assert.Equal(1, occ.InstanceTotal);  // ...and one raw hit (no co-location to fold)
                 Assert.Contains("TARGET", o.Snippet);
                 Assert.Contains("ccc", o.Snippet);
                 Assert.Contains("ddd", o.Snippet);
@@ -267,6 +269,51 @@ namespace CST.Avalonia.Tests.Tools
                 Assert.Equal("SANKHARA", o.Snippet.Substring(o.Highlights[1].Start, o.Highlights[1].Length));
                 // cursor is the anchor's SOURCE offset (for /v1/passage)
                 Assert.Equal(a, o.Cursor);
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task GetOccurrencesAsync_colocated_hits_fold_into_one_record_but_instanceTotal_counts_raw()
+        {
+            // Finding #1 (Desktop MCP report): two hits in ONE sentence merge into a single snippet record with
+            // two highlights, so `total` (records) is 1 while `instanceTotal` (raw hits) is 2 — which ties out to
+            // search's per-book `count`. `total < instanceTotal` means folded hits, not dropped hits.
+            var dir = Path.Combine(Path.GetTempPath(), "cst-occ-colo-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                const string book = "s0101m.mul.xml";
+                string xml =
+                    "<body><div id=\"dn1\" type=\"book\">" +
+                    "<pb ed=\"V\" n=\"1.0003\"/>" +
+                    "<p rend=\"bodytext\" n=\"12\">aaa TARGET bbb TARGET ccc\u0964</p>" +   // two hits, one sentence (danda escaped)
+                    "</div></body>";
+                await File.WriteAllTextAsync(Path.Combine(dir, book), xml, Encoding.Unicode);
+
+                int h1 = xml.IndexOf("TARGET", StringComparison.Ordinal);
+                int h2 = xml.IndexOf("TARGET", h1 + 1, StringComparison.Ordinal);
+                var search = new Mock<ISearchService>();
+                search.Setup(s => s.GetTermPositionsAsync(book, "tgt", It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new List<TermPosition>
+                    {
+                        new TermPosition { StartOffset = h1, EndOffset = h1 + 6, IsFirstTerm = true, Word = "tgt" },
+                        new TermPosition { StartOffset = h2, EndOffset = h2 + 6, IsFirstTerm = true, Word = "tgt" },
+                    });
+
+                var tool = new SearchTool(search.Object, Settings(dir));
+                var occ = await tool.GetOccurrencesAsync(
+                    new OccurrenceRequest(book, "tgt", OutputScript: Script.Devanagari, MinChars: 1));
+
+                var o = Assert.Single(occ.Occurrences);   // one merged record
+                Assert.Equal(2, o.Highlights.Count);      // ...carrying both hits
+                Assert.Equal(1, occ.Total);               // records to page over
+                Assert.Equal(2, occ.InstanceTotal);       // raw hits (matches search's per-book count)
+                Assert.Equal(1, occ.ReturnedCount);
+                Assert.False(occ.HasMore);
             }
             finally
             {

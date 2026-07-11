@@ -25,7 +25,11 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "forms (e.g. 'satipatthanam') are common. To find a stem's variations, use mode:Wildcard with a "
             + "trailing '*' (e.g. 'satipatthan*'). PHRASE/PROXIMITY (corpus-wide): a space-separated query "
             + "(e.g. 'ekayano ayam') finds those words co-occurring; wrap in quotes (e.g. '\"ekayano ayam\"') for "
-            + "an adjacent phrase. Each match's term is the co-occurring words; pass it to 'occurrences' to read it.")]
+            + "an adjacent phrase. Each match's term is the co-occurring words; pass it to 'occurrences' to read it. "
+            + "TOP-LEVEL COUNTS are page-scoped (over the term-forms on THIS page): 'returnedOccurrenceCount' is a "
+            + "SUM of their corpus frequencies, 'returnedBookCount' is the DISTINCT books they span (deduped, so it "
+            + "is not that sum). 'hasMore' = more term-pages exist (page with skip); 'truncated' = the pattern hit "
+            + "the term-expansion cap (narrow it) — two independent signals.")]
         public static async Task<SearchToolResult> SearchAsync(
             ISearchTool search,
             [Description("The word or pattern to search for, in any script (romanized Latin accepted).")]
@@ -65,7 +69,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "refs (paragraph number + per-edition pages) and a cursor for reading the full passage. Pass a "
             + "term returned by 'search' (in the same script it came back) and a bookId from its per-book "
             + "breakdown or the 'books' tool. A space-separated multi-word term co-occurs within a proximity "
-            + "window; a quoted run is an adjacent phrase.")]
+            + "window; a quoted run is an adjacent phrase. COUNTS: 'total' is the number of snippet RECORDS you "
+            + "page over (Skip/Take are against it); co-located hits in one sentence merge into one record with "
+            + "multiple highlights, so 'total' can be less than 'instanceTotal' (the raw hit count, which matches "
+            + "search's per-book 'count'). total < instanceTotal means folded hits, NOT dropped hits.")]
         public static async Task<OccurrenceResult> OccurrencesAsync(
             ISearchTool search,
             [Description("The book's id (file name), e.g. from a search result's per-book breakdown or the 'books' tool.")]

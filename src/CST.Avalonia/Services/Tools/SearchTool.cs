@@ -103,7 +103,7 @@ namespace CST.Avalonia.Services.Tools
             return terms.Select(t => ScriptConverter.Convert(t, Script.Unknown, outputScript)).ToList();
         }
 
-        private static readonly OccurrenceResult EmptyOccurrences = new(Array.Empty<Occurrence>(), 0, 0, false);
+        private static readonly OccurrenceResult EmptyOccurrences = new(Array.Empty<Occurrence>(), 0, 0, 0, false);
 
         public async Task<OccurrenceResult> GetOccurrencesAsync(
             OccurrenceRequest request, CancellationToken ct = default)
@@ -180,12 +180,15 @@ namespace CST.Avalonia.Services.Tools
                     Highlights: s.Highlights
                         .Select(h => new OccurrenceHighlight(h.Start, h.Length, h.IsAnchor)).ToList()));
             }
-            // Envelope (like search): book-scoped total + hasMore, so an agent paging occurrences isn't blind.
-            // Total is the MERGED snippet count (what you actually page over), not the raw hit count.
+            // Envelope (like search): book-scoped totals + hasMore, so an agent paging occurrences isn't blind.
+            // Total is the MERGED record count (what you actually page over); InstanceTotal is the raw pre-merge
+            // hit count — for a single term it ties out to search's per-book count, so `Total < InstanceTotal`
+            // reads as "folded co-located hits", not "dropped hits". (Desktop MCP friction report, finding #1.)
             return new OccurrenceResult(
                 Occurrences: occurrences,
                 ReturnedCount: occurrences.Count,
                 Total: groups.Count,
+                InstanceTotal: perOccurrence.Count,
                 HasMore: request.Skip + occurrences.Count < groups.Count);
 
             static int AnchorStart(IReadOnlyList<SnippetMark> m)

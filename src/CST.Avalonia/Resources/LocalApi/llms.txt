@@ -112,8 +112,11 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   MULTI-WORD / PROXIMITY search in context: `/v1/search` returns a multi-word match's `term` space-joined
   (e.g. `ekayano ayam`), so pass it straight back here. Words match LITERALLY (as in search), so reuse the SAME wildcards you searched
   with - a bare `avijja` will miss the sandhi forms `avijjaya`/`avijjapaccaya`, whereas `avijj*` catches them.
-  The response is an envelope `{ occurrences, returnedCount, total, hasMore }` - `total` is the term's
-  occurrence count in THAT book (before paging), so page with `skip`/`take` while `hasMore`. Each occurrence is
+  The response is an envelope `{ occurrences, returnedCount, total, instanceTotal, hasMore }` - `total` is the
+  number of snippet RECORDS you page over (`skip`/`take` are against it, page while `hasMore`); `instanceTotal`
+  is the RAW hit count before co-located hits (multiple in one sentence) are merged into a single record with
+  multiple `highlights`. For a single term `instanceTotal` equals that term's per-book `count` from `/v1/search`,
+  so `total < instanceTotal` means hits were FOLDED into records, not dropped. Each occurrence is
   `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedFootnotes, cursor, highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
   offsets - `[{ start, length, isAnchor }]`: a single-term hit has one, a proximity/phrase hit has one PER
   co-occurring word with exactly one `isAnchor:true` (the navigable word; the rest are the co-occurring
