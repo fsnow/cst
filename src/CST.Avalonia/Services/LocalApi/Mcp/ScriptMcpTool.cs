@@ -15,7 +15,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
     {
         [McpServerTool(Name = "convert")]
         [Description("Transliterate Pali text to another script. The input script is auto-detected (mixed-script "
-            + "input is handled), so you only name the desired output.")]
+            + "input is handled), so you only name the desired output. All scripts convert losslessly EXCEPT "
+            + "Cyrillic, a legacy transliteration with a known non-reversibility (revision planned) — its output "
+            + "is expected, not a defect.")]
         public static ConvertResult Convert(
             IScriptTool script,
             [Description("The Pali text to convert (any script; auto-detected).")]

@@ -40,7 +40,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             [Description("Script for the returned text.")]
             OutputScript outputScript = OutputScript.Latin,
             [Description("Include the print-edition footnotes (the braced {…} apparatus — variant readings, "
-                + "cross-references, editorial notes) in the text.")]
+                + "cross-references, editorial notes) in the text. ONLY the {…} apparatus is toggled — parenthetical "
+                + "(…) source citations in the body are always present; identical true/false output means no {…} "
+                + "apparatus here, not 'no references'. Apparatus lives almost only in MULA texts.")]
             bool includeFootnotes = false,
             CancellationToken ct = default)
         {
