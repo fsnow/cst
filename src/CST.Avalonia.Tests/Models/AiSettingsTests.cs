@@ -20,7 +20,8 @@ namespace CST.Avalonia.Tests.Models
             Assert.False(ai.Enabled);                 // master OFF
             Assert.True(ai.LocalApi.Enabled);         // sub-permissions ON...
             Assert.True(ai.LocalApi.AllowRemoteControl);
-            Assert.Equal(0, ai.LocalApi.Port);        // ephemeral
+            Assert.Equal(LocalApiSettings.DefaultPort, ai.LocalApi.Port);  // fixed default (stable config, #275)
+            Assert.Null(ai.LocalApi.Token);                                // generated + persisted on first start
         }
 
         [Fact]

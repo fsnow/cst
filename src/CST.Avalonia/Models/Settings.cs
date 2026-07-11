@@ -51,8 +51,18 @@ namespace CST.Avalonia.Models
         /// <summary>Let agents drive the reader (navigate/highlight) vs. read-only. On by default under the master.</summary>
         public bool AllowRemoteControl { get; set; } = true;
 
-        /// <summary>Loopback port; 0 = ephemeral (recommended, advertised via local-api.json). Fixed only for debugging.</summary>
-        public int Port { get; set; } = 0;
+        /// <summary>Loopback port. A FIXED default so a BYO-MCP client can keep a static config across restarts;
+        /// `0` = ephemeral (a fresh OS-assigned port each launch). Rotatable from Settings.</summary>
+        public int Port { get; set; } = DefaultPort;
+
+        /// <summary>The default fixed loopback port (below the OS ephemeral range, so it can't collide with an
+        /// ephemeral allocation). Arbitrary; rotate it if it's already in use.</summary>
+        public const int DefaultPort = 8765;
+
+        /// <summary>The persisted bearer token, reused across launches so a copied MCP config stays valid.
+        /// Null/empty => generate one on first start and persist it here. Rotatable from Settings. NOTE: this is
+        /// a secret living in settings.json - consider tightening that file's permissions.</summary>
+        public string? Token { get; set; }
     }
     
     public class DeveloperSettings
