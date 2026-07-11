@@ -156,8 +156,13 @@ namespace CST.Avalonia.Services.Tools
             // Nav paths are stored Devanagari; romanize to the requested script. (#186 cold test)
             string bookName = ScriptConverter.Convert(rawBookName, Script.Devanagari, request.OutputScript);
 
+            // Merge hits that share an enclosing sentence into ONE snippet with multiple highlights, so N
+            // co-located hits aren't N byte-identical snippets. Paging + total are over the merged groups.
+            // (Desktop MCP friction report — the snippet de-dup / token win.)
+            var groups = TeiSnippetExtractor.GroupCoLocated(xml, perOccurrence);
+
             var occurrences = new List<Occurrence>();
-            foreach (var marks in perOccurrence.Skip(request.Skip).Take(request.Take))
+            foreach (var marks in groups.Skip(request.Skip).Take(request.Take))
             {
                 ct.ThrowIfCancellationRequested();
                 var s = TeiSnippetExtractor.Extract(xml, marks, markers, opts);
@@ -176,13 +181,14 @@ namespace CST.Avalonia.Services.Tools
                         .Select(h => new OccurrenceHighlight(h.Start, h.Length, h.IsAnchor)).ToList()));
             }
             // Envelope (like search): book-scoped total + hasMore, so an agent paging occurrences isn't blind.
+            // Total is the MERGED snippet count (what you actually page over), not the raw hit count.
             return new OccurrenceResult(
                 Occurrences: occurrences,
                 ReturnedCount: occurrences.Count,
-                Total: perOccurrence.Count,
-                HasMore: request.Skip + occurrences.Count < perOccurrence.Count);
+                Total: groups.Count,
+                HasMore: request.Skip + occurrences.Count < groups.Count);
 
-            static int AnchorStart(List<SnippetMark> m)
+            static int AnchorStart(IReadOnlyList<SnippetMark> m)
             {
                 var a = m.FirstOrDefault(x => x.IsAnchor);
                 return a?.Start ?? (m.Count > 0 ? m[0].Start : 0);
