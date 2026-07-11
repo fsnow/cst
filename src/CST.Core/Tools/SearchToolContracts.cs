@@ -129,7 +129,7 @@ namespace CST.Tools
     public sealed record OccurrenceRequest(
         string BookId,
         string Term,
-        bool IncludeVariantReadings = false,
+        bool IncludeFootnotes = false,
         Script OutputScript = Script.Latin,
         int Skip = 0,
         int Take = 50,
@@ -165,7 +165,7 @@ namespace CST.Tools
         int HitStart,
         int HitLength,
         OccurrenceRefs Refs,
-        bool IncludedVariants,
+        bool IncludedFootnotes,
         int Cursor,
         IReadOnlyList<OccurrenceHighlight> Highlights);
 

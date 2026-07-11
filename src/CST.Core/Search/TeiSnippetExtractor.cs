@@ -69,31 +69,106 @@ namespace CST.Search
 
             sb.Append(ellipsisStart ? "... " : "");
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, winStart, ms[0].Start, opts.IncludeVariantReadings), opts.OutputScript)).TrimStart());
+                TeiText.Clean(xml, winStart, ms[0].Start, opts.IncludeFootnotes), opts.OutputScript)).TrimStart());
 
             for (int i = 0; i < ms.Count; i++)
             {
                 string markText = TeiText.Convert(
-                    TeiText.Clean(xml, ms[i].Start, ms[i].End, opts.IncludeVariantReadings), opts.OutputScript).Trim();
+                    TeiText.Clean(xml, ms[i].Start, ms[i].End, opts.IncludeFootnotes), opts.OutputScript).Trim();
                 highlights.Add(new SnippetHighlight(sb.Length, markText.Length, ms[i].IsAnchor));
                 sb.Append(markText);
 
                 if (i < ms.Count - 1)
                 {
                     string gap = TeiText.Collapse(TeiText.Convert(
-                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, opts.IncludeVariantReadings), opts.OutputScript));
+                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, opts.IncludeFootnotes), opts.OutputScript));
                     sb.Append(gap.Length == 0 ? " " : gap); // never fuse two distinct marked words
                 }
             }
 
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, opts.IncludeVariantReadings), opts.OutputScript)).TrimEnd());
+                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, opts.IncludeFootnotes), opts.OutputScript)).TrimEnd());
             sb.Append(ellipsisEnd ? " ..." : "");
 
             var (num, code, pages) = markers.RefsAt(anchor.Start);
             var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];
             return new SnippetResult(
-                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeVariantReadings, highlights);
+                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeFootnotes, highlights);
+        }
+
+        /// <summary>
+        /// Group hits that fall in the SAME enclosing sentence into one mark-set (so co-located hits render as a
+        /// single snippet with multiple highlights, not N byte-identical snippets). Each group keeps exactly one
+        /// anchor (the first hit's); the rest become plain highlights. Ordered by anchor position. The caller
+        /// pages over the returned groups and calls <see cref="Extract(string,IReadOnlyList{SnippetMark},BookMarkers,SnippetOptions)"/>
+        /// on each. (Desktop MCP friction report — the snippet de-dup / token win.)
+        /// </summary>
+        public static List<IReadOnlyList<SnippetMark>> GroupCoLocated(
+            string xml, IReadOnlyList<IReadOnlyList<SnippetMark>> hits)
+        {
+            var ordered = hits
+                .Where(h => h.Count > 0)
+                .Select(h => (marks: h, anchor: (h.FirstOrDefault(m => m.IsAnchor) ?? h[0]).Start))
+                .OrderBy(x => x.anchor)
+                .ToList();
+
+            var groups = new List<IReadOnlyList<SnippetMark>>();
+            List<SnippetMark>? current = null;
+            int currentSentence = int.MinValue;
+            foreach (var (marks, anchor) in ordered)
+            {
+                int sentence = EnclosingSentenceStart(xml, anchor);
+                if (current == null || sentence != currentSentence)
+                {
+                    current = new List<SnippetMark>();
+                    groups.Add(current);
+                    currentSentence = sentence;
+                }
+                current.AddRange(marks);
+            }
+            // Collapse each group to a single anchor (the earliest), demoting the rest to plain highlights, so the
+            // "exactly one anchor" invariant holds for the merged snippet.
+            return groups.Select(WithSingleAnchor).ToList();
+        }
+
+        private static IReadOnlyList<SnippetMark> WithSingleAnchor(IReadOnlyList<SnippetMark> marks)
+        {
+            bool anchored = false;
+            var result = new List<SnippetMark>(marks.Count);
+            foreach (var m in marks)
+            {
+                if (m.IsAnchor && !anchored) { anchored = true; result.Add(m); }
+                else if (m.IsAnchor) result.Add(new SnippetMark(m.Start, m.End, false));
+                else result.Add(m);
+            }
+            return result;
+        }
+
+        private static int EnclosingSentenceStart(string xml, int pos)
+        {
+            var (_, pStart, pEnd, _) = FindEnclosingP(xml, pos);
+            if (pStart < 0) { pStart = 0; pEnd = xml.Length; }
+            var notes = TeiText.NoteRegions(xml, pStart, pEnd);
+            return SentenceStart(xml, pStart, pos, notes);
+        }
+
+        // True if pos sits inside a start/end tag (an unclosed '<' precedes it without a matching '>').
+        private static bool InsideTag(string xml, int pos)
+        {
+            if (pos <= 0 || pos > xml.Length) return false;
+            return xml.LastIndexOf('<', pos - 1) > xml.LastIndexOf('>', pos - 1);
+        }
+
+        private static int NudgePastTag(string xml, int pos)
+        {
+            if (InsideTag(xml, pos)) { int gt = xml.IndexOf('>', pos); if (gt >= 0) return gt + 1; }
+            return pos;
+        }
+
+        private static int NudgeBeforeTag(string xml, int pos)
+        {
+            if (InsideTag(xml, pos)) { int lt = xml.LastIndexOf('<', Math.Max(0, pos - 1)); if (lt >= 0) return lt; }
+            return pos;
         }
 
         /// <summary>

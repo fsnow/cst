@@ -324,7 +324,7 @@ namespace CST.Avalonia.Services.LocalApi
                         ? new NavigationReference.Paragraph(n, req.BookCode)
                         : new NavigationReference.WholeBook();
                     var pr = new PassageRequest(req.BookId, reference, req.Cursor, req.MaxChars,
-                        req.OutputScript, req.IncludeVariantReadings);
+                        req.OutputScript, req.IncludeFootnotes);
                     return Results.Json(await passage.FetchPassageAsync(pr, ct));
                 });
             }
@@ -368,6 +368,6 @@ namespace CST.Avalonia.Services.LocalApi
             int? Cursor = null,
             int MaxChars = 1200,
             Script OutputScript = Script.Latin,
-            bool IncludeVariantReadings = false);
+            bool IncludeFootnotes = false);
     }
 }

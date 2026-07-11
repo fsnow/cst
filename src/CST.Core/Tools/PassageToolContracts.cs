@@ -33,7 +33,7 @@ namespace CST.Tools
         int? Cursor = null,
         int MaxChars = 1200,
         Script OutputScript = Script.Latin,
-        bool IncludeVariantReadings = false);
+        bool IncludeFootnotes = false);
 
     /// <summary>
     /// A reading window: the text, the citation refs at its start, and cursors to page through. Pass a cursor

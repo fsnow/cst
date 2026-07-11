@@ -36,8 +36,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             int maxChars = 1200,
             [Description("Script for the returned text.")]
             OutputScript outputScript = OutputScript.Latin,
-            [Description("Include apparatus/variant readings (braced) in the text.")]
-            bool includeVariantReadings = false,
+            [Description("Include the print-edition footnotes (the braced {…} apparatus — variant readings, "
+                + "cross-references, editorial notes) in the text.")]
+            bool includeFootnotes = false,
             CancellationToken ct = default)
         {
             NavigationReference reference = paragraph is int n
@@ -49,7 +50,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 Cursor: cursor,
                 MaxChars: maxChars,
                 OutputScript: McpScript.ToScript(outputScript),
-                IncludeVariantReadings: includeVariantReadings);
+                IncludeFootnotes: includeFootnotes);
             return await passage.FetchPassageAsync(request, ct).ConfigureAwait(false);
         }
     }
