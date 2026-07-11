@@ -40,12 +40,20 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             bool includeBooks = false,
             [Description("How many matching term-forms to skip (paging). Re-request with skip += maxTerms while hasMore is true.")]
             int skip = 0,
+            [Description("Restrict the search to parts of the corpus. Pitaka flags (vinaya/sutta/abhidhamma) OR "
+                + "within their group; text-class flags (mula/atthakatha/tika) OR within theirs; the two groups "
+                + "AND together. E.g. commentaries-only = { mula:false, atthakatha:true, tika:true, other:false }. Omit for the whole corpus.")]
+            ToolBookFilter? filter = null,
+            [Description("For a multi-word/proximity query, the co-occurrence window in words (default 10).")]
+            int proximityDistance = 10,
             CancellationToken ct = default)
         {
             var request = new SearchToolRequest(
                 Query: query ?? string.Empty,
                 Mode: mode,
+                Filter: filter,
                 MaxTerms: maxTerms,
+                ProximityDistance: proximityDistance,
                 OutputScript: McpScript.ToScript(outputScript),
                 Skip: skip,
                 IncludeBooks: includeBooks);
@@ -74,6 +82,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             int take = 50,
             [Description("Include apparatus/variant readings (braced) in the snippet.")]
             bool includeVariantReadings = false,
+            [Description("For a multi-word/proximity term, the co-occurrence window in words (default 10).")]
+            int proximityDistance = 10,
             CancellationToken ct = default)
         {
             var request = new OccurrenceRequest(
@@ -83,7 +93,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 OutputScript: McpScript.ToScript(outputScript),
                 Skip: skip,
                 Take: take,
-                Mode: mode);
+                Mode: mode,
+                ProximityDistance: proximityDistance);
             return await search.GetOccurrencesAsync(request, ct).ConfigureAwait(false);
         }
     }

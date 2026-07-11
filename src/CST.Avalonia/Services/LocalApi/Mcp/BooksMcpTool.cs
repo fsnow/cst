@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using CST;
-using CST.Conversion;
+using CST.Avalonia.Services.LocalApi;
 using CST.Tools;
 using ModelContextProtocol.Server;
 
@@ -20,18 +18,20 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         [Description("List the corpus's books: for each, its id (file name — the key the other tools take), its "
             + "full and short names in the requested script, its pitaka / commentary-level / type classification, "
             + "and whether it is indexed. Use this to turn a bookId into a recognizable location, or to find "
-            + "book ids to read.")]
-        public static IReadOnlyList<BookSummary> Books_(
+            + "book ids to read. The full catalog is 217 books and large — FILTER by pitaka and/or commentary "
+            + "level to narrow it (e.g. pitaka:Abhidhamma), and page with skip/take. Returns "
+            + "{ books, returnedCount, total, hasMore }.")]
+        public static BookListResult Books_(
             [Description("Script for the returned book names.")]
-            OutputScript outputScript = OutputScript.Latin)
-        {
-            var target = McpScript.ToScript(outputScript);
-            // Nav-path names are stored Devanagari; romanize to the requested script (like /v1/books).
-            return Books.Inst.Select(b => new BookSummary(
-                b.FileName,
-                ScriptConverter.Convert(b.LongNavPath, Script.Devanagari, target),
-                ScriptConverter.Convert(b.ShortNavPath, Script.Devanagari, target),
-                b.Pitaka, b.Matn, b.BookType, b.DocId >= 0)).ToList();
-        }
+            OutputScript outputScript = OutputScript.Latin,
+            [Description("Restrict to a piṭaka: Vinaya, Sutta, Abhidhamma, or Other. Omit for all.")]
+            Pitaka? pitaka = null,
+            [Description("Restrict to a commentary level: Mula (root), Atthakatha (commentary), Tika (sub-commentary), or Other. Omit for all.")]
+            CommentaryLevel? commentaryLevel = null,
+            [Description("How many books to skip (paging).")]
+            int skip = 0,
+            [Description("How many books to return per page.")]
+            int take = 100)
+            => BookCatalog.List(McpScript.ToScript(outputScript), pitaka, commentaryLevel, skip, take);
     }
 }

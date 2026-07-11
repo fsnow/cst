@@ -339,14 +339,13 @@ namespace CST.Avalonia.Services.LocalApi
             // Book catalog — agents need book ids to call the other tools. Always available (no service
             // needed). Nav-path names are stored Devanagari; romanize to the requested script (Latin default,
             // like every other endpoint) via ?script=. (#186 cold-agent test: names came back Devanagari.)
-            app.MapGet(v + "/books", (string? script) =>
+            app.MapGet(v + "/books", (string? script, string? pitaka, string? commentaryLevel, int? skip, int? take) =>
             {
                 var outputScript = ParseScript(script);
-                return Results.Json(Books.Inst.Select(b => new BookSummary(
-                    b.FileName,
-                    ScriptConverter.Convert(b.LongNavPath, Script.Devanagari, outputScript),
-                    ScriptConverter.Convert(b.ShortNavPath, Script.Devanagari, outputScript),
-                    b.Pitaka, b.Matn, b.BookType, b.DocId >= 0)).ToList());
+                Pitaka? p = Enum.TryParse<Pitaka>(pitaka, ignoreCase: true, out var pp) ? pp : null;
+                CommentaryLevel? cl = Enum.TryParse<CommentaryLevel>(commentaryLevel, ignoreCase: true, out var cc) ? cc : null;
+                // Filter (pitaka / commentary level) + paging so the 217-book catalog can't overflow a caller. (#191 Cowork)
+                return Results.Json(BookCatalog.List(outputScript, p, cl, skip ?? 0, take ?? BookCatalog.DefaultTake));
             });
 
             // Surface which tool groups got wired, so a missing DI hand-off (e.g. a null IScriptTool leaving

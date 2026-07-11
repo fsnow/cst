@@ -37,6 +37,17 @@ namespace CST.Tools
         BookType BookType,
         bool Indexed);
 
+    /// <summary>
+    /// A page of the book catalog. The 217-book catalog is large, so the listing is filterable (by piṭaka /
+    /// commentary level) and paged — an unfiltered, unpaged list can overflow an agent's context. (Cowork
+    /// friction report)
+    /// </summary>
+    public sealed record BookListResult(
+        IReadOnlyList<BookSummary> Books,
+        int ReturnedCount,
+        int Total,
+        bool HasMore);
+
     /// <summary>Which books to list. Defaults include everything.</summary>
     public sealed record BookListFilter(
         bool Vinaya = true,
