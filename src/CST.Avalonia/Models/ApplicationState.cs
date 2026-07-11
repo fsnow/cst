@@ -234,7 +234,7 @@ public class ApplicationPreferences
     /// Current script for Pali text display
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public Script CurrentScript { get; set; } = Script.Devanagari;
+    public Script CurrentScript { get; set; } = Script.Latin;
 
     /// <summary>
     /// UI language (for future localization)

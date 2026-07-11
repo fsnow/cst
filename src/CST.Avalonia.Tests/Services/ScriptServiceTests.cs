@@ -27,32 +27,32 @@ public class ScriptServiceTests
     }
 
     [Fact]
-    public void Default_IsDevanagari()
-        => Assert.Equal(Script.Devanagari, Create().svc.CurrentScript);
+    public void Default_IsLatin()
+        => Assert.Equal(Script.Latin, Create().svc.CurrentScript);
 
     [Fact]
     public void InitializeFromState_RestoresSavedScript_AndFiresEvent()
     {
-        var (svc, _, _) = Create(Script.Latin);
+        var (svc, _, _) = Create(Script.Devanagari); // differs from the Latin default -> restored + fires
         Script? fired = null;
         svc.ScriptChanged += s => fired = s;
 
         svc.InitializeFromState();
 
-        Assert.Equal(Script.Latin, svc.CurrentScript);
-        Assert.Equal(Script.Latin, fired);
+        Assert.Equal(Script.Devanagari, svc.CurrentScript);
+        Assert.Equal(Script.Devanagari, fired);
     }
 
     [Fact]
-    public void InitializeFromState_SavedDevanagari_NoChangeNoEvent()
+    public void InitializeFromState_SavedMatchesDefault_NoChangeNoEvent()
     {
-        var (svc, _, _) = Create(Script.Devanagari);
+        var (svc, _, _) = Create(Script.Latin); // saved == default -> nothing to restore
         bool fired = false;
         svc.ScriptChanged += _ => fired = true;
 
         svc.InitializeFromState();
 
-        Assert.Equal(Script.Devanagari, svc.CurrentScript);
+        Assert.Equal(Script.Latin, svc.CurrentScript);
         Assert.False(fired);
     }
 
@@ -71,11 +71,11 @@ public class ScriptServiceTests
     }
 
     [Fact]
-    public void NoStateService_InitializeIsNoOp_DefaultsDevanagari()
+    public void NoStateService_InitializeIsNoOp_DefaultsLatin()
     {
         var svc = new ScriptService(NullLogger<ScriptService>.Instance, null);
         svc.InitializeFromState(); // must not throw with no state service
-        Assert.Equal(Script.Devanagari, svc.CurrentScript);
+        Assert.Equal(Script.Latin, svc.CurrentScript);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class ScriptServiceTests
         bool fired = false;
         svc.ScriptChanged += _ => fired = true;
 
-        svc.CurrentScript = Script.Devanagari; // unchanged from default
+        svc.CurrentScript = Script.Latin; // unchanged from default
 
         Assert.False(fired);
         mock.Verify(s => s.MarkDirty(), Times.Never);

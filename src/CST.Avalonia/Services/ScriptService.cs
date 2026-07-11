@@ -13,7 +13,7 @@ public class ScriptService : IScriptService
 {
     private readonly ILogger<ScriptService> _logger;
     private readonly IApplicationStateService? _stateService;
-    private Script _currentScript = Script.Devanagari;
+    private Script _currentScript = Script.Latin;
 
     public ScriptService(ILogger<ScriptService> logger, IApplicationStateService? stateService = null)
     {
@@ -67,7 +67,7 @@ public class ScriptService : IScriptService
     /// The single, deterministic initialization path: set the current script from the loaded application
     /// state. Called once after state load. Idempotent - a second call is a no-op when already in sync, and
     /// it fires <see cref="ScriptChanged"/> only when the restored script actually differs from the current
-    /// (default Devanagari) value. (#81)
+    /// (default Latin) value. (#81)
     /// </summary>
     public void InitializeFromState()
     {
