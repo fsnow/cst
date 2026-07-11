@@ -23,8 +23,8 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   convention) - normalize/strip U+200C before comparing or matching strings.
 - Cursors (`prevCursor` / `nextCursor` from `/v1/passage`) are INTEGERS, and opaque - pass one back verbatim
   as `cursor` to page; do not interpret them or do arithmetic on them. `null` means the start/end of the book.
-- Response shape is per endpoint: `/v1/search`, `/v1/occurrences`, `/v1/passage`, `/v1/convert`, `/v1/status`
-  return a JSON object; `/v1/dictionary/lookup`, `/v1/books`, `/v1/scripts` return a bare JSON array.
+- Response shape is per endpoint: `/v1/search`, `/v1/occurrences`, `/v1/books`, `/v1/passage`, `/v1/convert`,
+  `/v1/status` return a JSON object; `/v1/dictionary/lookup`, `/v1/scripts` return a bare JSON array.
 - You work entirely in readable Pali (romanized by default). To read a search hit in context, pass the
   term's `term` value (exactly as `/v1/search` returned it, in whatever script you requested) back to
   `/v1/occurrences` as `term`. There is no opaque id to round-trip - the server handles the internal encoding.
@@ -51,11 +51,14 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 ## Endpoints
 
 - `GET  /v1/status` - app version, API version, readiness.
-- `GET  /v1/books` - the catalog. Each: `{ bookId, name, shortName, pitaka, commentaryLevel, bookType, indexed }`.
-  `name`/`shortName` are romanized by default; add `?script=Devanagari` (etc.) to change. Classify with
-  `commentaryLevel` (`Mula`/`Atthakatha`/`Tika`/`Other`) and `pitaka`; `bookType` is a legacy field, often
-  `Unknown` - do not rely on it. The `.mul`/`.att`/`.tik` FILENAME suffix is only a hint and can DISAGREE with
-  `commentaryLevel` (e.g. `e0102n.mul.xml` is `commentaryLevel:"Other"`) - trust the field, not the name.
+- `GET  /v1/books` - the catalog (217 books - LARGE, so it is FILTERABLE and PAGED). Query params:
+  `?pitaka=` (`Vinaya`/`Sutta`/`Abhidhamma`/`Other`), `?commentaryLevel=` (`Mula`/`Atthakatha`/`Tika`/`Other`),
+  `?skip=`/`?take=` (default take 100), `?script=Devanagari` (etc.; names romanized by default). FILTER to
+  avoid pulling all 217 at once (e.g. `?pitaka=Abhidhamma`). Returns `{ books, returnedCount, total, hasMore }`
+  where each book is `{ bookId, name, shortName, pitaka, commentaryLevel, bookType, indexed }`. Classify with
+  `commentaryLevel` and `pitaka`; `bookType` is a legacy field, often `Unknown` - do not rely on it. The
+  `.mul`/`.att`/`.tik` FILENAME suffix is only a hint and can DISAGREE with `commentaryLevel`
+  (e.g. `e0102n.mul.xml` is `commentaryLevel:"Other"`) - trust the field, not the name.
 - `POST /v1/search` - matching terms. Search is over WHOLE-WORD tokens matched as LITERAL character
   patterns, not grammatical inflections. To cover a stem's inflected endings, reach FIRST for a trailing
   `*` WILDCARD (`dhamm*`): the `*` absorbs the case/number endings, so you do NOT need to hand-write a

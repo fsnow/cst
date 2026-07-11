@@ -35,6 +35,13 @@ namespace CST.Avalonia.Tests.Integration
             return JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         }
 
+        private static async Task<JsonDocument> GetDoc(HttpClient http, string path)
+        {
+            var resp = await http.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+            return JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        }
+
         [Fact]
         public async Task All_core_endpoints_respond()
         {
@@ -203,6 +210,10 @@ namespace CST.Avalonia.Tests.Integration
             string.Concat(r.Content.OfType<TextContentBlock>().Select(b => b.Text))
             + (r.StructuredContent?.GetRawText() ?? string.Empty);
 
+        // A typed tool return is serialized as JSON in the text content block; parse it for field assertions.
+        private static JsonDocument ToolJson(ModelContextProtocol.Protocol.CallToolResult r) =>
+            JsonDocument.Parse(string.Concat(r.Content.OfType<TextContentBlock>().Select(b => b.Text)));
+
         [Fact]
         public async Task Mcp_lists_the_read_tool_set()
         {
@@ -238,13 +249,64 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
-        public async Task Mcp_books_tool_resolves_ids_to_names()
+        public async Task Mcp_books_tool_resolves_ids_to_names_and_pages()
         {
             await using var client = await ConnectMcpAsync();
-            var books = await client.CallToolAsync("books", new Dictionary<string, object?>());
+            // Envelope { books, returnedCount, total, hasMore }; take:250 covers the whole catalog so the
+            // fixture's mula book (a real catalog file name) is present - an agent can resolve a bookId.
+            var books = await client.CallToolAsync("books", new Dictionary<string, object?> { ["take"] = 250 });
             Assert.NotEqual(true, books.IsError);
-            // The fixture's mula book (a real catalog file name) is listed - so an agent can resolve a bookId.
             Assert.Contains(_api.MulaBook, ToolText(books));
+            using var booksDoc = ToolJson(books);
+            int total = booksDoc.RootElement.GetProperty("total").GetInt32();
+            Assert.True(total > 200, "the full catalog is 217 books");
+
+            // Filtering narrows the catalog (the overflow fix) - Abhidhamma is a small subset.
+            var abhi = await client.CallToolAsync("books",
+                new Dictionary<string, object?> { ["pitaka"] = "Abhidhamma" });
+            using var abhiDoc = ToolJson(abhi);
+            int abhiTotal = abhiDoc.RootElement.GetProperty("total").GetInt32();
+            Assert.True(abhiTotal > 0 && abhiTotal < total, "pitaka filter returns a proper subset");
+        }
+
+        [Fact]
+        public async Task Books_endpoint_filters_and_pages()
+        {
+            using var http = _api.Http();
+            // Paging: take:5 => a 5-book page over the full ~217-book catalog, hasMore true. (Cowork overflow fix)
+            using var page = await GetDoc(http, "/v1/books?take=5");
+            Assert.Equal(5, page.RootElement.GetProperty("returnedCount").GetInt32());
+            Assert.Equal(5, page.RootElement.GetProperty("books").GetArrayLength());
+            Assert.True(page.RootElement.GetProperty("total").GetInt32() > 200);
+            Assert.True(page.RootElement.GetProperty("hasMore").GetBoolean());
+
+            // Filter: pitaka=Abhidhamma is a small, all-Abhidhamma subset.
+            using var abhi = await GetDoc(http, "/v1/books?pitaka=Abhidhamma&take=250");
+            Assert.InRange(abhi.RootElement.GetProperty("total").GetInt32(), 1, 60);
+            foreach (var b in abhi.RootElement.GetProperty("books").EnumerateArray())
+                Assert.Equal("Abhidhamma", b.GetProperty("pitaka").GetString());
+        }
+
+        [Fact]
+        public async Task Mcp_search_filter_scopes_to_book_class()
+        {
+            await using var client = await ConnectMcpAsync();
+            // "dhamma" is in both fixture books (mula + attha). A mula-only filter (a NESTED object param over
+            // MCP) must scope it to just the mula book - proving the MCP search tool now honors the filter.
+            var filtered = await client.CallToolAsync("search", new Dictionary<string, object?>
+            {
+                ["query"] = "dhamma",
+                ["includeBooks"] = true,
+                ["filter"] = new Dictionary<string, object?>
+                {
+                    ["vinaya"] = true, ["sutta"] = true, ["abhidhamma"] = true,
+                    ["mula"] = true, ["atthakatha"] = false, ["tika"] = false, ["other"] = true,
+                },
+            });
+            Assert.NotEqual(true, filtered.IsError);
+            using var doc = ToolJson(filtered);
+            int bookCount = doc.RootElement.GetProperty("terms")[0].GetProperty("bookCount").GetInt32();
+            Assert.Equal(1, bookCount);   // mula only; the attha book is excluded by the filter
         }
 
         [Fact]
