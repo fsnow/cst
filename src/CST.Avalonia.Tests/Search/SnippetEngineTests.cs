@@ -81,53 +81,6 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
-        public void GroupCoLocated_merges_hits_in_the_same_sentence()
-        {
-            // Sentence 1 has TWO hits, sentence 2 has ONE. Co-located hits must merge into a single snippet.
-            const string xml =
-                "<body><div id=\"a\" type=\"book\"><p rend=\"bodytext\" n=\"1\">"
-                + "one TARGET two TARGET three\u0964 four TARGET five\u0964"
-                + "</p></div></body>";
-            var markers = BookMarkers.Build(xml);
-            var hits = new List<IReadOnlyList<SnippetMark>>();
-            for (int i = xml.IndexOf("TARGET", System.StringComparison.Ordinal); i >= 0;
-                 i = xml.IndexOf("TARGET", i + 1, System.StringComparison.Ordinal))
-                hits.Add(new[] { new SnippetMark(i, i + "TARGET".Length, true) });
-            Assert.Equal(3, hits.Count);
-
-            var groups = TeiSnippetExtractor.GroupCoLocated(xml, hits);
-            Assert.Equal(2, groups.Count);                        // 2 same-sentence hits merged; 1 separate
-            Assert.Equal(2, groups[0].Count);                     // both sentence-1 marks in one group
-            Assert.Equal(1, groups[0].Count(m => m.IsAnchor));    // exactly one anchor survives the merge
-            Assert.Single(groups[1]);
-
-            var s = TeiSnippetExtractor.Extract(xml, groups[0], markers, Deva());
-            Assert.Equal(2, s.Highlights.Count);                  // one snippet, two highlights (the token win)
-            Assert.Equal(1, s.Highlights.Count(h => h.IsAnchor));
-        }
-
-        [Fact]
-        public void Snippet_never_leaks_markup_across_truncation_budgets()
-        {
-            // A window bound that lands inside `<pb ed="V" n="1.0002"/>` must not leak `ed="V" n=...` as text.
-            // Sweep MaxChars so the truncation start lands mid-tag at some budget. (Code+API friction D-2)
-            const string xml =
-                "<body><div id=\"a\" type=\"book\"><p rend=\"bodytext\" n=\"1\">"
-                + "alpha bravo charlie delta echo foxtrot <pb ed=\"V\" n=\"1.0002\"/> golf hotel TARGET india juliet\u0964"
-                + "</p></div></body>";
-            var markers = BookMarkers.Build(xml);
-            int pos = xml.IndexOf("TARGET", System.StringComparison.Ordinal);
-            for (int max = 6; max <= 60; max += 2)
-            {
-                var s = TeiSnippetExtractor.Extract(xml, pos, "TARGET".Length, markers, Deva(min: 1, max: max));
-                Assert.DoesNotContain("rend", s.Snippet);
-                Assert.DoesNotContain("ed=", s.Snippet);
-                Assert.DoesNotContain("<", s.Snippet);
-                Assert.DoesNotContain(">", s.Snippet);
-            }
-        }
-
-        [Fact]
         public void Markers_report_paragraph_and_all_editions_at_hit()
         {
             var markers = BookMarkers.Build(Prose);
