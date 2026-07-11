@@ -23,6 +23,25 @@ sealed class Program
             // Handle library conflicts on macOS by suppressing duplicate class warnings
             Environment.SetEnvironmentVariable("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES");
 
+            // Headless MCP bridge: relay this process's STDIO to the running app's /mcp (#278). Handled FIRST,
+            // before any UI/logging init. STDOUT is the JSON-RPC stream, so logs go to STDERR only; no GUI.
+            if (args.Length > 0 && args[0] == "--mcp-bridge")
+            {
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Warning()
+                    .WriteTo.Console(standardErrorFromLevel: Serilog.Events.LogEventLevel.Verbose)
+                    .CreateLogger();
+
+                var handshakeDir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
+
+                CST.Avalonia.Services.LocalApi.Mcp.McpBridge
+                    .RunFromStdioAsync(handshakeDir, System.Threading.CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                return;
+            }
+
             // Check for browse-sharepoint command
             if (args.Length > 0 && args[0] == "--browse-sharepoint")
             {
