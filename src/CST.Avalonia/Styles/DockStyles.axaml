@@ -50,5 +50,54 @@
         <Setter Property="MinWidth" Value="0"/>
         <Setter Property="Margin" Value="0"/>
     </Style>
-    
+
+    <!-- #270: unify the tool-pane tabs (Search / Select a Book) with the book (document) tabs.
+         The stock ToolTabStripItem theme signals "selected" with a NEUTRAL fill and merely tints
+         the tab TEXT accent-colored, whereas DocumentTabStripItem signals it with an accent-FILLED
+         tab (accent background + accent-contrast text), dimming to grey only when the tab's dock
+         group is inactive. Those read as two different colour schemes. We re-point the tool tab's
+         selected/hover states at the SAME accent brushes the document tabs use, so both strips now
+         share one scheme: active-group selected tab = accent fill, inactive = grey, hover = accent.
+         (App-level styles outrank the ControlTheme's own setters, so these win.) -->
+
+    <!-- A selected tab is ALWAYS accent-filled (accent bg + accent-contrast text), regardless of
+         whether its dock group is the focused one. The stock themes dim a selected tab to grey when
+         its group is inactive (:not(:active):selected); with the tool and book strips side by side
+         that made whichever pane lacked focus grey out, breaking the "selected = accent fill" scheme
+         the user chose. We override BOTH the active- and inactive-selected states to the same accent
+         fill on both strips, so a selected tab reads identically no matter where focus is. Border
+         brush neutralised to Transparent so no grey outline boxes the accent fill; the stock theme's
+         border thickness is kept for stable geometry. -->
+    <Style Selector="dock|ToolTabStripItem:selected">
+        <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style Selector="dock|ToolTabStripItem:not(:active):selected">
+        <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <!-- Book (document) tabs: same flattening — a selected book tab stays accent-filled even when
+         the book pane isn't focused, so it never greys out to mismatch the tool tabs. -->
+    <Style Selector="dock|DocumentTabStripItem:not(:active):selected">
+        <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <!-- Hover (unselected tool tab): stock theme already sets the accent-med background; add the
+         accent foreground so hovered text matches the book tabs' hover. -->
+    <Style Selector="dock|ToolTabStripItem:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+    </Style>
+
+    <!-- Hover over the selected tool tab: keep the accent fill. -->
+    <Style Selector="dock|ToolTabStripItem:selected:pointerover">
+        <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
 </Styles>

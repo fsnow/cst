@@ -21,6 +21,30 @@
         <Style Selector="Button:disabled Image">
             <Setter Property="Opacity" Value="0.35"/>
         </Style>
+
+        <!-- #270: match the Highlight/Footnotes toggles' "on" state to the tab accent scheme.
+             Fluent's ToggleButton :checked fills with the OS SYSTEM accent, but the book/tool tabs
+             use Dock's FIXED VS-Code-blue accent (DockApplicationAccentBrushLow #007ACC, foreground
+             #F0F0F0) — so on a non-blue macOS accent the toggles would clash with the tabs. Re-point
+             the checked states at the same Dock accent brushes so an active toggle reads as the same
+             colour as a selected tab, whatever the OS accent. Fluent applies the checked colours on
+             the template's PART_ContentPresenter, so we target that element. These are the only two
+             ToggleButtons in this view (Highlight, Footnotes), so the bare selector is safe here. -->
+        <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+            <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushMed}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DockApplicationAccentBrushMed}"/>
+            <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton:checked:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushHigh}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DockApplicationAccentBrushHigh}"/>
+            <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+        </Style>
     </UserControl.Styles>
 
     <DockPanel>
