@@ -11,7 +11,9 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
@@ -181,6 +183,14 @@ public partial class App : Application
                 // Load settings first - MUST complete before indexing
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading settings..."));
                 await LoadSettingsAsync();
+
+                // #277: if the configured local-API port was already taken, the API did NOT start. Prompt
+                // the user (once, non-blocking) to rotate the port in Settings. Post so the rest of init
+                // (indexing, fonts) doesn't wait on the modal.
+                if (LocalApiPortInUse is int portInUse)
+                {
+                    Dispatcher.UIThread.Post(() => _ = ShowPortInUseDialogAsync(portInUse));
+                }
 
                 // Load application state
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading application state..."));
@@ -363,6 +373,70 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to start local API server");
+        }
+    }
+
+    /// <summary>
+    /// #277: notify the user that the local API could not start because its configured port was already in
+    /// use, and offer to open Settings (where they can rotate the port). Modal over the main window.
+    /// </summary>
+    private async Task ShowPortInUseDialogAsync(int port)
+    {
+        try
+        {
+            if (MainWindow == null) return;
+
+            var openSettings = false;
+
+            var dialog = new Window
+            {
+                Title = "Local API not started",
+                Width = 460,
+                SizeToContent = SizeToContent.Height,
+                CanResize = false,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ShowInTaskbar = false,
+            };
+
+            var message = new TextBlock
+            {
+                Text = $"The local API server could not start because port {port} is already in use, " +
+                       "so AI agent access is off.\n\nOpen Settings to rotate the port to a free one, " +
+                       "then restart CST Reader.",
+                TextWrapping = TextWrapping.Wrap,
+            };
+
+            var laterBtn = new Button { Content = "Not now", IsCancel = true };
+            laterBtn.Click += (_, _) => dialog.Close();
+
+            var openBtn = new Button { Content = "Open Settings…", IsDefault = true };
+            openBtn.Click += (_, _) => { openSettings = true; dialog.Close(); };
+
+            var buttons = new StackPanel
+            {
+                Orientation = global::Avalonia.Layout.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Spacing = 8,
+                Margin = new Thickness(0, 16, 0, 0),
+            };
+            buttons.Children.Add(laterBtn);
+            buttons.Children.Add(openBtn);
+
+            var root = new StackPanel { Margin = new Thickness(20) };
+            root.Children.Add(message);
+            root.Children.Add(buttons);
+            dialog.Content = root;
+
+            await dialog.ShowDialog(MainWindow);
+
+            if (openSettings)
+            {
+                await ShowSettingsWindow();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to show port-in-use dialog");
         }
     }
 

@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CST.Avalonia.ViewModels;
@@ -29,6 +31,43 @@ namespace CST.Avalonia.Views
                 viewModel.CloseWindow = Close;
                 viewModel.BrowseForXmlDirectory = async () => await BrowseForXmlDirectory();
                 viewModel.BrowseForIndexDirectory = async () => await BrowseForIndexDirectory();
+            }
+        }
+
+        // #277: copy the pre-populated Claude Desktop MCP config to the clipboard. Done here rather than
+        // in the ViewModel because the clipboard is reached through the window's TopLevel, which the VM
+        // has no handle to. The confirmation TextBlock lives inside the AI DataTemplate (a separate
+        // namescope from the window), so we find it as a sibling of the button rather than by FindControl.
+        private async void OnCopyMcpConfig(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is not Button button || button.DataContext is not AiSettingsViewModel ai)
+                    return;
+
+                var clipboard = Clipboard ?? TopLevel.GetTopLevel(this)?.Clipboard;
+                if (clipboard == null)
+                {
+                    _logger.Warning("No clipboard available to copy MCP configuration");
+                    return;
+                }
+
+                await clipboard.SetTextAsync(ai.McpClientConfigJson);
+                _logger.Information("Copied MCP configuration to clipboard");
+
+                // Flash the "Copied ✓" sibling for ~1.5s. Async void handler resumes on the UI thread
+                // (Avalonia sync context), so touching UI after the delay is safe.
+                if (button.Parent is Panel panel &&
+                    panel.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == "CopyMcpConfirm") is { } confirm)
+                {
+                    confirm.IsVisible = true;
+                    await Task.Delay(1500);
+                    confirm.IsVisible = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to copy MCP configuration");
             }
         }
 
