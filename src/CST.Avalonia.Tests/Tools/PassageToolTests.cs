@@ -68,5 +68,33 @@ namespace CST.Avalonia.Tests.Tools
             Assert.Equal("", r.Text);
             Assert.Null(r.NextCursor);
         }
+
+        [Fact]
+        public async Task FetchPassage_rejects_a_bookId_outside_the_catalog_no_arbitrary_read()
+        {
+            // #301: a bookId that isn't an exact catalog file name must never be opened — an ABSOLUTE path makes
+            // Path.Combine discard the corpus dir, so without the catalog guard this would read an arbitrary file.
+            var dir = Path.Combine(Path.GetTempPath(), "cst-pass-trav-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            var secret = Path.Combine(Path.GetTempPath(), "cst-secret-" + Guid.NewGuid().ToString("N") + ".txt");
+            await File.WriteAllTextAsync(secret, "SECRETDATA", Encoding.Unicode);
+            try
+            {
+                var tool = new PassageTool(Settings(dir));
+
+                var abs = await tool.FetchPassageAsync(new PassageRequest(secret, new NavigationReference.WholeBook()));
+                Assert.Equal("unknown book", abs.NormalizedReference);
+                Assert.Equal("", abs.Text);                    // file never read
+                Assert.DoesNotContain("SECRET", abs.Text);
+
+                var rel = await tool.FetchPassageAsync(new PassageRequest("../../etc/hosts", new NavigationReference.WholeBook()));
+                Assert.Equal("unknown book", rel.NormalizedReference);
+            }
+            finally
+            {
+                try { File.Delete(secret); } catch { }
+                Directory.Delete(dir, recursive: true);
+            }
+        }
     }
 }

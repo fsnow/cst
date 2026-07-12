@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using CST;
 using CST.Navigation;
 using CST.Search;
 using CST.Tools;
@@ -22,11 +24,21 @@ namespace CST.Avalonia.Services.Tools
 
         public PassageTool(ISettingsService settings) => _settings = settings;
 
+        /// <summary>True only for a bookId that is an exact catalog file name — the confinement check that keeps
+        /// a client-supplied bookId from escaping the corpus directory. (#301)</summary>
+        internal static bool IsCatalogBook(string? bookId) =>
+            !string.IsNullOrEmpty(bookId) &&
+            Books.Inst.Any(b => string.Equals(b.FileName, bookId, StringComparison.OrdinalIgnoreCase));
+
         public async Task<PassageResult> FetchPassageAsync(PassageRequest request, CancellationToken ct = default)
         {
             var dir = _settings.Settings?.XmlBooksDirectory;
-            var path = string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, request.BookId);
-            if (path == null || !File.Exists(path))
+            // Confine file access to catalog books: NEVER Path.Combine an unvalidated bookId — an absolute path
+            // makes Combine discard `dir`, and `..` escapes the corpus dir (path traversal / arbitrary read). (#301)
+            if (string.IsNullOrEmpty(dir) || !IsCatalogBook(request.BookId))
+                return Empty(request, "unknown book");
+            var path = Path.Combine(dir, request.BookId);
+            if (!File.Exists(path))
                 return Empty(request, "book not available");
 
             // Char offsets index the decoded (BOM-stripped) UTF-16 text — read it the same way.
