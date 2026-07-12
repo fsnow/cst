@@ -866,8 +866,8 @@ public class SearchService : ISearchService
             reader = AcquireReader();
             var allTerms = new List<string>();
             var fields = MultiFields.GetFields(reader);
-            var terms = fields.GetTerms("text");
-            
+            var terms = fields?.GetTerms("text");   // GetFields returns null on an empty index (#313 A4-14)
+
             if (terms == null) return allTerms;
             
             var termsEnum = terms.GetEnumerator();
@@ -1173,9 +1173,14 @@ public class SearchService : ISearchService
     {
         lock (_readerLock)
         {
-            _indexReader?.Dispose();
+            // Release our OWNER ref rather than force-Dispose: a force-Dispose closes the reader (and the
+            // FSDirectory inputs an in-flight pool-thread search opened from it) out from under that search,
+            // throwing ObjectDisposedException in the shutdown window. DecRef instead — the reader (and its
+            // directory handles) closes once the last in-flight search DecRefs its own ref. The FSDirectory is
+            // left to be reclaimed with the reader it backs; disposing it here, under in-flight searches, is the
+            // very race. (#313 A4-16)
+            _indexReader?.DecRef();
             _indexReader = null;
-            _directory?.Dispose();
             _directory = null;
         }
     }

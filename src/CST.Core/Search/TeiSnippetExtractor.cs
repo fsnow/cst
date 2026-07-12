@@ -277,6 +277,7 @@ namespace CST.Search
         private static int FindLastPOpen(string xml, int before)
         {
             int idx = Math.Min(before, xml.Length);
+            if (idx <= 0) return -1;   // no room for "<p" before position 0; guards LastIndexOf(-1) (#313 A4-11)
             while ((idx = xml.LastIndexOf("<p", idx - 1, StringComparison.Ordinal)) >= 0)
             {
                 char c = idx + 2 < xml.Length ? xml[idx + 2] : '\0';
@@ -299,6 +300,9 @@ namespace CST.Search
 
         private static int SnapToSpace(string xml, int pos, int dir, int stopAt)
         {
+            // In the no-enclosing-<p> fallback pEnd == xml.Length, so a backward scan can start at pos == length
+            // and index xml[length]. Clamp the starting index. (#313 A4-12)
+            if (dir < 0 && pos >= xml.Length) pos = xml.Length - 1;
             for (int i = pos; dir > 0 ? i < stopAt : i > stopAt; i += dir)
                 if (xml[i] == ' ' || xml[i] == '\n') return i + (dir > 0 ? 1 : 0);
             return pos;

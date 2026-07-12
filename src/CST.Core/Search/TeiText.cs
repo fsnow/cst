@@ -63,6 +63,11 @@ namespace CST.Search
                     }
                     else if (name == "hi" && IsStructuralHi(tag) && !tag.EndsWith("/>", System.StringComparison.Ordinal))
                         i = SkipSubtree(xml, gt + 1, "hi", end);
+                    else if (name == "hi")
+                        // A non-structural <hi>/</hi> (e.g. rend="bold") is intra-word to the tokenizer — treat it
+                        // zero-width (no injected space), else a hit on a bold-containing word renders "sa mmā" and
+                        // the highlight text stops matching the term. (#313 A4-10)
+                        i = gt + 1;
                     else
                     {
                         if (sb.Length > 0 && sb[sb.Length - 1] != ' ') sb.Append(' ');
