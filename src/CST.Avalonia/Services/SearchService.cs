@@ -143,8 +143,14 @@ public class SearchService : ISearchService
             stopwatch.Stop();
             result.SearchDuration = stopwatch.Elapsed;
 
-            // Cache the result (bounded; FIFO eviction)
-            _searchCache.Set(cacheKey, result);
+            // Cache the result (bounded; FIFO eviction) — but ONLY if the reader we searched is still the live
+            // one. A concurrent re-index reopen calls _searchCache.Clear() inside AcquireReader; Setting an
+            // old-reader result after that Clear would serve stale hits until FIFO eviction. (#311 A4-5)
+            lock (_readerLock)
+            {
+                if (ReferenceEquals(reader, _indexReader))
+                    _searchCache.Set(cacheKey, result);
+            }
 
             _logger.LogInformation("Search completed in {Duration}ms with {TermCount} terms, {OccurrenceCount} occurrences",
                 stopwatch.ElapsedMilliseconds, result.TotalTermCount, result.TotalOccurrenceCount);
@@ -890,6 +896,10 @@ public class SearchService : ISearchService
         try
         {
             reader = AcquireReader();
+            // Sync DocIds to THIS reader generation before reading book.DocId — else after a re-index this
+            // endpoint targets a stale/deleted doc and returns empty/wrong positions (only SearchAsync synced
+            // before this). (#311 A4-4)
+            EnsureDocIds(reader, Books.Inst);
             // Books' string indexer throws on an unknown file name; use a safe lookup so a bad bookId can't
             // become an unhandled 500 in the occurrences endpoint. (#186 cold test)
             var book = Books.Inst.FirstOrDefault(b =>
@@ -962,6 +972,7 @@ public class SearchService : ISearchService
         try
         {
             reader = AcquireReader();
+            EnsureDocIds(reader, Books.Inst);   // sync DocIds to this reader generation before reading book.DocId (#311 A4-4)
             var book = Books.Inst.FirstOrDefault(b =>
                 string.Equals(b.FileName, bookFileName, StringComparison.OrdinalIgnoreCase));
             if (book == null || book.DocId < 0) return Task.FromResult(empty);
