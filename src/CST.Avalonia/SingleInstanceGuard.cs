@@ -120,17 +120,30 @@ namespace CST.Avalonia
         /// outside a bundle, so it can never spawn a second GUI.</summary>
         public static void ActivateRunningInstance()
         {
-            if (!OperatingSystem.IsMacOS()) return;
+            if (!OperatingSystem.IsMacOS())
+            {
+                // No foreground-activation path on Windows/Linux yet — say so (to the now-real logger, #316 A6-3)
+                // instead of a silent no-op that looks broken. (#317 A6-6)
+                Log.Information("SingleInstanceGuard: another instance is running; activation is macOS-only, so just exiting.");
+                return;
+            }
             try
             {
                 var dir = Path.GetDirectoryName(Environment.ProcessPath);
-                while (!string.IsNullOrEmpty(dir) && !dir.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+                // Require a REAL bundle: the name ends .app AND it has Contents/Info.plist — not merely any dir
+                // whose name happens to end .app. (#317 A6-7)
+                while (!string.IsNullOrEmpty(dir) &&
+                       !(dir.EndsWith(".app", StringComparison.OrdinalIgnoreCase) &&
+                         File.Exists(Path.Combine(dir, "Contents", "Info.plist"))))
                     dir = Path.GetDirectoryName(dir);
                 if (string.IsNullOrEmpty(dir)) return;
 
+                // `open` asks LaunchServices to activate the registered instance. WaitForExit so LS has acted
+                // before Main exits — shrinks the flash/relaunch race against a dev (unregistered) holder. (#317 A6-5)
                 var psi = new ProcessStartInfo("open") { UseShellExecute = false };
                 psi.ArgumentList.Add(dir);
-                using var _ = Process.Start(psi);
+                using var p = Process.Start(psi);
+                p?.WaitForExit(5000);
             }
             catch { /* best effort */ }
         }

@@ -332,9 +332,7 @@ public partial class App : Application
             var ai = settingsService.Settings.Ai;
             if (!ai.ServerShouldRun) return;
 
-            var dir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
+            var dir = CST.Avalonia.Constants.AppConstants.DataDirectory;   // single source of truth (#317 A6-9)
             System.IO.Directory.CreateDirectory(dir);
 
             // #278 Phase 4: the loopback API is EPHEMERAL (OS-assigned port) with a PER-SESSION token — no stable
