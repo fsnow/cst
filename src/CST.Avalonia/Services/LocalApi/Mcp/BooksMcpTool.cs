@@ -16,8 +16,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
     {
         [McpServerTool(Name = "books")]
         [Description("List the corpus's books: for each, its id (file name — the key the other tools take), its "
-            + "full and short names in the requested script, its pitaka / commentary-level / type classification, "
-            + "and whether it is indexed. Use this to turn a bookId into a recognizable location, or to find "
+            + "full and short names in the requested script, and its pitaka / commentary-level / type "
+            + "classification. Use this to turn a bookId into a recognizable location, or to find "
             + "book ids to read. The full catalog is 217 books and large — FILTER by pitaka and/or commentary "
             + "level to narrow it (e.g. pitaka:Abhidhamma), and page with skip/take. Returns "
             + "{ books, returnedCount, total, hasMore }.")]

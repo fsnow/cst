@@ -31,14 +31,6 @@ namespace CST.Tools
         /// both the agent loop (scan → cite/fetch) and the human concordance panel.
         /// </summary>
         Task<OccurrenceResult> GetOccurrencesAsync(OccurrenceRequest request, CancellationToken ct = default);
-
-        /// <summary>
-        /// Eagerly map the index to the catalog (DocIds), so the <c>books</c> catalog's <c>indexed</c> flag is
-        /// truthful before any search runs. Otherwise DocIds sync lazily on the first search, and a books call
-        /// before that reports <c>indexed:false</c> for books that are in fact searchable (#291). Best-effort +
-        /// idempotent; a no-op if the index isn't ready yet.
-        /// </summary>
-        void EnsureIndexMapped();
     }
 
     /// <summary>How the query text is interpreted.</summary>

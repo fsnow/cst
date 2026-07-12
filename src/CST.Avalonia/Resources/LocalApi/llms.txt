@@ -61,7 +61,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   `?pitaka=` (`Vinaya`/`Sutta`/`Abhidhamma`/`Other`), `?commentaryLevel=` (`Mula`/`Atthakatha`/`Tika`/`Other`),
   `?skip=`/`?take=` (default take 100), `?script=Devanagari` (etc.; names romanized by default). FILTER to
   avoid pulling all 217 at once (e.g. `?pitaka=Abhidhamma`). Returns `{ books, returnedCount, total, hasMore }`
-  where each book is `{ bookId, name, shortName, pitaka, commentaryLevel, bookType, indexed }`. Classify with
+  where each book is `{ bookId, name, shortName, pitaka, commentaryLevel, bookType }`. Classify with
   `commentaryLevel` and `pitaka`; `bookType` is a legacy field, often `Unknown` - do not rely on it. The
   `.mul`/`.att`/`.tik` FILENAME suffix is only a hint and can DISAGREE with `commentaryLevel`
   (e.g. `e0102n.mul.xml` is `commentaryLevel:"Other"`) - trust the field, not the name.

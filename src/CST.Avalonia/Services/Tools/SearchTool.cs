@@ -31,9 +31,6 @@ namespace CST.Avalonia.Services.Tools
             _settings = settings;
         }
 
-        /// <inheritdoc />
-        public void EnsureIndexMapped() => _search.EnsureIndexMapped();
-
         public async Task<SearchToolResult> SearchAsync(SearchToolRequest request, CancellationToken ct = default)
         {
             var query = new SearchQuery

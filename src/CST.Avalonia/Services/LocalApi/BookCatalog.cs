@@ -31,7 +31,7 @@ namespace CST.Avalonia.Services.LocalApi
                     b.FileName,
                     ScriptConverter.Convert(b.LongNavPath, Script.Devanagari, outputScript),
                     ScriptConverter.Convert(b.ShortNavPath, Script.Devanagari, outputScript),
-                    b.Pitaka, b.Matn, b.BookType, b.DocId >= 0))
+                    b.Pitaka, b.Matn, b.BookType))
                 .ToList();
 
             return new BookListResult(page, page.Count, filtered.Count, skip + page.Count < filtered.Count);
