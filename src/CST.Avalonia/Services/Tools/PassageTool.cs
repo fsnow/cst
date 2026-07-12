@@ -24,6 +24,10 @@ namespace CST.Avalonia.Services.Tools
 
         public PassageTool(ISettingsService settings) => _settings = settings;
 
+        // Upper bound on a single passage read — a client asking for MaxChars:2_000_000_000 shouldn't pin a
+        // 4 GB substring off a corpus file. (#305)
+        private const int MaxPassageChars = 20_000;
+
         /// <summary>True only for a bookId that is an exact catalog file name — the confinement check that keeps
         /// a client-supplied bookId from escaping the corpus directory. (#301)</summary>
         internal static bool IsCatalogBook(string? bookId) =>
@@ -52,7 +56,7 @@ namespace CST.Avalonia.Services.Tools
             // A cursor points AT a hit (mid-sentence); snap the window start back to the enclosing sentence so
             // the hit is read with its governing clause. A paragraph reference already starts clean - no snap.
             var w = TeiPassageReader.ReadWindow(
-                xml, startPos, Math.Max(1, request.MaxChars),
+                xml, startPos, Math.Clamp(request.MaxChars, 1, MaxPassageChars),
                 request.IncludeFootnotes, request.OutputScript, markers,
                 snapStartToSentence: request.Cursor.HasValue);
 

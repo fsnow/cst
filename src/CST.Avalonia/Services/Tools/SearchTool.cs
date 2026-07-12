@@ -31,13 +31,19 @@ namespace CST.Avalonia.Services.Tools
             _settings = settings;
         }
 
+        // Caps on client-supplied sizes/paging: bound per-request work so an agent fan-out can't self-DoS the
+        // in-process thread pool the UI shares (or blow memory). (#305)
+        private const int MaxPageSize = 1000;
+        private const int MaxTake = 500;
+        private const int MaxSnippetChars = 20_000;
+
         public async Task<SearchToolResult> SearchAsync(SearchToolRequest request, CancellationToken ct = default)
         {
             var query = new SearchQuery
             {
                 QueryText = request.Query ?? string.Empty,
                 Mode = MapMode(request.Mode),
-                PageSize = request.MaxTerms,
+                PageSize = Math.Clamp(request.MaxTerms, 1, MaxPageSize),
                 Skip = request.Skip,
                 // No per-book breakdown requested => let the engine take counts straight from the index (no
                 // postings) when the search is also unfiltered.
@@ -147,11 +153,12 @@ namespace CST.Avalonia.Services.Tools
             // Char offsets index the decoded (BOM-stripped) UTF-16 text — read it the same way.
             string xml = await File.ReadAllTextAsync(path, Encoding.Unicode, ct).ConfigureAwait(false);
             var markers = BookMarkers.Build(xml);
+            int minChars = Math.Clamp(request.MinChars ?? 60, 1, MaxSnippetChars);
             var opts = new SnippetOptions(
                 OutputScript: request.OutputScript,
                 IncludeFootnotes: request.IncludeFootnotes,
-                MinChars: request.MinChars ?? 60,
-                MaxChars: request.MaxChars ?? 320);
+                MinChars: minChars,
+                MaxChars: Math.Clamp(request.MaxChars ?? 320, minChars, MaxSnippetChars));   // bounded; MaxChars >= MinChars
 
             string rawBookName = Books.Inst
                 .FirstOrDefault(b => string.Equals(b.FileName, request.BookId, StringComparison.OrdinalIgnoreCase))
@@ -164,8 +171,10 @@ namespace CST.Avalonia.Services.Tools
             // (Desktop MCP friction report — the snippet de-dup / token win.)
             var groups = TeiSnippetExtractor.GroupCoLocated(xml, perOccurrence);
 
+            int skip = Math.Max(0, request.Skip);
+            int take = Math.Clamp(request.Take, 0, MaxTake);
             var occurrences = new List<Occurrence>();
-            foreach (var marks in groups.Skip(request.Skip).Take(request.Take))
+            foreach (var marks in groups.Skip(skip).Take(take))
             {
                 ct.ThrowIfCancellationRequested();
                 var s = TeiSnippetExtractor.Extract(xml, marks, markers, opts);
@@ -193,7 +202,7 @@ namespace CST.Avalonia.Services.Tools
                 ReturnedCount: occurrences.Count,
                 Total: groups.Count,
                 InstanceTotal: perOccurrence.Count,
-                HasMore: request.Skip + occurrences.Count < groups.Count);
+                HasMore: skip + occurrences.Count < groups.Count);
 
             static int AnchorStart(IReadOnlyList<SnippetMark> m)
             {
