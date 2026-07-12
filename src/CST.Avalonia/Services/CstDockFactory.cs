@@ -2089,16 +2089,43 @@ namespace CST.Avalonia.Services
         // auto-closed, so this is transient).
         private const string DefaultFloatingWindowTitle = "CST Reader";
 
+        // #322 (#284 follow-up): the title-tracking event subscriptions per floating window, kept as
+        // detach delegates so they can be removed when the window closes (no leaked handlers / rooted
+        // window graph) and re-wired idempotently on a repeat SetLayout (no double-wiring).
+        private readonly Dictionary<CstHostWindow, List<Action>> _titleSubscriptions = new();
+
         // #284: keep a floating window's title in sync with its content. Naming scheme:
         //   single item  -> that item's title (book name or tool name),
         //   multiple items-> active tab's title + "  +N"  (N = the other tabs),
-        // updated live as tabs are added/removed and as the active tab changes. (The main window keeps
-        // its static "CST Reader" title.) Wired from CstHostWindow.SetLayout, once the layout exists.
+        // updated live as tabs are added/removed, as the active tab changes, and as a leaf's own title
+        // changes (e.g. a global script switch retitles a book). (The main window keeps its static
+        // "CST Reader" title.) Wired from CstHostWindow.SetLayout, once the layout exists.
         public void SetupHostWindowTitleTracking(CstHostWindow window)
         {
             try
             {
-                WireTitleUpdates(window, window.Layout, 0);
+                // Idempotent: drop any prior subscriptions before re-wiring (SetLayout may run again).
+                if (_titleSubscriptions.TryGetValue(window, out var existing))
+                {
+                    DetachTitleSubscriptions(existing);
+                }
+                else
+                {
+                    // Hook the window's close exactly once to detach + forget its subscriptions.
+                    window.Closed += (_, _) =>
+                    {
+                        if (_titleSubscriptions.TryGetValue(window, out var subs))
+                        {
+                            DetachTitleSubscriptions(subs);
+                            _titleSubscriptions.Remove(window);
+                        }
+                    };
+                }
+
+                var detaches = new List<Action>();
+                WireTitleUpdates(window, window.Layout, 0, detaches);
+                _titleSubscriptions[window] = detaches;
+
                 UpdateHostWindowTitle(window);
             }
             catch (Exception ex)
@@ -2107,47 +2134,84 @@ namespace CST.Avalonia.Services
             }
         }
 
-        // Subscribe every dock in the window to the two things that change the title: its tab set
-        // (VisibleDockables collection) and which tab is active (ActiveDockable/FocusedDockable). Only
-        // the docks present at wire-up time are tracked; a later split inside the float still updates
-        // on the parent's collection change, just not on an active-tab switch within the new dock.
-        private void WireTitleUpdates(CstHostWindow window, IDockable? node, int depth)
+        private static void DetachTitleSubscriptions(List<Action> detaches)
         {
-            if (node is not IDock dock || depth > 32) return;
-
-            if (dock is INotifyPropertyChanged inpc)
+            foreach (var detach in detaches)
             {
-                inpc.PropertyChanged += (_, e) =>
+                try { detach(); } catch { /* best-effort unsubscribe */ }
+            }
+            detaches.Clear();
+        }
+
+        // Subscribe the things that change a floating window's title: each dock's tab set
+        // (VisibleDockables collection) and active tab (ActiveDockable/FocusedDockable), plus each LEAF
+        // dockable's own Title (a book retitles on a global script switch — A8-3). Every subscription is
+        // paired with a detach delegate collected into <paramref name="detaches"/> so it can be undone on
+        // window close. Only the docks/leaves present at wire-up are tracked; a later split still updates
+        // the title on the parent's collection change.
+        private void WireTitleUpdates(CstHostWindow window, IDockable? node, int depth, List<Action> detaches)
+        {
+            if (node == null || depth > 32) return;
+
+            if (node is IDock dock)
+            {
+                if (dock is INotifyPropertyChanged inpc)
                 {
-                    if (e.PropertyName == nameof(IDock.ActiveDockable) ||
-                        e.PropertyName == nameof(IDock.FocusedDockable))
+                    PropertyChangedEventHandler h = (_, e) =>
+                    {
+                        if (e.PropertyName == nameof(IDock.ActiveDockable) ||
+                            e.PropertyName == nameof(IDock.FocusedDockable))
+                        {
+                            UpdateHostWindowTitle(window);
+                        }
+                    };
+                    inpc.PropertyChanged += h;
+                    detaches.Add(() => inpc.PropertyChanged -= h);
+                }
+
+                if (dock.VisibleDockables is INotifyCollectionChanged incc)
+                {
+                    NotifyCollectionChangedEventHandler h = (_, _) => UpdateHostWindowTitle(window);
+                    incc.CollectionChanged += h;
+                    detaches.Add(() => incc.CollectionChanged -= h);
+                }
+
+                if (dock.VisibleDockables != null)
+                {
+                    foreach (var child in dock.VisibleDockables)
+                    {
+                        WireTitleUpdates(window, child, depth + 1, detaches);
+                    }
+                }
+            }
+            else if (node is INotifyPropertyChanged leaf)
+            {
+                // Leaf content VM (book/tool): its Title can change in place (script switch → new
+                // DisplayTitle → Title). A single-tab float has no tab-switch to otherwise refresh it.
+                PropertyChangedEventHandler h = (_, e) =>
+                {
+                    if (e.PropertyName == nameof(IDockable.Title) || e.PropertyName == "DisplayTitle")
                     {
                         UpdateHostWindowTitle(window);
                     }
                 };
-            }
-
-            if (dock.VisibleDockables is INotifyCollectionChanged incc)
-            {
-                incc.CollectionChanged += (_, _) => UpdateHostWindowTitle(window);
-            }
-
-            if (dock.VisibleDockables != null)
-            {
-                foreach (var child in dock.VisibleDockables)
-                {
-                    WireTitleUpdates(window, child, depth + 1);
-                }
+                leaf.PropertyChanged += h;
+                detaches.Add(() => leaf.PropertyChanged -= h);
             }
         }
 
-        // Compute and apply the title for a floating window from its current content.
+        // Compute and apply the title for a floating window from its current content. Short-circuits when
+        // the computed title is unchanged, so ordinary focus flapping doesn't churn SetTitle + the native
+        // Window-menu rebuild (A8-5).
         public void UpdateHostWindowTitle(CstHostWindow window)
         {
             try
             {
-                window.SetTitle(ComputeFloatingWindowTitle(window.Layout));
-                // #284: the Window menu shows this title, so refresh the lists when it changes.
+                var newTitle = ComputeFloatingWindowTitle(window.Layout);
+                if (string.Equals(window.Title, newTitle, StringComparison.Ordinal)) return;
+
+                window.SetTitle(newTitle);
+                // #284: the Window menu shows this title, so refresh the lists when it actually changes.
                 (Application.Current as App)?.RebuildWindowMenus();
             }
             catch (Exception ex)
