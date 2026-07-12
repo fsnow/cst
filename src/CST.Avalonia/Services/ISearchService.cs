@@ -22,11 +22,4 @@ public interface ISearchService
     /// </summary>
     Task<List<List<TermPosition>>> GetMultiWordPositionsAsync(
         string bookFileName, string query, SearchMode mode, int proximityDistance, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Sync the index→catalog DocId map now, instead of lazily on the first search, so the <c>books</c> catalog's
-    /// <c>indexed</c> flag is accurate up front (#291). Best-effort and idempotent; a no-op if the index isn't
-    /// configured/ready yet (DocIds then still sync on the first search).
-    /// </summary>
-    void EnsureIndexMapped();
 }

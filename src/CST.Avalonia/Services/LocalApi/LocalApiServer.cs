@@ -234,10 +234,6 @@ namespace CST.Avalonia.Services.LocalApi
             Token = token;
             BaseUrl = $"http://127.0.0.1:{port}";
 
-            // Warm the index→catalog DocId map now, so the `books` catalog's `indexed` flag is truthful before
-            // any search runs (otherwise it lazily syncs on the first search). Best-effort. (#291)
-            _search?.EnsureIndexMapped();
-
             new LocalApiInfo(port, token, Environment.ProcessId).Write(_handshakeDirectory);
             _logger.Information("Local API listening on {BaseUrl} (rest={Rest}, mcp={Mcp})",
                 BaseUrl, _restApiEnabled, _mcpEnabled);

@@ -27,15 +27,14 @@ namespace CST.Tools
         BookAnchors? ListAnchors(string bookId);
     }
 
-    /// <summary>A book as seen by an agent: its id (file name), names, classification, and index state.</summary>
+    /// <summary>A book as seen by an agent: its id (file name), names, and classification.</summary>
     public sealed record BookSummary(
         string BookId,
         string Name,
         string ShortName,
         Pitaka Pitaka,
         CommentaryLevel CommentaryLevel,
-        BookType BookType,
-        bool Indexed);
+        BookType BookType);
 
     /// <summary>
     /// A page of the book catalog. The 217-book catalog is large, so the listing is filterable (by piṭaka /
