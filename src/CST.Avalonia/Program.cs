@@ -94,6 +94,19 @@ sealed class Program
                 return;
             }
 
+            // Single-instance guard (#289): only one GUI per data directory. The --mcp-bridge relay and the CLI
+            // utility flags above have already returned, so this gates only a real GUI launch. Two instances would
+            // clobber the shared settings / app-state / index and race on local-api.json.
+            var appDataDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
+            if (!SingleInstanceGuard.TryAcquire(appDataDir))
+            {
+                _logger.Information("Another CST Reader instance already owns {Dir}; activating it and exiting.", appDataDir);
+                SingleInstanceGuard.ActivateRunningInstance();
+                return;
+            }
+
             // Build the Avalonia app without starting it yet
             var app = BuildAvaloniaApp();
 
