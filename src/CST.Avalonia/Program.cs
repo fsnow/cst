@@ -114,6 +114,15 @@ sealed class Program
 
             app.StartWithClassicDesktopLifetime(args);
         }
+        catch (Exception ex)
+        {
+            // Last-resort: an early-startup failure (e.g. the single-instance guard on an unwritable data dir)
+            // would otherwise be an unhandled crash with no window and — if it happened before logging init — no
+            // log. Make it visible on stderr, and log if Serilog is up. (#315 A6-2)
+            Console.Error.WriteLine($"CST Reader failed to start: {ex}");
+            try { Serilog.Log.Fatal(ex, "Fatal startup error"); } catch { /* logging may not be configured yet */ }
+            throw;
+        }
         finally
         {
             // No cleanup needed for WebView
