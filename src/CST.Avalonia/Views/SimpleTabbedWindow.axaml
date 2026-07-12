@@ -31,6 +31,11 @@
                     <NativeMenuItem Header="View Source (2010 ed.)" Click="OnViewSource2010Click" Gesture="cmd+shift+e" />
                 </NativeMenu>
             </NativeMenuItem>
+
+            <!-- Window Menu (#284): populated at runtime with the live window list by App.RebuildWindowMenus -->
+            <NativeMenuItem Header="Window">
+                <NativeMenu />
+            </NativeMenuItem>
         </NativeMenu>
     </NativeMenu.Menu>
 

@@ -2147,6 +2147,8 @@ namespace CST.Avalonia.Services
             try
             {
                 window.SetTitle(ComputeFloatingWindowTitle(window.Layout));
+                // #284: the Window menu shows this title, so refresh the lists when it changes.
+                (Application.Current as App)?.RebuildWindowMenus();
             }
             catch (Exception ex)
             {

@@ -66,6 +66,12 @@ public partial class App : Application
     private List<NativeMenuItem> _searchMenuItems = new List<NativeMenuItem>();
     private List<NativeMenuItem> _dictionaryMenuItems = new List<NativeMenuItem>();
 
+    // #284: the per-window "Window" submenu (main + each floating window). Each is repopulated with the
+    // live window list (Minimize + a "jump to window" entry per open window) whenever windows open, close,
+    // change title, or change activation. macOS shows the menu bar of the active window, so every window
+    // carries its own copy of the (identical) list.
+    private readonly Dictionary<Window, NativeMenu> _windowMenus = new();
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -1167,6 +1173,10 @@ public partial class App : Application
             {
                 layoutViewModel.PanelVisibilityChanged += OnPanelVisibilityChanged;
             }
+
+            // #284: register the main window's "Window" submenu (declared empty in XAML) and fill the list.
+            RegisterWindowMenu(MainWindow);
+            RebuildWindowMenus();
         }
     }
 
@@ -1279,7 +1289,13 @@ public partial class App : Application
             var nativeMenu = new NativeMenu();
             nativeMenu.Add(new NativeMenuItem { Header = "View", Menu = viewMenu });
             nativeMenu.Add(new NativeMenuItem { Header = "Tools", Menu = toolsMenu });
+            // #284: this window's "Window" submenu (populated by RebuildWindowMenus below).
+            nativeMenu.Add(new NativeMenuItem { Header = "Window", Menu = new NativeMenu() });
             NativeMenu.SetMenu(window, nativeMenu);
+
+            // Register + populate the Window list (this new window now also appears in every window's list).
+            RegisterWindowMenu(window);
+            RebuildWindowMenus();
 
             Log.Information("Floating window menu built - tracked toggle items: {SelectBookCount} select-book, {SearchCount} search",
                 _selectBookMenuItems.Count, _searchMenuItems.Count);
@@ -1289,7 +1305,106 @@ public partial class App : Application
             Log.Error(ex, "Failed to set up floating window menu");
         }
     }
-    
+
+    // ===== #284: menu-bar "Window" menu (jump-to-window list) =====
+    // Each window (main + floating) carries a "Window" top-level menu, since macOS shows the menu bar of
+    // whichever window is active. The submenu is repopulated with the live window list on any change.
+    // (When Avalonia is new enough to expose NativeDock.Menu, the same GetListedWindows/PopulateWindowMenu
+    // logic can back a real Dock-icon menu — that's the only piece #284 still wants.)
+
+    // Locate a window's "Window" submenu (main window declares it in XAML; floating windows add it in
+    // SetupFloatingWindowMenu), register it for population, and keep it fresh as this window closes/activates.
+    private void RegisterWindowMenu(Window owner)
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var menu = NativeMenu.GetMenu(owner);
+        var windowItem = menu?.OfType<NativeMenuItem>().FirstOrDefault(i => (i.Header as string) == "Window");
+        if (windowItem?.Menu is not NativeMenu submenu) return;
+
+        _windowMenus[owner] = submenu;
+        owner.Closed += (_, _) => { _windowMenus.Remove(owner); RebuildWindowMenus(); };
+        owner.Activated += (_, _) => RebuildWindowMenus();   // keep the active-window checkmark current
+    }
+
+    // The windows to list, in order: main window first ("CST Reader"), then floating book/tool windows
+    // (their live title). Transient dialogs (Settings, Go To) are intentionally excluded.
+    private List<(Window Window, string Title)> GetListedWindows()
+    {
+        var result = new List<(Window, string)>();
+        if (MainWindow != null) result.Add((MainWindow, "CST Reader"));
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            foreach (var w in desktop.Windows)
+            {
+                if (w is CstHostWindow host)
+                {
+                    var title = string.IsNullOrWhiteSpace(host.Title) ? "CST Reader" : host.Title;
+                    result.Add((host, title));
+                }
+            }
+        }
+        return result;
+    }
+
+    // Repopulate every registered "Window" submenu with the current window list. Cheap (a handful of
+    // windows); called on window open/close/retitle/activate. Public so CstDockFactory can call it.
+    public void RebuildWindowMenus()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        try
+        {
+            var windows = GetListedWindows();
+            foreach (var pair in _windowMenus.ToList())
+            {
+                PopulateWindowMenu(pair.Value, pair.Key, windows);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to rebuild Window menus");
+        }
+    }
+
+    private void PopulateWindowMenu(NativeMenu submenu, Window owner, List<(Window Window, string Title)> windows)
+    {
+        submenu.Items.Clear();
+
+        // Minimize acts on the window whose menu bar is showing (its owner).
+        var minimize = new NativeMenuItem { Header = "Minimize", Gesture = KeyGesture.Parse("Cmd+M") };
+        minimize.Click += (_, _) => { try { owner.WindowState = global::Avalonia.Controls.WindowState.Minimized; } catch { /* ignore */ } };
+        submenu.Add(minimize);
+
+        submenu.Add(new NativeMenuItemSeparator());
+
+        // One entry per open window; checkmark on the active one; click brings it to the front.
+        foreach (var (win, title) in windows)
+        {
+            var target = win;
+            var item = new NativeMenuItem
+            {
+                Header = title,
+                ToggleType = NativeMenuItemToggleType.CheckBox,
+                IsChecked = win.IsActive
+            };
+            item.Click += (_, _) => ActivateWindow(target);
+            submenu.Add(item);
+        }
+    }
+
+    private static void ActivateWindow(Window win)
+    {
+        try
+        {
+            if (win.WindowState == global::Avalonia.Controls.WindowState.Minimized)
+                win.WindowState = global::Avalonia.Controls.WindowState.Normal;
+            win.Activate();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to activate window from Window menu");
+        }
+    }
+
     private async Task ShowSettingsWindow()
     {
         try
