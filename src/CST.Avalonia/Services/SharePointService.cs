@@ -243,7 +243,7 @@ namespace CST.Avalonia.Services
                 }
 
                 // Download the file content
-                var contentStream = await _graphClient.Drives[driveId].Items[itemPath].Content.GetAsync();
+                using var contentStream = await _graphClient.Drives[driveId].Items[itemPath].Content.GetAsync();
 
                 if (contentStream == null)
                 {
