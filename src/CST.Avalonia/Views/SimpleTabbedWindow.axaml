@@ -54,10 +54,14 @@
                 <TextBlock Text="Interface Language:" 
                           VerticalAlignment="Center" 
                           Margin="0,0,5,0"/>
-                <ComboBox MinWidth="120" 
+                <!-- #350: SelectedIndex="0" so "English" shows instead of blank — a child item's
+                     IsSelected doesn't reliably drive the ComboBox's own selection in Avalonia.
+                     (Placeholder until the interface-localization epic #26.) -->
+                <ComboBox MinWidth="120"
                           Margin="0,0,20,0"
-                          x:Name="InterfaceLangCombo">
-                    <ComboBoxItem Content="English" IsSelected="True"/>
+                          x:Name="InterfaceLangCombo"
+                          SelectedIndex="0">
+                    <ComboBoxItem Content="English"/>
                 </ComboBox>
                 
                 <!-- Pali Script -->
