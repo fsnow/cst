@@ -41,6 +41,24 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void ReadWindow_drops_the_space_a_stripped_inline_tag_leaves_before_punctuation()
+        {
+            // A page-break tag sits between a word and its comma; stripping it must not leave "alpha ," (#292).
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<pb ed=\"V\" n=\"1.0001\"/>" +
+                "<p rend=\"bodytext\" n=\"5\">alpha<pb ed=\"V\" n=\"1.0002\"/>, bravo charlie\u0964</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int start = markers.PositionOfParagraph(5);
+            var w = TeiPassageReader.ReadWindow(xml, start, maxChars: 200, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("alpha,", w.Text);        // punctuation hugs the word...
+            Assert.DoesNotContain("alpha ,", w.Text);  // ...no stray space from the stripped <pb/>
+        }
+
+        [Fact]
         public void ReadWindow_wraps_included_notes_in_braces()
         {
             const string xml =
