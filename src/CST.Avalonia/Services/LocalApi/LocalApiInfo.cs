@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Serilog;
 
 namespace CST.Avalonia.Services.LocalApi
 {
@@ -31,8 +33,22 @@ namespace CST.Avalonia.Services.LocalApi
         public void Write(string directory)
         {
             var path = PathIn(directory);
-            File.WriteAllText(path, JsonSerializer.Serialize(this, Options));
-            TrySetOwnerOnly(path);
+            var json = JsonSerializer.Serialize(this, Options);
+
+            // Write to a temp file created 0600 at open(2) (no world-readable window on macOS/Linux — the token is
+            // a session secret), then atomically rename it over the real path so a concurrently polling client (the
+            // --mcp-bridge relay) never reads torn JSON. (#303)
+            var tmp = path + "." + Environment.ProcessId + ".tmp";
+            var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
+            if (!OperatingSystem.IsWindows())
+                options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+            using (var fs = new FileStream(tmp, options))
+            using (var w = new StreamWriter(fs, new UTF8Encoding(false)))
+                w.Write(json);
+
+            File.Move(tmp, path, overwrite: true);   // rename preserves the temp's 0600 mode
+            TrySetOwnerOnly(path);                    // belt-and-suspenders; also fixes a pre-existing file's mode
         }
 
         public static LocalApiInfo? Read(string directory)
@@ -59,7 +75,11 @@ namespace CST.Avalonia.Services.LocalApi
                 if (!OperatingSystem.IsWindows())
                     File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             }
-            catch { /* best effort */ }
+            catch (Exception ex)
+            {
+                // Don't swallow: a token file left group/world-readable is a real exposure worth a log line. (#303)
+                Log.Warning(ex, "Could not restrict permissions on {Path}; the local-API token may be readable by other local users.", path);
+            }
         }
     }
 }
