@@ -8,6 +8,11 @@
     <RootNamespace>CST</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Let the test project exercise internal TEI helpers (TeiText.Clean etc.) directly. -->
+    <InternalsVisibleTo Include="CST.Avalonia.Tests" />
+  </ItemGroup>
+
   <!-- Temporarily removed Lucene.Net dependency to focus on core book data -->
   <!-- <ItemGroup>
     <PackageReference Include="Lucene.Net" Version="4.8.0-beta00018" />

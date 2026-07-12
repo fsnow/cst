@@ -58,8 +58,14 @@ namespace CST.Search
             // A window bound can land INSIDE a tag (e.g. SnapToSpace stopping at a space within `<hi rend="dot">`),
             // which would leak the tag's tail (`rend="dot">`) as text since Clean can't see the `<` before it.
             // Nudge the start past the tag and the end before it. Never cross the marks. (Code+API friction D-2)
-            winStart = Math.Min(NudgePastTag(xml, winStart), ms[0].Start);
-            winEnd = Math.Max(NudgeBeforeTag(xml, winEnd), ms[ms.Count - 1].End);
+            //
+            // A bound can ALSO land inside a <note> element (SnapToSpace can snap to a space within note content) —
+            // the tag-nudge only fixes bounds inside a tag, not inside a note. So first nudge each bound out of any
+            // note region (start => note end, end => note start), then out of a tag. The clamps keep us from ever
+            // crossing the marks, so a hit that is itself inside a note still renders. (#310 A4-2)
+            var winNotes = TeiText.NoteRegions(xml, pStart, pEnd);
+            winStart = Math.Min(NudgePastTag(xml, NudgePastNote(winStart, winNotes)), ms[0].Start);
+            winEnd = Math.Max(NudgeBeforeTag(xml, NudgeBeforeNote(winEnd, winNotes)), ms[ms.Count - 1].End);
 
             // Render as segments: prefix . before . [mark . gap]* . mark . after . suffix, tracking each mark's
             // snippet-local start as the cumulative rendered length before it. Same length rule as the single-mark
@@ -93,8 +99,10 @@ namespace CST.Search
             var (num, code, pages) = markers.RefsAt(anchor.Start);
             var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];
             // Apparatus notes ({…}) in this window — counted from the raw XML regardless of IncludeFootnotes, so a
-            // caller can tell "no apparatus here" from "apparatus suppressed" without a second call. (#293)
-            int noteCount = TeiText.NoteRegions(xml, winStart, winEnd).Count;
+            // caller can tell "no apparatus here" from "apparatus suppressed" without a second call. (#293) Count
+            // notes INTERSECTING the window, not just those starting in it, so a note the window opens mid-way
+            // through still counts. (#310 A4-15)
+            int noteCount = TeiText.CountNotesIntersecting(xml, pStart, winStart, winEnd);
             return new SnippetResult(
                 sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeFootnotes, highlights, noteCount);
         }
@@ -171,6 +179,22 @@ namespace CST.Search
         private static int NudgeBeforeTag(string xml, int pos)
         {
             if (InsideTag(xml, pos)) { int lt = xml.LastIndexOf('<', Math.Max(0, pos - 1)); if (lt >= 0) return lt; }
+            return pos;
+        }
+
+        // A window START inside a note region moves past the note (to its end); a stripped/apparatus note should
+        // not open the visible window mid-content. (#310 A4-2)
+        private static int NudgePastNote(int pos, List<(int s, int e)> notes)
+        {
+            foreach (var (s, e) in notes) if (pos >= s && pos < e) return e;
+            return pos;
+        }
+
+        // A window END (exclusive) inside a note region pulls back to that note's start, so the window never ends
+        // partway through note content. (#310 A4-2)
+        private static int NudgeBeforeNote(int pos, List<(int s, int e)> notes)
+        {
+            foreach (var (s, e) in notes) if (pos > s && pos < e) return s;
             return pos;
         }
 
