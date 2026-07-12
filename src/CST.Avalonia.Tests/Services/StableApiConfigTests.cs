@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Services.LocalApi;
 using CST.Avalonia.Services.LocalApi.Mcp;
+using CST.Conversion;
 using ModelContextProtocol.Client;
 using Xunit;
 
@@ -142,6 +143,16 @@ namespace CST.Avalonia.Tests.Services
 
             onGone.Cancel();   // stop the watcher
             await watch;
+        }
+
+        [Fact]
+        public void McpScript_ToScript_rejects_undefined_outputScript_ordinals()
+        {
+            // #304: the MCP SDK accepts integer enum values; OutputScript is 0-13 but Script has Ipe=15 — an
+            // out-of-range value must be rejected, not mapped into Script.Ipe (IPE leak) or empty output.
+            Assert.Equal(Script.Sinhala, McpScript.ToScript(OutputScript.Sinhala));   // defined → mapped by name
+            Assert.Throws<System.ArgumentException>(() => McpScript.ToScript((OutputScript)15));  // Script.Ipe ordinal
+            Assert.Throws<System.ArgumentException>(() => McpScript.ToScript((OutputScript)99));
         }
 
         [Fact]
