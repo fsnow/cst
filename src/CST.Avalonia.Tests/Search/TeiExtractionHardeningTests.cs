@@ -49,6 +49,19 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void Extract_does_not_throw_when_a_pb_tag_starts_the_buffer()
+        {
+            // #313 A4-11 loop residual: a "<p"-prefixed non-<p> tag (<pb/>) at position 0 must not make
+            // FindLastPOpen search before index 0 (LastIndexOf(..,-1)) and throw.
+            const string xml = "<pb ed=\"V\" n=\"1\"/>alpha TARGET beta gamma\u0964";
+            var markers = BookMarkers.Build(xml);
+            int hit = xml.IndexOf("TARGET", StringComparison.Ordinal);
+            var ex = Record.Exception(() =>
+                TeiSnippetExtractor.Extract(xml, hit, "TARGET".Length, markers, Deva(1, 400)));
+            Assert.Null(ex);
+        }
+
+        [Fact]
         public void ReadWindow_with_int_max_maxchars_returns_the_whole_text_not_one_char()
         {
             // #313 A4-13: hardCap = maxChars + maxChars/2 overflowed negative at maxChars=int.MaxValue, so the walk

@@ -319,7 +319,7 @@ public class SearchService : ISearchService
                 var w = unit.Words[s];
                 if (query.Mode == SearchMode.Wildcard && (w.Contains("*") || w.Contains("?")))
                 {
-                    slots[s] = ExpandWildcard(w, reader, out var wasTruncated);
+                    slots[s] = ExpandWildcard(w, reader, out var wasTruncated, cancellationToken);
                     if (wasTruncated) truncatedTermCount++;
                 }
                 else if (query.Mode == SearchMode.Regex)
@@ -327,7 +327,7 @@ public class SearchService : ISearchService
                     // Each unit of a multi-word regex must be expanded to its matching terms, just like the
                     // single-term path uses RegexTermMatcher. Previously regex units fell through to the
                     // literal branch below and matched nothing. (#60)
-                    slots[s] = ExpandRegex(w, reader, out var wasTruncated);
+                    slots[s] = ExpandRegex(w, reader, out var wasTruncated, cancellationToken);
                     if (wasTruncated) truncatedTermCount++;
                 }
                 else
@@ -722,9 +722,15 @@ public class SearchService : ISearchService
     // The matcher is position-based, not cartesian, so this bounds postings work, not E^N.
     private const int WildcardExpansionLimit = 5000;
 
+    // Abort an expansion whose pattern repeatedly hits the 200ms backtracking-FALLBACK timeout (a NonBacktracking-
+    // unsupported pattern — lookaround/backreference — wrapped around a catastrophic core). 25 × 200ms ≈ 5s hard
+    // ceiling on wasted CPU before we give up, so a crafted multi-word regex can't pin a core for the whole
+    // ~500K-term scan. NonBacktracking patterns never time out and never trip this. (#309 fallback residual)
+    private const int MaxFallbackTimeouts = 25;
+
     // Uses the caller's own (ref-counted) reader, not the mutable _indexReader field, so a concurrent
     // reader refresh can't make a single multi-word search mix two index generations. (SRCH-2)
-    private List<string> ExpandWildcard(string pattern, DirectoryReader reader, out bool truncated, int maxResults = WildcardExpansionLimit)
+    private List<string> ExpandWildcard(string pattern, DirectoryReader reader, out bool truncated, CancellationToken ct, int maxResults = WildcardExpansionLimit)
     {
         truncated = false;
 
@@ -748,6 +754,7 @@ public class SearchService : ISearchService
 
         var termsEnum = terms.GetEnumerator();
         var results = new List<string>();
+        int timeouts = 0;
 
         if (literalPrefix.Length > 0)
         {
@@ -756,14 +763,16 @@ public class SearchService : ISearchService
             {
                 do
                 {
+                    ct.ThrowIfCancellationRequested();   // the scan can be ~500K terms — stay cancellable (#309 fallback)
                     var term = termsEnum.Term.Utf8ToString();
                     if (!term.StartsWith(literalPrefix, StringComparison.Ordinal))
                         break; // sorted: past the prefix range, nothing more can match
-                    if (SafeRegex.IsMatch(regex, term))
+                    if (SafeRegex.IsMatch(regex, term, out bool to))
                     {
                         if (results.Count >= maxResults) { truncated = true; break; }
                         results.Add(term);
                     }
+                    if (to && ++timeouts >= MaxFallbackTimeouts) { truncated = true; break; }
                 } while (termsEnum.MoveNext());
             }
         }
@@ -771,12 +780,14 @@ public class SearchService : ISearchService
         {
             while (termsEnum.MoveNext())
             {
+                ct.ThrowIfCancellationRequested();
                 var term = termsEnum.Term.Utf8ToString();
-                if (SafeRegex.IsMatch(regex, term))
+                if (SafeRegex.IsMatch(regex, term, out bool to))
                 {
                     if (results.Count >= maxResults) { truncated = true; break; }
                     results.Add(term);
                 }
+                if (to && ++timeouts >= MaxFallbackTimeouts) { truncated = true; break; }
             }
         }
 
@@ -794,7 +805,7 @@ public class SearchService : ISearchService
     // (^lit...), seek to its literal prefix to avoid scanning all ~500K terms; otherwise full-scan. An
     // invalid pattern throws RegexParseException, surfaced upstream as the quiet "Invalid regex pattern"
     // hint (#59). (#60)
-    private List<string> ExpandRegex(string pattern, DirectoryReader reader, out bool truncated, int maxResults = WildcardExpansionLimit)
+    private List<string> ExpandRegex(string pattern, DirectoryReader reader, out bool truncated, CancellationToken ct, int maxResults = WildcardExpansionLimit)
     {
         truncated = false;
 
@@ -811,6 +822,7 @@ public class SearchService : ISearchService
 
         var termsEnum = terms.GetEnumerator();
         var results = new List<string>();
+        int timeouts = 0;
 
         if (literalPrefix.Length > 0)
         {
@@ -819,14 +831,16 @@ public class SearchService : ISearchService
             {
                 do
                 {
+                    ct.ThrowIfCancellationRequested();   // ~500K-term scan — stay cancellable (#309 fallback)
                     var term = termsEnum.Term.Utf8ToString();
                     if (!term.StartsWith(literalPrefix, StringComparison.Ordinal))
                         break; // sorted: past the prefix range, nothing more can match
-                    if (SafeRegex.IsMatch(regex, term))
+                    if (SafeRegex.IsMatch(regex, term, out bool to))
                     {
                         if (results.Count >= maxResults) { truncated = true; break; }
                         results.Add(term);
                     }
+                    if (to && ++timeouts >= MaxFallbackTimeouts) { truncated = true; break; }
                 } while (termsEnum.MoveNext());
             }
         }
@@ -834,12 +848,14 @@ public class SearchService : ISearchService
         {
             while (termsEnum.MoveNext())
             {
+                ct.ThrowIfCancellationRequested();
                 var term = termsEnum.Term.Utf8ToString();
-                if (SafeRegex.IsMatch(regex, term))
+                if (SafeRegex.IsMatch(regex, term, out bool to))
                 {
                     if (results.Count >= maxResults) { truncated = true; break; }
                     results.Add(term);
                 }
+                if (to && ++timeouts >= MaxFallbackTimeouts) { truncated = true; break; }
             }
         }
 
@@ -1011,8 +1027,8 @@ public class SearchService : ISearchService
                     cancellationToken.ThrowIfCancellationRequested();
                     var w = unit.Words[s];
                     List<string> expansions =
-                        mode == SearchMode.Wildcard && (w.Contains('*') || w.Contains('?')) ? ExpandWildcard(w, reader, out _)
-                        : mode == SearchMode.Regex ? ExpandRegex(w, reader, out _)
+                        mode == SearchMode.Wildcard && (w.Contains('*') || w.Contains('?')) ? ExpandWildcard(w, reader, out _, cancellationToken)
+                        : mode == SearchMode.Regex ? ExpandRegex(w, reader, out _, cancellationToken)
                         : new List<string> { w };
 
                     var positions = new List<TermPosition>();
@@ -1261,12 +1277,17 @@ internal static class SafeRegex
     }
 
     /// <summary>IsMatch that treats a fallback-timeout as "no match" (skip that term) instead of letting the
-    /// exception abort the whole scan — one pathological term shouldn't kill the search.</summary>
-    public static bool IsMatch(System.Text.RegularExpressions.Regex regex, string input)
+    /// exception abort the whole scan — one pathological term shouldn't kill the search. <paramref name="timedOut"/>
+    /// reports whether the (backtracking-fallback) match hit its per-term timeout, so a caller scanning many terms
+    /// can abort a pattern that repeatedly times out. NonBacktracking never times out (no MatchTimeout set).</summary>
+    public static bool IsMatch(System.Text.RegularExpressions.Regex regex, string input, out bool timedOut)
     {
+        timedOut = false;
         try { return regex.IsMatch(input); }
-        catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { return false; }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { timedOut = true; return false; }
     }
+
+    public static bool IsMatch(System.Text.RegularExpressions.Regex regex, string input) => IsMatch(regex, input, out _);
 }
 
 internal class WildcardTermMatcher : ITermMatcher

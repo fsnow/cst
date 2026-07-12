@@ -36,6 +36,24 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
+        public void Reports_timeout_on_a_fallback_catastrophic_pattern()
+        {
+            // #309 fallback residual: a pattern NonBacktracking can't express (backreference) drops to the timed
+            // backtracking engine; a catastrophic core then times out per-term, and IsMatch must REPORT it so an
+            // expansion scan can abort a pattern that repeatedly times out instead of pinning a core over 500K terms.
+            var regex = SafeRegex.Compile(@"(a)\1(a+)+$");   // backreference → fallback; (a+)+$ → catastrophic
+            var evil = new string('a', 40) + "b";            // no match → catastrophic backtracking → 200ms timeout
+
+            var sw = Stopwatch.StartNew();
+            bool matched = SafeRegex.IsMatch(regex, evil, out bool timedOut);
+            sw.Stop();
+
+            Assert.False(matched);
+            Assert.True(timedOut);
+            Assert.True(sw.Elapsed < TimeSpan.FromSeconds(2), $"took {sw.Elapsed} — should be bounded by the 200ms MatchTimeout");
+        }
+
+        [Fact]
         public void Throws_on_a_genuinely_invalid_pattern()
         {
             // A syntax error still surfaces as a parse exception (upstream "Invalid regex pattern" hint), #59.
