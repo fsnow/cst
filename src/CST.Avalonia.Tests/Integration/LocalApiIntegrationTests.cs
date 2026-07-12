@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using CST.Avalonia.Services.LocalApi;
 using CST.Avalonia.Services.LocalApi.Mcp;
 using CST.Avalonia.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -347,6 +348,28 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Mcp_search_filter_all_false_means_whole_corpus_not_empty()
+        {
+            // #307 A2-10: an agent that sets EVERY filter flag false (trying to "clear" the filter) used to get
+            // zero results (all-false -> exclude-all BitArray). It now normalizes to no constraint = whole corpus.
+            await using var client = await ConnectMcpAsync();
+            var cleared = await client.CallToolAsync("search", new Dictionary<string, object?>
+            {
+                ["query"] = "dhamma",
+                ["includeBooks"] = true,
+                ["filter"] = new Dictionary<string, object?>
+                {
+                    ["vinaya"] = false, ["sutta"] = false, ["abhidhamma"] = false,
+                    ["mula"] = false, ["atthakatha"] = false, ["tika"] = false, ["other"] = false,
+                },
+            });
+            Assert.NotEqual(true, cleared.IsError);
+            using var doc = ToolJson(cleared);
+            int bookCount = doc.RootElement.GetProperty("terms")[0].GetProperty("bookCount").GetInt32();
+            Assert.Equal(2, bookCount);   // both fixture books (mula + attha) — same as no filter, not zero
+        }
+
+        [Fact]
         public async Task Mcp_bridge_relays_list_and_call_to_the_real_mcp()
         {
             // The --mcp-bridge relay (#278 Phase 1): an MCP client drives the bridge over in-memory pipes; the
@@ -425,16 +448,17 @@ namespace CST.Avalonia.Tests.Integration
         {
             // Phase 3 (#278): when CST Reader never becomes ready (not installed / still starting / AI off), the
             // bridge must NOT exit silently — it answers the client's `initialize` with a JsonRpcError so Desktop
-            // shows a reason instead of a bare "Server disconnected". Here `clientSide` has no server behind it;
-            // AnswerRequestsWithErrorAsync stands in for the not-ready path.
+            // shows a reason instead of a bare "Server disconnected". Here `clientSide` has no server behind it and
+            // the handshake dir stays empty, so NotReadyLoopAsync (the not-ready path) never finds a live app and
+            // errors every request. (#307 A2-5)
             var toServer = new Pipe();
             var toClient = new Pipe();
             var clientSide = new StreamServerTransport(
                 toServer.Reader.AsStream(), toClient.Writer.AsStream(), "cst-reader-bridge", NullLoggerFactory.Instance);
 
+            var emptyHandshakeDir = Path.Combine(Path.GetTempPath(), "cst-notready-" + Guid.NewGuid().ToString("N"));
             using var cts = new CancellationTokenSource(System.TimeSpan.FromSeconds(30));
-            const string message = "CST Reader did not become ready for MCP.";
-            var pump = McpBridge.AnswerRequestsWithErrorAsync(clientSide, message, cts.Token);
+            var pump = McpBridge.NotReadyLoopAsync(clientSide, emptyHandshakeDir, cts.Token);
 
             var clientTransport = new StreamClientTransport(
                 toServer.Writer.AsStream(), toClient.Reader.AsStream(), NullLoggerFactory.Instance);
@@ -451,6 +475,36 @@ namespace CST.Avalonia.Tests.Integration
 
             cts.Cancel();
             try { await pump; } catch { }
+        }
+
+        [Fact]
+        public async Task Mcp_bridge_not_ready_loop_attaches_when_a_live_handshake_is_present()
+        {
+            // #307 A2-5: the not-ready path re-reads the handshake per request; with a live handshake it attaches
+            // and relays the already-read request onward — exercising the mid-session `pending` forward in RunAsync.
+            var dir = Path.Combine(Path.GetTempPath(), "cst-latehs-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            int port = new System.Uri(_api.BaseUrl!).Port;
+            new LocalApiInfo(port, _api.Token!, Environment.ProcessId).Write(dir);   // live: points at _api, our own pid
+
+            var toServer = new Pipe();
+            var toClient = new Pipe();
+            var clientSide = new StreamServerTransport(
+                toServer.Reader.AsStream(), toClient.Writer.AsStream(), "cst-reader-bridge", NullLoggerFactory.Instance);
+
+            using var cts = new CancellationTokenSource(System.TimeSpan.FromSeconds(30));
+            var pump = McpBridge.NotReadyLoopAsync(clientSide, dir, cts.Token);
+
+            var clientTransport = new StreamClientTransport(
+                toServer.Writer.AsStream(), toClient.Reader.AsStream(), NullLoggerFactory.Instance);
+            await using var client = await McpClient.CreateAsync(clientTransport, cancellationToken: cts.Token);
+
+            var tools = await client.ListToolsAsync(cancellationToken: cts.Token);
+            Assert.Contains(tools, t => t.Name == "search");   // initialize + list traversed the attached relay
+
+            cts.Cancel();
+            try { await pump; } catch { }
+            try { Directory.Delete(dir, recursive: true); } catch { }
         }
 
         [Fact]
