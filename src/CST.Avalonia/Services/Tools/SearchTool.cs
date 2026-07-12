@@ -222,6 +222,11 @@ namespace CST.Avalonia.Services.Tools
         private static BookFilter MapFilter(ToolBookFilter? f)
         {
             if (f == null) return new BookFilter();
+            // All-false across every group + 'other' would make SearchService produce a zero-book BitArray
+            // ("exclude all if no filters") — a footgun for an agent trying to CLEAR the filter, which then gets
+            // no results. Treat all-false as no constraint (the whole corpus), matching the intent. (#307 A2-10)
+            if (!f.Vinaya && !f.Sutta && !f.Abhidhamma && !f.Mula && !f.Atthakatha && !f.Tika && !f.Other)
+                return new BookFilter();   // all-true default = whole corpus (hits the unfiltered fast path)
             return new BookFilter
             {
                 IncludeVinaya = f.Vinaya,

@@ -70,23 +70,34 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
 
             if (info is null)
             {
-                Log.Warning("--mcp-bridge: CST Reader did not become ready; erroring the client's requests.");
-                await AnswerRequestsWithErrorAsync(clientSide, NotReadyMessage, ct).ConfigureAwait(false);
+                Log.Warning("--mcp-bridge: CST Reader did not become ready; erroring client requests (re-checking per request).");
+                await NotReadyLoopAsync(clientSide, handshakeDirectory, ct).ConfigureAwait(false);
                 return;
             }
 
-            // Relay until stdin EOF OR the app's stream ends OR the app PROCESS goes away. The last is the key
-            // case: if the user closes/kills CST Reader, the bridge must NOT dangle as a backend-less process, and
-            // it must NOT resurrect a window the user deliberately closed. So it watches the GUI's pid and, when it
-            // dies (clean quit, crash, or kill -9 — hence pid, not the handshake file which a kill -9 leaves stale),
-            // tears the relay down and exits. Net: it's always zero or two processes, never a lone bridge. (#278)
+            await AttachAndRelayAsync(clientSide, info, pending: null, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Attach to the running app named by <paramref name="info"/> and relay until stdin EOF, the app's stream
+        /// ending, or the app PROCESS going away. The last is the key case: if the user closes/kills CST Reader,
+        /// the bridge must NOT dangle as a backend-less process, and must NOT resurrect a window the user closed.
+        /// So it watches the GUI's pid and, when it dies (clean quit, crash, or <c>kill -9</c> — hence pid, not the
+        /// handshake file which a kill -9 leaves stale), tears the relay down and exits. Net: always zero or two
+        /// processes, never a lone bridge. <paramref name="pending"/> is an already-read first client message
+        /// (the mid-session-attach case) forwarded before the pump takes over. (#278)
+        /// </summary>
+        private static async Task AttachAndRelayAsync(
+            ITransport clientSide, LocalApiInfo info, JsonRpcMessage? pending, CancellationToken ct)
+        {
             using var appGoneCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var watcher = info.Pid > 0
                 ? WatchProcessLivenessAsync(info.Pid, appGoneCts, AppLivenessPollMs, appGoneCts.Token)
                 : Task.CompletedTask;
             try
             {
-                await RunAsync(clientSide, BuildHttpOptions(info), httpClient: null, appGoneCts.Token).ConfigureAwait(false);
+                await RunAsync(clientSide, BuildHttpOptions(info), httpClient: null, appGoneCts.Token, pending)
+                    .ConfigureAwait(false);
             }
             finally
             {
@@ -125,7 +136,14 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         private static bool IsProcessAlive(int pid)
         {
             try { using var _ = Process.GetProcessById(pid); return true; }
-            catch (ArgumentException) { return false; }
+            catch (ArgumentException) { return false; }   // definitively not running
+            catch (Exception ex)
+            {
+                // Any other failure (transient/platform quirk) must NOT fault the watcher task — that would
+                // silently lose liveness protection for the bridge's whole life. Assume alive and keep polling. (#307 A2-6)
+                Log.Warning(ex, "--mcp-bridge: liveness check for pid {Pid} failed; assuming alive.", pid);
+                return true;
+            }
         }
 
         /// <summary>
@@ -179,22 +197,33 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         }
 
         /// <summary>
-        /// The app isn't reachable: read from <paramref name="clientSide"/> and answer every JSON-RPC <em>request</em>
-        /// (starting with the client's <c>initialize</c>) with a <see cref="JsonRpcError"/> carrying
-        /// <paramref name="message"/>, so the chat client surfaces the reason instead of a silent spawn-timeout.
-        /// Notifications (no id) are ignored. Returns on stdin EOF.
+        /// The app isn't reachable yet: read from <paramref name="clientSide"/> and answer every JSON-RPC
+        /// <em>request</em> (starting with <c>initialize</c>) with a <see cref="JsonRpcError"/>, so the chat client
+        /// surfaces the reason instead of a silent spawn-timeout. But re-read the handshake on EVERY request: a cold
+        /// start (CEF + first-run index) that finishes AFTER the launch poll gave up is picked up here — the bridge
+        /// attaches and relays from that request onward, no client restart needed. Notifications (no id) are
+        /// ignored. Returns on stdin EOF. (#307 A2-5)
         /// </summary>
-        internal static async Task AnswerRequestsWithErrorAsync(ITransport clientSide, string message, CancellationToken ct)
+        internal static async Task NotReadyLoopAsync(ITransport clientSide, string handshakeDirectory, CancellationToken ct)
         {
             try
             {
                 await foreach (var msg in clientSide.MessageReader.ReadAllAsync(ct).ConfigureAwait(false))
                 {
                     if (msg is not JsonRpcRequest req) continue;
+
+                    var live = ReadLiveHandshake(handshakeDirectory);
+                    if (live is not null)
+                    {
+                        Log.Information("--mcp-bridge: CST Reader became ready; attaching and relaying from this request on.");
+                        await AttachAndRelayAsync(clientSide, live, pending: req, ct).ConfigureAwait(false);
+                        return;
+                    }
+
                     var error = new JsonRpcError
                     {
                         Id = req.Id,
-                        Error = new JsonRpcErrorDetail { Code = UnreachableErrorCode, Message = message },
+                        Error = new JsonRpcErrorDetail { Code = UnreachableErrorCode, Message = NotReadyMessage },
                     };
                     try { await clientSide.SendMessageAsync(error, ct).ConfigureAwait(false); }
                     catch { break; }   // client side gone
@@ -247,79 +276,98 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         /// (stdin EOF, or the app going away). Does not dispose <paramref name="clientSide"/> (the caller owns it).
         /// </summary>
         public static async Task RunAsync(
-            ITransport clientSide, HttpClientTransportOptions httpOptions, HttpClient? httpClient, CancellationToken ct)
+            ITransport clientSide, HttpClientTransportOptions httpOptions, HttpClient? httpClient, CancellationToken ct,
+            JsonRpcMessage? pending = null)
         {
             var httpTransport = httpClient is null
                 ? new HttpClientTransport(httpOptions, NullLoggerFactory.Instance)
                 : new HttpClientTransport(httpOptions, httpClient, NullLoggerFactory.Instance, ownsHttpClient: false);
-            // Disposing at the end sends a DELETE to end the server session (else it lingers to the idle timeout).
-            await using var serverSide = await httpTransport.ConnectAsync(ct).ConfigureAwait(false);
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var inFlight = new ConcurrentDictionary<Task, byte>();
-
-            // client -> server: each message on its OWN task. A sequential `await SendMessageAsync` here would
-            // serialize concurrent tool calls, block `notifications/cancelled` mid-call, and can DEADLOCK on a
-            // server->client request. (Fable review, must-have #1.)
-            async Task ClientToServer()
+            var serverSide = await httpTransport.ConnectAsync(ct).ConfigureAwait(false);
+            try
             {
-                try
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                var inFlight = new ConcurrentDictionary<Task, byte>();
+
+                void Enqueue(Task task)
                 {
-                    await foreach (var msg in clientSide.MessageReader.ReadAllAsync(cts.Token).ConfigureAwait(false))
+                    inFlight[task] = 0;
+                    _ = task.ContinueWith(t => inFlight.TryRemove(t, out _), TaskScheduler.Default);
+                }
+
+                // client -> server: each message on its OWN task. A sequential `await SendMessageAsync` here would
+                // serialize concurrent tool calls, block `notifications/cancelled` mid-call, and can DEADLOCK on a
+                // server->client request. (Fable review, must-have #1.)
+                async Task ClientToServer()
+                {
+                    try
                     {
-                        var task = ForwardAsync(msg);
-                        inFlight[task] = 0;
-                        _ = task.ContinueWith(t => inFlight.TryRemove(t, out _), TaskScheduler.Default);
+                        // A mid-session attach already pulled the client's first message off the reader — forward it
+                        // before resuming the pump so it isn't lost. (#307 A2-5)
+                        if (pending is not null) Enqueue(ForwardAsync(pending));
+                        await foreach (var msg in clientSide.MessageReader.ReadAllAsync(cts.Token).ConfigureAwait(false))
+                            Enqueue(ForwardAsync(msg));
                     }
+                    catch (OperationCanceledException) { }
                 }
-                catch (OperationCanceledException) { }
-            }
 
-            // server -> client: sequential is fine (the stdio/stream send path is internally serialized).
-            async Task ServerToClient()
-            {
-                try
+                // server -> client: sequential is fine (the stdio/stream send path is internally serialized).
+                async Task ServerToClient()
                 {
-                    await foreach (var msg in serverSide.MessageReader.ReadAllAsync(cts.Token).ConfigureAwait(false))
-                        await clientSide.SendMessageAsync(msg, cts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) { }
-                catch { /* server stream ended (app gone) */ }
-            }
-
-            // Forward one client->server message; if it was a request and the send throws (stale token 401,
-            // connection refused), synthesize a JsonRpcError so the client doesn't hang. (must-have #2.)
-            async Task ForwardAsync(JsonRpcMessage msg)
-            {
-                try
-                {
-                    await serverSide.SendMessageAsync(msg, cts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    if (msg is JsonRpcRequest req)
+                    try
                     {
-                        var error = new JsonRpcError
+                        await foreach (var msg in serverSide.MessageReader.ReadAllAsync(cts.Token).ConfigureAwait(false))
+                            await clientSide.SendMessageAsync(msg, cts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                    catch { /* server stream ended (app gone) */ }
+                }
+
+                // Forward one client->server message; if it was a request and the send throws (stale token 401,
+                // connection refused), synthesize a JsonRpcError so the client doesn't hang. (must-have #2.)
+                async Task ForwardAsync(JsonRpcMessage msg)
+                {
+                    try
+                    {
+                        await serverSide.SendMessageAsync(msg, cts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex)
+                    {
+                        if (msg is JsonRpcRequest req)
                         {
-                            Id = req.Id,
-                            Error = new JsonRpcErrorDetail
+                            var error = new JsonRpcError
                             {
-                                Code = UnreachableErrorCode,
-                                Message = "CST Reader is not reachable (is it running with AI features enabled?): " + ex.Message,
-                            },
-                        };
-                        try { await clientSide.SendMessageAsync(error, cts.Token).ConfigureAwait(false); }
-                        catch { /* client side gone too */ }
+                                Id = req.Id,
+                                Error = new JsonRpcErrorDetail
+                                {
+                                    Code = UnreachableErrorCode,
+                                    Message = "CST Reader is not reachable (is it running with AI features enabled?): " + ex.Message,
+                                },
+                            };
+                            try { await clientSide.SendMessageAsync(error, cts.Token).ConfigureAwait(false); }
+                            catch { /* client side gone too */ }
+                        }
                     }
                 }
-            }
 
-            var c2s = ClientToServer();
-            var s2c = ServerToClient();
-            await Task.WhenAny(c2s, s2c).ConfigureAwait(false);
-            cts.Cancel();
-            try { await Task.WhenAll(inFlight.Keys.ToArray()).ConfigureAwait(false); } catch { }
+                var c2s = ClientToServer();
+                var s2c = ServerToClient();
+                await Task.WhenAny(c2s, s2c).ConfigureAwait(false);
+                cts.Cancel();
+                // Observe BOTH loops (a non-OCE fault would otherwise go unobserved), and await the client loop so
+                // no further forwards get enqueued after we snapshot inFlight. (#307 A2-8)
+                try { await Task.WhenAll(c2s, s2c).ConfigureAwait(false); } catch { }
+                try { await Task.WhenAll(inFlight.Keys.ToArray()).ConfigureAwait(false); } catch { }
+            }
+            finally
+            {
+                // Disposing sends the session-ending DELETE — but the SDK issues it with CancellationToken.None on a
+                // default-100s-timeout HttpClient, so a wedged-but-alive app would make the bridge linger up to 100s
+                // after Desktop quits. Bound it: race the dispose against a short timeout. (#307 A2-4)
+                var dispose = serverSide.DisposeAsync().AsTask();
+                _ = dispose.ContinueWith(t => { _ = t.Exception; }, TaskScheduler.Default);   // observe if the timeout wins
+                await Task.WhenAny(dispose, Task.Delay(TimeSpan.FromSeconds(5), CancellationToken.None)).ConfigureAwait(false);
+            }
         }
     }
 }

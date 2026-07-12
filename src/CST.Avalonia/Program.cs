@@ -27,8 +27,10 @@ sealed class Program
             // before any UI/logging init. STDOUT is the JSON-RPC stream, so logs go to STDERR only; no GUI.
             if (args.Length > 0 && args[0] == "--mcp-bridge")
             {
+                // Information (not Warning): the bridge's attach/launch/watcher-exit breadcrumbs are the exact
+                // trace needed to debug launch-or-attach, and stderr-only keeps the JSON-RPC stdout clean. (#307 A2-7)
                 Log.Logger = new LoggerConfiguration()
-                    .MinimumLevel.Warning()
+                    .MinimumLevel.Information()
                     .WriteTo.Console(standardErrorFromLevel: Serilog.Events.LogEventLevel.Verbose)
                     .CreateLogger();
 
