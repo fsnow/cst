@@ -181,7 +181,8 @@ namespace CST.Avalonia.Services.Tools
                     // (paragraph numbers repeat within a book). (#186 cold test)
                     Cursor: AnchorStart(marks),
                     Highlights: s.Highlights
-                        .Select(h => new OccurrenceHighlight(h.Start, h.Length, h.IsAnchor)).ToList()));
+                        .Select(h => new OccurrenceHighlight(h.Start, h.Length, h.IsAnchor)).ToList(),
+                    NoteCount: s.NoteCount));
             }
             // Envelope (like search): book-scoped totals + hasMore, so an agent paging occurrences isn't blind.
             // Total is the MERGED record count (what you actually page over); InstanceTotal is the raw pre-merge

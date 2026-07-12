@@ -73,6 +73,7 @@ namespace CST.Avalonia.Tests.Search
                 outputScript: Script.Devanagari, markers);
             Assert.DoesNotContain("VAR", off.Text);   // note stripped by default
             Assert.DoesNotContain("{", off.Text);
+            Assert.Equal(1, off.NoteCount);            // ...but noteCount reports it's there (#293)
 
             var on = TeiPassageReader.ReadWindow(xml, start, maxChars: 10000, includeVariants: true,
                 outputScript: Script.Devanagari, markers);
@@ -80,6 +81,7 @@ namespace CST.Avalonia.Tests.Search
             int close = on.Text.IndexOf('}');
             Assert.True(open >= 0 && close > open, "note should be wrapped in { }");
             Assert.Contains("VAR", on.Text.Substring(open, close - open));
+            Assert.Equal(1, on.NoteCount);             // same count whether or not it's rendered
         }
 
         [Fact]

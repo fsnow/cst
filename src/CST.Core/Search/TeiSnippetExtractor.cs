@@ -92,8 +92,11 @@ namespace CST.Search
 
             var (num, code, pages) = markers.RefsAt(anchor.Start);
             var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];
+            // Apparatus notes ({…}) in this window — counted from the raw XML regardless of IncludeFootnotes, so a
+            // caller can tell "no apparatus here" from "apparatus suppressed" without a second call. (#293)
+            int noteCount = TeiText.NoteRegions(xml, winStart, winEnd).Count;
             return new SnippetResult(
-                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeFootnotes, highlights);
+                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeFootnotes, highlights, noteCount);
         }
 
         /// <summary>

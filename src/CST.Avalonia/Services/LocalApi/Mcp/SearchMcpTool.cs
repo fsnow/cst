@@ -79,7 +79,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "window; a quoted run is an adjacent phrase. COUNTS: 'total' is the number of snippet RECORDS you "
             + "page over (Skip/Take are against it); co-located hits in one sentence merge into one record with "
             + "multiple highlights, so 'total' can be less than 'instanceTotal' (the raw hit count, which matches "
-            + "search's per-book 'count'). total < instanceTotal means folded hits, NOT dropped hits.")]
+            + "search's per-book 'count'). total < instanceTotal means folded hits, NOT dropped hits. Each "
+            + "occurrence's 'noteCount' is how many {…} apparatus notes (variant readings / editorial notes) fall "
+            + "in its window, counted regardless of includeFootnotes — noteCount>0 means this hit HAS apparatus "
+            + "(re-read with includeFootnotes:true to see it), so you needn't fetch twice to check.")]
         public static async Task<OccurrenceResult> OccurrencesAsync(
             ISearchTool search,
             [Description("The book's id (file name), e.g. from a search result's per-book breakdown or the 'books' tool.")]

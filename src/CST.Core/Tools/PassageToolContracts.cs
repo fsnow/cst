@@ -42,6 +42,9 @@ namespace CST.Tools
     /// <param name="NormalizedReference">Short human-readable reference at the window start (e.g. "paragraph 123 (an5)").</param>
     /// <param name="Text">The passage text in the requested script.</param>
     /// <param name="Pages">The per-edition page(s) at the window start, for citation.</param>
+    /// <param name="NoteCount">How many print-edition apparatus notes (<c>{…}</c>) fall in this window. Counted
+    /// regardless of <c>IncludeFootnotes</c>, so <c>NoteCount &gt; 0</c> means apparatus is present here (re-read
+    /// with <c>includeFootnotes:true</c> to see it). Apparatus lives almost only in MULA texts.</param>
     public sealed record PassageResult(
         string BookId,
         string NormalizedReference,
@@ -50,5 +53,6 @@ namespace CST.Tools
         int? ParagraphNumber,
         string? ParagraphBookCode,
         int? PrevCursor,
-        int? NextCursor);
+        int? NextCursor,
+        int NoteCount);
 }

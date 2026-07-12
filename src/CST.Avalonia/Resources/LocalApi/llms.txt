@@ -126,7 +126,11 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   is the RAW hit count before co-located hits (multiple in one sentence) are merged into a single record with
   multiple `highlights`. For a single term `instanceTotal` equals that term's per-book `count` from `/v1/search`,
   so `total < instanceTotal` means hits were FOLDED into records, not dropped. Each occurrence is
-  `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedFootnotes, cursor, highlights }`. `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
+  `{ bookId, bookName, snippet, hitStart, hitLength, refs, includedFootnotes, cursor, highlights, noteCount }`.
+  `noteCount` is how many `{...}` apparatus notes fall in this snippet's window, counted REGARDLESS of
+  `includeFootnotes` - so `noteCount > 0` tells you this hit HAS variants/notes (re-read with
+  `includeFootnotes:true`, or via `/v1/passage`, to see them) WITHOUT a second probe call; `0` means none here.
+  `snippet` is hit-centered; `highlights` is the ordered set of marked spans in SNIPPET-LOCAL
   offsets - `[{ start, length, isAnchor }]`: a single-term hit has one, a proximity/phrase hit has one PER
   co-occurring word with exactly one `isAnchor:true` (the navigable word; the rest are the co-occurring
   context). `hitStart`/`hitLength` mirror the anchor. All snippet offsets (`hitStart`/`hitLength`/`highlights`)
@@ -143,7 +147,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   variant readings were rendered), NOT whether this particular hit has any; see the apparatus note above.
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeFootnotes? }`.
-  Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, ... }`. Page by passing back the
+  Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, noteCount, ... }` - `noteCount` is how
+  many `{...}` apparatus notes fall in the window (counted regardless of `includeFootnotes`; `>0` = apparatus
+  present here). Page by passing back the
   integer `prevCursor` / `nextCursor` as `cursor` (see the cursor note above). A `cursor` (from occurrences or
   passage) reads the ENCLOSING SENTENCE: the window start is snapped back so you get the governing clause, not a
   mid-sentence fragment. `maxChars` is a SOFT budget - the window OVERSHOOTS to the next sentence boundary, so

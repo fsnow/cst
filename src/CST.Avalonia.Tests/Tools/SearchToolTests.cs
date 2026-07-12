@@ -229,6 +229,50 @@ namespace CST.Avalonia.Tests.Tools
         }
 
         [Fact]
+        public async Task GetOccurrencesAsync_reports_noteCount_regardless_of_includeFootnotes()
+        {
+            // #293: an agent must be able to tell "this hit HAS apparatus" without a second call — noteCount is
+            // the count of {…} notes in the window, computed from the raw XML whether or not they're rendered.
+            var dir = Path.Combine(Path.GetTempPath(), "cst-occ-note-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                const string book = "s0101m.mul.xml";
+                string xml =
+                    "<body><div id=\"dn1\" type=\"book\">" +
+                    "<pb ed=\"V\" n=\"1.0003\"/>" +
+                    "<p rend=\"bodytext\" n=\"12\">aaa\u0964 ccc TARGET <note>VAR (si)</note> ddd\u0964 eee\u0964</p>" +
+                    "</div></body>";
+                await File.WriteAllTextAsync(Path.Combine(dir, book), xml, Encoding.Unicode);
+
+                int hit = xml.IndexOf("TARGET", StringComparison.Ordinal);
+                var search = new Mock<ISearchService>();
+                search.Setup(s => s.GetTermPositionsAsync(book, "tgt", It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new List<TermPosition>
+                    {
+                        new TermPosition { StartOffset = hit, EndOffset = hit + 6, IsFirstTerm = true, Word = "tgt" }
+                    });
+                var tool = new SearchTool(search.Object, Settings(dir));
+
+                var without = await tool.GetOccurrencesAsync(
+                    new OccurrenceRequest(book, "tgt", IncludeFootnotes: false, OutputScript: Script.Devanagari, MinChars: 1));
+                var with = await tool.GetOccurrencesAsync(
+                    new OccurrenceRequest(book, "tgt", IncludeFootnotes: true, OutputScript: Script.Devanagari, MinChars: 1));
+
+                var o1 = Assert.Single(without.Occurrences);
+                var o2 = Assert.Single(with.Occurrences);
+                Assert.Equal(1, o1.NoteCount);              // apparatus present even though NOT rendered...
+                Assert.Equal(1, o2.NoteCount);              // ...and the same when it IS rendered
+                Assert.DoesNotContain("VAR", o1.Snippet);   // stripped when off
+                Assert.Contains("VAR", o2.Snippet);         // shown when on
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
         public async Task GetOccurrencesAsync_multiword_marks_each_cooccurring_word()
         {
             var dir = Path.Combine(Path.GetTempPath(), "cst-occ-mw-" + Guid.NewGuid().ToString("N"));
