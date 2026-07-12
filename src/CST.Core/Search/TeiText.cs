@@ -65,10 +65,23 @@ namespace CST.Search
                         i = gt + 1;
                     }
                 }
-                else { sb.Append(c); i++; }
+                else
+                {
+                    // A stripped inline tag (page break, dot-hi, a not-included note) — or a stray space in the
+                    // source — can leave a space in front of clause/sentence punctuation (e.g. "…upaneti ,").
+                    // That punctuation should hug the preceding word, so drop the dangling space. (#292)
+                    if (IsClosePunctuation(c) && sb.Length > 0 && sb[sb.Length - 1] == ' ')
+                        sb.Length--;
+                    sb.Append(c);
+                    i++;
+                }
             }
             return sb.ToString();
         }
+
+        // Punctuation that should sit directly after the preceding word (no space before it).
+        private static bool IsClosePunctuation(char c) =>
+            c == ',' || c == ';' || c == '.' || c == '!' || c == '?' || c == Danda || c == DoubleDanda;
 
         internal static List<(int s, int e)> NoteRegions(string xml, int lo, int hi)
         {
