@@ -98,7 +98,10 @@ namespace CST.Search
         // boundary (capped) so we never cut mid-sentence. Tags and stripped subtrees cost zero budget.
         private static int WalkForward(string xml, int start, int maxChars, bool includeNotes, int limit)
         {
-            int i = start, rendered = 0, hardCap = maxChars + maxChars / 2;
+            // long: an unclamped client maxChars (e.g. int.MaxValue) would overflow `maxChars + maxChars/2`
+            // negative, tripping `rendered >= hardCap` on the first char. (#313 A4-13; endpoint also clamps, #305)
+            int i = start, rendered = 0;
+            long hardCap = (long)maxChars + maxChars / 2;
             bool budgetReached = false;
             while (i < limit)
             {
