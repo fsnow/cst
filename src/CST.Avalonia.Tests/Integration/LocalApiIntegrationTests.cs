@@ -78,6 +78,24 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Invalid_outputScript_is_400_not_500_or_empty()
+        {
+            // #304: an out-of-range/undefined or Ipe outputScript must be a clean 400 — not a 500 (non-string
+            // token) and not silently-empty converted text.
+            using var http = _api.Http();
+            foreach (var body in new[]
+            {
+                "{\"text\":\"dhamma\",\"outputScript\":99}",       // undefined ordinal (number token)
+                "{\"text\":\"dhamma\",\"outputScript\":15}",       // Script.Ipe ordinal (number token)
+                "{\"text\":\"dhamma\",\"outputScript\":\"Ipe\"}",  // Ipe by name
+            })
+            {
+                var resp = await http.PostAsync("/v1/convert", Json(body));
+                Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+            }
+        }
+
+        [Fact]
         public async Task Requires_the_bearer_token()
         {
             using var http = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) };

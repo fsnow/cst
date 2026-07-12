@@ -258,6 +258,7 @@ namespace CST.Avalonia.Services.LocalApi
 
         private static Script ParseScript(string? name) =>
             Enum.TryParse<Script>(name, ignoreCase: true, out var script)
+                && Enum.IsDefined(script)                         // reject undefined ordinals like "99" (→ empty output)
                 && script is not (Script.Ipe or Script.Unknown)   // never expose the internal IPE font encoding
                 ? script : Script.Latin;
 

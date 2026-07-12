@@ -28,8 +28,14 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
 
     internal static class McpScript
     {
-        /// <summary>Map an agent-facing <see cref="OutputScript"/> to the internal <see cref="Script"/>
-        /// (names match, so parse by name).</summary>
-        public static Script ToScript(OutputScript s) => Enum.Parse<Script>(s.ToString());
+        /// <summary>Map an agent-facing <see cref="OutputScript"/> to the internal <see cref="Script"/> (names
+        /// match, so parse by name). The MCP SDK's enum converter accepts INTEGERS, so an out-of-range value like
+        /// <c>15</c> would otherwise <c>ToString()</c> to <c>"15"</c> and <c>Enum.Parse</c> into a wrong/undefined
+        /// <see cref="Script"/> — including <see cref="Script.Ipe"/> (ordinal 15), leaking the internal encoding.
+        /// Reject anything not a defined <see cref="OutputScript"/>. (#304)</summary>
+        public static Script ToScript(OutputScript s) =>
+            Enum.IsDefined(s)
+                ? Enum.Parse<Script>(s.ToString())
+                : throw new ArgumentException($"Unknown outputScript value '{(int)s}'. Use the 'scripts' tool for valid values.", nameof(s));
     }
 }
