@@ -74,6 +74,25 @@ namespace CST.Avalonia.Tests.Services
             => Assert.Null(McpBridge.AppBundleFromExecutablePath(exe));
 
         [Fact]
+        public void Write_creates_the_handshake_owner_only_and_leaves_no_temp()
+        {
+            // #303: the token file must be created 0600 (no world-readable window) and written atomically.
+            var dir = Path.Combine(Path.GetTempPath(), "cst-hs-perms-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                new LocalApiInfo(51515, "SECRET", 123).Write(dir);
+                var path = LocalApiInfo.PathIn(dir);
+
+                Assert.Equal("SECRET", LocalApiInfo.Read(dir)!.Token);          // content round-trips
+                Assert.Empty(Directory.GetFiles(dir, "*.tmp"));                 // atomic rename left no temp
+                if (!OperatingSystem.IsWindows())
+                    Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+            }
+            finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+        }
+
+        [Fact]
         public void ReadLiveHandshake_ignores_a_stale_dead_pid_handshake()
         {
             // #302: a crash/kill -9 leaves local-api.json behind; attach must treat a dead-pid handshake as stale
