@@ -277,8 +277,10 @@ namespace CST.Search
         private static int FindLastPOpen(string xml, int before)
         {
             int idx = Math.Min(before, xml.Length);
-            if (idx <= 0) return -1;   // no room for "<p" before position 0; guards LastIndexOf(-1) (#313 A4-11)
-            while ((idx = xml.LastIndexOf("<p", idx - 1, StringComparison.Ordinal)) >= 0)
+            // The `idx > 0` guard on EACH iteration (not just entry) is what prevents `LastIndexOf(..., -1)`: if a
+            // match lands at position 0 that isn't a real `<p>` tag (e.g. `<pb .../>` at the start of the buffer),
+            // the next iteration would otherwise search before 0 and throw. (#313 A4-11 loop residual)
+            while (idx > 0 && (idx = xml.LastIndexOf("<p", idx - 1, StringComparison.Ordinal)) >= 0)
             {
                 char c = idx + 2 < xml.Length ? xml[idx + 2] : '\0';
                 if (c == ' ' || c == '>' || c == '\t' || c == '\n' || c == '\r') return idx;
