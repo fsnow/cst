@@ -437,6 +437,22 @@ namespace CST.Avalonia.Tests.Tools
         }
 
         [Fact]
+        public async Task GetOccurrencesAsync_rejects_a_bookId_outside_the_catalog()
+        {
+            // #301: a non-catalog bookId (traversal / absolute path) returns empty WITHOUT touching the file or search.
+            var search = new Mock<ISearchService>();
+            var tool = new SearchTool(search.Object, Settings("/tmp"));
+
+            var occ = await tool.GetOccurrencesAsync(new OccurrenceRequest("/etc/passwd", "x"));
+
+            Assert.Empty(occ.Occurrences);
+            Assert.Equal(0, occ.Total);
+            search.Verify(s => s.GetTermPositionsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            search.Verify(s => s.GetMultiWordPositionsAsync(It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<SearchMode>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Fact]
         public async Task GetOccurrencesAsync_empty_when_no_positions()
         {
             var search = new Mock<ISearchService>();

@@ -110,6 +110,9 @@ namespace CST.Avalonia.Services.Tools
         {
             var dir = _settings.Settings?.XmlBooksDirectory;
             if (string.IsNullOrEmpty(dir)) return EmptyOccurrences;
+            // Confine file access to catalog books before any Path.Combine — don't rely on the position lookup
+            // downstream to reject a traversal/abs-path bookId (defense-in-depth with the HTTP BookExists gate). (#301)
+            if (!PassageTool.IsCatalogBook(request.BookId)) return EmptyOccurrences;
             var path = Path.Combine(dir, request.BookId);
             if (!File.Exists(path)) return EmptyOccurrences;
 
