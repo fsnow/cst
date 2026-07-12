@@ -704,7 +704,7 @@ public class SearchService : ISearchService
         var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
             .Replace("\\*", ".*")
             .Replace("\\?", ".") + "$";
-        var regex = new System.Text.RegularExpressions.Regex(regexPattern);
+        var regex = SafeRegex.Compile(regexPattern);   // linear-time engine — no catastrophic backtracking (#309)
 
         var fields = MultiFields.GetFields(reader);
         var terms = fields?.GetTerms("text");
@@ -731,7 +731,7 @@ public class SearchService : ISearchService
                     var term = termsEnum.Term.Utf8ToString();
                     if (!term.StartsWith(literalPrefix, StringComparison.Ordinal))
                         break; // sorted: past the prefix range, nothing more can match
-                    if (regex.IsMatch(term))
+                    if (SafeRegex.IsMatch(regex, term))
                     {
                         if (results.Count >= maxResults) { truncated = true; break; }
                         results.Add(term);
@@ -744,7 +744,7 @@ public class SearchService : ISearchService
             while (termsEnum.MoveNext())
             {
                 var term = termsEnum.Term.Utf8ToString();
-                if (regex.IsMatch(term))
+                if (SafeRegex.IsMatch(regex, term))
                 {
                     if (results.Count >= maxResults) { truncated = true; break; }
                     results.Add(term);
@@ -770,7 +770,7 @@ public class SearchService : ISearchService
     {
         truncated = false;
 
-        var regex = new System.Text.RegularExpressions.Regex(pattern);
+        var regex = SafeRegex.Compile(pattern);   // linear-time engine — no catastrophic backtracking (#309)
 
         var fields = MultiFields.GetFields(reader);
         var terms = fields?.GetTerms("text");
@@ -794,7 +794,7 @@ public class SearchService : ISearchService
                     var term = termsEnum.Term.Utf8ToString();
                     if (!term.StartsWith(literalPrefix, StringComparison.Ordinal))
                         break; // sorted: past the prefix range, nothing more can match
-                    if (regex.IsMatch(term))
+                    if (SafeRegex.IsMatch(regex, term))
                     {
                         if (results.Count >= maxResults) { truncated = true; break; }
                         results.Add(term);
@@ -807,7 +807,7 @@ public class SearchService : ISearchService
             while (termsEnum.MoveNext())
             {
                 var term = termsEnum.Term.Utf8ToString();
-                if (regex.IsMatch(term))
+                if (SafeRegex.IsMatch(regex, term))
                 {
                     if (results.Count >= maxResults) { truncated = true; break; }
                     results.Add(term);
@@ -1175,6 +1175,45 @@ internal class ExactTermMatcher : ITermMatcher
     public bool Matches(string term) => term == _target;
 }
 
+/// <summary>
+/// Builds and runs regexes safely against the ~500K-term index. A client-supplied <c>mode:Regex</c> pattern
+/// (and, belt-and-braces, wildcard-derived patterns) is compiled with <see cref="RegexOptions.NonBacktracking"/>
+/// — the linear-time engine that CANNOT catastrophically backtrack, so <c>(a+)+b</c> against a 50-char Pāli
+/// compound stays O(n) instead of ~2^40 steps pinning a core (which no CancellationToken can interrupt). Patterns
+/// using constructs NonBacktracking rejects (backreferences, lookarounds, atomic groups) fall back to the
+/// backtracking engine but with a per-match timeout, so a single term still can't hang. A genuine syntax error
+/// throws <c>RegexParseException</c> as before (surfaced upstream as the "Invalid regex pattern" hint). (#309 A4-1)
+/// </summary>
+internal static class SafeRegex
+{
+    // Per-term match ceiling for the backtracking FALLBACK only (NonBacktracking needs no timeout — it's linear).
+    private static readonly System.TimeSpan MatchTimeout = System.TimeSpan.FromMilliseconds(200);
+
+    public static System.Text.RegularExpressions.Regex Compile(string pattern)
+    {
+        try
+        {
+            return new System.Text.RegularExpressions.Regex(
+                pattern, System.Text.RegularExpressions.RegexOptions.NonBacktracking);
+        }
+        catch (System.NotSupportedException)
+        {
+            // Backreference / lookaround / atomic group: unsupported by the linear engine. Use the backtracking
+            // engine but bound each match with a timeout so a crafted pattern still can't pin a core.
+            return new System.Text.RegularExpressions.Regex(
+                pattern, System.Text.RegularExpressions.RegexOptions.Compiled, MatchTimeout);
+        }
+    }
+
+    /// <summary>IsMatch that treats a fallback-timeout as "no match" (skip that term) instead of letting the
+    /// exception abort the whole scan — one pathological term shouldn't kill the search.</summary>
+    public static bool IsMatch(System.Text.RegularExpressions.Regex regex, string input)
+    {
+        try { return regex.IsMatch(input); }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { return false; }
+    }
+}
+
 internal class WildcardTermMatcher : ITermMatcher
 {
     private readonly System.Text.RegularExpressions.Regex _regex;
@@ -1187,23 +1226,24 @@ internal class WildcardTermMatcher : ITermMatcher
         var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
             .Replace("\\*", ".*")
             .Replace("\\?", ".") + "$";
-        _regex = new System.Text.RegularExpressions.Regex(
-            regexPattern, System.Text.RegularExpressions.RegexOptions.Compiled);
+        // NonBacktracking (via SafeRegex): Matches() runs against every term; the wildcard-derived pattern is
+        // simple, but keep it on the linear engine belt-and-braces. (#309 A4-1)
+        _regex = SafeRegex.Compile(regexPattern);
     }
 
-    public bool Matches(string term) => _regex.IsMatch(term);
+    public bool Matches(string term) => SafeRegex.IsMatch(_regex, term);
 }
 
 internal class RegexTermMatcher : ITermMatcher
 {
     private readonly System.Text.RegularExpressions.Regex _regex;
-    
+
     public RegexTermMatcher(string pattern)
     {
-        // Compiled: Matches() runs against every term in the index for a regex search.
-        _regex = new System.Text.RegularExpressions.Regex(
-            pattern, System.Text.RegularExpressions.RegexOptions.Compiled);
+        // SafeRegex: NonBacktracking (linear time) so a client regex can't catastrophically backtrack while
+        // Matches() runs against every term in the index. (#309 A4-1)
+        _regex = SafeRegex.Compile(pattern);
     }
-    
-    public bool Matches(string term) => _regex.IsMatch(term);
+
+    public bool Matches(string term) => SafeRegex.IsMatch(_regex, term);
 }
