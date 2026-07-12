@@ -28,7 +28,7 @@ namespace CST.Avalonia.Services.Tools
             DictionaryRequest request, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
-            var words = await _dictionary.LookupAsync(request.Language, request.Query ?? string.Empty)
+            var words = await _dictionary.LookupAsync(request.Language, request.Query ?? string.Empty, ct)
                 .ConfigureAwait(false);
 
             return words

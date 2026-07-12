@@ -901,8 +901,10 @@ public class SearchService : ISearchService
             }
 
             // term is a display-script term (e.g. the romanized Latin term from a prior search); convert it
-            // to IPE for the index lookup. Any2Ipe auto-detects the input script.
-            var ipeTerm = Any2Ipe.Convert(term);
+            // to IPE for the index lookup. Any2Ipe auto-detects the input script. Strip a pasted zero-width
+            // joiner FIRST (Any2Ipe doesn't) — same normalization the expanding/multi-word paths apply — else an
+            // exact term that `search` reported hits for can look up 0 occurrences here. (#308 A3-8)
+            var ipeTerm = Any2Ipe.Convert(MultiWordSearch.StripJoiners(term));
             var termBytes = new BytesRef(Encoding.UTF8.GetBytes(ipeTerm));
             var liveDocs = MultiFields.GetLiveDocs(reader);
             var dape = MultiFields.GetTermPositionsEnum(reader, liveDocs, "text", termBytes);

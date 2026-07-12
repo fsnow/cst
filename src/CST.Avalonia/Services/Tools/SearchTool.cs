@@ -150,9 +150,9 @@ namespace CST.Avalonia.Services.Tools
             }
             if (perOccurrence.Count == 0) return EmptyOccurrences;
 
-            // Char offsets index the decoded (BOM-stripped) UTF-16 text — read it the same way.
-            string xml = await File.ReadAllTextAsync(path, Encoding.Unicode, ct).ConfigureAwait(false);
-            var markers = BookMarkers.Build(xml);
+            // Char offsets index the decoded (BOM-stripped) UTF-16 text; read + parse via the shared bounded
+            // cache so paging one book doesn't re-read + re-parse it each call. (#308 A3-6)
+            var (xml, markers) = await BookTextCache.GetAsync(path, ct).ConfigureAwait(false);
             int minChars = Math.Clamp(request.MinChars ?? 60, 1, MaxSnippetChars);
             var opts = new SnippetOptions(
                 OutputScript: request.OutputScript,
