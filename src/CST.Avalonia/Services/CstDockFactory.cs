@@ -2081,10 +2081,124 @@ namespace CST.Avalonia.Services
                     if (found != null) return found;
                 }
             }
-            
+
             return null;
         }
-        
+
+        // Fallback title for a floating window that momentarily has no content (empty windows are
+        // auto-closed, so this is transient).
+        private const string DefaultFloatingWindowTitle = "CST Reader";
+
+        // #284: keep a floating window's title in sync with its content. Naming scheme:
+        //   single item  -> that item's title (book name or tool name),
+        //   multiple items-> active tab's title + "  +N"  (N = the other tabs),
+        // updated live as tabs are added/removed and as the active tab changes. (The main window keeps
+        // its static "CST Reader" title.) Wired from CstHostWindow.SetLayout, once the layout exists.
+        public void SetupHostWindowTitleTracking(CstHostWindow window)
+        {
+            try
+            {
+                WireTitleUpdates(window, window.Layout, 0);
+                UpdateHostWindowTitle(window);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "*** Failed to set up host window title tracking ***");
+            }
+        }
+
+        // Subscribe every dock in the window to the two things that change the title: its tab set
+        // (VisibleDockables collection) and which tab is active (ActiveDockable/FocusedDockable). Only
+        // the docks present at wire-up time are tracked; a later split inside the float still updates
+        // on the parent's collection change, just not on an active-tab switch within the new dock.
+        private void WireTitleUpdates(CstHostWindow window, IDockable? node, int depth)
+        {
+            if (node is not IDock dock || depth > 32) return;
+
+            if (dock is INotifyPropertyChanged inpc)
+            {
+                inpc.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(IDock.ActiveDockable) ||
+                        e.PropertyName == nameof(IDock.FocusedDockable))
+                    {
+                        UpdateHostWindowTitle(window);
+                    }
+                };
+            }
+
+            if (dock.VisibleDockables is INotifyCollectionChanged incc)
+            {
+                incc.CollectionChanged += (_, _) => UpdateHostWindowTitle(window);
+            }
+
+            if (dock.VisibleDockables != null)
+            {
+                foreach (var child in dock.VisibleDockables)
+                {
+                    WireTitleUpdates(window, child, depth + 1);
+                }
+            }
+        }
+
+        // Compute and apply the title for a floating window from its current content.
+        public void UpdateHostWindowTitle(CstHostWindow window)
+        {
+            try
+            {
+                window.SetTitle(ComputeFloatingWindowTitle(window.Layout));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "*** Failed to update host window title ***");
+            }
+        }
+
+        private string ComputeFloatingWindowTitle(IDock? layout)
+        {
+            var leaves = new List<IDockable>();
+            CollectLeafDockables(layout, leaves, 0);
+            if (leaves.Count == 0) return DefaultFloatingWindowTitle;
+
+            var active = FindActiveLeafDockable(layout) ?? leaves[0];
+            var baseTitle = string.IsNullOrWhiteSpace(active.Title) ? DefaultFloatingWindowTitle : active.Title;
+
+            var others = leaves.Count - 1;
+            return others > 0 ? $"{baseTitle}  +{others}" : baseTitle;
+        }
+
+        // Leaves = the actual content view-models (books/tools), i.e. dockables that are not themselves docks.
+        private static void CollectLeafDockables(IDockable? node, List<IDockable> leaves, int depth)
+        {
+            if (node == null || depth > 32) return;
+            if (node is IDock dock)
+            {
+                if (dock.VisibleDockables != null)
+                {
+                    foreach (var child in dock.VisibleDockables)
+                    {
+                        CollectLeafDockables(child, leaves, depth + 1);
+                    }
+                }
+            }
+            else
+            {
+                leaves.Add(node);
+            }
+        }
+
+        // Follow the ActiveDockable chain down to the focused leaf (the visible tab), or null if it
+        // doesn't resolve to a leaf (caller then falls back to the first leaf).
+        private static IDockable? FindActiveLeafDockable(IDockable? node)
+        {
+            var guard = 0;
+            while (node is IDock dock && dock.ActiveDockable != null && guard++ < 32)
+            {
+                node = dock.ActiveDockable;
+            }
+            return node is IDock ? null : node;
+        }
+
         // Check for empty floating windows and close them
         private void CheckForEmptyFloatingWindows()
         {

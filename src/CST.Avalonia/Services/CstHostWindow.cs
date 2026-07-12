@@ -151,6 +151,9 @@ namespace CST.Avalonia.Services
                         {
                             // Call the public method to set up monitoring
                             cstFactory.SetupFloatingWindowMonitoring(layout);
+
+                            // #284: keep this window's title in sync with its active tab / tab count.
+                            cstFactory.SetupHostWindowTitleTracking(this);
                         }
                         catch (Exception)
                         {
