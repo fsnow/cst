@@ -11,7 +11,11 @@ namespace CST.Avalonia;
 sealed class Program
 {
     // Logger instance for Program class
-    private static readonly ILogger _logger = Log.ForContext<Program>();
+    // A PROPERTY, not a field captured at static-init: at type-load Log.Logger is still Serilog's silent default,
+    // so a captured contextual logger would swallow every Program-level message forever (the guard's "another
+    // instance owns {dir}", the "shutting down" line). Re-resolving each use picks up the bootstrap logger set in
+    // Main and, later, App DI's full logger. (#316 A6-3)
+    private static ILogger Logger => Log.ForContext<Program>();
     
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
@@ -96,6 +100,15 @@ sealed class Program
                 return;
             }
 
+            // Bootstrap logger for the GUI path: until App DI installs the full logger, Log.Logger is still the
+            // silent default, so the guard / blocked-launch / early-startup lines would vanish. Install a minimal
+            // one here (App DI replaces it). Goes to stderr — this path never carries the bridge's JSON-RPC
+            // stdout (that returned above). (#316 A6-3)
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.Console(standardErrorFromLevel: Serilog.Events.LogEventLevel.Verbose)
+                .CreateLogger();
+
             // Single-instance guard (#289): only one GUI per data directory. The --mcp-bridge relay and the CLI
             // utility flags above have already returned, so this gates only a real GUI launch. Two instances would
             // clobber the shared settings / app-state / index and race on local-api.json.
@@ -104,7 +117,7 @@ sealed class Program
                 CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
             if (!SingleInstanceGuard.TryAcquire(appDataDir))
             {
-                _logger.Information("Another CST Reader instance already owns {Dir}; activating it and exiting.", appDataDir);
+                Logger.Information("Another CST Reader instance already owns {Dir}; activating it and exiting.", appDataDir);
                 SingleInstanceGuard.ActivateRunningInstance();
                 return;
             }
@@ -126,7 +139,7 @@ sealed class Program
         finally
         {
             // No cleanup needed for WebView
-            _logger.Information("Application shutting down");
+            Logger.Information("Application shutting down");
         }
     }
     
@@ -139,7 +152,7 @@ sealed class Program
             .LogToTrace()
             .AfterSetup(_ => 
             {
-                _logger.Information("WebView-based CST application starting");
+                Logger.Information("WebView-based CST application starting");
             });
     }
 }
