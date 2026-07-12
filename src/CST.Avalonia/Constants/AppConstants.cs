@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+
 namespace CST.Avalonia.Constants;
 
 /// <summary>
@@ -10,6 +13,14 @@ public static class AppConstants
     /// Change this in one place to update throughout the application.
     /// </summary>
     public const string AppDataDirectoryName = "CSTReader";
+
+    /// <summary>
+    /// The per-user data directory (<c>&lt;ApplicationData&gt;/CSTReader</c>). Single source of truth so the
+    /// single-instance guard, the <c>--mcp-bridge</c> handshake, and the local-API server can never target
+    /// diverging directories (a future configurable data dir changes only this). (#317 A6-9)
+    /// </summary>
+    public static string DataDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppDataDirectoryName);
 
     /// <summary>
     /// The application name for display purposes

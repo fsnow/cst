@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Threading;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CST.Avalonia.Views;
 using Serilog;
@@ -29,7 +30,7 @@ sealed class Program
 
             // Headless MCP bridge: relay this process's STDIO to the running app's /mcp (#278). Handled FIRST,
             // before any UI/logging init. STDOUT is the JSON-RPC stream, so logs go to STDERR only; no GUI.
-            if (args.Length > 0 && args[0] == "--mcp-bridge")
+            if (args.Contains("--mcp-bridge"))
             {
                 // Information (not Warning): the bridge's attach/launch/watcher-exit breadcrumbs are the exact
                 // trace needed to debug launch-or-attach, and stderr-only keeps the JSON-RPC stdout clean. (#307 A2-7)
@@ -38,9 +39,7 @@ sealed class Program
                     .WriteTo.Console(standardErrorFromLevel: Serilog.Events.LogEventLevel.Verbose)
                     .CreateLogger();
 
-                var handshakeDir = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
+                var handshakeDir = CST.Avalonia.Constants.AppConstants.DataDirectory;   // (#317 A6-9)
 
                 CST.Avalonia.Services.LocalApi.Mcp.McpBridge
                     .RunFromStdioAsync(handshakeDir, System.Threading.CancellationToken.None)
@@ -49,7 +48,7 @@ sealed class Program
             }
 
             // Check for browse-sharepoint command
-            if (args.Length > 0 && args[0] == "--browse-sharepoint")
+            if (args.Contains("--browse-sharepoint"))
             {
                 // Initialize Serilog for console output
                 Log.Logger = new LoggerConfiguration()
@@ -62,7 +61,7 @@ sealed class Program
             }
 
             // Check for find-start-pages command
-            if (args.Length > 0 && args[0] == "--find-start-pages")
+            if (args.Contains("--find-start-pages"))
             {
                 // Initialize Serilog for console output
                 Log.Logger = new LoggerConfiguration()
@@ -75,7 +74,7 @@ sealed class Program
             }
 
             // Check for download-tika-pdfs command
-            if (args.Length > 0 && args[0] == "--download-tika-pdfs")
+            if (args.Contains("--download-tika-pdfs"))
             {
                 // Initialize Serilog for console output
                 Log.Logger = new LoggerConfiguration()
@@ -88,7 +87,7 @@ sealed class Program
             }
 
             // Check for download-anya-pdfs command
-            if (args.Length > 0 && args[0] == "--download-anya-pdfs")
+            if (args.Contains("--download-anya-pdfs"))
             {
                 // Initialize Serilog for console output
                 Log.Logger = new LoggerConfiguration()
@@ -112,9 +111,7 @@ sealed class Program
             // Single-instance guard (#289): only one GUI per data directory. The --mcp-bridge relay and the CLI
             // utility flags above have already returned, so this gates only a real GUI launch. Two instances would
             // clobber the shared settings / app-state / index and race on local-api.json.
-            var appDataDir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                CST.Avalonia.Constants.AppConstants.AppDataDirectoryName);
+            var appDataDir = CST.Avalonia.Constants.AppConstants.DataDirectory;   // (#317 A6-9)
             if (!SingleInstanceGuard.TryAcquire(appDataDir))
             {
                 Logger.Information("Another CST Reader instance already owns {Dir}; activating it and exiting.", appDataDir);
