@@ -27,7 +27,10 @@ namespace CST.Search
         /// </summary>
         public static SnippetResult Extract(string xml, IReadOnlyList<SnippetMark> marks, BookMarkers markers, SnippetOptions opts)
         {
-            // Clamp + sort marks; drop any that clamp to empty. Fall back to a zero-width mark at 0 if none remain.
+            // Clamp marks, then DE-DUPE by (Start,End): MultiWordSearch.FindHits' sliding window can emit two hits
+            // sharing a word occurrence (A…B…A → {A1,B},{B,A2}); merged into one sentence the shared word would be
+            // rendered twice with a phantom highlight ("… b b …"). Collapse duplicates, keeping the anchor flag if
+            // any duplicate carried it. Fall back to a zero-width mark at 0 if none remain. (#312 A4-7)
             var ms = marks
                 .Select(m =>
                 {
@@ -35,6 +38,8 @@ namespace CST.Search
                     int e = Math.Clamp(m.End, s, xml.Length);
                     return new SnippetMark(s, e, m.IsAnchor);
                 })
+                .GroupBy(m => (m.Start, m.End))
+                .Select(g => new SnippetMark(g.Key.Start, g.Key.End, g.Any(x => x.IsAnchor)))
                 .OrderBy(m => m.Start).ThenBy(m => m.End)
                 .ToList();
             if (ms.Count == 0) ms.Add(new SnippetMark(0, 0, true));

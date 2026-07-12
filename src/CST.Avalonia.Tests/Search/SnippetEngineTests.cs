@@ -60,6 +60,29 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void Extract_dedupes_marks_at_the_same_offset()
+        {
+            // #312 A4-7: FindHits' sliding window can emit two hits sharing a word occurrence (A…B…A gives
+            // {A1,B},{B,A2}) — the shared word must render ONCE, not twice with a phantom highlight.
+            const string xml =
+                "<body><div id=\"a\" type=\"book\"><p rend=\"bodytext\" n=\"1\">aaa bbb ccc\u0964</p></div></body>";
+            var markers = BookMarkers.Build(xml);
+            int a = xml.IndexOf("aaa", System.StringComparison.Ordinal);
+            int b = xml.IndexOf("bbb", System.StringComparison.Ordinal);
+            var marks = new[]
+            {
+                new SnippetMark(a, a + 3, true),    // anchor "aaa"
+                new SnippetMark(b, b + 3, false),   // "bbb"
+                new SnippetMark(a, a + 3, false),   // DUPLICATE of "aaa" (the shared occurrence)
+            };
+
+            var s = TeiSnippetExtractor.Extract(xml, marks, markers, Deva());
+
+            Assert.Equal(2, s.Highlights.Count);                  // deduped: two highlights, not three
+            Assert.Equal(1, s.Highlights.Count(h => h.IsAnchor)); // the anchor flag is preserved
+        }
+
+        [Fact]
         public void Snippet_never_leaks_markup_across_truncation_budgets()
         {
             // A window bound that lands inside `<pb ed="V" n="1.0002"/>` must not leak `ed="V" n=...` as text.

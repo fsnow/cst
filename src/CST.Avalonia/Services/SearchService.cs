@@ -501,16 +501,29 @@ public class SearchService : ISearchService
             }
         }
 
-        // Step 4: convert results
-        // Order matching combinations alphabetically by their IPE words (word-by-word), matching
-        // CST4 and the single-term path. The '~'-joined key sorts word0, then word1, etc.
-        result.Terms = combos.Values.OrderBy(t => t.Term, StringComparer.Ordinal).ToList();
+        // Step 4: convert results. Order matching combinations alphabetically by their IPE words (word-by-word),
+        // matching CST4 and the single-term path (the '~'-joined key sorts word0, then word1, ...), then apply the
+        // SAME page budget (Skip + PageSize) the single-term path honors. The multi-word path previously IGNORED
+        // paging: Skip>0 returned the full set again and HasMore was never set, and every combo's TermPositions
+        // stayed in the cached result. Both callers already pass PageSize (UI 500, API MaxTerms); honor it. (#312 A4-8)
+        var allTerms = combos.Values.OrderBy(t => t.Term, StringComparer.Ordinal).ToList();
+        int skip = Math.Max(0, query.Skip);
+        int pageSize = query.PageSize > 0 ? query.PageSize : allTerms.Count;
+        result.Terms = allTerms.Skip(skip).Take(pageSize).ToList();
+        result.HasMore = skip + result.Terms.Count < allTerms.Count;
+        // Keep the UI's "showing the first N" message for the first page — but don't clobber a wildcard-expansion
+        // truncation message (that one is the more urgent "narrow the pattern").
+        if (result.HasMore && skip == 0 && !result.ResultsTruncated)
+        {
+            result.ResultsTruncated = true;
+            result.TruncationMessage = $"Showing the first {pageSize:N0} matching words — refine your search to narrow the results.";
+        }
         result.TotalTermCount = result.Terms.Count;
         result.TotalOccurrenceCount = result.Terms.Sum(t => t.TotalCount);
         result.TotalBookCount = result.Terms.SelectMany(t => t.Occurrences).Select(o => o.Book).Distinct().Count();
 
-        _logger.LogInformation("Multi-word search found {ComboCount} unique word combinations, {OccurrenceCount} total occurrences",
-            result.TotalTermCount, result.TotalOccurrenceCount);
+        _logger.LogInformation("Multi-word search found {ComboCount} unique word combinations (page of {Total}), {OccurrenceCount} occurrences on page",
+            allTerms.Count, result.TotalTermCount, result.TotalOccurrenceCount);
 
         return result;
     }
