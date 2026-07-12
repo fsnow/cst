@@ -131,7 +131,16 @@ public sealed class DictionaryService : IDictionaryService
         if (string.IsNullOrEmpty(language) || string.IsNullOrEmpty(query))
             return Array.Empty<DictionaryWord>();
 
-        var index = await GetOrLoadIndexAsync(language, ct).ConfigureAwait(false);
+        // SECURITY (#352): confine `language` to an ACTUAL dictionary subdirectory before it ever reaches
+        // Path.Combine in LoadLanguageAsync — a rooted path or "../" would otherwise escape the dictionaries root
+        // and read arbitrary files. Exact catalog match (mirrors PassageTool.IsCatalogBook, #301); use the
+        // canonical directory name, never the raw client value.
+        var canonical = AvailableLanguages.FirstOrDefault(
+            l => string.Equals(l, language, StringComparison.OrdinalIgnoreCase));
+        if (canonical == null)
+            return Array.Empty<DictionaryWord>();
+
+        var index = await GetOrLoadIndexAsync(canonical, ct).ConfigureAwait(false);
         if (index == null)
             return Array.Empty<DictionaryWord>();
 
