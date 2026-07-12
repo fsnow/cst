@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -106,8 +107,8 @@ public class SearchService : ISearchService
 
             var books = Books.Inst;
 
-            // Ensure all books have DocIds (once per reader generation, not every search)
-            EnsureDocIds(reader, books);
+            // Build (once per reader generation) the per-reader DocId map, and keep the global Book.DocId synced.
+            var docMap = EnsureDocIds(reader, books);
 
             // Convert search text to IPE (strip pasted zero-width joiners first, or they'd survive into
             // the IPE term and match no index term — SRCH-3).
@@ -133,11 +134,11 @@ public class SearchService : ISearchService
             }
             else if (units.Count == 1 && !units[0].IsPhrase)
             {
-                result = await SearchSingleTermAsync(reader, units[0].Words[0], query, books, cancellationToken);
+                result = await SearchSingleTermAsync(reader, units[0].Words[0], query, books, docMap, cancellationToken);
             }
             else
             {
-                result = await SearchMultiWordAsync(reader, units, query, books, cancellationToken);
+                result = await SearchMultiWordAsync(reader, units, query, books, docMap, cancellationToken);
             }
 
             stopwatch.Stop();
@@ -173,6 +174,7 @@ public class SearchService : ISearchService
         string ipeTerm,
         SearchQuery query,
         Books books,
+        ReaderDocMap docMap,
         CancellationToken cancellationToken)
     {
         var result = new SearchResult();
@@ -192,11 +194,16 @@ public class SearchService : ISearchService
         // wants counts only (no per-book breakdown), take each term's total-count and book-count straight from
         // the index (TotalTermFreq/DocFreq) and NEVER read postings. Otherwise walk the filter survivors,
         // computing per-book occurrences. (SRCH-12: apply the budget to filter survivors, not raw matches.)
+        //
+        // ...but DocFreq/TotalTermFreq COUNT deleted-but-unmerged docs (verified: Lucene 4.8, see
+        // LuceneDeletionStatsTests), so after an incremental re-index the fast path would over-count a book's
+        // terms until the next merge. When the reader HasDeletions, fall back to the postings path, which filters
+        // liveDocs and is correct. (#311 A4-6)
         var conversionStopwatch = Stopwatch.StartNew();
         List<MatchingTerm> selectedTerms;
         int totalOccurrences;
         bool hasMore;
-        if (query.CountsOnly && IsUnfiltered(query.Filter))
+        if (query.CountsOnly && IsUnfiltered(query.Filter) && !reader.HasDeletions)
         {
             (selectedTerms, totalOccurrences, hasMore) = SelectTermsCountsOnly(
                 GetMatchingTermStats(reader, termMatcher, cancellationToken),
@@ -207,7 +214,7 @@ public class SearchService : ISearchService
             (selectedTerms, totalOccurrences, hasMore) = await SelectTermsWithinBudgetAsync(
                 GetMatchingTerms(reader, termMatcher, cancellationToken),
                 query.Skip, query.PageSize,
-                term => GetTermOccurrencesAsync(reader, term, bookBits, books, cancellationToken),
+                term => GetTermOccurrencesAsync(reader, term, bookBits, books, docMap, cancellationToken),
                 ConvertToDisplayScript, cancellationToken);
         }
         conversionStopwatch.Stop();
@@ -290,6 +297,7 @@ public class SearchService : ISearchService
         List<SearchUnit> units,
         SearchQuery query,
         Books books,
+        ReaderDocMap docMap,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Multi-word search: {UnitCount} units, IsPhrase={IsPhrase}, Distance={Distance}",
@@ -411,7 +419,7 @@ public class SearchService : ISearchService
         candidateBooks ??= new HashSet<int>();
         candidateBooks.RemoveWhere(docId =>
         {
-            var b = books.FromDocId(docId);
+            var b = docMap.BookOf(docId);
             return b == null || !bookBits[b.Index];
         });
 
@@ -425,7 +433,7 @@ public class SearchService : ISearchService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var book = books.FromDocId(docId);
+            var book = docMap.BookOf(docId);
             if (book == null)
                 continue;
 
@@ -533,6 +541,7 @@ public class SearchService : ISearchService
         string term,
         BitArray bookBits,
         Books books,
+        ReaderDocMap docMap,
         CancellationToken cancellationToken)
     {
         var occurrences = new List<BookOccurrence>();
@@ -560,7 +569,7 @@ public class SearchService : ISearchService
             CST.Book? book = null;
             try
             {
-                book = books.FromDocId(docId);
+                book = docMap.BookOf(docId);
             }
             catch (KeyNotFoundException)
             {
@@ -909,16 +918,12 @@ public class SearchService : ISearchService
         try
         {
             reader = AcquireReader();
-            // Sync DocIds to THIS reader generation before reading book.DocId — else after a re-index this
-            // endpoint targets a stale/deleted doc and returns empty/wrong positions (only SearchAsync synced
-            // before this). (#311 A4-4)
-            EnsureDocIds(reader, Books.Inst);
-            // Books' string indexer throws on an unknown file name; use a safe lookup so a bad bookId can't
-            // become an unhandled 500 in the occurrences endpoint. (#186 cold test)
-            var book = Books.Inst.FirstOrDefault(b =>
-                string.Equals(b.FileName, bookFileName, StringComparison.OrdinalIgnoreCase));
-
-            if (book == null || book.DocId < 0)
+            // Resolve the book's docId for THIS reader generation via the per-reader map — not the global
+            // Book.DocId, which a concurrent re-index could have re-synced to another generation, targeting a
+            // stale/deleted doc. An unknown bookId maps to -1 (empty), never a throw. (#311 A4-3/A4-4, #186)
+            var docMap = EnsureDocIds(reader, Books.Inst);
+            int docId = docMap.DocIdOf(bookFileName);
+            if (docId < 0)
             {
                 return new List<TermPosition>();
             }
@@ -938,7 +943,7 @@ public class SearchService : ISearchService
             
             while (dape.NextDoc() != DocIdSetIterator.NO_MORE_DOCS)
             {
-                if (dape.DocID != book.DocId) continue;
+                if (dape.DocID != docId) continue;
                 
                 int posCount = 0;
                 while (posCount < dape.Freq)
@@ -985,11 +990,10 @@ public class SearchService : ISearchService
         try
         {
             reader = AcquireReader();
-            EnsureDocIds(reader, Books.Inst);   // sync DocIds to this reader generation before reading book.DocId (#311 A4-4)
-            var book = Books.Inst.FirstOrDefault(b =>
-                string.Equals(b.FileName, bookFileName, StringComparison.OrdinalIgnoreCase));
-            if (book == null || book.DocId < 0) return Task.FromResult(empty);
-            int docId = book.DocId;
+            // Per-reader docId (not the cross-generation-racy global Book.DocId). (#311 A4-3/A4-4)
+            var docMap = EnsureDocIds(reader, Books.Inst);
+            int docId = docMap.DocIdOf(bookFileName);
+            if (docId < 0) return Task.FromResult(empty);
             var liveDocs = MultiFields.GetLiveDocs(reader);
 
             // Same query normalization as SearchAsync: strip pasted joiners, collapse spaces, normalize quotes.
@@ -1100,32 +1104,35 @@ public class SearchService : ISearchService
         return bookBits ?? new BitArray(bookCount, false); // Return empty if somehow null
     }
 
-    // The reader generation whose DocIds we've already applied to Books. DocIds only change when the
-    // index (reader) changes, so re-running the whole MaxDoc scan on every search was wasted work AND
-    // wrote booksByDocId from concurrent pool threads. Sync once per generation, comparing reader
-    // identity (AcquireReader hands out the same instance until it reopens). (CORE-1)
-    private DirectoryReader? _docIdSyncedReader;
-    private readonly object _docIdSyncLock = new();
+    // Per-reader immutable DocId maps. DocIds are per-reader-GENERATION, but Books.Inst's Book.DocId is a single
+    // mutable last-writer-wins global — so a search on reader R1 could resolve R1's docIds through R2's map after
+    // a concurrent re-index re-synced the global, attributing occurrences to the wrong book (or dropping them).
+    // SearchService's own docId<->Book resolution goes through this per-reader map instead; the global Book.DocId
+    // is still synced, because EXTERNAL consumers read it (the book display's Lucene offset lookup). Cached by
+    // reader identity in a ConditionalWeakTable (built once per generation; AcquireReader hands out the same
+    // instance until it reopens). (#311 A4-3; CORE-1)
+    private readonly ConditionalWeakTable<DirectoryReader, ReaderDocMap> _readerDocMaps = new();
 
-    private void EnsureDocIds(DirectoryReader reader, Books books)
+    private ReaderDocMap EnsureDocIds(DirectoryReader reader, Books books) =>
+        _readerDocMaps.GetValue(reader, r => BuildDocMap(r, books));
+
+    private static ReaderDocMap BuildDocMap(DirectoryReader reader, Books books)
     {
-        lock (_docIdSyncLock)
+        var bookByFile = new Dictionary<string, CST.Book>(StringComparer.OrdinalIgnoreCase);
+        foreach (var b in books) bookByFile[b.FileName] = b;
+
+        var byDocId = new Dictionary<int, CST.Book>();
+        var docIdByFile = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < reader.MaxDoc; i++)
         {
-            if (ReferenceEquals(_docIdSyncedReader, reader))
-                return;
-
-            for (int i = 0; i < reader.MaxDoc; i++)
-            {
-                var doc = reader.Document(i);
-                var fileName = doc.Get("file");
-                if (!string.IsNullOrEmpty(fileName))
-                {
-                    books.SetDocId(fileName, i);
-                }
-            }
-
-            _docIdSyncedReader = reader;
+            var fileName = reader.Document(i).Get("file");
+            if (string.IsNullOrEmpty(fileName) || !bookByFile.TryGetValue(fileName, out var book))
+                continue;   // skip an unknown file rather than let Books.SetDocId's indexer throw (#186 cold test)
+            books.SetDocId(fileName, i);   // keep the global Book.DocId fresh for external (UI) consumers
+            byDocId[i] = book;
+            docIdByFile[fileName] = i;
         }
+        return new ReaderDocMap(byDocId, docIdByFile);
     }
 
     private string ConvertToDisplayScript(string ipeTerm)
@@ -1184,6 +1191,25 @@ public class SearchService : ISearchService
             _directory = null;
         }
     }
+}
+
+// An immutable docId<->Book map for ONE reader generation, so SearchService never resolves a docId through a
+// different generation's mapping under a concurrent re-index. (#311 A4-3)
+internal sealed class ReaderDocMap
+{
+    private readonly Dictionary<int, CST.Book> _byDocId;
+    private readonly Dictionary<string, int> _docIdByFile;
+
+    public ReaderDocMap(Dictionary<int, CST.Book> byDocId, Dictionary<string, int> docIdByFile)
+    {
+        _byDocId = byDocId;
+        _docIdByFile = docIdByFile;
+    }
+
+    public CST.Book? BookOf(int docId) => _byDocId.TryGetValue(docId, out var b) ? b : null;
+
+    public int DocIdOf(string? fileName) =>
+        fileName != null && _docIdByFile.TryGetValue(fileName, out var id) ? id : -1;
 }
 
 // Term matching interfaces and implementations
