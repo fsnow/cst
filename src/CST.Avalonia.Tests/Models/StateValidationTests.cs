@@ -201,6 +201,25 @@ public class StateValidationTests
     }
 
     [Fact]
+    public void Sanitize_repairs_a_null_Ai_or_null_LocalApi_section()
+    {
+        // #319 A7-2: an explicit "ai": null (or nested "localApi": null) in settings.json deserializes to null and
+        // would NRE AiSettingsViewModel's ctor, permanently bricking the Settings window. Repair like every other
+        // section.
+        var s1 = new Settings();
+        s1.Ai = null!;
+        var fixes1 = SettingsValidator.Sanitize(s1);
+        Assert.NotNull(s1.Ai);
+        Assert.NotNull(s1.Ai.LocalApi);
+        Assert.Contains(fixes1, f => f.Contains("ai settings were null"));
+
+        var s2 = new Settings();
+        s2.Ai.LocalApi = null!;
+        SettingsValidator.Sanitize(s2);
+        Assert.NotNull(s2.Ai.LocalApi);
+    }
+
+    [Fact]
     public void Sanitize_IsIdempotent()
     {
         var state = new ApplicationState();

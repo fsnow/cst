@@ -85,6 +85,13 @@ public static class SettingsValidator
             fixes.Add($"log level '{bad}' -> Information");
         }
 
+        // AI settings: an explicit "ai": null (or "ai": {"localApi": null}) in a hand-edited settings.json
+        // overwrites the `= new()` initializer and deserializes to null, so AiSettingsViewModel's ctor NREs on
+        // ai.LocalApi.Enabled and ShowSettingsWindow's catch swallows it — the Settings window then never opens
+        // again, and Settings is the only repair path. Repair like every other section. (#319 A7-2)
+        if (settings.Ai == null) { settings.Ai = new AiSettings(); fixes.Add("ai settings were null; reset to default"); }
+        if (settings.Ai.LocalApi == null) { settings.Ai.LocalApi = new LocalApiSettings(); fixes.Add("ai.localApi settings were null; reset to default"); }
+
         // XML update repository fields
         var xml = settings.XmlUpdateSettings ??= new XmlUpdateSettings();
         if (string.IsNullOrWhiteSpace(xml.XmlRepositoryOwner)) { xml.XmlRepositoryOwner = "VipassanaTech"; fixes.Add("xml repo owner -> VipassanaTech"); }
