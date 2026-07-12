@@ -14,6 +14,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Reactive;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
@@ -1253,8 +1254,14 @@ public partial class App : Application
         if (windowItem?.Menu is not NativeMenu submenu) return;
 
         _windowMenus[owner] = submenu;
-        owner.Closed += (_, _) => { _windowMenus.Remove(owner); RebuildWindowMenus(); };
-        owner.Activated += (_, _) => RebuildWindowMenus();   // keep the active-window checkmark current
+
+        // #322 follow-up: the active-window checkmark renders win.IsActive, so refresh whenever ANY window's
+        // active state changes. The Activated event alone was insufficient — it never fired on focus LOSS and
+        // its timing vs. IsActive was unreliable — and once A8-5 removed the incidental title-path rebuilds
+        // that used to paper over the gap, the checkmark went stale until an unrelated rebuild (e.g. a global
+        // script change). Tracking IsActive directly is the exact signal, and fires on both sides of a switch.
+        var activeSub = owner.GetObservable(Window.IsActiveProperty).Subscribe(new AnonymousObserver<bool>(_ => RebuildWindowMenus()));
+        owner.Closed += (_, _) => { activeSub.Dispose(); _windowMenus.Remove(owner); RebuildWindowMenus(); };
     }
 
     // The windows to list, in order: main window first ("CST Reader"), then floating book/tool windows
