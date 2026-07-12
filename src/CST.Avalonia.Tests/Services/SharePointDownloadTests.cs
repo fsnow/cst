@@ -136,6 +136,21 @@ public class SharePointDownloadTests : IDisposable
     }
 
     [Fact]
+    public void IsIntactPdf_TrueWhenHeaderIsWithinFirst1KB_NotAtByte0()
+    {
+        // #324 A9-3: some server PDFs carry junk before %PDF-; Acrobat scans the first 1KB, so we do too — such a
+        // file must validate (else it re-downloads byte-identically on every open forever).
+        Assert.True(SharePointService.IsIntactPdf(WritePdf("\n\n   preamble junk   %PDF-1.4\n1 0 obj\ntrailer\n%%EOF")));
+    }
+
+    [Fact]
+    public void IsIntactPdf_StillFalseWhenHeaderIsPresentButTruncated()
+    {
+        // The tolerant header scan must NOT weaken truncation detection: header found (even offset), no %%EOF.
+        Assert.False(SharePointService.IsIntactPdf(WritePdf("junk %PDF-1.4\n" + new string('a', 4000))));
+    }
+
+    [Fact]
     public void IsIntactPdf_FalseForEmptyOrTinyFile()
     {
         Assert.False(SharePointService.IsIntactPdf(WritePdf("")));
