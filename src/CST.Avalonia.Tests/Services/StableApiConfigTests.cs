@@ -74,6 +74,26 @@ namespace CST.Avalonia.Tests.Services
             => Assert.Null(McpBridge.AppBundleFromExecutablePath(exe));
 
         [Fact]
+        public void ReadLiveHandshake_ignores_a_stale_dead_pid_handshake()
+        {
+            // #302: a crash/kill -9 leaves local-api.json behind; attach must treat a dead-pid handshake as stale
+            // (null) so it falls through to launch, not attach + immediately get killed by the pid-watcher.
+            var dir = Path.Combine(Path.GetTempPath(), "cst-livehs-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                new LocalApiInfo(51515, "TOK", 2_000_000_000).Write(dir);   // pid far above OS max = not running
+                Assert.Null(McpBridge.ReadLiveHandshake(dir));
+
+                new LocalApiInfo(51515, "TOK", Environment.ProcessId).Write(dir);   // a live pid
+                var info = McpBridge.ReadLiveHandshake(dir);
+                Assert.NotNull(info);
+                Assert.Equal(Environment.ProcessId, info!.Pid);
+            }
+            finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+        }
+
+        [Fact]
         public async Task Liveness_watcher_trips_when_the_watched_process_is_gone()
         {
             // The GUI's pid isn't running -> the watcher cancels its token so the relay unwinds and the bridge
