@@ -158,8 +158,11 @@ public class BookWindowState
     public string BookFileName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Script used for this book display
+    /// Script used for this book display. Forced to always serialize (#323 A9-1): Script.Bengali is enum value 0
+    /// = default(Script), which the global WhenWritingDefault would DROP — so a per-book Bengali choice would be
+    /// omitted and reload as the Devanagari initializer. Same trap the #224 bools fixed.
     /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.Never)]
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public Script BookScript { get; set; } = Script.Devanagari;
 
@@ -231,8 +234,11 @@ public class BookWindowState
 public class ApplicationPreferences
 {
     /// <summary>
-    /// Current script for Pali text display
+    /// Current script for Pali text display. Forced to always serialize (#323 A9-1): Script.Bengali is enum value
+    /// 0 = default(Script), which the global WhenWritingDefault would DROP — so a Bengali choice would be omitted
+    /// and reload as the Latin initializer, silently resetting every launch. Same trap the #224 bools fixed.
     /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.Never)]
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public Script CurrentScript { get; set; } = Script.Latin;
 

@@ -201,6 +201,32 @@ public class StateValidationTests
     }
 
     [Fact]
+    public void Bengali_display_script_survives_a_save_load_round_trip()
+    {
+        // #323 A9-1: Script.Bengali is enum value 0 = default(Script). With the app-state serializer's
+        // WhenWritingDefault, currentScript/bookScript would be OMITTED and reload as their initializers, silently
+        // resetting a Bengali choice every launch. [JsonIgnore(Never)] forces them out.
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        };
+
+        var state = new ApplicationState();
+        state.Preferences.CurrentScript = Script.Bengali;
+        state.BookWindows.Add(new BookWindowState { BookIndex = 0, BookScript = Script.Bengali });
+
+        var json = JsonSerializer.Serialize(state, options);
+        Assert.Contains("currentScript", json);   // NOT dropped despite being the enum default (0)
+        Assert.Contains("bookScript", json);
+
+        var round = JsonSerializer.Deserialize<ApplicationState>(json, options)!;
+        Assert.Equal(Script.Bengali, round.Preferences.CurrentScript);
+        Assert.Equal(Script.Bengali, round.BookWindows[0].BookScript);
+    }
+
+    [Fact]
     public void Sanitize_repairs_a_null_Ai_or_null_LocalApi_section()
     {
         // #319 A7-2: an explicit "ai": null (or nested "localApi": null) in settings.json deserializes to null and
