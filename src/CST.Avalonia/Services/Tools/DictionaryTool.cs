@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -18,6 +19,9 @@ namespace CST.Avalonia.Services.Tools
 
         public DictionaryTool(IDictionaryService dictionary) => _dictionary = dictionary;
 
+        // Upper bound on dictionary hits returned in one call — negative asks 0, huge asks are capped. (#305)
+        private const int MaxDictEntries = 500;
+
         public IReadOnlyList<string> Languages => _dictionary.AvailableLanguages;
 
         public async Task<IReadOnlyList<DictionaryEntry>> LookupAsync(
@@ -28,7 +32,7 @@ namespace CST.Avalonia.Services.Tools
                 .ConfigureAwait(false);
 
             return words
-                .Take(request.MaxEntries)
+                .Take(Math.Clamp(request.MaxEntries, 0, MaxDictEntries))
                 .Select(w => new DictionaryEntry(
                     Headword: ScriptConverter.Convert(w.Word, Script.Ipe, request.OutputScript),
                     MeaningHtml: w.Meaning))

@@ -63,5 +63,23 @@ namespace CST.Avalonia.Tests.Tools
 
             Assert.Equal(2, entries.Count);
         }
+
+        [Fact]
+        public async Task LookupAsync_clamps_a_negative_MaxEntries_to_zero()
+        {
+            // #305: a negative MaxEntries must not throw or wrap into a huge Take — it yields no entries.
+            var mock = new Mock<IDictionaryService>();
+            mock.Setup(d => d.LookupAsync("en", "d"))
+                .ReturnsAsync(new List<DictionaryWord>
+                {
+                    new DictionaryWord("a", "1"),
+                    new DictionaryWord("b", "2")
+                });
+
+            var tool = new DictionaryTool(mock.Object);
+            var entries = await tool.LookupAsync(new DictionaryRequest("en", "d", MaxEntries: -5));
+
+            Assert.Empty(entries);
+        }
     }
 }
