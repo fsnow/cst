@@ -1811,6 +1811,18 @@ public partial class BookDisplayView : UserControl
                                 pendingScroll = pending.scroll;
                             }
 
+                            // #321 (A8-2): honor a highlight-visibility intent that C# requested BEFORE this
+                            // object existed. ApplySearchTermsVisibility can run while SetupJavaScriptBridge is
+                            // still deferred behind the shared JS lock, so its setHighlightsVisible() call would
+                            // hit an undefined object and be lost - then this fresh object would default to
+                            // visible:true and paint every hit despite the toggle/persisted state saying off.
+                            // The intent is queued on window.__cstPendingHighlightsVisible; consume it before the
+                            // first styling pass so the initial paint is correct (also restores the off state on
+                            // reload, where the object is recreated with the true default).
+                            if (typeof window.__cstPendingHighlightsVisible === 'boolean') {
+                                this.highlightsVisible = window.__cstPendingHighlightsVisible;
+                            }
+
                             this.updateHighlightStyles();
 
                             if (pendingScroll) {
@@ -1862,6 +1874,9 @@ public partial class BookDisplayView : UserControl
                         // showHits, which hid the words via display:none — wrong semantics.)
                         setHighlightsVisible: function(visible) {
                             this.highlightsVisible = visible;
+                            // #321 (A8-2): persist the intent so a later re-injection of this object (reload)
+                            // initializes from it instead of the visible:true default.
+                            window.__cstPendingHighlightsVisible = visible;
                             this.updateHighlightStyles();
                         }
                     };
@@ -2064,7 +2079,26 @@ public partial class BookDisplayView : UserControl
         try
         {
             var display = visible ? "''" : "'none'";
-            _webView.ExecuteScript($"document.querySelectorAll('.note').forEach(function(n){{ n.style.display = {display}; }});");
+            // #321 (A8-1): toggling notes reflows the document, which invalidates cstAnchorCache's absolute
+            // pixel positions (chapter/para/page tracking + the persisted scroll anchor read from them).
+            // Rebuild the cache after the toggle, and keep the viewport steady by holding a reference anchor
+            // at its pre-toggle offset so the content doesn't jump under the reader.
+            var script = $@"
+                (function() {{
+                    var refName = (window.cstAnchorCache && window.cstAnchorCache.getCurrentAnchor)
+                        ? window.cstAnchorCache.getCurrentAnchor(window.pageYOffset) : null;
+                    var refEl = refName ? document.querySelector('a[name=""' + refName + '""]') : null;
+                    var refOffset = refEl ? refEl.getBoundingClientRect().top : null;
+
+                    document.querySelectorAll('.note').forEach(function(n) {{ n.style.display = {display}; }});
+
+                    if (window.cstAnchorCache && window.cstAnchorCache.build) {{ window.cstAnchorCache.build(); }}
+
+                    if (refEl && refOffset !== null) {{
+                        window.scrollBy(0, refEl.getBoundingClientRect().top - refOffset);
+                    }}
+                }})();";
+            _webView.ExecuteScript(script);
         }
         catch (Exception ex)
         {
@@ -2086,7 +2120,13 @@ public partial class BookDisplayView : UserControl
         }
         try
         {
-            _webView.ExecuteScript($"window.cstSearchHighlights?.setHighlightsVisible({visible.ToString().ToLower()});");
+            // #321 (A8-2): always queue the intent on the window so a not-yet-injected cstSearchHighlights
+            // still picks it up in init() (the bridge can be deferred behind the shared JS lock); apply it
+            // immediately too when the object is already present.
+            var v = visible.ToString().ToLower();
+            _webView.ExecuteScript(
+                $"window.__cstPendingHighlightsVisible = {v}; " +
+                $"if (window.cstSearchHighlights) {{ window.cstSearchHighlights.setHighlightsVisible({v}); }}");
         }
         catch (Exception ex)
         {
