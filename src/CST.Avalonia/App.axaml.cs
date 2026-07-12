@@ -48,9 +48,6 @@ public partial class App : Application
     // Opt-in loopback API server for AI tools; gated on settings at launch (restart to apply). (#186)
     private CST.Avalonia.Services.LocalApi.LocalApiServer? _localApiServer;
 
-    /// <summary>The configured local-API port when it was already in use at startup (so the API did NOT bind),
-    /// else null. The Settings UI reads this to prompt the user to rotate the port. (#275)</summary>
-    public int? LocalApiPortInUse { get; private set; }
     /// <summary>
     /// True once application shutdown has begun. Floating windows close as part of shutdown too;
     /// consumers (e.g. CstDockFactory.CloseHostWindow's book rescue) use this to distinguish
@@ -189,14 +186,6 @@ public partial class App : Application
                 // Load settings first - MUST complete before indexing
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading settings..."));
                 await LoadSettingsAsync();
-
-                // #277: if the configured local-API port was already taken, the API did NOT start. Prompt
-                // the user (once, non-blocking) to rotate the port in Settings. Post so the rest of init
-                // (indexing, fonts) doesn't wait on the modal.
-                if (LocalApiPortInUse is int portInUse)
-                {
-                    Dispatcher.UIThread.Post(() => _ = ShowPortInUseDialogAsync(portInUse));
-                }
 
                 // Load application state
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading application state..."));
@@ -352,8 +341,6 @@ public partial class App : Application
             // secret is stored and there's no fixed port to collide. MCP clients don't need one either: the app's
             // --mcp-bridge relay reads the current local-api.json each spawn. So we pass no port/token (server
             // mints them) and mount each surface per its own permission.
-            LocalApiPortInUse = null;
-
             var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
             // Resolve the tools through the shared factory (covered by AppCompositionTests), so a tool that is
             // registered but forgotten here can't silently 404 an endpoint again.
@@ -363,76 +350,22 @@ public partial class App : Application
                 : new CST.Avalonia.Services.LocalApi.LocalApiServer(
                     version, dir, Log.Logger, restApiEnabled: ai.LocalApiEnabled, mcpEnabled: ai.McpEnabled);
             await _localApiServer.StartAsync();
+            LocalApiStartFailed = false;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to start local API server");
+            // #316 A6-4: the API is EPHEMERAL now, so there is no "port in use" case — but ANY StartAsync failure
+            // (loopback bind blocked by security software, a DI fault) leaves AI shown as enabled while the server
+            // never started and every bridge spawn fails. Log it loudly and record the state so a Settings
+            // indicator can surface it (the old #277 port-in-use dialog was dead code and is removed).
+            LocalApiStartFailed = true;
+            Log.Error(ex, "Local API server failed to start — AI agent access will not work this session despite being enabled in Settings");
         }
     }
 
-    /// <summary>
-    /// #277: notify the user that the local API could not start because its configured port was already in
-    /// use, and offer to open Settings (where they can rotate the port). Modal over the main window.
-    /// </summary>
-    private async Task ShowPortInUseDialogAsync(int port)
-    {
-        try
-        {
-            if (MainWindow == null) return;
-
-            var openSettings = false;
-
-            var dialog = new Window
-            {
-                Title = "Local API not started",
-                Width = 460,
-                SizeToContent = SizeToContent.Height,
-                CanResize = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                ShowInTaskbar = false,
-            };
-
-            var message = new TextBlock
-            {
-                Text = $"The local API server could not start because port {port} is already in use, " +
-                       "so AI agent access is off.\n\nOpen Settings to rotate the port to a free one, " +
-                       "then restart CST Reader.",
-                TextWrapping = TextWrapping.Wrap,
-            };
-
-            var laterBtn = new Button { Content = "Not now", IsCancel = true };
-            laterBtn.Click += (_, _) => dialog.Close();
-
-            var openBtn = new Button { Content = "Open Settings…", IsDefault = true };
-            openBtn.Click += (_, _) => { openSettings = true; dialog.Close(); };
-
-            var buttons = new StackPanel
-            {
-                Orientation = global::Avalonia.Layout.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Spacing = 8,
-                Margin = new Thickness(0, 16, 0, 0),
-            };
-            buttons.Children.Add(laterBtn);
-            buttons.Children.Add(openBtn);
-
-            var root = new StackPanel { Margin = new Thickness(20) };
-            root.Children.Add(message);
-            root.Children.Add(buttons);
-            dialog.Content = root;
-
-            await dialog.ShowDialog(MainWindow);
-
-            if (openSettings)
-            {
-                await ShowSettingsWindow();
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Failed to show port-in-use dialog");
-        }
-    }
+    /// <summary>True when the loopback API was enabled but <c>StartAsync</c> threw, so AI access is silently
+    /// non-functional this session. Surfaced for a Settings status indicator. (#316 A6-4)</summary>
+    public bool LocalApiStartFailed { get; private set; }
 
     /// <summary>
     /// Pre-load fonts for all scripts to avoid UI delays in settings
