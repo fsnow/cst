@@ -59,7 +59,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             await using var clientSide = new StdioServerTransport("cst-reader", NullLoggerFactory.Instance);
             Console.SetOut(Console.Error);   // any stray Console.Out goes to stderr, never onto the JSON-RPC stdout
 
-            var info = LocalApiInfo.Read(handshakeDirectory);   // attach: a running instance already published its handshake
+            var info = ReadLiveHandshake(handshakeDirectory);   // attach: a RUNNING instance already published its handshake
             if (info is null)
             {
                 Log.Information("--mcp-bridge: no {File}; launching CST Reader and waiting for it to come up…", LocalApiInfo.FileName);
@@ -219,12 +219,26 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         {
             for (int i = 0; i < attempts && !ct.IsCancellationRequested; i++)
             {
-                var info = LocalApiInfo.Read(dir);
+                var info = ReadLiveHandshake(dir);
                 if (info is not null) return info;
                 try { await Task.Delay(delayMs, ct).ConfigureAwait(false); }
                 catch (OperationCanceledException) { return null; }
             }
-            return LocalApiInfo.Read(dir);
+            return ReadLiveHandshake(dir);
+        }
+
+        /// <summary>
+        /// Read the handshake, but treat one whose GUI process is gone as STALE (null). A crash / <c>kill -9</c>
+        /// leaves <c>local-api.json</c> behind (only a clean shutdown deletes it), so without this the bridge would
+        /// attach to a dead instance and the pid-watcher would immediately cancel the relay — defeating
+        /// launch-or-attach in exactly the crash-recovery case. Ignoring the stale file lets attach fall through to
+        /// launch, and the poll then waits for the fresh instance to overwrite it with a live pid. (#302)
+        /// </summary>
+        internal static LocalApiInfo? ReadLiveHandshake(string dir)
+        {
+            var info = LocalApiInfo.Read(dir);
+            if (info is not null && info.Pid > 0 && !IsProcessAlive(info.Pid)) return null;
+            return info;
         }
 
         /// <summary>
