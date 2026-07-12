@@ -78,6 +78,19 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Books_report_indexed_true_after_the_server_maps_the_index()
+        {
+            // #291: BookIndexer doesn't set DocIds; they used to sync lazily on the FIRST search, so `books`
+            // called before any search reported indexed:false for searchable books. The server now warms the
+            // DocId map at startup, so `indexed` is truthful up front.
+            using var http = _api.Http();
+            using var doc = await GetDoc(http, "/v1/books?take=250");
+            var mula = doc.RootElement.GetProperty("books").EnumerateArray()
+                .First(b => b.GetProperty("bookId").GetString() == _api.MulaBook);
+            Assert.True(mula.GetProperty("indexed").GetBoolean());
+        }
+
+        [Fact]
         public async Task Requires_the_bearer_token()
         {
             using var http = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) };

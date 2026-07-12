@@ -1102,6 +1102,26 @@ public class SearchService : ISearchService
         }
     }
 
+    /// <inheritdoc />
+    public void EnsureIndexMapped()
+    {
+        DirectoryReader? reader = null;
+        try
+        {
+            reader = AcquireReader();
+            EnsureDocIds(reader, Books.Inst);   // same sync the first search does, just without a search (#291)
+        }
+        catch (Exception ex)
+        {
+            // Index not configured/ready yet — DocIds will sync on the first search instead.
+            _logger.LogDebug(ex, "EnsureIndexMapped: index not ready; DocIds will sync on first search.");
+        }
+        finally
+        {
+            reader?.DecRef();
+        }
+    }
+
     private string ConvertToDisplayScript(string ipeTerm)
     {
         _logger.LogDebug("Converting term to display script: {IpeTerm}", ipeTerm);
