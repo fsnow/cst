@@ -72,11 +72,13 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
-        public async Task Status_requires_the_token()
+        public async Task Status_is_public_discovery_without_a_token()
         {
+            // #306 A1-4: the unauthenticated root advertises /v1/status, so it must itself be reachable without a
+            // token (it carries no secrets) — otherwise a cold agent following the pointer gets a 401.
             using var http = Client(withToken: false);
             var resp = await http.GetAsync("/v1/status");
-            Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         }
 
         [Fact]
@@ -89,11 +91,20 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
+        public async Task An_authenticated_endpoint_requires_the_token()
+        {
+            // /v1/books is a real (non-discovery) endpoint, so it stands in for "everything past the auth gate".
+            using var http = Client(withToken: false);
+            var resp = await http.GetAsync("/v1/books");
+            Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+        }
+
+        [Fact]
         public async Task Wrong_token_is_rejected()
         {
             var http = new HttpClient { BaseAddress = new Uri(_server.BaseUrl!) };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "not-the-token");
-            var resp = await http.GetAsync("/v1/status");
+            var resp = await http.GetAsync("/v1/books");
             Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
         }
 
@@ -136,6 +147,27 @@ namespace CST.Avalonia.Tests.Services
             using var http = Client(withToken: false, origin: "http://evil.example");
             var resp = await http.GetAsync("/llms.txt");
             Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+        }
+
+        [Fact]
+        public async Task Concurrent_StartAsync_binds_a_single_server()
+        {
+            // #306 A1-8: two racing starts must not bind two Kestrels — the lifecycle lock + _app check make
+            // the second call a no-op. A fresh server (not the fixture's already-started one).
+            var dir = Path.Combine(Path.GetTempPath(), "cst-api-concstart-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            var server = new LocalApiServer("5.0.0-test", dir, Serilog.Log.Logger);
+            try
+            {
+                await Task.WhenAll(server.StartAsync(), server.StartAsync());
+                Assert.True(server.IsRunning);
+                Assert.NotNull(server.BaseUrl);
+            }
+            finally
+            {
+                await server.StopAsync();
+                try { Directory.Delete(dir, recursive: true); } catch { }
+            }
         }
 
         [Fact]

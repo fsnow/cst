@@ -63,6 +63,10 @@ namespace CST.Avalonia.Services.LocalApi
 
         private WebApplication? _app;
 
+        // Serialize Start/Stop so a live enable/disable toggle (promised in the class doc) can't run two
+        // check-then-act starts concurrently and leave two Kestrels bound. (#306 A1-8)
+        private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
+
         /// <summary>The base URL once started (e.g. <c>http://127.0.0.1:52344</c>), or null if not running.</summary>
         public string? BaseUrl { get; private set; }
 
@@ -107,6 +111,16 @@ namespace CST.Avalonia.Services.LocalApi
 
         public async Task StartAsync(CancellationToken ct = default)
         {
+            await _lifecycleLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await StartCoreAsync(ct).ConfigureAwait(false);
+            }
+            finally { _lifecycleLock.Release(); }
+        }
+
+        private async Task StartCoreAsync(CancellationToken ct)
+        {
             if (_app != null) return;
 
             // Reuse the persisted token when supplied (stable config across launches), else mint one. (#275)
@@ -114,6 +128,10 @@ namespace CST.Avalonia.Services.LocalApi
 
             var builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders(); // don't spam stdout; the app logs via Serilog
+            // ...but bridge ASP.NET's own logs (500s, pipeline faults) into Serilog at Warning+, so a server-side
+            // failure isn't silently swallowed. (#306 A1-7)
+            builder.Logging.AddSerilog(Serilog.Log.Logger, dispose: false);
+            builder.Logging.SetMinimumLevel(LogLevel.Warning);
             // Fixed loopback port when configured (so a client config stays valid), else ephemeral. (#275)
             builder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, _port > 0 ? _port : 0));
             builder.Services.ConfigureHttpJsonOptions(o =>
@@ -179,6 +197,9 @@ namespace CST.Avalonia.Services.LocalApi
             });
 
             var app = builder.Build();
+            bool started = false;
+            try
+            {
 
             // Security gate: no browsers, loopback host only, valid bearer token.
             app.Use(async (context, next) =>
@@ -228,6 +249,7 @@ namespace CST.Avalonia.Services.LocalApi
                 app.MapMcp("/mcp");
 
             await app.StartAsync(ct);
+            started = true;
 
             int port = ResolvePort(app);
             _app = app;
@@ -237,21 +259,43 @@ namespace CST.Avalonia.Services.LocalApi
             new LocalApiInfo(port, token, Environment.ProcessId).Write(_handshakeDirectory);
             _logger.Information("Local API listening on {BaseUrl} (rest={Rest}, mcp={Mcp})",
                 BaseUrl, _restApiEnabled, _mcpEnabled);
+            }
+            catch (Exception ex)
+            {
+                // A throw anywhere between Build() and Write() (ResolvePort, port already taken, handshake write)
+                // must not leak the built host or orphan a *running* Kestrel with _app still null. (#306 A1-5)
+                _logger.Error(ex, "Local API failed to start; cleaning up");
+                if (started) { try { await app.StopAsync().ConfigureAwait(false); } catch { /* best-effort */ } }
+                await app.DisposeAsync().ConfigureAwait(false);
+                _app = null;
+                BaseUrl = null;
+                Token = null;
+                throw;
+            }
         }
 
         public async Task StopAsync()
         {
-            if (_app == null) return;
-            try { await _app.StopAsync(); } catch (Exception ex) { _logger.Warning(ex, "Local API stop error"); }
-            await _app.DisposeAsync();
-            _app = null;
-            BaseUrl = null;
-            Token = null;
-            LocalApiInfo.Delete(_handshakeDirectory);
-            _logger.Information("Local API stopped");
+            await _lifecycleLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_app == null) return;
+                try { await _app.StopAsync(); } catch (Exception ex) { _logger.Warning(ex, "Local API stop error"); }
+                await _app.DisposeAsync();
+                _app = null;
+                BaseUrl = null;
+                Token = null;
+                LocalApiInfo.Delete(_handshakeDirectory);
+                _logger.Information("Local API stopped");
+            }
+            finally { _lifecycleLock.Release(); }
         }
 
-        public ValueTask DisposeAsync() => new(StopAsync());
+        public async ValueTask DisposeAsync()
+        {
+            await StopAsync().ConfigureAwait(false);
+            _lifecycleLock.Dispose();
+        }
 
         private static bool IsLoopbackHost(string host) =>
             host is "127.0.0.1" or "localhost" or "[::1]" or "::1";
@@ -269,7 +313,10 @@ namespace CST.Avalonia.Services.LocalApi
         private static bool IsDiscoveryPath(PathString path) =>
             !path.HasValue || path == "/"
             || path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWithSegments("/docs", StringComparison.OrdinalIgnoreCase);
+            // /v1/status is advertised by the unauthenticated root and carries no secrets, so a cold agent
+            // following the pointer must not hit a 401. (#306 A1-4) — /docs was exempt but nothing maps
+            // there; dropped so a future /docs/... route can't inherit the exemption unnoticed. (#306 A1-6)
+            || path.Equals("/" + ApiVersion + "/status", StringComparison.OrdinalIgnoreCase);
 
         // The version-stamped llms.txt body, served both at GET /llms.txt and as the MCP llms.txt resource
         // (single source, so the two can't drift). Version-stamped so it can't be mistaken for another build.
