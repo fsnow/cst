@@ -43,15 +43,19 @@ namespace CST.Search
                     string name = TagName(tag);
                     if (name == "note" && !tag.EndsWith("/>", System.StringComparison.Ordinal))
                     {
+                        // TagName("</note>") is "note" too, so this branch fires for BOTH open and close. A close
+                        // tag means the range began INSIDE a note — it must be zero-width, never a subtree: calling
+                        // SkipSubtree on a lone </note> enters depth 1 and consumes to the NEXT </note> (or the whole
+                        // rest of the window), silently dropping the following base text. (#310 A4-2)
+                        bool isClose = tag.StartsWith("</", System.StringComparison.Ordinal);
                         if (!includeNotes)
-                            i = SkipSubtree(xml, gt + 1, "note", end);
+                            i = isClose ? gt + 1 : SkipSubtree(xml, gt + 1, "note", end);
                         else
                         {
                             // Delimit an included note with curly braces (which never occur in the corpus - 0
                             // across all 217 files) so a consumer can tell injected footnote/variant apparatus
                             // from the base text; the parentheses the notes carry are otherwise indistinguishable
                             // from the text's own. Open tag => '{', close tag => '}'; inside stays `reading (sigla)`.
-                            bool isClose = tag.StartsWith("</", System.StringComparison.Ordinal);
                             if (!isClose && sb.Length > 0 && sb[sb.Length - 1] != ' ') sb.Append(' ');
                             sb.Append(isClose ? '}' : '{');
                             i = gt + 1;
@@ -103,6 +107,18 @@ namespace CST.Search
         {
             foreach (var (s, e) in notes) if (pos >= s && pos < e) return true;
             return false;
+        }
+
+        /// <summary>Count notes that INTERSECT the window <c>[lo, hi)</c>, including one that opened before
+        /// <paramref name="lo"/> and extends into it. <see cref="NoteRegions"/> only finds notes that START in a
+        /// range, so scan from <paramref name="scanFrom"/> (&lt;= lo — e.g. the enclosing paragraph start) and keep
+        /// those overlapping the window. (#310 A4-15)</summary>
+        internal static int CountNotesIntersecting(string xml, int scanFrom, int lo, int hi)
+        {
+            int count = 0;
+            foreach (var (s, e) in NoteRegions(xml, Math.Min(scanFrom, lo), hi))
+                if (s < hi && e > lo) count++;
+            return count;
         }
 
         // Position just past the matching close tag for an already-open element.

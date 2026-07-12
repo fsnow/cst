@@ -32,7 +32,11 @@ namespace CST.Search
             if (snapStartToSentence)
             {
                 int floor = EnclosingParagraphStart(startPos, markers);
-                int candidate = SnapBackToSentenceStart(xml, startPos, floor);
+                // Note-aware like the snippet extractor's sentence scans: a danda INSIDE a <note> is apparatus
+                // punctuation, not a base-text sentence boundary, so snapping to it would land the window start
+                // mid-note. (#310 A4-2)
+                var snapNotes = TeiText.NoteRegions(xml, floor, startPos);
+                int candidate = SnapBackToSentenceStart(xml, startPos, floor, snapNotes);
                 if (candidate < startPos
                     && WalkForward(xml, candidate, maxChars, includeVariants, xml.Length) > startPos)
                     readStart = candidate;
@@ -47,15 +51,17 @@ namespace CST.Search
             int? prev = prevStart < readStart ? prevStart : (int?)null;
 
             // Apparatus notes ({…}) in this window — counted from the raw XML regardless of includeVariants, so a
-            // caller knows whether apparatus exists here without a second call. (#293)
-            int noteCount = TeiText.NoteRegions(xml, readStart, end).Count;
+            // caller knows whether apparatus exists here without a second call. (#293) Count notes INTERSECTING the
+            // window (including one opened before readStart), not just those starting in it. (#310 A4-15)
+            int paraStart = EnclosingParagraphStart(readStart, markers);
+            int noteCount = TeiText.CountNotesIntersecting(xml, paraStart, readStart, end);
             var (num, code, pages) = markers.RefsAt(readStart);
             return new PassageWindow(text, prev, next, num, code, pages, noteCount);
         }
 
         // The nearest sentence start at or after <paramref name="minStart"/> and at/before <paramref name="startPos"/>
         // — i.e. just past the closest preceding sentence boundary, without crossing minStart. Tags are skipped.
-        private static int SnapBackToSentenceStart(string xml, int startPos, int minStart)
+        private static int SnapBackToSentenceStart(string xml, int startPos, int minStart, List<(int s, int e)> notes)
         {
             if (minStart < 0) minStart = 0;
             int i = startPos - 1;
@@ -68,7 +74,9 @@ namespace CST.Search
                     i = lt >= minStart ? lt - 1 : minStart - 1;
                     continue;
                 }
-                if (TeiText.IsBoundary(c)) return i + 1;   // begin just past the sentence-ending danda
+                // begin just past the sentence-ending danda — but a danda inside a note is apparatus, not a
+                // base-text boundary. (#310 A4-2)
+                if (TeiText.IsBoundary(c) && !TeiText.InNote(i, notes)) return i + 1;
                 i--;
             }
             return minStart;
@@ -102,7 +110,11 @@ namespace CST.Search
                     string tag = xml.Substring(i, gt - i + 1);
                     string name = TeiText.TagName(tag);
                     if (name == "note" && !includeNotes && !tag.EndsWith("/>", StringComparison.Ordinal))
-                        i = TeiText.SkipSubtree(xml, gt + 1, "note", limit);
+                        // Open <note> strips its subtree; a lone </note> (walk began inside a note) is zero-width,
+                        // never a subtree — else SkipSubtree jumps to the next </note>, silently skipping text. (#310 A4-2)
+                        i = tag.StartsWith("</", StringComparison.Ordinal)
+                            ? gt + 1
+                            : TeiText.SkipSubtree(xml, gt + 1, "note", limit);
                     else if (name == "hi" && TeiText.IsStructuralHi(tag) && !tag.EndsWith("/>", StringComparison.Ordinal))
                         i = TeiText.SkipSubtree(xml, gt + 1, "hi", limit);
                     else i = gt + 1;
@@ -133,8 +145,10 @@ namespace CST.Search
                 }
                 else { rendered++; i--; }
             }
-            for (int j = Math.Max(i, limit); j < start; j++)
-                if (TeiText.IsBoundary(xml[j])) return j + 1;                   // begin at a sentence start
+            int from = Math.Max(i, limit);
+            var notes = TeiText.NoteRegions(xml, from, start);
+            for (int j = from; j < start; j++)
+                if (TeiText.IsBoundary(xml[j]) && !TeiText.InNote(j, notes)) return j + 1;   // sentence start (note-aware, #310)
             return Math.Max(i + 1, limit);
         }
     }
