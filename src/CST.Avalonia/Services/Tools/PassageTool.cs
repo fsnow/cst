@@ -52,7 +52,8 @@ namespace CST.Avalonia.Services.Tools
                 ParagraphNumber: w.ParagraphNumber,
                 ParagraphBookCode: w.ParagraphBookCode,
                 PrevCursor: w.PrevCursor,
-                NextCursor: w.NextCursor);
+                NextCursor: w.NextCursor,
+                NoteCount: w.NoteCount);
         }
 
         private static int ResolveStart(NavigationReference? reference, BookMarkers markers) => reference switch
@@ -69,6 +70,6 @@ namespace CST.Avalonia.Services.Tools
             : $"paragraph {number} ({bookCode})";
 
         private static PassageResult Empty(PassageRequest request, string note) =>
-            new(request.BookId, note, "", Array.Empty<SnippetPageRef>(), null, null, null, null);
+            new(request.BookId, note, "", Array.Empty<SnippetPageRef>(), null, null, null, null, 0);
     }
 }

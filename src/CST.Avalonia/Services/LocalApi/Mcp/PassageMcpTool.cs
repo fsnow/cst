@@ -21,7 +21,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "page forward. Both ends snap to sentence boundaries: a cursor (which points AT a hit) is pulled "
             + "back to the start of its enclosing sentence, and the window extends to the next sentence end — so "
             + "the hit is read with its full governing clause, never mid-sentence. Use the returned "
-            + "nextCursor/prevCursor to page. With neither paragraph nor cursor, reads from the book start.")]
+            + "nextCursor/prevCursor to page. With neither paragraph nor cursor, reads from the book start. "
+            + "'noteCount' is how many {…} apparatus notes fall in the window (counted regardless of "
+            + "includeFootnotes) — noteCount>0 means apparatus is present here.")]
         public static async Task<PassageResult> PassageAsync(
             IPassageTool passage,
             [Description("The book's id (file name), e.g. from the 'books' tool or a search result.")]

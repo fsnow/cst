@@ -46,8 +46,11 @@ namespace CST.Search
             int prevStart = WalkBackward(xml, readStart, maxChars, 0);
             int? prev = prevStart < readStart ? prevStart : (int?)null;
 
+            // Apparatus notes ({…}) in this window — counted from the raw XML regardless of includeVariants, so a
+            // caller knows whether apparatus exists here without a second call. (#293)
+            int noteCount = TeiText.NoteRegions(xml, readStart, end).Count;
             var (num, code, pages) = markers.RefsAt(readStart);
-            return new PassageWindow(text, prev, next, num, code, pages);
+            return new PassageWindow(text, prev, next, num, code, pages, noteCount);
         }
 
         // The nearest sentence start at or after <paramref name="minStart"/> and at/before <paramref name="startPos"/>
@@ -143,5 +146,6 @@ namespace CST.Search
         int? NextCursor,
         int? ParagraphNumber,
         string? ParagraphBookCode,
-        IReadOnlyList<SnippetPageRef> Pages);
+        IReadOnlyList<SnippetPageRef> Pages,
+        int NoteCount);
 }

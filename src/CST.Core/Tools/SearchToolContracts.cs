@@ -167,6 +167,11 @@ namespace CST.Tools
     /// <param name="Cursor">The anchor's unique locator — pass it to <c>/v1/passage</c> as <c>cursor</c> to read
     /// the exact passage around <em>this</em> occurrence. (Paragraph numbers repeat within a book, so they are
     /// not a unique locator.)</param>
+    /// <param name="NoteCount">How many print-edition apparatus notes (<c>{…}</c> — variant readings / editorial
+    /// notes) fall in this snippet's window. Counted regardless of <c>IncludeFootnotes</c>, so
+    /// <c>NoteCount &gt; 0</c> tells you this hit HAS apparatus (re-read with <c>includeFootnotes:true</c>, or via
+    /// <c>/v1/passage</c>, to see it) without a second probe call. Apparatus lives almost only in MULA texts, so
+    /// this is usually 0 in commentaries.</param>
     public sealed record Occurrence(
         string BookId,
         string BookName,
@@ -176,7 +181,8 @@ namespace CST.Tools
         OccurrenceRefs Refs,
         bool IncludedFootnotes,
         int Cursor,
-        IReadOnlyList<OccurrenceHighlight> Highlights);
+        IReadOnlyList<OccurrenceHighlight> Highlights,
+        int NoteCount);
 
     /// <summary>
     /// A page of a term's in-context occurrences within one book — the same envelope shape as

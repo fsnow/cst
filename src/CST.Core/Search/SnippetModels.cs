@@ -49,5 +49,6 @@ namespace CST.Search
         string? ParagraphBookCode,
         IReadOnlyList<SnippetPageRef> Pages,
         bool IncludedFootnotes,
-        IReadOnlyList<SnippetHighlight> Highlights);
+        IReadOnlyList<SnippetHighlight> Highlights,
+        int NoteCount);
 }
