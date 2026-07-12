@@ -253,8 +253,12 @@ public class ApplicationPreferences
     public List<RecentBookItem> RecentBooks { get; set; } = new();
 
     /// <summary>
-    /// Maximum number of recent books to remember
+    /// Maximum number of recent books to remember. Forced to always serialize (#323 A9-1 class): the initializer
+    /// is 10 but the CLR default is 0, which the global WhenWritingDefault would DROP — so a deliberate 0 ("disable
+    /// the recent-books list") would be omitted and silently revert to 10 next launch. Same trap the two Script
+    /// enums and the #224 bools fixed.
     /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.Never)]
     public int MaxRecentBooks { get; set; } = 10;
 }
 

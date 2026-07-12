@@ -227,6 +227,27 @@ public class StateValidationTests
     }
 
     [Fact]
+    public void MaxRecentBooks_zero_survives_a_save_load_round_trip()
+    {
+        // #323 class: MaxRecentBooks' initializer is 10 but its CLR default is 0, so a deliberate 0 ("disable the
+        // recent-books list") would be dropped by WhenWritingDefault and revert to 10 next launch without
+        // [JsonIgnore(Never)].
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        };
+
+        var state = new ApplicationState();
+        state.Preferences.MaxRecentBooks = 0;
+
+        var json = JsonSerializer.Serialize(state, options);
+        Assert.Contains("maxRecentBooks", json);   // NOT dropped despite being the CLR default (0)
+        Assert.Equal(0, JsonSerializer.Deserialize<ApplicationState>(json, options)!.Preferences.MaxRecentBooks);
+    }
+
+    [Fact]
     public void Sanitize_repairs_a_null_Ai_or_null_LocalApi_section()
     {
         // #319 A7-2: an explicit "ai": null (or nested "localApi": null) in settings.json deserializes to null and
