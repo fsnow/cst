@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
@@ -80,6 +81,21 @@ namespace CST.Avalonia.Tests.Tools
             var entries = await tool.LookupAsync(new DictionaryRequest("en", "d", MaxEntries: -5));
 
             Assert.Empty(entries);
+        }
+
+        [Fact]
+        public async Task LookupAsync_forwards_the_cancellation_token_to_the_service()
+        {
+            // #308 A3-5: the tool must thread ct through so a client timeout can cancel a first-touch load.
+            using var cts = new CancellationTokenSource();
+            var mock = new Mock<IDictionaryService>();
+            mock.Setup(d => d.LookupAsync("en", "x", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<DictionaryWord>());
+
+            var tool = new DictionaryTool(mock.Object);
+            await tool.LookupAsync(new DictionaryRequest("en", "x"), cts.Token);
+
+            mock.Verify(d => d.LookupAsync("en", "x", cts.Token), Times.Once);
         }
     }
 }

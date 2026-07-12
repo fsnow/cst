@@ -126,12 +126,12 @@ public sealed class DictionaryService : IDictionaryService
         }
     }
 
-    public async Task<IReadOnlyList<DictionaryWord>> LookupAsync(string language, string query)
+    public async Task<IReadOnlyList<DictionaryWord>> LookupAsync(string language, string query, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(language) || string.IsNullOrEmpty(query))
             return Array.Empty<DictionaryWord>();
 
-        var index = await GetOrLoadIndexAsync(language).ConfigureAwait(false);
+        var index = await GetOrLoadIndexAsync(language, ct).ConfigureAwait(false);
         if (index == null)
             return Array.Empty<DictionaryWord>();
 
@@ -144,7 +144,7 @@ public sealed class DictionaryService : IDictionaryService
         return index.Lookup(ipeQuery);
     }
 
-    private async Task<DictionaryIndex?> GetOrLoadIndexAsync(string language)
+    private async Task<DictionaryIndex?> GetOrLoadIndexAsync(string language, CancellationToken ct)
     {
         lock (_cache)
         {
@@ -152,7 +152,7 @@ public sealed class DictionaryService : IDictionaryService
                 return cached;
         }
 
-        await _loadLock.WaitAsync().ConfigureAwait(false);
+        await _loadLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             lock (_cache)
@@ -161,7 +161,7 @@ public sealed class DictionaryService : IDictionaryService
                     return cached;
             }
 
-            var index = await LoadLanguageAsync(language).ConfigureAwait(false);
+            var index = await LoadLanguageAsync(language, ct).ConfigureAwait(false);
             if (index != null)
             {
                 lock (_cache)
@@ -177,7 +177,7 @@ public sealed class DictionaryService : IDictionaryService
         }
     }
 
-    private async Task<DictionaryIndex?> LoadLanguageAsync(string language)
+    private async Task<DictionaryIndex?> LoadLanguageAsync(string language, CancellationToken ct)
     {
         var languageDir = Path.Combine(_dictionariesDirectory, language);
         if (!Directory.Exists(languageDir))
@@ -194,7 +194,8 @@ public sealed class DictionaryService : IDictionaryService
 
             foreach (var file in Directory.GetFiles(languageDir).OrderBy(f => f, StringComparer.Ordinal))
             {
-                var lines = await File.ReadAllLinesAsync(file).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();   // a client timeout stops the load, not just the caller's await
+                var lines = await File.ReadAllLinesAsync(file, ct).ConfigureAwait(false);
 
                 // Lines come in (headword, definition) pairs; skip a pair if either side is empty.
                 for (int i = 0; i + 1 < lines.Length; i += 2)
@@ -216,6 +217,7 @@ public sealed class DictionaryService : IDictionaryService
                 index.Count, language, languageDir);
             return index;
         }
+        catch (OperationCanceledException) { throw; }   // cancellation isn't a load failure — let it propagate
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading '{Language}' dictionary from {Path}", language, languageDir);

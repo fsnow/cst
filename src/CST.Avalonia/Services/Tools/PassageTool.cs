@@ -45,9 +45,8 @@ namespace CST.Avalonia.Services.Tools
             if (!File.Exists(path))
                 return Empty(request, "book not available");
 
-            // Char offsets index the decoded (BOM-stripped) UTF-16 text — read it the same way.
-            string xml = await File.ReadAllTextAsync(path, Encoding.Unicode, ct).ConfigureAwait(false);
-            var markers = BookMarkers.Build(xml);
+            // Read + parse via the shared bounded cache so paging one book doesn't re-read + re-parse it. (#308 A3-6)
+            var (xml, markers) = await BookTextCache.GetAsync(path, ct).ConfigureAwait(false);
 
             int startPos = request.Cursor ?? ResolveStart(request.Reference, markers);
             if (startPos < 0) return Empty(request, "reference not found");

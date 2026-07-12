@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
 
@@ -22,6 +23,8 @@ public interface IDictionaryService
     /// query is IPE-normalized internally, so it matches regardless of input script. The language's
     /// data is loaded and cached on first use. Returns matching entries in display order (see
     /// <see cref="DictionaryIndex.Lookup"/>); empty for an unknown language, empty query, or no match.
+    /// The first-touch load (read + IPE-convert every file) honors <paramref name="ct"/>, so a client
+    /// timeout stops it instead of holding the load lock past the deadline.
     /// </summary>
-    Task<IReadOnlyList<DictionaryWord>> LookupAsync(string language, string query);
+    Task<IReadOnlyList<DictionaryWord>> LookupAsync(string language, string query, CancellationToken ct = default);
 }
