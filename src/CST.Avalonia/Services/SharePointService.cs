@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Azure.Identity;
@@ -197,6 +198,10 @@ namespace CST.Avalonia.Services
             // evicted, so it never heals). A corrupt cached file falls through to a fresh, size-verified
             // re-download below, which atomically REPLACES the bad file - re-downloading a corrupt file does not
             // conflict with the preservation rule. (#194, follow-up to NET-1)
+            // A corrupt cached PDF still on disk is a fallback if the re-download fails: it's the permanent
+            // preservation store and tolerant viewers show its readable pages, so an offline user should get it
+            // rather than nothing. (#324 A9-2)
+            bool haveUnvalidatedCache = false;
             if (File.Exists(localPath))
             {
                 if (IsIntactPdf(localPath))
@@ -204,8 +209,14 @@ namespace CST.Avalonia.Services
                     _logger.LogInformation("PDF already cached locally: {Path}", localPath);
                     return localPath;
                 }
-                _logger.LogWarning("Cached PDF failed integrity check (truncated/corrupt); re-downloading: {Path}", localPath);
+                haveUnvalidatedCache = true;
+                if (WarnOnce(localPath))
+                    _logger.LogWarning("Cached PDF failed integrity check (truncated/corrupt); re-downloading: {Path}", localPath);
             }
+
+            // On any re-download failure, fall back to the (corrupt-but-present) cached copy rather than null, so
+            // an offline user keeps the readable pages; never deletes it, and a later call retries. (#324 A9-2)
+            string? Fallback() => haveUnvalidatedCache && File.Exists(localPath) ? localPath : null;
 
             try
             {
@@ -213,7 +224,7 @@ namespace CST.Avalonia.Services
                 if (string.IsNullOrEmpty(driveId))
                 {
                     _logger.LogError("Could not get drive ID");
-                    return null;
+                    return Fallback();
                 }
 
                 var fullPath = $"{SourceRootFolder}/{sharePointPath}";
@@ -228,7 +239,7 @@ namespace CST.Avalonia.Services
                 if (driveItem == null)
                 {
                     _logger.LogError("File not found in SharePoint: {Path}", fullPath);
-                    return null;
+                    return Fallback();
                 }
 
                 // Download the file content
@@ -237,14 +248,18 @@ namespace CST.Avalonia.Services
                 if (contentStream == null)
                 {
                     _logger.LogError("Failed to get content stream for: {Path}", fullPath);
-                    return null;
+                    return Fallback();
                 }
 
                 // Save atomically with size verification. A partial download must never land at localPath:
                 // the cache check above trusts any file already there, and these PDFs are the permanent
                 // preservation store (not an evictable cache). (NET-1)
                 if (!await SaveStreamVerifiedAsync(contentStream, localPath, driveItem.Size, _logger))
-                    return null;
+                {
+                    if (haveUnvalidatedCache)
+                        _logger.LogWarning("Re-download failed verification; serving the unvalidated cached copy, will retry: {Path}", localPath);
+                    return Fallback();
+                }
 
                 _logger.LogInformation("Downloaded PDF to: {Path} ({Size:N0} bytes)", localPath, new FileInfo(localPath).Length);
                 return localPath;
@@ -252,8 +267,18 @@ namespace CST.Avalonia.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to download PDF: {Path}", sharePointPath);
-                return null;
+                if (haveUnvalidatedCache)
+                    _logger.LogWarning("Re-download failed; serving the unvalidated cached copy, will retry: {Path}", localPath);
+                return Fallback();
             }
+        }
+
+        // Log the "corrupt cached PDF" warning at most once per path per session — a legitimately-unconventional
+        // server PDF would otherwise re-warn on every open. (#324 A9-3)
+        private static readonly HashSet<string> _warnedCorruptPaths = new();
+        private static bool WarnOnce(string path)
+        {
+            lock (_warnedCorruptPaths) return _warnedCorruptPaths.Add(path);
         }
 
         /// <summary>
@@ -268,7 +293,9 @@ namespace CST.Avalonia.Services
             if (!string.IsNullOrEmpty(localDir))
                 Directory.CreateDirectory(localDir);
 
-            var tempPath = finalPath + ".part";
+            // Unique temp name so two concurrent re-downloads of the same PDF don't collide on one ".part" and
+            // both fail this round. (#324 A9-4)
+            var tempPath = finalPath + "." + Guid.NewGuid().ToString("N") + ".part";
             try
             {
                 using (var fileStream = File.Create(tempPath))
@@ -320,9 +347,14 @@ namespace CST.Avalonia.Services
                 long length = fs.Length;
                 if (length < header.Length + eof.Length) return false;
 
-                Span<byte> headBuf = stackalloc byte[5];
+                // Scan the first 1KB for %PDF- rather than requiring it at byte 0 — mirrors Acrobat, which
+                // tolerates junk before the header; a truncation still keeps the header, so this doesn't weaken
+                // the EOF check below. (#324 A9-3)
+                int headLen = (int)Math.Min(1024, length);
+                Span<byte> headBuf = stackalloc byte[1024];
+                headBuf = headBuf.Slice(0, headLen);
                 fs.ReadExactly(headBuf);
-                if (!headBuf.SequenceEqual(header)) return false;
+                if (headBuf.IndexOf(header) < 0) return false;
 
                 // Scan the final chunk for %%EOF (the spec allows trailing whitespace/newlines after it).
                 int tailLength = (int)Math.Min(1024, length);
