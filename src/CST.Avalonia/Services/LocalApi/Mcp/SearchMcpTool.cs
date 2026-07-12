@@ -34,7 +34,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             ISearchTool search,
             [Description("The word or pattern to search for, in any script (romanized Latin accepted).")]
             string query,
-            [Description("How to interpret the query. Exact = exact inflected form; Wildcard = * (any run) and ? (one char); Regex.")]
+            [Description("How to interpret the query. Exact = exact inflected form; Wildcard = * (any run, a "
+                + "prefix match) and ? (one char); Regex = .NET regex matched ANYWHERE in a term-form (substring) "
+                + "— anchor with ^…$ to match the whole form, e.g. ^pañña.{0,3}$ (unanchored sweeps in compounds "
+                + "and homographs like paññāsa='fifty').")]
             SearchToolMode mode = SearchToolMode.Exact,
             [Description("Page size: how many matching term-forms to return per page. No fixed ceiling; page with skip.")]
             int maxTerms = 100,
@@ -44,11 +47,15 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             bool includeBooks = false,
             [Description("How many matching term-forms to skip (paging). Re-request with skip += maxTerms while hasMore is true.")]
             int skip = 0,
-            [Description("Restrict the search to parts of the corpus. Pitaka flags (vinaya/sutta/abhidhamma) OR "
-                + "within their group; text-class flags (mula/atthakatha/tika) OR within theirs; the two groups "
-                + "AND together. E.g. commentaries-only = { mula:false, atthakatha:true, tika:true, other:false }. Omit for the whole corpus.")]
+            [Description("Restrict the search to parts of the corpus. ALL flags default TRUE. Pitaka flags "
+                + "(vinaya/sutta/abhidhamma) OR within their group; text-class flags (mula/atthakatha/tika) OR "
+                + "within theirs; the two groups AND together. All-false in a group means NO constraint from that "
+                + "group (not 'exclude all'), so set the flags you WANT. 'other' is separate + additive (unions the "
+                + "non-canonical books). Commentaries-only = { mula:false, atthakatha:true, tika:true, other:false }; "
+                + "to isolate ONLY 'other', set every other flag false. Omit for the whole corpus.")]
             ToolBookFilter? filter = null,
-            [Description("For a multi-word/proximity query, the co-occurrence window in words (default 10).")]
+            [Description("For a multi-word/proximity query, the co-occurrence window in words (default 10). Order "
+                + "matters: 'a b' and 'b a' are separate forms with separate counts.")]
             int proximityDistance = 10,
             CancellationToken ct = default)
         {
@@ -79,7 +86,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             string bookId,
             [Description("The term to locate in context, in any script (e.g. a term from a prior 'search').")]
             string term,
-            [Description("How to interpret the term: Exact, Wildcard (* and ?), or Regex (expands per word).")]
+            [Description("How to interpret the term: Exact, Wildcard (* and ?), or Regex — matched ANYWHERE in a "
+                + "term-form (substring); anchor with ^…$ to match the whole form.")]
             SearchToolMode mode = SearchToolMode.Exact,
             [Description("Script for the returned snippet text.")]
             OutputScript outputScript = OutputScript.Latin,
@@ -88,7 +96,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             [Description("How many occurrences to return.")]
             int take = 50,
             [Description("Include the print-edition footnotes (the braced {…} apparatus — variant readings, "
-                + "cross-references, editorial notes) in the snippet.")]
+                + "cross-references, editorial notes) in the snippet. ONLY the {…} apparatus is toggled — "
+                + "parenthetical (…) source citations in the body text are always present; identical true/false "
+                + "output means no {…} apparatus here, not 'no references'. Apparatus lives almost only in MULA "
+                + "texts; commentaries carry ~none.")]
             bool includeFootnotes = false,
             [Description("For a multi-word/proximity term, the co-occurrence window in words (default 10).")]
             int proximityDistance = 10,

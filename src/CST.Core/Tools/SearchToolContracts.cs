@@ -82,7 +82,8 @@ namespace CST.Tools
     /// <param name="ReturnedTermCount">How many matching term-forms are IN THIS PAGE (= <c>Terms.Count</c>), NOT
     /// the corpus-wide match count. Use <c>HasMore</c> to page; there is no cheap whole-result term total.</param>
     /// <param name="ReturnedOccurrenceCount">Sum of <c>TotalCount</c> over the terms IN THIS PAGE (not the whole
-    /// result set). Per-term <c>TotalCount</c> is corpus-wide; this page sum is not.</param>
+    /// result set). Per-term <c>TotalCount</c> is the complete count across the searched scope (corpus-wide when
+    /// unfiltered, narrowed to the filter when one is applied); this page sum is not.</param>
     /// <param name="ReturnedBookCount">Distinct books over the terms IN THIS PAGE. <b>Null when
     /// <c>IncludeBooks</c> is false</b> — the counts-only fast path does not enumerate books, so the union is
     /// unavailable and reported as null (not a misleading 0). Per-term <c>BookCount</c> is always present.</param>
