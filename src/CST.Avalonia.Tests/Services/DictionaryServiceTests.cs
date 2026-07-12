@@ -70,6 +70,32 @@ public class DictionaryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Lookup_ConfinesLanguage_RejectsTraversalAndReadsNothingOutsideRoot()
+    {
+        // #352: a client-supplied `language` must be confined to a real dictionary subdirectory. An absolute or
+        // "../" path that would otherwise make LoadLanguageAsync read arbitrary files must return empty and load
+        // nothing — while a genuine language still resolves (case-insensitively).
+        WriteLang("en", "d.txt", "buddha", "<p>awakened</p>");
+
+        var secretDir = Path.Combine(Path.GetTempPath(), "cst-dict-secret-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(secretDir);
+        File.WriteAllLines(Path.Combine(secretDir, "s.txt"), new[] { "topsecret", "<p>classified</p>" });
+        try
+        {
+            var svc = Service();
+
+            // Absolute path — Path.Combine would discard the dictionaries root and read secretDir.
+            Assert.Empty(await svc.LookupAsync(secretDir, "topsecret"));
+            // Relative traversal to the same place (both are siblings under the temp dir).
+            Assert.Empty(await svc.LookupAsync(Path.Combine("..", Path.GetFileName(secretDir)), "topsecret"));
+
+            // A real language still works, case-insensitively.
+            Assert.Single(await svc.LookupAsync("EN", "buddha"));
+        }
+        finally { try { Directory.Delete(secretDir, recursive: true); } catch { } }
+    }
+
+    [Fact]
     public async Task Lookup_LatinQuery_IsCaseInsensitive()
     {
         WriteLang("en", "d.txt", "buddha", "<p>awakened one</p>");
