@@ -821,10 +821,19 @@ namespace CST.Avalonia.ViewModels
             _token = ai.LocalApi.Token ?? string.Empty;
 
             // Rotate icons (password-generator style); both apply on the next API (re)start. (#275)
+            // #320 (A7-5): PickAvailable() runs TcpListener probes whose non-SocketException failures (e.g. a
+            // sandbox/entitlement SecurityException) would otherwise escape a ReactiveCommand with no
+            // ThrownExceptions subscriber and crash via RxApp's default handler. Contain them here.
             RotatePortCommand = ReactiveCommand.Create(() =>
-                { Port = CST.Avalonia.Services.LocalApi.PortAvailability.PickAvailable(); });
+            {
+                try { Port = CST.Avalonia.Services.LocalApi.PortAvailability.PickAvailable(); }
+                catch (Exception ex) { Log.Warning(ex, "Rotate port failed"); }
+            });
             RotateTokenCommand = ReactiveCommand.Create(() =>
-                { Token = CST.Avalonia.Services.LocalApi.ApiToken.Generate(); });
+            {
+                try { Token = CST.Avalonia.Services.LocalApi.ApiToken.Generate(); }
+                catch (Exception ex) { Log.Warning(ex, "Rotate token failed"); }
+            });
         }
 
         /// <summary>Master switch — "Enable AI Features". Everything AI-related is gated behind this (default OFF).</summary>
@@ -850,6 +859,11 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _localApiEnabled, value);
                 _settingsService.Settings.Ai.LocalApi.Enabled = value;
+                // #318 (A7-1): this single "Run the local API server" checkbox controls the WHOLE loopback
+                // server (both /v1 REST and /mcp), matching its label. EnableMcpServer has no separate UI yet
+                // (that lands in the #280 rework), so gate it here too — otherwise unchecking this leaves /mcp
+                // running (ServerShouldRun = LocalApiEnabled || McpEnabled) and silently ignores the opt-out.
+                _settingsService.Settings.Ai.LocalApi.EnableMcpServer = value;
                 _settingsService.RequestSave();
                 // Remote control is only reachable when the local API is on.
                 this.RaisePropertyChanged(nameof(RemoteControlEnabled));

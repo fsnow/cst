@@ -362,7 +362,7 @@
                                                 <TextBlock Text="⟳" FontSize="14"/>
                                             </Button>
                                         </Grid>
-                                        <TextBlock Text="Fixed port (default 8765) so a copied client config keeps working across restarts. 0 = automatic. Applies on the next start of the API server."
+                                        <TextBlock Text="Loopback port; 0 = automatic (ephemeral). The MCP config launches the app's --mcp-bridge relay, which reads the live port at spawn, so it needn't match. Applies on the next start of the API server."
                                                   Classes="SettingDescription" Margin="0,4,0,0"/>
 
                                         <!-- Token: the persisted bearer secret. Masked by default; the 👁 toggle reveals it
@@ -392,11 +392,12 @@
                                                 <TextBlock Text="⟳" FontSize="14"/>
                                             </Button>
                                         </Grid>
-                                        <TextBlock Text="Bearer token agents use to authenticate. Rotating it invalidates any previously-copied client config — re-copy below. Applies on the next start of the API server."
+                                        <TextBlock Text="Bearer token agents authenticate with. Applies on the next start of the API server."
                                                   Classes="SettingDescription" Margin="0,4,0,0"/>
 
-                                        <!-- Copy the ready-made Claude Desktop MCP config for the current port + token.
-                                             Clipboard is done in code-behind (OnCopyMcpConfig) since the VM has no TopLevel. -->
+                                        <!-- Copy the ready-made Claude Desktop MCP config: it launches CST Reader's
+                                             mcp-bridge relay and carries no port/token. Clipboard is done in
+                                             code-behind (OnCopyMcpConfig) since the VM has no TopLevel. -->
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Button Content="Copy MCP configuration"
                                                     Click="OnCopyMcpConfig"
@@ -406,7 +407,7 @@
                                                       Foreground="{DynamicResource DockApplicationAccentBrushLow}"
                                                       VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
                                         </StackPanel>
-                                        <TextBlock Text="Paste into ~/Library/Application Support/Claude/claude_desktop_config.json under &quot;mcpServers&quot;. Requires Node.js (npx). Re-copy after rotating the port or token."
+                                        <TextBlock Text="Paste into the Claude Desktop config (~/Library/Application Support/Claude/claude_desktop_config.json) under &quot;mcpServers&quot;. It launches CST Reader's --mcp-bridge relay and embeds no port or token — copy it once (no Node, and no re-copy after rotating)."
                                                   Classes="SettingDescription" Margin="0,4,0,0"/>
 
                                         <Expander Header="Show configuration" Margin="0,4,0,0">
