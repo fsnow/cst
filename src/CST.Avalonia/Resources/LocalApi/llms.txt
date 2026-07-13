@@ -173,14 +173,22 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `GET  /v1/lemma/{form}?script=` - LEMMA back-lookup: resolve a surface form to its candidate dictionary
   lemmas (DPD). Returns `{ form, candidates:[{ lemmaId, lemma, pos, gloss, derivedFrom }], note }`. A form is
   often a HOMOGRAPH (>1 candidate) - pick the intended `lemmaId`. `script` is BOTH the input form's script and
-  the output. (Present only when the DPD-lemma dataset is installed; 503 if not.)
+  the output. `{form}` is a PATH segment, so PERCENT-ENCODE diacritics (`pajānāti` -> `paj%C4%81n%C4%81ti`).
+  (Present only when the DPD-lemma dataset is installed; 503 if not.)
 - `GET  /v1/forms/{lemmaId}?family=&script=` - LEMMA forward-expansion: a lemma's ATTESTED paradigm WITH
   corpus counts. Returns `{ lemmaId, lemma, pos, gloss, forms:[{ form, count, bookCount }], totalOccurrences,
   attestedFormCount, candidateFormCount, expansionCapped, note }`. This answers "the whole declension/
   conjugation of X and how often each form occurs" in ONE call - counts come from the corpus index, so a
-  DPD form that never occurs is omitted (synthetic). `family:true` widens to the derived_from word family.
+  DPD form that never occurs is omitted (synthetic). `totalOccurrences` is de-duplicated within this response.
   ** For an inflectional family, PREFER this lemma path over the hand-built regex below - it handles the
   stem alternation, the homograph (you chose the lemma), and the synthetic-vs-attested split for you. **
+  CROSS-LEMMA CAUTION: a word's forms are often SPLIT across SIBLING lemmas (e.g. a verb's present participle
+  is its OWN lemmaId), and the SAME surface token can appear under several of them - so do NOT sum
+  `totalOccurrences` across sibling lemmaIds (that double-counts the shared tokens). `family:true` returns the
+  DE-DUPLICATED UNION of the whole `derived_from` word family (the verb AND its participles, deverbal nouns,
+  causative, passive - everything sharing the root-sense), each token counted ONCE, with a combined
+  `totalOccurrences`. That is BROADER than a single conjugation; to scope to just "the verb", union the
+  relevant siblings' forms yourself (filter by `pos`).
 
 ## A typical research flow
 
