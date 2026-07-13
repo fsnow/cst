@@ -996,6 +996,14 @@ public partial class App : Application
         services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<IDictionaryService, DictionaryService>();
 
+        // Lemma search (DPD-lemma asset). NOT AI-gated — a core reading/search feature; degrades to "off"
+        // when the asset is absent. The asset is seeded/downloaded to <app-support>/CSTReader/dpd-lemma/.
+        var dpdLemmaPath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            AppConstants.AppDataDirectoryName, "dpd-lemma", "dpd-lemma.db");
+        services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new CST.Lemma.SqliteLemmaProvider(dpdLemmaPath));
+        services.AddSingleton<ILemmaSearchService, LemmaSearchService>();
+
         // Surface-C tool wrappers (exposed over the local API). (#186)
         services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
         services.AddSingleton<CST.Tools.IDictionaryTool, Services.Tools.DictionaryTool>();
