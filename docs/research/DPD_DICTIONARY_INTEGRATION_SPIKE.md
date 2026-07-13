@@ -211,7 +211,38 @@ All additive and unit-testable with `dotnet test` (new tests: manifest parsing, 
 7. **Converter maintenance.** DPD releases monthly and its schema evolves; the converter must track `DpdHeadword` field changes. Pin to a known-good DPD version and re-verify on bump.
 8. **Language coverage.** DPD is Pāli→English only today; the per-source model handles that, but don't assume future sources are English.
 
-## 10. Sources
+## 10. The `other-dictionaries` shelf (follow-up — beyond DPD proper)
+
+*Added after the original spike, on the pointer that `dpd-db` carries a second dictionary source one level down.*
+
+`dpd-db` includes a **git submodule** `resources/other-dictionaries` → the separate repo [`digitalpalidictionary/other-dictionaries`](https://github.com/digitalpalidictionary/other-dictionaries): a **shelf of ~14 Pāḷi/Sanskrit lexicons** the DPD project has collected, normalized, and wired to GoldenDict/MDict exporters.
+
+| Dir | Dictionary | Rough license posture |
+|---|---|---|
+| `bold_def` | **CST Bold Definitions** — bold-defined terms extracted from the Chaṭṭha Saṅgāyana Tipiṭaka | VRI-origin — simplest |
+| `cped` | Concise Pāli-English Dictionary (Buddhadatta) | check |
+| `cone` | *A Dictionary of Pāli* — Margaret Cone (vols I–III) | **modern copyright (PTS)** — triage |
+| `cpd` | Critical Pāli Dictionary | **modern scholarship** — triage |
+| `dppn` | Dictionary of Pāli Proper Names (Malalasekera, rev. Ānandajoti 2025) | check |
+| `simsapa` | Combined: PTS PED + NCPED + Nyanatiloka | **mixed, incl. modern** — triage |
+| `peu` | Pali English Ultimate (Myanmar Abhidhān, ~200k words, ~80% human-translated) | check |
+| `dpr` | DPR Analysis | check |
+| `mw`, `apte`, `whitney`, `bhs` | Monier-Williams (1899), Apte (1890), Whitney's Roots, Edgerton BHS (1953) | mostly public-domain (19th–mid-20th c.) |
+| `abt`, `si_en_si`, `wordnet` | ABT glossary, Sinhala-Eng-Sinhala, WordNet | check |
+
+**Three findings that revise this spike:**
+
+1. **The source data is import-ready TSV/JSON — not only the "awkward" consumer bundles.** §2.2 / §4 assumed we would parse DPD's GoldenDict/MDict outputs; this shelf instead ships the **upstream source** per dictionary under `dictionaries/<name>/source/…` (e.g. `bold_def/source/bold_definitions.tsv`, `cone/source/cone_dict.json`) inside a `*.tar.zst`, plus a documented Python exporter (`<name>.py`) and CSS. That source is already close to the §5 `manifest.json + entries.tsv` shape, and the exporters are a ready field-mapping reference. The import path is cleaner than the spike concluded.
+
+2. **`bold_def` is the natural v1 dictionary** for the §8 phasing. It is *our own corpus's* bold-defined terms as a clean 2-column TSV, VRI-origin (licensing-simple), and small — an ideal "one importable dictionary end-to-end" without touching the DPD-download machinery.
+
+3. **Licensing becomes per-dictionary, not uniform.** Unlike DPD proper (uniform CC BY-NC-SA), this shelf is heterogeneous: public-domain 19th-c. works (MW/Apte/Whitney/BHS) sit beside **modern copyrighted scholarship** (Cone, CPD, PTS PED). The §5 per-source `manifest.json` `license` field is the right container, but **each source needs individual provenance triage before it ships** — the shelf cannot be blanket-adopted. Treat the table above as *candidates with open license questions*, feeding §9.
+
+**Relation to the lemma map (#247):** these are **gloss/meaning sources** (a lemma's definition), *not* inflected-form→lemma resolvers. The form→stem job still belongs to DPD's `Lookup` table (§2.3c, §9.3). This shelf enriches *what a lemma means*, not *which lemma a surface form is*.
+
+**Net for #109:** the choice is not "DPD or not" but "DPD + a license-triaged subset of this shelf," all through the same §5 import format; `bold_def` is the obvious first mover.
+
+## 11. Sources
 
 - DPD home / docs: https://digitalpalidictionary.github.io/
 - Data + build repo: https://github.com/digitalpalidictionary/dpd-db
@@ -224,6 +255,7 @@ All additive and unit-testable with `dotnet test` (new tests: manifest parsing, 
 - Web app: https://www.dpdict.net/
 - Attribution/citation guidance (creator Bhikkhu Bodhirāsa): https://buddhistuniversity.net/content/reference/dpd
 - Release stats example (`v0.3.20260202`): https://github.com/digitalpalidictionary/dpd-db/releases/tag/v0.3.20260202
+- Other-dictionaries shelf (§10) — repo: https://github.com/digitalpalidictionary/other-dictionaries ; index in dpd-db: https://github.com/digitalpalidictionary/dpd-db/blob/main/docs/other_dicts.md ; releases (GoldenDict/MDict): https://github.com/digitalpalidictionary/other-dictionaries/releases/latest
 
 *Internal ground truth (this repo):* `docs/features/in-progress/DICTIONARIES.md`; `src/CST.Avalonia/Services/{DictionaryService,IDictionaryService,DictionaryIndex}.cs`; `src/CST.Avalonia/Models/DictionaryWord.cs`; `src/CST.Core/Tools/DictionaryToolContracts.cs`.
 
