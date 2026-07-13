@@ -174,14 +174,27 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 
 1. `POST /v1/search` for a word -> keep each `term` you want. NOTE: `mode: "Exact"` matches ONE literal
    whole-word form, so its `returnedOccurrenceCount` is that single form's count, NOT the stem's whole
-   footprint. To gather a stem's inflectional family (nominative, accusative, instrumental... together),
-   follow up with a length-bounded anchored regex - `{ "query": "^metta.{1,4}$", "mode": "Regex" }`
-   returns each case-form (`metta`, `mettam`, `mettaya`, `mettena`, ...) as its own `term` with its own
-   count. Use `stem*` (Wildcard) instead when you also WANT the compounds. Results are in ordinal order, so
-   PAGE while `hasMore` (with `skip`) to see EVERY form - a common one can be on a later page; a single page
-   is not the complete family. Or, once you know the exact forms you want, get them all in one call with an
-   anchored alternation - `{ "query": "^(metta|mettaya|mettam)$", "mode": "Regex", "includeBooks": true }`.
-   (See the /v1/search note above.)
+   footprint. To gather a NOUN's inflectional family (its whole declension - nominative, accusative,
+   instrumental... together), follow up with a length-bounded anchored regex, TRUNCATED BELOW the stem-final
+   vowel to the consonant stem - `{ "query": "^mett.{1,5}$", "mode": "Regex" }` returns each case-form
+   (`mettā`, `mettaṃ`, `mettāya`, `mette`, ...) as its own `term` with its own count. Fixing that final
+   vowel is a TRAP: `metta*` keeps short -a and MISSES the nominative `mettā`; `^mettā...` keeps long -ā and
+   misses acc. `mettaṃ` / voc. `mette` - the declension SWAPS that vowel between cells, so truncate below it
+   (to `mett`) and let the pattern supply it. Dropped cells raise NO error, just a quiet UNDER-count. Use
+   `stem*` (Wildcard) when you also WANT the sandhi compounds. Results are in ordinal order, so PAGE while
+   `hasMore` (with `skip`) to see EVERY form - a common one can be on a later page; a single page is not the
+   complete family. Or, once you know the exact forms you want, get them all in one call with an anchored
+   alternation - `{ "query": "^(mettā|mettāya|mettaṃ)$", "mode": "Regex", "includeBooks": true }`. (See the
+   /v1/search note above.)
+   VERBS ARE HARDER: the stem-truncation trick works for a NOUN because its consonant stem stays CONSTANT
+   across the declension. A VERB's stem ALTERNATES across its conjugation (reduplication, aorist, root
+   grades), so often NO single wildcard or regex spans it - e.g. for `pajānāti` the present is `pajān-`
+   (`pajānāti`, `pajānanti`) but the aorist and absolutive are `paññ-` (`paññāsi`, `paññāya`); no common
+   searchable stem. Enumerate the forms explicitly with an alternation, or use lemma lookup if/when the API
+   offers it.
+   COUNTS ARE LITERAL TOKEN FORMS, NOT LEMMAS: the engine tallies surface strings, so a HOMOGRAPH conflates
+   two distinct words under ONE count that CANNOT be split by form alone - e.g. `paññāya` is both the noun
+   (instr./loc. of `paññā`) AND the absolutive of `pajānāti`, tallied together.
 2. `POST /v1/occurrences` for that `term` in a book -> scan the concordance snippets; cite by paragraph
    and per-edition page.
 3. `POST /v1/passage` with an occurrence's `cursor` -> read the exact passage around that hit; page with
