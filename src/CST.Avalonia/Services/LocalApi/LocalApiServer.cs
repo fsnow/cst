@@ -21,6 +21,7 @@ using CST;
 using CST.Conversion;
 using CST.Navigation;
 using CST.Tools;
+using CST.Avalonia.Services.LocalApi.Lemma;
 using CST.Avalonia.Services.LocalApi.Mcp;
 using ModelContextProtocol.Server;
 using Serilog;
@@ -431,6 +432,16 @@ namespace CST.Avalonia.Services.LocalApi
                 // Filter (pitaka / commentary level) + paging so the 217-book catalog can't overflow a caller. (#191 Cowork)
                 return Results.Json(BookCatalog.List(outputScript, p, cl, skip ?? 0, take ?? BookCatalog.DefaultTake));
             });
+
+            // POC SCAFFOLD (#247 morphological lemma map). Wiring is real; the provider is a stub with
+            // canned DPD data (see LemmaStubProvider / ~/dpd-poc/TASK1_dpd_inspection.md). Swap the stub for
+            // a dpd.db-backed ILemmaProvider (route + response shapes are the intended contract).
+            //   GET /v1/lemma/{form}          -> form -> candidate lemmas (+ sandhi deconstructions)
+            //   GET /v1/forms/{lemmaId}?family=true -> a lemma's attested paradigm (+ derived_from family)
+            ILemmaProvider lemma = new LemmaStubProvider();
+            app.MapGet(v + "/lemma/{form}", (string form) => Results.Json(lemma.Resolve(form)));
+            app.MapGet(v + "/forms/{lemmaId:long}",
+                (long lemmaId, bool? family) => Results.Json(lemma.Forms(lemmaId, family ?? false)));
 
             // Surface which tool groups got wired, so a missing DI hand-off (e.g. a null IScriptTool leaving
             // /v1/scripts + /v1/convert unmapped -> 404) is visible in the log instead of only at call time.
