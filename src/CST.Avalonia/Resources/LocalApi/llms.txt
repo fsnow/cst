@@ -81,8 +81,10 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   the default `Exact` mode those characters are LITERAL and match nothing (the response `note` flags this).
   PROXIMITY: a multi-word `query` (space-separated) plus `proximityDistance` finds those words co-occurring
   within N words; quote a run - `"a b"` - for an exact adjacent phrase; combine with `mode:"Wildcard"`/`"Regex"`
-  to expand each word before matching. ORDER MATTERS: `a b` and `b a` are SEPARATE co-occurrence forms with
-  their own counts - sum both orderings for an order-agnostic total.
+  to expand each word before matching. ORDER: ONE query already finds BOTH directions - whichever of `a b` /
+  `b a` actually occur within the window come back as SEPARATE forms with their own counts. Re-querying with the
+  words SWAPPED returns the SAME set, so do NOT run both word orders and add them (that DOUBLE-COUNTS). For an
+  order-agnostic total, sum those form-rows WITHIN the single result.
   FILTER: `filter` is an object of booleans, all default true -
   `{ vinaya, sutta, abhidhamma, mula, atthakatha, tika, other }`. The pitaka flags (vinaya/sutta/abhidhamma)
   OR within their group, the text-class flags (mula/atthakatha/tika) OR within theirs, and those two groups
