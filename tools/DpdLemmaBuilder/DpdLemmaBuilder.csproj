@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DPD-lemma generator. Standalone console tool (NOT part of the main solution) that builds the
+    trimmed, corpus-agnostic form->lemma asset (dpd-lemma.db) from a full DPD dpd.db release.
+    Depends only on Microsoft.Data.Sqlite - zero dependency on CST.Core (forms stored in IAST;
+    the app converts to IPE at query time). Placement in-repo is provisional; may move to a
+    dedicated `dpd-lemma` repo.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DpdLemmaBuilder</RootNamespace>
+    <AssemblyName>DpdLemmaBuilder</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Pin patched native SQLite (3.0.3) to clear the 2.1.11 advisory GHSA-2m69-gcr7-jv3q. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+  </ItemGroup>
+
+</Project>
