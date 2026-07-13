@@ -47,6 +47,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CST.Core\CST.Core.csproj" />
     <ProjectReference Include="..\CST.Lucene\CST.Lucene.csproj" />
+    <ProjectReference Include="..\CST.Lemma\CST.Lemma.csproj" />
   </ItemGroup>
 
   <!-- Local AI-tool API server (loopback, opt-in). Hosts a minimal ASP.NET Core API in-process. -->
