@@ -9,7 +9,8 @@ formats; you get clean JSON and never touch the underlying files.
 This document is served WITHOUT authentication. Every other endpoint requires a token.
 
 1. Read the handshake file `local-api.json` in the app-support directory
-   (macOS: `~/Library/Application Support/CSTReader/local-api.json`). It is `{ "port", "token", "pid" }`.
+   (macOS: `~/Library/Application Support/CSTReader/local-api.json`). It is `{ "port", "token", "pid", "docs" }`
+   (`docs` is the self-description path, `/llms.txt`).
 2. Base URL is `http://127.0.0.1:<port>` (loopback only).
 3. Send `Authorization: Bearer <token>` on every request.
 4. Do NOT send an `Origin` header - browser-origin requests are rejected by design.
@@ -191,7 +192,10 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
    grades), so often NO single wildcard or regex spans it - e.g. for `pajānāti` the present stem is `pajān-`
    (`pajānāti`, `pajānanti`) but the -ya absolutive is `paññ-` (`paññāya` - itself the homograph noted just
    below); no common searchable stem. Enumerate the forms explicitly with an alternation, or use lemma lookup
-   if/when the API offers it.
+   if/when the API offers it. Also: a prefix/wildcard search only sees forms where the stem is TOKEN-INITIAL,
+   so it MISSES negated `na+` assimilations (`nappajānāti` = na + pajānāti) and sandhi-embedded forms - for a
+   verb ALWAYS cross-check with an unanchored anywhere-regex (`{ "query": "pajān", "mode": "Regex" }`, which
+   matches as a substring) and reconcile; the token-initial family alone can undercount by ~10%.
    COUNTS ARE LITERAL TOKEN FORMS, NOT LEMMAS: the engine tallies surface strings, so a HOMOGRAPH conflates
    two distinct words under ONE count that CANNOT be split by form alone - e.g. `paññāya` is both the noun
    (instr./loc. of `paññā`) AND the absolutive of `pajānāti`, tallied together.
