@@ -259,8 +259,49 @@ namespace CST.Avalonia.Tests.Integration
             var names = (await client.ListToolsAsync()).Select(t => t.Name).ToHashSet();
             // The read tools wired by the test server (search+occurrences via ISearchTool, passage, script,
             // books). Dictionary is not wired in the test server, so it is (correctly) absent.
-            foreach (var expected in new[] { "search", "occurrences", "passage", "books", "convert", "scripts" })
+            foreach (var expected in new[] { "search", "occurrences", "passage", "books", "convert", "scripts",
+                                             "lemma_lookup", "lemma_forms" })
                 Assert.Contains(expected, names);
+        }
+
+        [Fact]
+        public async Task Lemma_lookup_resolves_a_homograph()
+        {
+            using var http = _api.Http();
+            using var doc = await GetDoc(http, "/v1/lemma/dhamma");
+            var root = doc.RootElement;
+            Assert.Equal("dhamma", root.GetProperty("form").GetString());
+            var ids = root.GetProperty("candidates").EnumerateArray()
+                .Select(c => c.GetProperty("lemmaId").GetInt64()).ToHashSet();
+            Assert.Equal(new HashSet<long> { 100, 101 }, ids);          // homograph
+            Assert.False(string.IsNullOrEmpty(root.GetProperty("note").GetString()));
+        }
+
+        [Fact]
+        public async Task Lemma_forms_returns_the_attested_paradigm_with_counts()
+        {
+            using var http = _api.Http();
+            using var doc = await GetDoc(http, "/v1/forms/100");
+            var root = doc.RootElement;
+            Assert.Equal(100, root.GetProperty("lemmaId").GetInt64());
+            var forms = root.GetProperty("forms").EnumerateArray()
+                .Select(f => f.GetProperty("form").GetString()).ToHashSet();
+            // dhamma/citta/kamma occur in the corpus; the synthetic 'dhammani' must be omitted.
+            Assert.Contains("dhamma", forms);
+            Assert.Contains("citta", forms);
+            Assert.Contains("kamma", forms);
+            Assert.DoesNotContain("dhammani", forms);
+            Assert.Equal(4, root.GetProperty("candidateFormCount").GetInt32());
+            Assert.Equal(3, root.GetProperty("attestedFormCount").GetInt32());
+            Assert.True(root.GetProperty("totalOccurrences").GetInt32() > 0);
+        }
+
+        [Fact]
+        public async Task Lemma_lookup_unknown_form_is_404()
+        {
+            using var http = _api.Http();
+            var resp = await http.GetAsync("/v1/lemma/zzznotaword");
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, resp.StatusCode);
         }
 
         [Fact]

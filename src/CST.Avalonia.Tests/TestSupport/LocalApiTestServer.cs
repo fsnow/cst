@@ -12,6 +12,8 @@ using CST.Avalonia.Services;
 using CST.Avalonia.Services.LocalApi;
 using CST.Avalonia.Services.Tools;
 using CST.Conversion;
+using CST.Lemma;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -112,11 +114,35 @@ namespace CST.Avalonia.Tests.TestSupport
             var passageTool = new PassageTool(settings.Object);
             var scriptTool = new ScriptTool();
 
+            // DPD-lemma fixture: 'dhamma' is a homograph (lemmas 100/101); lemma 100's paradigm has three
+            // corpus-attested forms (dhamma, citta, kamma) + one synthetic form (dhammani, absent from the corpus).
+            string dpdLemmaPath = Path.Combine(root, "dpd-lemma.db");
+            BuildLemmaFixture(dpdLemmaPath);
+            var lemmaSearch = new LemmaSearchService(new SqliteLemmaProvider(dpdLemmaPath), searchService);
+
             var server = new LocalApiServer("test", handshakeDir, Serilog.Log.Logger,
-                searchTool, dictionary: null, passage: passageTool, script: scriptTool);
+                searchTool, dictionary: null, passage: passageTool, script: scriptTool, lemma: lemmaSearch);
             await server.StartAsync();
 
             return new LocalApiTestServer(root, server, mula.FileName, attha.FileName);
+        }
+
+        private static void BuildLemmaFixture(string path)
+        {
+            using var c = new SqliteConnection($"Data Source={path}");
+            c.Open();
+            void Exec(string sql) { using var cmd = c.CreateCommand(); cmd.CommandText = sql; cmd.ExecuteNonQuery(); }
+            Exec(@"
+                CREATE TABLE lemma (id INTEGER PRIMARY KEY, lemma TEXT NOT NULL, pos TEXT, gloss TEXT, derived_from TEXT);
+                CREATE TABLE form_lemma (form TEXT NOT NULL, lemma_id INTEGER NOT NULL);
+                CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+                INSERT INTO lemma VALUES
+                    (100,'dhamma 1','masc','nature; a teaching',NULL),
+                    (101,'dhamma 2','masc','a phenomenon',NULL);
+                INSERT INTO form_lemma VALUES
+                    ('dhamma',100),('citta',100),('kamma',100),('dhammani',100),
+                    ('dhamma',101);
+                INSERT INTO meta VALUES ('scope','mid'),('dpd_version','test');");
         }
 
         public async ValueTask DisposeAsync()

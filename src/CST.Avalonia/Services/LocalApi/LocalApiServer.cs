@@ -57,6 +57,7 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly IDictionaryTool? _dictionary;
         private readonly IPassageTool? _passage;
         private readonly IScriptTool? _script;
+        private readonly ILemmaSearchService? _lemma;   // DPD-lemma back-lookup + forward-expansion (may be null / asset-absent)
         private readonly int _port;              // fixed loopback port, or <= 0 for ephemeral
         private readonly string? _configuredToken; // persisted bearer token, or null to generate one
         private readonly bool _restApiEnabled;   // map the /v1 REST tool endpoints
@@ -79,7 +80,7 @@ namespace CST.Avalonia.Services.LocalApi
         public LocalApiServer(
             string appVersion, string handshakeDirectory, Serilog.ILogger logger,
             ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null,
-            IScriptTool? script = null, int port = 0, string? token = null,
+            IScriptTool? script = null, ILemmaSearchService? lemma = null, int port = 0, string? token = null,
             bool restApiEnabled = true, bool mcpEnabled = true)
         {
             _appVersion = appVersion;
@@ -89,6 +90,7 @@ namespace CST.Avalonia.Services.LocalApi
             _dictionary = dictionary;
             _passage = passage;
             _script = script;
+            _lemma = lemma;
             _port = port;
             _configuredToken = token;
             _restApiEnabled = restApiEnabled;
@@ -108,7 +110,8 @@ namespace CST.Avalonia.Services.LocalApi
                 services.GetService<ISearchTool>(),
                 services.GetService<IDictionaryTool>(),
                 services.GetService<IPassageTool>(),
-                services.GetService<IScriptTool>(), port, token, restApiEnabled, mcpEnabled);
+                services.GetService<IScriptTool>(),
+                services.GetService<ILemmaSearchService>(), port, token, restApiEnabled, mcpEnabled);
 
         public async Task StartAsync(CancellationToken ct = default)
         {
@@ -170,6 +173,11 @@ namespace CST.Avalonia.Services.LocalApi
                 {
                     builder.Services.AddSingleton(mcpDictionary);
                     mcp.WithTools<DictionaryMcpTool>(McpJson);
+                }
+                if (_lemma is { IsAvailable: true } mcpLemma)
+                {
+                    builder.Services.AddSingleton(mcpLemma);
+                    mcp.WithTools<LemmaMcpTool>(McpJson);
                 }
                 // Expose llms.txt as an MCP resource — an MCP client has no base URL to "fetch /llms.txt", so give
                 // it the same version-stamped orientation as a readable resource. (Desktop MCP friction report)
@@ -433,21 +441,42 @@ namespace CST.Avalonia.Services.LocalApi
                 return Results.Json(BookCatalog.List(outputScript, p, cl, skip ?? 0, take ?? BookCatalog.DefaultTake));
             });
 
-            // POC SCAFFOLD (#247 morphological lemma map). Wiring is real; the provider is a stub with
-            // canned DPD data (see LemmaStubProvider / ~/dpd-poc/TASK1_dpd_inspection.md). Swap the stub for
-            // a dpd.db-backed ILemmaProvider (route + response shapes are the intended contract).
-            //   GET /v1/lemma/{form}          -> form -> candidate lemmas (+ sandhi deconstructions)
-            //   GET /v1/forms/{lemmaId}?family=true -> a lemma's attested paradigm (+ derived_from family)
-            ILemmaProvider lemma = new LemmaStubProvider();
-            app.MapGet(v + "/lemma/{form}", (string form) => Results.Json(lemma.Resolve(form)));
-            app.MapGet(v + "/forms/{lemmaId:long}",
-                (long lemmaId, bool? family) => Results.Json(lemma.Forms(lemmaId, family ?? false)));
+            // Lemma search (#247, DPD-lemma). Two hops: back-lookup a surface form to its candidate lemmas,
+            // then forward-expand a chosen lemma to its ATTESTED paradigm WITH corpus counts (counts from the
+            // index, not DPD; a synthetic form returns 0). `script` sets both the input form's script and the
+            // output script (default Latin). Mapped only when the DPD-lemma asset is present.
+            if (_lemma is { } lemma)
+            {
+                IResult LemmaUnavailable() => Results.Json(
+                    new { error = "The DPD-lemma dataset is not installed; lemma search is unavailable." }, statusCode: 503);
+
+                app.MapGet(v + "/lemma/{form}", (string form, string? script) =>
+                {
+                    if (!lemma.IsAvailable) return LemmaUnavailable();
+                    var outputScript = ParseScript(script);
+                    var res = lemma.ResolveWord(form, outputScript);
+                    return res is null
+                        ? Results.NotFound(new { error = $"No lemma resolves the form '{form}'." })
+                        : Results.Json(LemmaApi.ToLookup(form, res, outputScript));
+                });
+
+                app.MapGet(v + "/forms/{lemmaId:long}", async (long lemmaId, bool? family, string? script, CancellationToken ct) =>
+                {
+                    if (!lemma.IsAvailable) return LemmaUnavailable();
+                    var outputScript = ParseScript(script);
+                    var res = await lemma.ExpandAndSearchAsync(lemmaId, family ?? false, null, outputScript, ct);
+                    return res is null
+                        ? Results.NotFound(new { error = $"Unknown lemmaId {lemmaId}." })
+                        : Results.Json(LemmaApi.ToForms(res, outputScript));
+                });
+            }
 
             // Surface which tool groups got wired, so a missing DI hand-off (e.g. a null IScriptTool leaving
             // /v1/scripts + /v1/convert unmapped -> 404) is visible in the log instead of only at call time.
             _logger.Information(
-                "Local API tools wired: search={Search} dictionary={Dictionary} passage={Passage} script={Script}",
-                _search != null, _dictionary != null, _passage != null, _script != null);
+                "Local API tools wired: search={Search} dictionary={Dictionary} passage={Passage} script={Script} lemma={Lemma}",
+                _search != null, _dictionary != null, _passage != null, _script != null,
+                _lemma is { IsAvailable: true });
         }
 
         private sealed record RootResponse(string Name, string App, string Api, string Docs, string Status);
