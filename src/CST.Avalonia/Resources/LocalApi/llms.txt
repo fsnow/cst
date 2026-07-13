@@ -188,10 +188,10 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
    /v1/search note above.)
    VERBS ARE HARDER: the stem-truncation trick works for a NOUN because its consonant stem stays CONSTANT
    across the declension. A VERB's stem ALTERNATES across its conjugation (reduplication, aorist, root
-   grades), so often NO single wildcard or regex spans it - e.g. for `pajānāti` the present is `pajān-`
-   (`pajānāti`, `pajānanti`) but the aorist and absolutive are `paññ-` (`paññāsi`, `paññāya`); no common
-   searchable stem. Enumerate the forms explicitly with an alternation, or use lemma lookup if/when the API
-   offers it.
+   grades), so often NO single wildcard or regex spans it - e.g. for `pajānāti` the present stem is `pajān-`
+   (`pajānāti`, `pajānanti`) but the -ya absolutive is `paññ-` (`paññāya` - itself the homograph noted just
+   below); no common searchable stem. Enumerate the forms explicitly with an alternation, or use lemma lookup
+   if/when the API offers it.
    COUNTS ARE LITERAL TOKEN FORMS, NOT LEMMAS: the engine tallies surface strings, so a HOMOGRAPH conflates
    two distinct words under ONE count that CANNOT be split by form alone - e.g. `paññāya` is both the noun
    (instr./loc. of `paññā`) AND the absolutive of `pajānāti`, tallied together.
