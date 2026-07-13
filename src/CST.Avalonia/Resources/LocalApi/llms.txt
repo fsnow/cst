@@ -170,6 +170,17 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `POST /v1/convert` - convert Pali text to another script. Body `{ text, outputScript }` -> `{ text, outputScript }`.
   Input script is auto-detected and mixed-script input is handled in one pass.
 - `GET  /v1/scripts` - the valid script names for `outputScript` and the `?script=` params.
+- `GET  /v1/lemma/{form}?script=` - LEMMA back-lookup: resolve a surface form to its candidate dictionary
+  lemmas (DPD). Returns `{ form, candidates:[{ lemmaId, lemma, pos, gloss, derivedFrom }], note }`. A form is
+  often a HOMOGRAPH (>1 candidate) - pick the intended `lemmaId`. `script` is BOTH the input form's script and
+  the output. (Present only when the DPD-lemma dataset is installed; 503 if not.)
+- `GET  /v1/forms/{lemmaId}?family=&script=` - LEMMA forward-expansion: a lemma's ATTESTED paradigm WITH
+  corpus counts. Returns `{ lemmaId, lemma, pos, gloss, forms:[{ form, count, bookCount }], totalOccurrences,
+  attestedFormCount, candidateFormCount, expansionCapped, note }`. This answers "the whole declension/
+  conjugation of X and how often each form occurs" in ONE call - counts come from the corpus index, so a
+  DPD form that never occurs is omitted (synthetic). `family:true` widens to the derived_from word family.
+  ** For an inflectional family, PREFER this lemma path over the hand-built regex below - it handles the
+  stem alternation, the homograph (you chose the lemma), and the synthetic-vs-attested split for you. **
 
 ## A typical research flow
 
