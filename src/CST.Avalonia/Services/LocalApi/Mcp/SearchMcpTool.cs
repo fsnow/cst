@@ -54,8 +54,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 + "non-canonical books). Commentaries-only = { mula:false, atthakatha:true, tika:true, other:false }; "
                 + "to isolate ONLY 'other', set every other flag false. Omit for the whole corpus.")]
             ToolBookFilter? filter = null,
-            [Description("For a multi-word/proximity query, the co-occurrence window in words (default 10). Order "
-                + "matters: 'a b' and 'b a' are separate forms with separate counts.")]
+            [Description("For a multi-word/proximity query, the co-occurrence window in words (default 10). One "
+                + "query already returns BOTH directions: 'a b' and 'b a' come back as separate forms with their "
+                + "own counts, so do NOT re-query with the words swapped and sum (that double-counts).")]
             int proximityDistance = 10,
             CancellationToken ct = default)
         {
