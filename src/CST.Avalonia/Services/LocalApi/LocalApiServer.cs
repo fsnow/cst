@@ -58,6 +58,7 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly IPassageTool? _passage;
         private readonly IScriptTool? _script;
         private readonly ILemmaSearchService? _lemma;   // DPD-lemma back-lookup + forward-expansion (may be null / asset-absent)
+        private readonly ILemmaReportService? _lemmaReport;   // the rendered lemma dossier
         private readonly int _port;              // fixed loopback port, or <= 0 for ephemeral
         private readonly string? _configuredToken; // persisted bearer token, or null to generate one
         private readonly bool _restApiEnabled;   // map the /v1 REST tool endpoints
@@ -80,8 +81,8 @@ namespace CST.Avalonia.Services.LocalApi
         public LocalApiServer(
             string appVersion, string handshakeDirectory, Serilog.ILogger logger,
             ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null,
-            IScriptTool? script = null, ILemmaSearchService? lemma = null, int port = 0, string? token = null,
-            bool restApiEnabled = true, bool mcpEnabled = true)
+            IScriptTool? script = null, ILemmaSearchService? lemma = null, ILemmaReportService? lemmaReport = null,
+            int port = 0, string? token = null, bool restApiEnabled = true, bool mcpEnabled = true)
         {
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
@@ -91,6 +92,7 @@ namespace CST.Avalonia.Services.LocalApi
             _passage = passage;
             _script = script;
             _lemma = lemma;
+            _lemmaReport = lemmaReport;
             _port = port;
             _configuredToken = token;
             _restApiEnabled = restApiEnabled;
@@ -111,7 +113,8 @@ namespace CST.Avalonia.Services.LocalApi
                 services.GetService<IDictionaryTool>(),
                 services.GetService<IPassageTool>(),
                 services.GetService<IScriptTool>(),
-                services.GetService<ILemmaSearchService>(), port, token, restApiEnabled, mcpEnabled);
+                services.GetService<ILemmaSearchService>(),
+                services.GetService<ILemmaReportService>(), port, token, restApiEnabled, mcpEnabled);
 
         public async Task StartAsync(CancellationToken ct = default)
         {
@@ -468,6 +471,19 @@ namespace CST.Avalonia.Services.LocalApi
                     return res is null
                         ? Results.NotFound(new { error = $"Unknown lemmaId {lemmaId}." })
                         : Results.Json(LemmaApi.ToForms(res, outputScript));
+                });
+            }
+
+            // Lemma dossier (rendered HTML). The GUI renders it in-process; this endpoint gives agents/humans
+            // the same report. `script` selects the render script (default Latin). HTML only (no IPE leak).
+            if (_lemmaReport is { IsAvailable: true } report)
+            {
+                app.MapGet(v + "/lemma-report/{lemmaId:long}", async (long lemmaId, string? script, CancellationToken ct) =>
+                {
+                    var rep = await report.BuildAsync(lemmaId, ct);
+                    return rep is null
+                        ? Results.NotFound(new { error = $"Unknown lemmaId {lemmaId}." })
+                        : Results.Content(LemmaReportRenderer.Render(rep, ParseScript(script)), "text/html; charset=utf-8");
                 });
             }
 

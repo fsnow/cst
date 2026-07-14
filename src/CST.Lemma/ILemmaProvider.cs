@@ -24,4 +24,7 @@ public interface ILemmaProvider : IDisposable
 
     /// <summary>A single lemma's metadata, or null if the id is unknown.</summary>
     LemmaCandidate? GetLemma(long lemmaId);
+
+    /// <summary>Report-grade detail (etymology/example/frequency/root) for one lemma; null if the id is unknown. Enriched fields are null on a non-report asset.</summary>
+    LemmaDetail? GetDetail(long lemmaId);
 }

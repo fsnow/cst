@@ -118,10 +118,13 @@ namespace CST.Avalonia.Tests.TestSupport
             // corpus-attested forms (dhamma, citta, kamma) + one synthetic form (dhammani, absent from the corpus).
             string dpdLemmaPath = Path.Combine(root, "dpd-lemma.db");
             BuildLemmaFixture(dpdLemmaPath);
-            var lemmaSearch = new LemmaSearchService(new SqliteLemmaProvider(dpdLemmaPath), searchService);
+            var lemmaProvider = new SqliteLemmaProvider(dpdLemmaPath);
+            var lemmaSearch = new LemmaSearchService(lemmaProvider, searchService);
+            var lemmaReport = new LemmaReportService(lemmaProvider, lemmaSearch);
 
             var server = new LocalApiServer("test", handshakeDir, Serilog.Log.Logger,
-                searchTool, dictionary: null, passage: passageTool, script: scriptTool, lemma: lemmaSearch);
+                searchTool, dictionary: null, passage: passageTool, script: scriptTool,
+                lemma: lemmaSearch, lemmaReport: lemmaReport);
             await server.StartAsync();
 
             return new LocalApiTestServer(root, server, mula.FileName, attha.FileName);
@@ -133,12 +136,19 @@ namespace CST.Avalonia.Tests.TestSupport
             c.Open();
             void Exec(string sql) { using var cmd = c.CreateCommand(); cmd.CommandText = sql; cmd.ExecuteNonQuery(); }
             Exec(@"
-                CREATE TABLE lemma (id INTEGER PRIMARY KEY, lemma TEXT NOT NULL, pos TEXT, gloss TEXT, derived_from TEXT);
+                CREATE TABLE lemma (id INTEGER PRIMARY KEY, lemma TEXT NOT NULL, pos TEXT, gloss TEXT, derived_from TEXT,
+                    root_key TEXT, construction TEXT, sanskrit TEXT, meaning_lit TEXT, pattern TEXT, ebt_count INTEGER,
+                    example_source TEXT, example_sutta TEXT, example TEXT, synonym TEXT, antonym TEXT);
+                CREATE TABLE root (root_key TEXT PRIMARY KEY, root_sign TEXT, root_meaning TEXT, root_group INTEGER,
+                    sanskrit_root TEXT, sanskrit_root_meaning TEXT, dhatupatha_pali TEXT, dhatupatha_english TEXT);
                 CREATE TABLE form_lemma (form TEXT NOT NULL, lemma_id INTEGER NOT NULL);
                 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
-                INSERT INTO lemma VALUES
-                    (100,'dhamma 1','masc','nature; a teaching',NULL),
-                    (101,'dhamma 2','masc','a phenomenon',NULL);
+                INSERT INTO lemma
+                  (id,lemma,pos,gloss,derived_from,root_key,construction,sanskrit,pattern,ebt_count,example_source,example_sutta,example)
+                  VALUES
+                    (100,'dhamma 1','masc','nature; a teaching',NULL,'√dhar','dhar + a','dharma','a masc',77,'DN1','brahmajalasutta','so <b>dhamma</b> passati'),
+                    (101,'dhamma 2','masc','a phenomenon',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+                INSERT INTO root VALUES ('√dhar','dhar','hold; support',1,'√dhṛ','hold','dharaṇe','holding');
                 INSERT INTO form_lemma VALUES
                     ('dhamma',100),('citta',100),('kamma',100),('dhammani',100),
                     ('dhamma',101);

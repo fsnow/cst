@@ -305,6 +305,30 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Lemma_report_renders_the_dossier_html()
+        {
+            using var http = _api.Http();
+            var resp = await http.GetAsync("/v1/lemma-report/100?script=Latin");
+            Assert.True(resp.IsSuccessStatusCode);
+            Assert.Equal("text/html", resp.Content.Headers.ContentType!.MediaType);
+            var html = await resp.Content.ReadAsStringAsync();
+            Assert.Contains("dhamma", html);                 // the lemma
+            Assert.Contains("hold", html);                   // root meaning (etymology from the root table)
+            Assert.Contains("attested paradigm", html);      // paradigm section
+            Assert.Contains("masculine", html);              // pos 'masc' expanded
+            Assert.Contains("Word family", html);
+            Assert.Contains("DPD candidates", html);         // synthetic/attested split (dhammani is synthetic)
+        }
+
+        [Fact]
+        public async Task Lemma_report_unknown_id_is_404()
+        {
+            using var http = _api.Http();
+            var resp = await http.GetAsync("/v1/lemma-report/999999");
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, resp.StatusCode);
+        }
+
+        [Fact]
         public async Task Mcp_occurrences_and_passage_read_the_corpus()
         {
             await using var client = await ConnectMcpAsync();

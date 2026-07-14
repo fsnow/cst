@@ -1003,6 +1003,7 @@ public partial class App : Application
             AppConstants.AppDataDirectoryName, "dpd-lemma", "dpd-lemma.db");
         services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new CST.Lemma.SqliteLemmaProvider(dpdLemmaPath));
         services.AddSingleton<ILemmaSearchService, LemmaSearchService>();
+        services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
         // Surface-C tool wrappers (exposed over the local API). (#186)
         services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
