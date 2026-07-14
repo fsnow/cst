@@ -59,9 +59,7 @@ public sealed class LemmaReportService : ILemmaReportService
         var focus = await _search.ExpandAndSearchAsync(lemmaId, includeFamily: false, filter: null, outputScript: Script.Ipe, ct: ct)
             .ConfigureAwait(false);
         var forms = new List<ReportForm>();
-        string? homographForm = null;
-        int homographCount = -1;
-        var homoSenses = new List<ReportHomographSense>();
+        var homographs = new List<ReportHomograph>();
         if (focus is not null)
         {
             foreach (var f in focus.AttestedForms)
@@ -69,16 +67,16 @@ public sealed class LemmaReportService : ILemmaReportService
                 var res = _lemma.ResolveForm(ScriptConverter.Convert(f.Ipe, Script.Ipe, Script.Latin));
                 bool homo = res is not null && res.Candidates.Count > 1;
                 forms.Add(new ReportForm(f.Ipe, f.Count, f.BookCount, homo));
-                if (homo && f.Count > homographCount)
+                if (homo)
                 {
-                    homographCount = f.Count;
-                    homographForm = f.Ipe;
-                    homoSenses = res!.Candidates
+                    var senses = res!.Candidates
                         .Select(c => new ReportHomographSense(c.LemmaId, ToIpe(c.Lemma), c.Pos, c.Gloss, ToIpeOrNull(c.DerivedFrom)))
                         .ToList();
+                    homographs.Add(new ReportHomograph(f.Ipe, f.Count, senses));
                 }
             }
         }
+        homographs = homographs.OrderByDescending(h => h.Count).ToList();
 
         // Word family — derived_from siblings, each with its own corpus total, grouped by pos category.
         var family = new List<ReportFamilyMember>();
@@ -104,7 +102,7 @@ public sealed class LemmaReportService : ILemmaReportService
             forms, focus?.TotalOccurrences ?? 0, focus?.AttestedFormCount ?? 0, focus?.CandidateFormCount ?? 0, focus?.ExpansionCapped ?? false,
             ToIpeOrNull(d.Example), d.ExampleSource, d.ExampleSutta,
             family, famAll?.TotalOccurrences ?? 0, famAll?.AttestedFormCount ?? 0,
-            homographForm, homoSenses,
+            homographs,
             meta?.DpdVersion ?? string.Empty, meta?.Attribution ?? string.Empty);
     }
 

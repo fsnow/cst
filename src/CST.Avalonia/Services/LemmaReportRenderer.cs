@@ -103,13 +103,19 @@ public static class LemmaReportRenderer
             if (cite.Length > 0) sb.Append($"<div class=\"ex-cite\">{cite}</div>");
             sb.Append("</section>");
         }
-        if (r.HomographFormPali is { } hf && r.HomographSenses.Count > 1)
+        if (r.Homographs.Count > 0)
         {
-            sb.Append("<section class=\"card homo\"><div class=\"card-h\" style=\"padding:0 0 10px\"><h2>Homograph — one form, many words</h2></div>")
-              .Append($"<p>The form <span class=\"hform pali\">{P(hf)}</span> belongs to several lemmas; a surface-string count can’t be split between them.</p><table><tbody>");
-            foreach (var s in r.HomographSenses)
-                sb.Append($"<tr><td class=\"pali\">{P(s.LemmaPali)} <span class=\"tag\">{Esc(PosFull(s.Pos))}</span></td><td>{Esc(s.Gloss ?? "")}</td></tr>");
-            sb.Append("</tbody></table><div class=\"warn\"><span>⚠</span><span>Excluded from the total — an irreducible limit of a surface-string index.</span></div></section>");
+            int n = r.Homographs.Count;
+            sb.Append($"<section class=\"card homo\"><div class=\"card-h\" style=\"padding:0 0 10px\"><h2>Homographs — {n} form{(n == 1 ? "" : "s")} shared with other words</h2></div>")
+              .Append("<p>These paradigm forms are spelled identically to other lemmas; the index tallies surface strings, so a form’s count can’t be split between them.</p>");
+            foreach (var h in r.Homographs)
+            {
+                sb.Append($"<div class=\"homo-item\"><div class=\"homo-head\"><span class=\"hform pali\">{P(h.FormPali)}</span><span class=\"homo-count\">{h.Count:N0}</span></div><table><tbody>");
+                foreach (var s in h.Senses)
+                    sb.Append($"<tr><td class=\"pali\">{P(s.LemmaPali)} <span class=\"tag\">{Esc(PosFull(s.Pos))}</span></td><td>{Esc(s.Gloss ?? "")}</td></tr>");
+                sb.Append("</tbody></table></div>");
+            }
+            sb.Append("<div class=\"warn\"><span>⚠</span><span>Their counts are included in the paradigm above but overlap these other lemmas — a surface-string index can’t separate them.</span></div></section>");
         }
         sb.Append("</div>");
 
@@ -161,7 +167,8 @@ td.form{font-family:var(--pali);font-size:1rem}td.c{text-align:right;font-family
 .fam-row{display:flex;align-items:baseline;gap:10px;padding:4px 6px;border-radius:8px}.fam-lemma{font-family:var(--pali);font-size:1rem;min-width:8em}.fam-gloss{flex:1;font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fam-count{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.8rem;color:var(--jade)}
 .lower{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;margin-top:20px}@media(max-width:820px){.lower{grid-template-columns:1fr}}
 blockquote{margin:0;font-family:var(--pali);font-size:1.1rem;line-height:1.6}blockquote b{color:var(--jade)}
-.ex-cite{margin-top:10px;font-size:.8rem;color:var(--faint)}.homo{padding:16px 18px}.homo p{margin:0 0 10px;font-size:.85rem;color:var(--muted)}.homo .hform{font-size:1.2rem}.homo td{padding:5px 0;font-size:.85rem}.homo td:first-child{padding-right:14px}
+.ex-cite{margin-top:10px;font-size:.8rem;color:var(--faint)}.homo{padding:16px 18px}.homo p{margin:0 0 10px;font-size:.85rem;color:var(--muted)}.homo .hform{font-size:1.15rem}.homo td{padding:4px 0;font-size:.85rem}.homo td:first-child{padding-right:14px}
+.homo-item{padding:8px 0;border-top:1px solid var(--hair)}.homo-item:first-of-type{border-top:none}.homo-head{display:flex;justify-content:space-between;align-items:baseline}.homo-count{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--faint);font-size:.8rem}
 .warn{margin-top:10px;font-size:.78rem;color:var(--amber);display:flex;gap:7px}
 footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:.74rem;color:var(--faint)}";
 }

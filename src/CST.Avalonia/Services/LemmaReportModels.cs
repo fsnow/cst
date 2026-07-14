@@ -16,6 +16,9 @@ public sealed record ReportFamilyMember(
 
 public sealed record ReportHomographSense(long LemmaId, string LemmaPali, string? Pos, string? Gloss, string? DerivedFromPali);
 
+/// <summary>One paradigm form that is a homograph, with every lemma the surface string belongs to.</summary>
+public sealed record ReportHomograph(string FormPali, int Count, IReadOnlyList<ReportHomographSense> Senses);
+
 public sealed record LemmaReport(
     long LemmaId, string LemmaPali, string? Pos, string? Gloss, string? MeaningLit, string? DerivedFromPali,
     // etymology
@@ -26,7 +29,7 @@ public sealed record LemmaReport(
     string? ExamplePali, string? ExampleSource, string? ExampleSutta,
     // word family (derived_from siblings, grouped) + the family:true union totals
     IReadOnlyList<ReportFamilyMember> Family, int FamilyTotalOccurrences, int FamilyFormCount,
-    // homograph focus (the top form shared with other lemmas)
-    string? HomographFormPali, IReadOnlyList<ReportHomographSense> HomographSenses,
+    // homographs — EVERY paradigm form shared with other lemmas (its count can't be split)
+    IReadOnlyList<ReportHomograph> Homographs,
     // provenance
     string DpdVersion, string Attribution);
