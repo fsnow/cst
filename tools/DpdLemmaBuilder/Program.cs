@@ -22,8 +22,8 @@ using Microsoft.Data.Sqlite;
 // Usage: DpdLemmaBuilder [<dpd.db path> [<output dpd-lemma.db path>]] [--scope lean|mid|full]
 // =====================================================================================================
 
-const string ConverterVersion = "1";
-const string SchemaVersion = "1";
+const string ConverterVersion = "2";   // v2: report-grade per-lemma columns + root table
+const string SchemaVersion = "2";
 
 // ---- args ----
 var positional = new List<string>();
@@ -45,6 +45,7 @@ string outPath = positional.Count > 1 ? positional[1] : "/Users/fsnow/dpd-poc/dp
 
 bool includeForms = scope != "lean";      // the forms (grammar) table
 bool includeDecon = scope == "full";      // sandhi deconstructor column
+bool includeReport = scope != "lean";     // report-grade per-lemma columns (etymology/example/…) + root table
 
 if (!File.Exists(srcPath))
 {
@@ -79,12 +80,20 @@ if (File.Exists(outPath)) File.Delete(outPath);
 using var outDb = new SqliteConnection($"Data Source={outPath}");
 outDb.Open();
 Exec(outDb, "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY;");
+Exec(outDb, includeReport
+    ? @"CREATE TABLE lemma (
+        id INTEGER PRIMARY KEY, lemma TEXT NOT NULL, pos TEXT, gloss TEXT, derived_from TEXT,
+        root_key TEXT, construction TEXT, sanskrit TEXT, meaning_lit TEXT, pattern TEXT, ebt_count INTEGER,
+        example_source TEXT, example_sutta TEXT, example TEXT, synonym TEXT, antonym TEXT );"
+    : @"CREATE TABLE lemma (
+        id INTEGER PRIMARY KEY, lemma TEXT NOT NULL, pos TEXT, gloss TEXT, derived_from TEXT );");
 Exec(outDb, @"
-    CREATE TABLE lemma (
-        id INTEGER PRIMARY KEY, lemma TEXT NOT NULL, pos TEXT, gloss TEXT, derived_from TEXT
-    );
     CREATE TABLE form_lemma ( form TEXT NOT NULL, lemma_id INTEGER NOT NULL );
     CREATE TABLE meta ( key TEXT PRIMARY KEY, value TEXT );");
+if (includeReport)
+    Exec(outDb, @"CREATE TABLE root (
+        root_key TEXT PRIMARY KEY, root_sign TEXT, root_meaning TEXT, root_group INTEGER,
+        sanskrit_root TEXT, sanskrit_root_meaning TEXT, dhatupatha_pali TEXT, dhatupatha_english TEXT );");
 if (includeForms)
     Exec(outDb, includeDecon
         ? "CREATE TABLE forms ( form TEXT PRIMARY KEY, grammar TEXT, deconstructor TEXT );"
@@ -95,15 +104,43 @@ long lemmaCount = 0;
 using (var tx = outDb.BeginTransaction())
 {
     using var ins = outDb.CreateCommand();
-    ins.CommandText = "INSERT INTO lemma(id,lemma,pos,gloss,derived_from) VALUES($id,$lemma,$pos,$gloss,$df)";
+    using var read = src.CreateCommand();
+    if (includeReport)
+    {
+        ins.CommandText = @"INSERT INTO lemma
+            (id,lemma,pos,gloss,derived_from,root_key,construction,sanskrit,meaning_lit,pattern,ebt_count,
+             example_source,example_sutta,example,synonym,antonym)
+            VALUES ($id,$lemma,$pos,$gloss,$df,$rk,$con,$skt,$lit,$pat,$ebt,$exs,$exu,$ex,$syn,$ant)";
+        read.CommandText = @"SELECT id,lemma_1,pos,meaning_1,derived_from,root_key,construction,sanskrit,
+            meaning_lit,pattern,ebt_count,source_1,sutta_1,example_1,synonym,antonym FROM dpd_headwords";
+    }
+    else
+    {
+        ins.CommandText = "INSERT INTO lemma(id,lemma,pos,gloss,derived_from) VALUES($id,$lemma,$pos,$gloss,$df)";
+        read.CommandText = "SELECT id, lemma_1, pos, meaning_1, derived_from FROM dpd_headwords";
+    }
     var pId = ins.Parameters.Add("$id", SqliteType.Integer);
     var pLemma = ins.Parameters.Add("$lemma", SqliteType.Text);
     var pPos = ins.Parameters.Add("$pos", SqliteType.Text);
     var pGloss = ins.Parameters.Add("$gloss", SqliteType.Text);
     var pDf = ins.Parameters.Add("$df", SqliteType.Text);
+    SqliteParameter pRk = null!, pCon = null!, pSkt = null!, pLit = null!, pPat = null!, pEbt = null!,
+                    pExs = null!, pExu = null!, pEx = null!, pSyn = null!, pAnt = null!;
+    if (includeReport)
+    {
+        pRk = ins.Parameters.Add("$rk", SqliteType.Text);
+        pCon = ins.Parameters.Add("$con", SqliteType.Text);
+        pSkt = ins.Parameters.Add("$skt", SqliteType.Text);
+        pLit = ins.Parameters.Add("$lit", SqliteType.Text);
+        pPat = ins.Parameters.Add("$pat", SqliteType.Text);
+        pEbt = ins.Parameters.Add("$ebt", SqliteType.Integer);
+        pExs = ins.Parameters.Add("$exs", SqliteType.Text);
+        pExu = ins.Parameters.Add("$exu", SqliteType.Text);
+        pEx = ins.Parameters.Add("$ex", SqliteType.Text);
+        pSyn = ins.Parameters.Add("$syn", SqliteType.Text);
+        pAnt = ins.Parameters.Add("$ant", SqliteType.Text);
+    }
 
-    using var read = src.CreateCommand();
-    read.CommandText = "SELECT id, lemma_1, pos, meaning_1, derived_from FROM dpd_headwords";
     using var r = read.ExecuteReader();
     while (r.Read())
     {
@@ -112,12 +149,64 @@ using (var tx = outDb.BeginTransaction())
         pPos.Value = NullIfEmpty(r.GetString(2));
         pGloss.Value = NullIfEmpty(r.GetString(3));
         pDf.Value = NullIfEmpty(r.GetString(4));
+        if (includeReport)
+        {
+            pRk.Value = NullIfEmpty(r.GetString(5));
+            pCon.Value = NullIfEmpty(r.GetString(6));
+            pSkt.Value = NullIfEmpty(r.GetString(7));
+            pLit.Value = NullIfEmpty(r.GetString(8));
+            pPat.Value = NullIfEmpty(r.GetString(9));
+            pEbt.Value = r.IsDBNull(10) ? DBNull.Value : r.GetValue(10);
+            pExs.Value = NullIfEmpty(r.GetString(11));
+            pExu.Value = NullIfEmpty(r.GetString(12));
+            pEx.Value = NullIfEmpty(r.GetString(13));
+            pSyn.Value = NullIfEmpty(r.GetString(14));
+            pAnt.Value = NullIfEmpty(r.GetString(15));
+        }
         ins.ExecuteNonQuery();
         lemmaCount++;
     }
     tx.Commit();
 }
 Console.WriteLine($"  lemma rows: {lemmaCount:N0}  ({sw.Elapsed.TotalSeconds:F1}s)");
+
+// ---- 1b. root layer (report scope) ----
+if (includeReport)
+{
+    using var tx = outDb.BeginTransaction();
+    using var ins = outDb.CreateCommand();
+    ins.CommandText = @"INSERT OR IGNORE INTO root
+        (root_key,root_sign,root_meaning,root_group,sanskrit_root,sanskrit_root_meaning,dhatupatha_pali,dhatupatha_english)
+        VALUES ($rk,$rs,$rm,$rg,$sr,$srm,$dp,$de)";
+    var a = ins.Parameters.Add("$rk", SqliteType.Text);
+    var b = ins.Parameters.Add("$rs", SqliteType.Text);
+    var c2 = ins.Parameters.Add("$rm", SqliteType.Text);
+    var d = ins.Parameters.Add("$rg", SqliteType.Integer);
+    var e = ins.Parameters.Add("$sr", SqliteType.Text);
+    var f = ins.Parameters.Add("$srm", SqliteType.Text);
+    var g = ins.Parameters.Add("$dp", SqliteType.Text);
+    var h = ins.Parameters.Add("$de", SqliteType.Text);
+    using var read = src.CreateCommand();
+    read.CommandText = @"SELECT root,root_sign,root_meaning,root_group,sanskrit_root,sanskrit_root_meaning,
+        dhatupatha_pali,dhatupatha_english FROM dpd_roots";
+    using var r = read.ExecuteReader();
+    long rootCount = 0;
+    while (r.Read())
+    {
+        a.Value = r.GetString(0);
+        b.Value = NullIfEmpty(r.GetString(1));
+        c2.Value = NullIfEmpty(r.GetString(2));
+        d.Value = r.IsDBNull(3) ? DBNull.Value : r.GetValue(3);
+        e.Value = NullIfEmpty(r.GetString(4));
+        f.Value = NullIfEmpty(r.GetString(5));
+        g.Value = NullIfEmpty(r.GetString(6));
+        h.Value = NullIfEmpty(r.GetString(7));
+        ins.ExecuteNonQuery();
+        rootCount++;
+    }
+    tx.Commit();
+    Console.WriteLine($"  root rows: {rootCount:N0}  ({sw.Elapsed.TotalSeconds:F1}s)");
+}
 
 // ---- 2. explode lookup -> form_lemma (+ forms) ----
 long formCount = 0, edgeCount = 0, skipped = 0;
