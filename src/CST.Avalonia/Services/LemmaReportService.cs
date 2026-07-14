@@ -55,7 +55,16 @@ public sealed class LemmaReportService : ILemmaReportService
         var d = _lemma.GetDetail(lemmaId);
         if (d is null) return null;
 
-        // Focus paradigm — forms with corpus counts (in IPE). Flag each form that is a homograph.
+        // The focus lemma's word-family (its derived_from cluster). Used to tell a REAL homograph (a form
+        // shared with a DIFFERENT word) from a mere in-family overlap — e.g. a form the finite verb shares
+        // with its own present participle (pajānantīti = pajānanti+iti OR pajānantī+iti), which is not a
+        // meaningful ambiguity.
+        var exp = _lemma.ExpandLemma(lemmaId, includeFamily: true);
+        var familyIds = new HashSet<long> { lemmaId };
+        if (exp?.Family is { } famMembers) foreach (var m in famMembers) familyIds.Add(m.LemmaId);
+
+        // Focus paradigm — forms with corpus counts (in IPE). A form is a homograph only if it also belongs
+        // to a lemma OUTSIDE this word-family.
         var focus = await _search.ExpandAndSearchAsync(lemmaId, includeFamily: false, filter: null, outputScript: Script.Ipe, ct: ct)
             .ConfigureAwait(false);
         var forms = new List<ReportForm>();
@@ -65,7 +74,7 @@ public sealed class LemmaReportService : ILemmaReportService
             foreach (var f in focus.AttestedForms)
             {
                 var res = _lemma.ResolveForm(ScriptConverter.Convert(f.Ipe, Script.Ipe, Script.Latin));
-                bool homo = res is not null && res.Candidates.Count > 1;
+                bool homo = res is not null && res.Candidates.Any(c => !familyIds.Contains(c.LemmaId));
                 forms.Add(new ReportForm(f.Ipe, f.Count, f.BookCount, homo));
                 if (homo)
                 {
@@ -80,7 +89,6 @@ public sealed class LemmaReportService : ILemmaReportService
 
         // Word family — derived_from siblings, each with its own corpus total, grouped by pos category.
         var family = new List<ReportFamilyMember>();
-        var exp = _lemma.ExpandLemma(lemmaId, includeFamily: true);
         if (exp?.Family is { } siblings)
         {
             foreach (var m in siblings)
