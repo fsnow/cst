@@ -112,28 +112,40 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
             // it from the base verb or from any derived member (participle, absolutive, deverbal noun)
             // yields the same cluster. So a form the finite verb shares with its own participle is
             // correctly in-family (not a homograph), regardless of which member the report focuses on.
-            // The family is the DERIVATIONAL cluster around the focus, taken in BOTH directions so it is
-            // symmetric regardless of which member the report focuses on:
-            //   • $base = the focus's parent (its derived_from) when the focus is itself derived, else its
-            //     own headword. `lemma = $base` pulls in the parent headword and `derived_from = $base`
-            //     pulls in the co-derived siblings (e.g. from a participle, back up to its finite verb and
-            //     across to the verb's other derivations).
-            //   • $self = the focus's own headword; `derived_from = $self` pulls in the focus's own
-            //     children (e.g. from a deverbal noun, down to that noun's declensional derivations).
-            //   • `id = $id` guarantees the focus is always present (even a numbered homonym base).
-            // Deliberately NOT grouped by shared spelling: homonyms like 'dhamma 1' / 'dhamma 2' are
-            // DIFFERENT words (their shared forms are genuine homographs), so there is no GLOB 'base [0-9]*'.
+            // The family is the DERIVATIONAL cluster around the focus. `id = $id` always keeps the focus,
+            // and `derived_from = $self` (self = the focus's own headword) pulls in the focus's own children
+            // (e.g. from a deverbal noun, down to its declensional derivations).
+            //
+            // When the focus is ITSELF derived, we also climb to its parent cluster, keyed on the focus's
+            // derived_from ($base): `derived_from = $base` gets the co-derived siblings, and the parent
+            // headword is `lemma = $base` OR — because DPD stores homonymous headwords numbered ('paññā 1')
+            // while derived_from is unnumbered ('paññā') — `lemma GLOB 'base [0-9]*'`. This homonym GLOB is
+            // used ONLY for the parent lookup: derived_from cannot say which numbered homonym is the parent,
+            // so we (coarsely) include them all. It is deliberately NOT applied to a base lemma's own name,
+            // so genuinely different words that merely share a spelling ('dhamma 1' / 'dhamma 2', both with
+            // derived_from NULL) stay distinct and their shared forms remain true homographs.
             string? df = string.IsNullOrEmpty(head.DerivedFrom) ? null : head.DerivedFrom;
             var self = StripHomonym(head.Lemma);
-            var baseName = StripHomonym(df ?? head.Lemma);
             using var cmd = c.CreateCommand();
-            cmd.CommandText =
-                @"SELECT id, lemma, pos, gloss, derived_from FROM lemma
-                  WHERE id = $id OR lemma = $base OR derived_from = $base OR derived_from = $self
-                  ORDER BY id";
             cmd.Parameters.AddWithValue("$id", lemmaId);
-            cmd.Parameters.AddWithValue("$base", baseName);
             cmd.Parameters.AddWithValue("$self", self);
+            if (df is null)
+            {
+                cmd.CommandText =
+                    @"SELECT id, lemma, pos, gloss, derived_from FROM lemma
+                      WHERE id = $id OR derived_from = $self ORDER BY id";
+            }
+            else
+            {
+                var parentBase = StripHomonym(df);
+                cmd.CommandText =
+                    @"SELECT id, lemma, pos, gloss, derived_from FROM lemma
+                      WHERE id = $id OR derived_from = $self
+                         OR derived_from = $base OR lemma = $base OR lemma GLOB $baseGlob
+                      ORDER BY id";
+                cmd.Parameters.AddWithValue("$base", parentBase);
+                cmd.Parameters.AddWithValue("$baseGlob", parentBase + " [0-9]*");
+            }
             using var r = cmd.ExecuteReader();
             while (r.Read())
                 family.Add(new LemmaCandidate(r.GetInt64(0), r.GetString(1), Str(r, 2), Str(r, 3), Str(r, 4)));

@@ -140,6 +140,19 @@ public sealed class SqliteLemmaProviderTests : IDisposable
     }
 
     [Fact]
+    public void ExpandLemma_from_a_bottom_member_reaches_a_numbered_parent()
+    {
+        using var p = new SqliteLemmaProvider(_dbPath);
+        // Focus 'paññāya 2' (40071) is derived_from 'paññā', whose headword is the NUMBERED homonym
+        // 'paññā 1' (39994). The parent lookup must climb via the homonym GLOB, not exact match, so the
+        // parent is reached and 'paññāya' (shared with the parent) is not mis-flagged as a homograph.
+        var e = p.ExpandLemma(40071, includeFamily: true);
+        Assert.NotNull(e!.Family);
+        Assert.Contains(e.Family!, x => x.LemmaId == 40071);   // self
+        Assert.Contains(e.Family!, x => x.LemmaId == 39994);   // numbered parent 'paññā 1'
+    }
+
+    [Fact]
     public void ExpandLemma_unknown_id_is_null()
     {
         using var p = new SqliteLemmaProvider(_dbPath);
