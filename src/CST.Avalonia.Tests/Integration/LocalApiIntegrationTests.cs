@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using CST.Avalonia.Services.LocalApi;
 using CST.Avalonia.Services.LocalApi.Mcp;
 using CST.Avalonia.Tests.TestSupport;
+using CST.Conversion;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -301,6 +302,48 @@ namespace CST.Avalonia.Tests.Integration
         {
             using var http = _api.Http();
             var resp = await http.GetAsync("/v1/lemma/zzznotaword");
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, resp.StatusCode);
+        }
+
+        [Fact]
+        public async Task Lemma_report_renders_the_dossier_html()
+        {
+            using var http = _api.Http();
+            var resp = await http.GetAsync("/v1/lemma-report/100?script=Latin");
+            Assert.True(resp.IsSuccessStatusCode);
+            Assert.Equal("text/html", resp.Content.Headers.ContentType!.MediaType);
+            var html = await resp.Content.ReadAsStringAsync();
+            Assert.Contains("dhamma", html);                 // the lemma
+            Assert.Contains("hold", html);                   // root meaning (etymology from the root table)
+            Assert.Contains("attested paradigm", html);      // paradigm section
+            Assert.Contains("masculine", html);              // pos 'masc' expanded
+            Assert.Contains("Word family", html);
+            Assert.Contains("DPD candidates", html);         // synthetic/attested split (dhammani is synthetic)
+            // 'dhamma' is shared with lemma 101 ('dhamma 2'), a DIFFERENT word (out of family) -> homograph.
+            Assert.Contains("homograph", html);
+            // DPD example with <b> markup renders (Latin round-trips the tags).
+            Assert.Contains("<b>dhamma</b>", html);
+        }
+
+        [Fact]
+        public async Task Lemma_report_preserves_example_markup_in_non_latin_scripts()
+        {
+            using var http = _api.Http();
+            var resp = await http.GetAsync("/v1/lemma-report/100?script=Devanagari");
+            Assert.True(resp.IsSuccessStatusCode);
+            var html = await resp.Content.ReadAsStringAsync();
+            // The DPD example carries <b>…</b>. The tags must survive the IPE->Devanagari render LITERALLY
+            // (the bug converted the tag letter 'b' too, mangling <b> into '<ब्>'), and the enclosed word must
+            // itself be converted to Devanagari. Generated via ScriptConverter (no non-Latin literals in source).
+            var devDhamma = ScriptConverter.Convert("dhamma", Script.Latin, Script.Devanagari);
+            Assert.Contains("<b>" + devDhamma + "</b>", html);
+        }
+
+        [Fact]
+        public async Task Lemma_report_unknown_id_is_404()
+        {
+            using var http = _api.Http();
+            var resp = await http.GetAsync("/v1/lemma-report/999999");
             Assert.Equal(System.Net.HttpStatusCode.NotFound, resp.StatusCode);
         }
 

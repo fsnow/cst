@@ -36,3 +36,19 @@ public sealed record DpdLemmaMeta(
     string SchemaVersion,
     string License,
     string Attribution);
+
+/// <summary>Root (dhātu) detail for the report's etymology band (present only in report-grade assets).</summary>
+public sealed record RootDetail(
+    string RootKey, string? RootMeaning, long? RootGroup,
+    string? SanskritRoot, string? SanskritRootMeaning, string? DhatupathaPali, string? DhatupathaEnglish);
+
+/// <summary>
+/// Report-grade detail for one lemma (etymology, example, frequency, root) — the extra per-lemma columns a
+/// report-scope asset carries. On a lean/mid-without-report asset the enriched fields come back null.
+/// Pāli strings are IAST (as stored); the caller converts.
+/// </summary>
+public sealed record LemmaDetail(
+    long LemmaId, string Lemma, string? Pos, string? Gloss, string? DerivedFrom,
+    string? MeaningLit, string? Construction, string? Sanskrit, string? Pattern, long? EbtCount,
+    string? ExampleSource, string? ExampleSutta, string? Example, string? Synonym, string? Antonym,
+    RootDetail? Root);

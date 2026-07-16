@@ -11,6 +11,7 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
 {
     private readonly string? _connString;
     private readonly bool _hasFormsTable;
+    private readonly bool _hasReport;   // report-grade columns (root_key on lemma + a root table)
 
     public bool IsAvailable { get; }
     public DpdLemmaMeta? Meta { get; }
@@ -36,6 +37,7 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
             if (!TableExists(c, "lemma") || !TableExists(c, "form_lemma"))
                 return;
             _hasFormsTable = TableExists(c, "forms");
+            _hasReport = TableExists(c, "root") && ColumnExists(c, "lemma", "root_key");
             Meta = LoadMeta(c);
             _connString = connString;
             IsAvailable = true;
@@ -104,13 +106,46 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         if (includeFamily)
         {
             family = new List<LemmaCandidate>();
-            var baseName = StripHomonym(head.Lemma);
+            // The whole word-family (cluster), keyed on the family BASE — not just the focus's own
+            // children. The base is the focus's derived_from when the focus is itself a derived member,
+            // else the focus's own (homonym-stripped) headword. This makes the family SYMMETRIC: building
+            // it from the base verb or from any derived member (participle, absolutive, deverbal noun)
+            // yields the same cluster. So a form the finite verb shares with its own participle is
+            // correctly in-family (not a homograph), regardless of which member the report focuses on.
+            // The family is the DERIVATIONAL cluster around the focus. `id = $id` always keeps the focus,
+            // and `derived_from = $self` (self = the focus's own headword) pulls in the focus's own children
+            // (e.g. from a deverbal noun, down to its declensional derivations).
+            //
+            // When the focus is ITSELF derived, we also climb to its parent cluster, keyed on the focus's
+            // derived_from ($base): `derived_from = $base` gets the co-derived siblings, and the parent
+            // headword is `lemma = $base` OR — because DPD stores homonymous headwords numbered ('paññā 1')
+            // while derived_from is unnumbered ('paññā') — `lemma GLOB 'base [0-9]*'`. This homonym GLOB is
+            // used ONLY for the parent lookup: derived_from cannot say which numbered homonym is the parent,
+            // so we (coarsely) include them all. It is deliberately NOT applied to a base lemma's own name,
+            // so genuinely different words that merely share a spelling ('dhamma 1' / 'dhamma 2', both with
+            // derived_from NULL) stay distinct and their shared forms remain true homographs.
+            string? df = string.IsNullOrEmpty(head.DerivedFrom) ? null : head.DerivedFrom;
+            var self = StripHomonym(head.Lemma);
             using var cmd = c.CreateCommand();
-            cmd.CommandText =
-                @"SELECT id, lemma, pos, gloss, derived_from FROM lemma
-                  WHERE id = $id OR derived_from = $base ORDER BY id";
             cmd.Parameters.AddWithValue("$id", lemmaId);
-            cmd.Parameters.AddWithValue("$base", baseName);
+            cmd.Parameters.AddWithValue("$self", self);
+            if (df is null)
+            {
+                cmd.CommandText =
+                    @"SELECT id, lemma, pos, gloss, derived_from FROM lemma
+                      WHERE id = $id OR derived_from = $self ORDER BY id";
+            }
+            else
+            {
+                var parentBase = StripHomonym(df);
+                cmd.CommandText =
+                    @"SELECT id, lemma, pos, gloss, derived_from FROM lemma
+                      WHERE id = $id OR derived_from = $self
+                         OR derived_from = $base OR lemma = $base OR lemma GLOB $baseGlob
+                      ORDER BY id";
+                cmd.Parameters.AddWithValue("$base", parentBase);
+                cmd.Parameters.AddWithValue("$baseGlob", parentBase + " [0-9]*");
+            }
             using var r = cmd.ExecuteReader();
             while (r.Read())
                 family.Add(new LemmaCandidate(r.GetInt64(0), r.GetString(1), Str(r, 2), Str(r, 3), Str(r, 4)));
@@ -124,6 +159,45 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         if (!IsAvailable) return null;
         using var c = Open();
         return ReadLemma(c, lemmaId);
+    }
+
+    public LemmaDetail? GetDetail(long lemmaId)
+    {
+        if (!IsAvailable) return null;
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = _hasReport
+            ? @"SELECT id,lemma,pos,gloss,derived_from,meaning_lit,construction,sanskrit,pattern,ebt_count,
+                  example_source,example_sutta,example,synonym,antonym,root_key FROM lemma WHERE id=$id"
+            : "SELECT id,lemma,pos,gloss,derived_from FROM lemma WHERE id=$id";
+        cmd.Parameters.AddWithValue("$id", lemmaId);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+
+        long id = r.GetInt64(0);
+        string lemma = r.GetString(1);
+        string? pos = Str(r, 2), gloss = Str(r, 3), df = Str(r, 4);
+        if (!_hasReport)
+            return new LemmaDetail(id, lemma, pos, gloss, df, null, null, null, null, null, null, null, null, null, null, null);
+
+        long? ebt = r.IsDBNull(9) ? null : r.GetInt64(9);
+        string? rootKey = Str(r, 15);
+        RootDetail? root = rootKey is null ? null : ReadRoot(c, rootKey);
+        return new LemmaDetail(id, lemma, pos, gloss, df,
+            Str(r, 5), Str(r, 6), Str(r, 7), Str(r, 8), ebt,
+            Str(r, 10), Str(r, 11), Str(r, 12), Str(r, 13), Str(r, 14), root);
+    }
+
+    private static RootDetail? ReadRoot(SqliteConnection c, string rootKey)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = @"SELECT root_key,root_meaning,root_group,sanskrit_root,sanskrit_root_meaning,
+            dhatupatha_pali,dhatupatha_english FROM root WHERE root_key=$rk";
+        cmd.Parameters.AddWithValue("$rk", rootKey);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        long? grp = r.IsDBNull(2) ? null : r.GetInt64(2);
+        return new RootDetail(r.GetString(0), Str(r, 1), grp, Str(r, 3), Str(r, 4), Str(r, 5), Str(r, 6));
     }
 
     private static LemmaCandidate? ReadLemma(SqliteConnection c, long id)
@@ -154,6 +228,15 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         using var cmd = c.CreateCommand();
         cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name = $n LIMIT 1";
         cmd.Parameters.AddWithValue("$n", name);
+        return cmd.ExecuteScalar() is not null;
+    }
+
+    // table is a fixed literal (no injection); pragma_table_info can't be parameterized on the table name.
+    private static bool ColumnExists(SqliteConnection c, string table, string column)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = $"SELECT 1 FROM pragma_table_info('{table}') WHERE name = $n LIMIT 1";
+        cmd.Parameters.AddWithValue("$n", column);
         return cmd.ExecuteScalar() is not null;
     }
 
