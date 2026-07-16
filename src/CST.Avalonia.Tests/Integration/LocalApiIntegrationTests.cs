@@ -323,6 +323,13 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Contains("homograph", html);
             // DPD example with <b> markup renders (Latin round-trips the tags).
             Assert.Contains("<b>dhamma</b>", html);
+            // per-form grammatical analysis: abbreviations expanded, filtered to THIS lemma's headword,
+            // multiple analyses of the same form joined.
+            Assert.Contains("Analysis", html);                                       // column header
+            Assert.Contains("masculine nominative singular", html);                  // 'dhamma' expanded
+            Assert.Contains("masculine nominative singular / masculine vocative singular", html);
+            // lemma 100 is a masc NOUN, so the adjective analysis of 'dhamma' (same headword) is filtered out.
+            Assert.DoesNotContain("feminine nominative singular", html);
         }
 
         [Fact]

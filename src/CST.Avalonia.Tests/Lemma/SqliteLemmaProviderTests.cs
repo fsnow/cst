@@ -173,6 +173,9 @@ public sealed class SqliteLemmaProviderTests : IDisposable
     [InlineData("paññāya 1", "paññāya")]
     [InlineData("pajānāti", "pajānāti")]
     [InlineData("paññā 12", "paññā")]
+    [InlineData("dhamma 1.01", "dhamma")]        // DPD dotted sub-numbering
+    [InlineData("dhamma 2.1", "dhamma")]
+    [InlineData("a b", "a b")]                    // non-numeric suffix is not a homonym marker
     public void StripHomonym_removes_trailing_number(string input, string expected)
         => Assert.Equal(expected, SqliteLemmaProvider.StripHomonym(input));
 

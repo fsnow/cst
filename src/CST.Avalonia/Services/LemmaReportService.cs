@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Search;
@@ -71,11 +73,13 @@ public sealed class LemmaReportService : ILemmaReportService
         var homographs = new List<ReportHomograph>();
         if (focus is not null)
         {
+            var focusHeadword = StripHomonym(d.Lemma);
             foreach (var f in focus.AttestedForms)
             {
                 var res = _lemma.ResolveForm(ScriptConverter.Convert(f.Ipe, Script.Ipe, Script.Latin));
                 bool homo = res is not null && res.Candidates.Any(c => !familyIds.Contains(c.LemmaId));
-                forms.Add(new ReportForm(f.Ipe, f.Count, f.BookCount, homo));
+                string? grammar = GrammarFor(res?.Grammar, focusHeadword, d.Pos);
+                forms.Add(new ReportForm(f.Ipe, f.Count, f.BookCount, homo, grammar));
                 if (homo)
                 {
                     var senses = res!.Candidates
@@ -134,6 +138,80 @@ public sealed class LemmaReportService : ILemmaReportService
             else if (part.Length > 0) sb.Append(Any2Ipe.Convert(part));
         }
         return sb.ToString();
+    }
+
+    // The form's grammatical analysis restricted to THIS lemma. forms.grammar is a JSON array of
+    // [headword, pos, grammar] triples — a single surface form can analyse to several headwords (its own
+    // lemma, homographs, participles) — so we keep only the analyses whose headword is the focus lemma's,
+    // expand the abbreviations, and join distinct results (a form may be, e.g., both present and imperative).
+    private static string? GrammarFor(string? grammarJson, string focusHeadword, string? focusPos)
+    {
+        if (string.IsNullOrEmpty(grammarJson)) return null;
+        var focusBucket = PosBucket(focusPos);
+        List<string>? outp = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(grammarJson!);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            foreach (var triple in doc.RootElement.EnumerateArray())
+            {
+                if (triple.ValueKind != JsonValueKind.Array || triple.GetArrayLength() < 3) continue;
+                // Guard against a future DPD shape where an element isn't a string (GetString would throw
+                // InvalidOperationException, not JsonException) — degrade to a blank cell, never crash.
+                if (triple[0].ValueKind != JsonValueKind.String || triple[2].ValueKind != JsonValueKind.String) continue;
+                if (triple[0].GetString() != focusHeadword) continue;
+                // A surface form can analyse under one headword as different parts of speech (noun vs adj);
+                // keep only the analyses matching the focus lemma's broad category, so a masculine noun's
+                // paradigm doesn't show the adjective's "feminine nominative singular".
+                if (focusBucket is not null && PosBucket(triple[1].GetString()) is { } tb && tb != focusBucket) continue;
+                var gram = triple[2].GetString();
+                if (string.IsNullOrWhiteSpace(gram)) continue;
+                var expanded = ExpandGrammar(gram!);
+                outp ??= new List<string>();
+                if (!outp.Contains(expanded)) outp.Add(expanded);
+            }
+        }
+        catch (JsonException) { return null; }
+        return outp is { Count: > 0 } ? string.Join(" / ", outp) : null;
+    }
+
+    // Coarse part-of-speech bucket shared by lemma pos ('masc'/'pr'/…) and DPD grammar-triple pos
+    // ('noun'/'adj'/'verb'/…). Returns null for anything we shouldn't discriminate on (participles,
+    // cardinals, pronouns…), so those analyses are never wrongly filtered out.
+    private static string? PosBucket(string? pos) => pos switch
+    {
+        "masc" or "fem" or "nt" or "noun" => "noun",
+        "adj" => "adj",
+        "pr" or "aor" or "fut" or "opt" or "imp" or "cond" or "imperf" or "perf" or "verb" => "verb",
+        _ => null,
+    };
+
+    private static string ExpandGrammar(string gram) =>
+        string.Join(' ', gram.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                             .Select(t => GrammarTokens.TryGetValue(t, out var v) ? v : t));
+
+    // DPD grammar abbreviations → full words. Unknown tokens (1st/2nd/3rd, rare tags) pass through as-is.
+    private static readonly Dictionary<string, string> GrammarTokens = new()
+    {
+        ["pr"] = "present", ["fut"] = "future", ["aor"] = "aorist", ["imp"] = "imperative",
+        ["opt"] = "optative", ["cond"] = "conditional", ["imperf"] = "imperfect", ["perf"] = "perfect",
+        ["reflx"] = "reflexive", ["caus"] = "causative", ["pass"] = "passive", ["denom"] = "denominative",
+        ["desid"] = "desiderative", ["intens"] = "intensive",
+        ["sg"] = "singular", ["pl"] = "plural", ["dual"] = "dual",
+        ["nom"] = "nominative", ["acc"] = "accusative", ["instr"] = "instrumental", ["dat"] = "dative",
+        ["abl"] = "ablative", ["gen"] = "genitive", ["loc"] = "locative", ["voc"] = "vocative",
+        ["masc"] = "masculine", ["fem"] = "feminine", ["nt"] = "neuter",
+    };
+
+    // "paññāya 1" → "paññāya"; also DPD's DOTTED sub-numbering "dhamma 1.01" → "dhamma" (mirrors the
+    // provider). A trailing token of only digits and dots is a homonym marker; anything else is kept.
+    private static string StripHomonym(string lemma)
+    {
+        int sp = lemma.LastIndexOf(' ');
+        if (sp <= 0 || sp + 1 >= lemma.Length) return lemma;
+        for (int i = sp + 1; i < lemma.Length; i++)
+            if (!char.IsDigit(lemma[i]) && lemma[i] != '.') return lemma;
+        return lemma[..sp];
     }
 
     // Broad pos → family grouping (pos alone can't separate causative/passive from finite verbs — DPD tags
