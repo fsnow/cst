@@ -145,7 +145,7 @@ namespace CST.Avalonia.Tests.TestSupport
                 CREATE TABLE forms (form TEXT PRIMARY KEY, grammar TEXT);
                 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
                 INSERT INTO forms VALUES
-                    ('dhamma','[[""dhamma"",""noun"",""masc nom sg""],[""dhamma"",""noun"",""masc voc sg""]]'),
+                    ('dhamma','[[""dhamma"",""noun"",""masc nom sg""],[""dhamma"",""noun"",""masc voc sg""],[""dhamma"",""adj"",""fem nom sg""]]'),
                     ('citta','[[""dhamma"",""noun"",""masc acc sg""]]'),
                     ('kamma','[[""dhamma"",""noun"",""masc instr sg""]]');
                 INSERT INTO lemma

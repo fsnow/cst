@@ -328,6 +328,8 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Contains("Analysis", html);                                       // column header
             Assert.Contains("masculine nominative singular", html);                  // 'dhamma' expanded
             Assert.Contains("masculine nominative singular / masculine vocative singular", html);
+            // lemma 100 is a masc NOUN, so the adjective analysis of 'dhamma' (same headword) is filtered out.
+            Assert.DoesNotContain("feminine nominative singular", html);
         }
 
         [Fact]

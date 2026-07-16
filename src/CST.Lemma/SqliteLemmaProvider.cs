@@ -242,11 +242,15 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
 
     private static string? Str(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
 
-    /// <summary>"paññāya 1" → "paññāya"; "pajānāti" → "pajānāti" (strips a trailing homonym number).</summary>
+    /// <summary>"paññāya 1" → "paññāya"; DPD's dotted sub-numbering "dhamma 1.01" → "dhamma";
+    /// "pajānāti" → "pajānāti". A trailing token of only digits and dots is a homonym marker.</summary>
     internal static string StripHomonym(string lemma)
     {
         int sp = lemma.LastIndexOf(' ');
-        return sp > 0 && int.TryParse(lemma.AsSpan(sp + 1), out _) ? lemma[..sp] : lemma;
+        if (sp <= 0 || sp + 1 >= lemma.Length) return lemma;
+        for (int i = sp + 1; i < lemma.Length; i++)
+            if (!char.IsDigit(lemma[i]) && lemma[i] != '.') return lemma;
+        return lemma[..sp];
     }
 
     public void Dispose()

@@ -173,7 +173,7 @@ header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
 .card-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:13px 18px 9px;border-bottom:1px solid var(--hair)}.card-h h2{margin:0;font-size:.76rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700}.card-h .meta{font-size:.8rem;color:var(--faint)}.card-h .meta b{color:var(--jade);font-family:var(--mono)}
 table{width:100%;border-collapse:collapse;font-size:.92rem}.tbl-scroll{overflow-x:auto}tbody tr{border-top:1px solid var(--hair)}td,th{padding:6px 18px;text-align:left}th{font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:700}
 td.form{font-family:var(--pali);font-size:1rem}td.c{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}td.books{text-align:right;font-family:var(--mono);color:var(--muted)}
-td.gram{font-size:.8rem;color:var(--muted);white-space:nowrap}
+td.gram{font-size:.8rem;color:var(--muted)}
 .barcell{width:22%}.bar{height:7px;border-radius:4px;background:var(--jade-soft)}.bar>i{display:block;height:7px;border-radius:4px;background:var(--jade);opacity:.85}
 .tag{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:999px;margin-left:8px;color:var(--pos-noun);background:color-mix(in srgb,var(--pos-noun) 12%,transparent)}
 .foot-note{padding:9px 18px 13px;font-size:.8rem;color:var(--muted);border-top:1px solid var(--hair)}.foot-note b{color:var(--ink)}
