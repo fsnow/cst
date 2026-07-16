@@ -121,15 +121,22 @@ public sealed class SqliteLemmaProviderTests : IDisposable
     }
 
     [Fact]
-    public void ExpandLemma_with_family_includes_derived_from_children()
+    public void ExpandLemma_with_family_is_the_bidirectional_cluster()
     {
         using var p = new SqliteLemmaProvider(_dbPath);
+        // Focus 'paññā 1' (39994) is a deverbal noun derived_from 'pajānāti'. Its family must reach BOTH
+        // directions: UP to its parent verb 39702 and across to the verb's other derivations (35708, 40070),
+        // and DOWN to its own child 40071 (derived_from 'paññā'). Before the fix the family was computed
+        // downward-only, so the parent verb 39702 was missing and its shared forms were mis-flagged as
+        // homographs of the noun.
         var e = p.ExpandLemma(39994, includeFamily: true);
         Assert.NotNull(e);
         Assert.NotNull(e!.Family);
-        // baseName "paññā": self (39994) + children whose derived_from == "paññā" (40071)
-        Assert.Contains(e.Family!, x => x.LemmaId == 39994);
-        Assert.Contains(e.Family!, x => x.LemmaId == 40071);
+        Assert.Contains(e.Family!, x => x.LemmaId == 39994);   // self
+        Assert.Contains(e.Family!, x => x.LemmaId == 39702);   // parent verb (the fix)
+        Assert.Contains(e.Family!, x => x.LemmaId == 40070);   // sibling under pajānāti (paññāya 1, ger)
+        Assert.Contains(e.Family!, x => x.LemmaId == 35708);   // sibling under pajānāti (nappajānāti)
+        Assert.Contains(e.Family!, x => x.LemmaId == 40071);   // own child (paññāya 2, derived_from paññā)
     }
 
     [Fact]

@@ -17,8 +17,20 @@ public static class LemmaReportRenderer
     {
         // Pāli IPE -> target script, HTML-escaped for text nodes.
         string P(string? ipe) => string.IsNullOrEmpty(ipe) ? "" : Esc(ScriptConverter.Convert(ipe!, Script.Ipe, script));
-        // Pāli that is trusted DPD markup (example carries <b>…</b>): convert, keep tags.
-        string PMarkup(string? ipe) => string.IsNullOrEmpty(ipe) ? "" : ScriptConverter.Convert(ipe!, Script.Ipe, script);
+        // Pāli carrying trusted DPD markup (the example's <b>…</b>): convert + HTML-escape ONLY the text runs
+        // to the target script; re-emit the <b>/</b> tags literally (converting a tag would mangle it to
+        // e.g. <ब्> in Devanagari; escaping the text runs also closes the sole raw-output path).
+        string PMarkup(string? ipe)
+        {
+            if (string.IsNullOrEmpty(ipe)) return "";
+            var o = new StringBuilder(ipe!.Length);
+            foreach (var part in System.Text.RegularExpressions.Regex.Split(ipe!, "(</?b>)"))
+            {
+                if (part is "<b>" or "</b>") o.Append(part);
+                else if (part.Length > 0) o.Append(Esc(ScriptConverter.Convert(part, Script.Ipe, script)));
+            }
+            return o.ToString();
+        }
 
         var sb = new StringBuilder(8192);
         sb.Append("<style>").Append(Css).Append("</style>");
@@ -37,7 +49,8 @@ public static class LemmaReportRenderer
         sb.Append("</select></div></header>");
 
         // ---- etymology band ----
-        if (r.Root is { } root || !string.IsNullOrEmpty(r.ConstructionPali) || !string.IsNullOrEmpty(r.SanskritPali))
+        if (r.Root is { } root || !string.IsNullOrEmpty(r.ConstructionPali) || !string.IsNullOrEmpty(r.Sanskrit)
+            || !string.IsNullOrEmpty(r.Pattern))
         {
             sb.Append("<div class=\"etym\">");
             if (r.Root?.RootPali is { } rp) sb.Append($"<span class=\"root pali\">{P(rp)}</span>");
@@ -49,7 +62,7 @@ public static class LemmaReportRenderer
                 sb.Append($"<div class=\"kv\"><span class=\"k\">Root sense</span><span class=\"v\">{Esc(rm)}{dp}{de}{grp}</span></div>");
             }
             if (r.ConstructionPali is { } con) sb.Append($"<div class=\"kv\"><span class=\"k\">Construction</span><span class=\"v pali\">{P(con)}</span></div>");
-            if (r.SanskritPali is { } skt) sb.Append($"<div class=\"kv\"><span class=\"k\">Sanskrit</span><span class=\"v pali\">{P(skt)}</span></div>");
+            if (r.Sanskrit is { } skt) sb.Append($"<div class=\"kv\"><span class=\"k\">Sanskrit</span><span class=\"v pali\">{Esc(skt)}</span></div>");
             if (r.Pattern is { } pat) sb.Append($"<div class=\"kv\"><span class=\"k\">Pattern</span><span class=\"v\">{Esc(pat)}</span></div>");
             sb.Append("</div>");
         }

@@ -106,13 +106,34 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         if (includeFamily)
         {
             family = new List<LemmaCandidate>();
-            var baseName = StripHomonym(head.Lemma);
+            // The whole word-family (cluster), keyed on the family BASE — not just the focus's own
+            // children. The base is the focus's derived_from when the focus is itself a derived member,
+            // else the focus's own (homonym-stripped) headword. This makes the family SYMMETRIC: building
+            // it from the base verb or from any derived member (participle, absolutive, deverbal noun)
+            // yields the same cluster. So a form the finite verb shares with its own participle is
+            // correctly in-family (not a homograph), regardless of which member the report focuses on.
+            // The family is the DERIVATIONAL cluster around the focus, taken in BOTH directions so it is
+            // symmetric regardless of which member the report focuses on:
+            //   • $base = the focus's parent (its derived_from) when the focus is itself derived, else its
+            //     own headword. `lemma = $base` pulls in the parent headword and `derived_from = $base`
+            //     pulls in the co-derived siblings (e.g. from a participle, back up to its finite verb and
+            //     across to the verb's other derivations).
+            //   • $self = the focus's own headword; `derived_from = $self` pulls in the focus's own
+            //     children (e.g. from a deverbal noun, down to that noun's declensional derivations).
+            //   • `id = $id` guarantees the focus is always present (even a numbered homonym base).
+            // Deliberately NOT grouped by shared spelling: homonyms like 'dhamma 1' / 'dhamma 2' are
+            // DIFFERENT words (their shared forms are genuine homographs), so there is no GLOB 'base [0-9]*'.
+            string? df = string.IsNullOrEmpty(head.DerivedFrom) ? null : head.DerivedFrom;
+            var self = StripHomonym(head.Lemma);
+            var baseName = StripHomonym(df ?? head.Lemma);
             using var cmd = c.CreateCommand();
             cmd.CommandText =
                 @"SELECT id, lemma, pos, gloss, derived_from FROM lemma
-                  WHERE id = $id OR derived_from = $base ORDER BY id";
+                  WHERE id = $id OR lemma = $base OR derived_from = $base OR derived_from = $self
+                  ORDER BY id";
             cmd.Parameters.AddWithValue("$id", lemmaId);
             cmd.Parameters.AddWithValue("$base", baseName);
+            cmd.Parameters.AddWithValue("$self", self);
             using var r = cmd.ExecuteReader();
             while (r.Read())
                 family.Add(new LemmaCandidate(r.GetInt64(0), r.GetString(1), Str(r, 2), Str(r, 3), Str(r, 4)));

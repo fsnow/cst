@@ -106,19 +106,35 @@ public sealed class LemmaReportService : ILemmaReportService
         var meta = _lemma.Meta;
         return new LemmaReport(
             d.LemmaId, ToIpe(d.Lemma), d.Pos, d.Gloss, d.MeaningLit, ToIpeOrNull(d.DerivedFrom),
-            ToIpeOrNull(d.Construction), ToIpeOrNull(d.Sanskrit), d.Pattern, MapRoot(d.Root), d.EbtCount,
+            ToIpeOrNull(d.Construction), d.Sanskrit, d.Pattern, MapRoot(d.Root), d.EbtCount,
             forms, focus?.TotalOccurrences ?? 0, focus?.AttestedFormCount ?? 0, focus?.CandidateFormCount ?? 0, focus?.ExpansionCapped ?? false,
-            ToIpeOrNull(d.Example), d.ExampleSource, d.ExampleSutta,
+            ToIpeMarkupOrNull(d.Example), d.ExampleSource, d.ExampleSutta,
             family, famAll?.TotalOccurrences ?? 0, famAll?.AttestedFormCount ?? 0,
             homographs,
             meta?.DpdVersion ?? string.Empty, meta?.Attribution ?? string.Empty);
     }
 
+    // Sanskrit cognates carry characters outside the Pāli IPE inventory (ṛ ṝ ś ṣ …) that Any2Ipe can't
+    // round-trip, so Sanskrit stays verbatim IAST (rendered as-is, not script-converted).
     private static ReportRoot? MapRoot(RootDetail? r) => r is null ? null
-        : new ReportRoot(ToIpe(r.RootKey), r.RootMeaning, r.RootGroup, ToIpeOrNull(r.SanskritRoot), ToIpeOrNull(r.DhatupathaPali), r.DhatupathaEnglish);
+        : new ReportRoot(ToIpe(r.RootKey), r.RootMeaning, r.RootGroup, r.SanskritRoot, ToIpeOrNull(r.DhatupathaPali), r.DhatupathaEnglish);
 
     private static string ToIpe(string iast) => Any2Ipe.Convert(iast);
     private static string? ToIpeOrNull(string? iast) => string.IsNullOrEmpty(iast) ? iast : Any2Ipe.Convert(iast!);
+
+    // Like ToIpeOrNull but tag-aware: the DPD example carries <b>…</b> markup. Convert only the text runs
+    // to IPE; re-emit the tags literally so they survive the later IPE→script render un-mangled.
+    private static string? ToIpeMarkupOrNull(string? iast)
+    {
+        if (string.IsNullOrEmpty(iast)) return iast;
+        var sb = new System.Text.StringBuilder(iast!.Length);
+        foreach (var part in System.Text.RegularExpressions.Regex.Split(iast!, "(</?b>)"))
+        {
+            if (part is "<b>" or "</b>") sb.Append(part);
+            else if (part.Length > 0) sb.Append(Any2Ipe.Convert(part));
+        }
+        return sb.ToString();
+    }
 
     // Broad pos → family grouping (pos alone can't separate causative/passive from finite verbs — DPD tags
     // both as 'pr' — so this is a coarse-but-defensible three-way split).

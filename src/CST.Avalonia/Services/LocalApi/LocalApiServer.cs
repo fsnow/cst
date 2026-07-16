@@ -476,10 +476,13 @@ namespace CST.Avalonia.Services.LocalApi
 
             // Lemma dossier (rendered HTML). The GUI renders it in-process; this endpoint gives agents/humans
             // the same report. `script` selects the render script (default Latin). HTML only (no IPE leak).
-            if (_lemmaReport is { IsAvailable: true } report)
+            if (_lemmaReport is { } report)
             {
                 app.MapGet(v + "/lemma-report/{lemmaId:long}", async (long lemmaId, string? script, CancellationToken ct) =>
                 {
+                    // Same asset-absent contract as the sibling lemma endpoints: a 503 JSON, not a bare 404.
+                    if (!report.IsAvailable) return Results.Json(
+                        new { error = "The DPD-lemma dataset is not installed; lemma search is unavailable." }, statusCode: 503);
                     var rep = await report.BuildAsync(lemmaId, ct);
                     return rep is null
                         ? Results.NotFound(new { error = $"Unknown lemmaId {lemmaId}." })

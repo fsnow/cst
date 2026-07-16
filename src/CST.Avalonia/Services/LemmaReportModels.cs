@@ -7,7 +7,7 @@ namespace CST.Avalonia.Services;
 
 public sealed record ReportRoot(
     string? RootPali, string? RootMeaning, long? RootGroup,
-    string? SanskritRootPali, string? DhatupathaPali, string? DhatupathaEnglish);
+    string? SanskritRoot, string? DhatupathaPali, string? DhatupathaEnglish);   // SanskritRoot: verbatim IAST, not script-converted
 
 public sealed record ReportForm(string FormPali, int Count, int BookCount, bool Homograph);
 
@@ -21,8 +21,8 @@ public sealed record ReportHomograph(string FormPali, int Count, IReadOnlyList<R
 
 public sealed record LemmaReport(
     long LemmaId, string LemmaPali, string? Pos, string? Gloss, string? MeaningLit, string? DerivedFromPali,
-    // etymology
-    string? ConstructionPali, string? SanskritPali, string? Pattern, ReportRoot? Root, long? EbtCount,
+    // etymology  (Sanskrit: verbatim IAST — outside the Pāli IPE inventory, so NOT script-converted)
+    string? ConstructionPali, string? Sanskrit, string? Pattern, ReportRoot? Root, long? EbtCount,
     // corpus paradigm (this lemma)
     IReadOnlyList<ReportForm> Forms, int TotalOccurrences, int AttestedFormCount, int CandidateFormCount, bool ExpansionCapped,
     // DPD-cited example
