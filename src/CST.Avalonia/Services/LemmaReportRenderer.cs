@@ -72,12 +72,13 @@ public static class LemmaReportRenderer
         // ---- paradigm ----
         sb.Append("<section class=\"card\"><div class=\"card-h\"><h2>In this corpus — attested paradigm</h2>")
           .Append($"<div class=\"meta\"><b>{r.TotalOccurrences:N0}</b> occurrences · <b>{r.AttestedFormCount}</b>/{r.CandidateFormCount} forms</div></div>");
-        sb.Append("<div class=\"tbl-scroll\"><table><thead><tr><th>Form</th><th></th><th style=\"text-align:right\">Count</th><th style=\"text-align:right\">Books</th></tr></thead><tbody>");
+        sb.Append("<div class=\"tbl-scroll\"><table><thead><tr><th>Form</th><th>Analysis</th><th></th><th style=\"text-align:right\">Count</th><th style=\"text-align:right\">Books</th></tr></thead><tbody>");
         int max = r.Forms.Count > 0 ? r.Forms.Max(f => f.Count) : 1;
         foreach (var f in r.Forms.OrderByDescending(f => f.Count))
         {
             string homo = f.Homograph ? " <span class=\"tag\">homograph</span>" : "";
             sb.Append($"<tr><td class=\"form pali\">{P(f.FormPali)}{homo}</td>")
+              .Append($"<td class=\"gram\">{Esc(f.Grammar ?? "")}</td>")
               .Append($"<td class=\"barcell\"><div class=\"bar\"><i style=\"width:{(max > 0 ? f.Count * 100.0 / max : 0):F1}%\"></i></div></td>")
               .Append($"<td class=\"c\">{f.Count:N0}</td><td class=\"books\">{f.BookCount}</td></tr>");
         }
@@ -172,7 +173,8 @@ header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
 .card-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:13px 18px 9px;border-bottom:1px solid var(--hair)}.card-h h2{margin:0;font-size:.76rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700}.card-h .meta{font-size:.8rem;color:var(--faint)}.card-h .meta b{color:var(--jade);font-family:var(--mono)}
 table{width:100%;border-collapse:collapse;font-size:.92rem}.tbl-scroll{overflow-x:auto}tbody tr{border-top:1px solid var(--hair)}td,th{padding:6px 18px;text-align:left}th{font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:700}
 td.form{font-family:var(--pali);font-size:1rem}td.c{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}td.books{text-align:right;font-family:var(--mono);color:var(--muted)}
-.barcell{width:32%}.bar{height:7px;border-radius:4px;background:var(--jade-soft)}.bar>i{display:block;height:7px;border-radius:4px;background:var(--jade);opacity:.85}
+td.gram{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.barcell{width:22%}.bar{height:7px;border-radius:4px;background:var(--jade-soft)}.bar>i{display:block;height:7px;border-radius:4px;background:var(--jade);opacity:.85}
 .tag{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:999px;margin-left:8px;color:var(--pos-noun);background:color-mix(in srgb,var(--pos-noun) 12%,transparent)}
 .foot-note{padding:9px 18px 13px;font-size:.8rem;color:var(--muted);border-top:1px solid var(--hair)}.foot-note b{color:var(--ink)}
 .stat-row{display:flex;gap:16px;flex-wrap:wrap;padding:9px 18px 2px;font-size:.8rem;color:var(--muted)}.stat b{font-family:var(--mono);color:var(--ink)}.stat.syn b{color:var(--amber)}

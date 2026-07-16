@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Search;
@@ -71,11 +73,13 @@ public sealed class LemmaReportService : ILemmaReportService
         var homographs = new List<ReportHomograph>();
         if (focus is not null)
         {
+            var focusHeadword = StripHomonym(d.Lemma);
             foreach (var f in focus.AttestedForms)
             {
                 var res = _lemma.ResolveForm(ScriptConverter.Convert(f.Ipe, Script.Ipe, Script.Latin));
                 bool homo = res is not null && res.Candidates.Any(c => !familyIds.Contains(c.LemmaId));
-                forms.Add(new ReportForm(f.Ipe, f.Count, f.BookCount, homo));
+                string? grammar = GrammarFor(res?.Grammar, focusHeadword);
+                forms.Add(new ReportForm(f.Ipe, f.Count, f.BookCount, homo, grammar));
                 if (homo)
                 {
                     var senses = res!.Candidates
@@ -134,6 +138,57 @@ public sealed class LemmaReportService : ILemmaReportService
             else if (part.Length > 0) sb.Append(Any2Ipe.Convert(part));
         }
         return sb.ToString();
+    }
+
+    // The form's grammatical analysis restricted to THIS lemma. forms.grammar is a JSON array of
+    // [headword, pos, grammar] triples — a single surface form can analyse to several headwords (its own
+    // lemma, homographs, participles) — so we keep only the analyses whose headword is the focus lemma's,
+    // expand the abbreviations, and join distinct results (a form may be, e.g., both present and imperative).
+    private static string? GrammarFor(string? grammarJson, string focusHeadword)
+    {
+        if (string.IsNullOrEmpty(grammarJson)) return null;
+        List<string>? outp = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(grammarJson!);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            foreach (var triple in doc.RootElement.EnumerateArray())
+            {
+                if (triple.ValueKind != JsonValueKind.Array || triple.GetArrayLength() < 3) continue;
+                if (triple[0].GetString() != focusHeadword) continue;
+                var gram = triple[2].GetString();
+                if (string.IsNullOrWhiteSpace(gram)) continue;
+                var expanded = ExpandGrammar(gram!);
+                outp ??= new List<string>();
+                if (!outp.Contains(expanded)) outp.Add(expanded);
+            }
+        }
+        catch (JsonException) { return null; }
+        return outp is { Count: > 0 } ? string.Join(" / ", outp) : null;
+    }
+
+    private static string ExpandGrammar(string gram) =>
+        string.Join(' ', gram.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                             .Select(t => GrammarTokens.TryGetValue(t, out var v) ? v : t));
+
+    // DPD grammar abbreviations → full words. Unknown tokens (1st/2nd/3rd, rare tags) pass through as-is.
+    private static readonly Dictionary<string, string> GrammarTokens = new()
+    {
+        ["pr"] = "present", ["fut"] = "future", ["aor"] = "aorist", ["imp"] = "imperative",
+        ["opt"] = "optative", ["cond"] = "conditional", ["imperf"] = "imperfect", ["perf"] = "perfect",
+        ["reflx"] = "reflexive", ["caus"] = "causative", ["pass"] = "passive", ["denom"] = "denominative",
+        ["desid"] = "desiderative", ["intens"] = "intensive",
+        ["sg"] = "singular", ["pl"] = "plural", ["dual"] = "dual",
+        ["nom"] = "nominative", ["acc"] = "accusative", ["instr"] = "instrumental", ["dat"] = "dative",
+        ["abl"] = "ablative", ["gen"] = "genitive", ["loc"] = "locative", ["voc"] = "vocative",
+        ["masc"] = "masculine", ["fem"] = "feminine", ["nt"] = "neuter",
+    };
+
+    // "paññāya 1" → "paññāya" (strips a trailing homonym number, mirroring the provider).
+    private static string StripHomonym(string lemma)
+    {
+        int sp = lemma.LastIndexOf(' ');
+        return sp > 0 && int.TryParse(lemma.AsSpan(sp + 1), out _) ? lemma[..sp] : lemma;
     }
 
     // Broad pos → family grouping (pos alone can't separate causative/passive from finite verbs — DPD tags

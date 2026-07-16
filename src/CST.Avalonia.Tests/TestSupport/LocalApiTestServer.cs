@@ -142,7 +142,12 @@ namespace CST.Avalonia.Tests.TestSupport
                 CREATE TABLE root (root_key TEXT PRIMARY KEY, root_sign TEXT, root_meaning TEXT, root_group INTEGER,
                     sanskrit_root TEXT, sanskrit_root_meaning TEXT, dhatupatha_pali TEXT, dhatupatha_english TEXT);
                 CREATE TABLE form_lemma (form TEXT NOT NULL, lemma_id INTEGER NOT NULL);
+                CREATE TABLE forms (form TEXT PRIMARY KEY, grammar TEXT);
                 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+                INSERT INTO forms VALUES
+                    ('dhamma','[[""dhamma"",""noun"",""masc nom sg""],[""dhamma"",""noun"",""masc voc sg""]]'),
+                    ('citta','[[""dhamma"",""noun"",""masc acc sg""]]'),
+                    ('kamma','[[""dhamma"",""noun"",""masc instr sg""]]');
                 INSERT INTO lemma
                   (id,lemma,pos,gloss,derived_from,root_key,construction,sanskrit,pattern,ebt_count,example_source,example_sutta,example)
                   VALUES

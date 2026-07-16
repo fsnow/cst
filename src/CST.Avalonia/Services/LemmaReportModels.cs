@@ -9,7 +9,9 @@ public sealed record ReportRoot(
     string? RootPali, string? RootMeaning, long? RootGroup,
     string? SanskritRoot, string? DhatupathaPali, string? DhatupathaEnglish);   // SanskritRoot: verbatim IAST, not script-converted
 
-public sealed record ReportForm(string FormPali, int Count, int BookCount, bool Homograph);
+// Grammar: the form's grammatical analysis for THIS lemma (English, already abbreviation-expanded — e.g.
+// "present 3rd singular"); null when the asset carries no analysis for the form (e.g. an enclitic form).
+public sealed record ReportForm(string FormPali, int Count, int BookCount, bool Homograph, string? Grammar);
 
 public sealed record ReportFamilyMember(
     long LemmaId, string LemmaPali, string? Pos, string? Gloss, int TotalOccurrences, string Group);
