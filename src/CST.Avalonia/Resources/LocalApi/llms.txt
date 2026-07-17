@@ -233,6 +233,15 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   wrong flag is a gross error, not a rounding one. To count "just the verb" INCLUDING its negated/sandhi
   sibling (e.g. `nappajānāti` = na+), union that specific sibling's forms yourself rather than taking the
   whole family; filter by `pos` when you need to scope a family to one grammatical class.
+- `GET  /v1/deconstruct/{word}?script=` - SANDHI/COMPOUND deconstruction: a word -> its constituent PARTS
+  (DPD deconstructor). Returns `{ word, splits:[{ rank, parts:[…] }], directLemmas:[…], note }`. `splits` are
+  DPD's RANKED ALTERNATIVE analyses (rank 0 = best), NOT sequential pieces - Pāli sandhi is ambiguous, so the
+  top rank is not guaranteed correct; a genuine compound stored as its own headword (e.g. `sammāsambuddho`)
+  comes back with `directLemmas` and no split. This is the word->PARTS step only: each part is a surface form,
+  so chain it - `GET /v1/lemma/{part}` for the part's lemma(s) (a part is often a HOMOGRAPH), then
+  `/v1/dictionary/lookup` for glosses. `{word}` is a PATH segment, so PERCENT-ENCODE diacritics. `script` is
+  BOTH the input and output script. (Present only when the DPD-lemma dataset is installed; 503 if not. Full
+  compound coverage needs the full-scope asset; a mid-scope asset splits only enclitics like `…ti`/`…iti`.)
 <!--/doc:dictionary-->
 
 <!--doc:search-->

@@ -60,5 +60,26 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                     Array.Empty<LemmaFormDto>(), 0, 0, 0, false, $"Unknown lemmaId {lemmaId}.")
                 : LemmaApi.ToForms(res, s);
         }
+
+        [McpServerTool(Name = "sandhi_split")]
+        [Description("Deconstruct a Pali COMPOUND or SANDHI word into its constituent parts, using the Digital "
+            + "Pali Dictionary's deconstructor. Returns DPD's RANKED alternative splits (rank 0 = best; the "
+            + "splits are ALTERNATIVE analyses, NOT sequential pieces — Pali sandhi is ambiguous and the top "
+            + "rank is not guaranteed correct), plus any direct lemma(s) if the whole word is itself a headword "
+            + "(e.g. sammāsambuddho). This is the word->parts step only: each part is a surface form, so resolve "
+            + "it with 'lemma_lookup' (a part is often a HOMOGRAPH — don't assume one sense) and look up its "
+            + "gloss. `script` is BOTH the input and output script (default Latin).")]
+        public static DeconstructResponse SandhiSplit(
+            ILemmaSearchService lemma,
+            [Description("The compound/sandhi word to deconstruct, written in `script`.")] string word,
+            [Description("Script for the input word and the output (default Latin).")] Script script = Script.Latin)
+        {
+            var s = Safe(script);
+            var res = lemma.Deconstruct(word, s);
+            return res is null
+                ? new DeconstructResponse(word, Array.Empty<WordSplitDto>(), Array.Empty<LemmaCandidateDto>(),
+                    LemmaApi.DeconstructNotFoundNote(word, lemma.Meta?.Scope))
+                : LemmaApi.ToDeconstruct(word, res, s);
+        }
     }
 }

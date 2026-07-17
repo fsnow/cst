@@ -513,6 +513,18 @@ namespace CST.Avalonia.Services.LocalApi
                         ? Results.NotFound(new { error = $"Unknown lemmaId {lemmaId}." })
                         : Results.Json(LemmaApi.ToForms(res, outputScript));
                 });
+
+                // Sandhi/compound deconstruction: a word -> its ranked constituent-part splits (DPD deconstructor).
+                // The word->parts primitive only; the caller composes part -> /v1/lemma -> /v1/dictionary. (#383)
+                app.MapGet(v + "/deconstruct/{word}", (string word, string? script) =>
+                {
+                    if (!lemma.IsAvailable) return LemmaUnavailable();
+                    var outputScript = ParseScript(script);
+                    var res = lemma.Deconstruct(word, outputScript);
+                    return res is null
+                        ? Results.NotFound(new { error = LemmaApi.DeconstructNotFoundNote(word, lemma.Meta?.Scope) })
+                        : Results.Json(LemmaApi.ToDeconstruct(word, res, outputScript));
+                });
             }
 
             // Lemma dossier (rendered HTML). The GUI renders it in-process; this endpoint gives agents/humans

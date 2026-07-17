@@ -20,6 +20,18 @@ public sealed record FormResolution(
     string Form, IReadOnlyList<LemmaCandidate> Candidates, string? Grammar, string? Deconstructor);
 
 /// <summary>
+/// Raw sandhi/compound deconstruction of a surface form: the DPD deconstructor JSON (a ranked array of
+/// alternative splits, each a <c>" + "</c>-joined string, e.g. <c>["sattha + kosa + karaṇatthāya", …]</c>),
+/// plus any DIRECT lemma(s) the whole word is itself a headword of. A pure sandhi word has splits and NO
+/// direct lemma; a genuine compound stored as its own headword (e.g. <c>sammāsambuddho</c>) has a direct
+/// lemma and NO split — so both fields can be empty/null independently. Parsing the JSON is the caller's job
+/// (this stays free of split policy). Distinct from <see cref="FormResolution"/>, which short-circuits to
+/// null when a form has no direct lemma — pure sandhi words would be lost that way. (sandhi decomposer, #383)
+/// </summary>
+public sealed record FormDeconstruction(
+    string Form, IReadOnlyList<LemmaCandidate> DirectLemmas, string? Deconstructor);
+
+/// <summary>
 /// Forward expansion of one lemma: its attested surface forms (IAST) and, when requested, its
 /// <c>derived_from</c> family. Occurrence counts are NOT here — the caller joins forms to the search index.
 /// </summary>
