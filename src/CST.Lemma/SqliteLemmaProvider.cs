@@ -94,6 +94,41 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         return new FormResolution(form, candidates, grammar, deconstructor);
     }
 
+    public FormDeconstruction? Deconstruct(string form)
+    {
+        if (!IsAvailable || string.IsNullOrEmpty(form) || !_hasDecon) return null;
+        using var c = Open();
+
+        // Read the deconstructor DIRECTLY from forms — independent of form_lemma, so a pure-sandhi word
+        // (a split with no headword; 733k of them in DPD) is not lost the way ResolveForm would lose it.
+        string? decon = null;
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "SELECT deconstructor FROM forms WHERE form = $f";
+            cmd.Parameters.AddWithValue("$f", form);
+            using var r = cmd.ExecuteReader();
+            if (r.Read()) decon = Str(r, 0);
+        }
+
+        // Fall-through: a compound stored as its OWN headword (e.g. sammāsambuddho) has an empty
+        // deconstructor but a direct lemma — carry those so the caller reports the headword, not "nothing".
+        var direct = new List<LemmaCandidate>();
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText =
+                @"SELECT fl.lemma_id, l.lemma, l.pos, l.gloss, l.derived_from
+                  FROM form_lemma fl JOIN lemma l ON l.id = fl.lemma_id
+                  WHERE fl.form = $f ORDER BY fl.lemma_id";
+            cmd.Parameters.AddWithValue("$f", form);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                direct.Add(new LemmaCandidate(r.GetInt64(0), r.GetString(1), Str(r, 2), Str(r, 3), Str(r, 4)));
+        }
+
+        if (string.IsNullOrWhiteSpace(decon) && direct.Count == 0) return null;
+        return new FormDeconstruction(form, direct, decon);
+    }
+
     public LemmaExpansion? ExpandLemma(long lemmaId, bool includeFamily = false)
     {
         if (!IsAvailable) return null;

@@ -43,6 +43,39 @@ public sealed class LemmaSearchService : ILemmaSearchService
         return _lemma.ResolveForm(iast);
     }
 
+    public WordDeconstruction? Deconstruct(string word, Script sourceScript = Script.Ipe)
+    {
+        if (!IsAvailable || string.IsNullOrWhiteSpace(word)) return null;
+        string iast = sourceScript == Script.Latin ? word : ScriptConverter.Convert(word, sourceScript, Script.Latin);
+        var fd = _lemma.Deconstruct(iast);
+        if (fd is null) return null;
+        return new WordDeconstruction(iast, fd.DirectLemmas, ParseSplits(fd.Deconstructor), _lemma.Meta?.Scope);
+    }
+
+    // The DPD deconstructor is a JSON array of ranked alternative splits, each a " + "-joined string
+    // (e.g. ["sattha + kosa + karaṇatthāya", "satthako + usa + karaṇatthāya"]). Project to ranked WordSplits
+    // (array order IS the rank; element 0 is DPD's best). Malformed JSON degrades to what parsed so far.
+    private static IReadOnlyList<WordSplit> ParseSplits(string? deconJson)
+    {
+        if (string.IsNullOrWhiteSpace(deconJson)) return Array.Empty<WordSplit>();
+        var splits = new List<WordSplit>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(deconJson);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array) return splits;
+            int rank = 0;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != System.Text.Json.JsonValueKind.String) continue;
+                var parts = el.GetString()!
+                    .Split(" + ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0) splits.Add(new WordSplit(rank++, parts));
+            }
+        }
+        catch (System.Text.Json.JsonException) { /* return what parsed */ }
+        return splits;
+    }
+
     public async Task<LemmaSearchResult?> ExpandAndSearchAsync(
         long lemmaId,
         bool includeFamily = false,

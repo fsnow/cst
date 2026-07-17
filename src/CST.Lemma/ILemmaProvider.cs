@@ -22,6 +22,12 @@ public interface ILemmaProvider : IDisposable
     /// <summary>Forward expansion: a lemma id → its attested surface forms (+ derived_from family when asked). Null if the id is unknown.</summary>
     LemmaExpansion? ExpandLemma(long lemmaId, bool includeFamily = false);
 
+    /// <summary>Sandhi/compound deconstruction: a surface form (IAST) → its DPD deconstructor split(s) and any
+    /// DIRECT lemma(s). Unlike <see cref="ResolveForm"/> this does NOT short-circuit when the form has no direct
+    /// lemma, so pure-sandhi words (a split with no headword) are returned. Null when the asset carries no
+    /// deconstructor column, or the form has neither a split nor a direct lemma. (sandhi decomposer, #383)</summary>
+    FormDeconstruction? Deconstruct(string form);
+
     /// <summary>A single lemma's metadata, or null if the id is unknown.</summary>
     LemmaCandidate? GetLemma(long lemmaId);
 
