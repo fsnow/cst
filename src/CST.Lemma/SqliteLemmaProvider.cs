@@ -264,7 +264,8 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         }
         string G(string k) => m.TryGetValue(k, out var v) ? v : string.Empty;
         return new DpdLemmaMeta(G("scope"), G("dpd_version"), G("converter_version"),
-                                G("schema_version"), G("license"), G("attribution"));
+                                G("schema_version"), G("license"), G("attribution"),
+                                G("source"), G("author"), G("homepage"));
     }
 
     private static bool TableExists(SqliteConnection c, string name)

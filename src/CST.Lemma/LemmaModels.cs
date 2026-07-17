@@ -44,14 +44,19 @@ public sealed record LemmaExpansion(
     IReadOnlyList<string> Forms,
     IReadOnlyList<LemmaCandidate>? Family);
 
-/// <summary>Provenance / version of the loaded DPD-lemma asset (from its <c>meta</c> table).</summary>
+/// <summary>Provenance / version of the loaded DPD-lemma asset (from its <c>meta</c> table). <see cref="Source"/>,
+/// <see cref="Author"/>, and <see cref="Homepage"/> are the upstream DPD citation fields, so a DPD dictionary
+/// source can cite the shipped release without hard-coding it (#109).</summary>
 public sealed record DpdLemmaMeta(
     string Scope,
     string DpdVersion,
     string ConverterVersion,
     string SchemaVersion,
     string License,
-    string Attribution);
+    string Attribution,
+    string Source,
+    string Author,
+    string Homepage);
 
 /// <summary>Root (dhātu) detail for the report's etymology band (present only in report-grade assets).</summary>
 public sealed record RootDetail(
