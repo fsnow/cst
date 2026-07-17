@@ -84,6 +84,16 @@ namespace CST.Search
             return (number, code, pages);
         }
 
+        /// <summary>The distinct sub-book codes in this book, in first-appearance order (empty for a non-Multi
+        /// book, whose paragraphs carry no book-div code).</summary>
+        public IReadOnlyList<string> DistinctBookCodes()
+        {
+            var codes = new List<string>();
+            foreach (var p in _paras)
+                if (p.BookCode is { } code && !codes.Contains(code)) codes.Add(code);
+            return codes;
+        }
+
         // Largest index+1 whose predicate holds over an ascending-sorted list (i.e. count of leading trues).
         private static int UpperBound(int count, System.Func<int, bool> leadingTrue)
         {

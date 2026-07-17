@@ -20,7 +20,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "classification. Use this to turn a bookId into a recognizable location, or to find "
             + "book ids to read. The full catalog is 217 books and large — FILTER by pitaka and/or commentary "
             + "level to narrow it (e.g. pitaka:Abhidhamma), and page with skip/take. Returns "
-            + "{ books, returnedCount, total, hasMore }.")]
+            + "{ books, returnedCount, total, hasMore }; each book also carries bookCodes — a Multi book's valid "
+            + "sub-book codes (e.g. [\"an5\",\"an6\",\"an7\"]) to pass as bookCode when reading a passage, empty otherwise.")]
         public static BookListResult Books_(
             [Description("Script for the returned book names.")]
             OutputScript outputScript = OutputScript.Latin,
