@@ -133,6 +133,45 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void ReadWindow_structuredNotes_hugs_punctuation_after_an_excised_note()
+        {
+            // 41% of corpus notes are immediately followed by punctuation; excising the note must not leave a
+            // stray space before it in the "clean, quotable" text. (#267 review, Defect 1)
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<p rend=\"bodytext\" n=\"5\">alpha <note>varreading (si)</note>, bravo</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int start = markers.PositionOfParagraph(5);
+
+            var w = TeiPassageReader.ReadWindow(xml, start, maxChars: 10000, includeVariants: false,
+                outputScript: Script.Latin, markers, structuredNotes: true);
+
+            Assert.DoesNotContain(" ,", w.Text);          // no stray space before the comma
+            Assert.Contains("alpha, bravo", w.Text);
+            Assert.Equal("si", Assert.Single(w.Notes).Sigla);
+        }
+
+        [Fact]
+        public void ReadWindow_structuredNotes_never_cuts_mid_note_even_with_footnotes()
+        {
+            // A tiny budget + includeVariants would let the window end inside a note; a structured window must
+            // still return brace-free text (no unmatched '{'/'}'). (#267 review, Defect 2)
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<p rend=\"bodytext\" n=\"5\">alpha bravo <note>a very long apparatus note that exceeds the budget (si)</note> charlie</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int start = markers.PositionOfParagraph(5);
+
+            var w = TeiPassageReader.ReadWindow(xml, start, maxChars: 15, includeVariants: true,
+                outputScript: Script.Latin, markers, structuredNotes: true);
+
+            Assert.DoesNotContain("{", w.Text);
+            Assert.DoesNotContain("}", w.Text);
+        }
+
+        [Fact]
         public void ReadWindow_without_structuredNotes_has_no_notes()
         {
             const string xml =

@@ -42,7 +42,10 @@ namespace CST.Search
                     readStart = candidate;
             }
 
-            int end = WalkForward(xml, readStart, maxChars, includeVariants, xml.Length);
+            // When returning structured notes, size the window with notes SKIPPED (never entered), so the end
+            // (and thus nextCursor) can't land mid-note and leave an unmatched brace / apparatus in the clean
+            // base text — even if includeFootnotes is also set. (#267 review, Defect 2)
+            int end = WalkForward(xml, readStart, maxChars, includeNotes: includeVariants && !structuredNotes, xml.Length);
             IReadOnlyList<PassageNote> notes = System.Array.Empty<PassageNote>();
             string text;
             if (structuredNotes)
@@ -80,7 +83,7 @@ namespace CST.Search
         {
             if (braced.IndexOf('{') < 0) return (braced, System.Array.Empty<PassageNote>());
             var sb = new System.Text.StringBuilder(braced.Length);
-            var notes = new List<PassageNote>();
+            var raw = new List<(int Offset, string Inner)>();
             int i = 0;
             while (i < braced.Length)
             {
@@ -90,15 +93,35 @@ namespace CST.Search
                     int close = braced.IndexOf('}', i + 1);
                     if (close < 0) { sb.Append(braced, i, braced.Length - i); break; }   // malformed: keep verbatim
                     string inner = braced.Substring(i + 1, close - i - 1).Trim();
-                    var (reading, sigla) = ParseNote(inner);
-                    notes.Add(new PassageNote(sb.Length, inner, reading, sigla));
                     i = close + 1;
-                    if (i < braced.Length && braced[i] == ' ' && sb.Length > 0 && sb[sb.Length - 1] == ' ')
-                        i++;   // drop the space that flanked the excised span so the anchor isn't a double space
+                    // Clean always puts a space before '{'. If close punctuation follows the excised note, that
+                    // punctuation must hug the preceding word — Clean's #292 rule couldn't fire because '}' sat
+                    // before it — so drop the space. Otherwise, if the note was flanked by spaces, drop one to
+                    // avoid a double space at the seam. Anchor the note AFTER this adjustment. (#267 review, D1)
+                    if (sb.Length > 0 && sb[sb.Length - 1] == ' ')
+                    {
+                        if (i < braced.Length && TeiText.IsClosePunctuation(braced[i])) sb.Length--;
+                        else if (i < braced.Length && braced[i] == ' ') i++;
+                    }
+                    raw.Add((sb.Length, inner));
                 }
                 else { sb.Append(c); i++; }
             }
-            return (sb.ToString(), notes);
+
+            // A note at the window edge can leave a leading/trailing space (the .Trim() upstream ran on the
+            // braced string, before excision); trim it and shift the note offsets to match. (#267 review, D3)
+            string text = sb.ToString();
+            int lead = 0; while (lead < text.Length && char.IsWhiteSpace(text[lead])) lead++;
+            int tail = text.Length; while (tail > lead && char.IsWhiteSpace(text[tail - 1])) tail--;
+            text = text.Substring(lead, tail - lead);
+
+            var notes = new List<PassageNote>(raw.Count);
+            foreach (var (offset, inner) in raw)
+            {
+                var (reading, sigla) = ParseNote(inner);
+                notes.Add(new PassageNote(Math.Clamp(offset - lead, 0, text.Length), inner, reading, sigla));
+            }
+            return (text, notes);
         }
 
         // Split "reading (sigla)" only when there is exactly one trailing parenthetical and nothing else in
