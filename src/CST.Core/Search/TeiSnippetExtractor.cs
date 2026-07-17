@@ -121,7 +121,13 @@ namespace CST.Search
                 var (clean, split, remapped) = TeiText.SplitApparatus(snippet, highlights.Select(h => h.Start).ToList());
                 snippet = clean;
                 notes = split;
-                highlights = highlights.Select((h, k) => h with { Start = remapped[k] }).ToList();
+                // Remap each highlight to its brace-free offset; clamp defensively so Start+Length can never
+                // exceed the snippet (a consumer's Substring must not throw). (#267 f/u review)
+                highlights = highlights.Select((h, k) =>
+                {
+                    int start = Math.Clamp(remapped[k], 0, snippet.Length);
+                    return h with { Start = start, Length = Math.Clamp(h.Length, 0, snippet.Length - start) };
+                }).ToList();
             }
 
             var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];

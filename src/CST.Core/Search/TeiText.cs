@@ -126,13 +126,39 @@ namespace CST.Search
                     int close = braced.IndexOf('}', i + 1);
                     if (close < 0) { sb.Append(braced, i, braced.Length - i); break; }   // malformed: keep verbatim
                     string inner = braced.Substring(i + 1, close - i - 1).Trim();
-                    i = close + 1;
-                    if (sb.Length > 0 && sb[sb.Length - 1] == ' ')
+
+                    // If a tracked position (a snippet highlight) falls INSIDE this note, the hit itself is a
+                    // variant reading (note text is indexed). Keep the note's text INLINE so the hit stays
+                    // visible and its offset remaps char-by-char — never excise the hit into notes[] and leave
+                    // an out-of-range highlight. The note is still listed. (#267 f/u review)
+                    bool holdsHit = false;
+                    for (int k = 0; k < pn; k++)
+                        if (!pdone[k] && positions![k] > i && positions![k] < close) { holdsHit = true; break; }
+
+                    if (holdsHit)
                     {
-                        if (i < braced.Length && IsClosePunctuation(braced[i])) sb.Length--;   // hug the punctuation
-                        else if (i < braced.Length && braced[i] == ' ') i++;                    // avoid a double space
+                        int noteOffset = sb.Length;
+                        i++;                                  // past '{'
+                        while (i < close)
+                        {
+                            for (int k = 0; k < pn; k++)
+                                if (!pdone[k] && i >= positions![k]) { mapped[k] = sb.Length; pdone[k] = true; }
+                            sb.Append(braced[i]);
+                            i++;
+                        }
+                        i = close + 1;                        // past '}'
+                        raw.Add((noteOffset, inner));
                     }
-                    raw.Add((sb.Length, inner));
+                    else
+                    {
+                        i = close + 1;
+                        if (sb.Length > 0 && sb[sb.Length - 1] == ' ')
+                        {
+                            if (i < braced.Length && IsClosePunctuation(braced[i])) sb.Length--;   // hug the punctuation
+                            else if (i < braced.Length && braced[i] == ' ') i++;                    // avoid a double space
+                        }
+                        raw.Add((sb.Length, inner));
+                    }
                 }
                 else { sb.Append(braced[i]); i++; }
             }

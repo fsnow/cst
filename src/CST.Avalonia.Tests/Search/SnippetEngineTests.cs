@@ -118,6 +118,27 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void Extract_structuredNotes_keeps_an_in_note_hit_visible_and_highlighted()
+        {
+            // The hit word is INSIDE a note (note text is indexed). Structured mode must keep it in the snippet
+            // and land the highlight on it — not excise it and leave hitStart out of range. (#267 f/u review)
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<p rend=\"bodytext\" n=\"1\">alpha beta <note>varword (si)</note> gamma</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int hit = HitStart(xml, "varword");
+            var marks = new[] { new SnippetMark(hit, hit + "varword".Length, true) };
+            var opts = new SnippetOptions(OutputScript: Script.Latin, MinChars: 1, MaxChars: 4000, StructuredNotes: true);
+
+            var s = TeiSnippetExtractor.Extract(xml, marks, markers, opts);
+
+            Assert.InRange(s.HitStart + s.HitLength, 0, s.Snippet.Length);       // never out of range
+            Assert.Equal("varword", s.Snippet.Substring(s.HitStart, s.HitLength)); // hit visible + highlighted
+            Assert.Single(s.Notes);                                              // the containing note still listed
+        }
+
+        [Fact]
         public void Snippet_never_leaks_markup_across_truncation_budgets()
         {
             // A window bound that lands inside `<pb ed="V" n="1.0002"/>` must not leak `ed="V" n=...` as text.
