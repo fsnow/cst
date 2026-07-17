@@ -92,6 +92,81 @@ namespace CST.Search
         internal static bool IsClosePunctuation(char c) =>
             c == ',' || c == ';' || c == '.' || c == '!' || c == '?' || c == Danda || c == DoubleDanda;
 
+        /// <summary>
+        /// Split the <c>{reading (sigla)}</c> apparatus spans out of already-rendered text into structured notes.
+        /// Returns the brace-FREE text, the notes anchored by offset into it, and — for each input position in
+        /// <paramref name="positions"/> (e.g. snippet highlight starts) — its remapped offset into the brace-free
+        /// text. Braces never occur in the corpus, so they are unambiguous delimiters; a note's flanking space is
+        /// collapsed (and dropped entirely before close punctuation, so the base text stays quotable), and a
+        /// leading/trailing space left by an edge note is trimmed with all offsets shifted to match. (#267, #267 f/u)
+        /// </summary>
+        internal static (string Text, List<ApparatusNote> Notes, int[] Positions) SplitApparatus(
+            string braced, IReadOnlyList<int>? positions = null)
+        {
+            int pn = positions?.Count ?? 0;
+            var mapped = new int[pn];
+            var pdone = new bool[pn];
+
+            if (braced.IndexOf('{') < 0)
+            {
+                for (int k = 0; k < pn; k++) mapped[k] = positions![k];
+                return (braced, new List<ApparatusNote>(), mapped);
+            }
+
+            var sb = new StringBuilder(braced.Length);
+            var raw = new List<(int Offset, string Inner)>();
+            int i = 0;
+            while (i < braced.Length)
+            {
+                for (int k = 0; k < pn; k++)
+                    if (!pdone[k] && i >= positions![k]) { mapped[k] = sb.Length; pdone[k] = true; }
+
+                if (braced[i] == '{')
+                {
+                    int close = braced.IndexOf('}', i + 1);
+                    if (close < 0) { sb.Append(braced, i, braced.Length - i); break; }   // malformed: keep verbatim
+                    string inner = braced.Substring(i + 1, close - i - 1).Trim();
+                    i = close + 1;
+                    if (sb.Length > 0 && sb[sb.Length - 1] == ' ')
+                    {
+                        if (i < braced.Length && IsClosePunctuation(braced[i])) sb.Length--;   // hug the punctuation
+                        else if (i < braced.Length && braced[i] == ' ') i++;                    // avoid a double space
+                    }
+                    raw.Add((sb.Length, inner));
+                }
+                else { sb.Append(braced[i]); i++; }
+            }
+            for (int k = 0; k < pn; k++) if (!pdone[k]) { mapped[k] = sb.Length; pdone[k] = true; }
+
+            // Trim a leading/trailing space an edge note can leave, and shift every offset to match.
+            string text = sb.ToString();
+            int lead = 0; while (lead < text.Length && char.IsWhiteSpace(text[lead])) lead++;
+            int tail = text.Length; while (tail > lead && char.IsWhiteSpace(text[tail - 1])) tail--;
+            text = text.Substring(lead, tail - lead);
+
+            var notes = new List<ApparatusNote>(raw.Count);
+            foreach (var (offset, inner) in raw)
+            {
+                var (reading, sigla) = ParseApparatusNote(inner);
+                notes.Add(new ApparatusNote(System.Math.Clamp(offset - lead, 0, text.Length), inner, reading, sigla));
+            }
+            for (int k = 0; k < pn; k++) mapped[k] = System.Math.Clamp(mapped[k] - lead, 0, text.Length);
+            return (text, notes, mapped);
+        }
+
+        // Split "reading (sigla)" only when there is exactly one trailing parenthetical and nothing else in
+        // parens — the notes are digitized print footnotes, not a clean apparatus, so anything more complex
+        // (multiple readings, no sigla, freeform) is left as raw text with null reading/sigla. (#267)
+        internal static (string? Reading, string? Sigla) ParseApparatusNote(string t)
+        {
+            if (!t.EndsWith(")", System.StringComparison.Ordinal)) return (null, null);
+            int open = t.IndexOf('(');
+            if (open <= 0 || t.IndexOf('(', open + 1) >= 0) return (null, null);   // zero or >1 '('
+            string reading = t.Substring(0, open).Trim();
+            string sigla = t.Substring(open + 1, t.Length - open - 2).Trim();
+            return reading.Length > 0 && sigla.Length > 0 ? (reading, sigla) : (null, null);
+        }
+
         internal static List<(int s, int e)> NoteRegions(string xml, int lo, int hi)
         {
             var list = new List<(int, int)>();

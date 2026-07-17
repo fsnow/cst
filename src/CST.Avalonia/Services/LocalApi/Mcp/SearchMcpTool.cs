@@ -107,6 +107,11 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             bool includeFootnotes = false,
             [Description("For a multi-word/proximity term, the co-occurrence window in words (default 10).")]
             int proximityDistance = 10,
+            [Description("Return the apparatus as DATA instead of inline braces: each snippet comes back "
+                + "brace-free (clean, quotable Pāli, with the highlight offsets recomputed for it) and its notes "
+                + "appear in 'notes' as { offset, text, reading, sigla } (reading/sigla filled only for a simple "
+                + "'reading (sigla)' note). Use this to quote the base text and read variants separately.")]
+            bool structuredNotes = false,
             CancellationToken ct = default)
         {
             var request = new OccurrenceRequest(
@@ -117,7 +122,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 Skip: skip,
                 Take: take,
                 Mode: mode,
-                ProximityDistance: proximityDistance);
+                ProximityDistance: proximityDistance,
+                StructuredNotes: structuredNotes);
             return await search.GetOccurrencesAsync(request, ct).ConfigureAwait(false);
         }
     }

@@ -88,6 +88,6 @@ namespace CST.Avalonia.Services.Tools
 
         private static PassageResult Empty(PassageRequest request, string note) =>
             new(request.BookId, note, "", Array.Empty<SnippetPageRef>(), null, null, null, null, 0,
-                Array.Empty<CST.Search.PassageNote>());
+                Array.Empty<CST.Search.ApparatusNote>());
     }
 }

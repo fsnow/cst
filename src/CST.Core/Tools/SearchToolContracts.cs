@@ -137,7 +137,8 @@ namespace CST.Tools
         int? MinChars = null,
         int? MaxChars = null,
         SearchToolMode Mode = SearchToolMode.Exact,
-        int ProximityDistance = 10);
+        int ProximityDistance = 10,
+        bool StructuredNotes = false);
 
     /// <summary>Citation refs at a hit: the paragraph (with Multi sub-book code) and the page in each edition.</summary>
     public sealed record OccurrenceRefs(
@@ -174,7 +175,8 @@ namespace CST.Tools
         bool IncludedFootnotes,
         int Cursor,
         IReadOnlyList<OccurrenceHighlight> Highlights,
-        int NoteCount);
+        int NoteCount,
+        IReadOnlyList<CST.Search.ApparatusNote> Notes);
 
     /// <summary>
     /// A page of a term's in-context occurrences within one book — the same envelope shape as
