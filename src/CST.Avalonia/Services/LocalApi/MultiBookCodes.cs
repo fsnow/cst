@@ -23,8 +23,9 @@ namespace CST.Avalonia.Services.LocalApi
         private static readonly Dictionary<string, IReadOnlyList<string>> _codes = new(StringComparer.Ordinal);
         private static readonly object _gate = new();
 
-        /// <summary>Parse the sub-book codes of every Multi book once. Safe to call when the XML dir is missing
-        /// or a book can't be read — those books simply get no codes.</summary>
+        /// <summary>Parse the sub-book codes of each Multi book once. (A few Multi books have no internal book
+        /// divisions and so yield no codes — that is correct, not a failure.) Safe to call when the XML dir is
+        /// missing or a book can't be read — those books simply get no codes.</summary>
         public static async Task PrimeAsync(string? xmlDir, CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(xmlDir)) return;
