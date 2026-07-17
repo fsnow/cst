@@ -12,8 +12,10 @@ namespace CST.Tools
     /// </summary>
     public interface IDictionaryTool
     {
-        /// <summary>Available dictionary language codes (e.g. "en", "hi").</summary>
-        IReadOnlyList<string> Languages { get; }
+        /// <summary>Available dictionaries, each with its language code and source attribution (#268), so an
+        /// agent producing scholarly output can cite the gloss and weigh its authority. <c>Source</c> is null
+        /// when a dictionary carries no authoritative metadata — it is never inferred/guessed.</summary>
+        IReadOnlyList<DictionaryLanguageInfo> Languages { get; }
 
         /// <summary>
         /// Look up a headword (exact match plus the prefix run, or the nearest-neighbor run on a miss).
@@ -21,6 +23,20 @@ namespace CST.Tools
         /// </summary>
         Task<IReadOnlyList<DictionaryEntry>> LookupAsync(DictionaryRequest request, CancellationToken ct = default);
     }
+
+    /// <summary>A dictionary's language code and its source attribution (null if none is recorded). (#268)</summary>
+    public sealed record DictionaryLanguageInfo(string Language, DictionarySourceInfo? Source);
+
+    /// <summary>Authoritative citation for a dictionary — populated verbatim from the dictionary's own
+    /// <c>source.json</c>, never inferred. Every field is optional; an unpopulated source is null. (#268)</summary>
+    public sealed record DictionarySourceInfo(
+        string? Title,
+        string? Compiler,
+        string? Edition,
+        string? Year,
+        string? Publisher,
+        string? License,
+        string? Url);
 
     /// <summary>A dictionary lookup request.</summary>
     public sealed record DictionaryRequest(
@@ -32,7 +48,10 @@ namespace CST.Tools
     /// <summary>One dictionary entry.</summary>
     /// <param name="Headword">The headword in the requested output script.</param>
     /// <param name="MeaningHtml">The definition as an HTML fragment (the source format).</param>
+    /// <param name="Source">The dictionary's title, for inline attribution (null when unrecorded); the full
+    /// citation for this language is in <see cref="IDictionaryTool.Languages"/>. (#268)</param>
     public sealed record DictionaryEntry(
         string Headword,
-        string MeaningHtml);
+        string MeaningHtml,
+        string? Source);
 }

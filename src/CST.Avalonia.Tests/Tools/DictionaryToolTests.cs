@@ -19,14 +19,34 @@ namespace CST.Avalonia.Tests.Tools
     public class DictionaryToolTests
     {
         [Fact]
-        public void Languages_passes_through()
+        public void Languages_expose_code_and_source_attribution_or_null()
         {
             var mock = new Mock<IDictionaryService>();
             mock.SetupGet(d => d.AvailableLanguages).Returns(new[] { "en", "hi" });
+            mock.Setup(d => d.SourceFor("en"))
+                .Returns(new DictionarySourceInfo("Test PED", "A. Compiler", "2nd", "2020", "Pub", "CC", null));
+            // hi: SourceFor left unset -> null (an unattributed dictionary is null, never guessed).
 
             var tool = new DictionaryTool(mock.Object);
+            var langs = tool.Languages;
 
-            Assert.Equal(new[] { "en", "hi" }, tool.Languages);
+            Assert.Equal(new[] { "en", "hi" }, langs.Select(l => l.Language).ToArray());
+            Assert.Equal("Test PED", langs.First(l => l.Language == "en").Source?.Title);
+            Assert.Null(langs.First(l => l.Language == "hi").Source);
+        }
+
+        [Fact]
+        public async Task LookupAsync_attaches_the_source_title_to_each_entry()
+        {
+            var mock = new Mock<IDictionaryService>();
+            mock.Setup(d => d.LookupAsync("en", "metta"))
+                .ReturnsAsync(new List<DictionaryWord> { new("abc", "def") });
+            mock.Setup(d => d.SourceFor("en"))
+                .Returns(new DictionarySourceInfo("Test PED", null, null, null, null, null, null));
+
+            var tool = new DictionaryTool(mock.Object);
+            var e = Assert.Single(await tool.LookupAsync(new DictionaryRequest("en", "metta")));
+            Assert.Equal("Test PED", e.Source);
         }
 
         [Fact]

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
+using CST.Tools;
 
 namespace CST.Avalonia.Services;
 
@@ -17,6 +18,13 @@ public interface IDictionaryService
     /// <c>"hi"</c>). Empty if the dictionaries directory is missing.
     /// </summary>
     IReadOnlyList<string> AvailableLanguages { get; }
+
+    /// <summary>
+    /// The authoritative source citation for a language's dictionary, read verbatim from its
+    /// <c>&lt;lang&gt;/source.json</c>, or <c>null</c> if none is recorded. NEVER inferred from the file name
+    /// or contents — an unattributed dictionary reports null rather than a guess. (#268)
+    /// </summary>
+    DictionarySourceInfo? SourceFor(string language);
 
     /// <summary>
     /// Look up <paramref name="query"/> (typed in any supported script) in the given language. The
