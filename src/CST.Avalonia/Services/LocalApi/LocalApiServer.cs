@@ -255,7 +255,18 @@ namespace CST.Avalonia.Services.LocalApi
 
             // Unauthenticated front door: the agent's orientation (endpoints, conventions, auth handshake).
             // Version-stamped so it can't be mistaken for a different build's surface.
-            app.MapGet("/llms.txt", () => Results.Text(BuildLlmsText(), "text/markdown; charset=utf-8"));
+            app.MapGet("/llms.txt", () => Results.Text(LayeredDocs.WithPointer(BuildLlmsText()), "text/markdown; charset=utf-8"));
+            // Progressive discovery (#259): the whole document in one fetch, and per-topic slices — all from
+            // the single llms.txt source. Unauthenticated, like /llms.txt (see IsDiscoveryPath).
+            app.MapGet("/llms-full.txt", () => Results.Text(BuildLlmsText(), "text/markdown; charset=utf-8"));
+            app.MapGet("/docs/{topic}.md", (string topic) =>
+            {
+                var doc = BuildDocSlice(topic);
+                return doc is null
+                    ? Results.NotFound(new { error =
+                        $"Unknown docs topic '{topic}'. Available: {string.Join(", ", LayeredDocs.Topics.Select(t => t.Topic))}." })
+                    : Results.Text(doc, "text/markdown; charset=utf-8");
+            });
 
             if (_restApiEnabled)
                 MapToolEndpoints(app);
@@ -335,9 +346,10 @@ namespace CST.Avalonia.Services.LocalApi
         private static bool IsDiscoveryPath(PathString path) =>
             !path.HasValue || path == "/"
             || path.Equals("/llms.txt", StringComparison.OrdinalIgnoreCase)
-            // /v1/status is advertised by the unauthenticated root and carries no secrets, so a cold agent
-            // following the pointer must not hit a 401. (#306 A1-4) — /docs was exempt but nothing maps
-            // there; dropped so a future /docs/... route can't inherit the exemption unnoticed. (#306 A1-6)
+            // The progressive-discovery docs are the same public orientation content as /llms.txt, so they
+            // carry no secrets and must not 401 a cold agent following the pointer. (#259, cf. #306 A1-6)
+            || path.Equals("/llms-full.txt", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWithSegments("/docs", StringComparison.OrdinalIgnoreCase)
             || path.Equals("/" + ApiVersion + "/status", StringComparison.OrdinalIgnoreCase);
 
         // The version-stamped llms.txt body, served both at GET /llms.txt and as the MCP llms.txt resource
@@ -346,7 +358,17 @@ namespace CST.Avalonia.Services.LocalApi
         {
             var body = ReadResource("LocalApi.llms.txt")
                 ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
-            return $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + body;
+            // Strip the progressive-discovery region markers; the full document is the monolith. (#259)
+            return $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + LayeredDocs.StripMarkers(body);
+        }
+
+        // A per-topic slice of the SAME source (#259) — the concatenation of that topic's marked regions,
+        // stamped like the full doc. Null for an unknown topic. Single-source, so it can't drift.
+        private string? BuildDocSlice(string topic)
+        {
+            var raw = ReadResource("LocalApi.llms.txt");
+            var slice = raw is null ? null : LayeredDocs.Slice(raw, topic);
+            return slice is null ? null : $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + slice;
         }
 
         // The same orientation doc as an MCP resource, so a Streamable-HTTP client (which has no base URL to
