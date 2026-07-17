@@ -106,6 +106,37 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Layered_docs_are_served_unauthenticated_and_sliced_from_the_monolith()
+        {
+            // #259: /llms-full.txt + /docs/{topic}.md are unauthenticated discovery, like /llms.txt.
+            using var noAuth = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) };
+
+            var full = await noAuth.GetAsync("/llms-full.txt");
+            Assert.Equal(HttpStatusCode.OK, full.StatusCode);
+            var fullBody = await full.Content.ReadAsStringAsync();
+            Assert.DoesNotContain("<!--doc:", fullBody);         // region markers stripped
+            Assert.Contains("/v1/search", fullBody);
+            Assert.Contains("/v1/dictionary", fullBody);
+            Assert.Contains("Sandhi caveat", fullBody);          // the full doc HAS the endpoint detail
+
+            var slice = await noAuth.GetAsync("/docs/dictionary.md");
+            Assert.Equal(HttpStatusCode.OK, slice.StatusCode);
+            var sliceBody = await slice.Content.ReadAsStringAsync();
+            Assert.Contains("/v1/lemma", sliceBody);
+            Assert.DoesNotContain("Sandhi caveat", sliceBody);    // a different topic's detail is excluded
+            Assert.DoesNotContain("<!--doc", sliceBody);
+
+            // /llms.txt is now a THIN index: the pointer + connecting/essentials, but NOT the endpoint detail.
+            var llmsBody = await (await noAuth.GetAsync("/llms.txt")).Content.ReadAsStringAsync();
+            Assert.Contains("Progressive discovery", llmsBody);   // the pointer
+            Assert.Contains("## Connecting", llmsBody);           // the auth handshake stays
+            Assert.DoesNotContain("Sandhi caveat", llmsBody);     // the detail is NOT in the index
+            Assert.True(llmsBody.Length < fullBody.Length / 3);   // and it's much smaller
+
+            Assert.Equal(HttpStatusCode.NotFound, (await noAuth.GetAsync("/docs/nope.md")).StatusCode);
+        }
+
+        [Fact]
         public async Task Unknown_filter_key_is_400_through_real_json()
         {
             // The mock-bypassed seam bug: unknown JSON filter keys must fail loud, not bind to defaults.

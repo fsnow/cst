@@ -21,18 +21,25 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   `outputScript` to override (e.g. "Devanagari", "Thai", "Myanmar", "Sinhala"); `GET /v1/scripts` lists every
   valid value. All scripts convert losslessly EXCEPT `Cyrillic`, a legacy transliteration with a known
   non-reversibility (a revision is planned); its output is expected, not a conversion defect - do not report it.
+<!--doc:scripts-->
 - Zero-width format chars in output (per script): DEVANAGARI embeds a zero-width JOINER (U+200D) after the
   virama in many consonant conjuncts; SINHALA embeds a zero-width NON-joiner (U+200C). Do NOT assume Devanagari
   uses U+200C - it does not. Strip BOTH U+200C and U+200D before comparing or matching strings.
+<!--/doc:scripts-->
+<!--doc:reading-->
 - Cursors (`prevCursor` / `nextCursor` from `/v1/passage`) are INTEGERS, and opaque - pass one back verbatim
   as `cursor` to page; do not interpret them or do arithmetic on them. `null` means the start/end of the book.
+<!--/doc:reading-->
 - Response shape is per endpoint: `/v1/search`, `/v1/occurrences`, `/v1/books`, `/v1/passage`, `/v1/convert`,
   `/v1/status` return a JSON object; `/v1/dictionary/lookup`, `/v1/scripts` return a bare JSON array.
+<!--doc:search-->
 - You work entirely in readable Pali (romanized by default). To read a search hit in context, pass the
   term's `term` value (exactly as `/v1/search` returned it, in whatever script you requested) back to
   `/v1/occurrences` as `term`. There is no opaque id to round-trip - the server handles the internal encoding.
+<!--/doc:search-->
 - An empty result array means NO MATCHES, not an error. Errors use HTTP status codes (400 bad request,
   401 missing/invalid token, 404 unknown path); a 2xx with `[]` or empty fields is simply "nothing found".
+<!--doc:reading-->
 - Books are identified by file name (e.g. `s0101m.mul.xml`). Get the list from `GET /v1/books`.
 - References: the paragraph number is the primary citation unit; page numbers exist per edition
   (VRI / Myanmar / PTS / Thai). Search occurrences report both.
@@ -61,11 +68,13 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   `/v1/occurrences` the `highlights` (and `hitStart`/`hitLength`) offsets are recomputed for the brace-free
   snippet, so they stay accurate. Prefer this over string-parsing `{...}` yourself when you want to quote the
   base text and handle variants as data.
+<!--/doc:reading-->
 - Terminology: when writing about the texts, call them "Pali", "the Tipitaka", or "VRI texts".
 
 ## Endpoints
 
 - `GET  /v1/status` - app version, API version, readiness.
+<!--doc:reading-->
 - `GET  /v1/books` - the catalog (217 books - LARGE, so it is FILTERABLE and PAGED). Query params:
   `?pitaka=` (`Vinaya`/`Sutta`/`Abhidhamma`/`Other`), `?commentaryLevel=` (`Mula`/`Atthakatha`/`Tika`/`Other`),
   `?skip=`/`?take=` (default take 100), `?script=Devanagari` (etc.; names romanized by default). FILTER to
@@ -81,6 +90,8 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   pin the exact passage. The
   `.mul`/`.att`/`.tik` FILENAME suffix is only a hint and can DISAGREE with `commentaryLevel`
   (e.g. `e0102n.mul.xml` is `commentaryLevel:"Other"`) - trust the field, not the name.
+<!--/doc:reading-->
+<!--doc:search-->
 - `POST /v1/search` - matching terms. Search is over WHOLE-WORD tokens matched as LITERAL character
   patterns, not grammatical inflections. To cover a stem's inflected endings, reach FIRST for a trailing
   `*` WILDCARD (`dhamm*`): the `*` absorbs the case/number endings, so you do NOT need to hand-write a
@@ -162,7 +173,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   hit's unique locator - pass it to `/v1/passage`
   as `cursor` to read the exact passage around THIS hit (paragraph numbers repeat within a book, so the
   paragraph number alone is not a unique locator). `includedFootnotes` echoes your request flag (whether
-  variant readings were rendered), NOT whether this particular hit has any; see the apparatus note above.
+  variant readings were rendered), NOT whether this particular hit has any; see the footnotes/apparatus note (in `/docs/reading.md`).
+<!--/doc:search-->
+<!--doc:reading-->
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeFootnotes? }`.
   Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, noteCount, ... }` - `noteCount` is how
@@ -179,12 +192,18 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   can land on a DIFFERENT paragraph N than the one an `occurrences` hit reported. For exact addressing use the
   hit's `cursor` (unique); if you must go by number, pass the `bookCode` (the sub-book, from the occurrence's
   `refs.paragraphBookCode`) alongside `paragraph` to disambiguate.
+<!--/doc:reading-->
+<!--doc:dictionary-->
 - `GET  /v1/dictionary/languages` - available dictionary language codes (e.g. "en", "hi").
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
   -> entries `{ headword, meaningHtml }`.
+<!--/doc:dictionary-->
+<!--doc:scripts-->
 - `POST /v1/convert` - convert Pali text to another script. Body `{ text, outputScript }` -> `{ text, outputScript }`.
   Input script is auto-detected and mixed-script input is handled in one pass.
 - `GET  /v1/scripts` - the valid script names for `outputScript` and the `?script=` params.
+<!--/doc:scripts-->
+<!--doc:dictionary-->
 - `GET  /v1/lemma/{form}?script=` - LEMMA back-lookup: resolve a surface form to its candidate dictionary
   lemmas (DPD). Returns `{ form, candidates:[{ lemmaId, lemma, pos, gloss, derivedFrom }], note }`. A form is
   often a HOMOGRAPH (>1 candidate) - pick the intended `lemmaId`. `script` is BOTH the input form's script and
@@ -195,7 +214,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   attestedFormCount, candidateFormCount, expansionCapped, note }`. This answers "the whole declension/
   conjugation of X and how often each form occurs" in ONE call - counts come from the corpus index, so a
   DPD form that never occurs is omitted (synthetic). `totalOccurrences` is de-duplicated within this response.
-  ** For an inflectional family, PREFER this lemma path over the hand-built regex below - it handles the
+  ** For an inflectional family, PREFER this lemma path over hand-built search regexes (see `/docs/search.md`) - it handles the
   stem alternation, the homograph (you chose the lemma), and the synthetic-vs-attested split for you. **
   CROSS-LEMMA CAUTION: a word's forms are often SPLIT across SIBLING lemmas (e.g. a verb's present participle
   is its OWN lemmaId), and the SAME surface token can appear under several of them - so do NOT sum
@@ -210,7 +229,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   wrong flag is a gross error, not a rounding one. To count "just the verb" INCLUDING its negated/sandhi
   sibling (e.g. `nappajānāti` = na+), union that specific sibling's forms yourself rather than taking the
   whole family; filter by `pos` when you need to scope a family to one grammatical class.
+<!--/doc:dictionary-->
 
+<!--doc:search-->
 ## A typical research flow
 
 1. `POST /v1/search` for a word -> keep each `term` you want. NOTE: `mode: "Exact"` matches ONE literal
@@ -244,3 +265,4 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 3. `POST /v1/passage` with an occurrence's `cursor` -> read the exact passage around that hit; page with
    `prevCursor` / `nextCursor` for more. (Open by paragraph only when you don't have a cursor.)
 4. `POST /v1/dictionary/lookup` -> gloss unfamiliar words.
+<!--/doc:search-->
