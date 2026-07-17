@@ -17,28 +17,32 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 
 ## Conventions
 
-<!--doc:scripts-->
 - Pali output is ROMANIZED by DEFAULT. The romanized script token is `"Latin"` (IAST, with diacritics). Pass
   `outputScript` to override (e.g. "Devanagari", "Thai", "Myanmar", "Sinhala"); `GET /v1/scripts` lists every
   valid value. All scripts convert losslessly EXCEPT `Cyrillic`, a legacy transliteration with a known
   non-reversibility (a revision is planned); its output is expected, not a conversion defect - do not report it.
+<!--doc:scripts-->
 - Zero-width format chars in output (per script): DEVANAGARI embeds a zero-width JOINER (U+200D) after the
   virama in many consonant conjuncts; SINHALA embeds a zero-width NON-joiner (U+200C). Do NOT assume Devanagari
   uses U+200C - it does not. Strip BOTH U+200C and U+200D before comparing or matching strings.
 <!--/doc:scripts-->
+<!--doc:reading-->
 - Cursors (`prevCursor` / `nextCursor` from `/v1/passage`) are INTEGERS, and opaque - pass one back verbatim
   as `cursor` to page; do not interpret them or do arithmetic on them. `null` means the start/end of the book.
+<!--/doc:reading-->
 - Response shape is per endpoint: `/v1/search`, `/v1/occurrences`, `/v1/books`, `/v1/passage`, `/v1/convert`,
   `/v1/status` return a JSON object; `/v1/dictionary/lookup`, `/v1/scripts` return a bare JSON array.
+<!--doc:search-->
 - You work entirely in readable Pali (romanized by default). To read a search hit in context, pass the
   term's `term` value (exactly as `/v1/search` returned it, in whatever script you requested) back to
   `/v1/occurrences` as `term`. There is no opaque id to round-trip - the server handles the internal encoding.
+<!--/doc:search-->
 - An empty result array means NO MATCHES, not an error. Errors use HTTP status codes (400 bad request,
   401 missing/invalid token, 404 unknown path); a 2xx with `[]` or empty fields is simply "nothing found".
+<!--doc:reading-->
 - Books are identified by file name (e.g. `s0101m.mul.xml`). Get the list from `GET /v1/books`.
 - References: the paragraph number is the primary citation unit; page numbers exist per edition
   (VRI / Myanmar / PTS / Thai). Search occurrences report both.
-<!--doc:reading-->
 - Footnotes / apparatus (`includeFootnotes: true` on `/v1/occurrences` and `/v1/passage`): the
   texts carry the print editions' FOOTNOTES (Myanmar 1955-57 / VRI 1995-96), rendered INLINE and wrapped in
   curly braces `{...}`. Curly braces occur nowhere else in the corpus, so they reliably delimit apparatus from
@@ -227,6 +231,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   whole family; filter by `pos` when you need to scope a family to one grammatical class.
 <!--/doc:dictionary-->
 
+<!--doc:search-->
 ## A typical research flow
 
 1. `POST /v1/search` for a word -> keep each `term` you want. NOTE: `mode: "Exact"` matches ONE literal
@@ -260,3 +265,4 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 3. `POST /v1/passage` with an occurrence's `cursor` -> read the exact passage around that hit; page with
    `prevCursor` / `nextCursor` for more. (Open by paragraph only when you don't have a cursor.)
 4. `POST /v1/dictionary/lookup` -> gloss unfamiliar words.
+<!--/doc:search-->

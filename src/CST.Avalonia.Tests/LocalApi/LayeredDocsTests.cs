@@ -31,11 +31,26 @@ namespace CST.Avalonia.Tests.LocalApi
             Assert.DoesNotContain("/v1/passage", search);   // the reading region is excluded
             Assert.DoesNotContain("/v1/status", search);     // unmarked content is excluded
             Assert.DoesNotContain("<!--", search);           // markers stripped from the slice
-            Assert.Contains("focused slice", search);        // header present
+            Assert.Contains("topic slice", search);          // header present
         }
 
         [Fact]
         public void Slice_unknown_topic_is_null() => Assert.Null(LayeredDocs.Slice(Sample, "nope"));
+
+        [Fact]
+        public void ThinIndex_drops_topic_regions_but_keeps_essentials_and_pointer()
+        {
+            var idx = LayeredDocs.ThinIndex(Sample);
+            Assert.Contains("## Connecting", idx);                        // essential kept
+            Assert.Contains("core (unmarked)", idx);                     // unmarked content kept
+            Assert.Contains("Progressive discovery", idx);               // the pointer
+            Assert.Contains("/docs/search.md", idx);
+            Assert.DoesNotContain("find terms", idx);                    // the search region's DETAIL is gone
+            Assert.DoesNotContain("- `POST /v1/passage` - read", idx);   // the reading region is gone
+            Assert.DoesNotContain("<!--", idx);                          // no markers leak
+            // (length shrinkage is asserted end-to-end in the integration test, where the removed detail — ~21 KB —
+            // dwarfs the injected pointer; on this tiny sample the pointer alone is larger than the two regions.)
+        }
 
         [Fact]
         public void WithPointer_injects_the_pointer_before_the_first_section()

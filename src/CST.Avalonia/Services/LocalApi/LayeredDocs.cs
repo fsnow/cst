@@ -28,19 +28,37 @@ namespace CST.Avalonia.Services.LocalApi
         private static readonly Regex MarkerLine =
             new(@"^[ \t]*<!--/?doc:\w+-->[ \t]*\r?\n?", RegexOptions.Multiline | RegexOptions.Compiled);
 
+        // A whole topic region (open marker … its nearest close). Regions are sequential, never nested, so a
+        // non-greedy match pairs each open with its own close.
+        private static readonly Regex TopicRegion =
+            new(@"[ \t]*<!--doc:\w+-->.*?<!--/doc:\w+-->[ \t]*\r?\n?", RegexOptions.Singleline | RegexOptions.Compiled);
+
+        private static readonly Regex MultiBlank = new(@"\n{3,}", RegexOptions.Compiled);
+
         /// <summary>Remove every region marker line (for the full-document output).</summary>
         public static string StripMarkers(string raw) => MarkerLine.Replace(raw, "");
 
-        /// <summary>The pointer block injected into <c>/llms.txt</c> so agents learn the slices exist.</summary>
+        /// <summary>The THIN index: the monolith with every topic REGION (the detail) removed — leaving only the
+        /// cross-cutting essentials (intro, connecting/auth, output/error/terminology conventions) — plus the
+        /// progressive-discovery pointer. This is what <c>/llms.txt</c> serves, so an agent reads a small
+        /// orientation and fetches only the slice(s) it needs; the full doc stays at <c>/llms-full.txt</c>. (#259)</summary>
+        public static string ThinIndex(string raw)
+        {
+            var index = TopicRegion.Replace(raw, "");           // drop the detail
+            index = MultiBlank.Replace(StripMarkers(index), "\n\n");  // tidy the gaps left behind
+            return WithPointer(index.TrimEnd() + "\n");
+        }
+
+        /// <summary>The progressive-discovery pointer injected into the <c>/llms.txt</c> thin index.</summary>
         public static string Pointer()
         {
             var sb = new StringBuilder();
-            sb.Append("## Progressive discovery\n\n");
-            sb.Append("This is the full reference. To spend fewer tokens, fetch only the slice you need — each is ")
-              .Append("a subset of THIS document (nothing here is lost), served from the same source so it can't drift:\n");
+            sb.Append("## Progressive discovery — where the details are\n\n");
+            sb.Append("This is a THIN index. Each endpoint's full reference lives in a topic doc; FETCH ONLY the ")
+              .Append("one(s) your task needs (each is far smaller than the whole reference):\n");
             foreach (var (topic, title, covers) in Topics)
                 sb.Append($"- `GET /docs/{topic}.md` — {title}: {covers}\n");
-            sb.Append("- `GET /llms-full.txt` — this entire document in one fetch.\n\n");
+            sb.Append("- `GET /llms-full.txt` — the ENTIRE reference in one fetch, if you'd rather load it all.\n\n");
             return sb.ToString();
         }
 
@@ -74,9 +92,9 @@ namespace CST.Avalonia.Services.LocalApi
             var (_, title, _) = Topics.First(t => t.Topic == topic);
             string header =
                 $"# CST Reader local API — {topic} ({title})\n\n" +
-                "A focused slice of `/llms.txt`. Shared conventions (output is romanized by default, the scripts, " +
-                "opaque cursors, error status codes) and the auth handshake live in `/llms.txt` (or the whole doc " +
-                "at `/llms-full.txt`).\n\n";
+                "A topic slice of the CST Reader local API. Cross-cutting essentials (romanized output by default, " +
+                "error codes) and the auth handshake are in the index at `/llms.txt`; the whole reference is at " +
+                "`/llms-full.txt`.\n\n";
             return header + body.ToString().TrimEnd() + "\n";
         }
     }

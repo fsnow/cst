@@ -255,7 +255,7 @@ namespace CST.Avalonia.Services.LocalApi
 
             // Unauthenticated front door: the agent's orientation (endpoints, conventions, auth handshake).
             // Version-stamped so it can't be mistaken for a different build's surface.
-            app.MapGet("/llms.txt", () => Results.Text(LayeredDocs.WithPointer(BuildLlmsText()), "text/markdown; charset=utf-8"));
+            app.MapGet("/llms.txt", () => Results.Text(BuildThinIndex(), "text/markdown; charset=utf-8"));
             // Progressive discovery (#259): the whole document in one fetch, and per-topic slices — all from
             // the single llms.txt source. Unauthenticated, like /llms.txt (see IsDiscoveryPath).
             app.MapGet("/llms-full.txt", () => Results.Text(BuildLlmsText(), "text/markdown; charset=utf-8"));
@@ -360,6 +360,14 @@ namespace CST.Avalonia.Services.LocalApi
                 ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
             // Strip the progressive-discovery region markers; the full document is the monolith. (#259)
             return $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + LayeredDocs.StripMarkers(body);
+        }
+
+        // The thin index served at /llms.txt (#259): the monolith minus every topic region, plus the pointer.
+        private string BuildThinIndex()
+        {
+            var body = ReadResource("LocalApi.llms.txt")
+                ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
+            return $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + LayeredDocs.ThinIndex(body);
         }
 
         // A per-topic slice of the SAME source (#259) — the concatenation of that topic's marked regions,

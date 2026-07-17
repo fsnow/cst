@@ -117,16 +117,21 @@ namespace CST.Avalonia.Tests.Integration
             Assert.DoesNotContain("<!--doc:", fullBody);         // region markers stripped
             Assert.Contains("/v1/search", fullBody);
             Assert.Contains("/v1/dictionary", fullBody);
+            Assert.Contains("Sandhi caveat", fullBody);          // the full doc HAS the endpoint detail
 
             var slice = await noAuth.GetAsync("/docs/dictionary.md");
             Assert.Equal(HttpStatusCode.OK, slice.StatusCode);
             var sliceBody = await slice.Content.ReadAsStringAsync();
             Assert.Contains("/v1/lemma", sliceBody);
-            Assert.DoesNotContain("/v1/search", sliceBody);       // a different topic's endpoints are excluded
+            Assert.DoesNotContain("Sandhi caveat", sliceBody);    // a different topic's detail is excluded
             Assert.DoesNotContain("<!--doc", sliceBody);
 
-            var llms = await noAuth.GetAsync("/llms.txt");
-            Assert.Contains("Progressive discovery", await llms.Content.ReadAsStringAsync());   // the pointer
+            // /llms.txt is now a THIN index: the pointer + connecting/essentials, but NOT the endpoint detail.
+            var llmsBody = await (await noAuth.GetAsync("/llms.txt")).Content.ReadAsStringAsync();
+            Assert.Contains("Progressive discovery", llmsBody);   // the pointer
+            Assert.Contains("## Connecting", llmsBody);           // the auth handshake stays
+            Assert.DoesNotContain("Sandhi caveat", llmsBody);     // the detail is NOT in the index
+            Assert.True(llmsBody.Length < fullBody.Length / 3);   // and it's much smaller
 
             Assert.Equal(HttpStatusCode.NotFound, (await noAuth.GetAsync("/docs/nope.md")).StatusCode);
         }
