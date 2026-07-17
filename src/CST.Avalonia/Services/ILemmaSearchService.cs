@@ -48,4 +48,11 @@ public interface ILemmaSearchService
         BookFilter? filter = null,
         Script outputScript = Script.Latin,
         CancellationToken ct = default);
+
+    /// <summary>Expand and search the DE-DUPLICATED UNION of several lemmas' forms in ONE query — used to count
+    /// a collapsed family row (the homonyms of one headword) without double-counting their shared forms. (#247)</summary>
+    Task<LemmaSearchResult?> ExpandAndSearchSetAsync(
+        IReadOnlyList<long> lemmaIds,
+        Script outputScript = Script.Latin,
+        CancellationToken ct = default);
 }
