@@ -62,9 +62,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   brace-free `text`/`snippet` (where the note anchors); `text` is the whole note; `reading`/`sigla` are split
   out ONLY for a simple `reading (sigla)` note and are null otherwise (per the no-type-marker caveat above). On
   `/v1/occurrences` the `highlights` (and `hitStart`/`hitLength`) offsets are recomputed for the brace-free
-<!--/doc:reading-->
   snippet, so they stay accurate. Prefer this over string-parsing `{...}` yourself when you want to quote the
   base text and handle variants as data.
+<!--/doc:reading-->
 - Terminology: when writing about the texts, call them "Pali", "the Tipitaka", or "VRI texts".
 
 ## Endpoints
