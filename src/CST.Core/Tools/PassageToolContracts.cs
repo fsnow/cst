@@ -62,5 +62,5 @@ namespace CST.Tools
         int? PrevCursor,
         int? NextCursor,
         int NoteCount,
-        IReadOnlyList<PassageNote> Notes);
+        IReadOnlyList<ApparatusNote> Notes);
 }

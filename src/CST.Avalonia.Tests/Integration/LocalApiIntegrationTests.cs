@@ -347,6 +347,26 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Occurrences_structuredNotes_returns_brace_free_snippet_and_notes()
+        {
+            using var http = _api.Http();
+            // 'dukkha' sits immediately before the fixture's 'dhamma (si)' note, so the hit snippet includes it.
+            var resp = await http.PostAsync("/v1/occurrences",
+                Json($"{{\"bookId\":\"{_api.MulaBook}\",\"term\":\"dukkha\",\"structuredNotes\":true,\"outputScript\":\"Latin\"}}"));
+            Assert.True(resp.IsSuccessStatusCode);
+            using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var occ = doc.RootElement.GetProperty("occurrences").EnumerateArray().First();
+            var snippet = occ.GetProperty("snippet").GetString()!;
+            Assert.DoesNotContain("{", snippet);                                        // clean/quotable snippet
+            var notes = occ.GetProperty("notes").EnumerateArray().ToList();
+            Assert.NotEmpty(notes);                                                     // apparatus as data
+            Assert.Equal("si", notes[0].GetProperty("sigla").GetString());
+            // the highlight still lands on the hit word after brace removal
+            int hs = occ.GetProperty("hitStart").GetInt32(), hl = occ.GetProperty("hitLength").GetInt32();
+            Assert.Equal("dukkha", snippet.Substring(hs, hl));
+        }
+
+        [Fact]
         public async Task Passage_structuredNotes_returns_brace_free_text_and_parsed_notes()
         {
             using var http = _api.Http();

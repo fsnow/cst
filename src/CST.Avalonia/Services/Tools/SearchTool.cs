@@ -158,7 +158,8 @@ namespace CST.Avalonia.Services.Tools
                 OutputScript: request.OutputScript,
                 IncludeFootnotes: request.IncludeFootnotes,
                 MinChars: minChars,
-                MaxChars: Math.Clamp(request.MaxChars ?? 320, minChars, MaxSnippetChars));   // bounded; MaxChars >= MinChars
+                MaxChars: Math.Clamp(request.MaxChars ?? 320, minChars, MaxSnippetChars),   // bounded; MaxChars >= MinChars
+                StructuredNotes: request.StructuredNotes);
 
             string rawBookName = Books.Inst
                 .FirstOrDefault(b => string.Equals(b.FileName, request.BookId, StringComparison.OrdinalIgnoreCase))
@@ -191,7 +192,8 @@ namespace CST.Avalonia.Services.Tools
                     Cursor: AnchorStart(marks),
                     Highlights: s.Highlights
                         .Select(h => new OccurrenceHighlight(h.Start, h.Length, h.IsAnchor)).ToList(),
-                    NoteCount: s.NoteCount));
+                    NoteCount: s.NoteCount,
+                    Notes: s.Notes));
             }
             // Envelope (like search): book-scoped totals + hasMore, so an agent paging occurrences isn't blind.
             // Total is the MERGED record count (what you actually page over); InstanceTotal is the raw pre-merge

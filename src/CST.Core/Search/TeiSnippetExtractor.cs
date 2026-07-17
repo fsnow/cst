@@ -78,38 +78,61 @@ namespace CST.Search
             var sb = new StringBuilder();
             var highlights = new List<SnippetHighlight>(ms.Count);
 
+            // Structured notes need the apparatus rendered (as braces) so we can split it out afterwards, even
+            // if the caller left includeFootnotes off; the braces are then stripped and offsets recomputed. (#267 f/u)
+            bool renderBraces = opts.IncludeFootnotes || opts.StructuredNotes;
+
             sb.Append(ellipsisStart ? "... " : "");
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, winStart, ms[0].Start, opts.IncludeFootnotes), opts.OutputScript)).TrimStart());
+                TeiText.Clean(xml, winStart, ms[0].Start, renderBraces), opts.OutputScript)).TrimStart());
 
             for (int i = 0; i < ms.Count; i++)
             {
                 string markText = TeiText.Convert(
-                    TeiText.Clean(xml, ms[i].Start, ms[i].End, opts.IncludeFootnotes), opts.OutputScript).Trim();
+                    TeiText.Clean(xml, ms[i].Start, ms[i].End, renderBraces), opts.OutputScript).Trim();
                 highlights.Add(new SnippetHighlight(sb.Length, markText.Length, ms[i].IsAnchor));
                 sb.Append(markText);
 
                 if (i < ms.Count - 1)
                 {
                     string gap = TeiText.Collapse(TeiText.Convert(
-                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, opts.IncludeFootnotes), opts.OutputScript));
+                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, renderBraces), opts.OutputScript));
                     sb.Append(gap.Length == 0 ? " " : gap); // never fuse two distinct marked words
                 }
             }
 
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, opts.IncludeFootnotes), opts.OutputScript)).TrimEnd());
+                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, renderBraces), opts.OutputScript)).TrimEnd());
             sb.Append(ellipsisEnd ? " ..." : "");
 
             var (num, code, pages) = markers.RefsAt(anchor.Start);
-            var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];
             // Apparatus notes ({…}) in this window — counted from the raw XML regardless of IncludeFootnotes, so a
             // caller can tell "no apparatus here" from "apparatus suppressed" without a second call. (#293) Count
             // notes INTERSECTING the window, not just those starting in it, so a note the window opens mid-way
             // through still counts. (#310 A4-15)
             int noteCount = TeiText.CountNotesIntersecting(xml, pStart, winStart, winEnd);
+
+            string snippet = sb.ToString();
+            IReadOnlyList<ApparatusNote> notes = Array.Empty<ApparatusNote>();
+            if (opts.StructuredNotes)
+            {
+                // Strip the braces to a clean snippet and remap the highlight starts (a note in the prefix shifts
+                // the hit word's offset). Highlight lengths are unchanged — a hit word carries no apparatus. (#267 f/u)
+                var (clean, split, remapped) = TeiText.SplitApparatus(snippet, highlights.Select(h => h.Start).ToList());
+                snippet = clean;
+                notes = split;
+                // Remap each highlight to its brace-free offset; clamp defensively so Start+Length can never
+                // exceed the snippet (a consumer's Substring must not throw). (#267 f/u review)
+                highlights = highlights.Select((h, k) =>
+                {
+                    int start = Math.Clamp(remapped[k], 0, snippet.Length);
+                    return h with { Start = start, Length = Math.Clamp(h.Length, 0, snippet.Length - start) };
+                }).ToList();
+            }
+
+            var anchorHl = highlights.FirstOrDefault(h => h.IsAnchor) ?? highlights[0];
             return new SnippetResult(
-                sb.ToString(), anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeFootnotes, highlights, noteCount);
+                snippet, anchorHl.Start, anchorHl.Length, num, code, pages, opts.IncludeFootnotes, highlights, noteCount, notes);
         }
 
         /// <summary>

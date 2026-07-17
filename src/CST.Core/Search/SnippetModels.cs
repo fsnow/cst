@@ -13,11 +13,15 @@ namespace CST.Search
     /// <param name="IncludeFootnotes">Include <c>&lt;note&gt;</c> (variant-reading) text (default off).</param>
     /// <param name="MinChars">Prose floor: extend to neighboring sentences until at least this many rendered chars.</param>
     /// <param name="MaxChars">Prose ceiling: a longer single sentence is trimmed+ellipsized around the hit.</param>
+    /// <param name="StructuredNotes">Return the apparatus as data: the snippet comes back brace-free (and the
+    /// highlight offsets are recomputed for the brace-free text) with each note in <see cref="SnippetResult.Notes"/>.
+    /// Independent of <see cref="IncludeFootnotes"/> (which controls the inline brace form). (#267 f/u)</param>
     public sealed record SnippetOptions(
         Script OutputScript = Script.Latin,
         bool IncludeFootnotes = false,
         int MinChars = 60,
-        int MaxChars = 320);
+        int MaxChars = 320,
+        bool StructuredNotes = false);
 
     /// <summary>A page reference at a hit, in one edition's numbering.</summary>
     public sealed record SnippetPageRef(PageEdition Edition, int Volume, int Number);
@@ -50,5 +54,6 @@ namespace CST.Search
         IReadOnlyList<SnippetPageRef> Pages,
         bool IncludedFootnotes,
         IReadOnlyList<SnippetHighlight> Highlights,
-        int NoteCount);
+        int NoteCount,
+        IReadOnlyList<ApparatusNote> Notes);
 }
