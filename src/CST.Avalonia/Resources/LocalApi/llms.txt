@@ -173,7 +173,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   hit's unique locator - pass it to `/v1/passage`
   as `cursor` to read the exact passage around THIS hit (paragraph numbers repeat within a book, so the
   paragraph number alone is not a unique locator). `includedFootnotes` echoes your request flag (whether
-  variant readings were rendered), NOT whether this particular hit has any; see the apparatus note above.
+  variant readings were rendered), NOT whether this particular hit has any; see the footnotes/apparatus note (in `/docs/reading.md`).
 <!--/doc:search-->
 <!--doc:reading-->
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
@@ -214,7 +214,7 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   attestedFormCount, candidateFormCount, expansionCapped, note }`. This answers "the whole declension/
   conjugation of X and how often each form occurs" in ONE call - counts come from the corpus index, so a
   DPD form that never occurs is omitted (synthetic). `totalOccurrences` is de-duplicated within this response.
-  ** For an inflectional family, PREFER this lemma path over the hand-built regex below - it handles the
+  ** For an inflectional family, PREFER this lemma path over hand-built search regexes (see `/docs/search.md`) - it handles the
   stem alternation, the homograph (you chose the lemma), and the synthetic-vs-attested split for you. **
   CROSS-LEMMA CAUTION: a word's forms are often SPLIT across SIBLING lemmas (e.g. a verb's present participle
   is its OWN lemmaId), and the SAME surface token can appear under several of them - so do NOT sum

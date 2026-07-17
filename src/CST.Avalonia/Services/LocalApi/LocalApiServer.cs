@@ -352,8 +352,9 @@ namespace CST.Avalonia.Services.LocalApi
             || path.StartsWithSegments("/docs", StringComparison.OrdinalIgnoreCase)
             || path.Equals("/" + ApiVersion + "/status", StringComparison.OrdinalIgnoreCase);
 
-        // The version-stamped llms.txt body, served both at GET /llms.txt and as the MCP llms.txt resource
-        // (single source, so the two can't drift). Version-stamped so it can't be mistaken for another build.
+        // The version-stamped FULL llms.txt body (markers stripped), served at GET /llms-full.txt and as the
+        // MCP llms.txt resource. /llms.txt itself serves the thin index (BuildThinIndex). Single source (the
+        // embedded resource), so none of the three can drift. Version-stamped per build.
         private string BuildLlmsText()
         {
             var body = ReadResource("LocalApi.llms.txt")
