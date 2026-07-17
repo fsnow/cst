@@ -200,8 +200,14 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   `totalOccurrences` across sibling lemmaIds (that double-counts the shared tokens). `family:true` returns the
   DE-DUPLICATED UNION of the whole `derived_from` word family (the verb AND its participles, deverbal nouns,
   causative, passive - everything sharing the root-sense), each token counted ONCE, with a combined
-  `totalOccurrences`. That is BROADER than a single conjugation; to scope to just "the verb", union the
-  relevant siblings' forms yourself (filter by `pos`).
+  `totalOccurrences`. CHOOSE DELIBERATELY, the gap is large: `family:false` (the DEFAULT) = just THIS lemma's
+  own conjugation/declension; `family:true` = the whole word family, which is much bigger and pulls in
+  DIFFERENT words (a verb's family includes its deverbal NOUNS). For "how often does the verb X occur", use
+  `family:false` - e.g. the verb `pajānāti` is ~4,195 occurrences with `family:false`, but ~17,000 with
+  `family:true` (which sweeps in the noun `paññā` and its whole declension): a ~4x difference, so picking the
+  wrong flag is a gross error, not a rounding one. To count "just the verb" INCLUDING its negated/sandhi
+  sibling (e.g. `nappajānāti` = na+), union that specific sibling's forms yourself rather than taking the
+  whole family; filter by `pos` when you need to scope a family to one grammatical class.
 
 ## A typical research flow
 
