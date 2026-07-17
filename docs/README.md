@@ -15,6 +15,7 @@ Welcome to the CST (Chaṭṭha Saṅgāyana Tipiṭaka) project documentation.
 Core technical documentation about how the system works:
 - [Project Overview](architecture/OVERVIEW.md) - High-level project structure
 - [Ideal Pali Encoding (IPE)](architecture/IDEAL_PALI_ENCODING.md) - Script-independent encoding system
+- [Lemma Expansion (algorithm for review)](architecture/LEMMA_EXPANSION.md) - Word→lemma→forms→corpus pipeline over DPD data, the `derived_from` word-family definition, homograph handling, and open questions for expert review
 - [Character Set Analysis](architecture/CHARACTER_SET_ANALYSIS.md) - Unicode character analysis
 - [Window & Dock Architecture](architecture/WINDOW_DOCK_ARCHITECTURE.md) - Docking system and window management
 - [Dock Subsystem (current behavior)](architecture/DOCK_SUBSYSTEM.md) - Live map of dock handling: object model, ID scheme, CEF WebView lifecycle, failure modes, open design questions
