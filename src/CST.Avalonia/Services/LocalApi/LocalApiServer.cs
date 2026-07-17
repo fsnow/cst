@@ -82,7 +82,8 @@ namespace CST.Avalonia.Services.LocalApi
             string appVersion, string handshakeDirectory, Serilog.ILogger logger,
             ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null,
             IScriptTool? script = null, ILemmaSearchService? lemma = null, ILemmaReportService? lemmaReport = null,
-            int port = 0, string? token = null, bool restApiEnabled = true, bool mcpEnabled = true)
+            int port = 0, string? token = null, bool restApiEnabled = true, bool mcpEnabled = true,
+            string? xmlBooksDirectory = null)
         {
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
@@ -97,7 +98,11 @@ namespace CST.Avalonia.Services.LocalApi
             _configuredToken = token;
             _restApiEnabled = restApiEnabled;
             _mcpEnabled = mcpEnabled;
+            _xmlBooksDirectory = xmlBooksDirectory;
         }
+
+        // Corpus dir, used once at startup to prime the Multi-book sub-book codes (#266); null → codes stay empty.
+        private readonly string? _xmlBooksDirectory;
 
         /// <summary>
         /// Build a server by resolving EVERY tool adapter from the DI container. This is the single place the
@@ -114,7 +119,8 @@ namespace CST.Avalonia.Services.LocalApi
                 services.GetService<IPassageTool>(),
                 services.GetService<IScriptTool>(),
                 services.GetService<ILemmaSearchService>(),
-                services.GetService<ILemmaReportService>(), port, token, restApiEnabled, mcpEnabled);
+                services.GetService<ILemmaReportService>(), port, token, restApiEnabled, mcpEnabled,
+                services.GetService<ISettingsService>()?.Settings?.XmlBooksDirectory);
 
         public async Task StartAsync(CancellationToken ct = default)
         {
@@ -259,6 +265,10 @@ namespace CST.Avalonia.Services.LocalApi
             // Mapped only when the MCP permission is on (#278 Phase 4). (#191)
             if (_mcpEnabled)
                 app.MapMcp("/mcp");
+
+            // Prime the Multi-book sub-book codes for the `books` catalog (#266) — parses the 7 Multi books once
+            // off the shared cache. Best-effort: a missing/unreadable corpus just leaves those codes empty.
+            await MultiBookCodes.PrimeAsync(_xmlBooksDirectory, ct);
 
             await app.StartAsync(ct);
             started = true;

@@ -27,14 +27,17 @@ namespace CST.Tools
         BookAnchors? ListAnchors(string bookId);
     }
 
-    /// <summary>A book as seen by an agent: its id (file name), names, and classification.</summary>
+    /// <summary>A book as seen by an agent: its id (file name), names, and classification. For a Multi book,
+    /// <see cref="BookCodes"/> lists its valid sub-book codes (e.g. ["an5","an6","an7"]) so a paragraph
+    /// reference can target the right sub-book; empty for non-Multi books. (#266)</summary>
     public sealed record BookSummary(
         string BookId,
         string Name,
         string ShortName,
         Pitaka Pitaka,
         CommentaryLevel CommentaryLevel,
-        BookType BookType);
+        BookType BookType,
+        IReadOnlyList<string> BookCodes);
 
     /// <summary>
     /// A page of the book catalog. The 217-book catalog is large, so the listing is filterable (by piṭaka /
