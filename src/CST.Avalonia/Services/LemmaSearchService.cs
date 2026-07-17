@@ -69,13 +69,39 @@ public sealed class LemmaSearchService : ILemmaSearchService
             }
         }
 
+        return await SearchFormsAsync(lemma, forms, filter, outputScript, ct).ConfigureAwait(false);
+    }
+
+    public async Task<LemmaSearchResult?> ExpandAndSearchSetAsync(
+        IReadOnlyList<long> lemmaIds, Script outputScript = Script.Latin, CancellationToken ct = default)
+    {
+        if (!IsAvailable || lemmaIds.Count == 0) return null;
+        // Union the forms of several lemmas (typically the homonyms of ONE headword) and search them ONCE — so a
+        // collapsed family row counts the shared surface forms a single time, not once per homonym. (#247 family)
+        LemmaCandidate? lemma = null;
+        var forms = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var id in lemmaIds)
+        {
+            var e = _lemma.ExpandLemma(id, includeFamily: false);
+            if (e is null) continue;
+            lemma ??= new LemmaCandidate(e.LemmaId, e.Lemma, e.Pos, e.Gloss, e.DerivedFrom);
+            foreach (var f in e.Forms) forms.Add(f);
+        }
+        return lemma is null ? null
+            : await SearchFormsAsync(lemma, forms, null, outputScript, ct).ConfigureAwait(false);
+    }
+
+    // Search a de-duplicated form set as one anchored IAST alternation (converted to IPE by the search path)
+    // and project the attested terms with corpus counts.
+    private async Task<LemmaSearchResult> SearchFormsAsync(
+        LemmaCandidate lemma, SortedSet<string> forms, BookFilter? filter, Script outputScript, CancellationToken ct)
+    {
         if (forms.Count == 0)
             return new LemmaSearchResult(lemma, Array.Empty<LemmaSearchForm>(), 0, 0, 0, false);
 
         bool capped = forms.Count > MaxAlternationForms;
         var searchForms = capped ? forms.Take(MaxAlternationForms).ToList() : forms.ToList();
 
-        // IAST anchored alternation → ordinary Regex search path (SearchService converts it to IPE).
         string alternation = "^(" + string.Join("|", searchForms) + ")$";
         var query = new SearchQuery
         {

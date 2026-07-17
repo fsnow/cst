@@ -110,6 +110,28 @@ public sealed class LemmaSearchServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ExpandAndSearchSet_unions_several_lemmas_forms_in_one_query()
+    {
+        var fake = new FakeSearchService();
+        var svc = NewService(fake);
+
+        // Homonyms 'paññāya 1' (40070) + 'paññāya 2' (40071): their forms are UNIONed into ONE search, so a
+        // collapsed family row counts the shared forms once. (#247 family)
+        var result = await svc.ExpandAndSearchSetAsync(new long[] { 40070, 40071 }, Script.Ipe);
+
+        Assert.NotNull(result);
+        Assert.Contains("paññāya", fake.LastQuery!.QueryText);
+        Assert.Contains("paññāhi", fake.LastQuery.QueryText);   // pulled from the 2nd homonym, unioned in
+    }
+
+    [Fact]
+    public async Task ExpandAndSearchSet_empty_is_null()
+    {
+        var svc = NewService(new FakeSearchService());
+        Assert.Null(await svc.ExpandAndSearchSetAsync(System.Array.Empty<long>()));
+    }
+
+    [Fact]
     public async Task ExpandAndSearch_unknown_lemma_is_null()
     {
         var svc = NewService(new FakeSearchService());

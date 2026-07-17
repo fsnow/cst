@@ -95,15 +95,26 @@ public sealed class LemmaReportService : ILemmaReportService
         }
         homographs = homographs.OrderByDescending(h => h.Count).ToList();
 
-        // Word family — derived_from siblings, each with its own corpus total, grouped by pos category.
+        // Word family — the derived_from cluster, COLLAPSED so each distinct WORD (headword) is ONE row, not one
+        // per DPD homonym. A headword's homonyms share their surface forms, so their union is counted ONCE (not
+        // summed, which would double-count); the row is grouped by the homonyms' dominant part-of-speech, so a
+        // word like paññāṇa (adj + nt homonyms) is a single row, not split across buckets. (#247 family)
         var family = new List<ReportFamilyMember>();
         if (exp?.Family is { } siblings)
         {
-            foreach (var m in siblings)
+            foreach (var g in siblings.Where(m => m.LemmaId != lemmaId)
+                                      .GroupBy(m => StripHomonym(m.Lemma), StringComparer.Ordinal))
             {
-                if (m.LemmaId == lemmaId) continue;
-                var mr = await _search.ExpandAndSearchAsync(m.LemmaId, false, null, Script.Ipe, ct).ConfigureAwait(false);
-                family.Add(new ReportFamilyMember(m.LemmaId, ToIpe(m.Lemma), m.Pos, m.Gloss, mr?.TotalOccurrences ?? 0, PosGroup(m.Pos)));
+                var members = g.ToList();
+                // dominant pos = the most common among the homonyms; the representative sense is the first
+                // homonym of that pos.
+                var repPos = members.GroupBy(m => m.Pos)
+                    .OrderByDescending(x => x.Count()).ThenBy(x => x.Key, StringComparer.Ordinal).First().Key;
+                var rep = members.FirstOrDefault(m => m.Pos == repPos) ?? members[0];
+                var mr = await _search.ExpandAndSearchSetAsync(members.Select(m => m.LemmaId).ToList(), Script.Ipe, ct)
+                    .ConfigureAwait(false);
+                family.Add(new ReportFamilyMember(
+                    rep.LemmaId, ToIpe(g.Key), rep.Pos, rep.Gloss, mr?.TotalOccurrences ?? 0, PosGroup(repPos)));
             }
         }
         family = family.OrderByDescending(m => m.TotalOccurrences).ToList();
