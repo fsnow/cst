@@ -89,7 +89,7 @@ namespace CST.Search
         }
 
         // Punctuation that should sit directly after the preceding word (no space before it).
-        private static bool IsClosePunctuation(char c) =>
+        internal static bool IsClosePunctuation(char c) =>
             c == ',' || c == ';' || c == '.' || c == '!' || c == '?' || c == Danda || c == DoubleDanda;
 
         internal static List<(int s, int e)> NoteRegions(string xml, int lo, int hi)

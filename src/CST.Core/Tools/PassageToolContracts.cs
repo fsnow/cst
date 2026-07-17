@@ -27,13 +27,18 @@ namespace CST.Tools
     /// </summary>
     /// <param name="Cursor">A page cursor from a prior <see cref="PassageResult"/>; overrides <see cref="Reference"/> when set.</param>
     /// <param name="MaxChars">Rendered-character budget for the window.</param>
+    /// <param name="StructuredNotes">Return the apparatus as DATA instead of embedded braces: the <c>Text</c>
+    /// comes back brace-free (clean, quotable Pāli) and each note appears in <see cref="PassageResult.Notes"/>
+    /// with its offset, reading, and sigla. Independent of <c>IncludeFootnotes</c> (which controls the inline
+    /// brace form). (#267)</param>
     public sealed record PassageRequest(
         string BookId,
         NavigationReference? Reference = null,
         int? Cursor = null,
         int MaxChars = 1200,
         Script OutputScript = Script.Latin,
-        bool IncludeFootnotes = false);
+        bool IncludeFootnotes = false,
+        bool StructuredNotes = false);
 
     /// <summary>
     /// A reading window: the text, the citation refs at its start, and cursors to page through. Pass a cursor
@@ -45,6 +50,8 @@ namespace CST.Tools
     /// <param name="NoteCount">How many print-edition apparatus notes (<c>{…}</c>) fall in this window. Counted
     /// regardless of <c>IncludeFootnotes</c>, so <c>NoteCount &gt; 0</c> means apparatus is present here (re-read
     /// with <c>includeFootnotes:true</c> to see it). Apparatus lives almost only in MULA texts.</param>
+    /// <param name="Notes">The apparatus notes as structured data (offset into <c>Text</c>, full text, and
+    /// reading/sigla when simple), populated only when <c>StructuredNotes</c> was requested; empty otherwise. (#267)</param>
     public sealed record PassageResult(
         string BookId,
         string NormalizedReference,
@@ -54,5 +61,6 @@ namespace CST.Tools
         string? ParagraphBookCode,
         int? PrevCursor,
         int? NextCursor,
-        int NoteCount);
+        int NoteCount,
+        IReadOnlyList<PassageNote> Notes);
 }

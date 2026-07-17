@@ -53,6 +53,12 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   LAYER: apparatus lives almost entirely in MULA (root) texts; the ATTHAKATHA and TIKA (commentary /
   sub-commentary) layers carry NONE. So `includeFootnotes` on a commentary is always empty - expected,
   not a bug (and a commentary-restricted search will never surface variants).
+- STRUCTURED apparatus (`structuredNotes: true` on `/v1/passage`) - an alternative to the inline braces: the
+  `text` comes back BRACE-FREE (clean, quotable Pali) and every note is returned as data in `notes[]`, each
+  `{ offset, text, reading, sigla }`. `offset` indexes the returned `text` (where the note anchors); `text` is
+  the whole note; `reading`/`sigla` are split out ONLY for a simple `reading (sigla)` note and are null
+  otherwise (per the no-type-marker caveat above). Prefer this over string-parsing `{...}` yourself when you
+  want to quote the base text and handle variants as data. (`/v1/occurrences` still uses the inline brace form.)
 - Terminology: when writing about the texts, call them "Pali", "the Tipitaka", or "VRI texts".
 
 ## Endpoints
