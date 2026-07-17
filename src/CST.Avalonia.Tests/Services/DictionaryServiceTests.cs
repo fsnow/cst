@@ -51,6 +51,34 @@ public class DictionaryServiceTests : IDisposable
     }
 
     [Fact]
+    public void SourceFor_reads_authoritative_metadata_and_treats_a_blank_placeholder_as_null()
+    {
+        WriteLang("en", "vri-pali-english-dictionary.txt", "buddha", "<p>awakened</p>");
+        WriteLang("hi", "vri-pali-hindi-dictionary.txt", "buddha", "<p>bauddha</p>");
+        // en: real attribution
+        File.WriteAllText(Path.Combine(_root, "en", "source.json"),
+            "{ \"title\": \"Test PED\", \"publisher\": \"VRI\", \"year\": \"2020\" }");
+        // hi: the blank placeholder we ship -> NOT attribution (must be null, never a guess)
+        File.WriteAllText(Path.Combine(_root, "hi", "source.json"),
+            "{ \"title\": \"\", \"compiler\": \"\", \"edition\": \"\", \"year\": \"\", \"publisher\": \"\", \"license\": \"\", \"url\": \"\" }");
+
+        var svc = Service();
+        var en = svc.SourceFor("en");
+        Assert.NotNull(en);
+        Assert.Equal("Test PED", en!.Title);
+        Assert.Equal("VRI", en.Publisher);
+        Assert.Null(svc.SourceFor("hi"));       // blank placeholder collapses to null
+        Assert.Null(svc.SourceFor("zzz"));       // unknown language -> null (and no path traversal)
+    }
+
+    [Fact]
+    public void SourceFor_is_null_when_no_source_file()
+    {
+        WriteLang("en", "vri-pali-english-dictionary.txt", "buddha", "<p>awakened</p>");
+        Assert.Null(Service().SourceFor("en"));   // no source.json -> null, not a filename-derived guess
+    }
+
+    [Fact]
     public void AvailableLanguages_MissingRoot_IsEmpty()
     {
         var svc = new DictionaryService(NullLogger<DictionaryService>.Instance,

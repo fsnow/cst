@@ -42,7 +42,9 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         }
 
         [McpServerTool(Name = "dictionary_languages")]
-        [Description("List the available dictionary language codes (e.g. 'en', 'hi') for dictionary_lookup.")]
-        public static IReadOnlyList<string> Languages(IDictionaryTool dictionary) => dictionary.Languages;
+        [Description("List the available dictionaries: each language code (for dictionary_lookup) plus its "
+            + "source attribution (title, compiler, edition, publisher, license…) when recorded — cite this as "
+            + "the gloss's source. 'source' is null for a dictionary with no recorded attribution.")]
+        public static IReadOnlyList<DictionaryLanguageInfo> Languages(IDictionaryTool dictionary) => dictionary.Languages;
     }
 }

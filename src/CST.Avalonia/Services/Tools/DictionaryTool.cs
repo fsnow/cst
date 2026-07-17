@@ -22,7 +22,10 @@ namespace CST.Avalonia.Services.Tools
         // Upper bound on dictionary hits returned in one call — negative asks 0, huge asks are capped. (#305)
         private const int MaxDictEntries = 500;
 
-        public IReadOnlyList<string> Languages => _dictionary.AvailableLanguages;
+        public IReadOnlyList<DictionaryLanguageInfo> Languages =>
+            _dictionary.AvailableLanguages
+                .Select(l => new DictionaryLanguageInfo(l, _dictionary.SourceFor(l)))
+                .ToList();
 
         public async Task<IReadOnlyList<DictionaryEntry>> LookupAsync(
             DictionaryRequest request, CancellationToken ct = default)
@@ -31,11 +34,13 @@ namespace CST.Avalonia.Services.Tools
             var words = await _dictionary.LookupAsync(request.Language, request.Query ?? string.Empty, ct)
                 .ConfigureAwait(false);
 
+            var source = _dictionary.SourceFor(request.Language)?.Title;   // inline attribution; null if unrecorded
             return words
                 .Take(Math.Clamp(request.MaxEntries, 0, MaxDictEntries))
                 .Select(w => new DictionaryEntry(
                     Headword: ScriptConverter.Convert(w.Word, Script.Ipe, request.OutputScript),
-                    MeaningHtml: w.Meaning))
+                    MeaningHtml: w.Meaning,
+                    Source: source))
                 .ToList();
         }
     }

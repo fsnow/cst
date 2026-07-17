@@ -9,6 +9,7 @@ using CST.Avalonia.Constants;
 using CST.Avalonia.Models;
 using CST.Avalonia.Search;
 using CST.Conversion;
+using CST.Tools;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services;
@@ -61,11 +62,10 @@ public sealed class DictionaryService : IDictionaryService
     {
         try
         {
-            // Already populated? (any language subdir with files) -> nothing to do.
-            if (Directory.Exists(_dictionariesDirectory) &&
-                Directory.EnumerateDirectories(_dictionariesDirectory).Any(d => Directory.EnumerateFiles(d).Any()))
-                return;
-
+            // NOTE: we no longer early-return when already populated. The copy loop below only writes MISSING
+            // files, so it's cheap to re-check every launch — and it means a file ADDED to a bundled dictionary
+            // (e.g. a new source.json attribution, #268) reaches an existing install on its next launch, not
+            // just fresh installs. Existing dictionary data is never overwritten.
             var source = ResolveBundledDictionariesDir();
             if (source == null)
             {
@@ -125,6 +125,46 @@ public sealed class DictionaryService : IDictionaryService
                 .ToList();
         }
     }
+
+    private readonly Dictionary<string, DictionarySourceInfo?> _sourceCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly System.Text.Json.JsonSerializerOptions SourceJsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    public DictionarySourceInfo? SourceFor(string language)
+    {
+        if (string.IsNullOrEmpty(language)) return null;
+        // Confine to an ACTUAL dictionary dir before Path.Combine (path-traversal guard, same as #352).
+        var canonical = AvailableLanguages.FirstOrDefault(
+            l => string.Equals(l, language, StringComparison.OrdinalIgnoreCase));
+        if (canonical is null) return null;
+
+        lock (_sourceCache)
+            if (_sourceCache.TryGetValue(canonical, out var cached)) return cached;
+
+        DictionarySourceInfo? info = null;
+        try
+        {
+            var path = Path.Combine(_dictionariesDirectory, canonical, "source.json");
+            if (File.Exists(path))
+            {
+                info = System.Text.Json.JsonSerializer.Deserialize<DictionarySourceInfo>(
+                    File.ReadAllText(path), SourceJsonOpts);
+                // A placeholder file with every field blank is NOT attribution — report null, never a guess.
+                if (info is not null && IsUnattributed(info)) info = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read source.json for dictionary language {Language}", canonical);
+        }
+        lock (_sourceCache) _sourceCache[canonical] = info;
+        return info;
+    }
+
+    private static bool IsUnattributed(DictionarySourceInfo s) =>
+        string.IsNullOrWhiteSpace(s.Title) && string.IsNullOrWhiteSpace(s.Compiler) &&
+        string.IsNullOrWhiteSpace(s.Edition) && string.IsNullOrWhiteSpace(s.Year) &&
+        string.IsNullOrWhiteSpace(s.Publisher) && string.IsNullOrWhiteSpace(s.License) &&
+        string.IsNullOrWhiteSpace(s.Url);
 
     public async Task<IReadOnlyList<DictionaryWord>> LookupAsync(string language, string query, CancellationToken ct = default)
     {

@@ -194,9 +194,13 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   `refs.paragraphBookCode`) alongside `paragraph` to disambiguate.
 <!--/doc:reading-->
 <!--doc:dictionary-->
-- `GET  /v1/dictionary/languages` - available dictionary language codes (e.g. "en", "hi").
+- `GET  /v1/dictionary/languages` - the available dictionaries: each `{ language, source }`, where `source` is
+  the authoritative citation `{ title, compiler, edition, year, publisher, license, url }` (any field may be
+  null) or `null` when a dictionary has NO recorded attribution. CITE this as the gloss's source; it is never
+  guessed, so `source:null` means "unattributed", not "look it up yourself".
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
-  -> entries `{ headword, meaningHtml }`.
+  -> entries `{ headword, meaningHtml, source }`, where `source` is the dictionary's title for inline
+  attribution (null if unrecorded; the full citation is in `/v1/dictionary/languages`).
 <!--/doc:dictionary-->
 <!--doc:scripts-->
 - `POST /v1/convert` - convert Pali text to another script. Body `{ text, outputScript }` -> `{ text, outputScript }`.
