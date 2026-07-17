@@ -57,7 +57,8 @@ namespace CST.Avalonia.Services.Tools
             var w = TeiPassageReader.ReadWindow(
                 xml, startPos, Math.Clamp(request.MaxChars, 1, MaxPassageChars),
                 request.IncludeFootnotes, request.OutputScript, markers,
-                snapStartToSentence: request.Cursor.HasValue);
+                snapStartToSentence: request.Cursor.HasValue,
+                structuredNotes: request.StructuredNotes);
 
             return new PassageResult(
                 BookId: request.BookId,
@@ -68,7 +69,8 @@ namespace CST.Avalonia.Services.Tools
                 ParagraphBookCode: w.ParagraphBookCode,
                 PrevCursor: w.PrevCursor,
                 NextCursor: w.NextCursor,
-                NoteCount: w.NoteCount);
+                NoteCount: w.NoteCount,
+                Notes: w.Notes);
         }
 
         private static int ResolveStart(NavigationReference? reference, BookMarkers markers) => reference switch
@@ -85,6 +87,7 @@ namespace CST.Avalonia.Services.Tools
             : $"paragraph {number} ({bookCode})";
 
         private static PassageResult Empty(PassageRequest request, string note) =>
-            new(request.BookId, note, "", Array.Empty<SnippetPageRef>(), null, null, null, null, 0);
+            new(request.BookId, note, "", Array.Empty<SnippetPageRef>(), null, null, null, null, 0,
+                Array.Empty<CST.Search.PassageNote>());
     }
 }

@@ -347,6 +347,24 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Passage_structuredNotes_returns_brace_free_text_and_parsed_notes()
+        {
+            using var http = _api.Http();
+            var resp = await http.PostAsync("/v1/passage",
+                Json($"{{\"bookId\":\"{_api.MulaBook}\",\"paragraph\":1,\"structuredNotes\":true,\"outputScript\":\"Latin\"}}"));
+            Assert.True(resp.IsSuccessStatusCode);
+            using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var root = doc.RootElement;
+            var text = root.GetProperty("text").GetString()!;
+            Assert.DoesNotContain("{", text);                               // clean/quotable base text
+            var notes = root.GetProperty("notes").EnumerateArray().ToList();
+            Assert.NotEmpty(notes);                                         // the fixture's 'dhamma (si)' note as data
+            var note = notes[0];
+            Assert.Equal("si", note.GetProperty("sigla").GetString());      // witness sigla parsed out
+            Assert.InRange(note.GetProperty("offset").GetInt32(), 0, text.Length);
+        }
+
+        [Fact]
         public async Task Lemma_report_unknown_id_is_404()
         {
             using var http = _api.Http();

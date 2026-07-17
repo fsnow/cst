@@ -18,7 +18,7 @@ namespace CST.Search
     {
         public static PassageWindow ReadWindow(
             string xml, int startPos, int maxChars, bool includeVariants, Script outputScript, BookMarkers markers,
-            bool snapStartToSentence = false)
+            bool snapStartToSentence = false, bool structuredNotes = false)
         {
             startPos = Math.Clamp(startPos, 0, xml.Length);
             if (maxChars < 1) maxChars = 1;
@@ -43,8 +43,22 @@ namespace CST.Search
             }
 
             int end = WalkForward(xml, readStart, maxChars, includeVariants, xml.Length);
-            string text = TeiText.Collapse(
-                TeiText.Convert(TeiText.Clean(xml, readStart, end, includeVariants), outputScript)).Trim();
+            IReadOnlyList<PassageNote> notes = System.Array.Empty<PassageNote>();
+            string text;
+            if (structuredNotes)
+            {
+                // Render WITH brace delimiters through the SAME convert/collapse/trim pipeline, then split the
+                // {reading (sigla)} spans out into structured notes and return brace-free text. The note text is
+                // therefore already in the output script and offsets index the returned brace-free text. (#267)
+                string braced = TeiText.Collapse(
+                    TeiText.Convert(TeiText.Clean(xml, readStart, end, includeNotes: true), outputScript)).Trim();
+                (text, notes) = SplitBracedNotes(braced);
+            }
+            else
+            {
+                text = TeiText.Collapse(
+                    TeiText.Convert(TeiText.Clean(xml, readStart, end, includeVariants), outputScript)).Trim();
+            }
 
             int? next = end < xml.Length ? end : (int?)null;
             int prevStart = WalkBackward(xml, readStart, maxChars, 0);
@@ -56,7 +70,48 @@ namespace CST.Search
             int paraStart = EnclosingParagraphStart(readStart, markers);
             int noteCount = TeiText.CountNotesIntersecting(xml, paraStart, readStart, end);
             var (num, code, pages) = markers.RefsAt(readStart);
-            return new PassageWindow(text, prev, next, num, code, pages, noteCount);
+            return new PassageWindow(text, prev, next, num, code, pages, noteCount, notes);
+        }
+
+        // Strip the {reading (sigla)} apparatus spans out of already-rendered text into structured notes,
+        // returning the brace-free text and the notes anchored by offset into it. The braces never occur in the
+        // corpus, so they are unambiguous delimiters. A doubled space at the excised anchor is collapsed. (#267)
+        private static (string Text, IReadOnlyList<PassageNote> Notes) SplitBracedNotes(string braced)
+        {
+            if (braced.IndexOf('{') < 0) return (braced, System.Array.Empty<PassageNote>());
+            var sb = new System.Text.StringBuilder(braced.Length);
+            var notes = new List<PassageNote>();
+            int i = 0;
+            while (i < braced.Length)
+            {
+                char c = braced[i];
+                if (c == '{')
+                {
+                    int close = braced.IndexOf('}', i + 1);
+                    if (close < 0) { sb.Append(braced, i, braced.Length - i); break; }   // malformed: keep verbatim
+                    string inner = braced.Substring(i + 1, close - i - 1).Trim();
+                    var (reading, sigla) = ParseNote(inner);
+                    notes.Add(new PassageNote(sb.Length, inner, reading, sigla));
+                    i = close + 1;
+                    if (i < braced.Length && braced[i] == ' ' && sb.Length > 0 && sb[sb.Length - 1] == ' ')
+                        i++;   // drop the space that flanked the excised span so the anchor isn't a double space
+                }
+                else { sb.Append(c); i++; }
+            }
+            return (sb.ToString(), notes);
+        }
+
+        // Split "reading (sigla)" only when there is exactly one trailing parenthetical and nothing else in
+        // parens — the notes are digitized print footnotes, not a clean apparatus, so anything more complex
+        // (multiple readings, no sigla, freeform) is left as raw Text with null reading/sigla. (#267)
+        private static (string? Reading, string? Sigla) ParseNote(string t)
+        {
+            if (!t.EndsWith(")", System.StringComparison.Ordinal)) return (null, null);
+            int open = t.IndexOf('(');
+            if (open <= 0 || t.IndexOf('(', open + 1) >= 0) return (null, null);   // zero or >1 '('
+            string reading = t.Substring(0, open).Trim();
+            string sigla = t.Substring(open + 1, t.Length - open - 2).Trim();
+            return reading.Length > 0 && sigla.Length > 0 ? (reading, sigla) : (null, null);
         }
 
         // The nearest sentence start at or after <paramref name="minStart"/> and at/before <paramref name="startPos"/>
@@ -164,5 +219,12 @@ namespace CST.Search
         int? ParagraphNumber,
         string? ParagraphBookCode,
         IReadOnlyList<SnippetPageRef> Pages,
-        int NoteCount);
+        int NoteCount,
+        IReadOnlyList<PassageNote> Notes);
+
+    /// <summary>One apparatus note (a digitized print footnote — usually a variant reading) as structured data:
+    /// its character <paramref name="Offset"/> into the returned brace-free <c>Text</c>, its full converted
+    /// <paramref name="Text"/> (e.g. "anupāyinī (ka.)"), and — when it matches the simple <c>reading (sigla)</c>
+    /// shape — the split <paramref name="Reading"/> and witness <paramref name="Sigla"/> (else both null). (#267)</summary>
+    public sealed record PassageNote(int Offset, string Text, string? Reading, string? Sigla);
 }

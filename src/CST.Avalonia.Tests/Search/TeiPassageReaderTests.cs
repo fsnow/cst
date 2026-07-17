@@ -85,6 +85,69 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void ReadWindow_structuredNotes_returns_brace_free_text_plus_parsed_notes()
+        {
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<pb ed=\"V\" n=\"1.0001\"/>" +
+                "<p rend=\"bodytext\" n=\"5\">alpha bravo <note>varreading (si)</note> charlie</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int start = markers.PositionOfParagraph(5);
+
+            var w = TeiPassageReader.ReadWindow(xml, start, maxChars: 10000, includeVariants: false,
+                outputScript: Script.Latin, markers, structuredNotes: true);
+
+            // Text is clean/quotable: no braces, and the apparatus reading is NOT in the base text.
+            Assert.DoesNotContain("{", w.Text);
+            Assert.DoesNotContain("}", w.Text);
+            Assert.DoesNotContain("varreading", w.Text);
+            Assert.Contains("alpha bravo", w.Text);
+            Assert.Contains("charlie", w.Text);
+
+            // The note is returned as data, parsed into reading + sigla, anchored inside the text.
+            var note = Assert.Single(w.Notes);
+            Assert.Equal("varreading", note.Reading);
+            Assert.Equal("si", note.Sigla);
+            Assert.Contains("(si)", note.Text);
+            Assert.InRange(note.Offset, 0, w.Text.Length);
+        }
+
+        [Fact]
+        public void ReadWindow_structuredNotes_leaves_reading_sigla_null_for_a_non_variant_note()
+        {
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<p rend=\"bodytext\" n=\"5\">alpha <note>see also elsewhere</note> bravo</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int start = markers.PositionOfParagraph(5);
+
+            var w = TeiPassageReader.ReadWindow(xml, start, maxChars: 10000, includeVariants: false,
+                outputScript: Script.Latin, markers, structuredNotes: true);
+
+            var note = Assert.Single(w.Notes);
+            Assert.Null(note.Reading);          // no "reading (sigla)" shape
+            Assert.Null(note.Sigla);
+            Assert.Contains("see also", note.Text);
+        }
+
+        [Fact]
+        public void ReadWindow_without_structuredNotes_has_no_notes()
+        {
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\">" +
+                "<p rend=\"bodytext\" n=\"5\">alpha <note>varreading (si)</note> bravo</p>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(xml);
+            int start = markers.PositionOfParagraph(5);
+
+            var w = TeiPassageReader.ReadWindow(xml, start, maxChars: 10000, includeVariants: true,
+                outputScript: Script.Latin, markers);   // structuredNotes defaults false
+            Assert.Empty(w.Notes);
+        }
+
+        [Fact]
         public void ReadWindow_cursor_snaps_start_back_to_the_enclosing_sentence()
         {
             // A cursor from `occurrences` points AT the hit, mid-sentence. The window START must snap back to the

@@ -46,6 +46,11 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 + "(…) source citations in the body are always present; identical true/false output means no {…} "
                 + "apparatus here, not 'no references'. Apparatus lives almost only in MULA texts.")]
             bool includeFootnotes = false,
+            [Description("Return the apparatus as DATA instead of inline braces: 'text' comes back brace-free "
+                + "(clean, quotable Pāli) and each note appears in 'notes' with { offset, text, reading, sigla } "
+                + "(reading/sigla filled only for a simple 'reading (sigla)' note). Use this to quote the base "
+                + "text and read the variants separately, rather than string-parsing braces out of 'text'.")]
+            bool structuredNotes = false,
             CancellationToken ct = default)
         {
             NavigationReference reference = paragraph is int n
@@ -57,7 +62,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 Cursor: cursor,
                 MaxChars: maxChars,
                 OutputScript: McpScript.ToScript(outputScript),
-                IncludeFootnotes: includeFootnotes);
+                IncludeFootnotes: includeFootnotes,
+                StructuredNotes: structuredNotes);
             return await passage.FetchPassageAsync(request, ct).ConfigureAwait(false);
         }
     }
