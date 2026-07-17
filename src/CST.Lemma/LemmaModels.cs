@@ -13,7 +13,11 @@ public sealed record LemmaCandidate(long LemmaId, string Lemma, string? Pos, str
 /// more than one candidate; the caller (or user) disambiguates. <see cref="Grammar"/> is the form's raw
 /// grammatical analysis (JSON), for the disambiguation display; null when the asset omits it (lean scope).
 /// </summary>
-public sealed record FormResolution(string Form, IReadOnlyList<LemmaCandidate> Candidates, string? Grammar);
+/// <param name="Deconstructor">For an enclitic/sandhi form that carries no direct <paramref name="Grammar"/>,
+/// the DPD deconstruction JSON (e.g. <c>["pajānāti + iti"]</c>) — used to resolve the base form's grammar and
+/// append the enclitic ("present 3rd singular, + iti"). Null when unrecorded. (#247 Phase 2)</param>
+public sealed record FormResolution(
+    string Form, IReadOnlyList<LemmaCandidate> Candidates, string? Grammar, string? Deconstructor);
 
 /// <summary>
 /// Forward expansion of one lemma: its attested surface forms (IAST) and, when requested, its

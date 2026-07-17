@@ -83,7 +83,7 @@ namespace CST.Avalonia.Tests.TestSupport
             string mulaXml =
                 "<body><div id=\"dn1\" type=\"book\">" +
                 "<pb ed=\"V\" n=\"1.0001\"/>" +
-                "<p rend=\"bodytext\" n=\"1\">" + Deva("dhamma", "citta", "kamma", "dukkha") +
+                "<p rend=\"bodytext\" n=\"1\">" + Deva("dhamma", "citta", "kamma", "dukkha", "cittāti") +
                 " <note>" + Deva("dhamma") + " (si)</note></p>" +
                 "</div></body>";
             string atthaXml =
@@ -142,12 +142,15 @@ namespace CST.Avalonia.Tests.TestSupport
                 CREATE TABLE root (root_key TEXT PRIMARY KEY, root_sign TEXT, root_meaning TEXT, root_group INTEGER,
                     sanskrit_root TEXT, sanskrit_root_meaning TEXT, dhatupatha_pali TEXT, dhatupatha_english TEXT);
                 CREATE TABLE form_lemma (form TEXT NOT NULL, lemma_id INTEGER NOT NULL);
-                CREATE TABLE forms (form TEXT PRIMARY KEY, grammar TEXT);
+                CREATE TABLE forms (form TEXT PRIMARY KEY, grammar TEXT, deconstructor TEXT);
                 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
-                INSERT INTO forms VALUES
+                INSERT INTO forms(form,grammar) VALUES
                     ('dhamma','[[""dhamma"",""noun"",""masc nom sg""],[""dhamma"",""noun"",""masc voc sg""],[""dhamma"",""adj"",""fem nom sg""]]'),
                     ('citta','[[""dhamma"",""noun"",""masc acc sg""]]'),
                     ('kamma','[[""dhamma"",""noun"",""masc instr sg""]]');
+                -- enclitic form: no direct grammar, but decomposes to 'citta + iti' (#247 Phase 2)
+                INSERT INTO forms(form,grammar,deconstructor) VALUES
+                    ('cittāti', NULL, '[""citta + iti""]');
                 INSERT INTO lemma
                   (id,lemma,pos,gloss,derived_from,root_key,construction,sanskrit,pattern,ebt_count,example_source,example_sutta,example)
                   VALUES
@@ -155,7 +158,7 @@ namespace CST.Avalonia.Tests.TestSupport
                     (101,'dhamma 2','masc','a phenomenon',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
                 INSERT INTO root VALUES ('√dhar','dhar','hold; support',1,'√dhṛ','hold','dharaṇe','holding');
                 INSERT INTO form_lemma VALUES
-                    ('dhamma',100),('citta',100),('kamma',100),('dhammani',100),
+                    ('dhamma',100),('citta',100),('kamma',100),('dhammani',100),('cittāti',100),
                     ('dhamma',101);
                 INSERT INTO meta VALUES ('scope','mid'),('dpd_version','test');");
         }

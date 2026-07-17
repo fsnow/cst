@@ -79,6 +79,10 @@ public sealed class LemmaReportService : ILemmaReportService
                 var res = _lemma.ResolveForm(ScriptConverter.Convert(f.Ipe, Script.Ipe, Script.Latin));
                 bool homo = res is not null && res.Candidates.Any(c => !familyIds.Contains(c.LemmaId));
                 string? grammar = GrammarFor(res?.Grammar, focusHeadword, d.Pos);
+                // No direct grammar? An enclitic form (e.g. pajānātīti = pajānāti + iti) decomposes to a base
+                // form whose grammar IS known — resolve it and append the enclitic. (#247 Phase 2)
+                if (grammar is null && res?.Deconstructor is { } decon)
+                    grammar = EncliticGrammar(decon, focusHeadword, d.Pos);
                 forms.Add(new ReportForm(f.Ipe, f.Count, f.BookCount, homo, grammar));
                 if (homo)
                 {
@@ -202,6 +206,45 @@ public sealed class LemmaReportService : ILemmaReportService
         ["abl"] = "ablative", ["gen"] = "genitive", ["loc"] = "locative", ["voc"] = "vocative",
         ["masc"] = "masculine", ["fem"] = "feminine", ["nt"] = "neuter",
     };
+
+    // An enclitic form (pajānātīti) carries no direct grammar; its deconstructor gives "base + enclitic"
+    // (e.g. "pajānāti + iti"). Resolve the BASE form's grammar (filtered to THIS lemma) and append the enclitic,
+    // yielding e.g. "present 3rd singular, + iti". Multiple base analyses join with " / ". (#247 Phase 2)
+    private string? EncliticGrammar(string deconJson, string focusHeadword, string? focusPos)
+    {
+        List<string>? results = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(deconJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind != JsonValueKind.String) continue;
+                var (baseForm, enclitic) = SplitEnclitic(el.GetString()!);
+                if (baseForm is null) continue;
+                var baseGrammar = GrammarFor(_lemma.ResolveForm(baseForm)?.Grammar, focusHeadword, focusPos);
+                if (baseGrammar is null) continue;
+                var combined = $"{baseGrammar}, + {enclitic}";
+                results ??= new List<string>();
+                if (!results.Contains(combined)) results.Add(combined);
+            }
+        }
+        catch (JsonException) { return null; }
+        return results is { Count: > 0 } ? string.Join(" / ", results) : null;
+    }
+
+    // Common Pāli enclitic particles that attach to a fully-inflected base word.
+    private static readonly HashSet<string> Enclitics = new(StringComparer.Ordinal)
+        { "iti", "ti", "ca", "pi", "api", "eva", "ceva", "va", "hi", "kho", "su", "nu", "no", "ve" };
+
+    // "pajānāti + iti" → ("pajānāti", "iti"), but ONLY for a 2-part split whose tail is a known enclitic
+    // (so a multi-word sandhi compound is never mistaken for an enclitic). Else (null, null).
+    private static (string? Base, string? Enclitic) SplitEnclitic(string decon)
+    {
+        var parts = decon.Split(" + ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 && Enclitics.Contains(parts[1]) && parts[0].Length > 0
+            ? (parts[0], parts[1]) : (null, null);
+    }
 
     // "paññāya 1" → "paññāya"; also DPD's DOTTED sub-numbering "dhamma 1.01" → "dhamma" (mirrors the
     // provider). A trailing token of only digits and dots is a homonym marker; anything else is kept.

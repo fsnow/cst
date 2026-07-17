@@ -318,13 +318,13 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Equal(100, root.GetProperty("lemmaId").GetInt64());
             var forms = root.GetProperty("forms").EnumerateArray()
                 .Select(f => f.GetProperty("form").GetString()).ToHashSet();
-            // dhamma/citta/kamma occur in the corpus; the synthetic 'dhammani' must be omitted.
+            // dhamma/citta/kamma/cittāti occur in the corpus; the synthetic 'dhammani' must be omitted.
             Assert.Contains("dhamma", forms);
             Assert.Contains("citta", forms);
             Assert.Contains("kamma", forms);
             Assert.DoesNotContain("dhammani", forms);
-            Assert.Equal(4, root.GetProperty("candidateFormCount").GetInt32());
-            Assert.Equal(3, root.GetProperty("attestedFormCount").GetInt32());
+            Assert.Equal(5, root.GetProperty("candidateFormCount").GetInt32());   // +cittāti (enclitic)
+            Assert.Equal(4, root.GetProperty("attestedFormCount").GetInt32());
             Assert.True(root.GetProperty("totalOccurrences").GetInt32() > 0);
         }
 
@@ -359,6 +359,8 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Contains("Analysis", html);                                       // column header
             Assert.Contains("masculine nominative singular", html);                  // 'dhamma' expanded
             Assert.Contains("masculine nominative singular / masculine vocative singular", html);
+            // enclitic form 'cittāti' (= citta + iti) has no direct grammar — resolved via its base. (#247 Phase 2)
+            Assert.Contains("masculine accusative singular, + iti", html);
             // lemma 100 is a masc NOUN, so the adjective analysis of 'dhamma' (same headword) is filtered out.
             Assert.DoesNotContain("feminine nominative singular", html);
         }

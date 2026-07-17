@@ -11,6 +11,7 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
 {
     private readonly string? _connString;
     private readonly bool _hasFormsTable;
+    private readonly bool _hasDecon;    // forms.deconstructor column (enclitic +iti resolution, #247 Phase 2)
     private readonly bool _hasReport;   // report-grade columns (root_key on lemma + a root table)
 
     public bool IsAvailable { get; }
@@ -37,6 +38,7 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
             if (!TableExists(c, "lemma") || !TableExists(c, "form_lemma"))
                 return;
             _hasFormsTable = TableExists(c, "forms");
+            _hasDecon = _hasFormsTable && ColumnExists(c, "forms", "deconstructor");
             _hasReport = TableExists(c, "root") && ColumnExists(c, "lemma", "root_key");
             Meta = LoadMeta(c);
             _connString = connString;
@@ -74,15 +76,22 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         }
         if (candidates.Count == 0) return null;
 
-        string? grammar = null;
+        string? grammar = null, deconstructor = null;
         if (_hasFormsTable)
         {
             using var cmd = c.CreateCommand();
-            cmd.CommandText = "SELECT grammar FROM forms WHERE form = $f";
+            cmd.CommandText = _hasDecon
+                ? "SELECT grammar, deconstructor FROM forms WHERE form = $f"
+                : "SELECT grammar FROM forms WHERE form = $f";
             cmd.Parameters.AddWithValue("$f", form);
-            grammar = cmd.ExecuteScalar() as string;
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+            {
+                grammar = Str(r, 0);
+                if (_hasDecon) deconstructor = Str(r, 1);
+            }
         }
-        return new FormResolution(form, candidates, grammar);
+        return new FormResolution(form, candidates, grammar, deconstructor);
     }
 
     public LemmaExpansion? ExpandLemma(long lemmaId, bool includeFamily = false)

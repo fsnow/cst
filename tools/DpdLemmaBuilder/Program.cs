@@ -44,8 +44,32 @@ string srcPath = positional.Count > 0 ? positional[0] : "/Users/fsnow/dpd-poc/dp
 string outPath = positional.Count > 1 ? positional[1] : "/Users/fsnow/dpd-poc/dpd-lemma.db";
 
 bool includeForms = scope != "lean";      // the forms (grammar) table
-bool includeDecon = scope == "full";      // sandhi deconstructor column
+bool includeDecon = scope == "full";      // the FULL sandhi deconstructor (every decomposable form)
 bool includeReport = scope != "lean";     // report-grade per-lemma columns (etymology/example/…) + root table
+bool deconColumn = includeReport;         // the forms.deconstructor column exists for mid + full
+
+// Enclitic particles that attach to a fully-inflected base word. A form whose deconstructor is entirely
+// "base + <enclitic>" (2-part) is a RESOLVABLE enclitic (e.g. pajānātīti = pajānāti + iti) — mid keeps its
+// deconstructor (so the report resolves "base grammar, + iti") while dropping the multi-word sandhi bulk. (#247 Phase 2)
+var enclitics = new HashSet<string>(StringComparer.Ordinal)
+    { "iti", "ti", "ca", "pi", "api", "eva", "ceva", "va", "hi", "kho", "su", "nu", "no", "ve" };
+bool IsResolvableEnclitic(string deconJson)
+{
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(deconJson);
+        if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
+            return false;
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            if (el.ValueKind != System.Text.Json.JsonValueKind.String) return false;
+            var parts = el.GetString()!.Split(" + ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2 || !enclitics.Contains(parts[1])) return false;
+        }
+        return true;
+    }
+    catch { return false; }
+}
 
 if (!File.Exists(srcPath))
 {
@@ -95,7 +119,7 @@ if (includeReport)
         root_key TEXT PRIMARY KEY, root_sign TEXT, root_meaning TEXT, root_group INTEGER,
         sanskrit_root TEXT, sanskrit_root_meaning TEXT, dhatupatha_pali TEXT, dhatupatha_english TEXT );");
 if (includeForms)
-    Exec(outDb, includeDecon
+    Exec(outDb, deconColumn
         ? "CREATE TABLE forms ( form TEXT PRIMARY KEY, grammar TEXT, deconstructor TEXT );"
         : "CREATE TABLE forms ( form TEXT PRIMARY KEY, grammar TEXT );");
 
@@ -222,12 +246,12 @@ using (var tx = outDb.BeginTransaction())
     if (includeForms)
     {
         insForm = outDb.CreateCommand();
-        insForm.CommandText = includeDecon
+        insForm.CommandText = deconColumn
             ? "INSERT OR IGNORE INTO forms(form,grammar,deconstructor) VALUES($f,$g,$d)"
             : "INSERT OR IGNORE INTO forms(form,grammar) VALUES($f,$g)";
         fF = insForm.Parameters.Add("$f", SqliteType.Text);
         fG = insForm.Parameters.Add("$g", SqliteType.Text);
-        if (includeDecon) fD = insForm.Parameters.Add("$d", SqliteType.Text);
+        if (deconColumn) fD = insForm.Parameters.Add("$d", SqliteType.Text);
     }
 
     using var read = src.CreateCommand();
@@ -249,13 +273,18 @@ using (var tx = outDb.BeginTransaction())
 
         if (includeForms)
         {
-            // mid: a forms row only when there's grammar to carry; full: whenever kept.
-            bool wantForm = includeDecon || !string.IsNullOrWhiteSpace(grammar);
+            bool grammarPresent = !string.IsNullOrWhiteSpace(grammar);
+            // A resolvable enclitic (ids>0, no direct grammar, decon entirely "base + <enclitic>") is kept so
+            // the report can render "base grammar, + iti". FULL keeps every decon; MID keeps only enclitics.
+            bool enclitic = !grammarPresent && hasDecon && ids.Length > 0 && IsResolvableEnclitic(decon);
+            bool wantForm = includeDecon || grammarPresent || enclitic;
             if (wantForm)
             {
                 fF.Value = form;
                 fG.Value = NullIfEmpty(grammar);
-                if (includeDecon) fD.Value = hasDecon ? decon : DBNull.Value;
+                if (deconColumn)
+                    fD.Value = includeDecon ? (hasDecon ? decon : (object)DBNull.Value)
+                                            : (enclitic ? decon : (object)DBNull.Value);
                 insForm!.ExecuteNonQuery();
                 formCount++;
             }
@@ -344,7 +373,12 @@ Check("lemma 35708 derived_from == pajānāti", DerivedFrom(35708) == "pajānāt
 long fwd = Scalar("SELECT COUNT(*) FROM form_lemma WHERE lemma_id=39702");
 Check("forward expansion 39702 -> 34 forms", fwd == 34, fwd.ToString());
 if (scope == "mid")
+{
     Check("per-form grammar present (pajānāti)", Scalar("SELECT COUNT(*) FROM forms WHERE form='pajānāti' AND grammar IS NOT NULL") == 1);
+    // enclitic decon kept (pajānātīti = pajānāti + iti), but NOT a non-enclitic sandhi decon (sammappajānāti).
+    Check("enclitic decon retained (pajānātīti)", Scalar("SELECT COUNT(*) FROM forms WHERE form='pajānātīti' AND deconstructor IS NOT NULL") == 1);
+    Check("non-enclitic decon dropped in mid (sammappajānāti)", Scalar("SELECT COUNT(*) FROM forms WHERE form='sammappajānāti' AND deconstructor IS NOT NULL") == 0);
+}
 if (scope == "full")
     Check("sandhi preserved (sammappajānāti)", Scalar("SELECT COUNT(*) FROM forms WHERE form='sammappajānāti' AND deconstructor IS NOT NULL") == 1);
 
