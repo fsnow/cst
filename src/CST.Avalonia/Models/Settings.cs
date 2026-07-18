@@ -16,6 +16,7 @@ namespace CST.Avalonia.Models
         public FontSettings FontSettings { get; set; } = new();
         public DeveloperSettings DeveloperSettings { get; set; } = new();
         public XmlUpdateSettings XmlUpdateSettings { get; set; } = new();
+        public DpdUpdateSettings DpdUpdateSettings { get; set; } = new();
         public AiSettings Ai { get; set; } = new();
     }
 
@@ -86,6 +87,19 @@ namespace CST.Avalonia.Models
         public string XmlRepositoryName { get; set; } = "tipitaka-xml";
         public string XmlRepositoryPath { get; set; } = "deva master";
         public string XmlRepositoryBranch { get; set; } = "main";
+    }
+
+    /// <summary>
+    /// Update settings for the derived <c>dpd-cst-subset</c> asset (lemma / dictionary / sandhi). <see cref="EnablePolling"/>
+    /// is the ONLY DPD-related setting — it toggles the background check-for-a-newer-release, NOT whether the
+    /// features work: availability is driven purely by the asset FILE being present, so a manually dropped-in
+    /// file works regardless of this flag. Points at the derived-asset repo's releases. (#390)
+    /// </summary>
+    public class DpdUpdateSettings
+    {
+        public bool EnablePolling { get; set; } = true;
+        public string RepositoryOwner { get; set; } = "fsnow";
+        public string RepositoryName { get; set; } = "dpd-cst-subset";
     }
     
     public class FontSettings

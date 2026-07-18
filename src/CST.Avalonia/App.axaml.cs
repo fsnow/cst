@@ -514,6 +514,16 @@ public partial class App : Application
             await xmlUpdateService.CheckForUpdatesAsync();
 
             Log.Information("CheckForXmlUpdatesAsync() completed");
+
+            // dpd-cst-subset asset (lemma / dictionary / sandhi): check + download in the BACKGROUND
+            // (fire-and-forget) so a ~60 MB download never delays startup. Availability is driven by file
+            // presence, so a freshly downloaded asset simply activates on the NEXT launch. (#390)
+            var dpdUpdateService = ServiceProvider?.GetService<IDpdUpdateService>();
+            if (dpdUpdateService != null)
+            {
+                dpdUpdateService.StatusChanged += message => Log.Information("DPD Asset Status: {Message}", message);
+                _ = Task.Run(() => dpdUpdateService.CheckAndUpdateAsync());
+            }
         }
         catch (Exception ex)
         {
@@ -1025,6 +1035,7 @@ public partial class App : Application
         
         // XML Update service
         services.AddSingleton<IXmlUpdateService, XmlUpdateService>();
+        services.AddSingleton<IDpdUpdateService, DpdUpdateService>();
 
         // SharePoint service for PDF downloads
         services.AddSingleton<ISharePointService, SharePointService>();
