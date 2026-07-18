@@ -37,6 +37,7 @@ Lessons learned, known issues, and technical challenges:
 ### 🛠️ **development/** - Development Processes
 Guides for development workflows:
 - [Release Process](development/RELEASE_PROCESS.md) - Steps for releasing new versions
+- [DPD-lemma Asset](development/DPD_LEMMA_ASSET.md) - Building & delivering `dpd-lemma.db` (builder scopes, the CI workflow, the version tripwire)
 - [Code Review 2026-07-01](development/CODE_REVIEW_2026-07-01.md) - Multi-agent whole-codebase review (80 findings, ranked; hand-off for the fixing session)
 - [Cloud / Web Session Setup](development/CLOUD_SESSION_SETUP.md) - Provisioning a fresh remote container: XML corpus download, .NET SDK egress-policy block, CST_XML_DIR
 - [Proposed Claude Skills](development/PROPOSED_CLAUDE_SKILLS.md) - AI assistant skill definitions

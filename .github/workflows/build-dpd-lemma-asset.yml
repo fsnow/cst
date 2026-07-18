@@ -1,0 +1,119 @@
+# Builds the derived DPD-lemma asset (dpd-lemma.db) from a Digital Pāḷi Dictionary (DPD) release and publishes
+# it as a GitHub Release asset, so the app's (future) DpdUpdateService can download it — parallel to how the
+# corpus XML is delivered. Manual trigger: the DPD tag + scope are chosen at dispatch. (#109 / #383)
+#
+# Scope: `full` is the superset that powers EVERYTHING shipped — sandhi deconstruction (/v1/deconstruct needs
+# the non-enclitic deconstructors), the DPD dictionary source and lemma report (report-grade columns + the
+# meaning_2-coalesced gloss), and lemma search. `mid` drops the sandhi bulk (~half the size) but then
+# /v1/deconstruct only splits enclitics. Default `full`.
+#
+# Version tripwire: DpdLemmaBuilder's validation is pinned to the CURRENT DPD release (exact lemma count + a few
+# known lemma ids). A NEW DPD tag may fail those checks by design — that is a signal to re-verify the pinned
+# facts in tools/DpdLemmaBuilder/Program.cs and bump them deliberately, not a flaky build.
+
+name: Build DPD-lemma asset
+
+on:
+  workflow_dispatch:
+    inputs:
+      dpd_tag:
+        description: 'DPD dpd-db release tag to build from (e.g. v0.4.20260531)'
+        default: 'v0.4.20260531'
+        required: true
+      scope:
+        description: 'Builder scope. full = sandhi + dictionary + report + lemma; mid = no sandhi bulk'
+        default: 'full'
+        required: true
+        type: choice
+        options: [lean, mid, full]
+      publish:
+        description: 'Publish as a GitHub Release (unchecked = build + validate + upload artifact only)'
+        default: true
+        type: boolean
+
+permissions:
+  contents: write        # create/upload the release
+
+concurrency:
+  group: build-dpd-lemma-${{ inputs.scope }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: Download and extract DPD dpd.db
+        run: |
+          set -euo pipefail
+          url="https://github.com/digitalpalidictionary/dpd-db/releases/download/${{ inputs.dpd_tag }}/dpd.db.tar.bz2"
+          echo "Downloading $url"
+          curl -fSL "$url" -o dpd.db.tar.bz2
+          tar -xjf dpd.db.tar.bz2
+          rm -f dpd.db.tar.bz2
+          ls -la dpd.db
+
+      - name: Build dpd-lemma.db
+        run: |
+          set -euo pipefail
+          dotnet run -c Release --project tools/DpdLemmaBuilder -- \
+            dpd.db dpd-lemma.db --scope "${{ inputs.scope }}"
+          # DpdLemmaBuilder exits non-zero if any validation check fails, so a bad build fails the job here.
+
+      - name: Compress + checksum + manifest
+        run: |
+          set -euo pipefail
+          zstd -19 -T0 -f dpd-lemma.db -o dpd-lemma.db.zst
+          sha256sum dpd-lemma.db dpd-lemma.db.zst > dpd-lemma.sha256
+          raw=$(stat -c%s dpd-lemma.db)
+          zst=$(stat -c%s dpd-lemma.db.zst)
+          sha=$(sha256sum dpd-lemma.db.zst | cut -d' ' -f1)
+          cat > dpd-lemma.manifest.json <<JSON
+          {
+            "asset": "dpd-lemma",
+            "file": "dpd-lemma.db.zst",
+            "dpdTag": "${{ inputs.dpd_tag }}",
+            "scope": "${{ inputs.scope }}",
+            "rawBytes": $raw,
+            "zstBytes": $zst,
+            "sha256": "$sha"
+          }
+          JSON
+          echo "---- manifest ----"; cat dpd-lemma.manifest.json
+          echo "raw=$((raw/1024/1024))MB  zst=$((zst/1024/1024))MB"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpd-lemma-${{ inputs.dpd_tag }}-${{ inputs.scope }}
+          path: |
+            dpd-lemma.db.zst
+            dpd-lemma.sha256
+            dpd-lemma.manifest.json
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="dpd-lemma-${{ inputs.dpd_tag }}-${{ inputs.scope }}"
+          files="dpd-lemma.db.zst dpd-lemma.sha256 dpd-lemma.manifest.json"
+          notes="Derived DPD-lemma asset built from DPD ${{ inputs.dpd_tag }} at scope '${{ inputs.scope }}'. Download dpd-lemma.db.zst, verify with dpd-lemma.sha256, decompress to dpd-lemma.db. See dpd-lemma.manifest.json for sizes + checksum."
+          # Idempotent per (dpd tag, scope): re-running clobbers the same release rather than erroring.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" $files --clobber
+          else
+            gh release create "$tag" $files --title "DPD-lemma asset ($tag)" --notes "$notes"
+          fi
