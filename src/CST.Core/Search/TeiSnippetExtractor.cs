@@ -101,8 +101,18 @@ namespace CST.Search
                 }
             }
 
+            // #355: if the LAST mark is itself INSIDE a note (the hit is footnote text) and we're NOT rendering the
+            // note as braced apparatus, the note's post-hit tail (variant reading + sigla, e.g. "(sī. syā.)") would
+            // leak as undelimited base text — the suffix Clean starts mid-note and never sees the opening <note> to
+            // strip it (</note> is zero-width after the #310 close-tag fix). Start the suffix at the enclosing note's
+            // END so that tail is stripped, matching the already-correct pre-hit side. (renderBraces keeps braces
+            // balanced across the segments, so leave that path untouched.)
+            int suffixStart = ms[ms.Count - 1].End;
+            if (!renderBraces)
+                foreach (var (ns, ne) in winNotes)
+                    if (suffixStart >= ns && suffixStart < ne) { suffixStart = Math.Min(ne, winEnd); break; }
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, ms[ms.Count - 1].End, winEnd, renderBraces), opts.OutputScript)).TrimEnd());
+                TeiText.Clean(xml, suffixStart, winEnd, renderBraces), opts.OutputScript)).TrimEnd());
             sb.Append(ellipsisEnd ? " ..." : "");
 
             var (num, code, pages) = markers.RefsAt(anchor.Start);
