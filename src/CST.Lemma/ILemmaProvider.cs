@@ -1,7 +1,7 @@
 namespace CST.Lemma;
 
 /// <summary>
-/// Read access to a DPD-lemma asset (dpd-lemma.db): the two hops of lemma search —
+/// Read access to the dpd-cst-subset asset (dpd-cst-subset.db, the derived DPD subset for CST): the two hops of lemma search —
 /// <see cref="ResolveForm"/> (a surface form → its candidate lemmas) and
 /// <see cref="ExpandLemma"/> (a lemma → its attested surface forms). Corpus-agnostic: no occurrence
 /// counts (those come from the search index). Forms are IAST; callers convert to IPE to search.
