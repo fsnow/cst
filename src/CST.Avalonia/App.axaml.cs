@@ -996,12 +996,14 @@ public partial class App : Application
         services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<IDictionaryService, DictionaryService>();
 
-        // Lemma search (DPD-lemma asset). NOT AI-gated — a core reading/search feature; degrades to "off"
-        // when the asset is absent. The asset is seeded/downloaded to <app-support>/CSTReader/dpd-lemma/.
-        var dpdLemmaPath = System.IO.Path.Combine(
+        // Lemma/dictionary/sandhi (dpd-cst-subset asset — our derived DPD subset for CST). NOT AI-gated — a core
+        // reading/search feature; availability is driven by FILE PRESENCE alone (no setting), degrading to "off"
+        // when absent. Seeded/downloaded to <app-support>/CSTReader/dpd-cst-subset/. (Opened once at startup, so a
+        // manually dropped-in file activates on the next launch.)
+        var dpdCstSubsetPath = System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            AppConstants.AppDataDirectoryName, "dpd-lemma", "dpd-lemma.db");
-        services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new CST.Lemma.SqliteLemmaProvider(dpdLemmaPath));
+            AppConstants.AppDataDirectoryName, "dpd-cst-subset", "dpd-cst-subset.db");
+        services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new CST.Lemma.SqliteLemmaProvider(dpdCstSubsetPath));
         services.AddSingleton<ILemmaSearchService, LemmaSearchService>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 

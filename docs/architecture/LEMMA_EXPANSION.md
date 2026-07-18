@@ -29,7 +29,7 @@ for exactly those forms. DPD supplies the *candidate* forms; the corpus decides 
 ## 2. The DPD-lemma dataset
 
 We do not ship `dpd.db` (2.1 GB). A build tool (`DpdLemmaBuilder`) extracts a small, corpus-agnostic subset —
-**`dpd-lemma.db`** — from a given DPD release. Only the tables and columns the algorithm needs are copied:
+**`dpd-cst-subset.db`** (the derived DPD subset for CST) — from a given DPD release. Only the tables and columns the algorithm needs are copied:
 
 | Our table    | Source in `dpd.db`        | Columns kept | Role |
 |--------------|---------------------------|--------------|------|
@@ -96,7 +96,7 @@ result is flagged `ExpansionCapped` so the reader is told the count is a floor, 
 
 ### Step 4 — Attach corpus counts
 The search returns, per matched form, its **corpus occurrence count** and the number of books it appears in.
-**All counts come from the corpus index, never from `dpd-lemma.db`.** A DPD candidate form with count 0 is
+**All counts come from the corpus index, never from `dpd-cst-subset.db`.** A DPD candidate form with count 0 is
 therefore *synthetic* here — a form DPD can generate but that does not occur in this edition — and is reported as
 such (attested vs. candidate counts are shown separately).
 

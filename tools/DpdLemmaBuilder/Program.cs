@@ -3,11 +3,11 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
 // =====================================================================================================
-// DPD-lemma generator
-// Builds the trimmed, CORPUS-AGNOSTIC form->lemma asset (dpd-lemma.db) from a full DPD dpd.db release.
+// dpd-cst-subset generator (the derived DPD subset for CST — form->lemma + report + optional sandhi)
+// Builds the trimmed, CORPUS-AGNOSTIC asset (dpd-cst-subset.db) from a full DPD dpd.db release.
 //
 //   Inputs : a full DPD `dpd.db` (from digitalpalidictionary/dpd-db releases; has the `lookup` table).
-//   Output : `dpd-lemma.db` — form->lemma resolution + lemma metadata, stripped of everything else.
+//   Output : `dpd-cst-subset.db` — form->lemma resolution + lemma metadata, stripped of everything else.
 //
 // Keeps (Layer A only): form -> lemma resolution, lemma metadata (lemma/pos/gloss/derived_from), and
 // (mid/full) per-form grammar. DROPS: occurrence counts (Layer B = the app's Lucene index), roots,
@@ -19,7 +19,7 @@ using Microsoft.Data.Sqlite;
 //   mid  : + per-form grammar        (resolvable forms only; powers disambig UI)  ~20 MB zst   <-- v1
 //   full : + sandhi deconstructions  (861k splits; for a future sandhi feature)   ~46 MB zst
 //
-// Usage: DpdLemmaBuilder [<dpd.db path> [<output dpd-lemma.db path>]] [--scope lean|mid|full]
+// Usage: DpdLemmaBuilder [<dpd.db path> [<output dpd-cst-subset.db path>]] [--scope lean|mid|full]
 // =====================================================================================================
 
 const string ConverterVersion = "3";   // v3: gloss coalesces meaning_2 (blank-compound fix, #109)
@@ -41,7 +41,7 @@ if (scope is not ("lean" or "mid" or "full"))
     return 2;
 }
 string srcPath = positional.Count > 0 ? positional[0] : "/Users/fsnow/dpd-poc/dpd.db";
-string outPath = positional.Count > 1 ? positional[1] : "/Users/fsnow/dpd-poc/dpd-lemma.db";
+string outPath = positional.Count > 1 ? positional[1] : "/Users/fsnow/dpd-poc/dpd-cst-subset.db";
 
 bool includeForms = scope != "lean";      // the forms (grammar) table
 bool includeDecon = scope == "full";      // the FULL sandhi deconstructor (every decomposable form)
@@ -313,7 +313,7 @@ void Meta(string k, string v)
     c.Parameters.AddWithValue("$v", v);
     c.ExecuteNonQuery();
 }
-Meta("asset", "dpd-lemma");
+Meta("asset", "dpd-cst-subset");
 Meta("scope", scope);
 Meta("dpd_version", dpdVersion);
 Meta("converter_version", ConverterVersion);

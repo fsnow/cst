@@ -225,7 +225,7 @@ caller looks a word up the same way regardless of source:
   (`manifest.json` with id/headwordScript/meaningFormat/languages) is a later
   option, not required.
 - **Digital Pāḷi Dictionary (DPD)** — the reserved language code **`dpd`**, present
-  only when the DPD-lemma asset (`dpd-lemma.db`) is installed. DPD ships **no
+  only when the dpd-cst-subset asset (`dpd-cst-subset.db`) is installed. DPD ships **no
   rendered-HTML definitions**, so entries are **composed on the fly** from the
   asset's structured columns (pos + gloss + literal meaning + construction) by
   `CompositeDictionaryTool`. The word→entry key reuses the same `form_lemma`
