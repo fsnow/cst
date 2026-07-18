@@ -35,6 +35,22 @@ namespace CST.Avalonia.Services.LocalApi
 
         private static readonly Regex MultiBlank = new(@"\n{3,}", RegexOptions.Compiled);
 
+        // Asset-dependent blocks: <!--dpd-->…<!--/dpd--> wraps content that only works when the dpd-cst-subset
+        // asset is installed (lemma / forms / deconstruct endpoints + the DPD dictionary source). These nest
+        // INSIDE the doc:TOPIC regions; GateDpd runs FIRST so the doc-marker processing then sees a doc that
+        // already reflects asset presence.
+        private static readonly Regex DpdMarkerLine =
+            new(@"^[ \t]*<!--/?dpd-->[ \t]*\r?\n?", RegexOptions.Multiline | RegexOptions.Compiled);
+        private static readonly Regex DpdRegion =
+            new(@"[ \t]*<!--dpd-->.*?<!--/dpd-->[ \t]*\r?\n?", RegexOptions.Singleline | RegexOptions.Compiled);
+
+        /// <summary>Gate the DPD/lemma blocks on asset presence: when the dpd-cst-subset asset is ABSENT, drop the
+        /// whole <c>&lt;!--dpd--&gt;…&lt;!--/dpd--&gt;</c> regions so agents don't discover functionality that only
+        /// 503s (matching the MCP tools, which are already unregistered when the asset is absent); when PRESENT,
+        /// just remove the marker lines and keep the content. Apply BEFORE the doc-marker processing.</summary>
+        public static string GateDpd(string raw, bool assetAvailable) =>
+            assetAvailable ? DpdMarkerLine.Replace(raw, "") : DpdRegion.Replace(raw, "");
+
         /// <summary>Remove every region marker line (for the full-document output).</summary>
         public static string StripMarkers(string raw) => MarkerLine.Replace(raw, "");
 

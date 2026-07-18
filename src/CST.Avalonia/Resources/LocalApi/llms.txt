@@ -201,13 +201,15 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
   -> entries `{ headword, meaningHtml, source, lemmaId? }`, where `source` is the dictionary's title for inline
   attribution (null if unrecorded; the full citation is in `/v1/dictionary/languages`).
-  The bundled flat dictionaries (`en`, `hi`) do exact/prefix/nearest-neighbor matching. When the DPD-lemma
-  dataset is installed, `language:"dpd"` looks a word up in the **Digital Pāḷi Dictionary** — an inflected word
-  resolves through the same form->lemma index as the lemma endpoints (EXACT inflected-form match, no prefix/
-  nearest fallback), so one word can return SEVERAL entries (its candidate homograph lemmas). A DPD entry's `lemmaId` chains to `/v1/lemma-report/{lemmaId}` (full
-  dossier: etymology, root, paradigm, frequency) or `/v1/forms/{lemmaId}` (attested paradigm with counts) - the
-  dictionary meaning is deliberately COMPACT and the report is where the depth lives. `lemmaId` is null for the
-  flat dictionaries.
+  The bundled flat dictionaries (`en`, `hi`) do exact/prefix/nearest-neighbor matching.
+<!--dpd-->
+  When the dpd-cst-subset dataset is installed, `language:"dpd"` looks a word up in the **Digital Pāḷi
+  Dictionary** — an inflected word resolves through the same form->lemma index as the lemma endpoints (EXACT
+  inflected-form match, no prefix/nearest fallback), so one word can return SEVERAL entries (its candidate
+  homograph lemmas). A DPD entry's `lemmaId` chains to `/v1/lemma-report/{lemmaId}` (full dossier: etymology,
+  root, paradigm, frequency) or `/v1/forms/{lemmaId}` (attested paradigm with counts) - the dictionary meaning
+  is deliberately COMPACT and the report is where the depth lives. `lemmaId` is null for the flat dictionaries.
+<!--/dpd-->
 <!--/doc:dictionary-->
 <!--doc:scripts-->
 - `POST /v1/convert` - convert Pali text to another script. Body `{ text, outputScript }` -> `{ text, outputScript }`.
@@ -215,11 +217,12 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `GET  /v1/scripts` - the valid script names for `outputScript` and the `?script=` params.
 <!--/doc:scripts-->
 <!--doc:dictionary-->
+<!--dpd-->
 - `GET  /v1/lemma/{form}?script=` - LEMMA back-lookup: resolve a surface form to its candidate dictionary
   lemmas (DPD). Returns `{ form, candidates:[{ lemmaId, lemma, pos, gloss, derivedFrom }], note }`. A form is
   often a HOMOGRAPH (>1 candidate) - pick the intended `lemmaId`. `script` is BOTH the input form's script and
   the output. `{form}` is a PATH segment, so PERCENT-ENCODE diacritics (`pajānāti` -> `paj%C4%81n%C4%81ti`).
-  (Present only when the DPD-lemma dataset is installed; 503 if not.)
+  (Present only when the dpd-cst-subset dataset is installed; 503 if not.)
 - `GET  /v1/forms/{lemmaId}?family=&script=` - LEMMA forward-expansion: a lemma's ATTESTED paradigm WITH
   corpus counts. Returns `{ lemmaId, lemma, pos, gloss, forms:[{ form, count, bookCount }], totalOccurrences,
   attestedFormCount, candidateFormCount, expansionCapped, note }`. This answers "the whole declension/
@@ -247,8 +250,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   comes back with `directLemmas` and no split. This is the word->PARTS step only: each part is a surface form,
   so chain it - `GET /v1/lemma/{part}` for the part's lemma(s) (a part is often a HOMOGRAPH), then
   `/v1/dictionary/lookup` for glosses. `{word}` is a PATH segment, so PERCENT-ENCODE diacritics. `script` is
-  BOTH the input and output script. (Present only when the DPD-lemma dataset is installed; 503 if not. Full
+  BOTH the input and output script. (Present only when the dpd-cst-subset dataset is installed; 503 if not. Full
   compound coverage needs the full-scope asset; a mid-scope asset splits only enclitics like `…ti`/`…iti`.)
+<!--/dpd-->
 <!--/doc:dictionary-->
 
 <!--doc:search-->
