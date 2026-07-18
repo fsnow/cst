@@ -124,7 +124,8 @@ namespace CST.Avalonia.Services.Tools
                 ? iast
                 : ScriptConverter.Convert(iast, Script.Latin, output);
 
-        // Build DPD's citation from the asset's meta (written by DpdLemmaBuilder) — never hard-coded, so it tracks
+        // Build DPD's citation from the asset's meta (written by the DpdLemmaBuilder tool in the dpd-cst-subset
+        // repo) — never hard-coded, so it tracks
         // the shipped release. Null when the asset carries no attribution at all (mirrors the flat-file contract).
         private DictionarySourceInfo? DpdSource()
         {
