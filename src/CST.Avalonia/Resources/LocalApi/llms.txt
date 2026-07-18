@@ -199,8 +199,15 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   null) or `null` when a dictionary has NO recorded attribution. CITE this as the gloss's source; it is never
   guessed, so `source:null` means "unattributed", not "look it up yourself".
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
-  -> entries `{ headword, meaningHtml, source }`, where `source` is the dictionary's title for inline
+  -> entries `{ headword, meaningHtml, source, lemmaId? }`, where `source` is the dictionary's title for inline
   attribution (null if unrecorded; the full citation is in `/v1/dictionary/languages`).
+  The bundled flat dictionaries (`en`, `hi`) do exact/prefix/nearest-neighbor matching. When the DPD-lemma
+  dataset is installed, `language:"dpd"` looks a word up in the **Digital Pāḷi Dictionary** — an inflected word
+  resolves through the same form->lemma index as the lemma endpoints (EXACT inflected-form match, no prefix/
+  nearest fallback), so one word can return SEVERAL entries (its candidate homograph lemmas). A DPD entry's `lemmaId` chains to `/v1/lemma-report/{lemmaId}` (full
+  dossier: etymology, root, paradigm, frequency) or `/v1/forms/{lemmaId}` (attested paradigm with counts) - the
+  dictionary meaning is deliberately COMPACT and the report is where the depth lives. `lemmaId` is null for the
+  flat dictionaries.
 <!--/doc:dictionary-->
 <!--doc:scripts-->
 - `POST /v1/convert` - convert Pali text to another script. Body `{ text, outputScript }` -> `{ text, outputScript }`.

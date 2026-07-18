@@ -1007,7 +1007,12 @@ public partial class App : Application
 
         // Surface-C tool wrappers (exposed over the local API). (#186)
         services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
-        services.AddSingleton<CST.Tools.IDictionaryTool, Services.Tools.DictionaryTool>();
+        // Dictionary tool = flat-file dictionaries UNIONed with DPD ("dpd" language) when the DPD-lemma asset is
+        // present; the flat tool is the fallback for every other language. (#109)
+        services.AddSingleton<Services.Tools.DictionaryTool>();
+        services.AddSingleton<CST.Tools.IDictionaryTool>(sp => new Services.Tools.CompositeDictionaryTool(
+            sp.GetRequiredService<Services.Tools.DictionaryTool>(),
+            sp.GetRequiredService<CST.Lemma.ILemmaProvider>()));
         services.AddSingleton<CST.Tools.IPassageTool, Services.Tools.PassageTool>();
         services.AddSingleton<CST.Tools.IScriptTool, Services.Tools.ScriptTool>();
         services.AddTransient<TreeStateService>();

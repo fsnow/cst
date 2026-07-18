@@ -22,7 +22,7 @@ using Microsoft.Data.Sqlite;
 // Usage: DpdLemmaBuilder [<dpd.db path> [<output dpd-lemma.db path>]] [--scope lean|mid|full]
 // =====================================================================================================
 
-const string ConverterVersion = "2";   // v2: report-grade per-lemma columns + root table
+const string ConverterVersion = "3";   // v3: gloss coalesces meaning_2 (blank-compound fix, #109)
 const string SchemaVersion = "2";
 
 // ---- args ----
@@ -135,13 +135,16 @@ using (var tx = outDb.BeginTransaction())
             (id,lemma,pos,gloss,derived_from,root_key,construction,sanskrit,meaning_lit,pattern,ebt_count,
              example_source,example_sutta,example,synonym,antonym)
             VALUES ($id,$lemma,$pos,$gloss,$df,$rk,$con,$skt,$lit,$pat,$ebt,$exs,$exu,$ex,$syn,$ant)";
-        read.CommandText = @"SELECT id,lemma_1,pos,meaning_1,derived_from,root_key,construction,sanskrit,
+        // gloss = COALESCE(meaning_1, meaning_2): ~30% of DPD headwords (26,782/89,050, mostly compounds) have
+        // an EMPTY meaning_1 but a populated meaning_2, so a gloss keyed on meaning_1 alone would blank them —
+        // which surfaces as blank dictionary definitions (#109). meaning_2 is the fallback, ~0.7 MB total. (#109)
+        read.CommandText = @"SELECT id,lemma_1,pos,COALESCE(NULLIF(meaning_1,''),meaning_2),derived_from,root_key,construction,sanskrit,
             meaning_lit,pattern,ebt_count,source_1,sutta_1,example_1,synonym,antonym FROM dpd_headwords";
     }
     else
     {
         ins.CommandText = "INSERT INTO lemma(id,lemma,pos,gloss,derived_from) VALUES($id,$lemma,$pos,$gloss,$df)";
-        read.CommandText = "SELECT id, lemma_1, pos, meaning_1, derived_from FROM dpd_headwords";
+        read.CommandText = "SELECT id, lemma_1, pos, COALESCE(NULLIF(meaning_1,''),meaning_2), derived_from FROM dpd_headwords";
     }
     var pId = ins.Parameters.Add("$id", SqliteType.Integer);
     var pLemma = ins.Parameters.Add("$lemma", SqliteType.Text);
@@ -171,7 +174,9 @@ using (var tx = outDb.BeginTransaction())
         pId.Value = r.GetInt64(0);
         pLemma.Value = r.GetString(1);
         pPos.Value = NullIfEmpty(r.GetString(2));
-        pGloss.Value = NullIfEmpty(r.GetString(3));
+        // gloss is now a COALESCE(NULLIF(meaning_1,''),meaning_2) expression — NULL-capable if BOTH are empty
+        // (never happens in DPD, meaning_2 is NOT NULL, but guard so GetString can't throw on a future release).
+        pGloss.Value = r.IsDBNull(3) ? DBNull.Value : NullIfEmpty(r.GetString(3));
         pDf.Value = NullIfEmpty(r.GetString(4));
         if (includeReport)
         {

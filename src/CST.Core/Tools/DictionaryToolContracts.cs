@@ -50,8 +50,12 @@ namespace CST.Tools
     /// <param name="MeaningHtml">The definition as an HTML fragment (the source format).</param>
     /// <param name="Source">The dictionary's title, for inline attribution (null when unrecorded); the full
     /// citation for this language is in <see cref="IDictionaryTool.Languages"/>. (#268)</param>
+    /// <param name="LemmaId">For a structured dictionary (DPD) whose entries are DPD headwords, the DPD lemma id
+    /// — chain it to <c>/v1/lemma-report/{lemmaId}</c> for the full dossier, or <c>/v1/forms/{lemmaId}</c> for the
+    /// attested paradigm. Null for flat-file dictionaries. (#109)</param>
     public sealed record DictionaryEntry(
         string Headword,
         string MeaningHtml,
-        string? Source);
+        string? Source,
+        long? LemmaId = null);
 }

@@ -211,6 +211,47 @@ ahead-only, tie-both-sides, and no-common-prefix → empty).
 **UI layer (owned by the app's UI work):** the results panel, WebView rendering,
 `<see>` link handling, back-stack, and per-script fonts (§6).
 
+## 8. Third-party & structured dictionaries (#109)
+
+The flat-file loader above is only one **backend**. As of #109 the dictionary
+tool (`IDictionaryTool`, surface C) unions two backends behind one contract, so a
+caller looks a word up the same way regardless of source:
+
+- **Flat-file dictionaries** — the `dictionaries/<lang>/` tree of §4. This is also
+  the **general user-import format**: drop a `<lang>/` folder with one or more
+  UTF-8 files of alternating `headword` / `definition-HTML` lines (§4 "File
+  format") plus an optional `source.json`, and it loads with no code change. A
+  Pāli↔Pāli or bilingual flat dictionary imports today; a manifest-aware v2 loader
+  (`manifest.json` with id/headwordScript/meaningFormat/languages) is a later
+  option, not required.
+- **Digital Pāḷi Dictionary (DPD)** — the reserved language code **`dpd`**, present
+  only when the DPD-lemma asset (`dpd-lemma.db`) is installed. DPD ships **no
+  rendered-HTML definitions**, so entries are **composed on the fly** from the
+  asset's structured columns (pos + gloss + literal meaning + construction) by
+  `CompositeDictionaryTool`. The word→entry key reuses the same `form_lemma`
+  index the lemma endpoints use, so an **inflected** word resolves and a homograph
+  returns several entries. Each entry carries a `lemmaId` that chains to the lemma
+  report (`/v1/lemma-report/{lemmaId}`) for the full dossier — the dictionary
+  meaning is deliberately compact; depth lives in the report.
+
+**Attribution (`source.json`, #268).** Each flat `<lang>/` dir may carry a
+`source.json` — the authoritative citation `{ title, compiler, edition, year,
+publisher, license, url }`, read **verbatim, never inferred**; a wholly-blank file
+reports `null` (unattributed), not a guess. DPD's citation is built the same shape
+from the asset's own `meta` table (so it tracks the shipped release), never
+hard-coded. `/v1/dictionary/languages` returns each dictionary's source.
+
+**The `meaning_2` coalesce (DpdLemmaBuilder, #109).** ~30% of DPD headwords
+(26,782/89,050, mostly compounds) have an empty `meaning_1` but a populated
+`meaning_2`; the builder now sets `gloss = COALESCE(NULLIF(meaning_1,''),
+meaning_2)` so the composed DPD definition is not blank for those. Requires a
+rebuilt asset (converter v3).
+
+**Deferred (UI, Frank's lane):** a dictionary/source picker (today's picker only
+chooses a *language*) and a multi-source results panel with per-source sections.
+The API-first backend above lands the "look a word up in DPD and cite it" value
+without that UI.
+
 ## Corrections vs. the previous version of this document
 
 The earlier draft (written by a much weaker model) contained errors now fixed
