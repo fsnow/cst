@@ -177,7 +177,13 @@ namespace CST.Search
             var notes = TeiText.NoteRegions(xml, from, start);
             for (int j = from; j < start; j++)
                 if (TeiText.IsBoundary(xml[j]) && !TeiText.InNote(j, notes)) return j + 1;   // sentence start (note-aware, #310)
-            return Math.Max(i + 1, limit);
+            // No boundary found: the raw fallback can land mid-note, so the previous page would render that note's
+            // tail as base text (and Clean from mid-note emits an unbalanced brace). Snap out to the enclosing note's
+            // start so the cursor sits on a clean (base-text) boundary. (#355)
+            int fallback = Math.Max(i + 1, limit);
+            foreach (var (s, e) in notes)
+                if (fallback > s && fallback < e) { fallback = Math.Max(s, limit); break; }
+            return fallback;
         }
     }
 

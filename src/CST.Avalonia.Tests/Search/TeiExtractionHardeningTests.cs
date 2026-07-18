@@ -72,5 +72,41 @@ namespace CST.Avalonia.Tests.Search
             Assert.Contains("alpha", w.Text);
             Assert.Contains("epsilon", w.Text);
         }
+
+        [Fact]
+        public void Snippet_hit_inside_a_note_does_not_leak_the_notes_post_hit_tail()
+        {
+            // #355: the hit ("TARGET") is itself footnote text; with IncludeFootnotes=false the note's PRE-hit
+            // content is stripped, but its POST-hit tail ("variant reading sii syaa") used to leak as base text
+            // because the suffix Clean started mid-note. The base text after the note must still be preserved (#310).
+            const string xml = "<p>base one two <note>TARGET variant reading sii syaa</note> three four five।</p>";
+            var markers = BookMarkers.Build(xml);
+            int hit = xml.IndexOf("TARGET", StringComparison.Ordinal);
+
+            var r = TeiSnippetExtractor.Extract(xml, hit, "TARGET".Length, markers, Deva(1, 400));
+
+            Assert.Contains("base one two", r.Snippet);          // pre-note base text
+            Assert.Contains("TARGET", r.Snippet);                // the hit (note text) still renders
+            Assert.Contains("three four five", r.Snippet);       // post-note base text preserved (#310)
+            Assert.DoesNotContain("variant reading", r.Snippet); // the leaked note tail — gone (#355)
+            Assert.DoesNotContain("syaa", r.Snippet);
+        }
+
+        [Fact]
+        public void Snippet_hit_inside_a_note_still_shows_the_note_as_apparatus_when_footnotes_included()
+        {
+            // With footnotes ON the note is rendered as braced apparatus, so its tail is DELIMITED (not leaked as
+            // base text) — the #355 clip only applies when braces are off. This pins that the fix is one-sided.
+            const string xml = "<p>base one two <note>TARGET variant reading</note> three four five।</p>";
+            var markers = BookMarkers.Build(xml);
+            int hit = xml.IndexOf("TARGET", StringComparison.Ordinal);
+            var opts = new SnippetOptions(Script.Devanagari, IncludeFootnotes: true, MinChars: 1, MaxChars: 400);
+
+            var r = TeiSnippetExtractor.Extract(xml, hit, "TARGET".Length, markers, opts);
+
+            Assert.Contains("TARGET", r.Snippet);
+            Assert.Contains("three four five", r.Snippet);
+            Assert.Contains("variant reading", r.Snippet);       // present, but as apparatus (braces)
+        }
     }
 }
