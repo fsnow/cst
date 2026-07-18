@@ -26,6 +26,12 @@ namespace CST.Avalonia.Tests.Integration
     /// share one server (built once) and run serially, because building the fixture index mutates global
     /// <c>Books</c> DocId state.
     /// </summary>
+    // Shared serial collection: the integration classes all build a fixture index that mutates the global Books
+    // DocId state, so they must NOT run in parallel with one another. (#355-era asset-absent coverage)
+    [CollectionDefinition("LocalApiIntegration", DisableParallelization = true)]
+    public sealed class LocalApiIntegrationCollection { }
+
+    [Collection("LocalApiIntegration")]
     public class LocalApiIntegrationTests : IAsyncLifetime
     {
         private LocalApiTestServer _api = null!;

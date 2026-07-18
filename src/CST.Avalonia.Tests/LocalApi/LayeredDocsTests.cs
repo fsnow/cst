@@ -11,6 +11,31 @@ namespace CST.Avalonia.Tests.LocalApi
             "- `GET /v1/status` - core (unmarked)\n" +
             "<!--doc:reading-->\n- `POST /v1/passage` - read\n<!--/doc:reading-->\n";
 
+        // A doc with a DPD-gated block nested inside a topic region, plus a non-DPD sibling bullet.
+        private const string DpdSample =
+            "<!--doc:dictionary-->\n- `GET /v1/dictionary/languages` - flat dicts\n" +
+            "<!--dpd-->\n- `GET /v1/lemma/{form}` - DPD only\n<!--/dpd-->\n" +
+            "<!--/doc:dictionary-->\n";
+
+        [Fact]
+        public void GateDpd_present_strips_only_the_dpd_markers_keeps_content()
+        {
+            var s = LayeredDocs.GateDpd(DpdSample, assetAvailable: true);
+            Assert.DoesNotContain("<!--dpd-->", s);
+            Assert.DoesNotContain("<!--/dpd-->", s);
+            Assert.Contains("/v1/lemma/{form}", s);          // DPD content kept
+            Assert.Contains("/v1/dictionary/languages", s);  // flat content kept
+        }
+
+        [Fact]
+        public void GateDpd_absent_drops_the_whole_dpd_region_keeps_the_flat_sibling()
+        {
+            var s = LayeredDocs.GateDpd(DpdSample, assetAvailable: false);
+            Assert.DoesNotContain("/v1/lemma/{form}", s);     // DPD block gone
+            Assert.DoesNotContain("<!--dpd-->", s);
+            Assert.Contains("/v1/dictionary/languages", s);   // flat sibling survives
+        }
+
         [Fact]
         public void StripMarkers_removes_every_marker_but_keeps_content()
         {

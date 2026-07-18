@@ -355,10 +355,16 @@ namespace CST.Avalonia.Services.LocalApi
         // The version-stamped FULL llms.txt body (markers stripped), served at GET /llms-full.txt and as the
         // MCP llms.txt resource. /llms.txt itself serves the thin index (BuildThinIndex). Single source (the
         // embedded resource), so none of the three can drift. Version-stamped per build.
+        // Whether the DPD/lemma docs should be served: the asset must be installed (same contract as the
+        // endpoints/MCP tools). Absent → GateDpd drops the <!--dpd--> regions so agents don't discover 503-only
+        // functionality. Evaluated per request (restart-to-activate: the provider opens the file once at startup).
+        private bool DpdDocsAvailable => _lemma?.IsAvailable == true;
+
         private string BuildLlmsText()
         {
             var body = ReadResource("LocalApi.llms.txt")
                 ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
+            body = LayeredDocs.GateDpd(body, DpdDocsAvailable);
             // Strip the progressive-discovery region markers; the full document is the monolith. (#259)
             return $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + LayeredDocs.StripMarkers(body);
         }
@@ -368,6 +374,7 @@ namespace CST.Avalonia.Services.LocalApi
         {
             var body = ReadResource("LocalApi.llms.txt")
                 ?? "# CST Reader Local API\n\n(llms.txt resource missing)\n";
+            body = LayeredDocs.GateDpd(body, DpdDocsAvailable);
             return $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + LayeredDocs.ThinIndex(body);
         }
 
@@ -376,6 +383,7 @@ namespace CST.Avalonia.Services.LocalApi
         private string? BuildDocSlice(string topic)
         {
             var raw = ReadResource("LocalApi.llms.txt");
+            if (raw is not null) raw = LayeredDocs.GateDpd(raw, DpdDocsAvailable);
             var slice = raw is null ? null : LayeredDocs.Slice(raw, topic);
             return slice is null ? null : $"<!-- CST Reader {_appVersion} | API {ApiVersion} -->\n" + slice;
         }

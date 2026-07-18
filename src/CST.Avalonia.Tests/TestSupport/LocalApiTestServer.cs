@@ -60,7 +60,11 @@ namespace CST.Avalonia.Tests.TestSupport
             return http;
         }
 
-        public static async Task<LocalApiTestServer> StartAsync()
+        /// <param name="withLemmaAsset">When false, the lemma provider points at a NONEXISTENT asset (IsAvailable
+        /// == false) so the assembled stack exercises the asset-ABSENT path: lemma endpoints 503, MCP lemma tools
+        /// unregistered, and the DPD doc regions gated out of llms.txt — the real app's behavior when the
+        /// dpd-cst-subset file isn't installed.</param>
+        public static async Task<LocalApiTestServer> StartAsync(bool withLemmaAsset = true)
         {
             var root = Path.Combine(Path.GetTempPath(), "cst-int-" + Guid.NewGuid().ToString("N"));
             var xmlDir = Path.Combine(root, "xml");
@@ -116,8 +120,10 @@ namespace CST.Avalonia.Tests.TestSupport
 
             // DPD-lemma fixture: 'dhamma' is a homograph (lemmas 100/101); lemma 100's paradigm has three
             // corpus-attested forms (dhamma, citta, kamma) + one synthetic form (dhammani, absent from the corpus).
-            string dpdLemmaPath = Path.Combine(root, "dpd-lemma.db");
-            BuildLemmaFixture(dpdLemmaPath);
+            string dpdLemmaPath = Path.Combine(root, "dpd-cst-subset.db");
+            if (withLemmaAsset) BuildLemmaFixture(dpdLemmaPath);
+            // withLemmaAsset:false -> point at a path that does NOT exist, so IsAvailable is false and the whole
+            // assembled stack takes the asset-absent path (503s / gated docs), exactly as the shipped app does.
             var lemmaProvider = new SqliteLemmaProvider(dpdLemmaPath);
             var lemmaSearch = new LemmaSearchService(lemmaProvider, searchService);
             var lemmaReport = new LemmaReportService(lemmaProvider, lemmaSearch);
