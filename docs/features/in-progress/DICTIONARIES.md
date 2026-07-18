@@ -241,7 +241,7 @@ reports `null` (unattributed), not a guess. DPD's citation is built the same sha
 from the asset's own `meta` table (so it tracks the shipped release), never
 hard-coded. `/v1/dictionary/languages` returns each dictionary's source.
 
-**The `meaning_2` coalesce (DpdLemmaBuilder, #109).** ~30% of DPD headwords
+**The `meaning_2` coalesce (`DpdLemmaBuilder`, in the [`dpd-cst-subset`](https://github.com/fsnow/dpd-cst-subset) repo, #109).** ~30% of DPD headwords
 (26,782/89,050, mostly compounds) have an empty `meaning_1` but a populated
 `meaning_2`; the builder now sets `gloss = COALESCE(NULLIF(meaning_1,''),
 meaning_2)` so the composed DPD definition is not blank for those. Requires a

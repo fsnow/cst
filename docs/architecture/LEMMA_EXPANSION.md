@@ -28,7 +28,8 @@ for exactly those forms. DPD supplies the *candidate* forms; the corpus decides 
 
 ## 2. The DPD-lemma dataset
 
-We do not ship `dpd.db` (2.1 GB). A build tool (`DpdLemmaBuilder`) extracts a small, corpus-agnostic subset —
+We do not ship `dpd.db` (2.1 GB). A build tool (`DpdLemmaBuilder`, in the separate
+[`dpd-cst-subset`](https://github.com/fsnow/dpd-cst-subset) repo) extracts a small, corpus-agnostic subset —
 **`dpd-cst-subset.db`** (the derived DPD subset for CST) — from a given DPD release. Only the tables and columns the algorithm needs are copied:
 
 | Our table    | Source in `dpd.db`        | Columns kept | Role |
@@ -235,4 +236,5 @@ Reader is looking at the word **paññāya** and asks for its family across the 
 
 *Implementation:* `CST.Lemma.SqliteLemmaProvider` (data access), `CST.Avalonia.Services.LemmaSearchService`
 (expansion → search), `CST.Avalonia.Services.LemmaReportService` / `LemmaReportRenderer` (the dossier). Dataset
-built by `tools/DpdLemmaBuilder`. Related: [DPD dictionary integration spike](../research/DPD_DICTIONARY_INTEGRATION_SPIKE.md).
+built by `DpdLemmaBuilder` in the [`dpd-cst-subset`](https://github.com/fsnow/dpd-cst-subset) repo (the derived
+asset's own home). Related: [DPD dictionary integration spike](../research/DPD_DICTIONARY_INTEGRATION_SPIKE.md).
