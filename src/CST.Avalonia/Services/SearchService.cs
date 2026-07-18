@@ -486,28 +486,35 @@ public class SearchService : ISearchService
                     mt.Occurrences.Add(occ);
                 }
 
-                occ.Positions.AddRange(hit);
+                // Positions ONLY feed the UI's two-color highlighting. The counts-only path (the API when books
+                // aren't requested — SearchTool sets CountsOnly) never reads them, so skip accumulating them: for a
+                // broad multi-word query (e.g. `bhikkhu* dhamma*`) this avoids materializing — and then the
+                // BoundedCache PINNING — millions of TermPositions the caller discards. Count is tracked
+                // independently, so counts are unaffected. (#312 A4-8 pt2)
+                if (!query.CountsOnly)
+                    occ.Positions.AddRange(hit);
                 occ.Count++;
                 mt.TotalCount++;
             }
         }
         _logger.LogInformation("Multi-word: matched {BookCount} candidate books in {Elapsed}ms", candidateBooks.Count, sw.ElapsedMilliseconds);
 
-        // De-duplicate highlight positions per occurrence (a word can be shared by overlapping
-        // hits); prefer the first-term marking. Then sort for highlighting.
-        foreach (var mt in combos.Values)
-        {
-            foreach (var occ in mt.Occurrences)
+        // De-duplicate highlight positions per occurrence (a word can be shared by overlapping hits); prefer the
+        // first-term marking. Then sort for highlighting. Skipped on the counts-only path (positions are empty).
+        if (!query.CountsOnly)
+            foreach (var mt in combos.Values)
             {
-                var byOffset = new Dictionary<int, TermPosition>();
-                foreach (var tp in occ.Positions)
+                foreach (var occ in mt.Occurrences)
                 {
-                    if (!byOffset.TryGetValue(tp.StartOffset, out var existing) || (tp.IsFirstTerm && !existing.IsFirstTerm))
-                        byOffset[tp.StartOffset] = tp;
+                    var byOffset = new Dictionary<int, TermPosition>();
+                    foreach (var tp in occ.Positions)
+                    {
+                        if (!byOffset.TryGetValue(tp.StartOffset, out var existing) || (tp.IsFirstTerm && !existing.IsFirstTerm))
+                            byOffset[tp.StartOffset] = tp;
+                    }
+                    occ.Positions = byOffset.Values.OrderBy(p => p.Position).ToList();
                 }
-                occ.Positions = byOffset.Values.OrderBy(p => p.Position).ToList();
             }
-        }
 
         // Step 4: convert results. Order matching combinations alphabetically by their IPE words (word-by-word),
         // matching CST4 and the single-term path (the '~'-joined key sorts word0, then word1, ...), then apply the
