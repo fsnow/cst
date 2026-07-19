@@ -1403,12 +1403,21 @@ namespace CST.Avalonia.ViewModels
                 }
                 else
                 {
-                    // Try app bundle location for production (lowercase)
+                    // Packaged beside the executable (Windows/Linux self-contained publish): <app>/xsl. (#403)
+                    var besideExePath = Path.Combine(
+                        Path.GetDirectoryName(assemblyLocation) ?? "", "xsl");
+
+                    // Try app bundle location for production (macOS: Contents/MacOS -> ../Resources/xsl)
                     var bundleResourcesPath = Path.Combine(
                         Path.GetDirectoryName(assemblyLocation) ?? "",
                         "..", "Resources", "xsl");
 
-                    if (Directory.Exists(bundleResourcesPath))
+                    if (Directory.Exists(besideExePath))
+                    {
+                        sourceXslDir = besideExePath;
+                        _logger.Information("Found XSL files next to the executable: {Path}", besideExePath);
+                    }
+                    else if (Directory.Exists(bundleResourcesPath))
                     {
                         sourceXslDir = bundleResourcesPath;
                         _logger.Information("Found XSL files in app bundle: {Path}", bundleResourcesPath);
