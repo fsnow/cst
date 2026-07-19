@@ -134,6 +134,55 @@ public sealed class DpdUpdateServiceTests : IDisposable
         Assert.False(File.Exists(final + ".new"));
     }
 
+    // ---- Staged-swap install on Windows (#394) ----
+
+    [Fact]
+    public void ApplyPendingInstall_swaps_a_staged_file_into_place()
+    {
+        var final = Path.Combine(_dir, "dpd-cst-subset.db");
+        File.WriteAllText(final, "OLD");
+        File.WriteAllText(final + ".pending", "NEW-STAGED");
+
+        Assert.True(DpdUpdateService.ApplyPendingInstall(final));
+        Assert.Equal("NEW-STAGED", File.ReadAllText(final));
+        Assert.False(File.Exists(final + ".pending"));   // staged file consumed
+    }
+
+    [Fact]
+    public void ApplyPendingInstall_is_noop_when_nothing_staged()
+    {
+        var final = Path.Combine(_dir, "dpd-cst-subset.db");
+        File.WriteAllText(final, "OLD");
+
+        Assert.False(DpdUpdateService.ApplyPendingInstall(final));
+        Assert.Equal("OLD", File.ReadAllText(final));    // untouched
+    }
+
+    [Fact]
+    public void InstallFromGzip_stages_when_the_target_is_locked_then_activates_on_apply()
+    {
+        // Windows-specific: File.Move over an OPEN db throws a sharing violation, so the install stages a
+        // ".pending" swap for next launch instead of failing (and never clobbers the good, open asset). POSIX
+        // allows the move, so this reproduces only on Windows. (#394)
+        if (!OperatingSystem.IsWindows()) return;
+
+        var final = Path.Combine(_dir, "dpd-cst-subset.db");
+        File.WriteAllBytes(final, BuildAssetDbBytes(dpd: "v0", conv: "3"));   // a real, openable existing asset
+        var gz = Gzip(BuildAssetDbBytes(dpd: "v1", conv: "3"));
+
+        using (var hold = new FileStream(final, FileMode.Open, FileAccess.Read, FileShare.None))   // live provider
+        {
+            DpdUpdateService.InstallFromGzip(gz, Sha(gz), final);            // must NOT throw
+            Assert.True(File.Exists(final + ".pending"), "new asset staged for next launch");
+            Assert.False(File.Exists(final + ".new"), "temp cleaned up");
+        }
+
+        // Lock released → applying the staged swap activates the new asset.
+        Assert.True(DpdUpdateService.ApplyPendingInstall(final));
+        Assert.Equal("v1", DpdUpdateService.ReadInstalledMeta(final)!.DpdVersion);
+        Assert.False(File.Exists(final + ".pending"));
+    }
+
     // ---- ReadInstalledMeta ----
 
     [Fact]
