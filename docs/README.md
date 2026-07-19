@@ -6,7 +6,7 @@ Welcome to the CST (Chaṭṭha Saṅgāyana Tipiṭaka) project documentation.
 
 - [Project Overview](architecture/OVERVIEW.md)
 - [Current Features & Roadmap](../src/CST.Avalonia/CLAUDE.md)
-- [Windows Port Planning](features/in-progress/windows/WINDOWS_SUPPORT.md)
+- Windows port: tracked in [GitHub issue #28](https://github.com/fsnow/cst/issues/28) (Windows epic)
 - [Beta 3 Testing](testing/BETA_3_TESTING.md)
 
 ## Documentation Structure
@@ -73,9 +73,7 @@ Active work happening now:
 - [Show Source PDF](features/in-progress/SHOW_SOURCE_PDF.md) - View Burmese CST PDFs (core ships; mapping model #76 deferred)
 - [Dictionaries](features/in-progress/DICTIONARIES.md) - Pali-English and Pali-Hindi dictionaries (core ships; #25/#109 open)
 
-- **windows/** - Windows 11 port
-  - [Windows Support Plan](features/in-progress/windows/WINDOWS_SUPPORT.md)
-  - [WindowsFontService Design](features/in-progress/windows/WINDOWS_FONT_SERVICE.md)
+- **windows/** - Windows 11 port — planning now tracked in [GitHub issue #28](https://github.com/fsnow/cst/issues/28) (Windows epic + child issues), not docs. The `WindowsFontService` design is folded into [#29](https://github.com/fsnow/cst/issues/29).
 
 #### **features/planned/** - Future Features
 Features planned for future implementation (from CST4 analysis):
