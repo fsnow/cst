@@ -104,6 +104,10 @@ public sealed class DictionaryService : IDictionaryService
         var dev = Path.Combine(asmDir, "..", "..", "..", "dictionaries");
         if (Directory.Exists(dev))
             return dev;
+        // Packaged beside the executable (Windows/Linux self-contained publish): <app>/dictionaries. (#403)
+        var beside = Path.Combine(asmDir, "dictionaries");
+        if (Directory.Exists(beside))
+            return beside;
         // Packaged .app: Contents/MacOS/ -> ../Resources/dictionaries
         var bundle = Path.Combine(asmDir, "..", "Resources", "dictionaries");
         if (Directory.Exists(bundle))
