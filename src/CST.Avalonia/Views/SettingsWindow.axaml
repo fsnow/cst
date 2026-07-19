@@ -232,6 +232,17 @@
                         <!-- Configuration Settings Template -->
                         <DataTemplate DataType="vm:ConfigurationSettingsViewModel">
                             <StackPanel>
+                                <Border Classes="SettingGroup" IsVisible="{Binding IsWindows}">
+                                    <StackPanel>
+                                        <TextBlock Text="Graphics" Classes="SettingLabel"/>
+                                        <TextBlock Text="Hardware acceleration for the reader view. If book pages occasionally go blank until you click or select text (seen with some GPUs and in virtual machines), turn this off to use software rendering."
+                                                  Classes="SettingDescription" TextWrapping="Wrap"/>
+                                        <CheckBox IsChecked="{Binding UseHardwareAcceleration}"
+                                                 Content="Use hardware acceleration (requires restart)"
+                                                 Margin="0,10,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Configuration" Classes="SettingLabel"/>

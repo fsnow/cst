@@ -128,6 +128,19 @@ public partial class App : Application
             }
         }
 
+        // Hardware-acceleration preference (#401). CEF renders off-screen (OSR) and composites onto the Avalonia
+        // surface; under some GPUs/drivers (notably virtualized GPUs) that path stalls and the view goes black
+        // until an input event. When the user turns hardware acceleration OFF we disable the GPU so CEF composites
+        // in software. Windows-gated (the black-out class we've seen is Windows/virtual-GPU); macOS/Linux keep the
+        // GPU. This switch must be set before the first WebView initializes CEF, so read the setting from disk here
+        // (the same early-read approach as ReadSavedLogLevel; SettingsService isn't built yet).
+        if (OperatingSystem.IsWindows() && !ReadSavedUseHardwareAcceleration())
+        {
+            WebView.Settings.AddCommandLineSwitch("disable-gpu", "");
+            WebView.Settings.AddCommandLineSwitch("disable-gpu-compositing", "");
+            Log.Information("Hardware acceleration disabled by preference; forcing software compositing for the WebView.");
+        }
+
         // Disable persistent cache to use in-memory storage only
         // We still need to provide a path (WebViewLoader expects it), but PersistCache=false ensures it's temporary
         WebView.Settings.PersistCache = false;
@@ -956,6 +969,31 @@ public partial class App : Application
         catch
         {
             return null;
+        }
+    }
+
+    // Peek the persisted hardware-acceleration preference straight from settings.json, before DI is built (the
+    // CEF disable-gpu switch must be set before the first WebView initializes CEF). Same rationale/caveats as
+    // ReadSavedLogLevel. Defaults to true (accelerated) when unset or unreadable. (#401)
+    private static bool ReadSavedUseHardwareAcceleration()
+    {
+        try
+        {
+            var settingsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                AppConstants.AppDataDirectoryName,
+                "settings.json");
+            if (!File.Exists(settingsPath))
+                return true;
+
+            var json = File.ReadAllText(settingsPath);
+            var settings = JsonSerializer.Deserialize<Settings>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return settings?.UseHardwareAcceleration ?? true;
+        }
+        catch
+        {
+            return true;
         }
     }
 

@@ -670,13 +670,35 @@ namespace CST.Avalonia.ViewModels
     public class ConfigurationSettingsViewModel : ViewModelBase
     {
         private readonly ILogger _logger;
+        private readonly ISettingsService _settingsService;
+        private bool _useHardwareAcceleration;
 
         public ConfigurationSettingsViewModel(ISettingsService settingsService)
         {
             _logger = Log.ForContext<ConfigurationSettingsViewModel>();
+            _settingsService = settingsService;
+            _useHardwareAcceleration = settingsService.Settings.UseHardwareAcceleration;
             SettingsFilePath = settingsService.GetSettingsFilePath();
             OpenSettingsFileCommand = ReactiveCommand.Create(OpenSettingsFile);
         }
+
+        // Hardware acceleration for the embedded WebView. OFF forces software compositing, avoiding the CEF
+        // off-screen-rendering "black view" stall seen under some GPUs / virtualized drivers on Windows. Applied
+        // on the next launch (the CEF switch is set before the browser initializes). (#401)
+        public bool UseHardwareAcceleration
+        {
+            get => _useHardwareAcceleration;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _useHardwareAcceleration, value);
+                _settingsService.Settings.UseHardwareAcceleration = value;
+                _settingsService.RequestSave();
+            }
+        }
+
+        // The mitigation only takes effect on Windows (the black-view stall is Windows / virtual-GPU specific;
+        // macOS/Linux keep the GPU), so the Graphics group is hidden off-Windows rather than shown as a no-op. (#401)
+        public bool IsWindows => OperatingSystem.IsWindows();
 
         public string SettingsFilePath { get; }
 

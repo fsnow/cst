@@ -18,6 +18,13 @@ namespace CST.Avalonia.Models
         public XmlUpdateSettings XmlUpdateSettings { get; set; } = new();
         public DpdUpdateSettings DpdUpdateSettings { get; set; } = new();
         public AiSettings Ai { get; set; } = new();
+
+        /// <summary>
+        /// When false, hardware acceleration is disabled for the embedded WebView (forces software compositing).
+        /// Mitigates the CEF off-screen-rendering "black view" stall seen under some GPUs / virtualized drivers on
+        /// Windows (#401). Default true (accelerated). Takes effect on next launch (applied before CEF initializes).
+        /// </summary>
+        public bool UseHardwareAcceleration { get; set; } = true;
     }
 
     /// <summary>
