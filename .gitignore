@@ -15,6 +15,7 @@ src/CST.Avalonia/CST Reader.app/
 src/CST.Avalonia/publish/
 src/CST.Avalonia/dist/
 
+src/CST.Avalonia.Tests/bin/
 src/CST.Avalonia.Tests/obj/
 
 src/CST.CharacterAnalysis/bin/
@@ -23,8 +24,14 @@ src/CST.CharacterAnalysis/obj/
 src/CST.Core/bin/
 src/CST.Core/obj/
 
+src/CST.Lemma/bin/
+src/CST.Lemma/obj/
+
 src/CST.Lucene/bin/
 src/CST.Lucene/obj/
+
+src/CST.MAUI/bin/
+src/CST.MAUI/obj/
 
 src/CST.ScriptValidation/bin/
 src/CST.ScriptValidation/obj/
@@ -33,7 +40,9 @@ src/CST.ScriptValidation/obj/
 
 screenshots/
 
-src/CST.MAUI/obj/
+
 
 # Agent worktrees (isolated subagent workspaces) must never be committed
 .claude/worktrees/
+
+
