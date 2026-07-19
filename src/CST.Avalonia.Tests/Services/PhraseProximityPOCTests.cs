@@ -22,20 +22,24 @@ namespace CST.Avalonia.Tests;
 public class Tests_PhraseProximityPOC : IDisposable
 {
     private readonly ITestOutputHelper _output;
-    private readonly DirectoryReader _indexReader;
+    private readonly DirectoryReader? _indexReader;
     private readonly string _indexDirectory;
 
     public Tests_PhraseProximityPOC(ITestOutputHelper output)
     {
         _output = output;
 
-        // Use existing index from settings or environment variable
+        // POC/integration tests over a REAL pre-built Lucene index (from CST_INDEX_DIR or the app-support default,
+        // OS-appropriate). That index isn't present in CI or on a fresh machine — when absent, leave _indexReader
+        // null and each test early-returns (skips) rather than the whole class failing in the ctor. (#397)
         _indexDirectory = Environment.GetEnvironmentVariable("CST_INDEX_DIR")
-            ?? "/Users/fsnow/Library/Application Support/CSTReader/index";
+            ?? System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CSTReader", "index");
 
         if (!System.IO.Directory.Exists(_indexDirectory))
         {
-            throw new InvalidOperationException($"Index directory not found: {_indexDirectory}");
+            _output.WriteLine($"POC tests skipped: no Lucene index at {_indexDirectory} (set CST_INDEX_DIR to run).");
+            return;
         }
 
         _indexReader = DirectoryReader.Open(FSDirectory.Open(_indexDirectory));
@@ -49,6 +53,7 @@ public class Tests_PhraseProximityPOC : IDisposable
     [Fact]
     public void POC_01_GetTermPositions_SingleTerm()
     {
+        if (_indexReader is null) { _output.WriteLine("skipped: no index"); return; }
         // Search for a common Pali word - convert Latin to IPE
         string latinTerm = "bhikkhusatehi";  // "with five hundred monks"
         string ipeTerm = Latn2Ipe.Convert(latinTerm);
@@ -99,6 +104,7 @@ public class Tests_PhraseProximityPOC : IDisposable
     [Fact]
     public void POC_02_ProximitySearch_TwoTerms()
     {
+        if (_indexReader is null) { _output.WriteLine("skipped: no index"); return; }
         // Search for two related terms - convert Latin to IPE
         string latin1 = "rājagahaṃ";
         string latin2 = "nāḷandaṃ"; 
@@ -178,6 +184,7 @@ public class Tests_PhraseProximityPOC : IDisposable
     [Fact]
     public void POC_03_PhraseSearch_ExactOrder()
     {
+        if (_indexReader is null) { _output.WriteLine("skipped: no index"); return; }
         // Search for a common two-word phrase - "thus have I heard"
         string latin1 = "evaṃ";  // "thus"
         string latin2 = "me";  // "to me"
@@ -249,6 +256,7 @@ public class Tests_PhraseProximityPOC : IDisposable
     [Fact]
     public void POC_04_WildcardTermExpansion_WithPositions()
     {
+        if (_indexReader is null) { _output.WriteLine("skipped: no index"); return; }
         string latinPattern = "bhikkhu*";
         string ipePattern = Latn2Ipe.Convert("bhikkhu") + "*";  // Convert base then add wildcard
 
@@ -305,6 +313,7 @@ public class Tests_PhraseProximityPOC : IDisposable
     [Fact]
     public void POC_05_WildcardProximity_Combined()
     {
+        if (_indexReader is null) { _output.WriteLine("skipped: no index"); return; }
         // Search for "bhikkhu*" within 5 words of "sangha*"
         string latinPattern1 = "bhikkhu*";  // monk
         string latinPattern2 = "saṅgha*";   // community

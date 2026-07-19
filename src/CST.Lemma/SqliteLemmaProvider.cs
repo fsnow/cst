@@ -34,6 +34,13 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         {
             using var c = new SqliteConnection(connString);
             c.Open();
+            // Record the connection string NOW, before the table checks — with pooling on, `using var c` returns
+            // the OS file handle to the POOL rather than closing it, and only Dispose()->ClearPool releases it. If
+            // we set _connString later (after the checks), the unusable-asset early return below leaves _connString
+            // null, Dispose() no-ops, and the pooled handle lingers — which on Windows blocks a File.Delete of the
+            // file (a leaked .new temp on a rejected DPD download). _connString is consumed only by Open() (reached
+            // only when IsAvailable) and Dispose(), so setting it on the not-available path is safe. (#397)
+            _connString = connString;
             // Minimal sanity check: the core tables must exist.
             if (!TableExists(c, "lemma") || !TableExists(c, "form_lemma"))
                 return;
@@ -41,7 +48,6 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
             _hasDecon = _hasFormsTable && ColumnExists(c, "forms", "deconstructor");
             _hasReport = TableExists(c, "root") && ColumnExists(c, "lemma", "root_key");
             Meta = LoadMeta(c);
-            _connString = connString;
             IsAvailable = true;
         }
         catch
