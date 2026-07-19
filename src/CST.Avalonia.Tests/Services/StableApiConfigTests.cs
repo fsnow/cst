@@ -64,7 +64,12 @@ namespace CST.Avalonia.Tests.Services
         [InlineData("/Applications/CST Reader.app/Contents/MacOS/CST.Avalonia", "/Applications/CST Reader.app")]
         [InlineData("/Users/x/Desktop/CST Reader.app/Contents/MacOS/CST.Avalonia", "/Users/x/Desktop/CST Reader.app")]
         public void AppBundleFromExecutablePath_finds_the_enclosing_app_bundle(string exe, string expected)
-            => Assert.Equal(expected, McpBridge.AppBundleFromExecutablePath(exe));
+        {
+            // The macOS `.app` bundle concept + these Unix fixture paths are macOS-only; on Windows the Path APIs
+            // return backslashes and there is no bundle. Don't count as a failure off macOS. (#397)
+            if (!OperatingSystem.IsMacOS()) return;
+            Assert.Equal(expected, McpBridge.AppBundleFromExecutablePath(exe));
+        }
 
         [Theory]
         // Dev / non-bundle layouts (e.g. `dotnet run`) have no .app ancestor -> launch-or-attach can't auto-launch.
@@ -72,7 +77,10 @@ namespace CST.Avalonia.Tests.Services
         [InlineData("")]
         [InlineData(null)]
         public void AppBundleFromExecutablePath_is_null_outside_a_bundle(string? exe)
-            => Assert.Null(McpBridge.AppBundleFromExecutablePath(exe));
+        {
+            if (!OperatingSystem.IsMacOS()) return;   // macOS-only bundle parsing (#397)
+            Assert.Null(McpBridge.AppBundleFromExecutablePath(exe));
+        }
 
         [Fact]
         public void Write_creates_the_handshake_owner_only_and_leaves_no_temp()
