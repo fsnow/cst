@@ -1,8 +1,9 @@
 # Windows Support — Plan & Reality Check
 
 **Rewritten:** 2026-07-04 (supersedes the Oct 2025 draft, which was written early in the project and was over-optimistic — see "How this doc changed").
+**Updated:** 2026-07-19 — **first working Windows build achieved; both POCs pass.** See "Bring-up results" below.
 **Target:** Beta 5 goal; a focused-weekend MVP is plausible **if the two POCs below pass**.
-**Status:** Not started in code. Two make-or-break POCs must run first.
+**Status:** **Building, launching, and usable on Windows x64** (verified on Placid, Win10 x64 under Parallels). The csproj WebView fix + in-window menu landed in #400 (closes #20). Remaining: keyboard shortcuts (cmd→ctrl), a black-window GPU issue (#401), and bare-metal verification.
 **Stack:** .NET 10 + Avalonia 11 + WebViewControl-Avalonia (CefGlue/Chromium).
 
 ---
@@ -17,6 +18,21 @@ The codebase *is* reasonably well-isolated for cross-platform, but two things th
 Everything else (paths, fonts, packaging, project file) is genuinely low-risk plumbing. **WindowsFontService (#29) is NOT needed for MVP** — the existing `FontManager.Current.SystemFonts` fallback is fine; defer it.
 
 **Honest estimate:** if both POCs pass, a single-window MVP (launch → open a book → search → persist state) is a weekend. If POC-1 reveals reparenting SIGSEGVs like macOS had, that alone is a multi-day investigation and the weekend goal slips.
+
+---
+
+## Bring-up results — 2026-07-19 (Placid, Win10 x64 under Parallels)
+
+First real Windows run. **Both make-or-break POCs passed.** The enabling changes landed in **#400** (closes #20): csproj WebView `win-x64`/`win-arm64` package refs + an in-window `<NativeMenuBar/>`. The estimate above held — this was roughly a session, not a multi-day reparenting slog.
+
+- **POC-1 (CEF render + re-parent) — ✅ PASS.** Full first-run worked end to end: launch → CEF init → Welcome page → download the 217-book corpus → build the Lucene index → install the DPD asset → open/read books. Search + highlighted-result navigation, dictionary, book linking, Attha/Tika, and **dock float / unfloat / split** all work. The native window re-parenting that needed bespoke SIGSEGV workarounds on macOS *just worked* here — no crashes.
+- **POC-2 (menu) — ✅ PASS.** A single `<NativeMenuBar/>` renders the existing `NativeMenu` in-window; View toggles + Tools items work when clicked. macOS is unchanged (it still exports the menu to the system menu bar; `SetupWindowMenuEvents` was already called there, so un-gating it is a no-op for Mac).
+
+**One issue found → #401.** A CEF WebView intermittently goes **black and stops redrawing**; a click or text-selection restores it. Root cause confirmed: CEF off-screen rendering (OSR) + GPU compositing stalls under a **virtualized GPU** — adding `--disable-gpu` / `--disable-gpu-compositing` (Windows only) eliminated it. The fix will be a **hardware-acceleration preference** (default TBD, pending a bare-metal test). A temporary unconditional diagnostic switch currently sits uncommitted in the working tree.
+
+**Still open:**
+- **Keyboard shortcuts** — still `cmd+…` in XAML, which can't bind on Windows (see "Gesture conversion" note under POC-2). `cmd→ctrl` conversion pending; also unverifiable under Parallels.
+- **Bare-metal Windows** — everything above was under Parallels; the virtual GPU is the prime suspect for #401, so a real-hardware pass is needed to finalize the hardware-accel default and confirm shortcuts.
 
 ---
 
@@ -91,10 +107,7 @@ Every place that needs a Windows branch or verification. This is the real map �
 
 ### 1. Project file — `src/CST.Avalonia/CST.Avalonia.csproj`
 - `TargetFramework` is `net10.0` (fine).
-- **WebView refs are macOS-only and stale** (`:76-79`): pinned `3.120.9`, conditioned on `osx-arm64`/`osx-x64`, and the **dev fallback (`RuntimeIdentifier == ''`) pulls the macOS ARM64 package** — so a plain Windows build resolves the wrong native. Fix:
-  - Add a `win-x64` (and optionally `win-arm64`) condition pulling `WebViewControl-Avalonia` (the non-ARM64 package id; confirm the correct Windows package id/variant on NuGet).
-  - Bump to the current version (was going to be 3.120.10 — check latest).
-  - Fix the empty-RID fallback so Windows dev builds don't grab the mac package.
+- **WebView refs — ✅ DONE in #400.** Added `win-x64`/`win-arm64` conditions pulling the plain `WebViewControl-Avalonia` package (it carries the Windows CEF natives; the `-ARM64` package is Windows/macOS/Linux *arm64*), and made the empty-RID dev fallback host-aware via `$(OS)` so `dotnet run` picks the right package on both Windows and macOS. Kept the existing `3.120.9` pin (avoids a version split with the `-ARM64` package) rather than the 3.120.10 #20 suggested — 3.120.9 works. macOS conditions untouched.
 - Add a `WINDOWS` `DefineConstants` block mirroring the `MACOS` one (`:24-25`), for future `#if WINDOWS`.
 - Add `win-x64;win-arm64` to `RuntimeIdentifiers`.
 - `Assets\cst.ico` already exists for the Windows app icon.
@@ -148,22 +161,24 @@ Every place that needs a Windows branch or verification. This is the real map �
 ---
 
 ## Research / POC checklist
-- [ ] **POC-1:** CEF renders a book on Windows 11 **and** survives float/unfloat/re-dock. Capture repro if it fails.
-- [ ] How WebViewControl-Avalonia ships/locates its **browser subprocess** on Windows; confirm it's in `dotnet publish` output.
-- [x] ~~Correct **NuGet package id/version**~~ — per #20: plain `WebViewControl-Avalonia` **3.120.10** for both `win-x64` and `win-arm64`. Confirm 3.120.10 is still current before pinning.
-- [ ] **POC-2:** in-window `NativeMenuBar` (Option A) vs a Windows `<Menu>` (Option B); pick one.
-- [ ] `Cmd+…` → `Ctrl+…` gesture strategy (platform primary-modifier vs branched strings); audit for other hardcoded `Cmd`/meta.
-- [ ] Base-Windows-11 font validation across all 14 scripts (no manual font install).
+- [x] **POC-1:** CEF renders a book on Windows **and** survives float/unfloat/re-dock — **PASS** under Parallels (#400). Re-confirm on bare metal.
+- [ ] How WebViewControl-Avalonia ships/locates its **browser subprocess** on Windows; confirm it's in `dotnet publish` output. (Works under `dotnet run`; publish not yet tested.)
+- [x] ~~Correct **NuGet package id/version**~~ — plain `WebViewControl-Avalonia` **3.120.9** (kept the existing pin, not the 3.120.10 #20 suggested) for `win-x64`/`win-arm64`. Shipped in #400.
+- [x] **POC-2:** picked **Option A (`<NativeMenuBar/>`)** — renders + works in-window (#400).
+- [ ] `Cmd+…` → `Ctrl+…` gesture strategy (platform primary-modifier vs branched strings); audit for other hardcoded `Cmd`/meta. **Still `cmd+…`; not yet converted.**
+- [ ] Base-Windows-11 font validation across all 14 scripts (no manual font install). (Scripts rendered fine during bring-up, but not audited script-by-script.)
 - [ ] Path/URL audit for remaining Windows-hostile string building.
-- [ ] Verify `%APPDATA%\CSTReader` writability for index/logs/XML; Lucene index builds and reads on Windows.
+- [x] ~~Verify `%APPDATA%\CSTReader` writability for index/logs/XML; Lucene index builds and reads on Windows.~~ — confirmed: corpus, index, logs, chapter-lists, and DPD asset all wrote/read under `%APPDATA%\CSTReader`.
 
 ## Risk table (honest)
 | Area | Risk | Why |
 |---|---|---|
-| WebView reparenting (float/unfloat/dock) | **High** | macOS needed bespoke SIGSEGV workarounds; Windows untested — POC-1 |
-| Menu/shortcut surface | **Low-Med** | XAML `NativeMenu` predates #20; Windows needs `<NativeMenuBar/>` + un-gate View toggles + cmd→ctrl — verify what renders first |
-| Windows path/URL bugs | **Medium** | 2 found & fixed this session; more likely lurk |
-| CEF init / render on Windows | **Low-Med** | #20 reports a working Windows GUI; still verify subprocess ships in publish output + works on current HEAD |
+| WebView reparenting (float/unfloat/dock) | ~~High~~ → **Low** (verified) | POC-1 **passed** under Parallels — float/unfloat/split stable, no SIGSEGV. Re-confirm on bare metal. |
+| Menu surface | ~~Low-Med~~ → **Done** | `<NativeMenuBar/>` + un-gated View toggles shipped in #400; renders and works. |
+| Keyboard shortcuts | **Low-Med** | Still `cmd+…`; needs cmd→ctrl (see POC-2 note). Unverifiable under Parallels. |
+| Black-window under virtual GPU | **Medium** | #401 — CEF OSR + GPU compositing stalls under Parallels' virtual GPU; `--disable-gpu` fixes it. Needs a hardware-accel preference + bare-metal check. |
+| Windows path/URL bugs | **Medium** | 2 found & fixed earlier; more may lurk (none hit during bring-up) |
+| CEF init / render on Windows | ~~Low-Med~~ → **Low** (verified) | Confirmed: CEF inits, subprocesses spawn, books render on current HEAD. |
 | Fonts | **Low** | Fallback works; Win11 defaults likely cover all 14 scripts |
 | File paths / state dir | **Low** | `SpecialFolder` maps cleanly; just verify writability |
 | Build system / Lucene | **Low** | .NET 10 + Lucene.NET are cross-platform |
@@ -175,6 +190,9 @@ Every place that needs a Windows branch or verification. This is the real map �
 4. Windows ARM64: defer unless requested.
 
 ## Related
+- **#400** — the first working Windows build (csproj WebView refs + in-window menu); closes #20.
+- **#401** — black-window under virtualized GPU → hardware-acceleration preference (open).
+- **#28** — Windows platform-support umbrella. · **#111** — port CST4 keyboard shortcuts (ties into cmd→ctrl).
 - `docs/architecture/DOCK_WEBVIEW_WORKAROUNDS.md` — the macOS reparenting workarounds POC-1 stress-tests.
 - `docs/architecture/DOCK_SUBSYSTEM.md` — dock lifecycle constraints.
 - #29 — WindowsFontService (DirectWrite), deferred.
