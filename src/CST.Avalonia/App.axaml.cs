@@ -162,13 +162,12 @@ public partial class App : Application
             // Close application when main window is closed
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
-            // Set up window-level native menu events (View menu) on macOS
-            if (OperatingSystem.IsMacOS())
-            {
-                SetupWindowMenuEvents();
-                // Update panel visibility to sync initial checkmark state
-                layoutViewModel.UpdatePanelVisibility();
-            }
+            // Set up window-level menu events (View toggles + checkmarks). On macOS these back the system
+            // menu bar; on Windows/Linux they back the in-window <NativeMenuBar/>. SetupWindowMenuEvents is
+            // platform-agnostic; the macOS-only #284 Window-list helpers it calls simply no-op off macOS.
+            SetupWindowMenuEvents();
+            // Update panel visibility to sync initial checkmark state
+            layoutViewModel.UpdatePanelVisibility();
 
             // Get the WelcomeViewModel to update startup status
             var welcomeViewModel = layoutViewModel.GetWelcomeViewModel();
