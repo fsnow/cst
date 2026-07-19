@@ -118,7 +118,11 @@ namespace CST.Avalonia.Tests.Services
         {
             CreateMinimalIndex(1);
             await _service.InitializeAsync();
-            Assert.NotNull(_service.GetIndexReader());
+            var reader = _service.GetIndexReader();
+            Assert.NotNull(reader);
+            reader!.DecRef();   // release the caller's counted ref (GetIndexReader IncRef's) so Dispose can fully
+                                // close the reader — otherwise the FSDirectory handle stays open and the Windows
+                                // Directory.Delete below fails (macOS masks this: POSIX deletes open files). (#408)
 
             _service.Dispose();
 

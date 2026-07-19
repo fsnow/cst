@@ -42,7 +42,18 @@ public class Tests_PhraseProximityPOC : IDisposable
             return;
         }
 
-        _indexReader = DirectoryReader.Open(FSDirectory.Open(_indexDirectory));
+        // The directory can exist but hold no index (e.g. created empty by another test / a partial run); opening
+        // a reader there throws IndexNotFoundException in the ctor and fails all tests. Guard on IndexExists so
+        // _indexReader stays null and each test early-returns (skips) instead. (#408)
+        var fsDir = FSDirectory.Open(_indexDirectory);
+        if (!DirectoryReader.IndexExists(fsDir))
+        {
+            fsDir.Dispose();
+            _output.WriteLine($"POC tests skipped: directory exists but holds no Lucene index at {_indexDirectory}.");
+            return;
+        }
+
+        _indexReader = DirectoryReader.Open(fsDir);   // reader now owns fsDir; disposed with _indexReader
         _output.WriteLine($"Opened index with {_indexReader.NumDocs} documents");
     }
 
