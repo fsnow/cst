@@ -41,6 +41,10 @@
 
     <!-- Main Layout with Toolbar and DockControl -->
     <DockPanel>
+        <!-- In-window menu bar for Windows/Linux; on macOS this renders nothing (the NativeMenu.Menu
+             above is exported to the system menu bar instead), so it is safe to include unconditionally. -->
+        <NativeMenuBar DockPanel.Dock="Top" />
+
         <!-- Top Toolbar -->
         <Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
