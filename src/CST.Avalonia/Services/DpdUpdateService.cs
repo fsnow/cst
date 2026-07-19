@@ -27,6 +27,9 @@ public sealed class DpdUpdateService : IDpdUpdateService
     private const string ManifestAssetName = "dpd-cst-subset.manifest.json";
     private const string AssetDirName = "dpd-cst-subset";
     private const string AssetFileName = "dpd-cst-subset.db";
+    // A verified install staged for next launch when the target db can't be replaced in place (Windows: the live
+    // provider holds it open). Applied by ApplyPendingInstall() before the db is opened at startup. (#394)
+    private const string PendingSuffix = ".pending";
 
     private readonly ILogger<DpdUpdateService> _logger;
     private readonly ISettingsService _settings;
@@ -248,14 +251,61 @@ public sealed class DpdUpdateService : IDpdUpdateService
                     throw new InvalidDataException(
                         "decompressed dpd-cst-subset archive is not a usable asset (missing core tables) — not installing.");
 
-            // Atomic same-volume replace; the old file is preserved until here. (macOS keeps the old inode open for
-            // the live provider — restart-to-activate. On Windows File.Move over an open db throws; a running-app
-            // install there needs a staged-swap-on-next-launch — deferred, Windows is untested/designed-in.)
-            File.Move(tmp, finalPath, overwrite: true);
+            // Replace the installed asset with the freshly verified file. The old file is preserved until here.
+            //  - macOS/Linux: File.Move succeeds even while the live provider holds the old db open (POSIX unlinks
+            //    the old inode); the running provider keeps reading the old one until restart-to-activate.
+            //  - Windows: File.Move over an OPEN db throws a sharing violation. Rather than fail the install, stage
+            //    the verified file beside the target and swap it in on the next launch — before the provider opens
+            //    it — via ApplyPendingInstall(). Same user-visible outcome either way: active after restart. (#394)
+            try
+            {
+                File.Move(tmp, finalPath, overwrite: true);
+                // This direct install supersedes any earlier staged one — drop a leftover .pending so a stale,
+                // older staged file can't later regress the asset on a future launch. (fable review — #394)
+                var superseded = finalPath + PendingSuffix;
+                if (File.Exists(superseded)) { try { File.Delete(superseded); } catch { /* best effort */ } }
+            }
+            catch (Exception ex) when ((ex is IOException || ex is UnauthorizedAccessException) && File.Exists(finalPath))
+            {
+                // The existing asset is still in place (untouched), so preservation holds — stage for next launch.
+                File.Move(tmp, finalPath + PendingSuffix, overwrite: true);
+            }
         }
         finally
         {
             if (File.Exists(tmp)) { try { File.Delete(tmp); } catch { /* best effort */ } }
         }
     }
+
+    /// <summary>
+    /// Applies a staged install (see <see cref="InstallFromGzip"/>) on the next launch — call this BEFORE the
+    /// asset db is opened. No-op when nothing is staged (the common case, and always on macOS/Linux). Best-effort:
+    /// any failure leaves the staged file for a later attempt and must never block startup. Returns true when a
+    /// staged install was applied. (#394)
+    /// </summary>
+    internal static bool ApplyPendingInstall(string finalPath)
+    {
+        var pending = finalPath + PendingSuffix;
+        if (!File.Exists(pending)) return false;
+        try
+        {
+            File.Move(pending, finalPath, overwrite: true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Leave the staged file for the next launch rather than crash startup — but log it: a persistent
+            // failure here means the update never activates and CheckAndUpdate keeps re-downloading it. (#394)
+            Serilog.Log.Warning(ex,
+                "Failed to apply a staged dpd-cst-subset update at {Pending}; will retry on next launch.", pending);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Applies a staged install for the standard asset path (<see cref="AssetPath"/>). Call this once, early at
+    /// startup — before anything opens the db — so a Windows staged swap activates regardless of whether/when the
+    /// lemma provider gets resolved. No-op when nothing is staged. (#394)
+    /// </summary>
+    internal static bool ApplyPendingInstall() => ApplyPendingInstall(AssetPath);
 }

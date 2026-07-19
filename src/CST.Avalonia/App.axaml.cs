@@ -141,6 +141,13 @@ public partial class App : Application
         ConfigureServices(services);
         ServiceProvider = services.BuildServiceProvider();
 
+        // Apply any staged dpd-cst-subset update BEFORE anything opens the asset db. On Windows a running-app
+        // install can't replace the open db, so it stages a ".pending" swap that we apply here on the next launch.
+        // Unconditional (not tied to whether/when the lemma provider is resolved) and a no-op when nothing is
+        // staged / on macOS/Linux. (#394)
+        if (DpdUpdateService.ApplyPendingInstall())
+            Log.Information("Applied a staged dpd-cst-subset update on launch.");
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Avoid duplicate validations from both Avalonia and the CommunityToolkit.
