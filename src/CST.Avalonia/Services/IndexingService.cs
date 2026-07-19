@@ -15,6 +15,7 @@ namespace CST.Avalonia.Services
         private readonly ILogger<IndexingService> _logger;
         private readonly ISettingsService _settingsService;
         private readonly IXmlFileDatesService _xmlFileDatesService;
+        private readonly string? _appDataDirOverride;
         private BookIndexerAsync? _bookIndexer;
         private string _indexDirectory = string.Empty;
         private DirectoryReader? _indexReader;
@@ -24,14 +25,20 @@ namespace CST.Avalonia.Services
 
         public string IndexDirectory => _indexDirectory;
 
+        /// <param name="appDataDirOverride">Test/portability hook: when set, the default index directory is
+        /// computed under this base (<c>&lt;override&gt;/CSTReader/index</c>) instead of the real per-user
+        /// app-data location. Lets tests exercise the "empty setting → default path" flow without creating
+        /// or touching the real user profile. Null in production (the default).</param>
         public IndexingService(
             ILogger<IndexingService> logger,
             ISettingsService settingsService,
-            IXmlFileDatesService xmlFileDatesService)
+            IXmlFileDatesService xmlFileDatesService,
+            string? appDataDirOverride = null)
         {
             _logger = logger;
             _settingsService = settingsService;
             _xmlFileDatesService = xmlFileDatesService;
+            _appDataDirOverride = appDataDirOverride;
         }
 
         public async Task InitializeAsync()
@@ -230,8 +237,15 @@ namespace CST.Avalonia.Services
             });
         }
 
-        private string GetDefaultIndexDirectory()
+        internal string GetDefaultIndexDirectory()
         {
+            // Test/portability hook: override the app-data base so tests never create/touch the real user
+            // profile. Keeps the AppDataDirectoryName + "index" shape so the "default path" contract holds.
+            if (!string.IsNullOrEmpty(_appDataDirOverride))
+            {
+                return Path.Combine(_appDataDirOverride, AppConstants.AppDataDirectoryName, "index");
+            }
+
             string indexPath;
 
             if (OperatingSystem.IsWindows())

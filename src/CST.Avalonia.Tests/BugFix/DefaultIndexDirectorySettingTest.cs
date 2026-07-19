@@ -62,7 +62,7 @@ namespace CST.Avalonia.Tests.BugFix
         public async Task DefaultIndexDirectory_GetsSavedToSettings_OnFirstRun()
         {
             // Arrange
-            var indexingService = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object);
+            var indexingService = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object, _testAppDataDir);
 
             // Verify initial state - IndexDirectory should be empty
             Assert.Empty(_testSettings.IndexDirectory);
@@ -93,7 +93,7 @@ namespace CST.Avalonia.Tests.BugFix
             var configuredPath = Path.Combine(_testAppDataDir, "CustomIndex");
             _testSettings.IndexDirectory = configuredPath;
             
-            var indexingService = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object);
+            var indexingService = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object, _testAppDataDir);
 
             _output.WriteLine($"Configured IndexDirectory: '{_testSettings.IndexDirectory}'");
 
@@ -115,35 +115,44 @@ namespace CST.Avalonia.Tests.BugFix
         public async Task DefaultIndexDirectory_IsValidPath()
         {
             // Arrange
-            var indexingService = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object);
+            var indexingService = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object, _testAppDataDir);
 
             // Act
             await indexingService.InitializeAsync();
 
             // Assert
             var savedPath = _testSettings.IndexDirectory;
-            
-            // Path should be absolute
-            Assert.True(Path.IsPathRooted(savedPath), $"Path should be absolute: {savedPath}");
-            
-            // Path should be valid for directory creation
-            Assert.True(Directory.Exists(savedPath), $"Directory should exist after initialization: {savedPath}");
-            
-            // Path should be platform-appropriate
-            if (OperatingSystem.IsWindows())
-            {
-                Assert.Contains("AppData", savedPath);
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Assert.Contains("Library/Application Support", savedPath);
-            }
-            else // Linux
-            {
-                Assert.Contains(".config", savedPath);
-            }
 
-            _output.WriteLine($"✅ Default path is valid and platform-appropriate: {savedPath}");
+            // Path should be absolute and created — but under the temp override, so no real profile is touched.
+            Assert.True(Path.IsPathRooted(savedPath), $"Path should be absolute: {savedPath}");
+            Assert.True(Directory.Exists(savedPath), $"Directory should exist after initialization: {savedPath}");
+            Assert.StartsWith(_testAppDataDir, savedPath);
+            Assert.Contains("CSTReader", savedPath);
+            Assert.EndsWith("index", savedPath);
+
+            _output.WriteLine($"✅ Default path is valid and under the test base: {savedPath}");
+        }
+
+        [Fact]
+        public void GetDefaultIndexDirectory_IsPlatformAppropriate()
+        {
+            // No override → the real per-OS computation. GetDefaultIndexDirectory() does NOT create the
+            // directory, so this verifies the platform-appropriate shape without touching the filesystem
+            // (the reason the old approach polluted the real %APPDATA%\CSTReader profile).
+            var indexingService = new IndexingService(
+                _mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object);
+
+            var path = indexingService.GetDefaultIndexDirectory();
+
+            Assert.True(Path.IsPathRooted(path), $"Path should be absolute: {path}");
+            Assert.Contains("CSTReader", path);
+            Assert.EndsWith("index", path);
+            if (OperatingSystem.IsWindows())
+                Assert.Contains("AppData", path);
+            else if (OperatingSystem.IsMacOS())
+                Assert.Contains("Library/Application Support", path);
+            else // Linux
+                Assert.Contains(".config", path);
         }
     }
 }
