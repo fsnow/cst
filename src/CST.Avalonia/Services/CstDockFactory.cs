@@ -2092,7 +2092,7 @@ namespace CST.Avalonia.Services
         // #322 (#284 follow-up): the title-tracking event subscriptions per floating window, kept as
         // detach delegates so they can be removed when the window closes (no leaked handlers / rooted
         // window graph) and re-wired idempotently on a repeat SetLayout (no double-wiring).
-        private readonly Dictionary<CstHostWindow, List<Action>> _titleSubscriptions = new();
+        internal readonly Dictionary<IHostWindowTitleTarget, List<Action>> _titleSubscriptions = new();
 
         // #284: keep a floating window's title in sync with its content. Naming scheme:
         //   single item  -> that item's title (book name or tool name),
@@ -2102,34 +2102,43 @@ namespace CST.Avalonia.Services
         // "CST Reader" title.) Wired from CstHostWindow.SetLayout, once the layout exists.
         public void SetupHostWindowTitleTracking(CstHostWindow window)
         {
+            // Hook the window's close exactly once to detach + forget its subscriptions, then (re)wire.
+            if (!_titleSubscriptions.ContainsKey(window))
+            {
+                window.Closed += (_, _) =>
+                {
+                    if (_titleSubscriptions.TryGetValue(window, out var subs))
+                    {
+                        DetachTitleSubscriptions(subs);
+                        _titleSubscriptions.Remove(window);
+                    }
+                };
+            }
+            WireHostWindowTitle(window);
+        }
+
+        // Testable core (#425): (re)wire title tracking for a host and refresh its title. Idempotent —
+        // detaches any prior subscriptions first, so it's safe to call repeatedly (a SetLayout re-run, or the
+        // tab-set change handler). Has no dependency on a real Avalonia Window, so unit tests drive it with a
+        // fake IHostWindowTitleTarget.
+        internal void WireHostWindowTitle(IHostWindowTitleTarget host)
+        {
             try
             {
-                // Idempotent: drop any prior subscriptions before re-wiring (SetLayout may run again).
-                if (_titleSubscriptions.TryGetValue(window, out var existing))
+                // Idempotent: drop any prior subscriptions before re-wiring.
+                if (_titleSubscriptions.TryGetValue(host, out var existing))
                 {
                     DetachTitleSubscriptions(existing);
                 }
-                else
-                {
-                    // Hook the window's close exactly once to detach + forget its subscriptions.
-                    window.Closed += (_, _) =>
-                    {
-                        if (_titleSubscriptions.TryGetValue(window, out var subs))
-                        {
-                            DetachTitleSubscriptions(subs);
-                            _titleSubscriptions.Remove(window);
-                        }
-                    };
-                }
 
                 // Store the list BEFORE wiring so that if WireTitleUpdates throws mid-walk, the handlers it
-                // already attached are still reachable (via window.Closed / the next re-wire) and don't leak.
+                // already attached are still reachable (via close / the next re-wire) and don't leak.
                 // (Fable review of #357.)
                 var detaches = new List<Action>();
-                _titleSubscriptions[window] = detaches;
-                WireTitleUpdates(window, window.Layout, 0, detaches);
+                _titleSubscriptions[host] = detaches;
+                WireTitleUpdates(host, host.Layout, 0, detaches);
 
-                UpdateHostWindowTitle(window);
+                UpdateHostWindowTitle(host);
             }
             catch (Exception ex)
             {
@@ -2152,7 +2161,7 @@ namespace CST.Avalonia.Services
         // paired with a detach delegate collected into <paramref name="detaches"/> so it can be undone on
         // window close. Docks/leaves present at wire-up are tracked; a later tab add/remove re-runs this
         // wiring via the collection-change handler (#357), so dragged-in leaves get subscribed too.
-        private void WireTitleUpdates(CstHostWindow window, IDockable? node, int depth, List<Action> detaches)
+        private void WireTitleUpdates(IHostWindowTitleTarget host, IDockable? node, int depth, List<Action> detaches)
         {
             if (node == null || depth > 32) return;
 
@@ -2165,7 +2174,7 @@ namespace CST.Avalonia.Services
                         if (e.PropertyName == nameof(IDock.ActiveDockable) ||
                             e.PropertyName == nameof(IDock.FocusedDockable))
                         {
-                            UpdateHostWindowTitle(window);
+                            UpdateHostWindowTitle(host);
                         }
                     };
                     inpc.PropertyChanged += h;
@@ -2178,7 +2187,7 @@ namespace CST.Avalonia.Services
                     // dragged INTO an existing float also gets its own Title subscription. Without this, once
                     // the originally-wired tab is gone a later in-place retitle (global script switch) leaves
                     // this window's title bar + Window-menu entry stale. Re-wiring also refreshes the title.
-                    NotifyCollectionChangedEventHandler h = (_, _) => SetupHostWindowTitleTracking(window);
+                    NotifyCollectionChangedEventHandler h = (_, _) => WireHostWindowTitle(host);
                     incc.CollectionChanged += h;
                     detaches.Add(() => incc.CollectionChanged -= h);
                 }
@@ -2187,7 +2196,7 @@ namespace CST.Avalonia.Services
                 {
                     foreach (var child in dock.VisibleDockables)
                     {
-                        WireTitleUpdates(window, child, depth + 1, detaches);
+                        WireTitleUpdates(host, child, depth + 1, detaches);
                     }
                 }
             }
@@ -2199,7 +2208,7 @@ namespace CST.Avalonia.Services
                 {
                     if (e.PropertyName == nameof(IDockable.Title) || e.PropertyName == "DisplayTitle")
                     {
-                        UpdateHostWindowTitle(window);
+                        UpdateHostWindowTitle(host);
                     }
                 };
                 leaf.PropertyChanged += h;
@@ -2210,14 +2219,14 @@ namespace CST.Avalonia.Services
         // Compute and apply the title for a floating window from its current content. Short-circuits when
         // the computed title is unchanged, so ordinary focus flapping doesn't churn SetTitle + the native
         // Window-menu rebuild (A8-5).
-        public void UpdateHostWindowTitle(CstHostWindow window)
+        internal void UpdateHostWindowTitle(IHostWindowTitleTarget host)
         {
             try
             {
-                var newTitle = ComputeFloatingWindowTitle(window.Layout);
-                if (string.Equals(window.Title, newTitle, StringComparison.Ordinal)) return;
+                var newTitle = ComputeFloatingWindowTitle(host.Layout);
+                if (string.Equals(host.Title, newTitle, StringComparison.Ordinal)) return;
 
-                window.SetTitle(newTitle);
+                host.SetTitle(newTitle);
                 // #284: the Window menu shows this title, so refresh the lists when it actually changes.
                 (Application.Current as App)?.RebuildWindowMenus();
             }
@@ -2227,7 +2236,7 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private string ComputeFloatingWindowTitle(IDock? layout)
+        internal string ComputeFloatingWindowTitle(IDock? layout)
         {
             var leaves = new List<IDockable>();
             CollectLeafDockables(layout, leaves, 0);

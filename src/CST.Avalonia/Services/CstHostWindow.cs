@@ -12,9 +12,21 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CST.Avalonia.Services
 {
     /// <summary>
+    /// The minimal surface CstDockFactory's floating-window title tracking needs from a host window: its
+    /// dock layout, its current title, and a way to set it. Extracted so the tracking core is unit-testable
+    /// without a real Avalonia Window (#425). <see cref="CstHostWindow"/> implements it.
+    /// </summary>
+    internal interface IHostWindowTitleTarget
+    {
+        IDock? Layout { get; }
+        string Title { get; }
+        void SetTitle(string? title);
+    }
+
+    /// <summary>
     /// Host window implementation for multi-window docking support
     /// </summary>
-    public class CstHostWindow : Window, IHostWindow
+    public class CstHostWindow : Window, IHostWindow, IHostWindowTitleTarget
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public object? Context { get; set; }
