@@ -1584,6 +1584,51 @@ namespace CST.Avalonia.ViewModels
         /// Show source PDF for the current book at the current Myanmar page.
         /// Downloads PDF from SharePoint and displays in a dockable tab.
         /// </summary>
+        // Queue-intent entry point for View Source (keystroke / menu / JS paths). During a fast UI sequence
+        // the target Myanmar page may not be resolved yet (MyanmarPage == "*"), which greys the ShowSource
+        // commands (#54) — so a shortcut pressed in that window silently no-ops. Instead: fire immediately if
+        // the page is known, else remember the request and fire it once MyanmarPage resolves. (The toolbar
+        // buttons stay bound to the gated commands, so they still visibly grey out as before.)
+        // Distinct editions requested while the page was unresolved (deduped, request order preserved), plus
+        // the single wait-subscription that flushes them once MyanmarPage resolves. Both editions open if the
+        // user pressed Cmd+E and Cmd+Shift+E before resolution.
+        private readonly List<Sources.SourceType> _pendingSourceRequests = new();
+        private IDisposable? _pendingSourceSubscription;
+
+        public void RequestShowSource(bool source2010)
+        {
+            var sourceType = source2010 ? Sources.SourceType.Burmese2010 : Sources.SourceType.Burmese1957;
+            if (_myanmarPage != "*" && !string.IsNullOrEmpty(_myanmarPage))
+            {
+                ShowSource(sourceType);
+                return;
+            }
+
+            // Not resolved yet: queue this edition (deduped) and arm one wait that flushes ALL pending once
+            // the page lands, so requesting both editions before resolution opens both.
+            if (!_pendingSourceRequests.Contains(sourceType))
+                _pendingSourceRequests.Add(sourceType);
+
+            if (_pendingSourceSubscription != null) return;   // already waiting; the list above will be flushed
+
+            _pendingSourceSubscription = this.WhenAnyValue(x => x.MyanmarPage)
+                .Where(p => p != "*" && !string.IsNullOrEmpty(p))
+                .Take(1)   // auto-completes after the first resolved value
+                .Subscribe(_ =>
+                {
+                    var pending = _pendingSourceRequests.ToList();
+                    _pendingSourceRequests.Clear();
+                    _pendingSourceSubscription?.Dispose();
+                    _pendingSourceSubscription = null;
+                    // MyanmarPage may be set off the UI thread; ShowSource mutates the dock layout. (BOOK-2)
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        foreach (var t in pending) ShowSource(t);
+                    });
+                });
+            _logger.Debug("View Source queued ({Source}) until the Myanmar page resolves", sourceType);
+        }
+
         private void ShowSource(Sources.SourceType sourceType)
         {
             _logger.Information("ShowSource called - raw _myanmarPage value: '{MyanmarPage}', book: {Book}",
