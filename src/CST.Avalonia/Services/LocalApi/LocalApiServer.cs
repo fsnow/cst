@@ -519,7 +519,7 @@ namespace CST.Avalonia.Services.LocalApi
                     var res = await lemma.ExpandAndSearchAsync(lemmaId, family ?? false, null, outputScript, ct);
                     return res is null
                         ? Results.NotFound(new { error = $"Unknown lemmaId {lemmaId}." })
-                        : Results.Json(LemmaApi.ToForms(res, outputScript));
+                        : Results.Json(LemmaApi.ToForms(res, outputScript, family ?? false));
                 });
 
                 // Sandhi/compound deconstruction: a word -> its ranked constituent-part splits (DPD deconstructor).

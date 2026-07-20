@@ -110,6 +110,39 @@ public sealed class LemmaSearchServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ExpandAndSearch_reports_relatedLemmas_even_without_family_union()
+    {
+        var fake = new FakeSearchService();
+        var svc = NewService(fake);
+
+        // Focus = the verb pajānāti (39702). Its derived_from cluster = {39702, 39994 (paññā 1, fem),
+        // 40070 (paññāya 1, ger)}. Even with family:false (forms = just the verb's own), relatedLemmas must list
+        // the SIBLINGS with their pos so a client can scope a conjugation (the verbal `ger` 40070) vs a deverbal
+        // noun (`fem` 39994) — WITHOUT unioning the whole family. (#247 relatedLemmas)
+        var result = await svc.ExpandAndSearchAsync(39702, includeFamily: false, outputScript: Script.Ipe);
+
+        Assert.NotNull(result);
+        var related = result!.RelatedLemmas.ToDictionary(r => r.LemmaId);
+        Assert.Contains(39994L, related.Keys);              // deverbal noun sibling
+        Assert.Contains(40070L, related.Keys);              // a VERBAL sibling (its own lemmaId)
+        Assert.DoesNotContain(39702L, related.Keys);        // the focus itself is excluded
+        Assert.Equal("ger", related[40070].Pos);            // pos carried so the client can scope the conjugation
+        Assert.Equal("fem", related[39994].Pos);
+        // family:false → the searched alternation is just the verb's own forms, not the siblings'
+        Assert.DoesNotContain("paññāhi", fake.LastQuery!.QueryText);
+    }
+
+    [Fact]
+    public async Task ExpandAndSearch_includeRelated_false_skips_relatedLemmas()
+    {
+        // The report's focus-count path opts out — no family query, empty relatedLemmas. (#247 perf)
+        var svc = NewService(new FakeSearchService());
+        var result = await svc.ExpandAndSearchAsync(39702, includeFamily: false, outputScript: Script.Ipe, includeRelated: false);
+        Assert.NotNull(result);
+        Assert.Empty(result!.RelatedLemmas);
+    }
+
+    [Fact]
     public async Task ExpandAndSearchSet_unions_several_lemmas_forms_in_one_query()
     {
         var fake = new FakeSearchService();

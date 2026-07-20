@@ -67,7 +67,7 @@ public sealed class LemmaReportService : ILemmaReportService
 
         // Focus paradigm — forms with corpus counts (in IPE). A form is a homograph only if it also belongs
         // to a lemma OUTSIDE this word-family.
-        var focus = await _search.ExpandAndSearchAsync(lemmaId, includeFamily: false, filter: null, outputScript: Script.Ipe, ct: ct)
+        var focus = await _search.ExpandAndSearchAsync(lemmaId, includeFamily: false, filter: null, outputScript: Script.Ipe, ct: ct, includeRelated: false)
             .ConfigureAwait(false);
         var forms = new List<ReportForm>();
         var homographs = new List<ReportHomograph>();
