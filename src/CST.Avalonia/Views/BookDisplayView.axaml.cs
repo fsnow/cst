@@ -160,7 +160,7 @@ public partial class BookDisplayView : UserControl
         {
             _logger.Debug("*** VIEW SOURCE 1957 SHORTCUT DETECTED IN BookDisplayView ***");
             e.Handled = true; // Prevent further processing
-            _viewModel?.ShowSource1957Command.Execute().Subscribe();
+            _viewModel?.RequestShowSource(source2010: false);
             return;
         }
 
@@ -169,7 +169,7 @@ public partial class BookDisplayView : UserControl
         {
             _logger.Debug("*** VIEW SOURCE 2010 SHORTCUT DETECTED IN BookDisplayView ***");
             e.Handled = true; // Prevent further processing
-            _viewModel?.ShowSource2010Command.Execute().Subscribe();
+            _viewModel?.RequestShowSource(source2010: true);
             return;
         }
     }
@@ -1595,7 +1595,7 @@ public partial class BookDisplayView : UserControl
                     _logger.Debug("*** VIEW SOURCE 1957 REQUESTED FROM JAVASCRIPT ***");
                     // OnTitleChanged runs on the CEF thread; the command mutates the dock layout, so it
                     // must run on the UI thread. (BOOK-2)
-                    Dispatcher.UIThread.Post(() => _viewModel?.ShowSource1957Command.Execute().Subscribe());
+                    Dispatcher.UIThread.Post(() => _viewModel?.RequestShowSource(source2010: false));
                 }
             }
             catch (Exception ex)
@@ -1616,7 +1616,7 @@ public partial class BookDisplayView : UserControl
                     _logger.Debug("*** VIEW SOURCE 2010 REQUESTED FROM JAVASCRIPT ***");
                     // OnTitleChanged runs on the CEF thread; the command mutates the dock layout, so it
                     // must run on the UI thread. (BOOK-2)
-                    Dispatcher.UIThread.Post(() => _viewModel?.ShowSource2010Command.Execute().Subscribe());
+                    Dispatcher.UIThread.Post(() => _viewModel?.RequestShowSource(source2010: true));
                 }
             }
             catch (Exception ex)

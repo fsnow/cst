@@ -737,11 +737,11 @@ public partial class SimpleTabbedWindow : Window
             if (documentDock?.ActiveDockable is not BookDisplayViewModel bookViewModel)
                 return;
 
-            var command = source2010 ? bookViewModel.ShowSource2010Command : bookViewModel.ShowSource1957Command;
             _logger.Information("View Source ({Edition}) via menu/shortcut for book: {BookFile}",
                 source2010 ? "2010" : "1957", bookViewModel.Book.FileName);
-            // Swallow the CanExecute-false case (book has no source PDF) instead of faulting.
-            command.Execute().Subscribe(_ => { }, ex => _logger.Debug(ex, "View Source command not available"));
+            // Queue-intent: fires now if the Myanmar page is resolved, else once it resolves (so a shortcut
+            // pressed mid-recalc during fast UI sequences isn't a silent no-op). (#54 follow-up)
+            bookViewModel.RequestShowSource(source2010);
         }
         catch (Exception ex)
         {

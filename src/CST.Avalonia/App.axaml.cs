@@ -1492,10 +1492,11 @@ public partial class App : Application
                 var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
                 if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel)
                 {
-                    var command = source2010 ? bookViewModel.ShowSource2010Command : bookViewModel.ShowSource1957Command;
                     Log.Information("View Source ({Edition}) via floating-window menu for book: {BookFile}",
                         source2010 ? "2010" : "1957", bookViewModel.Book.FileName);
-                    command.Execute().Subscribe(_ => { }, ex => Log.Debug(ex, "View Source command not available"));
+                    // Queue-intent (see BookDisplayViewModel.RequestShowSource): fire now if the Myanmar page
+                    // is resolved, else once it resolves, so a mid-recalc shortcut isn't a silent no-op.
+                    bookViewModel.RequestShowSource(source2010);
                 }
             }
         }
