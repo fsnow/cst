@@ -44,8 +44,11 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "form that OCCURS in the corpus, each with its occurrence count and book count, plus the grand "
             + "total. Answers 'give me the whole declension/conjugation of X and how often each form occurs' in "
             + "ONE call — no wildcard/regex, no homograph confusion (the lemma was already chosen). Counts come "
-            + "from the corpus index; DPD candidate forms that never occur are omitted (synthetic). `family:true` "
-            + "widens to the whole derived_from word family. `script` sets the output script (default Latin).")]
+            + "from the corpus index; DPD candidate forms that never occur are omitted (synthetic). Also returns "
+            + "`relatedLemmas` — the OTHER lemmas of this word-family (a verb's participles/absolutive are SEPARATE "
+            + "lemmaIds, NOT in this paradigm): to build a whole CONJUGATION, call this again for the verbal-pos "
+            + "relatedLemmas and union. `family:true` instead widens to the ENTIRE derived_from word family (incl. "
+            + "deverbal nouns — broader). `script` sets the output script (default Latin).")]
         public static async Task<LemmaFormsResponse> LemmaForms(
             ILemmaSearchService lemma,
             [Description("The lemma id from 'lemma_lookup'.")] long lemmaId,
@@ -57,8 +60,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             var res = await lemma.ExpandAndSearchAsync(lemmaId, family, null, s, ct).ConfigureAwait(false);
             return res is null
                 ? new LemmaFormsResponse(lemmaId, string.Empty, null, null, null,
-                    Array.Empty<LemmaFormDto>(), 0, 0, 0, false, $"Unknown lemmaId {lemmaId}.")
-                : LemmaApi.ToForms(res, s);
+                    Array.Empty<LemmaFormDto>(), 0, 0, 0, false, Array.Empty<LemmaCandidateDto>(), $"Unknown lemmaId {lemmaId}.")
+                : LemmaApi.ToForms(res, s, family);
         }
 
         [McpServerTool(Name = "sandhi_split")]

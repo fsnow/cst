@@ -81,20 +81,27 @@ public sealed class LemmaSearchService : ILemmaSearchService
         bool includeFamily = false,
         BookFilter? filter = null,
         Script outputScript = Script.Latin,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool includeRelated = true)
     {
         if (!IsAvailable) return null;
 
-        var expansion = _lemma.ExpandLemma(lemmaId, includeFamily);
+        // Fetch the family iff we need it — either to UNION its forms (family:true) or to REPORT its members as
+        // `relatedLemmas` metadata (includeRelated, the default: a verb's participles/absolutive are their OWN
+        // lemmaIds, so this is how a client discovers them and scopes "the conjugation" without over-shooting to
+        // the whole family). When neither is needed (e.g. the report's focus-count call), skip the family query. (#247)
+        bool needFamily = includeFamily || includeRelated;
+        var expansion = _lemma.ExpandLemma(lemmaId, includeFamily: needFamily);
         if (expansion is null) return null;
 
         var lemma = new LemmaCandidate(expansion.LemmaId, expansion.Lemma, expansion.Pos, expansion.Gloss, expansion.DerivedFrom);
+        var siblings = expansion.Family?.Where(m => m.LemmaId != lemmaId).ToList() ?? new List<LemmaCandidate>();
 
-        // Gather forms: the lemma's own paradigm, plus (when asked) each derived_from family member's forms.
+        // Gather forms: the lemma's own paradigm, plus — only when family:true — each family member's forms UNIONed.
         var forms = new SortedSet<string>(expansion.Forms, StringComparer.Ordinal);
-        if (includeFamily && expansion.Family is { } family)
+        if (includeFamily)
         {
-            foreach (var member in family.Where(m => m.LemmaId != lemmaId))
+            foreach (var member in siblings)
             {
                 var fe = _lemma.ExpandLemma(member.LemmaId, includeFamily: false);
                 if (fe is not null)
@@ -102,7 +109,8 @@ public sealed class LemmaSearchService : ILemmaSearchService
             }
         }
 
-        return await SearchFormsAsync(lemma, forms, filter, outputScript, ct).ConfigureAwait(false);
+        var related = includeRelated ? (IReadOnlyList<LemmaCandidate>)siblings : Array.Empty<LemmaCandidate>();
+        return await SearchFormsAsync(lemma, forms, related, filter, outputScript, ct).ConfigureAwait(false);
     }
 
     public async Task<LemmaSearchResult?> ExpandAndSearchSetAsync(
@@ -121,16 +129,17 @@ public sealed class LemmaSearchService : ILemmaSearchService
             foreach (var f in e.Forms) forms.Add(f);
         }
         return lemma is null ? null
-            : await SearchFormsAsync(lemma, forms, null, outputScript, ct).ConfigureAwait(false);
+            : await SearchFormsAsync(lemma, forms, Array.Empty<LemmaCandidate>(), null, outputScript, ct).ConfigureAwait(false);
     }
 
     // Search a de-duplicated form set as one anchored IAST alternation (converted to IPE by the search path)
-    // and project the attested terms with corpus counts.
+    // and project the attested terms with corpus counts. `relatedLemmas` is carried through as metadata.
     private async Task<LemmaSearchResult> SearchFormsAsync(
-        LemmaCandidate lemma, SortedSet<string> forms, BookFilter? filter, Script outputScript, CancellationToken ct)
+        LemmaCandidate lemma, SortedSet<string> forms, IReadOnlyList<LemmaCandidate> relatedLemmas,
+        BookFilter? filter, Script outputScript, CancellationToken ct)
     {
         if (forms.Count == 0)
-            return new LemmaSearchResult(lemma, Array.Empty<LemmaSearchForm>(), 0, 0, 0, false);
+            return new LemmaSearchResult(lemma, Array.Empty<LemmaSearchForm>(), 0, 0, 0, false, relatedLemmas);
 
         bool capped = forms.Count > MaxAlternationForms;
         var searchForms = capped ? forms.Take(MaxAlternationForms).ToList() : forms.ToList();
@@ -163,6 +172,7 @@ public sealed class LemmaSearchService : ILemmaSearchService
             sr.TotalOccurrenceCount,
             CandidateFormCount: searchForms.Count,
             AttestedFormCount: attested.Count,
-            ExpansionCapped: capped || sr.ExpansionCapped);
+            ExpansionCapped: capped || sr.ExpansionCapped,
+            RelatedLemmas: relatedLemmas);
     }
 }

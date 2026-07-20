@@ -25,7 +25,8 @@ public sealed record LemmaSearchResult(
     int TotalOccurrences,
     int CandidateFormCount,
     int AttestedFormCount,
-    bool ExpansionCapped);
+    bool ExpansionCapped,
+    IReadOnlyList<LemmaCandidate> RelatedLemmas);
 
 /// <summary>One alternative sandhi/compound split of a word: its constituent parts (IAST) and DPD's rank
 /// (0 = best-ranked). The splits are ALTERNATIVES, not sequential pieces — Pāli sandhi is ambiguous, so DPD
@@ -66,13 +67,17 @@ public interface ILemmaSearchService
     /// for its lemma(s). (sandhi decomposer, #383)</summary>
     WordDeconstruction? Deconstruct(string word, Script sourceScript = Script.Ipe);
 
-    /// <summary>Forward-expand a chosen lemma (optionally its derived_from family) and search the corpus for the forms.</summary>
+    /// <summary>Forward-expand a chosen lemma (optionally its derived_from family) and search the corpus for the forms.
+    /// <paramref name="includeRelated"/> (default true) also reports the family's OTHER lemmas as
+    /// <see cref="LemmaSearchResult.RelatedLemmas"/> metadata; pass false to skip that family query when the caller
+    /// doesn't need it (e.g. the report's focus-count call). (#247 relatedLemmas)</summary>
     Task<LemmaSearchResult?> ExpandAndSearchAsync(
         long lemmaId,
         bool includeFamily = false,
         BookFilter? filter = null,
         Script outputScript = Script.Latin,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        bool includeRelated = true);
 
     /// <summary>Expand and search the DE-DUPLICATED UNION of several lemmas' forms in ONE query — used to count
     /// a collapsed family row (the homonyms of one headword) without double-counting their shared forms. (#247)</summary>

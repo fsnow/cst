@@ -225,14 +225,20 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   (Present only when the dpd-cst-subset dataset is installed; 503 if not.)
 - `GET  /v1/forms/{lemmaId}?family=&script=` - LEMMA forward-expansion: a lemma's ATTESTED paradigm WITH
   corpus counts. Returns `{ lemmaId, lemma, pos, gloss, forms:[{ form, count, bookCount }], totalOccurrences,
-  attestedFormCount, candidateFormCount, expansionCapped, note }`. This answers "the whole declension/
+  attestedFormCount, candidateFormCount, expansionCapped, relatedLemmas:[{ lemmaId, lemma, pos, gloss, derivedFrom }],
+  note }`. This answers "the whole declension/
   conjugation of X and how often each form occurs" in ONE call - counts come from the corpus index, so a
   DPD form that never occurs is omitted (synthetic). `totalOccurrences` is de-duplicated within this response.
   ** For an inflectional family, PREFER this lemma path over hand-built search regexes (see `/docs/search.md`) - it handles the
   stem alternation, the homograph (you chose the lemma), and the synthetic-vs-attested split for you. **
   CROSS-LEMMA CAUTION: a word's forms are often SPLIT across SIBLING lemmas (e.g. a verb's present participle
   is its OWN lemmaId), and the SAME surface token can appear under several of them - so do NOT sum
-  `totalOccurrences` across sibling lemmaIds (that double-counts the shared tokens). `family:true` returns the
+  `totalOccurrences` across sibling lemmaIds (that double-counts the shared tokens). This is exactly what
+  `relatedLemmas` is for: it lists those OTHER family lemmas (each with its `pos`), which are NOT in `forms`
+  above. THE MIDDLE GROUND between `family:false` and `family:true`: to assemble a whole CONJUGATION, take the
+  VERBAL-pos entries of `relatedLemmas` (`pr`/`aor`/`fut`/`opt`/`imp`/`cond`/`prp`/`app`/`abs`/`ger`/`inf`/`pp`/
+  `ptp`/`fpp`/`caus`/`pass`/`denom`), `GET /v1/forms/{lemmaId}` for each, and union their forms - that gets the
+  verb + all its participles/absolutive WITHOUT the deverbal nouns that `family:true` sweeps in. `family:true` returns the
   DE-DUPLICATED UNION of the whole `derived_from` word family (the verb AND its participles, deverbal nouns,
   causative, passive - everything sharing the root-sense), each token counted ONCE, with a combined
   `totalOccurrences`. CHOOSE DELIBERATELY, the gap is large: `family:false` (the DEFAULT) = just THIS lemma's

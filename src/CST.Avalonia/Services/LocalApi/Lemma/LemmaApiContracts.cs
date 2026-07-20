@@ -22,7 +22,8 @@ public sealed record LemmaFormDto(string Form, int Count, int BookCount);
 public sealed record LemmaFormsResponse(
     long LemmaId, string Lemma, string? Pos, string? Gloss, string? DerivedFrom,
     IReadOnlyList<LemmaFormDto> Forms, int TotalOccurrences,
-    int AttestedFormCount, int CandidateFormCount, bool ExpansionCapped, string? Note);
+    int AttestedFormCount, int CandidateFormCount, bool ExpansionCapped,
+    IReadOnlyList<LemmaCandidateDto> RelatedLemmas, string? Note);
 
 /// <summary>One ranked alternative split of a compound/sandhi word (parts in the output script).</summary>
 public sealed record WordSplitDto(int Rank, IReadOnlyList<string> Parts);
@@ -106,17 +107,30 @@ internal static class LemmaApi
             + (direct.Count > 0 ? " This word is ALSO a dictionary headword in its own right (see directLemmas)." : string.Empty);
     }
 
-    public static LemmaFormsResponse ToForms(LemmaSearchResult res, Script outputScript)
+    public static LemmaFormsResponse ToForms(LemmaSearchResult res, Script outputScript, bool familyUnion = false)
     {
         var forms = res.AttestedForms.Select(f => new LemmaFormDto(f.Form, f.Count, f.BookCount)).ToList();
+        var related = res.RelatedLemmas
+            .Select(c => new LemmaCandidateDto(c.LemmaId, Script(c.Lemma, outputScript), c.Pos, c.Gloss, ScriptOrNull(c.DerivedFrom, outputScript)))
+            .ToList();
         int synthetic = res.CandidateFormCount - res.AttestedFormCount;
         string note = $"Counts are corpus occurrences (from the index). {res.AttestedFormCount} of "
             + $"{res.CandidateFormCount} DPD candidate forms occur; the other {synthetic} are synthetic "
-            + "(never attested). totalOccurrences is the grand total for this lemma."
-            + (res.ExpansionCapped ? " NOTE: the form set was capped — narrow the query." : string.Empty);
+            + "(never attested). totalOccurrences is the grand total for this "
+            + (familyUnion ? "whole word family (de-duplicated union)." : "lemma.")
+            + (res.ExpansionCapped ? " NOTE: the form set was capped — narrow the query." : string.Empty)
+            // The "assemble a conjugation" guidance only makes sense on the DEFAULT (family:false) response — on a
+            // family:true response the forms above ALREADY union the whole family, so re-fetching would duplicate.
+            + (related.Count > 0 && !familyUnion
+                ? " relatedLemmas = the OTHER lemmas of this word-family, each with its pos — a verb's participles / "
+                  + "absolutive / infinitive are SEPARATE lemmaIds and are NOT in the forms above. To assemble a whole "
+                  + "CONJUGATION, GET /v1/forms/{lemmaId} for the VERBAL-pos relatedLemmas and union their forms "
+                  + "(family:true instead unions the ENTIRE family — including deverbal NOUNS — which is broader). Do NOT "
+                  + "sum totalOccurrences across relatedLemmas; they can share surface tokens (double-count)."
+                : string.Empty);
         return new LemmaFormsResponse(
             res.Lemma.LemmaId, Script(res.Lemma.Lemma, outputScript), res.Lemma.Pos, res.Lemma.Gloss,
             ScriptOrNull(res.Lemma.DerivedFrom, outputScript),
-            forms, res.TotalOccurrences, res.AttestedFormCount, res.CandidateFormCount, res.ExpansionCapped, note);
+            forms, res.TotalOccurrences, res.AttestedFormCount, res.CandidateFormCount, res.ExpansionCapped, related, note);
     }
 }
