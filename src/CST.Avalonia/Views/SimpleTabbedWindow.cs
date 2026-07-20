@@ -316,12 +316,20 @@ public partial class SimpleTabbedWindow : Window
                     double w = mainWindowState.Width, h = mainWindowState.Height;
                     if (placementScreen != null)
                     {
-                        w = Math.Min(w, placementScreen.WorkingArea.Width / placementScreen.Scaling);
-                        h = Math.Min(h, placementScreen.WorkingArea.Height / placementScreen.Scaling);
+                        // Clamp to the working area (logical units) so a large saved OR the 1400x900 default never
+                        // opens bigger than the screen on a smaller / display-scaled laptop. (#428)
+                        double scaling = placementScreen.Scaling <= 0 ? 1.0 : placementScreen.Scaling;
+                        w = Math.Max(MinWidth, Math.Min(w, placementScreen.WorkingArea.Width / scaling));
+                        h = Math.Max(MinHeight, Math.Min(h, placementScreen.WorkingArea.Height / scaling));
+                        _logger.Information("Clamped window size to screen: working area {WW}x{WH} @ {Scale}x -> {W}x{H}",
+                            placementScreen.WorkingArea.Width, placementScreen.WorkingArea.Height, scaling, w, h);
+                    }
+                    else
+                    {
+                        _logger.Warning("No placement screen available at restore; using size {W}x{H} unclamped", w, h);
                     }
                     Width = w;
                     Height = h;
-                    _logger.Information("Restored window size: {Width}x{Height}", Width, Height);
                 }
 
                 // Restore position, clamped so the WHOLE window rectangle stays within the placement
@@ -351,6 +359,20 @@ public partial class SimpleTabbedWindow : Window
                     Position = savedPos.Value;
                     _logger.Information("Restored window position (unvalidated): {X},{Y}", savedPos.Value.X, savedPos.Value.Y);
                 }
+                else if (placementScreen != null)
+                {
+                    // No saved position (fresh install): give the default a comfortable inset (~90% of the working
+                    // area, not edge-to-edge) and center it, so it comes up as an obvious normal, resizable window
+                    // with its controls reachable - never oversized/off-screen on a smaller or scaled display. (#428)
+                    var wa = placementScreen.WorkingArea;
+                    double scaling = placementScreen.Scaling <= 0 ? 1.0 : placementScreen.Scaling;
+                    Width = Math.Max(MinWidth, Math.Min(Width, (wa.Width / scaling) * 0.9));
+                    Height = Math.Max(MinHeight, Math.Min(Height, (wa.Height / scaling) * 0.9));
+                    int cx = wa.X + (int)Math.Max(0, (wa.Width - Width * scaling) / 2);
+                    int cy = wa.Y + (int)Math.Max(0, (wa.Height - Height * scaling) / 2);
+                    Position = new PixelPoint(cx, cy);
+                    _logger.Information("No saved window position; sized default to {W}x{H} and centered at {X},{Y}", Width, Height, cx, cy);
+                }
 
                 // Restore window state, but never launch minimized: a window saved while minimized
                 // (e.g. quit via Cmd+Q while minimized) would otherwise reopen minimized and look like
@@ -364,8 +386,14 @@ public partial class SimpleTabbedWindow : Window
             }
             else
             {
-                _logger.Information("No saved window state found, using defaults");
+                // Current.MainWindow is effectively never null (ApplicationState.MainWindow defaults to a value),
+                // so this is only a defensive fallback - use the XAML default size as-is.
+                _logger.Information("No application state MainWindow; using the XAML default window size");
             }
+
+            // Persist the restored/clamped/centered geometry now, forcing past the 500ms debounce (which would
+            // otherwise swallow the final Height/Position until the next clean close, losing it on a crash). (#428)
+            SaveWindowState(force: true);
         }
         catch (Exception ex)
         {
