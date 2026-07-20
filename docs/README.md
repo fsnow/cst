@@ -95,6 +95,7 @@ Exploratory research and investigations:
 - [MAUI Blazor POC Results](research/MAUI_BLAZOR_POC_RESULTS.md) - POC findings and conclusions
 - [Rendering Requirements](research/RENDERING_REQUIREMENTS.md) - Content rendering needs analysis
 - [Search Index Shrink Spike](research/SEARCH_INDEX_SHRINK_SPIKE.md) - #55 dropping redundant term vectors / norms / payloads (~135 MB → ~75 MB)
+- [Structural Markup Inventory](research/STRUCTURAL_MARKUP_INVENTORY.md) - corpus `<div>` coverage (78/217 structured); ground truth for the book-mapping / navigation cluster (#24/#76/#174/#314/#266). Regenerable via `structural_markup_inventory.py`
 - [Strategic Technology Options](research/STRATEGIC_TECHNOLOGY_OPTIONS.md) - Technology direction evaluation
 
 ### 📚 **reference/** - Reference Materials
