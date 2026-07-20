@@ -114,6 +114,7 @@ External resources and CST4 feature references:
   - Font Samples (2014)
 
 ### 🧪 **testing/** - Test Plans & Results
+- [UI Smoke Test](testing/UI_SMOKE_TEST.md) - printable click-through checklist for validating a build on a target machine (esp. bare-metal Windows), with a Windows-specific risk map
 - [Beta 3 Testing](testing/BETA_3_TESTING.md) - Beta 3 test results and notes
 - [Dictionary CST4 Capture Plan](testing/DICTIONARY_CST4_CAPTURE_PLAN.md) - CST4 Dictionary lookups to screenshot as regression oracles (#25)
 - [CST4 Parity Checklist](testing/CST4_PARITY_CHECKLIST.md) - CST4↔Avalonia feature-by-feature comparison to drive a side-by-side review
