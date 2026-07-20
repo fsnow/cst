@@ -2122,9 +2122,12 @@ namespace CST.Avalonia.Services
                     };
                 }
 
+                // Store the list BEFORE wiring so that if WireTitleUpdates throws mid-walk, the handlers it
+                // already attached are still reachable (via window.Closed / the next re-wire) and don't leak.
+                // (Fable review of #357.)
                 var detaches = new List<Action>();
-                WireTitleUpdates(window, window.Layout, 0, detaches);
                 _titleSubscriptions[window] = detaches;
+                WireTitleUpdates(window, window.Layout, 0, detaches);
 
                 UpdateHostWindowTitle(window);
             }
@@ -2147,8 +2150,8 @@ namespace CST.Avalonia.Services
         // (VisibleDockables collection) and active tab (ActiveDockable/FocusedDockable), plus each LEAF
         // dockable's own Title (a book retitles on a global script switch — A8-3). Every subscription is
         // paired with a detach delegate collected into <paramref name="detaches"/> so it can be undone on
-        // window close. Only the docks/leaves present at wire-up are tracked; a later split still updates
-        // the title on the parent's collection change.
+        // window close. Docks/leaves present at wire-up are tracked; a later tab add/remove re-runs this
+        // wiring via the collection-change handler (#357), so dragged-in leaves get subscribed too.
         private void WireTitleUpdates(CstHostWindow window, IDockable? node, int depth, List<Action> detaches)
         {
             if (node == null || depth > 32) return;
@@ -2171,7 +2174,11 @@ namespace CST.Avalonia.Services
 
                 if (dock.VisibleDockables is INotifyCollectionChanged incc)
                 {
-                    NotifyCollectionChangedEventHandler h = (_, _) => UpdateHostWindowTitle(window);
+                    // #357: on any tab add/remove, re-run the whole wiring (detach + re-subscribe) so a leaf
+                    // dragged INTO an existing float also gets its own Title subscription. Without this, once
+                    // the originally-wired tab is gone a later in-place retitle (global script switch) leaves
+                    // this window's title bar + Window-menu entry stale. Re-wiring also refreshes the title.
+                    NotifyCollectionChangedEventHandler h = (_, _) => SetupHostWindowTitleTracking(window);
                     incc.CollectionChanged += h;
                     detaches.Add(() => incc.CollectionChanged -= h);
                 }
