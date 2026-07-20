@@ -974,181 +974,24 @@ namespace CST.Avalonia.ViewModels
                 }
             }
 
-            if (_searchTerms == null || !_searchTerms.Any() || _docId == null)
+            if (_searchTerms == null || !_searchTerms.Any())
             {
-                Log.Debug("[BookDisplay] Skipping highlighting - no terms or no DocId");
+                Log.Debug("[BookDisplay] Skipping highlighting - no search terms");
                 return xmlContent;
             }
 
-            DirectoryReader? indexReader = null;
-            try
+            // Highlighting runs entirely off pre-computed postings offsets (_searchPositions), which
+            // every book-open path supplies (search result, state restore, float/unfloat). The former
+            // term-vector fallback here was retired with #55 when term vectors were dropped from the
+            // index; both paths read the same Lucene offset data, so the positions path is equivalent
+            // (and richer: two-color phrase/proximity). With no positions there is nothing to highlight.
+            if (_searchPositions != null && _searchPositions.Any())
             {
-                // NEW: If we have pre-computed positions (from phrase/proximity search), use them directly
-                if (_searchPositions != null && _searchPositions.Any())
-                {
-                    return ApplyHighlightingFromPositions(xmlContent);
-                }
-                // Get the IndexingService to access the Lucene index
-                var indexingService = App.ServiceProvider?.GetService<IIndexingService>();
-                if (indexingService == null)
-                {
-                    _logger.Warning("IndexingService not available for highlighting");
-                    return xmlContent;
-                }
-
-                indexReader = indexingService.GetIndexReader();
-                if (indexReader == null)
-                {
-                    _logger.Warning("Could not get index reader for highlighting");
-                    return xmlContent;
-                }
-
-                // Use the raw XML content directly (this matches what Lucene indexed)
-                var xmlString = xmlContent;
-                
-                // Get term vectors for this document
-                var termVectors = indexReader.GetTermVector(_docId.Value, "text");
-                if (termVectors == null)
-                {
-                    _logger.Warning("No term vectors found for document {DocId}", _docId.Value);
-                    return xmlContent;
-                }
-
-                // Collect all offset information for our search terms
-                var offsetList = new List<(int start, int end, string term)>();
-                
-                Log.Debug("[BookDisplay] Processing {Count} search terms for highlighting", _searchTerms.Count);
-                
-                foreach (var searchTerm in _searchTerms)
-                {
-                    if (string.IsNullOrWhiteSpace(searchTerm)) continue;
-                    
-                    Log.Debug("[BookDisplay] Looking for term: '{Term}'", searchTerm);
-                    
-                    // Get the postings for this term
-                    var termsEnum = termVectors.GetEnumerator(null);
-                    var termBytes = new BytesRef(System.Text.Encoding.UTF8.GetBytes(searchTerm));
-                    
-                    if (termsEnum.SeekExact(termBytes))
-                    {
-                        Log.Debug("[BookDisplay] Found term '{Term}' in index", searchTerm);
-                        
-                        // Get positions and offsets for this term
-                        var postingsEnum = termsEnum.DocsAndPositions(null, null, DocsAndPositionsFlags.OFFSETS);
-                        if (postingsEnum != null)
-                        {
-                            while (postingsEnum.NextDoc() != DocIdSetIterator.NO_MORE_DOCS)
-                            {
-                                var freq = postingsEnum.Freq;
-                                Log.Debug("[BookDisplay] Term '{Term}' appears {Count} times in document", searchTerm, freq);
-                                
-                                for (int i = 0; i < freq; i++)
-                                {
-                                    postingsEnum.NextPosition();
-                                    var startOffset = postingsEnum.StartOffset;
-                                    var endOffset = postingsEnum.EndOffset;
-                                    
-                                    if (startOffset >= 0 && endOffset > startOffset)
-                                    {
-                                        // Verify the offset points to the expected text
-                                        // NOTE: Lucene offsets are inclusive-exclusive, so no +1
-                                        var actualText = xmlString.Substring(startOffset, endOffset - startOffset);
-                                        offsetList.Add((startOffset, endOffset, searchTerm));
-                                        Log.Debug("[BookDisplay] Offset {Start}-{End} for '{Term}': actual text '{Text}'",
-                                            startOffset, endOffset, searchTerm, actualText);
-                                    }
-                                    else
-                                    {
-                                        Log.Warning("[BookDisplay] Invalid offset for '{Term}': {Start}-{End}", 
-                                            searchTerm, startOffset, endOffset);
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            Log.Debug("[BookDisplay] No postings enum for term '{Term}'", searchTerm);
-                        }
-                    }
-                    else
-                    {
-                        Log.Debug("[BookDisplay] Term '{Term}' not found in index", searchTerm);
-                    }
-                }
-
-                if (!offsetList.Any())
-                {
-                    Log.Debug("[BookDisplay] No offsets found for any search terms");
-                    return xmlContent;
-                }
-
-                // Sort offsets by position in REVERSE order (back to front)
-                // This is critical so that inserting tags doesn't invalidate later offsets
-                offsetList.Sort((a, b) => b.start.CompareTo(a.start));
-                
-                // Build the highlighted XML by inserting <hi> tags at the offsets
-                var sb = new StringBuilder(xmlString);
-                var hitCount = offsetList.Count;
-
-                // For single term search, use the same highlight style for all instances
-                // For multi-term search, each term would get different colors (not implemented yet)
-                var isSingleTerm = _searchTerms.Count == 1;
-                var hitIndex = hitCount - 1;
-                
-                Log.Debug("[BookDisplay] Applying {Count} highlights (single-term: {IsSingle})", hitCount, isSingleTerm);
-                
-                foreach (var (start, end, term) in offsetList)
-                {
-                    // Get the actual text at this offset
-                    var highlightedText = xmlString.Substring(start, end - start);
-                    
-                    // Create the highlight tags - always use unique IDs for navigation
-                    var openTag = $"<hi rend=\"hit\" id=\"hit{hitIndex + 1}\">";
-                    var closeTag = "</hi>";
-                    
-                    // Replace the text at this offset with highlighted version
-                    sb.Remove(start, end - start);
-                    sb.Insert(start, openTag + highlightedText + closeTag);
-                    
-                    Log.Debug("[BookDisplay] Applied highlight #{Number} at offset {Start}-{End}: '{Text}' (term: '{Term}')", 
-                        hitIndex + 1, start, end, highlightedText, term);
-                    hitIndex--;
-                }
-                
-                // Return the highlighted XML string
-                var highlightedXml = sb.ToString();
-                
-                Log.Information("[BookDisplay] Successfully applied {Count} highlights", hitCount);
-                
-                // Update hit count and status
-                var totalHits = hitCount;
-                Dispatcher.UIThread.Post(() =>
-                {
-                    TotalHits = totalHits;
-                    HasSearchHighlights = totalHits > 0;
-                    if (totalHits > 0)
-                    {
-                        // Seed only when there is no live position: this pipeline re-runs on every
-                        // re-render (script change), and resetting would clobber the hit the user
-                        // navigated to ("4 of 4" snapping back). (BOOK-7 follow-up)
-                        if (CurrentHitIndex < 1 || CurrentHitIndex > totalHits)
-                            CurrentHitIndex = 1;
-                        UpdateHitStatusText();
-                    }
-                });
-                
-                return highlightedXml;
+                return ApplyHighlightingFromPositions(xmlContent);
             }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to apply search highlighting");
-                Log.Error(ex, "[BookDisplay] Error applying highlights");
-                return xmlContent; // Return original content on error
-            }
-            finally
-            {
-                indexReader?.DecRef(); // release the counted reference (SRCH-6, mirrors SRCH-2)
-            }
+
+            Log.Debug("[BookDisplay] No pre-computed positions - nothing to highlight");
+            return xmlContent;
         }
 
         /// <summary>

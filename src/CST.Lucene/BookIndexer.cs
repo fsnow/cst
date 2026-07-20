@@ -265,11 +265,19 @@ namespace CST
             ft.IsIndexed = true;
             ft.IsStored = false;
             ft.IsTokenized = true;
-            ft.OmitNorms = false;
-            ft.StoreTermVectors = true;
-            ft.StoreTermVectorOffsets = true;
-            ft.StoreTermVectorPayloads = true;
-            ft.StoreTermVectorPositions = true;
+            // We use Lucene purely as a position/offset store read straight from the postings
+            // (MultiFields.GetTermPositionsEnum) — never via IndexSearcher scoring — so:
+            //  - Norms carry field-length normalization for scoring we never do -> omit them.
+            //  - Term vectors duplicated the postings' positions/offsets; the only reader was a
+            //    legacy highlight fallback (BookDisplayViewModel) now fully superseded by the
+            //    postings-offset path -> drop them (they were ~56 MB / ~40% of the index).
+            // Positions (proximity) and offsets (highlighting) still come from the postings, so
+            // IndexOptions keeps DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS. (#55)
+            ft.OmitNorms = true;
+            ft.StoreTermVectors = false;
+            ft.StoreTermVectorOffsets = false;
+            ft.StoreTermVectorPayloads = false;
+            ft.StoreTermVectorPositions = false;
             ft.IndexOptions = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
             ft.Freeze();
 
