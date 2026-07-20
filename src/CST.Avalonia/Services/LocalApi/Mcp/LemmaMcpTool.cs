@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Services;
@@ -62,6 +63,28 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 ? new LemmaFormsResponse(lemmaId, string.Empty, null, null, null,
                     Array.Empty<LemmaFormDto>(), 0, 0, 0, false, Array.Empty<LemmaCandidateDto>(), $"Unknown lemmaId {lemmaId}.")
                 : LemmaApi.ToForms(res, s, family);
+        }
+
+        [McpServerTool(Name = "lemma_forms_union")]
+        [Description("Count a SET of lemmas as ONE de-duplicated union of their attested forms — each surface token "
+            + "counted ONCE across them (NOT the sum of per-lemma totals, which double-counts shared tokens). This is "
+            + "how you get an EXACT count for a scoped group like a whole CONJUGATION: call 'lemma_forms' on the verb, "
+            + "take the VERBAL-pos entries of its `relatedLemmas` (its participles / absolutive / infinitive — `pr`, "
+            + "`prp`, `abs`, `ger`, `pp`, `caus`, `pass`, etc.), and pass this lemma + those lemmaIds here. `script` "
+            + "sets the output script (default Latin).")]
+        public static async Task<LemmaFormsUnionResponse> LemmaFormsUnion(
+            ILemmaSearchService lemma,
+            [Description("The lemmaIds to union (e.g. a verb + its verbal-pos relatedLemmas).")] long[] lemmaIds,
+            [Description("Output script (default Latin).")] Script script = Script.Latin,
+            CancellationToken ct = default)
+        {
+            var s = Safe(script);
+            var ids = (lemmaIds ?? Array.Empty<long>()).Distinct().Take(LemmaApi.MaxUnionLemmas).ToList();
+            var res = ids.Count == 0 ? null : await lemma.ExpandAndSearchSetAsync(ids, s, ct).ConfigureAwait(false);
+            return res is null
+                ? new LemmaFormsUnionResponse(ids, Array.Empty<LemmaFormDto>(), 0, 0, 0, false,
+                    ids.Count == 0 ? "lemmaIds is required (a non-empty array)." : "None of the given lemmaIds are known.")
+                : LemmaApi.ToFormsUnion(res, ids);
         }
 
         [McpServerTool(Name = "sandhi_split")]

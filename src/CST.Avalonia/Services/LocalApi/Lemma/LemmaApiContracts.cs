@@ -25,6 +25,16 @@ public sealed record LemmaFormsResponse(
     int AttestedFormCount, int CandidateFormCount, bool ExpansionCapped,
     IReadOnlyList<LemmaCandidateDto> RelatedLemmas, string? Note);
 
+/// <summary>Request for POST /v1/forms — count a SET of lemmas as one de-duplicated union of their forms.</summary>
+public sealed record LemmaFormsUnionRequest(long[]? LemmaIds, string? Script);
+
+/// <summary>Response for POST /v1/forms — the DE-DUPLICATED union of several lemmas' attested forms with a
+/// combined corpus total (each surface token counted once across the set). Used to count a scoped group such as
+/// a whole CONJUGATION (the verbal-pos relatedLemmas of a verb). (#247)</summary>
+public sealed record LemmaFormsUnionResponse(
+    IReadOnlyList<long> LemmaIds, IReadOnlyList<LemmaFormDto> Forms, int TotalOccurrences,
+    int AttestedFormCount, int CandidateFormCount, bool ExpansionCapped, string? Note);
+
 /// <summary>One ranked alternative split of a compound/sandhi word (parts in the output script).</summary>
 public sealed record WordSplitDto(int Rank, IReadOnlyList<string> Parts);
 
@@ -39,6 +49,10 @@ public sealed record DeconstructResponse(
 
 internal static class LemmaApi
 {
+    /// <summary>Cap on the lemmaIds a POST /v1/forms (and MCP lemma_forms_union) may expand — shared by the REST
+    /// endpoint and the MCP tool so they can't drift. (#247)</summary>
+    internal const int MaxUnionLemmas = 500;
+
     // Convert a lemma citation form (IAST, may carry a trailing homonym number) to the output script.
     private static string Script(string lemma, Script outputScript)
         => outputScript == CST.Conversion.Script.Latin ? lemma : ScriptConverter.Convert(lemma, CST.Conversion.Script.Latin, outputScript);
@@ -123,14 +137,30 @@ internal static class LemmaApi
             // family:true response the forms above ALREADY union the whole family, so re-fetching would duplicate.
             + (related.Count > 0 && !familyUnion
                 ? " relatedLemmas = the OTHER lemmas of this word-family, each with its pos — a verb's participles / "
-                  + "absolutive / infinitive are SEPARATE lemmaIds and are NOT in the forms above. To assemble a whole "
-                  + "CONJUGATION, GET /v1/forms/{lemmaId} for the VERBAL-pos relatedLemmas and union their forms "
-                  + "(family:true instead unions the ENTIRE family — including deverbal NOUNS — which is broader). Do NOT "
-                  + "sum totalOccurrences across relatedLemmas; they can share surface tokens (double-count)."
+                  + "absolutive / infinitive are SEPARATE lemmaIds and are NOT in the forms above. To COUNT a whole "
+                  + "CONJUGATION as ONE number, POST /v1/forms with { lemmaIds:[…] } = the VERBAL-pos relatedLemmas "
+                  + "(this lemma + its verbal siblings): it returns the DE-DUPLICATED union. (family:true instead unions "
+                  + "the ENTIRE family — including deverbal NOUNS — which is broader.) Do NOT sum totalOccurrences across "
+                  + "relatedLemmas yourself; they can share surface tokens (double-count)."
                 : string.Empty);
         return new LemmaFormsResponse(
             res.Lemma.LemmaId, Script(res.Lemma.Lemma, outputScript), res.Lemma.Pos, res.Lemma.Gloss,
             ScriptOrNull(res.Lemma.DerivedFrom, outputScript),
             forms, res.TotalOccurrences, res.AttestedFormCount, res.CandidateFormCount, res.ExpansionCapped, related, note);
+    }
+
+    // The forms in `res` are ALREADY in the requested output script (SearchFormsAsync converted them); this just
+    // projects them and writes the union note. Used by POST /v1/forms + MCP lemma_forms_union. (#247)
+    public static LemmaFormsUnionResponse ToFormsUnion(LemmaSearchResult res, IReadOnlyList<long> lemmaIds)
+    {
+        var forms = res.AttestedForms.Select(f => new LemmaFormDto(f.Form, f.Count, f.BookCount)).ToList();
+        string note = $"De-duplicated UNION over the {lemmaIds.Count} lemmaIds (any UNKNOWN ones are skipped) — each "
+            + "surface token counted ONCE across them (NOT the sum of per-lemma totals, which double-counts shared tokens). "
+            + $"{res.AttestedFormCount} of {res.CandidateFormCount} candidate forms occur; totalOccurrences is the "
+            + "combined corpus total. This is how to count a scoped SET such as a CONJUGATION: pass the VERBAL-pos "
+            + "relatedLemmas of a verb (from GET /v1/forms/{lemmaId})."
+            + (res.ExpansionCapped ? " NOTE: the form set was capped — narrow the set." : string.Empty);
+        return new LemmaFormsUnionResponse(
+            lemmaIds, forms, res.TotalOccurrences, res.AttestedFormCount, res.CandidateFormCount, res.ExpansionCapped, note);
     }
 }

@@ -522,6 +522,19 @@ namespace CST.Avalonia.Services.LocalApi
                         : Results.Json(LemmaApi.ToForms(res, outputScript, family ?? false));
                 });
 
+                // UNION of several lemmas' forms as ONE de-duplicated count — a scoped set like a CONJUGATION (pass
+                // the verbal-pos relatedLemmas of a verb). Reuses the same union plumbing the report uses. (#247)
+                app.MapPost(v + "/forms", async (LemmaFormsUnionRequest req, CancellationToken ct) =>
+                {
+                    if (!lemma.IsAvailable) return LemmaUnavailable();
+                    var ids = (req.LemmaIds ?? System.Array.Empty<long>()).Distinct().Take(LemmaApi.MaxUnionLemmas).ToList();
+                    if (ids.Count == 0) return Results.BadRequest(new { error = "lemmaIds is required (a non-empty array)." });
+                    var res = await lemma.ExpandAndSearchSetAsync(ids, ParseScript(req.Script), ct);
+                    return res is null
+                        ? Results.NotFound(new { error = "None of the given lemmaIds are known." })
+                        : Results.Json(LemmaApi.ToFormsUnion(res, ids));
+                });
+
                 // Sandhi/compound deconstruction: a word -> its ranked constituent-part splits (DPD deconstructor).
                 // The word->parts primitive only; the caller composes part -> /v1/lemma -> /v1/dictionary. (#383)
                 app.MapGet(v + "/deconstruct/{word}", (string word, string? script) =>

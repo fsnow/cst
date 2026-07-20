@@ -246,9 +246,17 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   DIFFERENT words (a verb's family includes its deverbal NOUNS). For "how often does the verb X occur", use
   `family:false` - e.g. the verb `pajānāti` is ~4,195 occurrences with `family:false`, but ~17,000 with
   `family:true` (which sweeps in the noun `paññā` and its whole declension): a ~4x difference, so picking the
-  wrong flag is a gross error, not a rounding one. To count "just the verb" INCLUDING its negated/sandhi
-  sibling (e.g. `nappajānāti` = na+), union that specific sibling's forms yourself rather than taking the
-  whole family; filter by `pos` when you need to scope a family to one grammatical class.
+  wrong flag is a gross error, not a rounding one. THE MIDDLE GROUND between `family:false` and `family:true` is
+  `relatedLemmas` (returned above) + `POST /v1/forms` (below): filter `relatedLemmas` by `pos` to the class you
+  want, then count that exact set as one number.
+- `POST /v1/forms` - `{ lemmaIds:[…], script? }` -> the DE-DUPLICATED UNION of those lemmas' attested forms with a
+  combined `totalOccurrences` (each surface token counted ONCE across the set). Returns
+  `{ lemmaIds, forms:[{ form, count, bookCount }], totalOccurrences, attestedFormCount, candidateFormCount,
+  expansionCapped, note }`. This is how to COUNT a scoped set - most usefully a whole CONJUGATION: `GET
+  /v1/forms/{lemmaId}` on the verb, take the VERBAL-pos entries of its `relatedLemmas` (`pr`/`aor`/`fut`/`opt`/
+  `imp`/`cond`/`prp`/`app`/`abs`/`ger`/`inf`/`pp`/`ptp`/`fpp`/`caus`/`pass`/`denom`), and POST that lemma + those
+  ids here for the verb's conjugation count WITHOUT the deverbal-noun over-shoot of `family:true`. Do NOT sum the
+  per-lemma `totalOccurrences` yourself (shared tokens double-count) - this endpoint de-dups for you.
 - `GET  /v1/deconstruct/{word}?script=` - SANDHI/COMPOUND deconstruction: a word -> its constituent PARTS
   (DPD deconstructor). Returns `{ word, splits:[{ rank, parts:[…] }], directLemmas:[…], note }`. `splits` are
   DPD's RANKED ALTERNATIVE analyses (rank 0 = best), NOT sequential pieces - Pāli sandhi is ambiguous, so the
