@@ -343,6 +343,37 @@ namespace CST.Avalonia.Tests.Integration
         }
 
         [Fact]
+        public async Task Forms_union_post_returns_a_deduplicated_union_of_several_lemmas()
+        {
+            // POST /v1/forms unions the two homograph lemmas' forms into one de-duplicated count. (#247)
+            using var http = _api.Http();
+            using var doc = await PostDoc(http, "/v1/forms", "{\"lemmaIds\":[100,101]}");
+            var root = doc.RootElement;
+            Assert.Equal(2, root.GetProperty("lemmaIds").GetArrayLength());
+            var forms = root.GetProperty("forms").EnumerateArray()
+                .Select(f => f.GetProperty("form").GetString()).ToHashSet();
+            Assert.Contains("dhamma", forms);                                    // shared by both lemmas — counted ONCE
+            Assert.True(root.GetProperty("totalOccurrences").GetInt32() > 0);
+            Assert.Contains("UNION", root.GetProperty("note").GetString());
+        }
+
+        [Fact]
+        public async Task Forms_union_post_empty_lemmaIds_is_400()
+        {
+            using var http = _api.Http();
+            var resp = await http.PostAsync("/v1/forms", Json("{\"lemmaIds\":[]}"));
+            Assert.Equal(System.Net.HttpStatusCode.BadRequest, resp.StatusCode);
+        }
+
+        [Fact]
+        public async Task Forms_union_post_all_unknown_ids_is_404()
+        {
+            using var http = _api.Http();
+            var resp = await http.PostAsync("/v1/forms", Json("{\"lemmaIds\":[99999998,99999999]}"));
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, resp.StatusCode);
+        }
+
+        [Fact]
         public async Task Lemma_report_renders_the_dossier_html()
         {
             using var http = _api.Http();
