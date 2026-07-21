@@ -1292,7 +1292,14 @@ public partial class App : Application
             toolsMenu.Add(viewSource1957Item);
             toolsMenu.Add(viewSource2010Item);
 
+            // #110: File > Close Tab (⌘W) — closes the active document tab in this floating window.
+            var closeTabItem = new NativeMenuItem { Header = "Close Tab", Gesture = KeyGesture.Parse("Cmd+W") };
+            closeTabItem.Click += (s, e) => OnCloseTabFromFloatingWindow(window);
+            var fileMenu = new NativeMenu();
+            fileMenu.Add(closeTabItem);
+
             var nativeMenu = new NativeMenu();
+            nativeMenu.Add(new NativeMenuItem { Header = "File", Menu = fileMenu });
             nativeMenu.Add(new NativeMenuItem { Header = "View", Menu = viewMenu });
             nativeMenu.Add(new NativeMenuItem { Header = "Tools", Menu = toolsMenu });
             // #284: this window's "Window" submenu (populated by RebuildWindowMenus below).
@@ -1486,6 +1493,25 @@ public partial class App : Application
 
     // View Source (Cmd+E = 1957, Shift+Cmd+E = 2010) for the active book in a floating window, so the
     // shortcut works without the book's WebView having focus (previously only a JS keydown handled it).
+    // #110: ⌘W in a floating window closes its active document tab (book or PDF). Uses the same close path
+    // as the main window (SimpleTabbedWindow.CloseDockableIfClosable) — skips a non-closable tab; a float
+    // holding only that tab closes with it.
+    private void OnCloseTabFromFloatingWindow(Window floatingWindow)
+    {
+        try
+        {
+            if (floatingWindow is CstHostWindow hostWindow && hostWindow.Layout != null)
+            {
+                var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
+                SimpleTabbedWindow.CloseDockableIfClosable(documentDock?.ActiveDockable);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error handling Close Tab from floating window");
+        }
+    }
+
     private void OnViewSourceFromFloatingWindow(Window floatingWindow, bool source2010)
     {
         try

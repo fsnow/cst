@@ -12,6 +12,13 @@
     <!-- Native Menu for macOS - Window level (creates top-level menus in menu bar) -->
     <NativeMenu.Menu>
         <NativeMenu>
+            <!-- File Menu (#110): ⌘W closes the active document tab (book or PDF) in the focused window -->
+            <NativeMenuItem Header="File">
+                <NativeMenu>
+                    <NativeMenuItem Header="Close Tab" Click="OnCloseTabClick" Gesture="cmd+w" />
+                </NativeMenu>
+            </NativeMenuItem>
+
             <!-- View Menu as top-level menu -->
             <NativeMenuItem Header="View">
                 <NativeMenu>

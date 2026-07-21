@@ -287,29 +287,12 @@ namespace CST.Avalonia.Services
                     }
                 }
             }
-            else if (dockable is IDockable otherDockable)
+            else
             {
-                // For tools, documents, and splitters, we might need to set factory too
-                if (otherDockable is Tool tool)
-                {
-                    tool.Factory = this;
-                }
-                else if (otherDockable is Document document)
-                {
-                    document.Factory = this;
-                }
-                else if (otherDockable is ReactiveDocument reactiveDocument)
-                {
-                    reactiveDocument.Factory = this;
-                }
-                else if (otherDockable is ReactiveTool reactiveTool)
-                {
-                    reactiveTool.Factory = this;
-                }
-                else if (otherDockable is ProportionalDockSplitter splitter)
-                {
-                    splitter.Factory = this;
-                }
+                // Every dockable carries its factory. This used to be a type-switch over Tool/Document/
+                // ReactiveDocument/ReactiveTool/Splitter, which silently missed BookDisplayViewModel — so
+                // books ran with Factory == null and any factory-routed command on them no-opped (#110).
+                dockable.Factory = this;
             }
         }
 
@@ -1976,6 +1959,10 @@ namespace CST.Avalonia.Services
             Log.Debug("*** AddDockable called - Dock: {DockId}, Dockable: {DockableId} ***", dock?.Id, dockable?.Id);
             if (dock != null && dockable != null)
             {
+                // Dockables created outside CreateLayout/SetFactory (every book opened at runtime) would
+                // otherwise never get a Factory, so stamp it here — the single funnel every add goes
+                // through. Idempotent; leaves an already-assigned factory alone. (#110)
+                dockable.Factory ??= this;
                 base.AddDockable(dock, dockable);
             }
             else
@@ -3175,18 +3162,18 @@ namespace CST.Avalonia.Services
         {
             Log.Debug("*** CloseHostWindow called for: {WindowId} ***", hostWindow.Id);
 
-            // Untrack FIRST: the rescue below empties this window's dock, and the collection-changed
+            // Untrack FIRST: the close below empties this window's dock, and the collection-changed
             // monitor reacts to that by closing any empty window it finds in HostWindows — running
             // that against a window already inside its own Closing event would re-enter Close().
             // (Idempotent: CloseEmptyHostWindow untracks before Close(), so this is often a no-op.)
             HostWindows.Remove(hostWindow);
             Log.Debug("*** Host window removed from tracking. Remaining host windows: {Count} ***", HostWindows.Count);
 
-            // The old rescue was doubly dead code: hostWindow.Layout is a RootDock (never a
-            // DocumentDock), and books are ReactiveDocument, which OfType<Document>() never matched —
-            // so closing a floating window silently dropped its books (leaked VMs, ghost tabs on next
-            // launch). Rescue them for real now. (DOCK-2)
-            RescueBooksFromClosingWindow(hostWindow);
+            // Closing a floating window closes the tabs inside it, the way a browser window does.
+            // (Originally these books were silently dropped — leaked VMs, ghost tabs next launch — DOCK-2
+            // then rescued them back into the main window; that surprised users, since the red button
+            // read as "close", so they are now really closed.)
+            CloseDockablesInClosingWindow(hostWindow);
 
             // Update panel visibility state after removing window
             // This ensures menu checkmarks update correctly when panels were in the closed window
@@ -3197,125 +3184,57 @@ namespace CST.Avalonia.Services
             }
         }
 
-        // Move any books left in a closing floating window back into the main document dock. (DOCK-2)
-        private void RescueBooksFromClosingWindow(CstHostWindow hostWindow)
+        // Close every tab in a closing floating window (books, PDFs) through the normal close path, so
+        // each one gets its persisted state removed, its CEF browser disposed and its VM disposed —
+        // the same treatment as closing the tab with the tab button or Cmd+W.
+        private void CloseDockablesInClosingWindow(CstHostWindow hostWindow)
         {
-            // During app shutdown every floating window closes as a matter of course: the books'
-            // states are already saved (they restore next launch) and ServiceProvider may already be
-            // disposed, so recreating tabs — which spins up fresh CEF browsers mid-teardown — would
-            // be wasted work at best and a crash at worst.
+            // During app shutdown every floating window closes as a matter of course: the books' states
+            // are already saved and must stay saved so they restore next launch, so nothing is closed here.
             if (App.IsShuttingDown)
             {
-                Log.Information("*** Skipping book rescue for {WindowId} - application is shutting down ***", hostWindow.Id);
+                Log.Information("*** Skipping tab close for {WindowId} - application is shutting down ***", hostWindow.Id);
                 return;
             }
 
             try
             {
                 var floatingDock = FindDocumentDockInLayout(hostWindow.Layout);
-                var mainDocDock = FindDocumentDock();
-                var booksToRescue = floatingDock?.VisibleDockables?.OfType<BookDisplayViewModel>().ToList();
-
-                if (booksToRescue == null || booksToRescue.Count == 0)
+                var toClose = floatingDock?.VisibleDockables?.ToList();
+                if (toClose == null || toClose.Count == 0)
                 {
-                    Log.Debug("*** No books to rescue - window was already empty ***");
-                    return;
-                }
-                if (mainDocDock == null)
-                {
-                    Log.Error("*** Cannot rescue {Count} book(s) from {WindowId} - main document dock not found ***",
-                        booksToRescue.Count, hostWindow.Id);
+                    Log.Debug("*** No tabs to close - window was already empty ***");
                     return;
                 }
 
-                Log.Information("*** Rescuing {Count} book(s) from closing floating window {WindowId} ***",
-                    booksToRescue.Count, hostWindow.Id);
+                Log.Information("*** Closing {Count} tab(s) with floating window {WindowId} ***", toClose.Count, hostWindow.Id);
 
-                foreach (var oldVm in booksToRescue)
+                foreach (var dockable in toClose)
                 {
                     try
                     {
-                        RescueBookToMainDock(oldVm, mainDocDock);
+                        if (dockable.CanClose)
+                        {
+                            CloseDockable(dockable);
+                        }
+                        else
+                        {
+                            // Nothing in a floating document dock opts out of closing today; if something
+                            // ever does, leave it be rather than force it - and say so.
+                            Log.Warning("*** Tab {Title} is not closable - left in the closing window {WindowId} ***",
+                                dockable.Title, hostWindow.Id);
+                        }
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "*** ERROR rescuing book {BookFile} from closing window ***", oldVm.Book.FileName);
+                        Log.Error(ex, "*** ERROR closing tab {Title} with its floating window ***", dockable.Title);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "*** ERROR rescuing books from closing window {WindowId} ***", hostWindow.Id);
+                Log.Error(ex, "*** ERROR closing tabs in closing window {WindowId} ***", hostWindow.Id);
             }
-        }
-
-        // Recreate one book from a closing floating window inside the main dock. Same discipline as
-        // UnfloatDockableWithoutRecycling: the old View's live CEF WebView must never be re-parented —
-        // capture state, shut down + evict the old View, dispose the old VM, create a fresh VM
-        // (fresh GUID => fresh View + browser). NOTE the WebView does NOT die with the closing window:
-        // WebViewControl auto-disposes only on detach with the window's PlatformImpl already null, and
-        // this runs inside Window.Closing while it is still live — the explicit
-        // DisposeAndEvictRecycledView below is what actually releases the browser (#177 reopen).
-        // The window is mid-Close, so no async WebView query is possible; CurrentVriAnchor (from the
-        // last scroll status update) is the best available scroll position. (DOCK-2)
-        private void RescueBookToMainDock(BookDisplayViewModel oldVm, DocumentDock mainDocDock)
-        {
-            var book = oldVm.Book;
-            var searchTerms = oldVm.SearchTerms?.ToList();
-            var searchPositions = oldVm.SearchPositions?.ToList();
-            var bookScript = oldVm.BookScript;
-            var docId = oldVm.DocId;
-            var currentHitIndex = oldVm.CurrentHitIndex;
-            var totalHits = oldVm.TotalHits;
-            var showFootnotes = oldVm.ShowFootnotes;       // #224: carry View toggles across float/unfloat
-            var showSearchTerms = oldVm.ShowSearchTerms;
-            var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
-            var anchor = oldVm.CurrentVriAnchor;
-
-            // Old id's persisted state and subscriptions go away with the old VM (the collection-changed
-            // monitor also removes the state on RemoveDockable; this keeps the ordering explicit).
-            RemoveBookWindowState(oldVm.Id);
-            RemoveDockable(oldVm, false);
-            _goToSubscribedBooks.Remove(oldVm.Id);
-            DisposeAndEvictRecycledView(oldVm);
-            oldVm.Dispose();
-
-            var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
-            var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
-            var fontService = App.ServiceProvider?.GetService<IFontService>();
-
-            var newVm = new BookDisplayViewModel(
-                book: book,
-                searchTerms: searchTerms,
-                initialAnchor: anchor,
-                chapterListsService: chapterListsService,
-                settingsService: settingsService,
-                fontService: fontService,
-                docId: docId,
-                searchPositions: searchPositions,
-                windowId: null,  // CRITICAL: null = generates fresh GUID
-                dockFactory: this,
-                initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
-            );
-
-            // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
-            newVm.BookScript = bookScript;
-            newVm.CurrentHitIndex = currentHitIndex;
-            newVm.TotalHits = totalHits;
-            newVm.ShowFootnotes = showFootnotes;
-            newVm.ShowSearchTerms = showSearchTerms;
-            newVm.IsFloating = false;
-            newVm.CanFloat = false; // Restore drag-to-float block (CEF crash mitigation); matches the open + float paths
-            newVm.Title = title;
-
-            // Wire Go To / Attha-Tika / View Source for the fresh instance
-            EnsureBookEventSubscription(newVm);
-
-            AddDockable(mainDocDock, newVm);
-            SetActiveDockable(newVm);
-            SetFocusedDockable(mainDocDock, newVm);
-
-            Log.Information("*** Rescued book {BookFile} into main window as {NewId} ***", book.FileName, newVm.Id);
         }
 
         // Find which window contains a specific book instance
