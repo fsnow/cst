@@ -317,6 +317,15 @@ public partial class BookDisplayView : UserControl
     {
         base.OnLoaded(e);
         this.PropertyChanged += OnIsVisibleChanged;
+        // Seed the resize baseline from the CURRENT bounds: we subscribe after the first layout pass, so the
+        // "0 -> first real size" Bounds event has usually already fired unobserved. Without this the first real
+        // resize is swallowed as "first measure" (a single-event maximize/snap would never restore), and on a
+        // reattach the baseline would keep the OLD pane's size and fire a phantom gesture. (#434, fable §1)
+        if (this.Bounds.Width > 0 && this.Bounds.Height > 0)
+        {
+            _lastKnownWidth = this.Bounds.Width;
+            _lastKnownHeight = this.Bounds.Height;
+        }
         _logger.Information("BookDisplayView OnLoaded called");
         // Now attached and styled, so the counter's font is resolved — size its reserve. Covers a
         // recycled view whose ViewModel already has TotalHits set (no fresh PropertyChanged). (#196)
@@ -567,12 +576,16 @@ public partial class BookDisplayView : UserControl
         var b = this.Bounds;
         if (b.Width <= 0 || b.Height <= 0) return;
 
-        // Ignore sub-pixel churn and the initial layout pass (0 -> first real size is not a user resize).
         bool firstMeasure = _lastKnownWidth <= 0 || _lastKnownHeight <= 0;
-        if (!firstMeasure && Math.Abs(b.Width - _lastKnownWidth) < 1 && Math.Abs(b.Height - _lastKnownHeight) < 1) return;
+        double dw = Math.Abs(b.Width - _lastKnownWidth);
         _lastKnownWidth = b.Width;
         _lastKnownHeight = b.Height;
         if (firstMeasure) return;
+
+        // Only a WIDTH change re-wraps the text. A height-only drag doesn't reflow, so native scrollTop is
+        // already lossless there and restoring could only lose (it would re-apply a slightly stale token).
+        // This also ignores sub-pixel churn and position-only (X/Y) Bounds changes. (fable §5)
+        if (dw < 1) return;
 
         // Nothing meaningful to preserve until the cache has produced a position, and never fight a hidden tab.
         if (!_anchorCacheBuilt || !this.IsVisible) return;
@@ -597,6 +610,12 @@ public partial class BookDisplayView : UserControl
 
     private void RestoreAfterResize()
     {
+        // A newer resize event re-armed the timer between Elapsed and this UI-thread post — or the user simply
+        // paused >250ms mid-drag. The gesture is still running, so KEEP the original pre-resize snapshot and let
+        // the real settle do the restore. Without this the gesture splits: the next segment would snapshot the
+        // already-drifted token (the 200ms tick has re-captured by then) and commit the drift. (fable §3)
+        if (_resizeSettleTimer?.Enabled == true) return;
+
         _resizeInProgress = false;
         var token = _resizeRestoreToken;
         _resizeRestoreToken = null;
