@@ -83,16 +83,38 @@ namespace CST.Avalonia.Tests.Models
         }
 
         [Fact]
-        public void Master_on_but_local_api_off_disables_server_and_remote_control()
+        public void Master_on_but_every_surface_off_disables_server_and_remote_control()
         {
             var ai = new AiSettings
             {
                 Enabled = true,
-                LocalApi = new LocalApiSettings { Enabled = false, AllowRemoteControl = true }
+                LocalApi = new LocalApiSettings
+                    { Enabled = false, EnableMcpServer = false, AllowRemoteControl = true }
             };
 
             Assert.False(ai.LocalApiEnabled);
+            Assert.False(ai.ServerShouldRun);
             Assert.False(ai.RemoteControlAllowed);
+        }
+
+        [Fact]
+        public void Rest_off_but_mcp_on_still_allows_remote_control()
+        {
+            // navigate (#187) is offered over BOTH /v1 and /mcp, so consent hangs off "a surface is running"
+            // plus the remote-control checkbox — NOT off the REST transport specifically. Keying it to the REST
+            // flag would leave an MCP-only user's every navigate denied, with a message telling them to enable a
+            // checkbox that is already ticked. Unreachable through today's Settings UI (it couples the two
+            // flags), but #280 gives MCP its own toggle. (fable LOW-5)
+            var ai = new AiSettings
+            {
+                Enabled = true,
+                LocalApi = new LocalApiSettings
+                    { Enabled = false, EnableMcpServer = true, AllowRemoteControl = true }
+            };
+
+            Assert.False(ai.LocalApiEnabled);
+            Assert.True(ai.ServerShouldRun);
+            Assert.True(ai.RemoteControlAllowed);
         }
 
         [Fact]

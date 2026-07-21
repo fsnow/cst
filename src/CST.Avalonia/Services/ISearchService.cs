@@ -19,6 +19,12 @@ public interface ISearchService
     /// proximity units, quotes = an adjacent phrase), expand wildcard/regex slots per <paramref name="mode"/>,
     /// and return the co-occurrence hits within one book. Each hit is the matched word positions, exactly one
     /// flagged <see cref="TermPosition.IsFirstTerm"/> (the navigable anchor).
+    /// <para>
+    /// Hits OVERLAP: adjacent windows share word positions, deliberately, because each hit's own members are
+    /// what a per-hit consumer (e.g. snippet marks) needs. Any caller that FLATTENS the hits for highlighting
+    /// must therefore collapse the shared positions first — see
+    /// <see cref="CST.Avalonia.Models.HighlightPositions.Dedupe"/>.
+    /// </para>
     /// </summary>
     Task<List<List<TermPosition>>> GetMultiWordPositionsAsync(
         string bookFileName, string query, SearchMode mode, int proximityDistance, CancellationToken cancellationToken = default);

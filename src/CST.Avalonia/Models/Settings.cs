@@ -55,9 +55,13 @@ namespace CST.Avalonia.Models
         [JsonIgnore]
         public bool ServerShouldRun => LocalApiEnabled || McpEnabled;
 
-        /// <summary>Agents may drive the reader only when the local API is enabled and remote control is permitted.</summary>
+        /// <summary>Agents may drive the reader only when a server surface is running and remote control is
+        /// permitted. Deliberately keyed to <see cref="ServerShouldRun"/> rather than <see cref="LocalApiEnabled"/>:
+        /// navigate is offered over BOTH /v1 and /mcp, so tying consent to the REST transport would leave an
+        /// MCP-only configuration denying every navigate while telling the user to enable a checkbox that is
+        /// already ticked. Unreachable through today's Settings UI, but #280 gives MCP its own toggle. (fable LOW-5)</summary>
         [JsonIgnore]
-        public bool RemoteControlAllowed => LocalApiEnabled && LocalApi.AllowRemoteControl;
+        public bool RemoteControlAllowed => ServerShouldRun && LocalApi.AllowRemoteControl;
     }
 
     /// <summary>Permissions for the loopback API server that exposes the corpus tools to agents (surface C).</summary>

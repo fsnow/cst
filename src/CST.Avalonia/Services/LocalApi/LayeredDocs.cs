@@ -21,6 +21,9 @@ namespace CST.Avalonia.Services.LocalApi
             ("reading", "locating & reading", "/v1/books, /v1/passage, the {…} apparatus"),
             ("dictionary", "glosses & lemmas", "/v1/dictionary, /v1/lemma, /v1/forms"),
             ("scripts", "scripts", "/v1/scripts, /v1/convert"),
+            // Documented unconditionally even when the user has not granted remote control: an agent that
+            // knows navigate exists can tell them how to enable it, which a hidden endpoint cannot. (#187)
+            ("navigate", "showing the user a passage", "/v1/navigate"),
         };
 
         public static bool IsTopic(string topic) => Topics.Any(t => t.Topic == topic);

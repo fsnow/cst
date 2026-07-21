@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -22,6 +23,7 @@ using CST.Conversion;
 using CST.Navigation;
 using CST.Tools;
 using CST.Avalonia.Services.LocalApi.Lemma;
+using CST.Avalonia.Services.Presentation;
 using CST.Avalonia.Services.LocalApi.Mcp;
 using ModelContextProtocol.Server;
 using Serilog;
@@ -83,8 +85,16 @@ namespace CST.Avalonia.Services.LocalApi
             ISearchTool? search = null, IDictionaryTool? dictionary = null, IPassageTool? passage = null,
             IScriptTool? script = null, ILemmaSearchService? lemma = null, ILemmaReportService? lemmaReport = null,
             int port = 0, string? token = null, bool restApiEnabled = true, bool mcpEnabled = true,
-            string? xmlBooksDirectory = null)
+            string? xmlBooksDirectory = null,
+            Services.Presentation.IPresentationService? presentation = null,
+            ISearchService? searchService = null,
+            Func<bool>? isRemoteControlAllowed = null)
         {
+            // Default the consent predicate to DENY: a caller that forgets to pass it must not accidentally
+            // grant an agent control of the user's window. (#187)
+            _navigate = presentation is null
+                ? null
+                : new NavigateService(presentation, searchService, isRemoteControlAllowed ?? (() => false));
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
             _logger = logger.ForContext<LocalApiServer>();
@@ -104,6 +114,10 @@ namespace CST.Avalonia.Services.LocalApi
         // Corpus dir, used once at startup to prime the Multi-book sub-book codes (#266); null → codes stay empty.
         private readonly string? _xmlBooksDirectory;
 
+        // Surface E (#187): the shared navigate implementation (consent gate + highlight resolution +
+        // presentation), or null when there is no reader to drive.
+        private readonly NavigateService? _navigate;
+
         /// <summary>
         /// Build a server by resolving EVERY tool adapter from the DI container. This is the single place the
         /// tools are gathered, so a forgotten tool (the /v1/scripts-404 class of bug, where a registered tool
@@ -120,7 +134,11 @@ namespace CST.Avalonia.Services.LocalApi
                 services.GetService<IScriptTool>(),
                 services.GetService<ILemmaSearchService>(),
                 services.GetService<ILemmaReportService>(), port, token, restApiEnabled, mcpEnabled,
-                services.GetService<ISettingsService>()?.Settings?.XmlBooksDirectory);
+                services.GetService<ISettingsService>()?.Settings?.XmlBooksDirectory,
+                services.GetService<Services.Presentation.IPresentationService>(),
+                services.GetService<ISearchService>(),
+                // Read live so a Settings toggle applies without restarting the server. (#187)
+                () => services.GetService<ISettingsService>()?.Settings?.Ai?.RemoteControlAllowed ?? false);
 
         public async Task StartAsync(CancellationToken ct = default)
         {
@@ -187,6 +205,11 @@ namespace CST.Avalonia.Services.LocalApi
                 {
                     builder.Services.AddSingleton(mcpLemma);
                     mcp.WithTools<LemmaMcpTool>(McpJson);
+                }
+                if (_navigate is { } mcpNavigate)
+                {
+                    builder.Services.AddSingleton(mcpNavigate);
+                    mcp.WithTools<NavigateMcpTool>(McpJson);
                 }
                 // Expose llms.txt as an MCP resource — an MCP client has no base URL to "fetch /llms.txt", so give
                 // it the same version-stamped orientation as a readable resource. (Desktop MCP friction report)
@@ -492,6 +515,32 @@ namespace CST.Avalonia.Services.LocalApi
                 // Filter (pitaka / commentary level) + paging so the 217-book catalog can't overflow a caller. (#191 Cowork)
                 return Results.Json(BookCatalog.List(outputScript, p, cl, skip ?? 0, take ?? BookCatalog.DefaultTake));
             });
+
+            // Navigate (#187) — the ONLY endpoint that acts on the user's window rather than just reading the
+            // corpus, so it is gated behind explicit remote-control consent. It is mapped unconditionally (when a
+            // reader is wired) and answers 403 when consent is off, so an agent gets an actionable "ask the user
+            // to turn this on" instead of a 404 it would read as "this build has no navigate".
+            if (_navigate is { } navigate)
+            {
+                app.MapPost(v + "/navigate", async (NavigateRequest req, CancellationToken ct) =>
+                {
+                    var (outcome, response) = await navigate.NavigateAsync(req, ct);
+                    // Always serialize the FULL response, including on failures: llms.txt tells agents to check
+                    // `presented`, so every outcome must actually carry it. (fable MED-4)
+                    int status = outcome switch
+                    {
+                        NavigateOutcome.ConsentDenied => StatusCodes.Status403Forbidden,
+                        NavigateOutcome.UnknownBook => StatusCodes.Status404NotFound,
+                        // The arguments can't be satisfied — retrying them unchanged never will.
+                        NavigateOutcome.InvalidRequest => StatusCodes.Status400BadRequest,
+                        // The app's STATE prevented it (no reader window, duplicate open): retry later, don't
+                        // "fix" the arguments.
+                        NavigateOutcome.NotPresented => StatusCodes.Status409Conflict,
+                        _ => StatusCodes.Status200OK
+                    };
+                    return Results.Json(response, statusCode: status);
+                });
+            }
 
             // Lemma search (#247, DPD-lemma). Two hops: back-lookup a surface form to its candidate lemmas,
             // then forward-expand a chosen lemma to its ATTESTED paradigm WITH corpus counts (counts from the

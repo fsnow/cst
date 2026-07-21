@@ -505,15 +505,7 @@ public class SearchService : ISearchService
             foreach (var mt in combos.Values)
             {
                 foreach (var occ in mt.Occurrences)
-                {
-                    var byOffset = new Dictionary<int, TermPosition>();
-                    foreach (var tp in occ.Positions)
-                    {
-                        if (!byOffset.TryGetValue(tp.StartOffset, out var existing) || (tp.IsFirstTerm && !existing.IsFirstTerm))
-                            byOffset[tp.StartOffset] = tp;
-                    }
-                    occ.Positions = byOffset.Values.OrderBy(p => p.Position).ToList();
-                }
+                    occ.Positions = HighlightPositions.Dedupe(occ.Positions);
             }
 
         // Step 4: convert results. Order matching combinations alphabetically by their IPE words (word-by-word),
