@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CST;
 
 namespace CST.Avalonia.Models;
@@ -115,6 +116,36 @@ public class TermPosition : IComparable<TermPosition>
     {
         if (other == null) return 1;
         return Position.CompareTo(other.Position);
+    }
+}
+
+/// <summary>
+/// Shared preparation of hit positions for HIGHLIGHTING.
+/// </summary>
+public static class HighlightPositions
+{
+    /// <summary>
+    /// Collapse positions that share a source offset, then order them for the highlighter.
+    ///
+    /// Overlapping multi-word hits SHARE word positions — in "yena yena yena" the proximity windows (1,2) and
+    /// (2,3) both contain the middle word, so the flattened hit list holds two entries at the same StartOffset.
+    /// The highlighter rewrites the text back-to-front, so a second entry at an offset would delete the markup
+    /// the first one just inserted, corrupting the rendered book; the duplicates would also inflate the hit
+    /// count that drives "N of M" navigation.
+    ///
+    /// Where a duplicate exists, the first-term marking wins: IsFirstTerm is what makes a word the navigable
+    /// anchor and gives it the primary highlight colour, so losing it to a context-word duplicate would silently
+    /// drop a hit.
+    /// </summary>
+    public static List<TermPosition> Dedupe(IEnumerable<TermPosition> positions)
+    {
+        var byOffset = new Dictionary<int, TermPosition>();
+        foreach (var tp in positions)
+        {
+            if (!byOffset.TryGetValue(tp.StartOffset, out var existing) || (tp.IsFirstTerm && !existing.IsFirstTerm))
+                byOffset[tp.StartOffset] = tp;
+        }
+        return byOffset.Values.OrderBy(p => p.Position).ToList();
     }
 }
 

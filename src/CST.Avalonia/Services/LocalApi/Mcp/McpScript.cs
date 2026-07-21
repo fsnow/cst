@@ -38,4 +38,16 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 ? Enum.Parse<Script>(s.ToString())
                 : throw new ArgumentException($"Unknown outputScript value '{(int)s}'. Use the 'scripts' tool for valid values.", nameof(s));
     }
+
+    internal static class McpSearchMode
+    {
+        /// <summary>Map the agent-facing <see cref="CST.Tools.SearchToolMode"/> to the internal
+        /// <see cref="CST.Avalonia.Models.SearchMode"/>. Guarded like <see cref="McpScript.ToScript"/>: the MCP
+        /// SDK's enum converter accepts INTEGERS, so an out-of-range ordinal would otherwise cast into an
+        /// undefined mode. Reject anything not a defined value. (#304)</summary>
+        public static CST.Avalonia.Models.SearchMode ToSearchMode(CST.Tools.SearchToolMode mode) =>
+            Enum.IsDefined(mode)
+                ? Enum.Parse<CST.Avalonia.Models.SearchMode>(mode.ToString())
+                : throw new ArgumentException($"Unknown mode value '{(int)mode}'. Use Exact, Wildcard, or Regex.", nameof(mode));
+    }
 }

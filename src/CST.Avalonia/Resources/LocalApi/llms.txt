@@ -1,8 +1,9 @@
 # CST Reader - Local Corpus API
 
 CST Reader (CST = Chattha Sangayana Tipitaka) exposes its Pali corpus, full-text search, and dictionaries
-as read-only tools over this loopback HTTP API, for AI agents such as Claude Code. The app owns all storage
-formats; you get clean JSON and never touch the underlying files.
+as tools over this loopback HTTP API, for AI agents such as Claude Code. The app owns all storage
+formats; you get clean JSON and never touch the underlying files. Everything here is READ-ONLY except
+`/v1/navigate`, which drives the user's reader window and requires them to have granted permission first.
 
 ## Connecting
 
@@ -193,6 +194,34 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   hit's `cursor` (unique); if you must go by number, pass the `bookCode` (the sub-book, from the occurrence's
   `refs.paragraphBookCode`) alongside `paragraph` to disambiguate.
 <!--/doc:reading-->
+<!--doc:navigate-->
+- `POST /v1/navigate` - SHOW a passage to the user in the CST Reader window. This is the only endpoint with a
+  visible side effect: it changes what the person in front of the app is looking at. Use it when the user asks
+  to be SHOWN something; to read text yourself use `/v1/passage`.
+  Body: `{ bookId, anchor?, terms?, hit?, mode?, proximityDistance?, outputScript? }`.
+  `anchor` is a reference to scroll to - a page anchor (`"V1.0023"`), a paragraph (`"para5"`), or a chapter id.
+  `terms` is a query (same syntax as `/v1/search`) whose matches are HIGHLIGHTED in the opened book; `hit` is a
+  1-based match to land on and REQUIRES `terms`. Omit `outputScript` to keep the reader's current script.
+  Returns `{ presented, error, bookId, highlights, note }` - on every outcome this endpoint produces, including
+  failures. (A request that cannot be PARSED - an unknown `mode`/`outputScript`, malformed JSON - gets a plain
+  400 error instead, with no `presented` field.)
+  ALWAYS CHECK `presented`. `false` means the reader did NOT move, and `error` says why. The status tells you
+  whether retrying helps: `400` = the request cannot be satisfied as written (e.g. a `hit` with no matching
+  `terms` to land on, or a malformed pattern) - change it; `409` = the request was fine but the app's state
+  stopped it (not running, no window yet, or the same book was just opened and the duplicate suppressed) -
+  retry in a moment; `403` = permission (below); `404` = unknown bookId.
+  `highlights` is how many match positions were applied, and is 0 whenever `presented` is false. `note`
+  explains anything unexpected but non-fatal, e.g. a query with no occurrences in that book (the book still
+  opens, without highlights).
+  LIMITS worth knowing before you trust a landing: `anchor` is NOT validated - an anchor that does not exist in
+  the book opens it at the START and still reports `presented: true`, so verify the reference with
+  `/v1/passage` first if it matters. If you send both `hit` and `anchor`, `hit` wins. A `hit` beyond the number
+  of matches is clamped to the last one rather than refused.
+  PERMISSION: this endpoint answers `403` unless the user has enabled, in the app's Settings window under AI,
+  the checkbox "Allow agents to drive the reader (navigate and highlight)" (it sits under "Run the local API
+  server"). That is the user's decision. If you get a 403, tell them that exact setting to turn on - do not
+  look for another way to move their window.
+<!--/doc:navigate-->
 <!--doc:dictionary-->
 - `GET  /v1/dictionary/languages` - the available dictionaries: each `{ language, source }`, where `source` is
   the authoritative citation `{ title, compiler, edition, year, publisher, license, url }` (any field may be

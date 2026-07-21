@@ -64,7 +64,13 @@ namespace CST.Avalonia.Tests.TestSupport
         /// == false) so the assembled stack exercises the asset-ABSENT path: lemma endpoints 503, MCP lemma tools
         /// unregistered, and the DPD doc regions gated out of llms.txt — the real app's behavior when the
         /// dpd-cst-subset file isn't installed.</param>
-        public static async Task<LocalApiTestServer> StartAsync(bool withLemmaAsset = true)
+        /// <param name="presentation">Stand-in for the reader window, so navigate (#187) can be exercised over
+        /// real HTTP without a UI. Null = no reader wired, which is how the endpoint stays unmapped.</param>
+        /// <param name="isRemoteControlAllowed">The consent gate, read per request.</param>
+        public static async Task<LocalApiTestServer> StartAsync(
+            bool withLemmaAsset = true,
+            CST.Avalonia.Services.Presentation.IPresentationService? presentation = null,
+            Func<bool>? isRemoteControlAllowed = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "cst-int-" + Guid.NewGuid().ToString("N"));
             var xmlDir = Path.Combine(root, "xml");
@@ -130,7 +136,9 @@ namespace CST.Avalonia.Tests.TestSupport
 
             var server = new LocalApiServer("test", handshakeDir, Serilog.Log.Logger,
                 searchTool, dictionary: null, passage: passageTool, script: scriptTool,
-                lemma: lemmaSearch, lemmaReport: lemmaReport);
+                lemma: lemmaSearch, lemmaReport: lemmaReport,
+                presentation: presentation, searchService: searchService,
+                isRemoteControlAllowed: isRemoteControlAllowed);
             await server.StartAsync();
 
             return new LocalApiTestServer(root, server, mula.FileName, attha.FileName);

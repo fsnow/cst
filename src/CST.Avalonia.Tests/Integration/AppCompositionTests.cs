@@ -52,6 +52,9 @@ namespace CST.Avalonia.Tests.Integration
             services.AddSingleton<IDictionaryTool, DictionaryTool>();
             services.AddSingleton<IPassageTool, PassageTool>();
             services.AddSingleton<IScriptTool, ScriptTool>();
+            // Navigate (#187) is resolved ONLY by the factory, so it belongs in the seam this test guards.
+            services.AddSingleton<CST.Avalonia.Services.Presentation.IPresentationService>(
+                new CST.Avalonia.Tests.TestSupport.RecordingPresentationService());
             var provider = services.BuildServiceProvider();
 
             _server = LocalApiServer.FromServiceProvider(provider, "test", _dir, Serilog.Log.Logger);
@@ -87,6 +90,23 @@ namespace CST.Avalonia.Tests.Integration
             // PassageTool is resolved by the identical factory path; its endpoint being mapped is confirmed
             // transitively (an unknown-book 404 is indistinguishable from an unmapped 404, so it's not asserted
             // directly here).
+        }
+
+        [Fact]
+        public async Task Navigate_is_mapped_by_the_factory_and_defaults_to_DENYING_remote_control()
+        {
+            using var http = Authed();
+
+            var resp = await http.PostAsync("/v1/navigate",
+                new StringContent("{\"bookId\":\"x\"}", Encoding.UTF8, "application/json"));
+
+            // 403, not 404: the route IS mapped (the factory wired the presentation service), and the consent
+            // gate answered. A 404 here would mean navigate silently vanished in production while every
+            // direct-constructor test still passed. (fable: FromServiceProvider is the only app wiring)
+            Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+
+            // These settings have Ai.Enabled false, so RemoteControlAllowed is false — the default must DENY.
+            Assert.Contains("Remote control is disabled", await resp.Content.ReadAsStringAsync());
         }
     }
 }
