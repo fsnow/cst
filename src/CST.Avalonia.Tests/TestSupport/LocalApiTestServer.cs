@@ -137,6 +137,9 @@ namespace CST.Avalonia.Tests.TestSupport
             var server = new LocalApiServer("test", handshakeDir, Serilog.Log.Logger,
                 searchTool, dictionary: null, passage: passageTool, script: scriptTool,
                 lemma: lemmaSearch, lemmaReport: lemmaReport,
+                // The corpus dir is what lets navigate VALIDATE a page anchor against the book's real page
+                // breaks (#187) — without it validation degrades to "could not verify".
+                xmlBooksDirectory: xmlDir,
                 presentation: presentation, searchService: searchService,
                 isRemoteControlAllowed: isRemoteControlAllowed);
             await server.StartAsync();

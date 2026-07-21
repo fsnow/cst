@@ -17,7 +17,9 @@ namespace CST.Search
 
         // Ascending-by-position lists.
         private readonly List<(int Pos, int Number, string? BookCode)> _paras = new();
-        private readonly Dictionary<PageEdition, List<(int Pos, int Volume, int Number)>> _pages = new();
+        // Raw is the VERBATIM @n ("1.0023"). The HTML anchor is ed + that exact string and the reader looks it
+        // up case/character-exactly, so the raw spelling — not the parsed ints — is what can be navigated to.
+        private readonly Dictionary<PageEdition, List<(int Pos, int Volume, int Number, string Raw)>> _pages = new();
 
         private BookMarkers() { }
 
@@ -45,7 +47,7 @@ namespace CST.Search
                         {
                             if (!m._pages.TryGetValue(edition, out var list))
                                 m._pages[edition] = list = new();
-                            list.Add((tag.Index, vol, num));
+                            list.Add((tag.Index, vol, num, pn));
                         }
                         break;
 
@@ -82,6 +84,33 @@ namespace CST.Search
             }
             pages.Sort((a, b) => a.Edition.CompareTo(b.Edition));
             return (number, code, pages);
+        }
+
+        /// <summary>
+        /// Look up a page break by its parsed coordinates and return the VERBATIM <c>@n</c> that the document
+        /// actually carries (e.g. "1.0023"). Callers must navigate with this spelling rather than one they
+        /// composed: the HTML anchor is <c>ed + @n</c> matched exactly, so "V1.23" and "V1.0023" address the
+        /// same page but only one of them resolves. (#187)
+        /// </summary>
+        public bool TryGetPageAnchor(PageEdition edition, int volume, int number, out string rawN)
+        {
+            if (_pages.TryGetValue(edition, out var list))
+                foreach (var p in list)
+                    if (p.Volume == volume && p.Number == number) { rawN = p.Raw; return true; }
+            rawN = string.Empty;
+            return false;
+        }
+
+        /// <summary>
+        /// The page editions this book carries, in a stable order. Not every text was printed in every edition —
+        /// the VRI set is 140 volumes and many texts were never published outside Myanmar — so this reports what
+        /// is actually present rather than what a caller hoped for. (#187)
+        /// </summary>
+        public IReadOnlyList<PageEdition> Editions()
+        {
+            var eds = new List<PageEdition>(_pages.Keys);
+            eds.Sort();
+            return eds;
         }
 
         /// <summary>The distinct sub-book codes in this book, in first-appearance order (empty for a non-Multi
