@@ -1287,8 +1287,21 @@ public partial class App : Application
             var viewSource2010Item = new NativeMenuItem { Header = "View Source (2010 ed.)", Gesture = KeyGesture.Parse("Cmd+Shift+E") };
             viewSource2010Item.Click += (s, e) => OnViewSourceFromFloatingWindow(window, source2010: true);
 
+            // #448: Look Up in Dictionary (Cmd+D) and Search for Selection (Cmd+F). These were declared only
+            // in the main window's Tools menu, and macOS shows the menu bar of whichever window is active —
+            // so with a floated book focused they were dead keys. Both act on the floated book's selection
+            // and reveal their tool in the main window.
+            var lookUpItem = new NativeMenuItem { Header = "Look Up in Dictionary", Gesture = KeyGesture.Parse("Cmd+D") };
+            lookUpItem.Click += async (s, e) =>
+                await SimpleTabbedWindow.LookUpInDictionaryAsync(FindActiveBookInFloatingWindow(window));
+            var searchSelectionItem = new NativeMenuItem { Header = "Search for Selection", Gesture = KeyGesture.Parse("Cmd+F") };
+            searchSelectionItem.Click += async (s, e) =>
+                await SimpleTabbedWindow.SearchForSelectionAsync(FindActiveBookInFloatingWindow(window));
+
             var toolsMenu = new NativeMenu();
             toolsMenu.Add(goToItem);
+            toolsMenu.Add(lookUpItem);
+            toolsMenu.Add(searchSelectionItem);
             toolsMenu.Add(viewSource1957Item);
             toolsMenu.Add(viewSource2010Item);
 
@@ -1496,6 +1509,16 @@ public partial class App : Application
     // #110: ⌘W in a floating window closes its active document tab (book or PDF). Uses the same close path
     // as the main window (SimpleTabbedWindow.CloseDockableIfClosable) — skips a non-closable tab; a float
     // holding only that tab closes with it.
+    // The active book in a floating window, or null if its active tab isn't a book. (#448)
+    private BookDisplayViewModel? FindActiveBookInFloatingWindow(Window floatingWindow)
+    {
+        if (floatingWindow is not CstHostWindow hostWindow || hostWindow.Layout == null)
+            return null;
+
+        var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
+        return documentDock?.ActiveDockable as BookDisplayViewModel;
+    }
+
     private void OnCloseTabFromFloatingWindow(Window floatingWindow)
     {
         try

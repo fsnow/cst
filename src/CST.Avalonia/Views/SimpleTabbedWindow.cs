@@ -685,10 +685,18 @@ public partial class SimpleTabbedWindow : Window
     private async void OnLookUpInDictionaryClick(object? sender, EventArgs e)
     {
         _logger.Information("Look Up in Dictionary (Cmd+D) from window: {WindowTitle}", this.Title);
+        await LookUpInDictionaryAsync(FindActiveBookInThisWindow());
+    }
+
+    // The Dictionary and Search tools always live in the main window, so only the book differs between the
+    // main-window and floating-window shortcuts — hence one shared implementation each, taking the active
+    // book as its parameter. Both finish by bringing the tool's own window forward, wherever it lives, so
+    // the keystroke never looks like it did nothing. (#448)
+    internal static async Task LookUpInDictionaryAsync(BookDisplayViewModel? book)
+    {
         try
         {
-            var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
-            if (dockControl?.DataContext is not LayoutViewModel layoutViewModel)
+            if (App.MainWindow?.DataContext is not LayoutViewModel layoutViewModel)
                 return;
 
             if (App.ServiceProvider?.GetService(typeof(DictionaryViewModel)) is not DictionaryViewModel dictionary)
@@ -700,35 +708,82 @@ public partial class SimpleTabbedWindow : Window
 
             // If a book is active AND has a selection, look that word up; otherwise we still open the pane.
             // Cmd+D (and the menu item) must reveal the Dictionary regardless of selection or book focus. (#175)
-            string? selection = null;
-            if (layoutViewModel.Layout is RootDock rootDock)
-            {
-                var documentDock = FindDocumentDockInLayout(rootDock);
-                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel &&
-                    bookViewModel.BookDisplayControl != null)
-                {
-                    selection = await bookViewModel.BookDisplayControl.GetWebViewSelectionAsync();
-                }
-            }
+            string? selection = book?.BookDisplayControl != null
+                ? await book.BookDisplayControl.GetWebViewSelectionAsync()
+                : null;
 
             var word = ExtractLookupWord(selection);
             if (!string.IsNullOrEmpty(word))
             {
                 dictionary.SearchText = word;
-                _logger.Information("Looked up '{Word}' in the dictionary", word);
+                Serilog.Log.Information("Looked up '{Word}' in the dictionary", word);
             }
             else
             {
-                _logger.Debug("Look Up in Dictionary: no selection — just opening the Dictionary pane");
+                Serilog.Log.Debug("Look Up in Dictionary: no selection — just opening the Dictionary pane");
             }
 
             // Always bring the Dictionary tab forward, whether or not a word was found. (#175)
             layoutViewModel.Factory?.SetActiveDockable(dictionary);
+            RevealWindowHosting(dictionary, layoutViewModel);
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Look Up in Dictionary failed");
+            Serilog.Log.Error(ex, "Look Up in Dictionary failed");
         }
+    }
+
+    // Bring the window that actually holds a tool to the front. The tool is usually docked in the main
+    // window, but it can be floated into its own window — and then activating the main window would bury
+    // the very pane the shortcut just revealed. Activating the main window when it already is the host is
+    // a harmless no-op. (#448 follow-up)
+    private static void RevealWindowHosting(IDockable tool, LayoutViewModel layoutViewModel)
+    {
+        var hostWindows = layoutViewModel.Factory?.HostWindows;
+        if (hostWindows != null)
+        {
+            foreach (var host in hostWindows)
+            {
+                if (host is CstHostWindow hostWindow && hostWindow.Layout != null &&
+                    LayoutContains(hostWindow.Layout, tool))
+                {
+                    hostWindow.Activate();
+                    return;
+                }
+            }
+        }
+
+        App.MainWindow?.Activate();
+    }
+
+    private static bool LayoutContains(IDock dock, IDockable target)
+    {
+        if (ReferenceEquals(dock, target))
+            return true;
+
+        if (dock.VisibleDockables == null)
+            return false;
+
+        foreach (var dockable in dock.VisibleDockables)
+        {
+            if (ReferenceEquals(dockable, target))
+                return true;
+            if (dockable is IDock childDock && LayoutContains(childDock, target))
+                return true;
+        }
+
+        return false;
+    }
+
+    // The active book in THIS window, or null if the active tab isn't a book (a PDF, Welcome, or nothing).
+    private BookDisplayViewModel? FindActiveBookInThisWindow()
+    {
+        var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
+        if (dockControl?.DataContext is not LayoutViewModel layoutViewModel ||
+            layoutViewModel.Layout is not RootDock rootDock)
+            return null;
+
+        return FindDocumentDockInLayout(rootDock)?.ActiveDockable as BookDisplayViewModel;
     }
 
     // Reduce a selection to a single lookup word: first whitespace-delimited token, minus surrounding
@@ -827,35 +882,37 @@ public partial class SimpleTabbedWindow : Window
     private async void OnSearchForSelectionClick(object? sender, EventArgs e)
     {
         _logger.Information("Search for Selection (Cmd+F) from window: {WindowTitle}", this.Title);
+        await SearchForSelectionAsync(FindActiveBookInThisWindow());
+    }
+
+    // Shared by both windows' Cmd+F, same as LookUpInDictionaryAsync above. (#448)
+    internal static async Task SearchForSelectionAsync(BookDisplayViewModel? book)
+    {
         try
         {
-            var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
-            if (dockControl?.DataContext is not LayoutViewModel layoutViewModel)
+            if (App.MainWindow?.DataContext is not LayoutViewModel layoutViewModel)
                 return;
 
-            string? selection = null;
-            if (layoutViewModel.Layout is RootDock rootDock)
-            {
-                var documentDock = FindDocumentDockInLayout(rootDock);
-                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel &&
-                    bookViewModel.BookDisplayControl != null)
-                {
-                    selection = await bookViewModel.BookDisplayControl.GetWebViewSelectionAsync();
-                }
-            }
+            string? selection = book?.BookDisplayControl != null
+                ? await book.BookDisplayControl.GetWebViewSelectionAsync()
+                : null;
 
             if (App.ServiceProvider?.GetService(typeof(SearchViewModel)) is not SearchViewModel search)
                 return;
+
+            // Recreate the Search pane if it was closed, for the same reason Cmd+D reopens the Dictionary.
+            layoutViewModel.ShowSearchPanel();
 
             var query = BuildSearchQuery(selection);
             if (!string.IsNullOrEmpty(query))
                 search.SearchText = query;   // the Search tool's real-time throttle runs the search
             layoutViewModel.Factory?.SetActiveDockable(search);   // reveal the Search tab
-            _logger.Information("Search for selection: '{Query}'", query);
+            RevealWindowHosting(search, layoutViewModel);
+            Serilog.Log.Information("Search for selection: '{Query}'", query);
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Search for Selection failed");
+            Serilog.Log.Error(ex, "Search for Selection failed");
         }
     }
 
