@@ -46,6 +46,14 @@ public partial class BookDisplayView : UserControl
     private TaskCompletionSource<string?>? _posTokenTcs = null;
     private int _posTokenReq = 0; // monotonic capture request id; a late title with a stale id is ignored (#434)
     private ReadingPositionToken? _lastPositionToken = null; // #434 rolling-captured reading position (from the status tick); restored on tab reattach (#31)
+    // #434 resize consumer: a reflow moves content under the native scrollTop, so the reading position drifts.
+    // Resize events fire AFTER layout changed, so we snapshot the still-pre-reflow rolling token on the FIRST
+    // event of a gesture and restore it once the gesture settles.
+    private ReadingPositionToken? _resizeRestoreToken = null;
+    private System.Timers.Timer? _resizeSettleTimer = null;
+    private bool _resizeInProgress = false;
+    private double _lastKnownWidth = 0, _lastKnownHeight = 0;
+    private const int ResizeSettleMs = 250;   // > the injected JS resize handler's 100ms cache rebuild
     private readonly string _tabId = $"tab_{DateTime.Now.Ticks}_{Guid.NewGuid().ToString("N")[..8]}";
     private string? _tempHtmlFilePath;   // the temp HTML file this View last loaded from; deleted on dispose (BOOK-8)
 
@@ -309,6 +317,15 @@ public partial class BookDisplayView : UserControl
     {
         base.OnLoaded(e);
         this.PropertyChanged += OnIsVisibleChanged;
+        // Seed the resize baseline from the CURRENT bounds: we subscribe after the first layout pass, so the
+        // "0 -> first real size" Bounds event has usually already fired unobserved. Without this the first real
+        // resize is swallowed as "first measure" (a single-event maximize/snap would never restore), and on a
+        // reattach the baseline would keep the OLD pane's size and fire a phantom gesture. (#434, fable §1)
+        if (this.Bounds.Width > 0 && this.Bounds.Height > 0)
+        {
+            _lastKnownWidth = this.Bounds.Width;
+            _lastKnownHeight = this.Bounds.Height;
+        }
         _logger.Information("BookDisplayView OnLoaded called");
         // Now attached and styled, so the counter's font is resolved — size its reserve. Covers a
         // recycled view whose ViewModel already has TotalHits set (no fresh PropertyChanged). (#196)
@@ -539,6 +556,81 @@ public partial class BookDisplayView : UserControl
                 _scrollTimer.Stop();
             }
         }
+        else if (e.Property == BoundsProperty)
+        {
+            OnViewResized();
+        }
+    }
+
+    /// <summary>
+    /// #434 resize consumer. A window/pane resize reflows the text, but the browser keeps the same native
+    /// scrollTop PIXEL — so the content moves under it and the reading position drifts. Resize events fire
+    /// AFTER layout has already changed, so there is no pre-reflow moment to capture; instead snapshot the
+    /// rolling token on the FIRST event of the gesture (it still holds the pre-resize position, because the
+    /// 200ms status tick hasn't re-captured the drifted one yet), debounce until the gesture settles, then
+    /// restore that snapshot. ScrollToPositionToken is cache-free and re-interpolates against the anchors'
+    /// NEW post-reflow positions, so it lands on the same TEXT rather than the same pixel.
+    /// </summary>
+    private void OnViewResized()
+    {
+        var b = this.Bounds;
+        if (b.Width <= 0 || b.Height <= 0) return;
+
+        bool firstMeasure = _lastKnownWidth <= 0 || _lastKnownHeight <= 0;
+        double dw = Math.Abs(b.Width - _lastKnownWidth);
+        _lastKnownHeight = b.Height;   // tracked, but height never gates a gesture (it doesn't re-wrap text)
+        if (firstMeasure)
+        {
+            _lastKnownWidth = b.Width;
+            return;
+        }
+
+        // Only a WIDTH change re-wraps the text. A height-only drag doesn't reflow, so native scrollTop is
+        // already lossless there and restoring could only lose (it would re-apply a slightly stale token).
+        // This also ignores position-only (X/Y) Bounds changes. (fable §5)
+        //
+        // Deliberately do NOT commit the width baseline below the threshold: sub-pixel deltas must ACCUMULATE,
+        // or a very slow drag (<1 DIP per event) would re-baseline every step and never start a gesture at all.
+        if (dw < 1) return;
+        _lastKnownWidth = b.Width;
+
+        // Nothing meaningful to preserve until the cache has produced a position, and never fight a hidden tab.
+        if (!_anchorCacheBuilt || !this.IsVisible) return;
+
+        if (!_resizeInProgress)
+        {
+            _resizeInProgress = true;
+            _resizeRestoreToken = _lastPositionToken;   // still the PRE-reflow position at this instant
+            _logger.Debug("Resize started - snapshotted reading position (above={Above}, below={Below}, frac={Frac})",
+                _resizeRestoreToken?.Above, _resizeRestoreToken?.Below, _resizeRestoreToken?.Fraction);
+        }
+
+        // (Re)start the settle debounce — restore only once the gesture stops.
+        if (_resizeSettleTimer == null)
+        {
+            _resizeSettleTimer = new System.Timers.Timer(ResizeSettleMs) { AutoReset = false };
+            _resizeSettleTimer.Elapsed += (_, __) => Dispatcher.UIThread.Post(RestoreAfterResize);
+        }
+        _resizeSettleTimer.Stop();
+        _resizeSettleTimer.Start();
+    }
+
+    private void RestoreAfterResize()
+    {
+        // A newer resize event re-armed the timer between Elapsed and this UI-thread post — or the user simply
+        // paused >250ms mid-drag. The gesture is still running, so KEEP the original pre-resize snapshot and let
+        // the real settle do the restore. Without this the gesture splits: the next segment would snapshot the
+        // already-drifted token (the 200ms tick has re-captured by then) and commit the drift. (fable §3)
+        if (_resizeSettleTimer?.Enabled == true) return;
+
+        _resizeInProgress = false;
+        var token = _resizeRestoreToken;
+        _resizeRestoreToken = null;
+        if (token == null || !this.IsVisible) return;
+
+        _logger.Debug("Resize settled - restoring reading position (above={Above}, below={Below}, frac={Frac})",
+            token.Above, token.Below, token.Fraction);
+        ScrollToPositionToken(token);
     }
 
 
@@ -2864,7 +2956,16 @@ public partial class BookDisplayView : UserControl
             _scrollTimer = null;
             _logger.Debug("Paused and disposed scroll tracking");
         }
-        
+
+        if (_resizeSettleTimer != null)   // #434 resize consumer
+        {
+            _resizeSettleTimer.Stop();
+            _resizeSettleTimer.Dispose();
+            _resizeSettleTimer = null;
+            _resizeInProgress = false;
+            _resizeRestoreToken = null;
+        }
+
         if (_dragMonitoringTimer != null)
         {
             _dragMonitoringTimer.Stop();
