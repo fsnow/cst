@@ -10,6 +10,33 @@ namespace CST.Navigation
     /// disambiguation candidates without rendering the book. Implementations precompute/parse from the TEI
     /// XML. A resolver given no catalog degrades to building anchors <em>without</em> range validation.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// CONTRACT FOR IMPLEMENTORS — <see cref="NavigationResolver"/>'s correctness depends on all of these, and
+    /// nothing enforces them:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// <b>Preserve the TEI XML's casing verbatim</b> in <see cref="ParagraphAnchor.BookCode"/> and
+    /// <see cref="BookAnchors.ChapterIds"/>. The resolver matches a caller's reference case-insensitively but
+    /// then emits <em>the catalog's</em> casing as the anchor, and the reader looks that up in the DOM
+    /// case-SENSITIVELY. A catalog that lower-cases or otherwise normalizes ids would make the resolver emit
+    /// dead anchors — and mark them validated.
+    /// </description></item>
+    /// <item><description>
+    /// <b>Uncoded paragraphs in a Multi book are legal.</b> <see cref="BookAnchors.BookCodesFor"/> deliberately
+    /// excludes them, so "no codes" does NOT mean "no paragraph" — e.g. vin02t.tik is a Multi book whose 654
+    /// paragraphs carry no book-div id at all. Callers must consult <see cref="BookAnchors.HasParagraph"/>
+    /// before concluding a paragraph is out of range.
+    /// </description></item>
+    /// <item><description>
+    /// <b>Ranged paragraph numbers exist and this model cannot represent them.</b> ~86 corpus files use a ranged
+    /// <c>@n</c> (e.g. <c>n="16-26"</c>), whose HTML anchor is literally <c>para16-26</c>, while
+    /// <see cref="ParagraphAnchor"/> holds a single int. A naive catalog will report paragraph 20 out of range
+    /// when it lives inside such a block. Resolving this belongs to the reference-model epic (#422); tracked as #444.
+    /// </description></item>
+    /// </list>
+    /// </remarks>
     public interface IAnchorCatalog
     {
         /// <summary>
@@ -45,8 +72,10 @@ namespace CST.Navigation
                  .Distinct()
                  .ToList();
 
-        /// <summary>True if a chapter/division with this id exists.</summary>
-        public bool HasChapter(string chapterId) => ChapterIds.Contains(chapterId);
+        /// <summary>True if a chapter/division with this id exists. Case-insensitive, matching the book and
+        /// sub-book lookups — an "AN5" vs "an5" mismatch used to read as "no such chapter". (#314)</summary>
+        public bool HasChapter(string chapterId) =>
+            ChapterIds.Any(id => string.Equals(id, chapterId, System.StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>A paragraph anchor: its number and, in a Multi book, the sub-book code (else null).</summary>
