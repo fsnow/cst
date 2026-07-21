@@ -733,11 +733,65 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
+    // "Select a Book" (Cmd+O): reveal the book tree and put keyboard focus in it. Deliberately never
+    // hides the panel — Cmd+O means "I want to open a book", so closing the tree on a second press
+    // would be the opposite of the intent. The View menu checkbox is still how you hide it. (#111)
+    private void OnSelectBookClick(object? sender, EventArgs e) => RevealSelectBookPanel();
+
+    internal static void RevealSelectBookPanel()
+    {
+        try
+        {
+            if (App.MainWindow?.DataContext is not LayoutViewModel layoutViewModel)
+                return;
+
+            if (App.ServiceProvider?.GetService(typeof(OpenBookDialogViewModel)) is not OpenBookDialogViewModel openBook)
+                return;
+
+            // Recreates the panel if it was closed, same recreate-on-demand path as Cmd+D / Cmd+F.
+            layoutViewModel.ShowSelectBookPanel();
+            layoutViewModel.Factory?.SetActiveDockable(openBook);
+
+            var host = RevealWindowHosting(openBook, layoutViewModel);
+
+            // Focus after the layout settles: when the panel was just recreated, its view doesn't exist
+            // yet at this point, so focusing now would find nothing to focus.
+            Dispatcher.UIThread.Post(() =>
+            {
+                // A focused CEF WebView (a book, or the Welcome page) holds the platform keyboard focus,
+                // and focusing an Avalonia control does not take it back — keystrokes keep going to the
+                // page, so the tree looked focused but arrow keys went nowhere. Release it first.
+                ReleaseWebViewKeyboardFocus(host);
+                host?.FindDescendantOfType<OpenBookPanel>()?.FocusBookTree();
+            }, DispatcherPriority.Loaded);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Select a Book (Cmd+O) failed");
+        }
+    }
+
+    // Ask the top level to drop whatever holds focus before the tree takes it. This is enough when focus
+    // sits on an Avalonia control; it is NOT enough when a CEF WebView (a book, or the Welcome page) holds
+    // the platform keyboard focus, which is the known limitation on #111 — the panel still reveals, but
+    // arrow keys keep going to the page until you click the tree.
+    private static void ReleaseWebViewKeyboardFocus(Window? host)
+    {
+        try
+        {
+            host?.FocusManager?.ClearFocus();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Debug(ex, "Could not clear focus before focusing the book tree");
+        }
+    }
+
     // Bring the window that actually holds a tool to the front. The tool is usually docked in the main
     // window, but it can be floated into its own window — and then activating the main window would bury
     // the very pane the shortcut just revealed. Activating the main window when it already is the host is
     // a harmless no-op. (#448 follow-up)
-    private static void RevealWindowHosting(IDockable tool, LayoutViewModel layoutViewModel)
+    private static Window? RevealWindowHosting(IDockable tool, LayoutViewModel layoutViewModel)
     {
         var hostWindows = layoutViewModel.Factory?.HostWindows;
         if (hostWindows != null)
@@ -748,12 +802,13 @@ public partial class SimpleTabbedWindow : Window
                     LayoutContains(hostWindow.Layout, tool))
                 {
                     hostWindow.Activate();
-                    return;
+                    return hostWindow;
                 }
             }
         }
 
         App.MainWindow?.Activate();
+        return App.MainWindow;
     }
 
     private static bool LayoutContains(IDock dock, IDockable target)
