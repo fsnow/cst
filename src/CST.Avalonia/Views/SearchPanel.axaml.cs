@@ -123,9 +123,12 @@ public partial class SearchPanel : UserControl
                             Positions = occurrence.Positions
                         }).ContinueWith(t =>
                         {
+                            // Must check IsCompletedSuccessfully before touching t.Result: on dispatcher
+                            // teardown at shutdown the task completes CANCELED, and reading Result would throw
+                            // inside this continuation — whose own faulted task nobody observes. (fable)
                             if (t.IsFaulted)
                                 Log.Error(t.Exception, "[SearchPanel] Presentation task faulted");
-                            else if (t.Result is { Presented: false } r)
+                            else if (t.IsCompletedSuccessfully && t.Result is { Presented: false } r)
                                 Log.Warning("[SearchPanel] Presentation did not happen: {Error}", r.Error);
                         }, System.Threading.Tasks.TaskScheduler.Default);
                     }

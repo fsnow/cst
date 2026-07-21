@@ -115,8 +115,11 @@ public static class PresentationPlanner
         // It also CANNOT carry script / docId / the per-book view toggles (it hardcodes the current script and
         // the ViewModel defaults), so any request that sets those must take the general path — otherwise those
         // fields would be silently dropped while the caller was told it succeeded. (fable §2)
+        // A DocId equal to the book's own is what the search tab would have used anyway, so it isn't a reason
+        // to give up search-tab semantics — only a DIFFERENT DocId is. (fable)
         bool hasHighlights = HasHighlights(request);
-        bool needsGeneralOnlyOptions = request.Script != null || request.DocId != null
+        bool needsGeneralOnlyOptions = request.Script != null
+                                       || (request.DocId != null && request.DocId != request.Book.DocId)
                                        || !request.ShowFootnotes || !request.ShowSearchTerms;
         bool useSearchTab = hasHighlights && anchor == null && hit == null && token == null && !needsGeneralOnlyOptions;
 

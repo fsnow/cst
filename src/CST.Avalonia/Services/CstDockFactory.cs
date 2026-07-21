@@ -465,6 +465,7 @@ namespace CST.Avalonia.Services
             {
                 Log.Error("*** NO DOCUMENT DOCK FOUND - Cannot add search document ***");
                 _logger.Error("No document dock found for search document");
+                return false;   // nothing was opened — don't let the caller report success (fable)
             }
             
             _logger.Debug("Search book opening completed");
@@ -546,12 +547,12 @@ namespace CST.Avalonia.Services
             EnsureBookEventSubscription(bookDisplayViewModel);
 
             // Add to the document dock
-            AddDocumentToLayout(bookDisplayViewModel);
+            var added = AddDocumentToLayout(bookDisplayViewModel);
 
             // Don't save state immediately - let tab changes trigger state saving
 
             _logger.Debug("Book document created: {DocumentId} with title: {Title}", bookDisplayViewModel.Id, bookDisplayViewModel.Title);
-            return true;
+            return added;   // no dock => nothing opened; don't report success (fable)
         }
 
         /// <summary>
@@ -832,7 +833,9 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private void AddDocumentToLayout(IDockable dockable)
+        // Returns TRUE when the document was actually added; FALSE when there is no document dock (e.g. the
+        // layout spine is still being built), so callers can report an honest failure. (fable / #187)
+        private bool AddDocumentToLayout(IDockable dockable)
         {
             var documentDock = FindDocumentDock();
             if (documentDock != null)
@@ -859,12 +862,12 @@ namespace CST.Avalonia.Services
 
                 // Restore user's proportions (framework may have recalculated them)
                 RestoreMainDockProportions();
+                return true;
             }
-            else
-            {
-                Log.Warning("*** WARNING: Could not find document dock to add book ***");
-                _logger.Warning("Could not find document dock to add book");
-            }
+
+            Log.Warning("*** WARNING: Could not find document dock to add book ***");
+            _logger.Warning("Could not find document dock to add book");
+            return false;
         }
         
         private void RemoveDocumentFromLayout(IDockable dockable)
