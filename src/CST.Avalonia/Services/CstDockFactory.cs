@@ -474,7 +474,8 @@ namespace CST.Avalonia.Services
         
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
             List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null,
-            int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true)
+            int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true,
+            ReadingPositionToken? initialPositionToken = null)
         {
             _logger.Information("Opening book: {BookFile} with anchor: {Anchor}, SearchTerms: {TermCount}, Positions: {PosCount}",
                 book.FileName, anchor ?? "null", searchTerms?.Count ?? 0, searchPositions?.Count ?? 0);
@@ -514,7 +515,7 @@ namespace CST.Avalonia.Services
             Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
 
             // Pass search data if available (for state restoration with highlighting)
-            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex, targetScript);
+            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex, targetScript, initialPositionToken);
 
             // No-op given the seed above (avoids the second full pipeline run); kept as a safety net.
             bookDisplayViewModel.BookScript = targetScript;
@@ -669,7 +670,8 @@ namespace CST.Avalonia.Services
                     SearchTerms = bookDisplayViewModel.SearchTerms ?? new List<string>(),
                     DocId = bookDisplayViewModel.DocId,
                     SearchPositions = bookDisplayViewModel.SearchPositions ?? new List<TermPosition>(),
-                    CurrentAnchor = currentAnchor, // Save scroll position for restoration
+                    CurrentAnchor = currentAnchor, // Save scroll position for restoration (coarse fallback)
+                    ReadingPosition = bookDisplayViewModel.LastPositionToken, // #434 exact reading position (preferred)
                     CurrentHitIndex = bookDisplayViewModel.CurrentHitIndex, // Save which search hit was active
                     TotalHits = bookDisplayViewModel.TotalHits,
                     TabIndex = 0, // TODO: Get actual tab index from dock
@@ -1327,16 +1329,19 @@ namespace CST.Avalonia.Services
             {
                 // Step 1: Query WebView for actual current scroll position
                 string? currentAnchor = null;
+                ReadingPositionToken? positionToken = null;   // #434: exact reading position across the re-parent
                 if (oldVm.BookDisplayControl != null)
                 {
                     Log.Information("Querying WebView for current scroll position...");
                     currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                    positionToken = await oldVm.BookDisplayControl.GetCurrentPositionTokenAsync();
                     Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
                 }
                 else
                 {
-                    // Fallback to last known VRI anchor if WebView not available
+                    // Fallback to last known VRI anchor / rolling token if the WebView isn't available.
                     currentAnchor = oldVm.CurrentVriAnchor;
+                    positionToken = oldVm.LastPositionToken;
                     Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
                 }
 
@@ -1392,7 +1397,8 @@ namespace CST.Avalonia.Services
                     searchPositions: searchPositions,
                     windowId: null,  // CRITICAL: null = generates fresh GUID
                     dockFactory: this,
-                    initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
+                    initialBookScript: bookScript,  // seed so the set below is a no-op (BOOK-3)
+                    initialPositionToken: positionToken  // #434: restore the exact reading position across float/unfloat
                 );
 
                 // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
@@ -1427,6 +1433,11 @@ namespace CST.Avalonia.Services
                 base.FloatDockable(newVm);
                 newVm.CanFloat = false;  // Restore to prevent drag-to-float
 
+                // A programmatic (button) float has no pointer position, so Dock lands the host window at the
+                // monitor boundary — which can be a different, possibly powered-off monitor (it landed at the
+                // left edge of the secondary screen). Reposition it onto the main window's screen. (#float-disappear)
+                PlaceAndRevealFloatingWindow(newVm);
+
                 Log.Information("Float operation completed - new instance in floating window");
             }
             catch (Exception ex)
@@ -1435,6 +1446,61 @@ namespace CST.Avalonia.Services
             }
 
             Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        }
+
+        // Place a just-button-floated host window near the main window, CLAMPED to the main window's screen, so
+        // it never lands on another (possibly powered-off) monitor. A programmatic (button) float gives Dock no
+        // pointer position, so it defaults to a monitor boundary — on a multi-monitor setup that can be a second
+        // screen. This only repositions the already-shown window (no WebView is moved → the re-parent hard rule
+        // is unaffected) and brings it to front. The drag-to-float path is unaffected (Dock places it at the
+        // drop point). (#float-disappear)
+        private void PlaceAndRevealFloatingWindow(BookDisplayViewModel floatedVm)
+        {
+            try
+            {
+                var floatDock = floatedVm.Owner as IDock;
+                if (floatDock == null) return; // no owning dock (shouldn't happen post-float) → don't risk a null==null host match (fable)
+                CstHostWindow? host = null;
+                int hostCount = 0;
+                foreach (var hw in HostWindows)
+                {
+                    if (hw is CstHostWindow chw)
+                    {
+                        hostCount++;
+                        if (host == null && FindDocumentDockInLayout(chw.Layout) == floatDock) host = chw;
+                    }
+                }
+                if (host == null) return;
+
+                var main = CST.Avalonia.App.MainWindow;
+                if (main == null) { host.Activate(); return; }
+
+                // The screen the MAIN window is on (proven #430 pattern: WorkingArea contains the main position).
+                global::Avalonia.Platform.Screen? screen = null;
+                var all = host.Screens?.All;
+                if (all != null)
+                    foreach (var s in all)
+                        if (s.WorkingArea.Contains(main.Position)) { screen = s; break; }
+                screen ??= host.Screens?.Primary;
+
+                // Cascade near the main window; clamp inside that screen's work area.
+                int cascade = 30 * Math.Max(0, hostCount - 1);
+                int x = main.Position.X + 40 + cascade;
+                int y = main.Position.Y + 40 + cascade;
+                if (screen != null)
+                {
+                    var wa = screen.WorkingArea;                 // device px
+                    double scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
+                    int w = (int)(host.Width * scale);           // Width/Height are logical
+                    int h = (int)(host.Height * scale);
+                    x = Math.Max(wa.X, Math.Min(x, wa.X + wa.Width - w));
+                    y = Math.Max(wa.Y, Math.Min(y, wa.Y + wa.Height - h));
+                }
+                host.Position = new PixelPoint(x, y);
+                host.Activate();
+                Log.Information("Placed floating window on the main window's screen at {Pos}", host.Position);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to place/reveal new floating window"); }
         }
 
         /// <summary>
@@ -1460,16 +1526,19 @@ namespace CST.Avalonia.Services
 
                 // Step 1: Query WebView for actual current scroll position
                 string? currentAnchor = null;
+                ReadingPositionToken? positionToken = null;   // #434: exact reading position across the re-parent
                 if (oldVm.BookDisplayControl != null)
                 {
                     Log.Information("Querying WebView for current scroll position...");
                     currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                    positionToken = await oldVm.BookDisplayControl.GetCurrentPositionTokenAsync();
                     Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
                 }
                 else
                 {
-                    // Fallback to last known VRI anchor if WebView not available
+                    // Fallback to last known VRI anchor / rolling token if the WebView isn't available.
                     currentAnchor = oldVm.CurrentVriAnchor;
+                    positionToken = oldVm.LastPositionToken;
                     Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
                 }
 
@@ -1533,7 +1602,8 @@ namespace CST.Avalonia.Services
                     searchPositions: searchPositions,
                     windowId: null,  // CRITICAL: null = generates fresh GUID
                     dockFactory: this,
-                    initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
+                    initialBookScript: bookScript,  // seed so the set below is a no-op (BOOK-3)
+                    initialPositionToken: positionToken  // #434: restore the exact reading position across float/unfloat
                 );
 
                 // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)

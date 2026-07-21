@@ -207,6 +207,13 @@ public class BookWindowState
     public string? CurrentAnchor { get; set; }
 
     /// <summary>
+    /// Canonical reading-position token (#434) — the exact reading position (bracketing anchors + fraction),
+    /// preferred over the coarse <see cref="CurrentAnchor"/> on restore. No migration is needed: beta-5 testers
+    /// clean-start the app-data dir, so an old file simply has this null and falls back to CurrentAnchor.
+    /// </summary>
+    public ReadingPositionToken? ReadingPosition { get; set; }
+
+    /// <summary>
     /// Which search hit the user was viewing (1-based), restored so navigation
     /// resumes at "N of Total" instead of resetting to "1 of Total".
     /// </summary>

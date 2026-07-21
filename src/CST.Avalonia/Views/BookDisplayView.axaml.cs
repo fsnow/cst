@@ -17,6 +17,7 @@ using Avalonia.VisualTree;
 using WebViewControl;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
+using CST.Avalonia.Models;
 using Serilog;
 
 namespace CST.Avalonia.Views;
@@ -39,6 +40,12 @@ public partial class BookDisplayView : UserControl
     private int _lastScrollPosition = 0;
     private bool _isBrowserInitialized = false;
     private TaskCompletionSource<string?>? _paraAnchorTcs = null;
+    // Completes when OnTitleChanged receives the CST_POSTOKEN raw bracket payload for a reading-position
+    // capture (#434). Carries the raw "above,abovePos,below,belowPos,scrollTop" string; the fraction math is
+    // computed C#-side by ReadingPositionMath so it stays unit-tested.
+    private TaskCompletionSource<string?>? _posTokenTcs = null;
+    private int _posTokenReq = 0; // monotonic capture request id; a late title with a stale id is ignored (#434)
+    private ReadingPositionToken? _lastPositionToken = null; // #434 rolling-captured reading position (from the status tick); restored on tab reattach (#31)
     private readonly string _tabId = $"tab_{DateTime.Now.Ticks}_{Guid.NewGuid().ToString("N")[..8]}";
     private string? _tempHtmlFilePath;   // the temp HTML file this View last loaded from; deleted on dispose (BOOK-8)
 
@@ -869,8 +876,29 @@ public partial class BookDisplayView : UserControl
                     }} catch(anchorError) {{
                     }}
 
+                    // #434 rolling reading-position bracket, piggybacked on this same tick (no extra round-trip)
+                    // so the View always has a fresh token to restore on tab reattach (#31). Isolated in its own
+                    // try so a bracket glitch can never disturb the status readout above.
+                    var ptA = '', ptAP = '', ptB = '', ptBP = '';
+                    try {{
+                        var ptc = window.cstAnchorCache;
+                        if (ptc && ptc.isBuilt && ptc.sortedAllAnchors && ptc.sortedAllAnchors.length > 0) {{
+                            var ptl = ptc.sortedAllAnchors;
+                            var ptIdx = -1;
+                            for (var pi = 0; pi < ptl.length; pi++) {{ if (ptl[pi].position <= scrollY) ptIdx = pi; else break; }}
+                            ptA = ptIdx >= 0 ? ptl[ptIdx].name : '';
+                            ptB = (ptIdx + 1 < ptl.length) ? ptl[ptIdx + 1].name : '';
+                            var ptLive = function(nm) {{
+                                if (!nm) return '';
+                                var el = document.querySelector('a[name=' + JSON.stringify(nm) + ']') || document.getElementById(nm);
+                                return el ? Math.round(el.getBoundingClientRect().top + window.pageYOffset) : '';
+                            }};
+                            ptAP = ptLive(ptA); ptBP = ptLive(ptB);
+                        }}
+                    }} catch(ptErr) {{ }}
+
                     // ATOMIC UPDATE: Send all status info in one message with tab ID including chapter and best anchor
-                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + scrollY + '|TAB:__TAB_ID_PLACEHOLDER__';
+                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + scrollY + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
                     // Emit nothing on error — an all-'*' title would clobber a good readout (#432
                     // constraint). The next scroll tick retries. (#423)
@@ -975,6 +1003,7 @@ public partial class BookDisplayView : UserControl
                         sortedPageAnchors: {{ V: [], M: [], P: [], T: [], O: [] }},
                         sortedParagraphAnchors: [],
                         sortedChapterAnchors: [],
+                        sortedAllAnchors: [],   // merged page+para+chapter, position-sorted (#434 token bracket lookup)
                         // False until build() has actually populated the anchors. The status-update
                         // script gates on this so a defined-but-empty cache (script injected, build
                         // still deferred behind a paint) can never emit an all-'*' readout that
@@ -988,6 +1017,7 @@ public partial class BookDisplayView : UserControl
                             this.sortedPageAnchors = {{ V: [], M: [], P: [], T: [], O: [] }};
                             this.sortedParagraphAnchors = [];
                             this.sortedChapterAnchors = [];
+                            this.sortedAllAnchors = [];
 
                             // Force a full synchronous layout so getBoundingClientRect() returns correct
                             // absolute values. One reflow computes layout for the whole document — the old
@@ -1052,6 +1082,18 @@ public partial class BookDisplayView : UserControl
                                 this.sortedChapterAnchors.push({{ name: name, position: this.chapterAnchors[name] }});
                             }}
                             this.sortedChapterAnchors.sort(function(a, b) {{ return a.position - b.position; }});
+
+                            // Merged, position-sorted list of ALL anchor types (page V/M/P/T/O + paragraph +
+                            // chapter) so the reading-position token (#434) can find the anchors bracketing the
+                            // viewport top in one lookup. The A->B gap across all types is typically well under a
+                            // screenful, so interpolating between them is a faithful proxy for the reading
+                            // position even across reflow/script change. Names only need to be UNIQUE and STABLE
+                            // across a script change, which they are (derived from the source XML).
+                            this.sortedAllAnchors = [];
+                            for (var pn in this.pageAnchors) this.sortedAllAnchors.push({{ name: pn, position: this.pageAnchors[pn] }});
+                            for (var qn in this.paragraphAnchors) this.sortedAllAnchors.push({{ name: qn, position: this.paragraphAnchors[qn] }});
+                            for (var cn in this.chapterAnchors) this.sortedAllAnchors.push({{ name: cn, position: this.chapterAnchors[cn] }});
+                            this.sortedAllAnchors.sort(function(a, b) {{ return a.position - b.position; }});
 
                             // Populated — status queries may now trust this cache. Set BEFORE the title
                             // signal so the C# side can never observe CACHE_BUILT ahead of the data. (#423)
@@ -1404,6 +1446,7 @@ public partial class BookDisplayView : UserControl
         ApplySearchTermsVisibility(_viewModel.ShowSearchTerms);
 
         var pendingHit = _viewModel.TakePendingHitNavigation();
+        var pendingToken = _viewModel.TakePendingPositionToken();
         var pendingAnchor = _viewModel.TakePendingAnchorNavigation();
 
         if (pendingHit is int savedHit && savedHit >= 1)
@@ -1417,6 +1460,22 @@ public partial class BookDisplayView : UserControl
             var target = total > 0 ? Math.Min(savedHit, total) : savedHit;
             _logger.Information("Restoring scroll to saved search hit {Hit}", target);
             NavigateToHighlight(target);
+            return;
+        }
+
+        // #434 reading-position token — preferred over the coarse string anchor (it interpolates to the exact
+        // reading position). Search-hit restore still wins (Fable §6 / #36). ScrollToPositionToken is cache-free
+        // (live querySelector), so it works here even before the deferred cache rebuild (Fable §2).
+        if (pendingToken != null)
+        {
+            _logger.Information("Restoring reading position from #434 token (above={Above}, below={Below}, frac={Frac})",
+                pendingToken.Above, pendingToken.Below, pendingToken.Fraction);
+            ScrollToPositionToken(pendingToken);
+
+            // As in the anchor branch: the token owns the scroll position, so re-mark the CURRENT hit (red)
+            // WITHOUT scrolling to keep the highlight matching the "N of M" counter after a reload.
+            if (_viewModel.HasSearchHighlights && _viewModel.CurrentHitIndex > 0)
+                SyncCurrentHitStyle(_viewModel.CurrentHitIndex);
             return;
         }
 
@@ -1444,6 +1503,15 @@ public partial class BookDisplayView : UserControl
         {
             _logger.Debug("Navigating to current search hit: {HitIndex}", _viewModel.CurrentHitIndex);
             NavigateToHighlight(_viewModel.CurrentHitIndex);
+        }
+        // #31: a NON-search book reattaching a recycled tab has no hit/anchor/token intent, but CEF can reset
+        // the live browser's scroll on reattach — so restore the rolling-captured reading position. Lowest
+        // precedence (search-hit wins, Fable §6); cache-free, so it's safe before the deferred cache rebuild.
+        else if (_lastPositionToken != null)
+        {
+            _logger.Debug("Restoring rolling reading-position token on reattach (#31): above={Above}, below={Below}, frac={Frac}",
+                _lastPositionToken.Above, _lastPositionToken.Below, _lastPositionToken.Fraction);
+            ScrollToPositionToken(_lastPositionToken);
         }
     }
 
@@ -1508,6 +1576,7 @@ public partial class BookDisplayView : UserControl
 
                 // Parse message components
                 string vri = "*", myanmar = "*", pts = "*", thai = "*", other = "*", para = "*", chapter = "*", anchor = "*";
+                string ptA = "", ptAP = "", ptB = "", ptBP = "";   // #434 rolling reading-position bracket
                 int scrollY = 0;
                 bool isCacheBuilt = false;
 
@@ -1521,6 +1590,10 @@ public partial class BookDisplayView : UserControl
                     else if (part.StartsWith("PARA=")) para = part.Substring(5);
                     else if (part.StartsWith("CHAPTER=")) chapter = part.Substring(8);
                     else if (part.StartsWith("ANCHOR=")) anchor = part.Substring(7);
+                    else if (part.StartsWith("PTAP=")) ptAP = part.Substring(5);
+                    else if (part.StartsWith("PTA=")) ptA = part.Substring(4);
+                    else if (part.StartsWith("PTBP=")) ptBP = part.Substring(5);
+                    else if (part.StartsWith("PTB=")) ptB = part.Substring(4);
                     else if (part.StartsWith("SCROLL=")) int.TryParse(part.Substring(7), out scrollY);
                     else if (part.StartsWith("CACHE_BUILT="))
                     {
@@ -1565,6 +1638,24 @@ public partial class BookDisplayView : UserControl
 
                     // Update scroll position
                     if (scrollY > 0) _lastKnownScrollY = scrollY;
+
+                    // #434 rolling capture: keep the freshest reading-position token so a tab reattach can
+                    // restore the exact position (#31). Computed via the unit-tested ReadingPositionMath. Only
+                    // overwrite when the bracket is present (cache built + a real position), so a transient
+                    // empty tick can't wipe a good token.
+                    {
+                        string? above = ptA.Length == 0 ? null : ptA;
+                        string? below = ptB.Length == 0 ? null : ptB;
+                        if (above != null || below != null)
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            double.TryParse(ptAP, System.Globalization.NumberStyles.Any, inv, out var aP);
+                            double.TryParse(ptBP, System.Globalization.NumberStyles.Any, inv, out var bP);
+                            _lastPositionToken = ReadingPositionMath.Capture(above, aP, below, bP, scrollY);
+                            // Push to the ViewModel so it can be persisted on shutdown for cross-run restore (#434).
+                            _viewModel?.UpdateLastPositionToken(_lastPositionToken);
+                        }
+                    }
 
                     // Store last known values
                     if (vri != "*") _lastKnownVri = vri;
@@ -1630,6 +1721,31 @@ public partial class BookDisplayView : UserControl
             {
                 _logger.Error("Error parsing GetPara result | {Details}", ex.Message);
                 _paraAnchorTcs?.TrySetException(ex);
+            }
+        }
+        // Reading-position token capture result (#434) — hand the raw bracket payload to the awaiting capture.
+        else if (title != null && title.StartsWith("CST_POSTOKEN:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var raw = parts[0].Substring("CST_POSTOKEN:".Length);
+                var messageTabId = "";
+                int reqId = -1;
+                foreach (var p in parts)
+                {
+                    if (p.StartsWith("TAB:")) messageTabId = p.Substring(4);
+                    else if (p.StartsWith("REQ:")) int.TryParse(p.Substring(4), out reqId);
+                }
+                // Only accept the title for THIS tab and THIS request — a late result from a timed-out capture
+                // (stale reqId) must not complete a newer capture with the wrong payload. (Fable PR-B review §3)
+                if (messageTabId == _tabId && reqId == _posTokenReq)
+                    _posTokenTcs?.TrySetResult(raw);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error parsing reading-position token result | {Details}", ex.Message);
+                _posTokenTcs?.TrySetException(ex);
             }
         }
         // Check for copy operation results
@@ -2524,6 +2640,177 @@ public partial class BookDisplayView : UserControl
             _logger.Debug("GetCurrentParagraphAnchorAsync failed to acquire JS lock - retrying after delay");
             await Task.Delay(100);
             return await GetCurrentParagraphAnchorAsync();
+        }
+    }
+
+    /// <summary>
+    /// Capture the current reading position as a #434 token — the anchors bracketing the viewport top plus the
+    /// fraction between them. The JS uses the cache only to SELECT the bracketing names (sorted lookup over
+    /// sortedAllAnchors), then reads LIVE getBoundingClientRect on just those two elements (Fable §1: immune to
+    /// cache staleness); the fraction is computed C#-side by <see cref="ReadingPositionMath"/> so it stays
+    /// unit-tested. Returns null when the cache isn't built yet (nothing meaningful to capture).
+    /// </summary>
+    public async Task<ReadingPositionToken?> GetCurrentPositionTokenAsync(int attempt = 0)
+    {
+        if (_webView == null || !_isBrowserInitialized) return null;
+
+        if (await _jsExecutionLock.WaitAsync(10))
+        {
+            try
+            {
+                // Tag this request so a LATE title from a previous (timed-out) capture can't complete THIS one
+                // with stale data — OnTitleChanged only accepts the matching REQ. (Fable PR-B review §3)
+                var reqId = ++_posTokenReq;
+                _posTokenTcs?.TrySetCanceled();
+                _posTokenTcs = new TaskCompletionSource<string?>();
+
+                var script = @"
+                (function() {
+                    try {
+                        var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        var out = 'null';
+                        var c = window.cstAnchorCache;
+                        if (c && c.isBuilt && c.sortedAllAnchors && c.sortedAllAnchors.length > 0) {
+                            var list = c.sortedAllAnchors;
+                            // Cache SELECTS the bracket (last <= scrollY, first > scrollY); live rects MEASURE it.
+                            var aIdx = -1;
+                            for (var i = 0; i < list.length; i++) { if (list[i].position <= scrollY) aIdx = i; else break; }
+                            var aName = aIdx >= 0 ? list[aIdx].name : '';
+                            var bName = (aIdx + 1 < list.length) ? list[aIdx + 1].name : '';
+                            var livePos = function(name) {
+                                if (!name) return '';
+                                var el = document.querySelector('a[name=' + JSON.stringify(name) + ']') || document.getElementById(name);
+                                return el ? Math.round(el.getBoundingClientRect().top + window.pageYOffset) : '';
+                            };
+                            out = aName + ',' + livePos(aName) + ',' + bName + ',' + livePos(bName) + ',' + Math.round(scrollY);
+                        }
+                        document.title = 'CST_POSTOKEN:' + out + '|TAB:{_tabId}' + '|REQ:{_reqId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                    } catch (e) {
+                        document.title = 'CST_POSTOKEN:err|TAB:{_tabId}' + '|REQ:{_reqId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                    }
+                })();";
+                script = script.Replace("{_tabId}", _tabId).Replace("{_reqId}", reqId.ToString());
+                _webView.ExecuteScript(script);
+
+                var completed = await Task.WhenAny(_posTokenTcs.Task, Task.Delay(1000));
+                if (completed != _posTokenTcs.Task) { _posTokenTcs.TrySetCanceled(); return null; }
+                return ParsePositionToken(await _posTokenTcs.Task);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error capturing reading-position token | {Details}", ex.Message);
+                return null;
+            }
+            finally { _jsExecutionLock.Release(); }
+        }
+
+        // Bounded lock-contention retry — a wedged lock must degrade to "no token" (no restore), NOT hang the
+        // synchronous script-change reload that awaits this. ~1s worth of attempts, then give up. (Fable §3)
+        if (attempt >= 10) { _logger.Warning("GetCurrentPositionTokenAsync gave up after {N} lock-contention retries", attempt); return null; }
+        await Task.Delay(100);
+        return await GetCurrentPositionTokenAsync(attempt + 1);
+    }
+
+    // Parse the raw "above,abovePos,below,belowPos,scrollTop" payload into a token via the unit-tested math.
+    private static ReadingPositionToken? ParsePositionToken(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw) || raw == "null" || raw == "err") return null;
+        var f = raw.Split(',');
+        if (f.Length != 5) return null;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string? above = f[0].Length == 0 ? null : f[0];
+        string? below = f[2].Length == 0 ? null : f[2];
+        double.TryParse(f[1], System.Globalization.NumberStyles.Any, inv, out var aPos);
+        double.TryParse(f[3], System.Globalization.NumberStyles.Any, inv, out var bPos);
+        double.TryParse(f[4], System.Globalization.NumberStyles.Any, inv, out var scrollTop);
+        if (above == null && below == null) return null; // no anchors → nothing to capture
+        return ReadingPositionMath.Capture(above, aPos, below, bPos, scrollTop);
+    }
+
+    /// <summary>
+    /// Restore a reading-position token (#434). CACHE-FREE (Fable §2): resolves the bracketing anchors by name
+    /// with live querySelector and interpolates, so it works even before the (deferred) cache rebuild and slots
+    /// into the existing ExecutePendingRestoration timing. Non-bracket cases are handled C#-side without JS.
+    /// </summary>
+    public void ScrollToPositionToken(ReadingPositionToken token)
+    {
+        if (_webView == null || !_isBrowserInitialized || token == null) return;
+        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => ScrollToPositionToken(token)); return; }
+
+        // Empty / unresolvable (no anchors, or a malformed token) → leave the position untouched.
+        if (token.Above == null && token.Below == null) return;
+
+        // Document start → top, no anchor lookup needed.
+        if (token.Above == null) { RunScrollScript("window.scrollTo({ top: 0, behavior: 'instant' });"); return; }
+
+        // Past the last anchor → land on the upper anchor (reuse the existing anchor scroll + fuzzy fallback).
+        if (token.Below == null) { ScrollToPageAnchor(token.Above); return; }
+
+        // Full bracket. Restore RELATIVELY — scrollIntoView(above) then scrollBy(fraction * gap) — rather than
+        // computing an ABSOLUTE window.scrollTo(target). The final scrollTop is the same as
+        // ReadingPositionMath.ResolveTarget (above + fraction*(below-above)), but this is robust to an early /
+        // pre-reflow rect read: if the gap is misread small (or 0), it simply lands at the above anchor's top
+        // edge — i.e. no worse than ScrollToPageAnchor — instead of an absolute scrollTo(0) jump-to-top (the
+        // #423 failure mode a raw getBoundingClientRect().top could trigger). (Fable PR-B review §1/§2)
+        var aboveJson = System.Text.Json.JsonSerializer.Serialize(token.Above);
+        var belowJson = System.Text.Json.JsonSerializer.Serialize(token.Below);
+        // Clamp the fraction defensively (matches ResolveTarget's guard) for hand-built / persisted tokens.
+        var f = double.IsNaN(token.Fraction) ? 0.0 : Math.Max(0.0, Math.Min(1.0, token.Fraction));
+        var fraction = f.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var script = $@"
+            (function() {{
+                var find = function(name) {{
+                    return document.querySelector('a[name=' + JSON.stringify(name) + ']') || document.getElementById(name);
+                }};
+                var aEl = find({aboveJson}), bEl = find({belowJson});
+                if (aEl) {{
+                    aEl.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                    if (bEl) {{
+                        // With aEl now at the viewport top, bEl's rect.top IS the live gap to the next anchor.
+                        var gap = bEl.getBoundingClientRect().top;
+                        if (gap > 0) {{ window.scrollBy(0, {fraction} * gap); }}
+                    }}
+                }} else if (bEl) {{
+                    bEl.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                }} else {{
+                    // BOTH bracket anchors gone (a corpus-update rename between runs) — restore the fuzzy
+                    // nearest-paragraph fallback the coarse ScrollToPageAnchor had, so cross-run restore doesn't
+                    // regress to top-of-doc. Use whichever bracket end is a paragraph anchor. (Fable cross-run §1)
+                    var fuzzyPara = function(name) {{
+                        if (!name || name.indexOf('para') !== 0) return false;
+                        var tgt = parseInt(name.substring(4).split('-')[0]);
+                        if (isNaN(tgt)) return false;
+                        var paras = document.querySelectorAll('a[name^=""para""]');
+                        var best = null, bestDiff = Infinity;
+                        paras.forEach(function(a) {{
+                            var n = parseInt((a.name || '').substring(4).split('-')[0]);
+                            if (!isNaN(n)) {{ var d = Math.abs(n - tgt); if (d < bestDiff) {{ bestDiff = d; best = a; }} }}
+                        }});
+                        // Same distance cap as ScrollToPageAnchor: don't jump to a far paragraph on a drastic
+                        // renumber — leave the position instead. (Fable cross-run re-review)
+                        var maxAllowedDiff = paras.length < 300 ? 100 : 50;
+                        if (best && bestDiff <= maxAllowedDiff) {{ best.scrollIntoView({{ behavior: 'instant', block: 'start' }}); return true; }}
+                        return false;
+                    }};
+                    fuzzyPara({aboveJson}) || fuzzyPara({belowJson});
+                }}
+            }})();";
+        RunScrollScript(script);
+    }
+
+    // Run a scroll script under the JS lock, mirroring ScrollToPageAnchor's lock discipline + retry.
+    private void RunScrollScript(string script)
+    {
+        if (_webView == null) return;
+        if (_jsExecutionLock.Wait(0))
+        {
+            try { _webView.ExecuteScript(script); }
+            catch (Exception ex) { _logger.Error("Reading-position scroll failed | {Details}", ex.Message); }
+            finally { _jsExecutionLock.Release(); }
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(async () => { await Task.Delay(100); RunScrollScript(script); }, DispatcherPriority.Background);
         }
     }
 

@@ -47,6 +47,7 @@ namespace CST.Avalonia.ViewModels
         private readonly List<string>? _searchTerms;
         private readonly List<TermPosition>? _searchPositions;  // NEW: Store positions with IsFirstTerm flags
         private readonly string? _initialAnchor;
+        private readonly ReadingPositionToken? _initialPositionToken; // #434 cross-run restore token (preferred over _initialAnchor)
         private readonly int? _initialCurrentHitIndex; // saved search hit to restore (null = fresh open)
         private readonly int? _docId;
 
@@ -108,9 +109,10 @@ namespace CST.Avalonia.ViewModels
         private readonly CstDockFactory? _dockFactory; // Factory for float/unfloat operations
         private string? _lastCapturedAnchor = null; // Cached anchor for scroll position restoration (persists across float/unfloat)
         private string? _pendingAnchorNavigation = null; // Anchor to navigate to when View becomes available
+        private ReadingPositionToken? _pendingPositionToken = null; // #434 reading-position token to restore when the View becomes available (preferred over the coarse string anchor)
         private int? _pendingHitNavigation = null; // Search hit to scroll to when View becomes available
 
-        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null, CstDockFactory? dockFactory = null, int? initialCurrentHitIndex = null, Script? initialBookScript = null)
+        public BookDisplayViewModel(Book book, List<string>? searchTerms = null, string? initialAnchor = null, ChapterListsService? chapterListsService = null, ISettingsService? settingsService = null, IFontService? fontService = null, int? docId = null, List<TermPosition>? searchPositions = null, string? windowId = null, CstDockFactory? dockFactory = null, int? initialCurrentHitIndex = null, Script? initialBookScript = null, ReadingPositionToken? initialPositionToken = null)
         {
             _logger = Log.ForContext<BookDisplayViewModel>();
             _chapterListsService = chapterListsService;
@@ -121,6 +123,7 @@ namespace CST.Avalonia.ViewModels
             _searchTerms = searchTerms;
             _searchPositions = searchPositions;  // NEW: Store positions for two-color highlighting
             _initialAnchor = initialAnchor;
+            _initialPositionToken = initialPositionToken;
             _initialCurrentHitIndex = initialCurrentHitIndex;
             _docId = docId;
             // Seed the per-tab script to the target the factory will use, so its post-construction
@@ -231,19 +234,18 @@ namespace CST.Avalonia.ViewModels
                         this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
                         this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
 
-                        // Save current page anchor for position preservation
-                        string savedPageAnchor = "";
+                        // Capture the exact reading position (#434 token) BEFORE the reload, while the current
+                        // script's DOM is still rendered. The token interpolates between the anchors bracketing
+                        // the viewport top, so restore lands on the same reading position rather than a page
+                        // marker's top edge (the pre-#434 GetCurrentPageAnchor -> ScrollToPageAnchor drift).
+                        ReadingPositionToken? savedToken = null;
                         if (BookDisplayControl != null)
                         {
-                            savedPageAnchor = BookDisplayControl.GetCurrentPageAnchor();
-                            if (!string.IsNullOrEmpty(savedPageAnchor))
-                            {
-                                _logger.Debug("Saved page anchor: {Anchor}", savedPageAnchor);
-                            }
+                            savedToken = await BookDisplayControl.GetCurrentPositionTokenAsync();
+                            if (savedToken != null)
+                                _logger.Debug("Captured reading-position token: above={Above} below={Below} frac={Frac}", savedToken.Above, savedToken.Below, savedToken.Fraction);
                             else
-                            {
-                                _logger.Warning("No page anchor available, won't restore position");
-                            }
+                                _logger.Warning("No reading-position token available, won't restore position");
                         }
 
                         // Ensure property updates happen on UI thread
@@ -286,10 +288,10 @@ namespace CST.Avalonia.ViewModels
                         // Queue the position restore BEFORE reloading: the View executes it from
                         // OnNavigationCompleted when the re-rendered document is actually ready, instead
                         // of a 1000ms delay-then-hope timer racing the load. (BOOK-7)
-                        if (!string.IsNullOrEmpty(savedPageAnchor))
+                        if (savedToken != null)
                         {
-                            _pendingAnchorNavigation = savedPageAnchor;
-                            _logger.Debug("Queued position restore to page anchor: {Anchor}", savedPageAnchor);
+                            _pendingPositionToken = savedToken;
+                            _logger.Debug("Queued reading-position token restore");
                         }
                         await LoadBookContentAsync();
                     }
@@ -448,6 +450,15 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public string? LastCapturedAnchor => _lastCapturedAnchor;
 
+        // Latest rolling reading-position token, pushed from the View's status tick; persisted on shutdown for
+        // cross-run restore (#434). Preferred over LastCapturedAnchor when present.
+        private ReadingPositionToken? _lastPositionToken = null;
+        public ReadingPositionToken? LastPositionToken => _lastPositionToken;
+        public void UpdateLastPositionToken(ReadingPositionToken? token)
+        {
+            if (token != null) _lastPositionToken = token;
+        }
+
         /// <summary>
         /// Updates the cached anchor for scroll position restoration.
         /// Called by BookDisplayView scroll timer every 200ms.
@@ -464,11 +475,21 @@ namespace CST.Avalonia.ViewModels
             // timer keeps ticking against the old document, and an unconditional clear here would
             // cancel the queued restore before the new document's OnNavigationCompleted could
             // execute it. (BOOK-7)
-            if (_pendingAnchorNavigation != null && previous != null && anchor != previous)
+            if (previous != null && anchor != previous)
             {
-                _logger.Debug("Clearing pending anchor navigation {PendingAnchor} - user has scrolled to {CurrentAnchor}",
-                    _pendingAnchorNavigation, anchor);
-                _pendingAnchorNavigation = null;
+                if (_pendingAnchorNavigation != null)
+                {
+                    _logger.Debug("Clearing pending anchor navigation {PendingAnchor} - user has scrolled to {CurrentAnchor}",
+                        _pendingAnchorNavigation, anchor);
+                    _pendingAnchorNavigation = null;
+                }
+                // Same yield-to-the-user rule for the #434 token: a real scroll on the still-live old document
+                // cancels the queued position restore. (Fable PR-B review §4)
+                if (_pendingPositionToken != null)
+                {
+                    _logger.Debug("Clearing pending reading-position token - user has scrolled to {CurrentAnchor}", anchor);
+                    _pendingPositionToken = null;
+                }
             }
         }
 
@@ -484,6 +505,16 @@ namespace CST.Avalonia.ViewModels
             var anchor = _pendingAnchorNavigation;
             _pendingAnchorNavigation = null;
             return anchor;
+        }
+
+        // Take (and clear) the queued #434 reading-position token. Preferred over the string anchor when both
+        // are queued — it interpolates between two anchors, so it restores the exact reading position rather
+        // than an anchor's top edge. (#434)
+        internal ReadingPositionToken? TakePendingPositionToken()
+        {
+            var token = _pendingPositionToken;
+            _pendingPositionToken = null;
+            return token;
         }
 
         internal int? TakePendingHitNavigation()
@@ -509,6 +540,16 @@ namespace CST.Avalonia.ViewModels
                     {
                         _lastCapturedAnchor = anchor;
                         _logger.Information("Captured final position before shutdown: {Anchor}", anchor);
+                    }
+
+                    // Also refresh the #434 token — it is PREFERRED over _lastCapturedAnchor on restore, so a
+                    // scroll in the final sub-tick window must update the token too, or the fresh anchor above
+                    // would be ignored in favour of an up-to-one-tick-staler token. (Fable cross-run review §2)
+                    var token = await BookDisplayControl.GetCurrentPositionTokenAsync();
+                    if (token != null)
+                    {
+                        _lastPositionToken = token;
+                        _logger.Debug("Captured final reading-position token before shutdown");
                     }
                 }
                 catch (Exception ex)
@@ -707,7 +748,14 @@ namespace CST.Avalonia.ViewModels
                 // the exact hit over the anchor, which only lands at the paragraph start and can leave
                 // the highlighted term off-screen in a long paragraph. (#36)
                 bool restoreSearchHit = _searchTerms?.Any() == true && _initialCurrentHitIndex.HasValue;
-                if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
+                if (_initialPositionToken != null && !restoreSearchHit)
+                {
+                    // #434 cross-run restore: prefer the exact reading-position token over the coarse anchor.
+                    _pendingPositionToken = _initialPositionToken;
+                    _logger.Debug("Queued initial reading-position token restore (above={Above}, below={Below})",
+                        _initialPositionToken.Above, _initialPositionToken.Below);
+                }
+                else if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
                 {
                     _pendingAnchorNavigation = _initialAnchor;
                     _logger.Debug("Queued initial anchor navigation: {Anchor}", _initialAnchor);
