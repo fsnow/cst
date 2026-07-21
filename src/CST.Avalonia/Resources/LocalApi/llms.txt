@@ -218,6 +218,15 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   chapter id also work, but paragraph numbers repeat in many books (see the reading section), so a page anchor
   is far more likely to land where you meant. Use an edition the book actually has - take it from an
   `occurrences` hit's `refs` or a `/v1/passage` window's `pages`; not every text was printed in every edition.
+  PAGE ANCHORS ARE VERIFIED: a page anchor the book does not contain is REFUSED with a 400 naming the editions
+  the book does carry, so a verified navigate cannot land you somewhere that isn't the page you asked for.
+  You also do not have to match the document's zero-padding - send `V1.23` or `V1.0023` and either resolves,
+  because the anchor is rewritten to the book's own spelling once it is found. If verification cannot RUN at
+  all (e.g. the corpus files are unavailable) the navigate still proceeds and says so in `note` - being unable
+  to check is not the same as knowing the reference is wrong - but the anchor is then used EXACTLY as you sent
+  it, so prefer the document's own spelling (`V1.0023`) when you have it. Other anchor forms (paragraph, chapter) are NOT
+  verified - paragraph numbers are not unique corpus-wide - so those come back with a `note` saying the anchor
+  was unchecked, and a wrong one opens the book at its start.
   `terms` is a query (same syntax as `/v1/search`) whose matches are HIGHLIGHTED in the opened book; `hit` is a
   1-based match to land on and REQUIRES `terms`. Omit `outputScript` to keep the reader's current script.
   Returns `{ presented, error, bookId, highlights, note }` - on every outcome this endpoint produces, including

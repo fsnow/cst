@@ -313,6 +313,121 @@ namespace CST.Avalonia.Tests.Integration
             Assert.IsType<PresentationTarget.Hit>(_reader.Last!.Target);
         }
 
+        // ---- page-anchor validation (#187) ----
+        // The fixture books carry a single VRI page break, <pb ed="V" n="1.0001"/>, so V1.0001 exists and
+        // anything else does not.
+
+        [Fact]
+        public async Task A_real_page_anchor_is_accepted_and_carries_no_caveat()
+        {
+            var (status, body) = await PostAsync(new { bookId = _api.MulaBook, anchor = "V1.0001" });
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.True(body!.Presented);
+            Assert.Null(body.Note);      // verified, so nothing to warn about
+            var target = Assert.IsType<PresentationTarget.Anchor>(_reader.Last!.Target);
+            Assert.Equal("V1.0001", target.Name);
+        }
+
+        [Fact]
+        public async Task A_page_anchor_the_book_does_not_have_is_refused()
+        {
+            // The point of the feature: "presented: true" must not be possible for a page that isn't there.
+            var (status, body) = await PostAsync(new { bookId = _api.MulaBook, anchor = "V9.9999" });
+
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+            Assert.False(body!.Presented);
+            Assert.Contains("V9.9999", body.Error);
+            Assert.Empty(_reader.Requests);   // the reader was never driven
+        }
+
+        [Fact]
+        public async Task An_edition_the_book_does_not_carry_says_which_it_has()
+        {
+            // Not every text was printed in every edition, so the useful answer is "this book has no PTS
+            // numbering; it carries: Vri" rather than "page missing".
+            var (status, body) = await PostAsync(new { bookId = _api.MulaBook, anchor = "P1.0001" });
+
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+            Assert.Contains("Pts", body!.Error);
+            Assert.Contains("Vri", body.Error);
+        }
+
+        [Fact]
+        public async Task A_non_page_anchor_is_still_accepted_but_flagged_as_unverified()
+        {
+            // Paragraph/chapter anchors have nothing trustworthy to check against yet (#447), so they must be
+            // reported as unchecked rather than silently implying the same guarantee as a page anchor.
+            var (status, body) = await PostAsync(new { bookId = _api.MulaBook, anchor = "para1" });
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.True(body!.Presented);
+            Assert.Contains("not verified", body.Note);
+        }
+
+        [Fact]
+        public async Task A_hit_target_is_unaffected_by_page_validation()
+        {
+            var (status, body) = await PostAsync(
+                new { bookId = _api.MulaBook, terms = "dhamma", hit = 1, anchor = "V9.9999" });
+
+            // hit wins over anchor, so the bogus page anchor is never used and must not refuse the request.
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.True(body!.Presented);
+            Assert.IsType<PresentationTarget.Hit>(_reader.Last!.Target);
+        }
+
+        [Fact]
+        public async Task An_unpadded_page_anchor_is_rewritten_to_the_documents_own_spelling()
+        {
+            // The HTML anchor is `ed + @n` matched EXACTLY, so "V1.1" and "V1.0001" name the same page but only
+            // the document's spelling resolves. An agent composing a reference from refs/pages — which serialize
+            // as bare ints — naturally writes the unpadded form. Validating already found the real spelling, so
+            // navigate with it instead of blessing an anchor that would silently miss. (fable HIGH-1)
+            var (status, body) = await PostAsync(new { bookId = _api.MulaBook, anchor = "V1.1" });
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.True(body!.Presented);
+            var target = Assert.IsType<PresentationTarget.Anchor>(_reader.Last!.Target);
+            Assert.Equal("V1.0001", target.Name);
+        }
+
+        [Fact]
+        public async Task Surrounding_whitespace_does_not_defeat_validation()
+        {
+            // Validating the trimmed string while navigating with the untrimmed one is the same class of bug.
+            var (status, _) = await PostAsync(new { bookId = _api.MulaBook, anchor = "  V1.0001  " });
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            var target = Assert.IsType<PresentationTarget.Anchor>(_reader.Last!.Target);
+            Assert.Equal("V1.0001", target.Name);
+        }
+
+        [Fact]
+        public async Task An_out_of_range_page_coordinate_is_refused_not_silently_blessed()
+        {
+            // Too large to parse as an int. Nothing in the book can match it, so it is a definite miss rather
+            // than an unverifiable one. (fable MED-3)
+            var (status, body) = await PostAsync(new { bookId = _api.MulaBook, anchor = "V1.99999999999" });
+
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+            Assert.Empty(_reader.Requests);
+            Assert.Contains("out of range", body!.Error);
+        }
+
+        [Fact]
+        public async Task Both_a_highlight_note_and_an_anchor_caveat_survive_together()
+        {
+            // Each note is independently load-bearing and llms.txt promises both, so first-wins would silently
+            // drop the caveat that the anchor was never checked. (fable MED-2)
+            var (status, body) = await PostAsync(
+                new { bookId = _api.MulaBook, terms = "nibbana", anchor = "para1" });
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Contains("No occurrences", body!.Note);
+            Assert.Contains("not verified", body.Note);
+        }
+
         // ---- MCP surface ----
         // The REST route and the MCP tool share NavigateService; these assert that the sharing is real, so the
         // two surfaces cannot drift in consent or behaviour. (fable: "one implementation" was untested)

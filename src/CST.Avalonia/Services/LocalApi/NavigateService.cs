@@ -1,11 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services.Presentation;
+using CST.Avalonia.Services.Tools;
+using CST.Navigation;
+using CST.Search;
+using Serilog;
 using TermPosition = CST.Avalonia.Models.TermPosition;
 using SearchMode = CST.Avalonia.Models.SearchMode;
 
@@ -40,12 +45,15 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly IPresentationService _presentation;
         private readonly ISearchService? _search;
         private readonly Func<bool> _isRemoteControlAllowed;
+        private readonly string? _xmlBooksDirectory;
+        private readonly ILogger _logger = Log.ForContext<NavigateService>();
 
         public NavigateService(IPresentationService presentation, ISearchService? search,
-            Func<bool> isRemoteControlAllowed)
+            Func<bool> isRemoteControlAllowed, string? xmlBooksDirectory = null)
         {
             _presentation = presentation;
             _search = search;
+            _xmlBooksDirectory = xmlBooksDirectory;
             // A PREDICATE, not a captured bool: the user can revoke remote control in Settings while the server
             // is running, and that must take effect on the very next call.
             _isRemoteControlAllowed = isRemoteControlAllowed;
@@ -57,6 +65,14 @@ namespace CST.Avalonia.Services.LocalApi
             "Remote control is disabled. The user must enable Settings → AI → \"Allow agents to drive the " +
             "reader (navigate and highlight)\" before an agent can navigate; this is the user's decision, " +
             "not something to work around.";
+
+        // Both notes can be true at once (e.g. a query with no matches AND an unverifiable anchor), and each is
+        // load-bearing, so first-wins would silently drop a caveat the docs promise. (fable MED-2)
+        private static string? Combine(string? a, string? b) =>
+            a is null ? b : b is null ? a : a + " " + b;
+
+        // The page-anchor form the XSL emits and the reader looks up: edition letter, volume, '.', page.
+        private static readonly Regex PageAnchorRx = new(@"^([VMPTO])(\d+)\.(\d+)$", RegexOptions.Compiled);
 
         public async Task<(NavigateOutcome Outcome, NavigateResponse Response)> NavigateAsync(
             NavigateRequest req, CancellationToken ct = default)
@@ -107,9 +123,40 @@ namespace CST.Avalonia.Services.LocalApi
                     Failed($"The {req.Mode ?? SearchMode.Exact} pattern '{req.Terms}' is not valid: {ex.Message}"));
             }
 
+            // Validate a PAGE anchor before navigating. Page references are the corpus's reliable addressing
+            // scheme and the one we steer agents towards (#449), so "presented: true" must not be possible for a
+            // page the book does not have. Other anchor forms stay unvalidated — paragraph numbers are not
+            // unique corpus-wide and a chapter id needs structure many books lack (#447), so there is nothing
+            // trustworthy to check them against yet. (#187)
+            // Trim once and navigate with the SAME string that was validated — validating one spelling and
+            // navigating with another is exactly how a "verified" anchor still misses. (fable HIGH-1)
+            string? anchor = string.IsNullOrWhiteSpace(req.Anchor) ? null : req.Anchor!.Trim();
+
+            if (req.Hit is null && anchor is not null)
+            {
+                if (PageAnchorRx.Match(anchor) is { Success: true } pm)
+                {
+                    var check = await CheckPageAnchorAsync(book.FileName, pm, ct);
+                    if (check.Refused is { } refusal)
+                        return (NavigateOutcome.InvalidRequest, Failed(refusal, note));
+                    // Rewrite to the document's own spelling. The HTML anchor is `ed + @n` matched exactly, so
+                    // "V1.23" and "V1.0023" name the same page but only one resolves — and an agent composing a
+                    // reference from refs/pages (which serialize as bare ints) naturally writes the former.
+                    // Validating already found the real spelling, so use it. (fable HIGH-1)
+                    if (check.Canonical is { } canonical) anchor = canonical;
+                    note = Combine(note, check.Note);
+                }
+                else
+                {
+                    note = Combine(note,
+                        "The anchor was not verified — only page anchors (e.g. \"V1.0023\") are checked. " +
+                        "If it does not exist the book opens at its start.");
+                }
+            }
+
             PresentationTarget? target =
                 req.Hit is int hit ? new PresentationTarget.Hit(hit)
-                : !string.IsNullOrWhiteSpace(req.Anchor) ? new PresentationTarget.Anchor(req.Anchor!)
+                : anchor is not null ? new PresentationTarget.Anchor(anchor)
                 : null;
 
             var request = new PresentationRequest
@@ -134,6 +181,64 @@ namespace CST.Avalonia.Services.LocalApi
 
             return (NavigateOutcome.Presented,
                 new NavigateResponse(true, null, book.FileName, positions.Count, note));
+        }
+
+
+        /// <summary>
+        /// Confirm a page anchor exists in the book, using the same parsed marker index the passage and
+        /// occurrence paths use (so there is no second parser and no extra read on a warm cache).
+        /// Returns a refusal message when the page is definitively absent; a note when validation could not be
+        /// performed at all. Being unable to check must never block navigation — only a definite miss refuses.
+        /// </summary>
+        private async Task<(string? Refused, string? Note, string? Canonical)> CheckPageAnchorAsync(
+            string bookFileName, Match m, CancellationToken ct)
+        {
+            // Checked FIRST: an out-of-range coordinate is a definite miss whether or not the corpus is
+            // readable (BookMarkers only stores int-parseable pages), so refuse it uniformly rather than
+            // degrading, and skip a pointless file read. (fable MED-3 + nit)
+            if (!int.TryParse(m.Groups[2].Value, out int volume) || !int.TryParse(m.Groups[3].Value, out int page))
+                return ($"No page anchor '{m.Value}' in '{bookFileName}' — the volume or page number is out of range.",
+                        null, null);
+
+            if (string.IsNullOrWhiteSpace(_xmlBooksDirectory))
+                return (null, "The page anchor was not verified (the corpus directory is not configured).", null);
+
+            var path = Path.Combine(_xmlBooksDirectory!, bookFileName);
+            BookMarkers markers;
+            try
+            {
+                markers = (await BookTextCache.GetAsync(path, ct)).Markers;
+            }
+            // Being unable to check must NEVER block navigation, so this catches broadly: a corrupt corpus path
+            // (ArgumentException) or anything unexpected out of the parser would otherwise escape as a bodyless
+            // 500 — the one outcome this path is contracted not to produce. Cancellation still propagates.
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.Warning(ex, "Could not verify page anchor for {Book}", bookFileName);
+                return (null, "The page anchor was not verified (the book's text could not be read).", null);
+            }
+
+            var edition = m.Groups[1].Value switch
+            {
+                "V" => PageEdition.Vri,
+                "M" => PageEdition.Myanmar,
+                "P" => PageEdition.Pts,
+                "T" => PageEdition.Thai,
+                _ => PageEdition.Other
+            };
+            if (markers.TryGetPageAnchor(edition, volume, page, out var rawN))
+                return (null, null, m.Groups[1].Value + rawN);
+
+            // Report which editions the book actually carries. Not every text was printed in every edition, so
+            // the useful answer is usually "that edition isn't in this book" rather than "that page is missing".
+            var have = markers.Editions();
+            string hint = have.Count == 0
+                ? "This book has no page breaks at all."
+                : have.Contains(edition)
+                    ? $"This book carries {edition} pages, but not {volume}.{page}."
+                    : $"This book has no {edition} page numbering; it carries: {string.Join(", ", have)}.";
+            return ($"No page anchor '{m.Value}' in '{bookFileName}'. {hint} " +
+                    "Take a page reference from an occurrence's refs or a passage window's pages.", null, null);
         }
 
         /// <summary>

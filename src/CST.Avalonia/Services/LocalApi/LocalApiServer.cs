@@ -94,7 +94,8 @@ namespace CST.Avalonia.Services.LocalApi
             // grant an agent control of the user's window. (#187)
             _navigate = presentation is null
                 ? null
-                : new NavigateService(presentation, searchService, isRemoteControlAllowed ?? (() => false));
+                : new NavigateService(presentation, searchService, isRemoteControlAllowed ?? (() => false),
+                                      xmlBooksDirectory);
             _appVersion = appVersion;
             _handshakeDirectory = handshakeDirectory;
             _logger = logger.ForContext<LocalApiServer>();
