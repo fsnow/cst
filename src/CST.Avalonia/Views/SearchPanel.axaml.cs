@@ -108,10 +108,37 @@ public partial class SearchPanel : UserControl
                     Log.Information("[SearchPanel] Opening book {FileName} with {TermCount} search terms for highlighting", 
                         occurrence.Book.FileName, searchTerms.Count);
                     
-                    // Use the search-specific method to open book with highlighting
-                    layoutViewModel.Factory.OpenBookInNewTab(occurrence.Book, searchTerms, occurrence.Positions);
-                    
-                    Log.Debug("[SearchPanel] OpenBookInNewTab call completed");
+                    // Route through the shared presentation command (#187) rather than calling the dock
+                    // directly, so the search UI and the agent present-tool drive the reader identically.
+                    var presenter = App.ServiceProvider?.GetService<Services.Presentation.IPresentationService>();
+                    if (presenter != null)
+                    {
+                        // Observe the task: PresentAsync returns failures as a result, but the task itself can
+                        // still fault (e.g. dispatcher teardown during shutdown) and a bare discard would leak
+                        // it to UnobservedTaskException.
+                        presenter.PresentAsync(new Services.Presentation.PresentationRequest
+                        {
+                            Book = occurrence.Book,
+                            SearchTerms = searchTerms,
+                            Positions = occurrence.Positions
+                        }).ContinueWith(t =>
+                        {
+                            // Must check IsCompletedSuccessfully before touching t.Result: on dispatcher
+                            // teardown at shutdown the task completes CANCELED, and reading Result would throw
+                            // inside this continuation — whose own faulted task nobody observes. (fable)
+                            if (t.IsFaulted)
+                                Log.Error(t.Exception, "[SearchPanel] Presentation task faulted");
+                            else if (t.IsCompletedSuccessfully && t.Result is { Presented: false } r)
+                                Log.Warning("[SearchPanel] Presentation did not happen: {Error}", r.Error);
+                        }, System.Threading.Tasks.TaskScheduler.Default);
+                    }
+                    else
+                    {
+                        // Defensive: fall back to the dock call if the service isn't registered.
+                        layoutViewModel.Factory.OpenBookInNewTab(occurrence.Book, searchTerms, occurrence.Positions);
+                    }
+
+                    Log.Debug("[SearchPanel] present request dispatched");
                 }
                 else
                 {

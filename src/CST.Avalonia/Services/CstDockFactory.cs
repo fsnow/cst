@@ -366,7 +366,9 @@ namespace CST.Avalonia.Services
         private static DateTime _lastSearchOpenTime = DateTime.MinValue;
         private static string? _lastSearchOpenedBook = null;
         
-        public void OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
+        // Returns TRUE when the book was actually opened, FALSE when the duplicate-suppression window
+        // swallowed it — so a non-UI caller (the #187 present-tool) can't report a false success.
+        public bool OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
         {
             _logger.Information("Opening book from search: {BookFile} with {SearchTermCount} search terms and {PositionCount} positions",
                 book.FileName, searchTerms.Count, positions.Count);
@@ -381,7 +383,7 @@ namespace CST.Avalonia.Services
                 if (book.FileName == _lastSearchOpenedBook && timeSinceLastSearchOpen.TotalMilliseconds < 2000)
                 {
                     _logger.Debug("Duplicate search book open prevented: {BookFile} (opened {TimeAgo}ms ago)", book.FileName, timeSinceLastSearchOpen.TotalMilliseconds);
-                    return;
+                    return false;
                 }
 
                 _lastSearchOpenTime = now;
@@ -450,7 +452,14 @@ namespace CST.Avalonia.Services
                 // Capture current proportions before adding document (preserves user adjustments)
                 CaptureMainDockProportions();
 
-                documentDock.VisibleDockables?.Add(bookDisplayViewModel);
+                // A null collection would make the ?.Add a silent no-op and leave us reporting success with
+                // no tab; treat it as the broken-layout failure it is. (fable)
+                if (documentDock.VisibleDockables is not { } searchDockables)
+                {
+                    Log.Error("*** Document dock has no VisibleDockables collection - cannot add search document ***");
+                    return false;
+                }
+                searchDockables.Add(bookDisplayViewModel);
                 documentDock.ActiveDockable = bookDisplayViewModel;
                 SetFactory(bookDisplayViewModel);
                 Log.Information("*** SEARCH DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
@@ -463,16 +472,20 @@ namespace CST.Avalonia.Services
             {
                 Log.Error("*** NO DOCUMENT DOCK FOUND - Cannot add search document ***");
                 _logger.Error("No document dock found for search document");
+                return false;   // nothing was opened — don't let the caller report success (fable)
             }
             
             _logger.Debug("Search book opening completed");
+            return true;
         }
         
         private static readonly object _regularOpenLock = new object();
         private static DateTime _lastRegularOpenTime = DateTime.MinValue;
         private static string? _lastRegularOpenedBook = null;
         
-        public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
+        // Returns TRUE when the book was actually opened, FALSE when the duplicate-suppression window
+        // swallowed it — so a non-UI caller (the #187 present-tool) can't report a false success.
+        public bool OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
             List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null,
             int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true,
             ReadingPositionToken? initialPositionToken = null)
@@ -493,7 +506,7 @@ namespace CST.Avalonia.Services
                     if (book.FileName == _lastRegularOpenedBook && timeSinceLastOpen.TotalMilliseconds < 1000)
                     {
                         _logger.Debug("Duplicate book open prevented: {BookFile} (opened {TimeAgo}ms ago)", book.FileName, timeSinceLastOpen.TotalMilliseconds);
-                        return;
+                        return false;
                     }
                     
                     _lastRegularOpenTime = now;
@@ -541,11 +554,12 @@ namespace CST.Avalonia.Services
             EnsureBookEventSubscription(bookDisplayViewModel);
 
             // Add to the document dock
-            AddDocumentToLayout(bookDisplayViewModel);
+            var added = AddDocumentToLayout(bookDisplayViewModel);
 
             // Don't save state immediately - let tab changes trigger state saving
 
             _logger.Debug("Book document created: {DocumentId} with title: {Title}", bookDisplayViewModel.Id, bookDisplayViewModel.Title);
+            return added;   // no dock => nothing opened; don't report success (fable)
         }
 
         /// <summary>
@@ -826,7 +840,9 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private void AddDocumentToLayout(IDockable dockable)
+        // Returns TRUE when the document was actually added; FALSE when there is no document dock (e.g. the
+        // layout spine is still being built), so callers can report an honest failure. (fable / #187)
+        private bool AddDocumentToLayout(IDockable dockable)
         {
             var documentDock = FindDocumentDock();
             if (documentDock != null)
@@ -845,7 +861,13 @@ namespace CST.Avalonia.Services
                     _logger.Error("Document with ID {DocumentId} already exists {Count} times", dockable.Id, existingWithSameId.Count);
                 }
 
-                documentDock.VisibleDockables?.Add(dockable);
+                // Same guard: a null collection must not be reported as a successful add. (fable)
+                if (documentDock.VisibleDockables is not { } dockables)
+                {
+                    Log.Error("*** Document dock has no VisibleDockables collection - cannot add document ***");
+                    return false;
+                }
+                dockables.Add(dockable);
                 documentDock.ActiveDockable = dockable;
                 SetFactory(dockable); // Ensure the document has the factory reference
                 Log.Information("*** DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
@@ -853,12 +875,12 @@ namespace CST.Avalonia.Services
 
                 // Restore user's proportions (framework may have recalculated them)
                 RestoreMainDockProportions();
+                return true;
             }
-            else
-            {
-                Log.Warning("*** WARNING: Could not find document dock to add book ***");
-                _logger.Warning("Could not find document dock to add book");
-            }
+
+            Log.Warning("*** WARNING: Could not find document dock to add book ***");
+            _logger.Warning("Could not find document dock to add book");
+            return false;
         }
         
         private void RemoveDocumentFromLayout(IDockable dockable)
