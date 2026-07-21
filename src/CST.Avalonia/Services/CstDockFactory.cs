@@ -1329,16 +1329,19 @@ namespace CST.Avalonia.Services
             {
                 // Step 1: Query WebView for actual current scroll position
                 string? currentAnchor = null;
+                ReadingPositionToken? positionToken = null;   // #434: exact reading position across the re-parent
                 if (oldVm.BookDisplayControl != null)
                 {
                     Log.Information("Querying WebView for current scroll position...");
                     currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                    positionToken = await oldVm.BookDisplayControl.GetCurrentPositionTokenAsync();
                     Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
                 }
                 else
                 {
-                    // Fallback to last known VRI anchor if WebView not available
+                    // Fallback to last known VRI anchor / rolling token if the WebView isn't available.
                     currentAnchor = oldVm.CurrentVriAnchor;
+                    positionToken = oldVm.LastPositionToken;
                     Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
                 }
 
@@ -1394,7 +1397,8 @@ namespace CST.Avalonia.Services
                     searchPositions: searchPositions,
                     windowId: null,  // CRITICAL: null = generates fresh GUID
                     dockFactory: this,
-                    initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
+                    initialBookScript: bookScript,  // seed so the set below is a no-op (BOOK-3)
+                    initialPositionToken: positionToken  // #434: restore the exact reading position across float/unfloat
                 );
 
                 // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
@@ -1462,16 +1466,19 @@ namespace CST.Avalonia.Services
 
                 // Step 1: Query WebView for actual current scroll position
                 string? currentAnchor = null;
+                ReadingPositionToken? positionToken = null;   // #434: exact reading position across the re-parent
                 if (oldVm.BookDisplayControl != null)
                 {
                     Log.Information("Querying WebView for current scroll position...");
                     currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
+                    positionToken = await oldVm.BookDisplayControl.GetCurrentPositionTokenAsync();
                     Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
                 }
                 else
                 {
-                    // Fallback to last known VRI anchor if WebView not available
+                    // Fallback to last known VRI anchor / rolling token if the WebView isn't available.
                     currentAnchor = oldVm.CurrentVriAnchor;
+                    positionToken = oldVm.LastPositionToken;
                     Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
                 }
 
@@ -1535,7 +1542,8 @@ namespace CST.Avalonia.Services
                     searchPositions: searchPositions,
                     windowId: null,  // CRITICAL: null = generates fresh GUID
                     dockFactory: this,
-                    initialBookScript: bookScript  // seed so the set below is a no-op (BOOK-3)
+                    initialBookScript: bookScript,  // seed so the set below is a no-op (BOOK-3)
+                    initialPositionToken: positionToken  // #434: restore the exact reading position across float/unfloat
                 );
 
                 // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
