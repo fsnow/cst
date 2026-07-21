@@ -366,7 +366,9 @@ namespace CST.Avalonia.Services
         private static DateTime _lastSearchOpenTime = DateTime.MinValue;
         private static string? _lastSearchOpenedBook = null;
         
-        public void OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
+        // Returns TRUE when the book was actually opened, FALSE when the duplicate-suppression window
+        // swallowed it — so a non-UI caller (the #187 present-tool) can't report a false success.
+        public bool OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
         {
             _logger.Information("Opening book from search: {BookFile} with {SearchTermCount} search terms and {PositionCount} positions",
                 book.FileName, searchTerms.Count, positions.Count);
@@ -381,7 +383,7 @@ namespace CST.Avalonia.Services
                 if (book.FileName == _lastSearchOpenedBook && timeSinceLastSearchOpen.TotalMilliseconds < 2000)
                 {
                     _logger.Debug("Duplicate search book open prevented: {BookFile} (opened {TimeAgo}ms ago)", book.FileName, timeSinceLastSearchOpen.TotalMilliseconds);
-                    return;
+                    return false;
                 }
 
                 _lastSearchOpenTime = now;
@@ -466,13 +468,16 @@ namespace CST.Avalonia.Services
             }
             
             _logger.Debug("Search book opening completed");
+            return true;
         }
         
         private static readonly object _regularOpenLock = new object();
         private static DateTime _lastRegularOpenTime = DateTime.MinValue;
         private static string? _lastRegularOpenedBook = null;
         
-        public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
+        // Returns TRUE when the book was actually opened, FALSE when the duplicate-suppression window
+        // swallowed it — so a non-UI caller (the #187 present-tool) can't report a false success.
+        public bool OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
             List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null,
             int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true,
             ReadingPositionToken? initialPositionToken = null)
@@ -493,7 +498,7 @@ namespace CST.Avalonia.Services
                     if (book.FileName == _lastRegularOpenedBook && timeSinceLastOpen.TotalMilliseconds < 1000)
                     {
                         _logger.Debug("Duplicate book open prevented: {BookFile} (opened {TimeAgo}ms ago)", book.FileName, timeSinceLastOpen.TotalMilliseconds);
-                        return;
+                        return false;
                     }
                     
                     _lastRegularOpenTime = now;
@@ -546,6 +551,7 @@ namespace CST.Avalonia.Services
             // Don't save state immediately - let tab changes trigger state saving
 
             _logger.Debug("Book document created: {DocumentId} with title: {Title}", bookDisplayViewModel.Id, bookDisplayViewModel.Title);
+            return true;
         }
 
         /// <summary>

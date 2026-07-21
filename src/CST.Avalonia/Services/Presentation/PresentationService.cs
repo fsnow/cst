@@ -21,8 +21,9 @@ public interface IPresentationService
 {
     /// <summary>
     /// Present the reader. Safe to call from any thread — marshals to the Avalonia UI thread itself.
-    /// Returns a failure result (rather than throwing) when there is no reader to drive, so a non-UI caller
-    /// can surface a clean error.
+    /// Returns a failure RESULT (rather than throwing) for every expected condition: no reader to drive, an
+    /// unpresentable request, or a duplicate open suppressed by the dock. Only cancellation throws, per the
+    /// usual CancellationToken contract.
     /// </summary>
     Task<PresentationResult> PresentAsync(PresentationRequest request, CancellationToken ct = default);
 }
@@ -33,7 +34,8 @@ public sealed class PresentationService : IPresentationService
 
     public async Task<PresentationResult> PresentAsync(PresentationRequest request, CancellationToken ct = default)
     {
-        if (request?.Book == null) return PresentationResult.Fail("No book specified.");
+        var invalid = PresentationPlanner.Validate(request);
+        if (invalid != null) return PresentationResult.Fail(invalid);
         ct.ThrowIfCancellationRequested();
 
         // Presentation mutates the dock/visual tree, so it must run on the UI thread regardless of who called
@@ -57,18 +59,19 @@ public sealed class PresentationService : IPresentationService
             var terms = request.SearchTerms?.ToList() ?? new List<string>();
             var positions = request.Positions?.ToList() ?? new List<TermPosition>();
 
+            bool opened;
             if (plan.UseSearchTab)
             {
                 // Search-result semantics: a fresh tab per result, highlight plumbing, lands on the first hit.
                 _logger.Information("Presenting {Book} in a search tab ({Terms} terms, {Positions} positions)",
                     request.Book.FileName, terms.Count, positions.Count);
-                factory.OpenBookInNewTab(request.Book, terms, positions);
+                opened = factory.OpenBookInNewTab(request.Book, terms, positions);
             }
             else
             {
                 _logger.Information("Presenting {Book} (anchor={Anchor}, hit={Hit}, token={HasToken})",
                     request.Book.FileName, plan.Anchor ?? "none", plan.HitIndex, plan.PositionToken != null);
-                factory.OpenBook(
+                opened = factory.OpenBook(
                     request.Book,
                     plan.Anchor,
                     request.Script,
@@ -80,6 +83,15 @@ public sealed class PresentationService : IPresentationService
                     request.ShowFootnotes,
                     request.ShowSearchTerms,
                     plan.PositionToken);
+            }
+
+            // The dock paths suppress a repeat open of the same book inside a short window and return silently.
+            // Report that honestly instead of claiming success a caller can't verify. (fable §1)
+            if (!opened)
+            {
+                _logger.Debug("Presentation suppressed as a duplicate open: {Book}", request.Book.FileName);
+                return PresentationResult.Fail(
+                    "Duplicate open suppressed — this book was just opened; retry in a moment.");
             }
 
             return PresentationResult.Ok();

@@ -113,12 +113,21 @@ public partial class SearchPanel : UserControl
                     var presenter = App.ServiceProvider?.GetService<Services.Presentation.IPresentationService>();
                     if (presenter != null)
                     {
-                        _ = presenter.PresentAsync(new Services.Presentation.PresentationRequest
+                        // Observe the task: PresentAsync returns failures as a result, but the task itself can
+                        // still fault (e.g. dispatcher teardown during shutdown) and a bare discard would leak
+                        // it to UnobservedTaskException.
+                        presenter.PresentAsync(new Services.Presentation.PresentationRequest
                         {
                             Book = occurrence.Book,
                             SearchTerms = searchTerms,
                             Positions = occurrence.Positions
-                        });
+                        }).ContinueWith(t =>
+                        {
+                            if (t.IsFaulted)
+                                Log.Error(t.Exception, "[SearchPanel] Presentation task faulted");
+                            else if (t.Result is { Presented: false } r)
+                                Log.Warning("[SearchPanel] Presentation did not happen: {Error}", r.Error);
+                        }, System.Threading.Tasks.TaskScheduler.Default);
                     }
                     else
                     {

@@ -108,5 +108,62 @@ namespace CST.Avalonia.Tests.Services
             var r = new PresentationRequest { Book = AnyBook, SearchTerms = new List<string> { "dhamma" } };
             Assert.False(PresentationPlanner.Plan(r).UseSearchTab);
         }
+
+        // ---- Validation: never report success for a request that could only be a silent no-op ----
+
+        [Fact]
+        public void Hit_target_without_search_context_is_rejected()
+        {
+            var err = PresentationPlanner.Validate(Req(new PresentationTarget.Hit(3)));
+            Assert.NotNull(err);
+            Assert.Contains("Hit target", err);
+        }
+
+        [Fact]
+        public void Hit_target_with_search_context_is_valid()
+        {
+            Assert.Null(PresentationPlanner.Validate(Req(new PresentationTarget.Hit(3), withHighlights: true)));
+        }
+
+        [Fact]
+        public void Plain_and_anchor_and_position_requests_are_valid()
+        {
+            Assert.Null(PresentationPlanner.Validate(Req()));
+            Assert.Null(PresentationPlanner.Validate(Req(new PresentationTarget.Anchor("V1.0023"))));
+            Assert.Null(PresentationPlanner.Validate(Req(new PresentationTarget.Position(
+                new ReadingPositionToken { Above = "para5", Below = "para6", Fraction = 0.4 }))));
+        }
+
+        // ---- Option-aware routing: the search tab can't carry these, so they force the general path ----
+
+        [Fact]
+        public void Explicit_script_forces_the_general_path()
+        {
+            var r = Req(withHighlights: true) with { Script = global::CST.Conversion.Script.Thai };
+            Assert.False(PresentationPlanner.Plan(r).UseSearchTab);
+        }
+
+        [Fact]
+        public void Explicit_docid_forces_the_general_path()
+        {
+            var r = Req(withHighlights: true) with { DocId = 42 };
+            Assert.False(PresentationPlanner.Plan(r).UseSearchTab);
+        }
+
+        [Theory]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        public void Non_default_view_toggles_force_the_general_path(bool footnotes, bool searchTerms)
+        {
+            var r = Req(withHighlights: true) with { ShowFootnotes = footnotes, ShowSearchTerms = searchTerms };
+            Assert.False(PresentationPlanner.Plan(r).UseSearchTab);
+        }
+
+        [Fact]
+        public void Default_toggles_still_use_the_search_tab()
+        {
+            // Guards the refactor: today's search UI sets none of these, so it must keep the search-tab path.
+            Assert.True(PresentationPlanner.Plan(Req(withHighlights: true)).UseSearchTab);
+        }
     }
 }

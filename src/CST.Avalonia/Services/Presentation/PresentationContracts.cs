@@ -73,6 +73,21 @@ public sealed record PresentationPlan(
 /// </summary>
 public static class PresentationPlanner
 {
+    /// <summary>
+    /// Pure precondition check. Returns null when the request is presentable, else the reason — so a caller
+    /// can't be told "presented" for a request that could only ever be a silent no-op. (fable §4)
+    /// </summary>
+    public static string? Validate(PresentationRequest request)
+    {
+        if (request?.Book == null) return "No book specified.";
+        if (request.Target is PresentationTarget.Hit && !HasHighlights(request))
+            return "A Hit target requires searchTerms and positions — there are no highlights to land on.";
+        return null;
+    }
+
+    private static bool HasHighlights(PresentationRequest r) =>
+        r.SearchTerms is { Count: > 0 } && r.Positions is { Count: > 0 };
+
     public static PresentationPlan Plan(PresentationRequest request)
     {
         string? anchor = null;
@@ -96,8 +111,14 @@ public static class PresentationPlanner
         // The search-tab path exists to allow MULTIPLE independent instances of the same book (one per result)
         // and owns the highlight plumbing. Use it when we have real highlight context AND no explicit landing
         // target; an explicit target needs the general path, which can carry an anchor/hit/token.
-        bool hasHighlights = request.SearchTerms is { Count: > 0 } && request.Positions is { Count: > 0 };
-        bool useSearchTab = hasHighlights && anchor == null && hit == null && token == null;
+        //
+        // It also CANNOT carry script / docId / the per-book view toggles (it hardcodes the current script and
+        // the ViewModel defaults), so any request that sets those must take the general path — otherwise those
+        // fields would be silently dropped while the caller was told it succeeded. (fable §2)
+        bool hasHighlights = HasHighlights(request);
+        bool needsGeneralOnlyOptions = request.Script != null || request.DocId != null
+                                       || !request.ShowFootnotes || !request.ShowSearchTerms;
+        bool useSearchTab = hasHighlights && anchor == null && hit == null && token == null && !needsGeneralOnlyOptions;
 
         return new PresentationPlan(useSearchTab, anchor, hit, token);
     }
