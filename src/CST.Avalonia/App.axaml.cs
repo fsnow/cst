@@ -1308,7 +1308,14 @@ public partial class App : Application
             // #110: File > Close Tab (⌘W) — closes the active document tab in this floating window.
             var closeTabItem = new NativeMenuItem { Header = "Close Tab", Gesture = KeyGesture.Parse("Cmd+W") };
             closeTabItem.Click += (s, e) => OnCloseTabFromFloatingWindow(window);
+            // #111: Select a Book (Cmd+O) — the tree lives in the main window, so this reveals and focuses
+            // it there, the same as the main window's File menu item.
+            var selectBookMenuItem = new NativeMenuItem { Header = "Select a Book", Gesture = KeyGesture.Parse("Cmd+O") };
+            selectBookMenuItem.Click += (s, e) => SimpleTabbedWindow.RevealSelectBookPanel();
+
             var fileMenu = new NativeMenu();
+            fileMenu.Add(selectBookMenuItem);
+            fileMenu.Add(new NativeMenuItemSeparator());
             fileMenu.Add(closeTabItem);
 
             var nativeMenu = new NativeMenu();
