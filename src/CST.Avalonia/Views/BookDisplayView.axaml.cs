@@ -2780,12 +2780,16 @@ public partial class BookDisplayView : UserControl
                         if (!name || name.indexOf('para') !== 0) return false;
                         var tgt = parseInt(name.substring(4).split('-')[0]);
                         if (isNaN(tgt)) return false;
+                        var paras = document.querySelectorAll('a[name^=""para""]');
                         var best = null, bestDiff = Infinity;
-                        document.querySelectorAll('a[name^=""para""]').forEach(function(a) {{
+                        paras.forEach(function(a) {{
                             var n = parseInt((a.name || '').substring(4).split('-')[0]);
                             if (!isNaN(n)) {{ var d = Math.abs(n - tgt); if (d < bestDiff) {{ bestDiff = d; best = a; }} }}
                         }});
-                        if (best) {{ best.scrollIntoView({{ behavior: 'instant', block: 'start' }}); return true; }}
+                        // Same distance cap as ScrollToPageAnchor: don't jump to a far paragraph on a drastic
+                        // renumber — leave the position instead. (Fable cross-run re-review)
+                        var maxAllowedDiff = paras.length < 300 ? 100 : 50;
+                        if (best && bestDiff <= maxAllowedDiff) {{ best.scrollIntoView({{ behavior: 'instant', block: 'start' }}); return true; }}
                         return false;
                     }};
                     fuzzyPara({aboveJson}) || fuzzyPara({belowJson});
