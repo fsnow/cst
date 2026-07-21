@@ -189,17 +189,35 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   START of paragraph N but the window is bounded by `maxChars`, so a long paragraph spans several windows and
   `nextCursor` may still be INSIDE the same paragraph - keep paging until `normalizedReference` changes, or
   raise `maxChars`.
-  PARAGRAPH NUMBERS ARE NOT GLOBALLY UNIQUE: in a multi-section book they RESTART per section, so `paragraph:N`
-  can land on a DIFFERENT paragraph N than the one an `occurrences` hit reported. For exact addressing use the
-  hit's `cursor` (unique); if you must go by number, pass the `bookCode` (the sub-book, from the occurrence's
-  `refs.paragraphBookCode`) alongside `paragraph` to disambiguate.
+  PREFER PAGE REFERENCES OVER PARAGRAPH NUMBERS. Paragraph numbers are a weak addressing scheme in this
+  corpus and page numbers are a strong one - when you have a choice, cite and navigate by page.
+  Paragraph numbers have three problems, measured over the corpus: (1) they are NOT UNIQUE - in 102 of 217
+  books the same number occurs more than once, because the printed numbering restarts per section, so
+  `paragraph:N` can land on a DIFFERENT paragraph N than the one an `occurrences` hit reported; (2) ~3,600
+  paragraphs are printed as RANGES (`16-26`, or abbreviated `196-7` meaning 196-197) because a commentary
+  passage comments on a span of root-text paragraphs - an exact number inside such a span may not be
+  addressable; (3) a `bookCode` only disambiguates in the 7 multi-book volumes - elsewhere the repeats occur
+  WITHIN one sub-book, so the code does not help.
+  For exact addressing, in order of preference: the hit's `cursor` (always unique - use this when you have
+  one), then a page reference, then `paragraph`. When you report a location to a user, a page citation
+  ("VRI vol 1 p. 23") is more trustworthy than a paragraph number.
+  WHICH EDITION: do not assume a book has pages in the edition you prefer. The print editions cover DIFFERENT
+  parts of the corpus - the VRI set is 140 volumes, and many texts (particularly the `e*` Anya/other works)
+  were never published outside Myanmar, so they legitimately have no VRI or PTS numbering at all. A missing
+  edition is expected, not an error and not missing data. Always take the editions from what the book itself
+  reports - the `pages` array on an `/v1/passage` window, or `refs` on an `occurrences` hit - and cite one of
+  those, rather than constructing a page anchor in an edition the book does not use.
 <!--/doc:reading-->
 <!--doc:navigate-->
 - `POST /v1/navigate` - SHOW a passage to the user in the CST Reader window. This is the only endpoint with a
   visible side effect: it changes what the person in front of the app is looking at. Use it when the user asks
   to be SHOWN something; to read text yourself use `/v1/passage`.
   Body: `{ bookId, anchor?, terms?, hit?, mode?, proximityDistance?, outputScript? }`.
-  `anchor` is a reference to scroll to - a page anchor (`"V1.0023"`), a paragraph (`"para5"`), or a chapter id.
+  `anchor` is a reference to scroll to. PREFER A PAGE ANCHOR - `"V1.0023"` (edition letter, volume, then the
+  page zero-padded to 4 digits; `V`=VRI, `M`=Myanmar, `P`=PTS, `T`=Thai). A paragraph anchor (`"para5"`) or a
+  chapter id also work, but paragraph numbers repeat in many books (see the reading section), so a page anchor
+  is far more likely to land where you meant. Use an edition the book actually has - take it from an
+  `occurrences` hit's `refs` or a `/v1/passage` window's `pages`; not every text was printed in every edition.
   `terms` is a query (same syntax as `/v1/search`) whose matches are HIGHLIGHTED in the opened book; `hit` is a
   1-based match to land on and REQUIRES `terms`. Omit `outputScript` to keep the reader's current script.
   Returns `{ presented, error, bookId, highlights, note }` - on every outcome this endpoint produces, including

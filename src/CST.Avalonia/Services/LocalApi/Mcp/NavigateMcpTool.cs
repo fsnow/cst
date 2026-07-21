@@ -28,7 +28,10 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             NavigateService navigate,
             [Description("Book id (file name) from the 'books' tool or a search result, e.g. 's0101m.mul.xml'.")]
             string bookId,
-            [Description("Optional reference to scroll to: a page anchor ('V1.0023'), a paragraph ('para5'), or a chapter id.")]
+            [Description("Optional reference to scroll to. PREFER a page anchor — 'V1.0023' = edition letter "
+                + "(V=VRI, M=Myanmar, P=PTS, T=Thai), volume, then the page zero-padded to 4 digits. A paragraph "
+                + "anchor ('para5') or chapter id also work, but paragraph numbers repeat in many books, so a "
+                + "page anchor is far more likely to land where you meant.")]
             string? anchor = null,
             [Description("Optional query whose matches are highlighted in the book — same syntax as the 'search' tool.")]
             string? terms = null,

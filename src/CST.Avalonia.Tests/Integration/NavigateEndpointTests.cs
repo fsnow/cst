@@ -366,6 +366,24 @@ namespace CST.Avalonia.Tests.Integration
 
 
         [Fact]
+        public async Task The_docs_steer_agents_towards_page_references_over_paragraph_numbers()
+        {
+            // A deliberate policy, not incidental prose: paragraph numbers are a weak addressing scheme in this
+            // corpus (repeated in 102 of 217 books, ~3,600 printed as ranges) while page numbers are strong, so
+            // the agent-facing docs must say so. Pinned because it is easy to lose in an edit. (#447, #446)
+            using var http = _api.Http();
+
+            var reading = await http.GetStringAsync("/docs/reading.md");
+            Assert.Contains("PREFER PAGE REFERENCES", reading);
+            // ...and must NOT revive the old advice that a bookCode disambiguates, which holds only for the
+            // 7 multi-book volumes — elsewhere the repeats are WITHIN one sub-book.
+            Assert.Contains("only disambiguates in the 7 multi-book volumes", reading);
+
+            var navigate = await http.GetStringAsync("/docs/navigate.md");
+            Assert.Contains("PREFER A PAGE ANCHOR", navigate);
+        }
+
+        [Fact]
         public async Task Navigate_is_documented_so_an_agent_can_tell_the_user_how_to_enable_it()
         {
             using var http = _api.Http();

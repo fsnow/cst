@@ -23,7 +23,11 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "the hit is read with its full governing clause, never mid-sentence. Use the returned "
             + "nextCursor/prevCursor to page. With neither paragraph nor cursor, reads from the book start. "
             + "'noteCount' is how many {…} apparatus notes fall in the window (counted regardless of "
-            + "includeFootnotes) — noteCount>0 means apparatus is present here.")]
+            + "includeFootnotes) — noteCount>0 means apparatus is present here. "
+            + "CAVEAT ON `paragraph`: paragraph numbers are NOT unique in this corpus — in 102 of 217 books the "
+            + "same number occurs more than once (the printed numbering restarts per section), and ~3,600 "
+            + "paragraphs are printed as ranges. Prefer a `cursor` when you have one, and prefer citing a PAGE "
+            + "when you report a location back to the user.")]
         public static async Task<PassageResult> PassageAsync(
             IPassageTool passage,
             [Description("The book's id (file name), e.g. from the 'books' tool or a search result.")]
