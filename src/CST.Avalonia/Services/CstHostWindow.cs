@@ -114,6 +114,9 @@ namespace CST.Avalonia.Services
 
         public void SetPosition(double x, double y)
         {
+            // Guard NaN like the stock Dock.Avalonia HostWindow does — a NaN from Dock's tracking must not
+            // become a garbage PixelPoint. (#float-disappear defensive)
+            if (double.IsNaN(x) || double.IsNaN(y)) return;
             Position = new PixelPoint((int)x, (int)y);
             X = x;
             Y = y;
@@ -127,8 +130,9 @@ namespace CST.Avalonia.Services
 
         public void SetSize(double width, double height)
         {
-            Width = width;
-            Height = height;
+            // Guard NaN per-dimension like the stock HostWindow. (#float-disappear defensive)
+            if (!double.IsNaN(width)) Width = width;
+            if (!double.IsNaN(height)) Height = height;
         }
 
         public void GetSize(out double width, out double height)

@@ -1433,6 +1433,11 @@ namespace CST.Avalonia.Services
                 base.FloatDockable(newVm);
                 newVm.CanFloat = false;  // Restore to prevent drag-to-float
 
+                // A programmatic (button) float has no pointer position, so Dock lands the host window at the
+                // monitor boundary — which can be a different, possibly powered-off monitor (it landed at the
+                // left edge of the secondary screen). Reposition it onto the main window's screen. (#float-disappear)
+                PlaceAndRevealFloatingWindow(newVm);
+
                 Log.Information("Float operation completed - new instance in floating window");
             }
             catch (Exception ex)
@@ -1441,6 +1446,61 @@ namespace CST.Avalonia.Services
             }
 
             Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        }
+
+        // Place a just-button-floated host window near the main window, CLAMPED to the main window's screen, so
+        // it never lands on another (possibly powered-off) monitor. A programmatic (button) float gives Dock no
+        // pointer position, so it defaults to a monitor boundary — on a multi-monitor setup that can be a second
+        // screen. This only repositions the already-shown window (no WebView is moved → the re-parent hard rule
+        // is unaffected) and brings it to front. The drag-to-float path is unaffected (Dock places it at the
+        // drop point). (#float-disappear)
+        private void PlaceAndRevealFloatingWindow(BookDisplayViewModel floatedVm)
+        {
+            try
+            {
+                var floatDock = floatedVm.Owner as IDock;
+                if (floatDock == null) return; // no owning dock (shouldn't happen post-float) → don't risk a null==null host match (fable)
+                CstHostWindow? host = null;
+                int hostCount = 0;
+                foreach (var hw in HostWindows)
+                {
+                    if (hw is CstHostWindow chw)
+                    {
+                        hostCount++;
+                        if (host == null && FindDocumentDockInLayout(chw.Layout) == floatDock) host = chw;
+                    }
+                }
+                if (host == null) return;
+
+                var main = CST.Avalonia.App.MainWindow;
+                if (main == null) { host.Activate(); return; }
+
+                // The screen the MAIN window is on (proven #430 pattern: WorkingArea contains the main position).
+                global::Avalonia.Platform.Screen? screen = null;
+                var all = host.Screens?.All;
+                if (all != null)
+                    foreach (var s in all)
+                        if (s.WorkingArea.Contains(main.Position)) { screen = s; break; }
+                screen ??= host.Screens?.Primary;
+
+                // Cascade near the main window; clamp inside that screen's work area.
+                int cascade = 30 * Math.Max(0, hostCount - 1);
+                int x = main.Position.X + 40 + cascade;
+                int y = main.Position.Y + 40 + cascade;
+                if (screen != null)
+                {
+                    var wa = screen.WorkingArea;                 // device px
+                    double scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
+                    int w = (int)(host.Width * scale);           // Width/Height are logical
+                    int h = (int)(host.Height * scale);
+                    x = Math.Max(wa.X, Math.Min(x, wa.X + wa.Width - w));
+                    y = Math.Max(wa.Y, Math.Min(y, wa.Y + wa.Height - h));
+                }
+                host.Position = new PixelPoint(x, y);
+                host.Activate();
+                Log.Information("Placed floating window on the main window's screen at {Pos}", host.Position);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to place/reveal new floating window"); }
         }
 
         /// <summary>
