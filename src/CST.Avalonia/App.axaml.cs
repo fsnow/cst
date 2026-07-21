@@ -1471,36 +1471,15 @@ public partial class App : Application
         try
         {
             Log.Information("Go To menu item clicked from floating window: {WindowTitle}", floatingWindow.Title);
-            Log.Information("Window type: {Type}", floatingWindow.GetType().Name);
 
-            // Floating windows are CstHostWindow instances with Layout property
-            if (floatingWindow is CstHostWindow hostWindow)
+            // Resolve the document the user is in - follows focus, so a split inside the floating window
+            // resolves to the pane they are actually working in rather than always the first. (#443)
+            if (FindActiveBookInFloatingWindow(floatingWindow) is { } bookViewModel)
             {
-                Log.Information("Found CstHostWindow");
-                Log.Information("HostWindow.Layout type: {Type}", hostWindow.Layout?.GetType().Name ?? "null");
-
-                if (hostWindow.Layout != null)
-                {
-                    // Find DocumentDock in the host window's layout
-                    var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
-                    Log.Information("DocumentDock found: {Found}", documentDock != null);
-
-                    if (documentDock != null)
-                    {
-                        Log.Information("DocumentDock.ActiveDockable type: {Type}", documentDock.ActiveDockable?.GetType().Name ?? "null");
-
-                        if (documentDock.ActiveDockable is BookDisplayViewModel bookViewModel)
-                        {
-                            Log.Information("Triggering Go To dialog for active book in floating window: {BookFile}", bookViewModel.Book.FileName);
-                            bookViewModel.InvokeOpenGoToDialog();
-                            return;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                Log.Warning("Window is not a CstHostWindow, type: {Type}", floatingWindow.GetType().Name);
+                Log.Information("Triggering Go To dialog for active book in floating window: {BookFile}",
+                    bookViewModel.Book.FileName);
+                bookViewModel.InvokeOpenGoToDialog();
+                return;
             }
 
             Log.Warning("Could not find active book document in floating window for Go To command");
@@ -1522,8 +1501,8 @@ public partial class App : Application
         if (floatingWindow is not CstHostWindow hostWindow || hostWindow.Layout == null)
             return null;
 
-        var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
-        return documentDock?.ActiveDockable as BookDisplayViewModel;
+        return DocumentTargetResolver.ResolveActiveDocument(
+            hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow)) as BookDisplayViewModel;
     }
 
     private void OnCloseTabFromFloatingWindow(Window floatingWindow)
@@ -1532,8 +1511,8 @@ public partial class App : Application
         {
             if (floatingWindow is CstHostWindow hostWindow && hostWindow.Layout != null)
             {
-                var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
-                SimpleTabbedWindow.CloseDockableIfClosable(documentDock?.ActiveDockable);
+                SimpleTabbedWindow.CloseDockableIfClosable(DocumentTargetResolver.ResolveActiveDocument(
+                    hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow)));
             }
         }
         catch (Exception ex)
@@ -1548,8 +1527,8 @@ public partial class App : Application
         {
             if (floatingWindow is CstHostWindow hostWindow && hostWindow.Layout != null)
             {
-                var documentDock = FindDocumentDockInLayout(hostWindow.Layout) as Dock.Model.Mvvm.Controls.DocumentDock;
-                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel)
+                if (DocumentTargetResolver.ResolveActiveDocument(
+                        hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow)) is BookDisplayViewModel bookViewModel)
                 {
                     Log.Information("View Source ({Edition}) via floating-window menu for book: {BookFile}",
                         source2010 ? "2010" : "1957", bookViewModel.Book.FileName);
