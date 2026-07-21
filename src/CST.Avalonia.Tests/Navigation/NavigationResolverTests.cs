@@ -261,6 +261,10 @@ namespace CST.Avalonia.Tests.Navigation
                 b.FileName, new NavigationReference.Paragraph(5, "an5")));
             Assert.Equal(NavigationStatus.InvalidReference, r.Status);
             Assert.Contains("not a multi-book volume", r.Message);
+            // The message must NOT claim paragraph numbers are unique in a non-Multi book — they repeat in 95
+            // of them, because the printed numbering restarts per section. The refusal stands (a book code is
+            // not what would disambiguate), but the reason given has to be true. (#447)
+            Assert.DoesNotContain("unique within it", r.Message);
         }
 
         [Fact]

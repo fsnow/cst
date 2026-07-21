@@ -68,15 +68,23 @@ namespace CST.Navigation
             bool isMulti = book.BookType == BookType.Multi;
             string? bookCode = p.BookCode;
 
-            // A book code on a single-book volume is meaningless. Silently ignoring it produced a
-            // wrong-but-plausible navigation (the caller believed it had disambiguated); say so instead. (#314)
+            // A book code addresses a sub-book of a Multi volume, so it cannot address anything here. Silently
+            // ignoring it produced a wrong-but-plausible navigation (the caller believed it had disambiguated);
+            // say so instead. (#314)
+            //
+            // Two things the wording must NOT claim. A non-Multi book CAN carry a book-div id (s0101m.mul has
+            // "dn1", and the XSL does emit para5_dn1), so "that code doesn't exist" would be false. And
+            // paragraph numbers are NOT unique here either — they repeat in 95 non-Multi books, because the
+            // printed numbering restarts per section. The honest reason to refuse is narrower: a book code is
+            // not the thing that would disambiguate them. Where a number does repeat, the repeats sit WITHIN a
+            // single book div, so (number, bookCode) is exactly as ambiguous as the bare number and the anchor
+            // resolves to the first occurrence. Qualifying by the deepest enclosing div would fix ~97% of that;
+            // tracked in #447. (fable LOW-6, corrected)
             if (!isMulti && bookCode is not null)
-                // Careful with the wording: a non-Multi book CAN carry a book-div id (s0101m.mul has "dn1", and
-                // the XSL does emit para5_dn1), so "that code doesn't exist" would be false. The reason to refuse
-                // is that paragraph numbers don't need disambiguating here. (fable LOW-6)
                 return NavigationResult.InvalidReference(
-                    $"'{book.FileName}' is not a multi-book volume, so paragraph numbers are unique within it; " +
-                    $"omit the book code '{bookCode}'.");
+                    $"'{book.FileName}' is not a multi-book volume, so a book code cannot address a paragraph " +
+                    $"in it; omit '{bookCode}'. (Paragraph numbers are not necessarily unique in this book " +
+                    "either, but a book code is not what would disambiguate them — see #447.)");
 
             if (isMulti)
             {
