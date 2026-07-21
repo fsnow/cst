@@ -1973,6 +1973,28 @@ public partial class BookDisplayView : UserControl
                 _logger.Error("Error processing View Source 2010 request from JavaScript | {Details}", ex.Message);
             }
         }
+        // #110: Close Tab requested from JavaScript (⌘W while the book WebView has focus).
+        else if (title != null && title.StartsWith("CST_CLOSE_TAB:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Debug("*** CLOSE TAB REQUESTED FROM JAVASCRIPT ***");
+                    // OnTitleChanged runs on the CEF thread; closing mutates the dock layout (and disposes
+                    // this very WebView), so defer to the UI thread — the current title callback returns
+                    // first, then the close runs. (BOOK-2)
+                    Dispatcher.UIThread.Post(() => SimpleTabbedWindow.CloseDockableIfClosable(_viewModel));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing Close Tab request from JavaScript | {Details}", ex.Message);
+            }
+        }
         // Check for JS log messages
         else if (title != null && title.StartsWith("CST_LOG_MSG::"))
         {
@@ -2082,6 +2104,16 @@ public partial class BookDisplayView : UserControl
                                     event.preventDefault();
                                     event.stopPropagation();
                                     document.title = 'CST_VIEW_SOURCE_1957:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                // #110: Cmd+W / Ctrl+W (Close Tab) - CEF eats the key when the book WebView
+                                // has focus, so forward it like the View Source shortcuts to close this tab.
+                                if (event.key === 'w' && (event.metaKey || event.ctrlKey)) {
+                                    window.cstLogger.log('DEBUG', 'Close Tab shortcut detected in JavaScript');
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    document.title = 'CST_CLOSE_TAB:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
                             }, true); // Use capture phase to intercept before other handlers

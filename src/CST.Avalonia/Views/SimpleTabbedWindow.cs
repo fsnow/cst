@@ -752,6 +752,49 @@ public partial class SimpleTabbedWindow : Window
     private void OnViewSource1957Click(object? sender, EventArgs e) => TriggerViewSource(source2010: false);
     private void OnViewSource2010Click(object? sender, EventArgs e) => TriggerViewSource(source2010: true);
 
+    // #110: ⌘W closes the active document tab in THIS window (main or floating routes here for the main
+    // window; floating windows use App.OnCloseTabFromFloatingWindow). Resolves the active dockable the same
+    // way ⌘G/⌘E do, but for ANY document type (book or View Source PDF); a non-closable tab (Welcome,
+    // CanClose=false) is skipped. A floating window with a single tab closes with its tab (framework closes
+    // the emptied window).
+    private void OnCloseTabClick(object? sender, EventArgs e)
+    {
+        try
+        {
+            var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
+            if (dockControl?.DataContext is not LayoutViewModel layoutViewModel ||
+                layoutViewModel.Layout is not RootDock rootDock)
+                return;
+
+            var documentDock = FindDocumentDockInLayout(rootDock);
+            CloseDockableIfClosable(documentDock?.ActiveDockable);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Close Tab (⌘W) failed");
+        }
+    }
+
+    // Close a dockable via its own factory if it exists and permits closing (Welcome opts out via
+    // CanClose=false). Shared by the ⌘W menu handler and the JS-forwarded close from a focused book WebView.
+    internal static void CloseDockableIfClosable(IDockable? active)
+    {
+        if (active is not { CanClose: true }) return;
+
+        // Belt-and-braces: CstDockFactory now stamps Factory on every added dockable, but a dockable
+        // restored from an older layout could still arrive without one — fall back to the owning dock's
+        // factory rather than silently doing nothing (the original #110 failure mode: books had a null
+        // Factory, so ⌘W closed PDFs but never a book).
+        var factory = active.Factory ?? (active.Owner as IDock)?.Factory;
+        if (factory is null)
+        {
+            Serilog.Log.Warning("Close Tab: no factory for {Dockable} - tab left open", active.GetType().Name);
+            return;
+        }
+
+        factory.CloseDockable(active);
+    }
+
     private void TriggerViewSource(bool source2010)
     {
         try
