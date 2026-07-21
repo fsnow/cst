@@ -3393,8 +3393,19 @@ namespace CST.Avalonia.Services
         }
 
         // Show Go To dialog for a book
+        // Guards against a second Go To dialog stacking on top of the first. Every trigger (native menu,
+        // the Avalonia tunnel handler, and the JS forward) funnels through here, so one flag covers them
+        // all - a fast double ⌘G, or a menu click while a dialog is already up, no longer stacks modals.
+        private bool _goToDialogOpen;
+
         private async System.Threading.Tasks.Task ShowGoToDialog(BookDisplayViewModel bookViewModel)
         {
+            if (_goToDialogOpen)
+            {
+                _logger.Debug("Go To dialog already open - ignoring repeat request");
+                return;
+            }
+            _goToDialogOpen = true;
             try
             {
                 _logger.Information("Showing Go To dialog for book: {BookFile}", bookViewModel.Book.FileName);
@@ -3439,6 +3450,10 @@ namespace CST.Avalonia.Services
             catch (Exception ex)
             {
                 _logger.Error(ex, "Error showing Go To dialog");
+            }
+            finally
+            {
+                _goToDialogOpen = false;
             }
         }
 
