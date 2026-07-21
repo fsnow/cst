@@ -44,6 +44,7 @@ public partial class BookDisplayView : UserControl
     // capture (#434). Carries the raw "above,abovePos,below,belowPos,scrollTop" string; the fraction math is
     // computed C#-side by ReadingPositionMath so it stays unit-tested.
     private TaskCompletionSource<string?>? _posTokenTcs = null;
+    private int _posTokenReq = 0; // monotonic capture request id; a late title with a stale id is ignored (#434)
     private readonly string _tabId = $"tab_{DateTime.Now.Ticks}_{Guid.NewGuid().ToString("N")[..8]}";
     private string? _tempHtmlFilePath;   // the temp HTML file this View last loaded from; deleted on dispose (BOOK-8)
 
@@ -1675,8 +1676,16 @@ public partial class BookDisplayView : UserControl
             {
                 var parts = title.Split('|');
                 var raw = parts[0].Substring("CST_POSTOKEN:".Length);
-                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
-                if (messageTabId == _tabId)
+                var messageTabId = "";
+                int reqId = -1;
+                foreach (var p in parts)
+                {
+                    if (p.StartsWith("TAB:")) messageTabId = p.Substring(4);
+                    else if (p.StartsWith("REQ:")) int.TryParse(p.Substring(4), out reqId);
+                }
+                // Only accept the title for THIS tab and THIS request — a late result from a timed-out capture
+                // (stale reqId) must not complete a newer capture with the wrong payload. (Fable PR-B review §3)
+                if (messageTabId == _tabId && reqId == _posTokenReq)
                     _posTokenTcs?.TrySetResult(raw);
             }
             catch (Exception ex)
@@ -2587,7 +2596,7 @@ public partial class BookDisplayView : UserControl
     /// cache staleness); the fraction is computed C#-side by <see cref="ReadingPositionMath"/> so it stays
     /// unit-tested. Returns null when the cache isn't built yet (nothing meaningful to capture).
     /// </summary>
-    public async Task<ReadingPositionToken?> GetCurrentPositionTokenAsync()
+    public async Task<ReadingPositionToken?> GetCurrentPositionTokenAsync(int attempt = 0)
     {
         if (_webView == null || !_isBrowserInitialized) return null;
 
@@ -2595,6 +2604,9 @@ public partial class BookDisplayView : UserControl
         {
             try
             {
+                // Tag this request so a LATE title from a previous (timed-out) capture can't complete THIS one
+                // with stale data — OnTitleChanged only accepts the matching REQ. (Fable PR-B review §3)
+                var reqId = ++_posTokenReq;
                 _posTokenTcs?.TrySetCanceled();
                 _posTokenTcs = new TaskCompletionSource<string?>();
 
@@ -2618,12 +2630,12 @@ public partial class BookDisplayView : UserControl
                             };
                             out = aName + ',' + livePos(aName) + ',' + bName + ',' + livePos(bName) + ',' + Math.round(scrollY);
                         }
-                        document.title = 'CST_POSTOKEN:' + out + '|TAB:{_tabId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                        document.title = 'CST_POSTOKEN:' + out + '|TAB:{_tabId}' + '|REQ:{_reqId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                     } catch (e) {
-                        document.title = 'CST_POSTOKEN:err|TAB:{_tabId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                        document.title = 'CST_POSTOKEN:err|TAB:{_tabId}' + '|REQ:{_reqId}' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                     }
                 })();";
-                script = script.Replace("{_tabId}", _tabId);
+                script = script.Replace("{_tabId}", _tabId).Replace("{_reqId}", reqId.ToString());
                 _webView.ExecuteScript(script);
 
                 var completed = await Task.WhenAny(_posTokenTcs.Task, Task.Delay(1000));
@@ -2638,8 +2650,11 @@ public partial class BookDisplayView : UserControl
             finally { _jsExecutionLock.Release(); }
         }
 
+        // Bounded lock-contention retry — a wedged lock must degrade to "no token" (no restore), NOT hang the
+        // synchronous script-change reload that awaits this. ~1s worth of attempts, then give up. (Fable §3)
+        if (attempt >= 10) { _logger.Warning("GetCurrentPositionTokenAsync gave up after {N} lock-contention retries", attempt); return null; }
         await Task.Delay(100);
-        return await GetCurrentPositionTokenAsync();
+        return await GetCurrentPositionTokenAsync(attempt + 1);
     }
 
     // Parse the raw "above,abovePos,below,belowPos,scrollTop" payload into a token via the unit-tested math.
@@ -2677,28 +2692,35 @@ public partial class BookDisplayView : UserControl
         // Past the last anchor → land on the upper anchor (reuse the existing anchor scroll + fuzzy fallback).
         if (token.Below == null) { ScrollToPageAnchor(token.Above); return; }
 
-        // Full bracket: resolve both live and interpolate. The JS mirrors ReadingPositionMath.ResolveTarget's
-        // clamp(a + f*(b-a)) and degrades to whichever anchor survives; if BOTH are gone it leaves the position
-        // (the nearest-paragraph fuzzy fallback for a corpus-update rename belongs to the cross-run PR).
+        // Full bracket. Restore RELATIVELY — scrollIntoView(above) then scrollBy(fraction * gap) — rather than
+        // computing an ABSOLUTE window.scrollTo(target). The final scrollTop is the same as
+        // ReadingPositionMath.ResolveTarget (above + fraction*(below-above)), but this is robust to an early /
+        // pre-reflow rect read: if the gap is misread small (or 0), it simply lands at the above anchor's top
+        // edge — i.e. no worse than ScrollToPageAnchor — instead of an absolute scrollTo(0) jump-to-top (the
+        // #423 failure mode a raw getBoundingClientRect().top could trigger). (Fable PR-B review §1/§2)
         var aboveJson = System.Text.Json.JsonSerializer.Serialize(token.Above);
         var belowJson = System.Text.Json.JsonSerializer.Serialize(token.Below);
-        var fraction = token.Fraction.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Clamp the fraction defensively (matches ResolveTarget's guard) for hand-built / persisted tokens.
+        var f = double.IsNaN(token.Fraction) ? 0.0 : Math.Max(0.0, Math.Min(1.0, token.Fraction));
+        var fraction = f.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var script = $@"
             (function() {{
-                var livePos = function(name) {{
-                    var el = document.querySelector('a[name=' + JSON.stringify(name) + ']') || document.getElementById(name);
-                    return el ? (el.getBoundingClientRect().top + window.pageYOffset) : null;
+                var find = function(name) {{
+                    return document.querySelector('a[name=' + JSON.stringify(name) + ']') || document.getElementById(name);
                 }};
-                var a = livePos({aboveJson}), b = livePos({belowJson});
-                var target = null;
-                if (a !== null && b !== null) {{
-                    var denom = b - a;
-                    target = (Math.abs(denom) <= 0.5) ? a : (a + {fraction} * denom);
-                    var lo = Math.min(a, b), hi = Math.max(a, b);
-                    target = Math.max(lo, Math.min(hi, target));
-                }} else if (a !== null) {{ target = a; }}
-                else if (b !== null) {{ target = b; }}
-                if (target !== null) {{ window.scrollTo({{ top: target, behavior: 'instant' }}); }}
+                var aEl = find({aboveJson}), bEl = find({belowJson});
+                if (aEl) {{
+                    aEl.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                    if (bEl) {{
+                        // With aEl now at the viewport top, bEl's rect.top IS the live gap to the next anchor.
+                        var gap = bEl.getBoundingClientRect().top;
+                        if (gap > 0) {{ window.scrollBy(0, {fraction} * gap); }}
+                    }}
+                }} else if (bEl) {{
+                    bEl.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                }}
+                // Both anchors gone (a corpus-update rename) → leave the position; the nearest-paragraph fuzzy
+                // fallback belongs to the cross-run PR.
             }})();";
         RunScrollScript(script);
     }

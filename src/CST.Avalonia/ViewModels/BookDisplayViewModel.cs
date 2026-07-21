@@ -464,11 +464,21 @@ namespace CST.Avalonia.ViewModels
             // timer keeps ticking against the old document, and an unconditional clear here would
             // cancel the queued restore before the new document's OnNavigationCompleted could
             // execute it. (BOOK-7)
-            if (_pendingAnchorNavigation != null && previous != null && anchor != previous)
+            if (previous != null && anchor != previous)
             {
-                _logger.Debug("Clearing pending anchor navigation {PendingAnchor} - user has scrolled to {CurrentAnchor}",
-                    _pendingAnchorNavigation, anchor);
-                _pendingAnchorNavigation = null;
+                if (_pendingAnchorNavigation != null)
+                {
+                    _logger.Debug("Clearing pending anchor navigation {PendingAnchor} - user has scrolled to {CurrentAnchor}",
+                        _pendingAnchorNavigation, anchor);
+                    _pendingAnchorNavigation = null;
+                }
+                // Same yield-to-the-user rule for the #434 token: a real scroll on the still-live old document
+                // cancels the queued position restore. (Fable PR-B review §4)
+                if (_pendingPositionToken != null)
+                {
+                    _logger.Debug("Clearing pending reading-position token - user has scrolled to {CurrentAnchor}", anchor);
+                    _pendingPositionToken = null;
+                }
             }
         }
 
