@@ -2772,9 +2772,24 @@ public partial class BookDisplayView : UserControl
                     }}
                 }} else if (bEl) {{
                     bEl.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                }} else {{
+                    // BOTH bracket anchors gone (a corpus-update rename between runs) — restore the fuzzy
+                    // nearest-paragraph fallback the coarse ScrollToPageAnchor had, so cross-run restore doesn't
+                    // regress to top-of-doc. Use whichever bracket end is a paragraph anchor. (Fable cross-run §1)
+                    var fuzzyPara = function(name) {{
+                        if (!name || name.indexOf('para') !== 0) return false;
+                        var tgt = parseInt(name.substring(4).split('-')[0]);
+                        if (isNaN(tgt)) return false;
+                        var best = null, bestDiff = Infinity;
+                        document.querySelectorAll('a[name^=""para""]').forEach(function(a) {{
+                            var n = parseInt((a.name || '').substring(4).split('-')[0]);
+                            if (!isNaN(n)) {{ var d = Math.abs(n - tgt); if (d < bestDiff) {{ bestDiff = d; best = a; }} }}
+                        }});
+                        if (best) {{ best.scrollIntoView({{ behavior: 'instant', block: 'start' }}); return true; }}
+                        return false;
+                    }};
+                    fuzzyPara({aboveJson}) || fuzzyPara({belowJson});
                 }}
-                // Both anchors gone (a corpus-update rename) → leave the position; the nearest-paragraph fuzzy
-                // fallback belongs to the cross-run PR.
             }})();";
         RunScrollScript(script);
     }

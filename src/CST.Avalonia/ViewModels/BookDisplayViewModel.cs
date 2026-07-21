@@ -541,6 +541,16 @@ namespace CST.Avalonia.ViewModels
                         _lastCapturedAnchor = anchor;
                         _logger.Information("Captured final position before shutdown: {Anchor}", anchor);
                     }
+
+                    // Also refresh the #434 token — it is PREFERRED over _lastCapturedAnchor on restore, so a
+                    // scroll in the final sub-tick window must update the token too, or the fresh anchor above
+                    // would be ignored in favour of an up-to-one-tick-staler token. (Fable cross-run review §2)
+                    var token = await BookDisplayControl.GetCurrentPositionTokenAsync();
+                    if (token != null)
+                    {
+                        _lastPositionToken = token;
+                        _logger.Debug("Captured final reading-position token before shutdown");
+                    }
                 }
                 catch (Exception ex)
                 {
