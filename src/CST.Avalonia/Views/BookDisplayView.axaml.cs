@@ -368,6 +368,11 @@ public partial class BookDisplayView : UserControl
                 // no new navigation will fire); a fresh/recreated browser is handled by
                 // OnNavigationCompleted instead. (BOOK-7)
                 ExecutePendingRestoration();
+                // A recycled tab fires no navigation, so nothing else would (re)build the anchor cache —
+                // this is the restore path where a book sat at "*" until a mouse move. Guarded/idempotent:
+                // if the live browser's JS cache is intact this no-ops; if a navigation DOES fire here,
+                // OnNavigationCompleted's unconditional rebuild supersedes this. (#423)
+                EnsureAnchorCacheBuilt();
             }
             else
             {
@@ -388,6 +393,11 @@ public partial class BookDisplayView : UserControl
                 // no new navigation will fire); a fresh/recreated browser is handled by
                 // OnNavigationCompleted instead. (BOOK-7)
                 ExecutePendingRestoration();
+                // A recycled tab fires no navigation, so nothing else would (re)build the anchor cache —
+                // this is the restore path where a book sat at "*" until a mouse move. Guarded/idempotent:
+                // if the live browser's JS cache is intact this no-ops; if a navigation DOES fire here,
+                // OnNavigationCompleted's unconditional rebuild supersedes this. (#423)
+                EnsureAnchorCacheBuilt();
             }
         }
         _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -511,6 +521,10 @@ public partial class BookDisplayView : UserControl
             {
                 _logger.Debug("View became visible, starting scroll timer.");
                 _scrollTimer.Start();
+                // Becoming visible wakes an occluded renderer — dispatch the build if it hasn't happened
+                // yet (a restored/background tab whose navigation fired while hidden). Guarded/idempotent:
+                // no-ops when the cache is already built or a build is in flight. (#423)
+                EnsureAnchorCacheBuilt();
             }
             else
             {
@@ -609,6 +623,7 @@ public partial class BookDisplayView : UserControl
                     // This prevents scroll timer from querying stale cache and overwriting
                     // ViewModel's page numbers with "*" values during tab switches
                     _anchorCacheBuilt = false;
+                    _anchorCacheBuildInFlight = false;   // new content ⇒ allow a fresh build to be dispatched (#423)
                     _logger.Debug("Invalidated anchor cache - will rebuild after navigation completes");
 
                     // Write HTML content to temporary file and load it
@@ -732,9 +747,18 @@ public partial class BookDisplayView : UserControl
             // Try to get scroll position and status in a single JavaScript call
             _logger.Debug("Executing JavaScript for status update");
             var script = $@"
+                (function() {{
                 try {{
                     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    
+
+                    // Gate on a POPULATED cache: if it is missing (a reload wiped the JS context) or
+                    // defined-but-not-yet-built (build still deferred behind a paint), emit NOTHING —
+                    // pushing an all-'*' readout in that transient state is exactly what clobbered good
+                    // page numbers in the reverted #429 (#432 constraint). The C#-side _anchorCacheBuilt
+                    // guard is the first line of defense; this catches the stale-flag case. The next
+                    // 200ms scroll tick simply retries. (#423)
+                    if (!window.cstAnchorCache || !window.cstAnchorCache.isBuilt) {{ return; }}
+
                     var vri = '*', myanmar = '*', pts = '*', thai = '*', other = '*', para = '*';
                     
                     // Try to get page references
@@ -848,8 +872,10 @@ public partial class BookDisplayView : UserControl
                     // ATOMIC UPDATE: Send all status info in one message with tab ID including chapter and best anchor
                     document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + scrollY + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
-                    document.title = 'CST_STATUS_UPDATE:VRI=*|MYANMAR=*|PTS=*|THAI=*|OTHER=*|PARA=*|CHAPTER=*|ANCHOR=*|SCROLL=0|TAB:__TAB_ID_PLACEHOLDER__';
+                    // Emit nothing on error — an all-'*' title would clobber a good readout (#432
+                    // constraint). The next scroll tick retries. (#423)
                 }}
+                }})();
             ";
 
             // Replace tab ID placeholder with actual tab ID value
@@ -864,6 +890,66 @@ public partial class BookDisplayView : UserControl
     }
 
     private bool _anchorCacheBuilt = false;
+    // True from the moment a build is dispatched until CACHE_BUILT confirms it (or a reset releases it).
+    // Makes the build idempotent now that several events can trigger it (navigation, visibility, reattach)
+    // so overlapping triggers don't inject the script 2-3x and race on window.cstAnchorCache / the shared
+    // document.title channel. (#423)
+    private bool _anchorCacheBuildInFlight = false;
+
+    private const int AnchorCacheBuildDeadlineMs = 2000;
+
+    // UNCONDITIONAL rebuild for navigation/reload. Any navigation means a fresh JS context —
+    // window.cstAnchorCache is gone no matter what _anchorCacheBuilt says, so reset both guards and
+    // dispatch. The reverted #429 attempt called the GUARDED path here; when Navigated fired without
+    // routing through LoadHtmlContent (tab switch away/back), the stale flag skipped the rebuild and
+    // the page readout stuck at "*" (the #432 regressions). The pre-#429 code also rebuilt on every
+    // navigation — this preserves that contract, minus the fixed 2s delay. (#423, #432)
+    private void RebuildAnchorCacheAfterNavigation()
+    {
+        _anchorCacheBuilt = false;
+        _anchorCacheBuildInFlight = false;
+        EnsureAnchorCacheBuilt();
+    }
+
+    // GUARDED, idempotent entry point: no-ops when the cache is already built or a build is in flight.
+    // For triggers where the JS context may still hold a valid cache — the view becoming visible, a
+    // recycled tab reattaching with a live browser (the restore path that previously had NOTHING
+    // trigger a build, leaving the page readout at "*" until a mouse move woke the renderer). NEVER
+    // use this for navigation — that must go through RebuildAnchorCacheAfterNavigation. The build
+    // script defers position reads behind a paint (see BuildAnchorPositionCache), so on an occluded
+    // background tab it simply parks and completes the moment the tab is next shown. (#423)
+    private void EnsureAnchorCacheBuilt()
+    {
+        if (_webView == null || !_isBrowserInitialized) return;
+        if (_anchorCacheBuilt || _anchorCacheBuildInFlight) return;
+
+        _anchorCacheBuildInFlight = true;
+        _logger.Debug("EnsureAnchorCacheBuilt: dispatching anchor cache build");
+        Task.Run(BuildAnchorPositionCache);
+        StartAnchorCacheBuildWatchdog();
+    }
+
+    // Safety net: _anchorCacheBuilt flips true ONLY when the JS CACHE_BUILT title round-trips, which is
+    // gated on a paint. The happy path completes in tens of ms. But if the renderer never paints this
+    // build (stuck occluded tab, JS fault before build() emits the title), _anchorCacheBuildInFlight
+    // would stay true forever and suppress every retrigger. After a deadline with no CACHE_BUILT,
+    // release the guard and retry while visible; a hidden tab just waits for its next show to
+    // re-trigger via OnIsVisibleChanged. (#423)
+    private void StartAnchorCacheBuildWatchdog()
+    {
+        Task.Run(async () =>
+        {
+            await Task.Delay(AnchorCacheBuildDeadlineMs);
+            if (_anchorCacheBuilt || !_anchorCacheBuildInFlight) return; // completed, or already released
+            _logger.Debug("Anchor cache build watchdog fired: no CACHE_BUILT within deadline; releasing guard");
+            _anchorCacheBuildInFlight = false;
+            // Marshal to the UI thread for the IsVisible / WebView reads.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (this.IsVisible) EnsureAnchorCacheBuilt();
+            });
+        });
+    }
 
     private async Task BuildAnchorPositionCache()
     {
@@ -889,7 +975,12 @@ public partial class BookDisplayView : UserControl
                         sortedPageAnchors: {{ V: [], M: [], P: [], T: [], O: [] }},
                         sortedParagraphAnchors: [],
                         sortedChapterAnchors: [],
-                        
+                        // False until build() has actually populated the anchors. The status-update
+                        // script gates on this so a defined-but-empty cache (script injected, build
+                        // still deferred behind a paint) can never emit an all-'*' readout that
+                        // clobbers good page numbers in the ViewModel — the #432 regression. (#423)
+                        isBuilt: false,
+
                         build: function() {{
                             this.pageAnchors = {{}};
                             this.paragraphAnchors = {{}};
@@ -898,13 +989,10 @@ public partial class BookDisplayView : UserControl
                             this.sortedParagraphAnchors = [];
                             this.sortedChapterAnchors = [];
 
-                            // Force layout calculation for the entire document
-                            // This is a workaround to ensure getBoundingClientRect() returns correct, absolute values
-                            var allElements = document.getElementsByTagName('*');
-                            for (var i = 0; i < allElements.length; i++) {{
-                                // Accessing a property like this forces the browser to compute the layout
-                                if (allElements[i].offsetParent === null) {{ continue; }}
-                            }}
+                            // Force a full synchronous layout so getBoundingClientRect() returns correct
+                            // absolute values. One reflow computes layout for the whole document — the old
+                            // O(N) loop over every element was redundant. (#423)
+                            void document.body.offsetHeight;
 
                             // Collect page anchors with the CORRECT position calculation.
                             ['V', 'M', 'P', 'T', 'O'].forEach(function(prefix) {{
@@ -965,26 +1053,36 @@ public partial class BookDisplayView : UserControl
                             }}
                             this.sortedChapterAnchors.sort(function(a, b) {{ return a.position - b.position; }});
 
-                            document.title = 'CST_STATUS_UPDATE:CACHE_BUILT=' + Object.keys(this.pageAnchors).length + ',' + Object.keys(this.paragraphAnchors).length + ',' + Object.keys(this.chapterAnchors).length + '|TAB:__TAB_ID_PLACEHOLDER__';
+                            // Populated — status queries may now trust this cache. Set BEFORE the title
+                            // signal so the C# side can never observe CACHE_BUILT ahead of the data. (#423)
+                            this.isBuilt = true;
+
+                            // |SEQ makes a rebuild with identical counts a *distinct* title so TitleChanged
+                            // fires again (the #156 identical-title-fires-no-event hazard); parsers scan
+                            // parts for their own prefixes, so the extra part is ignored. (#423)
+                            document.title = 'CST_STATUS_UPDATE:CACHE_BUILT=' + Object.keys(this.pageAnchors).length + ',' + Object.keys(this.paragraphAnchors).length + ',' + Object.keys(this.chapterAnchors).length + '|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                         }},
                         
                         getPageReferences: function(scrollY) {{
                             var result = {{ vri: '*', myanmar: '*', pts: '*', thai: '*', other: '*' }};
                             var docPos = scrollY + 20; // CST4 algorithm offset
-                            var isAtTop = scrollY < 100; // Consider at top if within first 100px
 
                             // PERFORMANCE OPTIMIZATION: Use pre-sorted lists instead of expensive sorting on every call
                             // The findBestAnchor function now works on the pre-sorted lists
-                            // Three cases:
-                            // 1. Normal: Look in first 200px of viewport
-                            // 2. Scrolled down: Look backwards for closest anchor
-                            // 3. At top of book: Search forward for first page number (after headings/namo tassa)
+                            // Two cases:
+                            // 1. Normal/scrolled: last anchor at or before the current position
+                            // 2. Above the FIRST marker (book title / namo tassa / a chapter heading that
+                            //    precedes the first page marker): resolve to the first anchor in the book.
+                            //    This fallback was previously gated on scrollY < 100, but a chapter-list
+                            //    jump can land the scroll above the first markers yet past 100px, which
+                            //    returned '*' — the #423 case-2 defect. Anywhere above the first marker,
+                            //    the first page IS the current page, so no threshold. (#423)
                             function findBestAnchor(sortedAnchors) {{
                                 if (!sortedAnchors || sortedAnchors.length === 0) {{
                                     return null;
                                 }}
 
-                                // Case 1 & 2: Linear search for anchor at or before current position
+                                // Case 1: Linear search for anchor at or before current position
                                 var bestAnchor = null;
                                 for (var i = 0; i < sortedAnchors.length; i++) {{
                                     if (sortedAnchors[i].position <= docPos) {{
@@ -995,9 +1093,8 @@ public partial class BookDisplayView : UserControl
                                     }}
                                 }}
 
-                                // Case 3: If at top and no anchor found, search forward for first page number
-                                if (!bestAnchor && isAtTop && sortedAnchors.length > 0) {{
-                                    // Return the very first anchor in the book
+                                // Case 2: No anchor at-or-before ⇒ we are above the first marker — return it
+                                if (!bestAnchor) {{
                                     bestAnchor = sortedAnchors[0];
                                 }}
 
@@ -1038,7 +1135,14 @@ public partial class BookDisplayView : UserControl
                                     break;
                                 }}
                             }}
-                            
+
+                            // Above the first paragraph marker (front matter / a heading that precedes it):
+                            // resolve to the FIRST paragraph instead of '*' — same above-first-marker gap as
+                            // getPageReferences, no scroll threshold. (#423)
+                            if (!bestPara) {{
+                                bestPara = this.sortedParagraphAnchors[0];
+                            }}
+
                             if (bestPara) {{
                                 // Extract paragraph number, handling both simple and range formats
                                 var paraName = bestPara.name;
@@ -1137,9 +1241,26 @@ public partial class BookDisplayView : UserControl
                         }}
                     }};
 
-                    // Build the cache immediately
-                    window.cstAnchorCache.build();
-                    
+                    // Build the cache once layout has SETTLED and the renderer has PAINTED, not after a
+                    // fixed delay. Waiting on fonts.ready avoids reading positions mid-shaping (complex
+                    // scripts reflow after first paint — reading rects too early is the #37 failure
+                    // mode); the double requestAnimationFrame reads getBoundingClientRect only after a
+                    // real paint frame — which also means that on a background/occluded tab this simply
+                    // PARKS and fires the moment the tab is next shown, instead of stalling until a
+                    // mouse move. build() emits the CACHE_BUILT title, the authoritative 'cache ready'
+                    // signal the C# side waits on; until it runs, isBuilt stays false and status
+                    // queries emit nothing. (#423)
+                    var cstBuildWhenReady = function() {{
+                        requestAnimationFrame(function() {{
+                            requestAnimationFrame(function() {{ window.cstAnchorCache.build(); }});
+                        }});
+                    }};
+                    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {{
+                        document.fonts.ready.then(cstBuildWhenReady);
+                    }} else {{
+                        cstBuildWhenReady();
+                    }}
+
                     // Rebuild cache when window is resized
                     window.addEventListener('resize', function() {{
                         setTimeout(function() {{
@@ -1154,14 +1275,17 @@ public partial class BookDisplayView : UserControl
 
                 _webView.ExecuteScript(script);
 
-                // Wait for the cache to be built
-                await Task.Delay(500);
-
-                _anchorCacheBuilt = true;
-                _logger.Debug("Anchor position cache built");
+                // Do NOT set _anchorCacheBuilt here or wait a fixed delay — the build is deferred in JS
+                // (fonts.ready + double-rAF) and completes on the next paint. _anchorCacheBuilt is set
+                // only when the script's CACHE_BUILT title arrives in OnTitleChanged — i.e. only after
+                // the cache is actually populated (the #432 constraint). (#423)
+                _logger.Debug("Anchor position cache build script injected; awaiting CACHE_BUILT");
             }
             catch (Exception ex)
             {
+                // The script never posted → no CACHE_BUILT will arrive, so release the in-flight guard
+                // to let a later trigger (visibility / reattach / navigation) retry. (#423)
+                _anchorCacheBuildInFlight = false;
                 _logger.Error("Error building anchor cache | {Details}", ex.Message);
             }
             finally
@@ -1204,16 +1328,13 @@ public partial class BookDisplayView : UserControl
                 // Set up JavaScript bridge after content loads
                 SetupJavaScriptBridge();
 
-                // Build the anchor position cache in the background.
-                _logger.Debug("Starting background task to build anchor cache");
-                Task.Run(async () =>
-                {
-                    _logger.Debug("Background task started, waiting for content to settle");
-                    await Task.Delay(2000); // Wait for content to settle
-
-                    _logger.Debug("Building anchor cache");
-                    await BuildAnchorPositionCache();
-                });
+                // Build the anchor position cache — UNCONDITIONALLY, because this navigation just gave
+                // the page a fresh JS context (any previous window.cstAnchorCache is gone, whatever
+                // _anchorCacheBuilt claims). No fixed "let it settle" delay: the build itself waits for
+                // fonts.ready + a paint frame before reading positions, so this fires immediately and
+                // the heavy lifting is gated on real readiness, not a 2s guess. (#423, #432)
+                _logger.Debug("Navigation completed - dispatching unconditional anchor cache rebuild");
+                RebuildAnchorCacheAfterNavigation();
 
                 // The document is ready — execute any queued restoration (saved anchor or saved
                 // search hit) NOW, from the one signal that knows the DOM exists. (BOOK-7)
@@ -1412,10 +1533,30 @@ public partial class BookDisplayView : UserControl
                     }
                 }
 
-                // Handle cache built notification
+                // Handle cache built notification — the authoritative 'cache ready' signal, emitted by
+                // build() only AFTER the anchors are populated, so the flag is trustworthy. (#423)
                 if (isCacheBuilt)
                 {
                     _anchorCacheBuilt = true;
+                    _anchorCacheBuildInFlight = false;
+                    // Surface the resolved page NOW instead of waiting for the next scroll tick
+                    // (≤200ms) plus its 200ms pre-lock delay. Same lock discipline as
+                    // OnScrollPositionCheck: skip (don't block) if JS work is in progress —
+                    // the timer retries. (#423)
+                    Dispatcher.UIThread.Post(async () =>
+                    {
+                        if (await _jsExecutionLock.WaitAsync(0))
+                        {
+                            try
+                            {
+                                UpdateScrollBasedStatus();
+                            }
+                            finally
+                            {
+                                _jsExecutionLock.Release();
+                            }
+                        }
+                    });
                 }
                 else
                 {
