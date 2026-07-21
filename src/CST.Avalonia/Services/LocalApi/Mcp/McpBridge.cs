@@ -92,7 +92,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         {
             using var appGoneCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var watcher = info.Pid > 0
-                ? WatchProcessLivenessAsync(info.Pid, appGoneCts, AppLivenessPollMs, appGoneCts.Token)
+                ? WatchProcessLivenessAsync(info.Pid, info.StartToken, appGoneCts, AppLivenessPollMs, appGoneCts.Token)
                 : Task.CompletedTask;
             try
             {
@@ -107,19 +107,24 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         }
 
         /// <summary>
-        /// Poll <paramref name="pid"/> (the attached CST Reader GUI, from <c>local-api.json</c>); when it is no
-        /// longer running, cancel <paramref name="onGone"/> so the relay unwinds and the bridge process exits.
-        /// Deliberately does NOT relaunch the app — a user closing it is authoritative. Checking the pid (not the
-        /// handshake file) catches every death: clean quit, crash, and <c>kill -9</c> (which leaves the file stale).
+        /// Poll the attached CST Reader GUI (<paramref name="pid"/> + <paramref name="startToken"/> from
+        /// <c>local-api.json</c>); when it is no longer the same running process, cancel <paramref name="onGone"/>
+        /// so the relay unwinds and the bridge process exits. Deliberately does NOT relaunch the app — a user
+        /// closing it is authoritative. Identity (pid + start token), not bare pid liveness, catches the deaths a
+        /// pid alone can — clean quit, crash, <c>kill -9</c> (which leaves the file stale) — plus a crash whose
+        /// pid is recycled onto another SAME-USER process (#351). On the TEARDOWN path the safe default under a
+        /// transient error is to assume the app is still alive — tearing down a working session over a glitch is
+        /// worse than polling a moment longer — so a pid recycled onto ANOTHER user's process (start time
+        /// unreadable) is not guaranteed to be caught here; the attach path catches that one. (#307 A2-6, #351)
         /// </summary>
         internal static async Task WatchProcessLivenessAsync(
-            int pid, CancellationTokenSource onGone, int pollMs, CancellationToken ct)
+            int pid, long startToken, CancellationTokenSource onGone, int pollMs, CancellationToken ct)
         {
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    if (!IsProcessAlive(pid))
+                    if (!ProcessIdentity.IsSameProcess(pid, startToken, assumeOnError: true))
                     {
                         Log.Information("--mcp-bridge: CST Reader (pid {Pid}) is gone; shutting the bridge down.", pid);
                         onGone.Cancel();
@@ -129,21 +134,6 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                 }
             }
             catch (OperationCanceledException) { }
-        }
-
-        /// <summary>True while a process with <paramref name="pid"/> exists. <see cref="Process.GetProcessById(int)"/>
-        /// throws <see cref="ArgumentException"/> when it doesn't — the canonical cross-platform liveness check.</summary>
-        private static bool IsProcessAlive(int pid)
-        {
-            try { using var _ = Process.GetProcessById(pid); return true; }
-            catch (ArgumentException) { return false; }   // definitively not running
-            catch (Exception ex)
-            {
-                // Any other failure (transient/platform quirk) must NOT fault the watcher task — that would
-                // silently lose liveness protection for the bridge's whole life. Assume alive and keep polling. (#307 A2-6)
-                Log.Warning(ex, "--mcp-bridge: liveness check for pid {Pid} failed; assuming alive.", pid);
-                return true;
-            }
         }
 
         /// <summary>
@@ -266,7 +256,12 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         internal static LocalApiInfo? ReadLiveHandshake(string dir)
         {
             var info = LocalApiInfo.Read(dir);
-            if (info is not null && info.Pid > 0 && !IsProcessAlive(info.Pid)) return null;
+            // Identity, not bare liveness: a recycled pid must not read as a live instance (#351). On the ATTACH
+            // path, an alive-but-unverifiable pid is treated as stale — falling through to launch is cheap
+            // (LaunchServices single-instances) and is the safe response to "can't confirm this is our app".
+            if (info is not null && info.Pid > 0
+                && !ProcessIdentity.IsSameProcess(info.Pid, info.StartToken, assumeOnError: false))
+                return null;
             return info;
         }
 
