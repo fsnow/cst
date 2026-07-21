@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
@@ -12,6 +13,16 @@ using Xunit.Abstractions;
 
 namespace CST.Avalonia.Tests.Performance
 {
+    /// <summary>
+    /// Exercises the indexing service's hot paths and RECORDS how long they take.
+    ///
+    /// These deliberately do not assert wall-clock bounds. A duration threshold is not an invariant of the
+    /// product — it is a property of the machine — so on a loaded runner (the full suite in parallel, a GC
+    /// pause, first-call JIT) an assert like "under 50ms" fails while every call returned the correct result.
+    /// That reports the CI box, not a regression, and a suite that goes red for reasons unrelated to the code
+    /// stops being believed. The timings are written to test output instead, where a human comparing runs can
+    /// still spot a real slowdown. (#412)
+    /// </summary>
     public class IndexingPerformanceTests : IDisposable
     {
         private readonly Mock<ILogger<IndexingService>> _mockLogger;
@@ -56,7 +67,7 @@ namespace CST.Avalonia.Tests.Performance
         }
 
         [Fact]
-        public async Task InitializeAsync_Performance_CompletesQuickly()
+        public async Task InitializeAsync_succeeds_and_its_duration_is_recorded()
         {
             // Arrange
             var stopwatch = Stopwatch.StartNew();
@@ -67,14 +78,10 @@ namespace CST.Avalonia.Tests.Performance
             // Assert
             stopwatch.Stop();
             _output.WriteLine($"InitializeAsync completed in {stopwatch.ElapsedMilliseconds}ms");
-            
-            // Should complete initialization in under 1 second
-            Assert.True(stopwatch.ElapsedMilliseconds < 1000, 
-                $"Initialization took {stopwatch.ElapsedMilliseconds}ms, expected < 1000ms");
         }
 
         [Fact]
-        public async Task IsIndexValidAsync_Performance_CompletesQuickly()
+        public async Task IsIndexValidAsync_reports_a_valid_index_and_its_duration_is_recorded()
         {
             // Arrange
             await _service.InitializeAsync();
@@ -92,13 +99,10 @@ namespace CST.Avalonia.Tests.Performance
             _output.WriteLine($"IsIndexValidAsync completed in {stopwatch.ElapsedMilliseconds}ms");
             
             Assert.True(result);
-            // Should complete validation in under 100ms even with multiple files
-            Assert.True(stopwatch.ElapsedMilliseconds < 100, 
-                $"Index validation took {stopwatch.ElapsedMilliseconds}ms, expected < 100ms");
         }
 
         [Fact]
-        public async Task MultipleIndexValidations_Performance_AreConsistent()
+        public async Task MultipleIndexValidations_all_report_valid_and_their_durations_are_recorded()
         {
             // Arrange
             await _service.InitializeAsync();
@@ -117,24 +121,15 @@ namespace CST.Avalonia.Tests.Performance
                 Assert.True(result);
             }
 
-            // Assert - times should be consistent and fast
-            var maxTime = Math.Max(Math.Max(Math.Max(Math.Max(times[0], times[1]), Math.Max(times[2], times[3])), 
-                                           Math.Max(Math.Max(times[4], times[5]), Math.Max(times[6], times[7]))), 
-                                  Math.Max(times[8], times[9]));
-            
-            var minTime = Math.Min(Math.Min(Math.Min(Math.Min(times[0], times[1]), Math.Min(times[2], times[3])), 
-                                           Math.Min(Math.Min(times[4], times[5]), Math.Min(times[6], times[7]))), 
-                                  Math.Min(times[8], times[9]));
-
-            _output.WriteLine($"Index validation times - Min: {minTime}ms, Max: {maxTime}ms");
-            
-            // Max time should be under 50ms and variation should be reasonable
-            Assert.True(maxTime < 50, $"Maximum validation time was {maxTime}ms, expected < 50ms");
-            Assert.True(maxTime - minTime < 30, $"Time variation was {maxTime - minTime}ms, expected < 30ms");
+            // The correctness assertion is inside the loop: all 10 calls reported a valid index. What is left
+            // here is measurement. (The old asserts — max < 50ms and spread < 30ms — were the flake in #412:
+            // a first-call JIT or a GC pause during a parallel suite run trips them with min 0ms / max ~40ms.)
+            _output.WriteLine($"Index validation times (ms): {string.Join(", ", times)}");
+            _output.WriteLine($"  min {times.Min()}ms, max {times.Max()}ms, spread {times.Max() - times.Min()}ms");
         }
 
         [Fact]
-        public async Task OptimizeIndexAsync_Performance_CompletesQuickly()
+        public async Task OptimizeIndexAsync_completes_and_its_duration_is_recorded()
         {
             // Arrange
             await _service.InitializeAsync();
@@ -145,11 +140,9 @@ namespace CST.Avalonia.Tests.Performance
 
             // Assert
             stopwatch.Stop();
+            // Modern Lucene handles optimization automatically, so this is expected to be near-instant — but
+            // "< 10ms" was the tightest bound in the file and the least defensible on a loaded machine.
             _output.WriteLine($"OptimizeIndexAsync completed in {stopwatch.ElapsedMilliseconds}ms");
-            
-            // Since modern Lucene handles optimization automatically, this should be very fast
-            Assert.True(stopwatch.ElapsedMilliseconds < 10, 
-                $"Index optimization took {stopwatch.ElapsedMilliseconds}ms, expected < 10ms");
         }
 
         [Fact]
@@ -175,13 +168,16 @@ namespace CST.Avalonia.Tests.Performance
             _output.WriteLine($"Memory usage - Initial: {initialMemory:N0}, After Init: {afterInitMemory:N0}, After GC: {afterGCMemory:N0}");
             _output.WriteLine($"Memory increase - Immediate: {memoryIncrease:N0} bytes, Stable: {stableMemoryIncrease:N0} bytes");
 
-            // Service initialization should not use excessive memory (< 10MB increase is reasonable)
+            // Kept, unlike the timing asserts: 10MB of headroom against a service that should allocate almost
+            // nothing is a wide enough margin to be a real signal. Note the residual hazard — GetTotalMemory is
+            // PROCESS-wide, so a parallel test allocating heavily in this window could still trip it. If that is
+            // ever observed, this should go the same way as the timing asserts rather than being loosened. (#412)
             Assert.True(stableMemoryIncrease < 10_000_000, 
                 $"Service initialization used {stableMemoryIncrease:N0} bytes, expected < 10MB");
         }
 
         [Fact]
-        public void ServiceCreation_Performance_IsFast()
+        public void ServiceCreation_succeeds_repeatedly_and_its_duration_is_recorded()
         {
             // Arrange & Act
             var stopwatch = Stopwatch.StartNew();
@@ -189,18 +185,15 @@ namespace CST.Avalonia.Tests.Performance
             // Create 100 service instances to test creation overhead
             for (int i = 0; i < 100; i++)
             {
+                // Construct only — no initialization. Assert it actually built, so the loop cannot be optimized
+                // away and the test still verifies something now that the timing bound is gone.
                 var service = new IndexingService(_mockLogger.Object, _mockSettingsService.Object, _mockXmlFileDatesService.Object);
-                // Just create, don't initialize
+                Assert.NotNull(service);
             }
             
             stopwatch.Stop();
 
-            // Assert
             _output.WriteLine($"Creating 100 IndexingService instances took {stopwatch.ElapsedMilliseconds}ms");
-            
-            // Should be able to create many service instances quickly
-            Assert.True(stopwatch.ElapsedMilliseconds < 100, 
-                $"Creating 100 services took {stopwatch.ElapsedMilliseconds}ms, expected < 100ms");
         }
     }
 }
