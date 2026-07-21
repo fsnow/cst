@@ -827,9 +827,8 @@ namespace CST.Avalonia.ViewModels
         private readonly ISettingsService _settingsService;
         private bool _aiEnabled;
         private bool _localApiEnabled;
+        private bool _mcpEnabled;
         private bool _allowRemoteControl;
-        private int _port;
-        private string _token = string.Empty;
 
         public AiSettingsViewModel(ISettingsService settingsService)
         {
@@ -838,24 +837,8 @@ namespace CST.Avalonia.ViewModels
             var ai = _settingsService.Settings.Ai;
             _aiEnabled = ai.Enabled;
             _localApiEnabled = ai.LocalApi.Enabled;
+            _mcpEnabled = ai.LocalApi.EnableMcpServer;
             _allowRemoteControl = ai.LocalApi.AllowRemoteControl;
-            _port = ai.LocalApi.Port;
-            _token = ai.LocalApi.Token ?? string.Empty;
-
-            // Rotate icons (password-generator style); both apply on the next API (re)start. (#275)
-            // #320 (A7-5): PickAvailable() runs TcpListener probes whose non-SocketException failures (e.g. a
-            // sandbox/entitlement SecurityException) would otherwise escape a ReactiveCommand with no
-            // ThrownExceptions subscriber and crash via RxApp's default handler. Contain them here.
-            RotatePortCommand = ReactiveCommand.Create(() =>
-            {
-                try { Port = CST.Avalonia.Services.LocalApi.PortAvailability.PickAvailable(); }
-                catch (Exception ex) { Log.Warning(ex, "Rotate port failed"); }
-            });
-            RotateTokenCommand = ReactiveCommand.Create(() =>
-            {
-                try { Token = CST.Avalonia.Services.LocalApi.ApiToken.Generate(); }
-                catch (Exception ex) { Log.Warning(ex, "Rotate token failed"); }
-            });
         }
 
         /// <summary>Master switch — "Enable AI Features". Everything AI-related is gated behind this (default OFF).</summary>
@@ -873,7 +856,8 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        /// <summary>Run the loopback corpus-API server. Effective only while the master is also on.</summary>
+        /// <summary>Expose the /v1 REST surface (corpus data for code agents). Effective only while the master
+        /// is also on. Independent of <see cref="McpEnabled"/> — the two surfaces run separately. (#280)</summary>
         public bool LocalApiEnabled
         {
             get => _localApiEnabled;
@@ -881,13 +865,24 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _localApiEnabled, value);
                 _settingsService.Settings.Ai.LocalApi.Enabled = value;
-                // #318 (A7-1): this single "Run the local API server" checkbox controls the WHOLE loopback
-                // server (both /v1 REST and /mcp), matching its label. EnableMcpServer has no separate UI yet
-                // (that lands in the #280 rework), so gate it here too — otherwise unchecking this leaves /mcp
-                // running (ServerShouldRun = LocalApiEnabled || McpEnabled) and silently ignores the opt-out.
+                _settingsService.RequestSave();
+                // Remote control follows "a server surface is running", not the REST flag specifically. (#440)
+                this.RaisePropertyChanged(nameof(RemoteControlEnabled));
+            }
+        }
+
+        /// <summary>Expose the /mcp surface (for chat clients like Claude Desktop, via the app's --mcp-bridge
+        /// relay). Effective only while the master is also on. Independent of <see cref="LocalApiEnabled"/>. The
+        /// #318 workaround that forced this to track the REST flag is gone now that it has its own toggle. (#280)</summary>
+        public bool McpEnabled
+        {
+            get => _mcpEnabled;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _mcpEnabled, value);
                 _settingsService.Settings.Ai.LocalApi.EnableMcpServer = value;
                 _settingsService.RequestSave();
-                // Remote control is only reachable when the local API is on.
+                // navigate is offered over BOTH surfaces, so remote control is reachable whenever EITHER runs. (#440)
                 this.RaisePropertyChanged(nameof(RemoteControlEnabled));
             }
         }
@@ -904,40 +899,6 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        /// <summary>Loopback port. A FIXED default so a BYO-MCP config stays valid across restarts; 0 = ephemeral.
-        /// Applies on the next API (re)start.</summary>
-        public int Port
-        {
-            get => _port;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _port, value);
-                _settingsService.Settings.Ai.LocalApi.Port = value;
-                _settingsService.RequestSave();
-                this.RaisePropertyChanged(nameof(McpClientConfigJson));
-            }
-        }
-
-        /// <summary>The persisted bearer token, reused across launches. Surfaced so it can be copied into an MCP
-        /// client config; rotate to invalidate the old one. Applies on the next API (re)start. (#275)</summary>
-        public string Token
-        {
-            get => _token;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _token, value);
-                _settingsService.Settings.Ai.LocalApi.Token = value;
-                _settingsService.RequestSave();
-                this.RaisePropertyChanged(nameof(McpClientConfigJson));
-            }
-        }
-
-        /// <summary>Rotate to a fresh AVAILABLE loopback port (rotate icon). (#275)</summary>
-        public ReactiveCommand<Unit, Unit> RotatePortCommand { get; }
-
-        /// <summary>Rotate (regenerate) the bearer token (rotate icon). (#275)</summary>
-        public ReactiveCommand<Unit, Unit> RotateTokenCommand { get; }
-
         /// <summary>Pre-populated Claude Desktop MCP config for the "Copy MCP configuration" button. Emits the
         /// #278 bridge config (spawn this app with --mcp-bridge); carries no port/token. (#280 reworks the UI.)</summary>
         public string McpClientConfigJson => CST.Avalonia.Services.LocalApi.McpClientConfig.ClaudeDesktop(
@@ -946,8 +907,10 @@ namespace CST.Avalonia.ViewModels
         /// <summary>The local-API sub-permissions are editable only when the master switch is on.</summary>
         public bool SubPermissionsEnabled => AiEnabled;
 
-        /// <summary>"Allow remote control" is editable only when the master AND the local API are both on.</summary>
-        public bool RemoteControlEnabled => AiEnabled && LocalApiEnabled;
+        /// <summary>"Allow remote control" is editable whenever the master is on and a server surface (REST OR
+        /// MCP) is running — because navigate is offered over both. Keying it to the REST flag alone would grey
+        /// it out for an MCP-only user whose navigate works fine, telling them to enable a box already ticked. (#440)</summary>
+        public bool RemoteControlEnabled => AiEnabled && (LocalApiEnabled || McpEnabled);
     }
 
     public class DeveloperSettingsViewModel : ViewModelBase

@@ -21,8 +21,8 @@ namespace CST.Avalonia.Tests.Models
             Assert.True(ai.LocalApi.Enabled);         // sub-permissions ON...
             Assert.True(ai.LocalApi.EnableMcpServer);
             Assert.True(ai.LocalApi.AllowRemoteControl);
-            Assert.Equal(0, ai.LocalApi.Port);        // ephemeral by default (#278 Phase 4 reverted the fixed port)
-            Assert.Null(ai.LocalApi.Token);           // per-session token minted at start; not persisted
+            // Port/Token are no longer settings fields (#280): the loopback port is ephemeral and the token
+            // per-session, both held only in local-api.json.
         }
 
         [Fact]

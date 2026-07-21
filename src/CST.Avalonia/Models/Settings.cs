@@ -31,8 +31,9 @@ namespace CST.Avalonia.Models
     /// The "AI" settings area. <see cref="Enabled"/> is the master "Enable AI Features" switch (default OFF);
     /// the sub-permissions default ON, so enabling the master turns everything on and the user can then pare
     /// back. Effective state is always master AND the specific permission, so unchecking the master disables
-    /// everything at once. Secrets (the local-API port + bearer token) are never stored here — they are
-    /// written to <c>local-api.json</c> at runtime.
+    /// everything at once. No secrets are stored here: the loopback port is ephemeral and the bearer token is
+    /// minted per session, both written only to <c>local-api.json</c> at runtime. (True again since #280 removed
+    /// the interim persisted port/token fields.)
     /// </summary>
     public class AiSettings
     {
@@ -77,13 +78,6 @@ namespace CST.Avalonia.Models
         /// <summary>Let agents drive the reader (navigate/highlight) vs. read-only. On by default under the master.</summary>
         public bool AllowRemoteControl { get; set; } = true;
 
-        // Deprecated (#278 Phase 4): the API reverted to an EPHEMERAL loopback port + a PER-SESSION token — no
-        // stable secret is stored, and an MCP client no longer needs one (the app's --mcp-bridge relay reads the
-        // current local-api.json each spawn). The runtime ignores these; they remain only so the pre-#280 Settings
-        // UI keeps compiling and #280 removes them.
-        public int Port { get; set; } = 0;                 // 0 => ephemeral (OS-assigned)
-        public const int DefaultPort = 8765;               // legacy fixed default (#276), retained for the UI only
-        public string? Token { get; set; }                 // no longer persisted; per-session token minted at start
     }
     
     public class DeveloperSettings
