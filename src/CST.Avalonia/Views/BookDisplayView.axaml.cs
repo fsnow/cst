@@ -1995,6 +1995,27 @@ public partial class BookDisplayView : UserControl
                 _logger.Error("Error processing Close Tab request from JavaScript | {Details}", ex.Message);
             }
         }
+        // #443: Go To requested from JavaScript (⌘G while this book's WebView has focus). The message
+        // arrives on the focused book's own view, so it is inherently the right book — no layout
+        // resolution, the same reasoning as CST_CLOSE_TAB above.
+        else if (title != null && title.StartsWith("CST_GOTO:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Debug("*** GO TO REQUESTED FROM JAVASCRIPT ***");
+                    Dispatcher.UIThread.Post(() => _viewModel?.InvokeOpenGoToDialog());
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing Go To request from JavaScript | {Details}", ex.Message);
+            }
+        }
         // Check for JS log messages
         else if (title != null && title.StartsWith("CST_LOG_MSG::"))
         {
@@ -2104,6 +2125,23 @@ public partial class BookDisplayView : UserControl
                                     event.preventDefault();
                                     event.stopPropagation();
                                     document.title = 'CST_VIEW_SOURCE_1957:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                // #443: Cmd+G / Ctrl+G (Go To) - when this WebView has focus, CEF holds the
+                                // native focus so the window's focus resolution comes back empty and the
+                                // native-menu Go To falls back to the first split's book. Forward it like
+                                // View Source / Close so it always targets THIS book.
+                                // Match 'g' AND 'G' (Caps Lock yields 'G' in Chromium); !shiftKey so ⌘⇧G
+                                // isn't caught. Without the 'G' case, ⌘G under Caps Lock would fall through
+                                // to the native menu and reopen the wrong-split bug. event.repeat is dropped
+                                // so holding ⌘G can't stack modal Go To dialogs.
+                                if ((event.key === 'g' || event.key === 'G') && !event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.repeat) return false;
+                                    window.cstLogger.log('DEBUG', 'Go To shortcut detected in JavaScript');
+                                    document.title = 'CST_GOTO:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
 
