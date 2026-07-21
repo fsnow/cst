@@ -108,10 +108,25 @@ public partial class SearchPanel : UserControl
                     Log.Information("[SearchPanel] Opening book {FileName} with {TermCount} search terms for highlighting", 
                         occurrence.Book.FileName, searchTerms.Count);
                     
-                    // Use the search-specific method to open book with highlighting
-                    layoutViewModel.Factory.OpenBookInNewTab(occurrence.Book, searchTerms, occurrence.Positions);
-                    
-                    Log.Debug("[SearchPanel] OpenBookInNewTab call completed");
+                    // Route through the shared presentation command (#187) rather than calling the dock
+                    // directly, so the search UI and the agent present-tool drive the reader identically.
+                    var presenter = App.ServiceProvider?.GetService<Services.Presentation.IPresentationService>();
+                    if (presenter != null)
+                    {
+                        _ = presenter.PresentAsync(new Services.Presentation.PresentationRequest
+                        {
+                            Book = occurrence.Book,
+                            SearchTerms = searchTerms,
+                            Positions = occurrence.Positions
+                        });
+                    }
+                    else
+                    {
+                        // Defensive: fall back to the dock call if the service isn't registered.
+                        layoutViewModel.Factory.OpenBookInNewTab(occurrence.Book, searchTerms, occurrence.Positions);
+                    }
+
+                    Log.Debug("[SearchPanel] present request dispatched");
                 }
                 else
                 {

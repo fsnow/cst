@@ -1049,6 +1049,8 @@ public partial class App : Application
         services.AddSingleton<ChapterListsService>();
         // services.AddSingleton<IBookService, BookService>();
         services.AddSingleton<ISearchService, SearchService>();
+        // The single "present the reader in context" command shared by every surface (#187).
+        services.AddSingleton<Services.Presentation.IPresentationService, Services.Presentation.PresentationService>();
         services.AddSingleton<IDictionaryService, DictionaryService>();
 
         // Lemma/dictionary/sandhi (dpd-cst-subset asset — our derived DPD subset for CST). NOT AI-gated — a core
