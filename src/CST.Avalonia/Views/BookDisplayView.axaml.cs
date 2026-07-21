@@ -1652,6 +1652,8 @@ public partial class BookDisplayView : UserControl
                             double.TryParse(ptAP, System.Globalization.NumberStyles.Any, inv, out var aP);
                             double.TryParse(ptBP, System.Globalization.NumberStyles.Any, inv, out var bP);
                             _lastPositionToken = ReadingPositionMath.Capture(above, aP, below, bP, scrollY);
+                            // Push to the ViewModel so it can be persisted on shutdown for cross-run restore (#434).
+                            _viewModel?.UpdateLastPositionToken(_lastPositionToken);
                         }
                     }
 

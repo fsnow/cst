@@ -474,7 +474,8 @@ namespace CST.Avalonia.Services
         
         public void OpenBook(CST.Book book, string? anchor, Script? bookScript, string? windowId,
             List<string>? searchTerms = null, int? docId = null, List<TermPosition>? searchPositions = null,
-            int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true)
+            int? initialCurrentHitIndex = null, bool showFootnotes = true, bool showSearchTerms = true,
+            ReadingPositionToken? initialPositionToken = null)
         {
             _logger.Information("Opening book: {BookFile} with anchor: {Anchor}, SearchTerms: {TermCount}, Positions: {PosCount}",
                 book.FileName, anchor ?? "null", searchTerms?.Count ?? 0, searchPositions?.Count ?? 0);
@@ -514,7 +515,7 @@ namespace CST.Avalonia.Services
             Script targetScript = bookScript ?? scriptService?.CurrentScript ?? Script.Devanagari;
 
             // Pass search data if available (for state restoration with highlighting)
-            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex, targetScript);
+            var bookDisplayViewModel = new BookDisplayViewModel(book, searchTerms, anchor, chapterListsService, settingsService, fontService, docId, searchPositions, null, this, initialCurrentHitIndex, targetScript, initialPositionToken);
 
             // No-op given the seed above (avoids the second full pipeline run); kept as a safety net.
             bookDisplayViewModel.BookScript = targetScript;
@@ -669,7 +670,8 @@ namespace CST.Avalonia.Services
                     SearchTerms = bookDisplayViewModel.SearchTerms ?? new List<string>(),
                     DocId = bookDisplayViewModel.DocId,
                     SearchPositions = bookDisplayViewModel.SearchPositions ?? new List<TermPosition>(),
-                    CurrentAnchor = currentAnchor, // Save scroll position for restoration
+                    CurrentAnchor = currentAnchor, // Save scroll position for restoration (coarse fallback)
+                    ReadingPosition = bookDisplayViewModel.LastPositionToken, // #434 exact reading position (preferred)
                     CurrentHitIndex = bookDisplayViewModel.CurrentHitIndex, // Save which search hit was active
                     TotalHits = bookDisplayViewModel.TotalHits,
                     TabIndex = 0, // TODO: Get actual tab index from dock
