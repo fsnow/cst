@@ -329,40 +329,37 @@
                                         <CheckBox IsChecked="{Binding AiEnabled}"
                                                  Content="Enable AI Features"
                                                  Margin="0,10,0,0"/>
-                                        <TextBlock Text="Master switch. When off, nothing AI-related runs."
+                                        <TextBlock Text="Master switch. When off, nothing AI-related runs. Two access modes are available below: a local API for code agents, and MCP for chat clients like Claude Desktop."
                                                   Classes="SettingDescription"/>
                                     </StackPanel>
                                 </Border>
 
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
-                                        <TextBlock Text="Local API Server" Classes="SettingLabel"/>
-                                        <TextBlock Text="A loopback-only HTTP server that exposes read access to the corpus (search, dictionary, passages) to local agents."
+                                        <TextBlock Text="Access for AI Clients" Classes="SettingLabel"/>
+                                        <TextBlock Text="A loopback-only server that exposes read access to the corpus (search, dictionary, passages). Two surfaces run on it independently — enable either or both."
                                                   Classes="SettingDescription"/>
 
+                                        <!-- REST surface (/v1): for code agents. -->
                                         <CheckBox IsChecked="{Binding LocalApiEnabled}"
                                                  IsEnabled="{Binding SubPermissionsEnabled}"
-                                                 Content="Run the local API server"
+                                                 Content="Run the local API server (for code agents)"
                                                  Margin="0,10,0,0"/>
 
+                                        <!-- MCP surface (/mcp): for chat clients, reached via the app's mcp-bridge relay. #280 -->
+                                        <CheckBox IsChecked="{Binding McpEnabled}"
+                                                 IsEnabled="{Binding SubPermissionsEnabled}"
+                                                 Content="Enable MCP access (Claude Desktop &amp; other chat clients)"
+                                                 Margin="0,5,0,0"/>
+
+                                        <!-- Cross-cutting capability: navigate/highlight is offered over BOTH surfaces, so this
+                                             is enabled whenever either one is on (RemoteControlEnabled). #440 -->
                                         <CheckBox IsChecked="{Binding AllowRemoteControl}"
                                                  IsEnabled="{Binding RemoteControlEnabled}"
                                                  Content="Allow agents to drive the reader (navigate and highlight)"
                                                  Margin="0,5,0,0"/>
                                         <TextBlock Text="When off, agents can read the corpus but cannot control the reader window."
                                                   Classes="SettingDescription"/>
-
-                                        <!-- #280 UI (Kestrel): the port + token controls were removed here — the API is now
-                                             ephemeral (OS-assigned port) with a per-session token, both in local-api.json, so
-                                             there is nothing to configure or copy. The ViewModel now exposes `McpEnabled`
-                                             (bound to LocalApi.EnableMcpServer, independent of the REST toggle above). ADD the
-                                             MCP sub-permission checkbox here, e.g.:
-                                               <CheckBox IsChecked="{Binding McpEnabled}"
-                                                         IsEnabled="{Binding SubPermissionsEnabled}"
-                                                         Content="Enable MCP access (Claude Desktop &amp; other chat clients)"
-                                                         Margin="0,10,0,0"/>
-                                             plus the top-of-panel one-line mention of the two access modes. The Copy-config
-                                             block below is already correct (bridge config, no port/token). -->
 
                                         <!-- Copy the ready-made Claude Desktop MCP config: it launches CST Reader's
                                              mcp-bridge relay and carries no port/token. Clipboard is done in
@@ -376,7 +373,7 @@
                                                       Foreground="{DynamicResource DockApplicationAccentBrushLow}"
                                                       VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
                                         </StackPanel>
-                                        <TextBlock Text="Paste into the Claude Desktop config (~/Library/Application Support/Claude/claude_desktop_config.json) under &quot;mcpServers&quot;. It launches CST Reader's --mcp-bridge relay and embeds no port or token — copy it once (no Node, and no re-copy after rotating)."
+                                        <TextBlock Text="Paste into the Claude Desktop config (~/Library/Application Support/Claude/claude_desktop_config.json) under &quot;mcpServers&quot;. It launches CST Reader's --mcp-bridge relay and embeds no port or token, so you copy it just once — no Node.js needed. Enable MCP access above; CST Reader must be running, and can auto-launch when a client connects."
                                                   Classes="SettingDescription" Margin="0,4,0,0"/>
 
                                         <Expander Header="Show configuration" Margin="0,4,0,0">
