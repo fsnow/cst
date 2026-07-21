@@ -578,14 +578,21 @@ public partial class BookDisplayView : UserControl
 
         bool firstMeasure = _lastKnownWidth <= 0 || _lastKnownHeight <= 0;
         double dw = Math.Abs(b.Width - _lastKnownWidth);
-        _lastKnownWidth = b.Width;
-        _lastKnownHeight = b.Height;
-        if (firstMeasure) return;
+        _lastKnownHeight = b.Height;   // tracked, but height never gates a gesture (it doesn't re-wrap text)
+        if (firstMeasure)
+        {
+            _lastKnownWidth = b.Width;
+            return;
+        }
 
         // Only a WIDTH change re-wraps the text. A height-only drag doesn't reflow, so native scrollTop is
         // already lossless there and restoring could only lose (it would re-apply a slightly stale token).
-        // This also ignores sub-pixel churn and position-only (X/Y) Bounds changes. (fable §5)
+        // This also ignores position-only (X/Y) Bounds changes. (fable §5)
+        //
+        // Deliberately do NOT commit the width baseline below the threshold: sub-pixel deltas must ACCUMULATE,
+        // or a very slow drag (<1 DIP per event) would re-baseline every step and never start a gesture at all.
         if (dw < 1) return;
+        _lastKnownWidth = b.Width;
 
         // Nothing meaningful to preserve until the cache has produced a position, and never fight a hidden tab.
         if (!_anchorCacheBuilt || !this.IsVisible) return;
