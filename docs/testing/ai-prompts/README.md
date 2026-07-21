@@ -40,3 +40,4 @@ They serve three purposes, in order of importance:
 | Prompt | Exercises | Requires |
 | --- | --- | --- |
 | [navigate-show-me.md](navigate-show-me.md) | `POST /v1/navigate` + MCP `navigate` — driving the reader window, and the consent gate (#187) | Settings → AI → "Allow agents to drive the reader" |
+| [citation-fidelity.md](citation-fidelity.md) | search → occurrences → passage, and whether the docs successfully steer an agent to cite by PAGE rather than paragraph (#449) | nothing beyond the local API |
