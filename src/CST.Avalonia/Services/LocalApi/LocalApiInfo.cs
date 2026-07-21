@@ -11,14 +11,22 @@ namespace CST.Avalonia.Services.LocalApi
     /// The discovery/handshake file for the local API (AI_INTEGRATION.md §6). Written to
     /// <c>…/CSTReader/local-api.json</c> when the server starts so a client (the MCP adapter, a coding agent)
     /// can find the ephemeral <see cref="Port"/> and present the per-session bearer <see cref="Token"/>. The
-    /// <see cref="Pid"/> lets a client detect a stale file after a crash. Written owner-only where the OS
-    /// supports it; never contains anything but this handshake (the token is a session secret, not persisted
-    /// to settings).
+    /// <see cref="Pid"/> plus <see cref="StartToken"/> let a client detect a stale file after a crash: a bare
+    /// pid can be recycled by the OS onto an unrelated process, so the pid is paired with a stable start token to
+    /// form a durable identity (#351). Written owner-only where the OS supports it; never contains anything but
+    /// this handshake (the token is a session secret, not persisted to settings).
     /// </summary>
+    /// <param name="StartToken">An opaque, stable identity token for the publishing process — its start time,
+    /// in whatever clock-immune form the platform provides (see <c>ProcessIdentity</c>). 0 = not recorded, in
+    /// which case a reader falls back to a pid-only liveness check. Compared only for equality, never interpreted.
+    /// On macOS/Windows this exceeds 2^53, so a consumer that round-trips this file through IEEE doubles (e.g. a
+    /// naive JS reader) would corrupt it — the only in-process reader is the C# bridge, which keeps it a
+    /// <c>long</c>, and external readers need just port/token; revisit as a string if that ever changes.</param>
     public sealed record LocalApiInfo(
         [property: JsonPropertyName("port")] int Port,
         [property: JsonPropertyName("token")] string Token,
-        [property: JsonPropertyName("pid")] int Pid)
+        [property: JsonPropertyName("pid")] int Pid,
+        [property: JsonPropertyName("startToken")] long StartToken = 0)
     {
         public const string FileName = "local-api.json";
 

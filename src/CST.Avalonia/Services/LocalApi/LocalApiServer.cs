@@ -313,7 +313,10 @@ namespace CST.Avalonia.Services.LocalApi
             Token = token;
             BaseUrl = $"http://127.0.0.1:{port}";
 
-            new LocalApiInfo(port, token, Environment.ProcessId).Write(_handshakeDirectory);
+            // Record start time alongside the pid so a crashed instance's recycled pid can't be mistaken for a
+            // live one (#351).
+            new LocalApiInfo(port, token, Environment.ProcessId, ProcessIdentity.CurrentStartToken())
+                .Write(_handshakeDirectory);
             _logger.Information("Local API listening on {BaseUrl} (rest={Rest}, mcp={Mcp})",
                 BaseUrl, _restApiEnabled, _mcpEnabled);
             }

@@ -113,12 +113,82 @@ namespace CST.Avalonia.Tests.Services
                 new LocalApiInfo(51515, "TOK", 2_000_000_000).Write(dir);   // pid far above OS max = not running
                 Assert.Null(McpBridge.ReadLiveHandshake(dir));
 
-                new LocalApiInfo(51515, "TOK", Environment.ProcessId).Write(dir);   // a live pid
+                // A live pid with no recorded start time (0) → pid-only fallback, treated as live. This keeps a
+                // handshake written before #351 (or by a build that couldn't read its own start time) usable.
+                new LocalApiInfo(51515, "TOK", Environment.ProcessId).Write(dir);
                 var info = McpBridge.ReadLiveHandshake(dir);
                 Assert.NotNull(info);
                 Assert.Equal(Environment.ProcessId, info!.Pid);
+
+                // A live pid whose recorded start time is ours → verified live.
+                new LocalApiInfo(51515, "TOK", Environment.ProcessId,
+                    CST.Avalonia.Services.LocalApi.ProcessIdentity.CurrentStartToken()).Write(dir);
+                Assert.NotNull(McpBridge.ReadLiveHandshake(dir));
+
+                // #351: a live pid whose recorded start time is NOT ours = a recycled pid from a crashed
+                // instance. Must be treated as stale (null) so attach falls through to launch, rather than
+                // attaching to a dead loopback port.
+                long impostorStart = CST.Avalonia.Services.LocalApi.ProcessIdentity.CurrentStartToken()
+                                     - System.TimeSpan.FromHours(1).Ticks;
+                new LocalApiInfo(51515, "TOK", Environment.ProcessId, impostorStart).Write(dir);
+                Assert.Null(McpBridge.ReadLiveHandshake(dir));
             }
             finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+        }
+
+        [Fact]
+        public void LocalApiInfo_round_trips_the_start_time()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "cst-hsrt-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                new LocalApiInfo(52344, "tok", 4242, StartToken: 638_000_000_000_000_000L).Write(dir);
+                var back = LocalApiInfo.Read(dir);
+                Assert.NotNull(back);
+                Assert.Equal(638_000_000_000_000_000L, back!.StartToken);
+
+                // Absent from the JSON (a pre-#351 file) deserializes to 0, the pid-only sentinel.
+                File.WriteAllText(LocalApiInfo.PathIn(dir), "{\"port\":1,\"token\":\"t\",\"pid\":2}");
+                Assert.Equal(0, LocalApiInfo.Read(dir)!.StartToken);
+            }
+            finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+        }
+
+        [Fact]
+        public async Task Liveness_watcher_with_no_recorded_token_falls_back_to_pid_only_and_stays_quiet()
+        {
+            // A live pid + startToken 0 (a pre-#351 handshake) must degrade to the old pid-only check, not trip.
+            using var onGone = new CancellationTokenSource();
+            var watch = McpBridge.WatchProcessLivenessAsync(
+                System.Environment.ProcessId, startToken: 0, onGone, pollMs: 20, onGone.Token);
+
+            await Task.Delay(300);
+            Assert.False(onGone.IsCancellationRequested);
+
+            onGone.Cancel();
+            await watch;
+        }
+
+        [Theory]
+        // field 22 (starttime jiffies) is the value; comm may contain spaces and parentheses, which is the trap.
+        // Tail after the last ')' starts at field 3 (state); starttime is field 22 = tail[19]. So 19 filler
+        // tokens (fields 3–21) then the value, then any trailing fields.
+        [InlineData("1234 (cst) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 987654 0 0", 987654L)]
+        [InlineData("42 (weird )name( x) R 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 555 0 0", 555L)]
+        public void Linux_proc_stat_start_jiffies_is_parsed_past_a_tricky_comm(string stat, long expected)
+        {
+            Assert.True(CST.Avalonia.Services.LocalApi.ProcessIdentity.TryParseLinuxStartJiffies(stat, out var j));
+            Assert.Equal(expected, j);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("no closing paren here")]
+        [InlineData("1 (short) S 1 2 3")]   // too few fields to reach field 22
+        public void Linux_proc_stat_parse_rejects_malformed_input(string stat)
+        {
+            Assert.False(CST.Avalonia.Services.LocalApi.ProcessIdentity.TryParseLinuxStartJiffies(stat, out _));
         }
 
         [Fact]
@@ -128,7 +198,7 @@ namespace CST.Avalonia.Tests.Services
             // exits (one -> zero, never a lone bridge). A pid far above the OS max is guaranteed not running. (#278)
             const int deadPid = 2_000_000_000;
             using var onGone = new CancellationTokenSource();
-            var watch = McpBridge.WatchProcessLivenessAsync(deadPid, onGone, pollMs: 20, onGone.Token);
+            var watch = McpBridge.WatchProcessLivenessAsync(deadPid, startToken: 0, onGone, pollMs: 20, onGone.Token);
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             while (!onGone.IsCancellationRequested && sw.Elapsed < System.TimeSpan.FromSeconds(2))
@@ -141,15 +211,36 @@ namespace CST.Avalonia.Tests.Services
         [Fact]
         public async Task Liveness_watcher_stays_quiet_while_the_process_is_alive()
         {
-            // Our own process is alive -> the watcher must NOT trip. (#278)
+            // Our own process is alive AND its recorded start time matches -> the watcher must NOT trip. (#278)
             using var onGone = new CancellationTokenSource();
             var watch = McpBridge.WatchProcessLivenessAsync(
-                System.Environment.ProcessId, onGone, pollMs: 20, onGone.Token);
+                System.Environment.ProcessId,
+                CST.Avalonia.Services.LocalApi.ProcessIdentity.CurrentStartToken(),
+                onGone, pollMs: 20, onGone.Token);
 
             await Task.Delay(300);
             Assert.False(onGone.IsCancellationRequested);
 
             onGone.Cancel();   // stop the watcher
+            await watch;
+        }
+
+        [Fact]
+        public async Task Liveness_watcher_trips_when_a_live_pid_is_a_recycled_impostor()
+        {
+            // #351: the crash-recovery hazard. The recorded pid is LIVE (our own process), but the recorded
+            // start time is NOT ours — as if the OS recycled a crashed instance's pid onto an unrelated process.
+            // Identity, not bare pid liveness, must detect the mismatch and tear the bridge down.
+            using var onGone = new CancellationTokenSource();
+            long notOurStart = CST.Avalonia.Services.LocalApi.ProcessIdentity.CurrentStartToken() - System.TimeSpan.FromHours(1).Ticks;
+            var watch = McpBridge.WatchProcessLivenessAsync(
+                System.Environment.ProcessId, notOurStart, onGone, pollMs: 20, onGone.Token);
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (!onGone.IsCancellationRequested && sw.Elapsed < System.TimeSpan.FromSeconds(2))
+                await Task.Delay(20);
+
+            Assert.True(onGone.IsCancellationRequested);
             await watch;
         }
 
