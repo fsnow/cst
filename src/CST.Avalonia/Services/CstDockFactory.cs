@@ -452,7 +452,14 @@ namespace CST.Avalonia.Services
                 // Capture current proportions before adding document (preserves user adjustments)
                 CaptureMainDockProportions();
 
-                documentDock.VisibleDockables?.Add(bookDisplayViewModel);
+                // A null collection would make the ?.Add a silent no-op and leave us reporting success with
+                // no tab; treat it as the broken-layout failure it is. (fable)
+                if (documentDock.VisibleDockables is not { } searchDockables)
+                {
+                    Log.Error("*** Document dock has no VisibleDockables collection - cannot add search document ***");
+                    return false;
+                }
+                searchDockables.Add(bookDisplayViewModel);
                 documentDock.ActiveDockable = bookDisplayViewModel;
                 SetFactory(bookDisplayViewModel);
                 Log.Information("*** SEARCH DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
@@ -854,7 +861,13 @@ namespace CST.Avalonia.Services
                     _logger.Error("Document with ID {DocumentId} already exists {Count} times", dockable.Id, existingWithSameId.Count);
                 }
 
-                documentDock.VisibleDockables?.Add(dockable);
+                // Same guard: a null collection must not be reported as a successful add. (fable)
+                if (documentDock.VisibleDockables is not { } dockables)
+                {
+                    Log.Error("*** Document dock has no VisibleDockables collection - cannot add document ***");
+                    return false;
+                }
+                dockables.Add(dockable);
                 documentDock.ActiveDockable = dockable;
                 SetFactory(dockable); // Ensure the document has the factory reference
                 Log.Information("*** DOCUMENT ADDED SUCCESSFULLY. Total documents: {DocumentCount} ***", documentDock.VisibleDockables?.Count ?? 0);
