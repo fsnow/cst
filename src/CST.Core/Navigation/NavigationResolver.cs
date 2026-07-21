@@ -38,7 +38,8 @@ namespace CST.Navigation
 
             return request.Reference switch
             {
-                NavigationReference.WholeBook => Resolved(book, anchor: "", normalized: "start of book", request),
+                // The start of a book always exists, so this is validated regardless of the catalog.
+                NavigationReference.WholeBook => Resolved(book, "", "start of book", request, validated: true),
                 NavigationReference.Paragraph p => ResolveParagraph(book, p, anchors, request),
                 NavigationReference.Page pg => ResolvePage(book, pg, anchors, request),
                 NavigationReference.Chapter c => ResolveChapter(book, c, anchors, request),
@@ -67,6 +68,16 @@ namespace CST.Navigation
             bool isMulti = book.BookType == BookType.Multi;
             string? bookCode = p.BookCode;
 
+            // A book code on a single-book volume is meaningless. Silently ignoring it produced a
+            // wrong-but-plausible navigation (the caller believed it had disambiguated); say so instead. (#314)
+            if (!isMulti && bookCode is not null)
+                // Careful with the wording: a non-Multi book CAN carry a book-div id (s0101m.mul has "dn1", and
+                // the XSL does emit para5_dn1), so "that code doesn't exist" would be false. The reason to refuse
+                // is that paragraph numbers don't need disambiguating here. (fable LOW-6)
+                return NavigationResult.InvalidReference(
+                    $"'{book.FileName}' is not a multi-book volume, so paragraph numbers are unique within it; " +
+                    $"omit the book code '{bookCode}'.");
+
             if (isMulti)
             {
                 if (bookCode is null)
@@ -77,8 +88,12 @@ namespace CST.Navigation
                             $"paragraph {p.Number} (anchor catalog unavailable to disambiguate).");
 
                     var codes = anchors.BookCodesFor(p.Number);
+                    // No CODES is not the same as no PARAGRAPH: a Multi book may carry uncoded paragraphs, and
+                    // reporting those as out-of-range was a false negative. Fall through uncoded. (#314)
                     if (codes.Count == 0)
-                        return NavigationResult.OutOfRange($"No paragraph {p.Number} in '{book.FileName}'.");
+                        return anchors.HasParagraph(p.Number)
+                            ? Resolved(book, $"para{p.Number}", $"paragraph {p.Number}", req, validated: true)
+                            : NavigationResult.OutOfRange($"No paragraph {p.Number} in '{book.FileName}'.");
                     if (codes.Count > 1)
                         return NavigationResult.Ambiguous(
                             codes.Select(c => new NavigationCandidate(
@@ -87,10 +102,16 @@ namespace CST.Navigation
                             "specify a book code.");
                     bookCode = codes[0];
                 }
-                else if (anchors is not null && !anchors.BookCodesFor(p.Number).Contains(bookCode))
+                else if (anchors is not null)
                 {
-                    return NavigationResult.OutOfRange(
-                        $"No paragraph {p.Number} in sub-book '{bookCode}' of '{book.FileName}'.");
+                    // Case-insensitive, matching the book lookup above: "AN5" and "an5" are the same sub-book,
+                    // and a case mismatch used to read as "no such paragraph". (#314)
+                    var match = anchors.BookCodesFor(p.Number)
+                        .FirstOrDefault(c => string.Equals(c, bookCode, StringComparison.OrdinalIgnoreCase));
+                    if (match is null)
+                        return NavigationResult.OutOfRange(
+                            $"No paragraph {p.Number} in sub-book '{bookCode}' of '{book.FileName}'.");
+                    bookCode = match;   // normalize to the catalog's casing so the anchor matches the document
                 }
             }
             else if (anchors is not null && !anchors.HasParagraph(p.Number))
@@ -105,7 +126,7 @@ namespace CST.Navigation
                 anchor += $"_{bookCode}";
                 normalized += $" ({bookCode})";
             }
-            return Resolved(book, anchor, normalized, req);
+            return Resolved(book, anchor, normalized, req, validated: anchors is not null);
         }
 
         private NavigationResult ResolvePage(
@@ -113,6 +134,12 @@ namespace CST.Navigation
         {
             if (pg.Number < 1)
                 return NavigationResult.InvalidReference($"Page number must be positive (got {pg.Number}).");
+            if (!Enum.IsDefined(pg.Edition))
+                return NavigationResult.InvalidReference(
+                    $"Unknown page edition '{(int)pg.Edition}'. Use Vri, Myanmar, Pts, Thai, or Other.");
+            if (pg.Volume is < 0)
+                return NavigationResult.InvalidReference(
+                    $"Volume must not be negative (got {pg.Volume.Value}).");
 
             string prefix = EditionPrefix(pg.Edition);
             string editionName = EditionName(pg.Edition);
@@ -141,13 +168,24 @@ namespace CST.Navigation
             }
             else
             {
-                // No current-position context and no catalog: mirror Go-To's volume-0 default.
-                volume = 0;
+                // Previously this defaulted to volume 0, mirroring Go-To. Without a catalog we cannot tell a
+                // single-volume book (where 0 is right) from a multi-volume one (where 0 is a DEAD anchor that
+                // resolves "successfully" and then silently fails to scroll). Ask for the volume instead of
+                // guessing — a caller can always pass 0 explicitly. (#314)
+                // Do NOT suggest 0 as a default: most single-FILE books still carry a print-set volume (e.g.
+                // s0101m.mul is volume 1, s0102m.mul is volume 2), so "0 for a single-volume book" would steer a
+                // caller straight into the dead anchor this refusal exists to prevent. (fable MED-3)
+                return NavigationResult.InvalidReference(
+                    $"{editionName} page {pg.Number} needs a volume: '{book.FileName}' has no anchor catalog " +
+                    "loaded, so the volume cannot be inferred. Supply the print-edition volume that appears in " +
+                    "the page reference (the 1 in V1.0023).");
             }
 
             string anchor = $"{prefix}{volume}.{pg.Number:D4}";
             string normalized = $"{editionName} page {volume}.{pg.Number}";
-            return Resolved(book, anchor, normalized, req);
+            // Three paths reach here and only the two catalog paths above actually checked the page exists —
+            // an explicit volume with no catalog is UNCHECKED and must not be stamped as validated. (fable HIGH-1)
+            return Resolved(book, anchor, normalized, req, validated: anchors is not null);
         }
 
         private NavigationResult ResolveChapter(
@@ -155,9 +193,17 @@ namespace CST.Navigation
         {
             if (string.IsNullOrWhiteSpace(c.ChapterId))
                 return NavigationResult.InvalidReference("Chapter id is empty.");
-            if (anchors is not null && !anchors.HasChapter(c.ChapterId))
-                return NavigationResult.OutOfRange($"No chapter '{c.ChapterId}' in '{book.FileName}'.");
-            return Resolved(book, c.ChapterId, $"chapter {c.ChapterId}", req);
+            if (anchors is not null)
+            {
+                // Case-insensitive like the book and sub-book lookups; normalize to the catalog's casing so the
+                // emitted anchor matches the document. (#314)
+                var match = anchors.ChapterIds
+                    .FirstOrDefault(id => string.Equals(id, c.ChapterId, StringComparison.OrdinalIgnoreCase));
+                if (match is null)
+                    return NavigationResult.OutOfRange($"No chapter '{c.ChapterId}' in '{book.FileName}'.");
+                return Resolved(book, match, $"chapter {match}", req, validated: true);
+            }
+            return Resolved(book, c.ChapterId, $"chapter {c.ChapterId}", req, validated: false);
         }
 
         private NavigationResult ResolveRawAnchor(
@@ -167,17 +213,21 @@ namespace CST.Navigation
                 return NavigationResult.InvalidReference("Anchor is empty.");
             // A raw anchor is trusted through as-is; the catalog cannot cheaply validate arbitrary strings
             // yet (it exposes typed anchors, not a flat set). Validation can tighten once that lands.
-            return Resolved(book, r.Anchor, r.Anchor, req);
+            // Never "validated": the catalog exposes typed anchors, not a flat set, so an arbitrary string
+            // cannot be checked. The caller must surface that this one is unverified. (#314)
+            return Resolved(book, r.Anchor, r.Anchor, req, validated: false);
         }
 
-        private static NavigationResult Resolved(Book book, string anchor, string normalized, NavigationRequest req) =>
+        private static NavigationResult Resolved(
+            Book book, string anchor, string normalized, NavigationRequest req, bool validated) =>
             NavigationResult.Resolved(new ResolvedTarget(
                 book.FileName,
                 book.Index,
                 book.DocId,
                 anchor,
                 normalized,
-                req.SearchTerms ?? Array.Empty<string>()));
+                req.SearchTerms ?? Array.Empty<string>(),
+                validated));
 
         private static string EditionPrefix(PageEdition e) => e switch
         {
@@ -186,7 +236,7 @@ namespace CST.Navigation
             PageEdition.Pts => "P",
             PageEdition.Thai => "T",
             PageEdition.Other => "O",
-            _ => "V"
+            _ => "V"   // unreachable: Enum.IsDefined is checked before this
         };
 
         private static string EditionName(PageEdition e) => e switch

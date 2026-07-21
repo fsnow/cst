@@ -132,11 +132,176 @@ namespace CST.Avalonia.Tests.Navigation
         }
 
         [Fact]
-        public void Page_without_volume_defaults_to_zero_without_catalog()
+        public void Page_without_volume_asks_for_one_rather_than_guessing_zero()
         {
+            // Volume 0 used to be assumed here. On a multi-volume book that produces a DEAD anchor which reports
+            // Resolved and then silently fails to scroll — the worst kind of failure. Without a catalog we cannot
+            // tell the cases apart, so ask. Note 0 is NOT a safe fallback to suggest: most single-FILE books
+            // still carry a print-set volume (s0101m.mul is volume 1), so the caller must supply the volume from
+            // the reference itself. (#314)
             var b = NonMultiBook();
             var r = Resolver().Resolve(new NavigationRequest(b.FileName, new NavigationReference.Page(PageEdition.Myanmar, 7)));
+            Assert.Equal(NavigationStatus.InvalidReference, r.Status);
+            Assert.Contains("needs a volume", r.Message);
+        }
+
+        [Fact]
+        public void An_explicit_volume_still_works_without_a_catalog_but_is_not_validated()
+        {
+            var b = NonMultiBook();
+            var r = Resolver().Resolve(new NavigationRequest(
+                b.FileName, new NavigationReference.Page(PageEdition.Myanmar, 7, Volume: 0)));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
             Assert.Equal("M0.0007", r.Target!.Anchor);
+            // The assertion this test is NAMED for: nothing checked that M0.0007 exists, so it must not claim
+            // to be validated. Without this line the page path stamped validated:true on an unchecked anchor —
+            // the exact lie Validated exists to prevent. (fable HIGH-1)
+            Assert.False(r.Target.Validated);
+        }
+
+        [Fact]
+        public void A_page_validated_by_the_catalog_is_marked_validated()
+        {
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, pages: new[] { new PageAnchor(PageEdition.Pts, 3, 42) });
+            var r = Resolver(cat).Resolve(new NavigationRequest(
+                b.FileName, new NavigationReference.Page(PageEdition.Pts, 42, Volume: 3)));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.True(r.Target!.Validated);
+        }
+
+        [Fact]
+        public void A_sub_book_code_matches_case_insensitively_and_emits_the_catalog_casing()
+        {
+            // The reader looks anchors up in the DOM case-SENSITIVELY, so matching leniently is only safe if we
+            // then emit the catalog's (== the XML's) casing rather than the caller's. (#314)
+            var b = MultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { new ParagraphAnchor(5, "an5") });
+            var r = Resolver(cat).Resolve(new NavigationRequest(
+                b.FileName, new NavigationReference.Paragraph(5, "AN5")));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("para5_an5", r.Target!.Anchor);
+            Assert.True(r.Target.Validated);
+        }
+
+        [Fact]
+        public void A_chapter_id_matches_case_insensitively_and_emits_the_catalog_casing()
+        {
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, chapterIds: new[] { "dn1" });
+            var r = Resolver(cat).Resolve(new NavigationRequest(
+                b.FileName, new NavigationReference.Chapter("DN1")));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("dn1", r.Target!.Anchor);
+            Assert.True(r.Target.Validated);
+        }
+
+        [Fact]
+        public void An_uncoded_paragraph_in_a_multi_book_resolves_to_a_bare_anchor()
+        {
+            // vin02t.tik is a Multi book whose 654 paragraphs carry NO book-div id, so BookCodesFor is empty for
+            // every one of them. Treating "no codes" as "no paragraph" made every vin02t paragraph unreachable;
+            // the bare paraN anchor is what the XSL emits and is real. (#314)
+            var b = MultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { new ParagraphAnchor(5, null) });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(5)));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.Equal("para5", r.Target!.Anchor);
+            Assert.True(r.Target.Validated);
+        }
+
+        [Fact]
+        public void A_missing_paragraph_in_a_multi_book_is_still_out_of_range()
+        {
+            // The other side of the fallthrough: absent codes must not become a blanket "resolve anyway".
+            var b = MultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { new ParagraphAnchor(5, null) });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(99)));
+            Assert.Equal(NavigationStatus.ReferenceOutOfRange, r.Status);
+        }
+
+        [Fact]
+        public void Resolved_without_a_catalog_is_not_marked_validated()
+        {
+            // The contract is "callers inspect Status, never guess" — but Status alone said nothing about
+            // whether the anchor actually EXISTS. Degraded (catalog-free) results must be distinguishable. (#314)
+            var b = NonMultiBook();
+            var r = Resolver().Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(99999)));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.False(r.Target!.Validated);
+            Assert.False(r.IsValidated);
+        }
+
+        [Fact]
+        public void Catalog_validated_results_are_marked_validated()
+        {
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { new ParagraphAnchor(5, null) });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.Paragraph(5)));
+            Assert.True(r.Target!.Validated);
+            Assert.True(r.IsValidated);
+        }
+
+        [Fact]
+        public void A_raw_anchor_is_never_marked_validated()
+        {
+            var b = NonMultiBook();
+            var cat = new FakeCatalog(b.FileName, paragraphs: new[] { new ParagraphAnchor(5, null) });
+            var r = Resolver(cat).Resolve(new NavigationRequest(b.FileName, new NavigationReference.RawAnchor("V9.9999")));
+            Assert.Equal(NavigationStatus.Resolved, r.Status);
+            Assert.False(r.Target!.Validated);   // arbitrary strings cannot be checked against a typed catalog
+        }
+
+        [Fact]
+        public void A_book_code_on_a_non_multi_book_is_refused_not_ignored()
+        {
+            // Silently dropping it navigated somewhere plausible while the caller believed it had disambiguated.
+            var b = NonMultiBook();
+            var r = Resolver().Resolve(new NavigationRequest(
+                b.FileName, new NavigationReference.Paragraph(5, "an5")));
+            Assert.Equal(NavigationStatus.InvalidReference, r.Status);
+            Assert.Contains("not a multi-book volume", r.Message);
+        }
+
+        [Fact]
+        public void An_unknown_page_edition_is_refused_rather_than_silently_becoming_VRI()
+        {
+            var b = NonMultiBook();
+            var r = Resolver().Resolve(new NavigationRequest(
+                b.FileName, new NavigationReference.Page((PageEdition)99, 5, Volume: 1)));
+            Assert.Equal(NavigationStatus.InvalidReference, r.Status);
+        }
+
+        [Fact]
+        public void A_negative_volume_is_refused()
+        {
+            var b = NonMultiBook();
+            var r = Resolver().Resolve(new NavigationRequest(
+                b.FileName, new NavigationReference.Page(PageEdition.Vri, 5, Volume: -1)));
+            Assert.Equal(NavigationStatus.InvalidReference, r.Status);
+        }
+
+        [Fact]
+        public void A_resolved_result_cannot_be_constructed_without_a_target()
+        {
+            // The documented "exactly one of Target/Candidates" invariant was unenforced, so a caller following
+            // the contract (Target! after Resolved) got an NRE instead of a clear failure. (#314)
+            Assert.Throws<System.ArgumentException>(() =>
+                new NavigationResult(NavigationStatus.Resolved));
+            Assert.Throws<System.ArgumentException>(() =>
+                new NavigationResult(NavigationStatus.AmbiguousReference));
+        }
+
+        [Fact]
+        public void A_non_resolved_result_cannot_smuggle_a_target()
+        {
+            // "Exactly one of Target/Candidates" — the doc claimed both halves, so enforce both. (fable LOW-4)
+            var target = new ResolvedTarget("x.xml", 0, 0, "para1", "paragraph 1", System.Array.Empty<string>(), true);
+            Assert.Throws<System.ArgumentException>(() =>
+                new NavigationResult(NavigationStatus.InvalidReference, Target: target));
+            Assert.Throws<System.ArgumentException>(() =>
+                new NavigationResult(NavigationStatus.Resolved, Target: target,
+                    Candidates: new[] { new NavigationCandidate("a", "b") }));
         }
 
         [Fact]
