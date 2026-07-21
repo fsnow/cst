@@ -92,19 +92,9 @@ public static class SettingsValidator
         if (settings.Ai == null) { settings.Ai = new AiSettings(); fixes.Add("ai settings were null; reset to default"); }
         if (settings.Ai.LocalApi == null) { settings.Ai.LocalApi = new LocalApiSettings(); fixes.Add("ai.localApi settings were null; reset to default"); }
 
-        // #320 (A7-3): the local-API port + bearer token are per-session at runtime (ephemeral port; token
-        // minted at start) and runtime-ignored since #278 Phase 4. Clear any historical persisted values on
-        // load so a plaintext token can't linger in settings.json and a stale fixed port can't be reused.
-        if (!string.IsNullOrEmpty(settings.Ai.LocalApi.Token))
-        {
-            settings.Ai.LocalApi.Token = null;
-            fixes.Add("cleared persisted ai.localApi.token (runtime mints a per-session token)");
-        }
-        if (settings.Ai.LocalApi.Port != 0)
-        {
-            settings.Ai.LocalApi.Port = 0;
-            fixes.Add("reset ai.localApi.port to ephemeral (runtime ignores a fixed port)");
-        }
+        // (The historical local-API Port/Token scrub is gone with those fields, removed in #280: the port is
+        // ephemeral and the token per-session, both held only in local-api.json. A stale value left in an old
+        // settings.json is now an unknown property the deserializer ignores.)
 
         // XML update repository fields
         var xml = settings.XmlUpdateSettings ??= new XmlUpdateSettings();
