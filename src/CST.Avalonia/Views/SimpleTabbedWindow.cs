@@ -659,11 +659,12 @@ public partial class SimpleTabbedWindow : Window
         {
             _logger.Information("Found LayoutViewModel in current window's DockControl");
 
-            // Get the active document from this window's layout
+            // Get the document the user is working in - follows focus, so a split layout resolves to
+            // the pane they are actually in rather than always the first one. (#443)
             if (layoutViewModel.Layout is RootDock rootDock)
             {
-                var documentDock = FindDocumentDockInLayout(rootDock);
-                if (documentDock?.ActiveDockable is BookDisplayViewModel bookViewModel)
+                var active = DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this));
+                if (active is BookDisplayViewModel bookViewModel)
                 {
                     _logger.Information("Triggering Go To dialog for active book: {BookFile}", bookViewModel.Book.FileName);
                     bookViewModel.InvokeOpenGoToDialog();
@@ -671,8 +672,8 @@ public partial class SimpleTabbedWindow : Window
                 }
                 else
                 {
-                    _logger.Warning("No active book in this window's document dock. ActiveDockable type: {Type}",
-                        documentDock?.ActiveDockable?.GetType().Name ?? "null");
+                    _logger.Warning("No active book in this window. Resolved dockable type: {Type}",
+                        active?.GetType().Name ?? "null");
                 }
             }
         }
@@ -838,7 +839,7 @@ public partial class SimpleTabbedWindow : Window
             layoutViewModel.Layout is not RootDock rootDock)
             return null;
 
-        return FindDocumentDockInLayout(rootDock)?.ActiveDockable as BookDisplayViewModel;
+        return DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this)) as BookDisplayViewModel;
     }
 
     // Reduce a selection to a single lookup word: first whitespace-delimited token, minus surrounding
@@ -876,13 +877,38 @@ public partial class SimpleTabbedWindow : Window
                 layoutViewModel.Layout is not RootDock rootDock)
                 return;
 
-            var documentDock = FindDocumentDockInLayout(rootDock);
-            CloseDockableIfClosable(documentDock?.ActiveDockable);
+            CloseDockableIfClosable(DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this)));
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Close Tab (⌘W) failed");
         }
+    }
+
+    // Which dockable does the user actually have focus in? Dock's own RootDock.FocusedDockable is never
+    // populated in this app (it reads null even immediately after clicking a tab), so ask Avalonia for the
+    // focused element and walk up the visual tree to the first control bound to a dockable. Clicking a tab
+    // focuses the tab item, whose DataContext IS the dockable; clicking into a book focuses the WebView,
+    // whose DataContext is the book's ViewModel. Both give the right answer. (#443)
+    //
+    // NOTE: the window argument does NOT scope this - Avalonia's FocusManager is app-global, so a floating
+    // window's handler can be handed a dockable that lives in the main window's layout. What keeps that
+    // safe is the containment check in DocumentTargetResolver: a dockable outside this window's layout is
+    // contained by none of its document docks, so resolution falls back instead of reaching across windows.
+    // A test covers this; do not drop the containment check.
+    internal static IDockable? ResolveFocusedDockable(Window? window)
+    {
+        var element = window?.FocusManager?.GetFocusedElement() as Visual;
+
+        while (element != null)
+        {
+            if (element is StyledElement { DataContext: IDockable dockable })
+                return dockable;
+
+            element = element.GetVisualParent();
+        }
+
+        return null;
     }
 
     // Close a dockable via its own factory if it exists and permits closing (Welcome opts out via
@@ -902,7 +928,17 @@ public partial class SimpleTabbedWindow : Window
             return;
         }
 
+        var owner = active.Owner as IDock;
         factory.CloseDockable(active);
+
+        // Closing removes the focused tab's control, so Avalonia focus lands nowhere useful and the NEXT
+        // Cmd+W would resolve through the fallback - i.e. the first split's tab, the very #443 bug, one
+        // press later. Point Dock's own focus at the pane's new active tab; the resolver consults it after
+        // real keyboard focus, so repeated Cmd+W keeps closing tabs in the pane the user is working in.
+        if (owner?.ActiveDockable is { } nextActive)
+        {
+            factory.SetFocusedDockable(owner, nextActive);
+        }
     }
 
     private void TriggerViewSource(bool source2010)
@@ -915,8 +951,7 @@ public partial class SimpleTabbedWindow : Window
                 layoutViewModel.Layout is not RootDock rootDock)
                 return;
 
-            var documentDock = FindDocumentDockInLayout(rootDock);
-            if (documentDock?.ActiveDockable is not BookDisplayViewModel bookViewModel)
+            if (DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this)) is not BookDisplayViewModel bookViewModel)
                 return;
 
             _logger.Information("View Source ({Edition}) via menu/shortcut for book: {BookFile}",
@@ -981,24 +1016,4 @@ public partial class SimpleTabbedWindow : Window
         return s.Contains(' ') ? $"\"{s}\"" : s;
     }
 
-    private DocumentDock? FindDocumentDockInLayout(IDock dock)
-    {
-        if (dock is DocumentDock documentDock)
-            return documentDock;
-
-        if (dock.VisibleDockables != null)
-        {
-            foreach (var dockable in dock.VisibleDockables)
-            {
-                if (dockable is IDock childDock)
-                {
-                    var result = FindDocumentDockInLayout(childDock);
-                    if (result != null)
-                        return result;
-                }
-            }
-        }
-
-        return null;
-    }
 }
