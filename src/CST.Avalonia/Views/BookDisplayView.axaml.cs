@@ -45,6 +45,7 @@ public partial class BookDisplayView : UserControl
     // computed C#-side by ReadingPositionMath so it stays unit-tested.
     private TaskCompletionSource<string?>? _posTokenTcs = null;
     private int _posTokenReq = 0; // monotonic capture request id; a late title with a stale id is ignored (#434)
+    private ReadingPositionToken? _lastPositionToken = null; // #434 rolling-captured reading position (from the status tick); restored on tab reattach (#31)
     private readonly string _tabId = $"tab_{DateTime.Now.Ticks}_{Guid.NewGuid().ToString("N")[..8]}";
     private string? _tempHtmlFilePath;   // the temp HTML file this View last loaded from; deleted on dispose (BOOK-8)
 
@@ -875,8 +876,29 @@ public partial class BookDisplayView : UserControl
                     }} catch(anchorError) {{
                     }}
 
+                    // #434 rolling reading-position bracket, piggybacked on this same tick (no extra round-trip)
+                    // so the View always has a fresh token to restore on tab reattach (#31). Isolated in its own
+                    // try so a bracket glitch can never disturb the status readout above.
+                    var ptA = '', ptAP = '', ptB = '', ptBP = '';
+                    try {{
+                        var ptc = window.cstAnchorCache;
+                        if (ptc && ptc.isBuilt && ptc.sortedAllAnchors && ptc.sortedAllAnchors.length > 0) {{
+                            var ptl = ptc.sortedAllAnchors;
+                            var ptIdx = -1;
+                            for (var pi = 0; pi < ptl.length; pi++) {{ if (ptl[pi].position <= scrollY) ptIdx = pi; else break; }}
+                            ptA = ptIdx >= 0 ? ptl[ptIdx].name : '';
+                            ptB = (ptIdx + 1 < ptl.length) ? ptl[ptIdx + 1].name : '';
+                            var ptLive = function(nm) {{
+                                if (!nm) return '';
+                                var el = document.querySelector('a[name=' + JSON.stringify(nm) + ']') || document.getElementById(nm);
+                                return el ? Math.round(el.getBoundingClientRect().top + window.pageYOffset) : '';
+                            }};
+                            ptAP = ptLive(ptA); ptBP = ptLive(ptB);
+                        }}
+                    }} catch(ptErr) {{ }}
+
                     // ATOMIC UPDATE: Send all status info in one message with tab ID including chapter and best anchor
-                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + scrollY + '|TAB:__TAB_ID_PLACEHOLDER__';
+                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + scrollY + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
                     // Emit nothing on error — an all-'*' title would clobber a good readout (#432
                     // constraint). The next scroll tick retries. (#423)
@@ -1482,6 +1504,15 @@ public partial class BookDisplayView : UserControl
             _logger.Debug("Navigating to current search hit: {HitIndex}", _viewModel.CurrentHitIndex);
             NavigateToHighlight(_viewModel.CurrentHitIndex);
         }
+        // #31: a NON-search book reattaching a recycled tab has no hit/anchor/token intent, but CEF can reset
+        // the live browser's scroll on reattach — so restore the rolling-captured reading position. Lowest
+        // precedence (search-hit wins, Fable §6); cache-free, so it's safe before the deferred cache rebuild.
+        else if (_lastPositionToken != null)
+        {
+            _logger.Debug("Restoring rolling reading-position token on reattach (#31): above={Above}, below={Below}, frac={Frac}",
+                _lastPositionToken.Above, _lastPositionToken.Below, _lastPositionToken.Fraction);
+            ScrollToPositionToken(_lastPositionToken);
+        }
     }
 
 
@@ -1545,6 +1576,7 @@ public partial class BookDisplayView : UserControl
 
                 // Parse message components
                 string vri = "*", myanmar = "*", pts = "*", thai = "*", other = "*", para = "*", chapter = "*", anchor = "*";
+                string ptA = "", ptAP = "", ptB = "", ptBP = "";   // #434 rolling reading-position bracket
                 int scrollY = 0;
                 bool isCacheBuilt = false;
 
@@ -1558,6 +1590,10 @@ public partial class BookDisplayView : UserControl
                     else if (part.StartsWith("PARA=")) para = part.Substring(5);
                     else if (part.StartsWith("CHAPTER=")) chapter = part.Substring(8);
                     else if (part.StartsWith("ANCHOR=")) anchor = part.Substring(7);
+                    else if (part.StartsWith("PTAP=")) ptAP = part.Substring(5);
+                    else if (part.StartsWith("PTA=")) ptA = part.Substring(4);
+                    else if (part.StartsWith("PTBP=")) ptBP = part.Substring(5);
+                    else if (part.StartsWith("PTB=")) ptB = part.Substring(4);
                     else if (part.StartsWith("SCROLL=")) int.TryParse(part.Substring(7), out scrollY);
                     else if (part.StartsWith("CACHE_BUILT="))
                     {
@@ -1602,6 +1638,22 @@ public partial class BookDisplayView : UserControl
 
                     // Update scroll position
                     if (scrollY > 0) _lastKnownScrollY = scrollY;
+
+                    // #434 rolling capture: keep the freshest reading-position token so a tab reattach can
+                    // restore the exact position (#31). Computed via the unit-tested ReadingPositionMath. Only
+                    // overwrite when the bracket is present (cache built + a real position), so a transient
+                    // empty tick can't wipe a good token.
+                    {
+                        string? above = ptA.Length == 0 ? null : ptA;
+                        string? below = ptB.Length == 0 ? null : ptB;
+                        if (above != null || below != null)
+                        {
+                            var inv = System.Globalization.CultureInfo.InvariantCulture;
+                            double.TryParse(ptAP, System.Globalization.NumberStyles.Any, inv, out var aP);
+                            double.TryParse(ptBP, System.Globalization.NumberStyles.Any, inv, out var bP);
+                            _lastPositionToken = ReadingPositionMath.Capture(above, aP, below, bP, scrollY);
+                        }
+                    }
 
                     // Store last known values
                     if (vri != "*") _lastKnownVri = vri;
