@@ -55,6 +55,11 @@ namespace CST.Avalonia.ViewModels
             Title = "Welcome";
             CanClose = false;   // Prevent closing the welcome tab
             CanFloat = false;   // Prevent floating the welcome tab
+            // Welcome hosts its own CEF WebView. CanFloat=false blocks new-window creation but NOT dragging
+            // the tab INTO an existing floating window — which would carry a live browser across windows and
+            // hit the #458 SIGSEGV (the dispose-before-move guard covers only Book/PDF). It's a fixed tab
+            // anyway, so make it non-draggable outright. (#458)
+            CanDrag = false;
             CanPin = false;     // Prevent pinning
 
             // Set current app version from assembly

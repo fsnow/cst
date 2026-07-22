@@ -99,6 +99,12 @@ public partial class BookDisplayView : UserControl
 
     // Window context tracking for CEF handle invalidation detection
     private Window? _currentWindow = null;
+    // The window this View's CEF browser was created in. Unlike _currentWindow (nulled on every detach so
+    // window-change is re-evaluated), this persists across detach/reattach so we can assert the invariant a
+    // live browser must never re-attach to a different window — that is the #458 SIGSEGV. Purely diagnostic;
+    // the fix is dispose-before-move in CstDockFactory. If this ever logs, a re-parent path is carrying a
+    // live browser and needs the same guard.
+    private Window? _browserBirthWindow = null;
 
     public BookDisplayView()
     {
@@ -347,6 +353,17 @@ public partial class BookDisplayView : UserControl
         // Get the new window this view is attached to
         var newWindow = this.GetVisualRoot() as Window;
 
+        // #458 invariant check: a LIVE browser must never re-attach to a window other than the one it was
+        // born in — that is the crash. With dispose-before-move in place this can't happen; if it ever does,
+        // this Error is the early warning that a re-parent path is missing the guard (better a log than a
+        // SIGSEGV). _webView != null means the browser is still live (not disposed for a rebuild).
+        if (newWindow != null && _webView != null && _browserBirthWindow != null &&
+            !ReferenceEquals(_browserBirthWindow, newWindow))
+        {
+            _logger.Error("*** #458 VIOLATION: live WebView re-attaching to a different window — Book: {BookFile}, born in {OldHash}, now {NewHash}. A re-parent path is carrying a live browser (crash risk). ***",
+                _viewModel?.Book?.FileName ?? "null", _browserBirthWindow.GetHashCode(), newWindow.GetHashCode());
+        }
+
         if (newWindow != null)
         {
             // Compare by reference equality, not by title
@@ -370,6 +387,7 @@ public partial class BookDisplayView : UserControl
 
                 // Recreate WebView with fresh native handle for new window
                 TryCreateWebView();
+                _browserBirthWindow = newWindow;  // fresh browser born here (#458)
 
                 // Reload content if ViewModel has HTML
                 if (_viewModel != null && !string.IsNullOrEmpty(_viewModel.HtmlContent))
@@ -382,6 +400,9 @@ public partial class BookDisplayView : UserControl
             {
                 // First attachment - just track the window
                 _currentWindow = newWindow;
+                // The browser (built in the ctor's TryCreateWebView) binds to the window it first renders in —
+                // here. Recording it lets the invariant check above catch any later live cross-window attach. (#458)
+                _browserBirthWindow ??= newWindow;
                 _logger.Information("*** 🆕 BookDisplayView attached to window for FIRST TIME ***");
                 _logger.Information("    Window: {WindowTitle} (Hash: {Hash})",
                     newWindow.Title ?? "null", newWindow.GetHashCode());

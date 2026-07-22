@@ -517,6 +517,11 @@ namespace CST.Avalonia.ViewModels
             return token;
         }
 
+        // Queue a reading-position token to restore when the View next becomes available. Used when a
+        // cross-window drag rebuilds this book's View with a fresh browser (#458): the VM instance is
+        // preserved, so seeding the pending token lands the fresh View where the user was reading. (#434)
+        internal void QueuePositionRestore(ReadingPositionToken token) => _pendingPositionToken = token;
+
         internal int? TakePendingHitNavigation()
         {
             var hit = _pendingHitNavigation;
