@@ -65,6 +65,24 @@ namespace CST.Avalonia.Tests.Lexicon
             Assert.Equal("", DppnConverter.ParseHeadword(""));
         }
 
+        [Fact]
+        public void Alternative_title_homonyms_take_the_first_bold_and_the_trailing_number()
+        {
+            // The only multi-bold+number headings in DPPN are "X or Y NN" alternatives; the first bold is the
+            // indexed lemma and the trailing number after the LATER </b> is its real homonym. (fable L1)
+            Assert.Equal("Uttiyasutta 2",
+                DppnConverter.ParseHeadword("<b>Uttiyasutta</b> or <b>Uttikasutta</b> 02. </span>"));
+        }
+
+        [Fact]
+        public void A_homonym_range_keeps_both_numbers_in_the_headword()
+        {
+            // DPPN's sole ranged heading: one entry covering homonyms 5–6. Display both; the key derives from the
+            // lemma alone (homonym split takes 5 as the sort number). (fable L2)
+            Assert.Equal("Piyasutta 5-6",
+                DppnConverter.ParseHeadword("<b>Piyasutta</b> 05-06. </span>"));
+        }
+
         // ---- body filtering ----
 
         [Fact]
@@ -92,6 +110,36 @@ namespace CST.Avalonia.Tests.Lexicon
             Assert.Contains("<b>ok</b>", cleaned);
             // The disallowed tags' text content is preserved (dropped tag, kept text).
             Assert.Contains("z", cleaned);
+            Assert.True(DppnConverter.IsClosedAllowlist(cleaned));
+        }
+
+        [Fact]
+        public void A_bare_angle_bracket_in_prose_is_not_read_as_a_tag()
+        {
+            // fable M1: "< b" (space after '<') is text, not a <b> tag, and the surrounding prose must survive.
+            string cleaned = DppnConverter.CleanBody("a < b and c > d");
+            Assert.Equal("a &lt; b and c &gt; d", cleaned);
+            Assert.True(DppnConverter.IsClosedAllowlist(cleaned));
+        }
+
+        [Fact]
+        public void Split_tags_and_comments_cannot_reassemble_into_live_markup()
+        {
+            // fable M2: the safety property is now intrinsic — stray angle brackets in text are escaped, so no
+            // dropped-tag remnant, split tag, comment, or dangling partial tag can form live markup.
+            foreach (var input in new[]
+            {
+                "<<script>script>alert(1)<</script>/script>",   // split-tag reassembly
+                "x <!-- <script>y</script> --> z",              // HTML comment
+                "trailing partial <b",                          // dangling open at end
+                "an entity &lt;script&gt; stays text",          // pre-escaped payload
+            })
+            {
+                string cleaned = DppnConverter.CleanBody(input);
+                Assert.True(DppnConverter.IsClosedAllowlist(cleaned), $"unsafe: {cleaned}");
+                Assert.DoesNotContain("<script", cleaned);
+                Assert.DoesNotContain("<!--", cleaned);
+            }
         }
 
         // ---- end to end ----

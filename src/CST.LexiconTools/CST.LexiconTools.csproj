@@ -3,13 +3,14 @@
   <!--
     CST.LexiconTools — BUILD-TIME converters that turn an upstream dictionary source into a canonical
     CST.Lexicon asset (#109). Run locally to produce the .db files the app downloads; NOT referenced by
-    the app, so its HTML dependencies (AngleSharp / Ganss.Xss) never ship in CST Reader. The app reads a
-    lexicon through CST.Lexicon.LexiconReader and trusts it was sanitized here.
+    the app, so nothing it does can ship in CST Reader. The app reads a lexicon through
+    CST.Lexicon.LexiconReader and trusts it was reduced to the closed tag set here.
 
     First converter: DPPN (Dictionary of Pāli Proper Names). Its source is a TRUSTED, fixed, public-domain
     file whose definitions use a tiny known tag set (b i p abbr li ul ol hr). So the body is reduced to our
-    closed allowlist by a small build-time filter (validated against the full corpus), and the bold headword
-    is extracted by regex — no XSS-sanitizer dependency, which belongs on the UNTRUSTED in-app import path
+    closed allowlist by a small build-time filter that is safe by construction (stray angle brackets in text
+    are escaped) and post-condition-checked, and the bold headword is extracted by regex. This tool therefore
+    pulls NO third-party HTML dependency; a vetted XSS sanitizer belongs on the UNTRUSTED in-app import path
     (a later change), not on a one-time conversion of data we control.
   -->
 
@@ -24,10 +25,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CST.Lexicon\CST.Lexicon.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <InternalsVisibleTo Include="CST.Avalonia.Tests" />
   </ItemGroup>
 
 </Project>

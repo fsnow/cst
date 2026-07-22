@@ -92,6 +92,10 @@ namespace CST.Avalonia.Tests.Lexicon
             Assert.Equal(("Nāgita", 1), LexiconKey.SplitHomonym("Nāgita 1"));
             Assert.Equal(("Sāvatthī", 0), LexiconKey.SplitHomonym("Sāvatthī"));
             Assert.Equal(("Migāra", 12), LexiconKey.SplitHomonym("Migāra 12"));   // base has the number stripped
+            // A hyphenated range is a homonym marker too (DPPN "Piyasutta 5-6"): first number is the sort key.
+            Assert.Equal(("Piyasutta", 5), LexiconKey.SplitHomonym("Piyasutta 5-6"));
+            // A dotted DPD-style token is NOT split (kept whole).
+            Assert.Equal(("dhamma 1.01", 0), LexiconKey.SplitHomonym("dhamma 1.01"));
             // A name that legitimately ends in a word, or has an interior number, is left whole.
             Assert.Equal(("Vessantara Jātaka", 0), LexiconKey.SplitHomonym("Vessantara Jātaka"));
         }

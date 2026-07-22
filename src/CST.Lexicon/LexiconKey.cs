@@ -40,16 +40,19 @@ namespace CST.Lexicon
         /// (which allows dots) because the proper-name/import sources this serves publish plain integer markers;
         /// a dotted DPD-shaped source would keep its whole headword (harmless — still findable by prefix).
         /// </summary>
+        // A final space-separated token that is a bare integer, or a hyphenated integer RANGE ("5-6", a single
+        // entry covering homonyms 5–6, as DPPN's "Piyasutta 05-06" publishes). The first number is the sort
+        // homonym. A DOTTED token ("1.01", DPD) is deliberately NOT matched (see the doc above).
+        private static readonly Regex HomonymTail = new(@"^(\d+)(?:-\d+)?$", RegexOptions.Compiled);
+
         public static (string Base, int Homonym) SplitHomonym(string headword)
         {
             if (string.IsNullOrEmpty(headword)) return (headword, 0);
             int sp = headword.LastIndexOf(' ');
             if (sp <= 0 || sp + 1 >= headword.Length) return (headword, 0);
-            for (int i = sp + 1; i < headword.Length; i++)
-                if (!char.IsDigit(headword[i])) return (headword, 0);
+            var m = HomonymTail.Match(headword[(sp + 1)..]);
             // TryParse, not Parse: an absurdly long all-digit run overflows int and falls back to (whole, 0).
-            var tail = headword[(sp + 1)..];
-            return int.TryParse(tail, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+            return m.Success && int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
                 ? (headword[..sp].TrimEnd(), n)
                 : (headword, 0);
         }

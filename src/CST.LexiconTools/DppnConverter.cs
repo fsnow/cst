@@ -23,8 +23,13 @@ namespace CST.LexiconTools
     {
         // The lemma is the FIRST <b>…</b> run; verified across all 13,642 records to be the headword.
         private static readonly Regex FirstBold = new("<b>(.*?)</b>", RegexOptions.Singleline | RegexOptions.Compiled);
-        // A bare integer immediately after that first </b> is the homonym marker ("…</b> 01.").
-        private static readonly Regex HomonymAfterBold = new("</b>\\s*0*(\\d+)", RegexOptions.Compiled);
+        // A bare integer after a </b> in the heading is the homonym marker ("…</b> 01."), optionally a RANGE
+        // ("…</b> 05-06." — one entry covering homonyms 5–6). NOTE this matches a number after ANY </b>, not
+        // only the first: the sole multi-bold+number headings in DPPN are alternative-title homonyms
+        // ("<b>Uttiyasutta</b> or <b>Uttikasutta</b> 02."), where the trailing number is the real homonym and
+        // matching the later </b> is correct. (fable L1)
+        private static readonly Regex HomonymAfterBold =
+            new("</b>\\s*0*(\\d+)(?:-0*(\\d+))?", RegexOptions.Compiled);
         private static readonly Regex AnyTag = new("<[^>]*>", RegexOptions.Compiled);
 
         /// <summary>
@@ -43,12 +48,16 @@ namespace CST.LexiconTools
             string lemma = WebUtility.HtmlDecode(AnyTag.Replace(m.Value, string.Empty)).Trim();
             if (lemma.Length == 0) return string.Empty;
 
-            // Look for a homonym number in the tail AFTER the first </b> only (not inside a later bold run).
+            // A homonym number (or range) after the lemma's </b>. Search from the first </b> onward.
             string tail = nameHtml[(m.Index + m.Length)..];
-            var h = HomonymAfterBold.Match("</b>" + tail);   // re-anchor so the pattern's </b> matches
-            return h.Success && int.TryParse(h.Groups[1].Value, out int n) && n > 0
-                ? $"{lemma} {n}"
-                : lemma;
+            var h = HomonymAfterBold.Match("</b>" + tail);
+            if (!h.Success || !int.TryParse(h.Groups[1].Value, out int n) || n <= 0)
+                return lemma;
+            // A range ("05-06") keeps both numbers in the display; the lexicon builder's homonym split takes the
+            // first as the sort number and derives the key from the lemma alone. (fable L2)
+            return h.Groups[2].Success && int.TryParse(h.Groups[2].Value, out int m2)
+                ? $"{lemma} {n}-{m2}"
+                : $"{lemma} {n}";
         }
 
         /// <summary>The tags a definition body may keep — DPPN uses only these; everything else is dropped
@@ -56,13 +65,19 @@ namespace CST.LexiconTools
         private static readonly HashSet<string> AllowedTags = new(StringComparer.OrdinalIgnoreCase)
         { "p", "br", "i", "b", "em", "strong", "ul", "ol", "li", "hr", "abbr" };
 
-        private static readonly Regex TagToken = new("<(/?)\\s*([a-zA-Z0-9]+)[^>]*?(/?)>", RegexOptions.Compiled);
+        // No "\s*" after "<": per the HTML spec a "<" followed by whitespace is TEXT, not a tag-open, so
+        // "a < b" must not be read as a "<b>" tag. (fable M1)
+        private static readonly Regex TagToken = new("<(/?)([a-zA-Z0-9]+)[^>]*?(/?)>", RegexOptions.Compiled);
 
         /// <summary>
-        /// Reduce a definition body to the closed allowlist: keep an allowed tag as its bare form (no
-        /// attributes — so no href/style/on*/class/title survives), drop any other tag while keeping the text
-        /// between tags. Malformed input is handled token-by-token (each tag stands alone). Trusted build-time
-        /// input, so this is a normalize-to-our-tag-set filter, not an adversarial sanitizer.
+        /// Reduce a definition body to the closed allowlist, SAFE BY CONSTRUCTION: an allowed tag is emitted as
+        /// its bare form (no attributes — so no href/style/on*/class/title survives), any other tag is dropped,
+        /// and every character of the text BETWEEN tags has its stray <c>&lt;</c>/<c>&gt;</c> escaped. That last
+        /// step is what makes the guarantee a property of the code rather than of the corpus: after cleaning,
+        /// the ONLY <c>&lt;</c>/<c>&gt;</c> in the output are the bare allowed tags this method wrote, so no
+        /// dropped-tag remnant, HTML comment, dangling partial tag, or split-tag reassembly can form live markup
+        /// in the WebView. Trusted build-time input, so this is a normalize-to-our-tag-set filter, not an
+        /// adversarial sanitizer — but it is now demonstrably closed. (fable M2)
         /// </summary>
         public static string CleanBody(string html)
         {
@@ -71,10 +86,10 @@ namespace CST.LexiconTools
             int pos = 0;
             foreach (Match t in TagToken.Matches(html))
             {
-                sb.Append(html, pos, t.Index - pos);          // text before this tag, verbatim
+                AppendEscaped(sb, html, pos, t.Index);        // text before this tag, with stray <> escaped
                 pos = t.Index + t.Length;
                 string name = t.Groups[2].Value;
-                if (!AllowedTags.Contains(name)) continue;    // drop the tag, keep surrounding text
+                if (!AllowedTags.Contains(name)) continue;    // drop the tag, keep surrounding (escaped) text
                 bool closing = t.Groups[1].Value == "/";
                 bool selfClose = t.Groups[3].Value == "/" || name.Equals("br", StringComparison.OrdinalIgnoreCase)
                                  || name.Equals("hr", StringComparison.OrdinalIgnoreCase);
@@ -82,9 +97,34 @@ namespace CST.LexiconTools
                         : selfClose ? $"<{name.ToLowerInvariant()}/>"
                         : $"<{name.ToLowerInvariant()}>");
             }
-            sb.Append(html, pos, html.Length - pos);          // trailing text
+            AppendEscaped(sb, html, pos, html.Length);        // trailing text
             return sb.ToString().Trim();
         }
+
+        // Append html[start..end], turning a stray '<' or '>' into an entity so text can never form or complete
+        // a tag. Existing entities (&lt; etc.) contain no '<'/'>' char, so they pass through untouched.
+        private static void AppendEscaped(StringBuilder sb, string html, int start, int end)
+        {
+            for (int i = start; i < end; i++)
+            {
+                char ch = html[i];
+                sb.Append(ch == '<' ? "&lt;" : ch == '>' ? "&gt;" : ch.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Build-time post-condition: a cleaned body must contain no markup outside the bare allowlist. Stripping
+        /// the allowed bare tags must leave zero <c>&lt;</c>/<c>&gt;</c>. Throws otherwise, so a future CleanBody
+        /// regression fails the build rather than shipping unsafe HTML. (fable M2)
+        /// </summary>
+        public static bool IsClosedAllowlist(string cleanedBody)
+        {
+            string stripped = AllowedBareTag.Replace(cleanedBody, string.Empty);
+            return !stripped.Contains('<') && !stripped.Contains('>');
+        }
+
+        private static readonly Regex AllowedBareTag =
+            new("</?(?:p|br|i|b|em|strong|ul|ol|li|hr|abbr)/?>", RegexOptions.Compiled);
 
         /// <summary>
         /// Map the DPPN source JSON to canonical raw entries. Skips records with no bold lemma or an effectively
@@ -102,8 +142,14 @@ namespace CST.LexiconTools
                 if (headword.Length == 0) continue;
 
                 string body = CleanBody(entry);
-                // A body that is empty once tags are stripped is a header stub, not a definition.
-                if (AnyTag.Replace(body, string.Empty).Trim().Length == 0) continue;
+                // A body that is empty once tags AND entities are removed is a header stub, not a definition
+                // (decode so "&nbsp;</p>" also counts as empty). (fable L3)
+                if (WebUtility.HtmlDecode(AnyTag.Replace(body, string.Empty)).Trim().Length == 0) continue;
+
+                // Safety post-condition: never emit a body with markup outside the closed allowlist. (fable M2)
+                if (!IsClosedAllowlist(body))
+                    throw new InvalidOperationException(
+                        $"CleanBody produced non-allowlisted markup for '{headword}': {body}");
 
                 yield return new RawEntry(headword, body);
             }
