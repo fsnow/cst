@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CST.Lexicon — the canonical multi-source dictionary asset format (#109). Both our build-time
+    converters (e.g. DPPN) and the future in-app import produce a "lexicon": a small SQLite carrying
+    IPE-keyed, homonym-aware, HTML-definition entries plus source/attribution meta. One writer
+    (LexiconBuilder), one reader (LexiconReader), one key-derivation (LexiconKey) — so build-time and
+    read-time can never drift on how a headword becomes a lookup key.
+
+    Depends on CST.Core for Any2Ipe (the key derivation must match the runtime query normalization
+    exactly) + Microsoft.Data.Sqlite. No HTML sanitizer here: our downloaded assets are sanitized at
+    BUILD time by the converter; runtime sanitization only matters for the later user-import path.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CST.Lexicon</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Same patched-native-SQLite pin as CST.Lemma (clears advisory GHSA-2m69-gcr7-jv3q). -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CST.Core\CST.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CST.Avalonia.Tests" />
+  </ItemGroup>
+
+</Project>
