@@ -1578,9 +1578,11 @@ namespace CST.Avalonia.Services
                 CstHostWindow? sourceHostWindow = null;
                 if (oldVm.Owner is IDock currentDock)
                 {
-                    // Find the host window that contains this dock
+                    // Find the host window that contains this dock — match against ANY of its panes, not
+                    // just the first, or unfloating from the second pane of a split float misidentifies the
+                    // source window. (#39 tab-loss)
                     sourceHostWindow = HostWindows.OfType<CstHostWindow>()
-                        .FirstOrDefault(hw => FindDocumentDockInLayout(hw.Layout) == currentDock);
+                        .FirstOrDefault(hw => FindAllDocumentDocksInLayout(hw.Layout).Contains(currentDock));
 
                     Log.Information("Unfloating from host window: {WindowId}", sourceHostWindow?.Id ?? "unknown");
 
@@ -1643,12 +1645,13 @@ namespace CST.Avalonia.Services
                 // DO NOT check all floating windows - this was causing other floating windows to disappear
                 if (sourceHostWindow != null)
                 {
-                    var documentDock = FindDocumentDockInLayout(sourceHostWindow.Layout);
-                    if (documentDock != null)
+                    var documentDocks = FindAllDocumentDocksInLayout(sourceHostWindow.Layout);
+                    if (documentDocks.Count > 0)
                     {
-                        // Check for ReactiveDocument (BookDisplayViewModel) not just Document
-                        var hasDocuments = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Any() ?? false;
-                        if (!hasDocuments)
+                        // Empty only when NO pane holds a document — else unfloating from a split float would
+                        // close a window still showing books in its other pane. (#39 tab-loss)
+                        var docCount = documentDocks.Sum(d => d.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0);
+                        if (docCount == 0)
                         {
                             Log.Information("Source floating window {WindowId} is now empty - closing it", sourceHostWindow.Id);
                             CloseEmptyHostWindow(sourceHostWindow);
@@ -1656,7 +1659,7 @@ namespace CST.Avalonia.Services
                         else
                         {
                             Log.Information("Source floating window {WindowId} still has {Count} documents - keeping it open",
-                                sourceHostWindow.Id, documentDock.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0);
+                                sourceHostWindow.Id, docCount);
                         }
                     }
                 }
@@ -2224,11 +2227,11 @@ namespace CST.Avalonia.Services
         private DocumentDock? FindDocumentDockInLayout(IDock? layout)
         {
             if (layout == null) return null;
-            
+
             // Direct DocumentDock
             if (layout is DocumentDock documentDock)
                 return documentDock;
-                
+
             // Search recursively in child docks
             if (layout.VisibleDockables != null)
             {
@@ -2240,6 +2243,29 @@ namespace CST.Avalonia.Services
             }
 
             return null;
+        }
+
+        // ALL DocumentDocks in a layout, not just the first. A floating window can be SPLIT (a
+        // ProportionalDock with two+ DocumentDock panes), and the single-dock FindDocumentDockInLayout above
+        // returns only the first in tree order — so "is this window empty?" and "close its tabs" both used to
+        // see only one pane. That silently orphaned the other pane's books: drag one pane's book out (or
+        // red-button-close a split float) and the survivors vanished. Enumerate every pane instead. (#39 tab-loss)
+        private void CollectDocumentDocks(IDock? layout, List<DocumentDock> result)
+        {
+            if (layout == null) return;
+            if (layout is DocumentDock documentDock) result.Add(documentDock);
+            if (layout.VisibleDockables != null)
+            {
+                foreach (var child in layout.VisibleDockables.OfType<IDock>())
+                    CollectDocumentDocks(child, result);
+            }
+        }
+
+        private List<DocumentDock> FindAllDocumentDocksInLayout(IDock? layout)
+        {
+            var docks = new List<DocumentDock>();
+            CollectDocumentDocks(layout, docks);
+            return docks;
         }
 
         // Fallback title for a floating window that momentarily has no content (empty windows are
@@ -2450,19 +2476,20 @@ namespace CST.Avalonia.Services
                 foreach (var hostWindow in HostWindows.OfType<CstHostWindow>().ToList())
                 {
                     Log.Debug("*** Checking host window: {WindowId} ***", hostWindow.Id);
-                    
-                    // Find the DocumentDock within the host window's layout hierarchy
-                    var documentDock = FindDocumentDockInLayout(hostWindow.Layout);
-                    
-                    if (documentDock != null)
-                    {
-                        var totalDockables = documentDock.VisibleDockables?.Count ?? 0;
-                        // Check for ReactiveDocument (BookDisplayViewModel) not just Document
-                        var hasDocuments = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Any() ?? false;
-                        var docCount = documentDock.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0;
 
-                        Log.Debug("*** Host window {WindowId} - Layout: {LayoutType}, DocumentDock found - Total dockables: {TotalCount}, ReactiveDocuments: {DocumentCount}, HasDocuments: {HasDocuments} ***",
-                            hostWindow.Id, hostWindow.Layout?.GetType().Name, totalDockables, docCount, hasDocuments);
+                    // Look at EVERY DocumentDock in the layout, not just the first: a split floating window
+                    // has more than one pane, and checking only the first orphaned the others' books when
+                    // that first pane emptied. The window is empty only when NO pane holds a document.
+                    // (#39 tab-loss)
+                    var documentDocks = FindAllDocumentDocksInLayout(hostWindow.Layout);
+
+                    if (documentDocks.Count > 0)
+                    {
+                        var docCount = documentDocks.Sum(d => d.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0);
+                        var hasDocuments = docCount > 0;
+
+                        Log.Debug("*** Host window {WindowId} - Layout: {LayoutType}, {DockCount} DocumentDock(s), ReactiveDocuments: {DocumentCount}, HasDocuments: {HasDocuments} ***",
+                            hostWindow.Id, hostWindow.Layout?.GetType().Name, documentDocks.Count, docCount, hasDocuments);
 
                         if (!hasDocuments)
                         {
@@ -2472,7 +2499,7 @@ namespace CST.Avalonia.Services
                     }
                     else
                     {
-                        Log.Warning("*** Host window {WindowId} has layout {LayoutType} but no DocumentDock found ***", 
+                        Log.Warning("*** Host window {WindowId} has layout {LayoutType} but no DocumentDock found ***",
                             hostWindow.Id, hostWindow.Layout?.GetType().Name ?? "null");
                     }
                 }
@@ -3277,9 +3304,13 @@ namespace CST.Avalonia.Services
 
             try
             {
-                var floatingDock = FindDocumentDockInLayout(hostWindow.Layout);
-                var toClose = floatingDock?.VisibleDockables?.ToList();
-                if (toClose == null || toClose.Count == 0)
+                // Close tabs from EVERY pane, not just the first DocumentDock — a split floating window has
+                // more than one, and closing only the first orphaned the rest (they stayed in the destroyed
+                // window's dead layout, leaking a live browser). (#39 tab-loss)
+                var toClose = FindAllDocumentDocksInLayout(hostWindow.Layout)
+                    .SelectMany(d => d.VisibleDockables ?? Enumerable.Empty<IDockable>())
+                    .ToList();
+                if (toClose.Count == 0)
                 {
                     Log.Debug("*** No tabs to close - window was already empty ***");
                     return;
