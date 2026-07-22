@@ -1921,8 +1921,10 @@ namespace CST.Avalonia.Services
             // Clean up empty splits after closing a dockable
             Log.Debug("*** Post-close cleanup - checking for empty splits ***");
             CleanupEmptySplits();
+            // (The empty-floating-window check is scheduled centrally in RemoveDockable, which base.CloseDockable
+            // routes through — see #39 note there.)
         }
-        
+
         // Override SwapDockable to debug tab operations and trigger cleanup
         public override void SwapDockable(IDock dock, IDockable sourceDockable, IDockable targetDockable)
         {
@@ -1974,6 +1976,7 @@ namespace CST.Avalonia.Services
             PrepareCrossWindowMove(sourceDockable, targetDock);
             base.MoveDockable(sourceDock, targetDock, sourceDockable, targetDockable);
             CleanupEmptySplits();
+            // Empty-floating-window check runs centrally in RemoveDockable (base.MoveDockable routes through it).
         }
 
         // Cross-dock swap: both dockables change docks, so either could be a book/PDF crossing windows.
@@ -1983,6 +1986,18 @@ namespace CST.Avalonia.Services
             PrepareCrossWindowMove(targetDockable, sourceDock);
             base.SwapDockable(sourceDock, targetDock, sourceDockable, targetDockable);
             CleanupEmptySplits();
+        }
+
+        // Close any now-empty floating window after a cross-window move, DEFERRED to the next dispatcher
+        // tick. Two reasons: (1) the per-pane collection monitor (SetupFloatingWindowMonitoring) is wired
+        // only at window creation, so emptying a pane added by a LATER split fires no handler and the empty
+        // window would otherwise linger blank — running the check here covers every drag path regardless of
+        // monitoring. (2) Deferring keeps the window Close() (native teardown, with CEF in the mix) out of
+        // the middle of base.MoveDockable's half-finished mutation; the check recomputes from live state, so
+        // one tick later is harmless. (#39 blank window)
+        private void ScheduleEmptyFloatingWindowCheck()
+        {
+            Dispatcher.UIThread.Post(CheckForEmptyFloatingWindows, DispatcherPriority.Background);
         }
 
         // When a book/PDF is about to move into a dock in a DIFFERENT window, shut down and evict its recycled
@@ -2083,9 +2098,16 @@ namespace CST.Avalonia.Services
             // Trigger cleanup after remove operations
             Log.Debug("*** Post-remove cleanup - checking for empty splits ***");
             CleanupEmptySplits();
+
+            // Every removal funnels through here — base.CloseDockable (tab close) and base.MoveDockable
+            // (drag out) both call the virtual RemoveDockable — so scheduling the empty-floating-window check
+            // HERE covers all of them in one place, regardless of whether the emptied pane was monitored (a
+            // later-split pane never is). Deferred so the native window Close() doesn't run inside a
+            // half-finished framework mutation; the check recomputes from live state. (#39 blank window)
+            ScheduleEmptyFloatingWindowCheck();
         }
-        
-        
+
+
         // Initialize host window support for floating windows
         public override void InitLayout(IDockable layout)
         {
@@ -2198,13 +2220,15 @@ namespace CST.Avalonia.Services
                             }
                         }
                         
-                        // Check for empty floating windows after any collection change
-                        Log.Debug("*** Floating window collection changed - calling CheckForEmptyFloatingWindows ***");
-                        CheckForEmptyFloatingWindows();
-                        
                         // Clean up empty splits in floating windows after any collection change
                         Log.Debug("*** Floating window collection changed - cleaning up empty splits ***");
                         CleanupEmptySplits();
+
+                        // Check for empty floating windows AFTER cleanup, deferred: this handler can fire
+                        // mid-mutation (inside base.MoveDockable), and closing a window there — native
+                        // teardown with CEF — is the risky moment the comment near the top of this file warns
+                        // about. The check recomputes from live state, so a tick later is safe. (#39)
+                        ScheduleEmptyFloatingWindowCheck();
                     };
                 }
                 
@@ -2477,30 +2501,27 @@ namespace CST.Avalonia.Services
                 {
                     Log.Debug("*** Checking host window: {WindowId} ***", hostWindow.Id);
 
-                    // Look at EVERY DocumentDock in the layout, not just the first: a split floating window
-                    // has more than one pane, and checking only the first orphaned the others' books when
-                    // that first pane emptied. The window is empty only when NO pane holds a document.
-                    // (#39 tab-loss)
-                    var documentDocks = FindAllDocumentDocksInLayout(hostWindow.Layout);
+                    // A floating window is empty when it has NO real content anywhere — no documents AND no
+                    // tools. Test the leaves of the whole layout, not a single DocumentDock:
+                    //   • split float, drag one pane's book out → the OTHER pane still holds books, so the
+                    //     window must stay (the old first-pane check closed it and orphaned them). (#39 tab-loss)
+                    //   • move the LAST books out → CleanupEmptySplits removes the emptied DocumentDock entirely,
+                    //     leaving a float with no DocumentDock at all; the old "needs a DocumentDock" gate left
+                    //     that blank "CST Reader" window open forever. (#39 blank window)
+                    // Leaf-based (not document-count) because floated TOOL panels (Search/Dictionary/Select a
+                    // Book — all CanFloat=true) are real content with zero documents; a doc-count test would
+                    // wrongly close them. Splitters are the only leaves that don't count as content.
+                    var leaves = new List<IDockable>();
+                    CollectLeafDockables(hostWindow.Layout, leaves, 0);
+                    var contentLeaves = leaves.Count(l => l is not ProportionalDockSplitter);
 
-                    if (documentDocks.Count > 0)
+                    Log.Debug("*** Host window {WindowId} - Layout: {LayoutType}, {LeafCount} leaf/leaves, {ContentCount} content (non-splitter) ***",
+                        hostWindow.Id, hostWindow.Layout?.GetType().Name ?? "null", leaves.Count, contentLeaves);
+
+                    if (contentLeaves == 0)
                     {
-                        var docCount = documentDocks.Sum(d => d.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0);
-                        var hasDocuments = docCount > 0;
-
-                        Log.Debug("*** Host window {WindowId} - Layout: {LayoutType}, {DockCount} DocumentDock(s), ReactiveDocuments: {DocumentCount}, HasDocuments: {HasDocuments} ***",
-                            hostWindow.Id, hostWindow.Layout?.GetType().Name, documentDocks.Count, docCount, hasDocuments);
-
-                        if (!hasDocuments)
-                        {
-                            Log.Debug("*** EMPTY FLOATING WINDOW DETECTED: {WindowId} - scheduling for closure ***", hostWindow.Id);
-                            emptyWindows.Add(hostWindow);
-                        }
-                    }
-                    else
-                    {
-                        Log.Warning("*** Host window {WindowId} has layout {LayoutType} but no DocumentDock found ***",
-                            hostWindow.Id, hostWindow.Layout?.GetType().Name ?? "null");
+                        Log.Debug("*** EMPTY FLOATING WINDOW DETECTED: {WindowId} (no documents or tools) - scheduling for closure ***", hostWindow.Id);
+                        emptyWindows.Add(hostWindow);
                     }
                 }
                 
@@ -2899,13 +2920,20 @@ namespace CST.Avalonia.Services
                             if (index >= 0)
                             {
                                 parent.VisibleDockables[index] = onlyChild;
-                                
-                                // Update active dockable if needed
+
+                                // Re-home the surviving child: without this its Owner still points at the now-
+                                // detached wrapper, so a follow-up base.SplitToDock (edge-drop is a two-step
+                                // move+split) resolves `dockable.Owner` to the dead wrapper and splits inside a
+                                // tree unreachable from any window — silently losing the dragged tab. (#39 data loss)
+                                onlyChild.Owner = parent;
+
+                                // Repoint active/default away from the removed wrapper, or the floating
+                                // RootDock renders a dangling ActiveDockable → a blank window. (#39 blank window)
                                 if (parent.ActiveDockable == emptySplit)
-                                {
                                     parent.ActiveDockable = onlyChild;
-                                }
-                                
+                                if (parent.DefaultDockable == emptySplit)
+                                    parent.DefaultDockable = onlyChild;
+
                                 Log.Information("*** Successfully replaced single-child ProportionalDock with child ***");
                             }
                             else
@@ -2928,7 +2956,17 @@ namespace CST.Avalonia.Services
                         Log.Information("*** Removing empty dock completely ***");
                         parent.VisibleDockables.Remove(emptySplit);
                     }
-                    
+
+                    // A removed split must not stay referenced as the parent's active/default dockable — the
+                    // floating RootDock renders ActiveDockable, so a dangling reference is a blank window.
+                    // Repoint at a surviving non-splitter child (or null). (#39 blank window)
+                    if (ReferenceEquals(parent.ActiveDockable, emptySplit) || ReferenceEquals(parent.DefaultDockable, emptySplit))
+                    {
+                        var survivor = parent.VisibleDockables?.FirstOrDefault(d => d is not ProportionalDockSplitter);
+                        if (ReferenceEquals(parent.ActiveDockable, emptySplit)) parent.ActiveDockable = survivor;
+                        if (ReferenceEquals(parent.DefaultDockable, emptySplit)) parent.DefaultDockable = survivor;
+                    }
+
                     // If parent is also a ProportionalDock, clean up splitters
                     if (parent is ProportionalDock parentProportional)
                     {
