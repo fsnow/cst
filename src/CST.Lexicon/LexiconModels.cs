@@ -34,10 +34,14 @@ namespace CST.Lexicon
         int ConverterVersion = 1);
 
     /// <summary>
-    /// A raw entry as a converter hands it in: the published headword (may contain HTML and a trailing homonym
-    /// number) and the definition as an HTML fragment. The builder derives the key, splits the homonym, and
-    /// strips HTML from the headword. <c>BodyHtml</c> is stored verbatim — the caller is responsible for having
-    /// sanitized it (our converters do so at build time; see the project notes).
+    /// A raw entry as a converter hands it in: the published headword (may contain HTML tags and/or a trailing
+    /// homonym number) and the definition as an HTML fragment. The builder derives the key, splits the homonym,
+    /// and reduces the headword to plain text (tags stripped, entities decoded).
+    /// <para>
+    /// <b>BodyHtml is stored VERBATIM.</b> The caller must have SANITIZED it — our build-time converters do so
+    /// over a source's known markup, so the app ships no sanitizer for its own trusted downloaded assets; the
+    /// untrusted in-app import path sanitizes before calling the builder.
+    /// </para>
     /// </summary>
     public sealed record RawEntry(string Headword, string BodyHtml);
 

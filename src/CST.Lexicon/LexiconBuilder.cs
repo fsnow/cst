@@ -29,57 +29,74 @@ namespace CST.Lexicon
             if (meta is null) throw new ArgumentNullException(nameof(meta));
             if (entries is null) throw new ArgumentNullException(nameof(entries));
 
-            // Start from a clean file so a rebuild can't leave stale rows.
-            if (File.Exists(dbPath)) File.Delete(dbPath);
+            // Build to a temp file and atomically rename into place, so a crash mid-build (journal_mode=OFF)
+            // can never leave a corrupt file at the real path, and an existing good lexicon is only replaced by
+            // a complete new one. (fable HIGH-1)
+            string tmp = dbPath + ".tmp";
+            if (File.Exists(tmp)) File.Delete(tmp);
 
-            var csb = new SqliteConnectionStringBuilder { DataSource = dbPath, Mode = SqliteOpenMode.ReadWriteCreate };
-            using var conn = new SqliteConnection(csb.ToString());
-            conn.Open();
-
-            using (var pragma = conn.CreateCommand())
+            // Pooling=false: these are open-once/close-once connections. With pooling on, a rebuild-at-same-path
+            // gets back a pooled handle pointing at the unlinked old inode ("table already exists" / "unable to
+            // open"), and a pooled handle also blocks File.Move/Delete on Windows. Same footgun SqliteLemmaProvider
+            // guards with ClearPool. (fable HIGH-1)
+            var csb = new SqliteConnectionStringBuilder
             {
-                pragma.CommandText = "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;";
-                pragma.ExecuteNonQuery();
-            }
-            using (var create = conn.CreateCommand())
-            {
-                create.CommandText = LexiconSchema.CreateSql;
-                create.ExecuteNonQuery();
-            }
-
-            using var tx = conn.BeginTransaction();
-
-            WriteMeta(conn, meta);
+                DataSource = tmp,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Pooling = false
+            };
 
             int written = 0;
-            using (var insert = conn.CreateCommand())
+            using (var conn = new SqliteConnection(csb.ToString()))
             {
-                insert.CommandText =
-                    "INSERT INTO entry(ipe_key, headword, homonym, body_html) VALUES ($k, $h, $n, $b)";
-                var pk = insert.CreateParameter(); pk.ParameterName = "$k"; insert.Parameters.Add(pk);
-                var ph = insert.CreateParameter(); ph.ParameterName = "$h"; insert.Parameters.Add(ph);
-                var pn = insert.CreateParameter(); pn.ParameterName = "$n"; insert.Parameters.Add(pn);
-                var pb = insert.CreateParameter(); pb.ParameterName = "$b"; insert.Parameters.Add(pb);
+                conn.Open();
 
-                foreach (var raw in entries)
+                using (var pragma = conn.CreateCommand())
                 {
-                    string stripped = LexiconKey.StripHtml(raw.Headword ?? string.Empty);
-                    if (string.IsNullOrWhiteSpace(stripped)) continue;   // nothing to key on
-
-                    var (headBase, homonym) = LexiconKey.SplitHomonym(stripped);
-                    string key = LexiconKey.DeriveKey(headBase);
-                    if (string.IsNullOrEmpty(key)) continue;
-
-                    pk.Value = key;
-                    ph.Value = stripped;                 // verbatim published form (homonym number kept)
-                    pn.Value = homonym;
-                    pb.Value = raw.BodyHtml ?? string.Empty;
-                    insert.ExecuteNonQuery();
-                    written++;
+                    pragma.CommandText = "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;";
+                    pragma.ExecuteNonQuery();
                 }
-            }
+                using (var create = conn.CreateCommand())
+                {
+                    create.CommandText = LexiconSchema.CreateSql;
+                    create.ExecuteNonQuery();
+                }
 
-            tx.Commit();
+                using var tx = conn.BeginTransaction();
+
+                WriteMeta(conn, meta);
+
+                using (var insert = conn.CreateCommand())
+                {
+                    insert.CommandText =
+                        "INSERT INTO entry(ipe_key, headword, homonym, body_html) VALUES ($k, $h, $n, $b)";
+                    var pk = insert.CreateParameter(); pk.ParameterName = "$k"; insert.Parameters.Add(pk);
+                    var ph = insert.CreateParameter(); ph.ParameterName = "$h"; insert.Parameters.Add(ph);
+                    var pn = insert.CreateParameter(); pn.ParameterName = "$n"; insert.Parameters.Add(pn);
+                    var pb = insert.CreateParameter(); pb.ParameterName = "$b"; insert.Parameters.Add(pb);
+
+                    foreach (var raw in entries)
+                    {
+                        string stripped = LexiconKey.StripHtml(raw.Headword ?? string.Empty);
+                        if (string.IsNullOrWhiteSpace(stripped)) continue;   // nothing to key on
+
+                        var (headBase, homonym) = LexiconKey.SplitHomonym(stripped);
+                        string key = LexiconKey.DeriveKey(headBase);
+                        if (string.IsNullOrEmpty(key)) continue;
+
+                        pk.Value = key;
+                        ph.Value = stripped;                 // verbatim published form (homonym number kept)
+                        pn.Value = homonym;
+                        pb.Value = raw.BodyHtml ?? string.Empty;
+                        insert.ExecuteNonQuery();
+                        written++;
+                    }
+                }
+
+                tx.Commit();
+            }   // connection disposed (and, with Pooling=false, its file handle released) before the rename
+
+            File.Move(tmp, dbPath, overwrite: true);
             return written;
         }
 

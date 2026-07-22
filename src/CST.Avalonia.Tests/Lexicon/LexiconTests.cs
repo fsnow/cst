@@ -186,6 +186,81 @@ namespace CST.Avalonia.Tests.Lexicon
         }
 
         [Fact]
+        public void Rebuilding_the_same_path_replaces_the_lexicon_without_loss()
+        {
+            // fable HIGH-1: with SQLite pooling on, a second Build to the same path resurrected the deleted
+            // file's handle and threw, losing the prior good lexicon. Build twice, then read.
+            var path = Path.Combine(_dir, "rebuild.db");
+            var meta = new LexiconMeta("x", "X", "en", LexiconKind.General);
+            LexiconBuilder.Build(path, meta, new[] { new RawEntry("Sāvatthī", "first") });
+            LexiconBuilder.Build(path, meta, new[] { new RawEntry("Kosala", "second") });   // must not throw
+
+            var lex = LexiconReader.Open(path);
+            Assert.Equal(1, lex.Count);
+            Assert.Empty(lex.Lookup("sāvatthī"));                 // old content gone
+            Assert.Equal("second", lex.Lookup("kosala").Single().BodyHtml);
+            Assert.False(File.Exists(path + ".tmp"));             // temp cleaned up by the rename
+        }
+
+        [Fact]
+        public void An_entity_encoded_headword_is_decoded_so_its_key_is_findable()
+        {
+            // fable MED-1: "N&#257;ga" must key/display as "Nāga", not keep the literal entity (a dead key).
+            var lex = Build(new RawEntry("N&#257;ga", "<p>A serpent-being.</p>"));
+            var hit = Assert.Single(lex.Lookup("nāga"));
+            Assert.Equal("Nāga", hit.Headword);
+            Assert.Equal(LexiconKey.DeriveKey("Nāga"), hit.IpeKey);
+            // A genuinely escaped literal is kept as the literal, not re-read as a tag.
+            Assert.Equal("a < b", LexiconKey.StripHtml("a &lt; b"));
+        }
+
+        [Fact]
+        public void Exact_homonyms_then_the_deeper_prefix_run_all_surface_together()
+        {
+            var lex = Build(
+                new RawEntry("Nāga 1", "n"),
+                new RawEntry("Nāga 2", "n"),
+                new RawEntry("Nāgadatta", "n"));
+            // Exact key "nāga" → both homonyms, then the deeper-prefix "Nāgadatta".
+            Assert.Equal(new[] { "Nāga 1", "Nāga 2", "Nāgadatta" },
+                lex.Lookup("nāga").Select(h => h.Headword));
+        }
+
+        [Fact]
+        public void A_miss_tied_on_both_sides_collects_both_runs_in_ascending_key_order()
+        {
+            var lex = Build(
+                new RawEntry("Nabhasa", "n"),      // shares "na"
+                new RawEntry("Nandā", "n"));       // shares "na"
+            // "naX" (no exact) with both neighbors sharing "na" (2) → both are returned...
+            var hits = lex.Lookup("naxyz");
+            Assert.Equal(2, hits.Count);
+            Assert.Contains(hits, h => h.Headword == "Nabhasa");
+            Assert.Contains(hits, h => h.Headword == "Nandā");
+            // ...in ascending IPE-key order (Pāli collation: dental 'n' sorts before labial 'b', so this is
+            // Nandā then Nabhasa — the point is the reader emits them sorted, whatever the collation says).
+            var keys = hits.Select(h => h.IpeKey).ToList();
+            Assert.Equal(keys.OrderBy(k => k, StringComparer.Ordinal), keys);
+        }
+
+        [Fact]
+        public void A_file_without_a_schema_version_is_refused()
+        {
+            var path = Path.Combine(_dir, "noschema.db");
+            LexiconBuilder.Build(path, new LexiconMeta("x", "X", "en", LexiconKind.General),
+                new[] { new RawEntry("Sāvatthī", "s") });
+            var csb = new SqliteConnectionStringBuilder { DataSource = path, Pooling = false };
+            using (var c = new SqliteConnection(csb.ToString()))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "DELETE FROM meta WHERE key = 'schema_version'";
+                cmd.ExecuteNonQuery();
+            }
+            Assert.Throws<NotSupportedException>(() => LexiconReader.Open(path));
+        }
+
+        [Fact]
         public void A_schema_newer_than_this_build_is_refused()
         {
             var path = Path.Combine(_dir, "future.db");

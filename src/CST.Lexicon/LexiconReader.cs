@@ -26,7 +26,14 @@ namespace CST.Lexicon
         /// <summary>Open a lexicon file, or throw if it is missing/malformed/too new for this schema.</summary>
         public static LexiconReader Open(string dbPath)
         {
-            var csb = new SqliteConnectionStringBuilder { DataSource = dbPath, Mode = SqliteOpenMode.ReadOnly };
+            // Pooling=false: a pooled read-only handle would block the delivery layer from replacing the lexicon
+            // file (File.Move/Delete) on Windows. Open-once/close-once — pooling buys nothing. (fable HIGH-1)
+            var csb = new SqliteConnectionStringBuilder
+            {
+                DataSource = dbPath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Pooling = false
+            };
             using var conn = new SqliteConnection(csb.ToString());
             conn.Open();
 
@@ -35,14 +42,23 @@ namespace CST.Lexicon
             var list = new List<LexiconEntry>();
             using (var cmd = conn.CreateCommand())
             {
-                // Sort in SQL by key then homonym then rowid so homonyms surface in published order.
-                cmd.CommandText =
-                    "SELECT ipe_key, headword, homonym, body_html FROM entry ORDER BY ipe_key, homonym, id";
+                cmd.CommandText = "SELECT ipe_key, headword, homonym, body_html FROM entry";
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                     list.Add(new LexiconEntry(r.GetString(0), r.GetString(1), r.GetInt32(2), r.GetString(3)));
             }
-            return new LexiconReader(list.ToArray(), meta);
+
+            // Sort in-memory with the SAME ordinal (UTF-16 code-unit) comparison the binary search uses, rather
+            // than trusting SQL's BINARY (UTF-8 byte) ORDER BY — they agree for all-BMP strings (IPE tops out at
+            // U+1E6D) but making the collation invariant local removes the cross-system assumption. (fable LOW-4)
+            var arr = list.ToArray();
+            Array.Sort(arr, (a, b) =>
+            {
+                int c = string.CompareOrdinal(a.IpeKey, b.IpeKey);
+                if (c != 0) return c;
+                return a.Homonym.CompareTo(b.Homonym);
+            });
+            return new LexiconReader(arr, meta);
         }
 
         /// <summary>
@@ -139,14 +155,19 @@ namespace CST.Lexicon
 
             string? Get(string k) => m.TryGetValue(k, out var v) ? v : null;
 
-            // A file whose schema is NEWER than this reader understands must be refused, not misread.
-            if (int.TryParse(Get(LexiconSchema.MetaSchemaVersion), out int sv) && sv > LexiconSchema.SchemaVersion)
+            // The version stamp must be PRESENT and parseable: an unstamped file isn't a lexicon this reader
+            // should guess at. Absent or NEWER than we understand → refuse, don't misread. (fable LOW-1)
+            if (!int.TryParse(Get(LexiconSchema.MetaSchemaVersion), out int sv))
+                throw new NotSupportedException("Not a lexicon: missing or invalid schema_version.");
+            if (sv > LexiconSchema.SchemaVersion)
                 throw new NotSupportedException(
                     $"Lexicon schema version {sv} is newer than this build supports ({LexiconSchema.SchemaVersion}).");
 
             var kind = string.Equals(Get(LexiconSchema.MetaKind), "proper-names", StringComparison.Ordinal)
                 ? LexiconKind.ProperNames : LexiconKind.General;
-            int.TryParse(Get(LexiconSchema.MetaConverterVersion), out int conv);
+            // Default to 1 when absent, symmetric with the record default (a lexicon the builder wrote always
+            // carries it). (fable LOW-5)
+            int conv = int.TryParse(Get(LexiconSchema.MetaConverterVersion), out int c) ? c : 1;
 
             return new LexiconMeta(
                 SourceId: Get(LexiconSchema.MetaSourceId) ?? string.Empty,

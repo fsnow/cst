@@ -20,16 +20,25 @@ namespace CST.Lexicon
 
         private static readonly Regex TagRx = new("<[^>]+>", RegexOptions.Compiled);
 
-        /// <summary>Remove HTML tags from a headword (some upstream sources wrap the name in markup), matching
-        /// the upstream exporters' <c>&lt;[^&gt;]+&gt;</c> strip. Leaves the text content.</summary>
+        /// <summary>
+        /// Reduce a headword to its plain text: strip HTML tags (some upstream sources wrap the name in markup),
+        /// then decode HTML entities. Decoding AFTER the tag strip is deliberate — an entity-escaped headword
+        /// like <c>N&amp;#257;ga</c> must become <c>Nāga</c> (else its key contains literal <c>&amp;#257;</c> and
+        /// the entry is permanently unfindable), while genuine escaped text (<c>a &amp;lt; b</c>) is left as the
+        /// literal it denotes rather than being re-interpreted as a tag. (fable MED-1)
+        /// </summary>
         public static string StripHtml(string headword) =>
-            string.IsNullOrEmpty(headword) ? headword : TagRx.Replace(headword, string.Empty).Trim();
+            string.IsNullOrEmpty(headword)
+                ? headword
+                : System.Net.WebUtility.HtmlDecode(TagRx.Replace(headword, string.Empty)).Trim();
 
         /// <summary>
         /// Split a trailing homonym number off a headword: <c>"Nāgita 1"</c> → (<c>"Nāgita"</c>, 1);
         /// <c>"Sāvatthī"</c> → (<c>"Sāvatthī"</c>, 0). A homonym marker is a final space-separated token of
-        /// digits only (the form the proper-name and DPD sources publish). Not stripped: an interior number, or
-        /// a token with non-digits.
+        /// digits ONLY. Not split: an interior number, a token with non-digits, or a DOTTED sub-homonym like
+        /// DPD's <c>"dhamma 1.01"</c> — this deliberately differs from <c>SqliteLemmaProvider.StripHomonym</c>
+        /// (which allows dots) because the proper-name/import sources this serves publish plain integer markers;
+        /// a dotted DPD-shaped source would keep its whole headword (harmless — still findable by prefix).
         /// </summary>
         public static (string Base, int Homonym) SplitHomonym(string headword)
         {
@@ -38,7 +47,7 @@ namespace CST.Lexicon
             if (sp <= 0 || sp + 1 >= headword.Length) return (headword, 0);
             for (int i = sp + 1; i < headword.Length; i++)
                 if (!char.IsDigit(headword[i])) return (headword, 0);
-            // int.Parse is safe: the tail is all digits. Clamp absurdly long runs to avoid overflow.
+            // TryParse, not Parse: an absurdly long all-digit run overflows int and falls back to (whole, 0).
             var tail = headword[(sp + 1)..];
             return int.TryParse(tail, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
                 ? (headword[..sp].TrimEnd(), n)
