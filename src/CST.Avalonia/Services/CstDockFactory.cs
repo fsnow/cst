@@ -952,7 +952,14 @@ namespace CST.Avalonia.Services
             }
             
             Log.Debug("*** Using framework default split behavior ***");
-            
+
+            // Defensive only: on the STANDARD edge-split path Dock re-parents the book via the 4-arg
+            // MoveDockable before this runs, and here `dockable` is the intermediate dock (not the book), so
+            // the type filter skips it. This call covers any non-standard split that hands us the book
+            // directly; the actual same/cross-window split protection lives in PrepareCrossWindowMove's
+            // unresolved-target default. (#458)
+            PrepareCrossWindowMove(dockable, dock);
+
             // Let the framework handle the split
             if (dock != null && dockable != null)
             {
@@ -1947,10 +1954,81 @@ namespace CST.Avalonia.Services
                 return;
             }
             Log.Debug("*** MoveDockable completed ***");
-            
+
             // Trigger cleanup after move operations as they can leave empty structures
             Log.Debug("*** Post-move cleanup - checking for empty splits ***");
             CleanupEmptySplits();
+        }
+
+        // The CROSS-DOCK move overload — the drag path that merges a tab into ANOTHER window's dock. This was
+        // NOT overridden before, so it skipped the dispose-before-move discipline the float/unfloat buttons
+        // follow: a book/PDF dragged into another window kept the same View with its LIVE CEF browser, and a
+        // browser cannot survive its birth window being destroyed — the next re-attach faults in
+        // AvnNativeControlHostTopLevelAttachment::InitializeWithChildHandle (SIGSEGV). Dispose + evict first so
+        // the destination rebuilds a fresh browser. (#458)
+        public override void MoveDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable targetDockable)
+        {
+            PrepareCrossWindowMove(sourceDockable, targetDock);
+            base.MoveDockable(sourceDock, targetDock, sourceDockable, targetDockable);
+            CleanupEmptySplits();
+        }
+
+        // Cross-dock swap: both dockables change docks, so either could be a book/PDF crossing windows.
+        public override void SwapDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable targetDockable)
+        {
+            PrepareCrossWindowMove(sourceDockable, targetDock);
+            PrepareCrossWindowMove(targetDockable, sourceDock);
+            base.SwapDockable(sourceDock, targetDock, sourceDockable, targetDockable);
+            CleanupEmptySplits();
+        }
+
+        // When a book/PDF is about to move into a dock in a DIFFERENT window, shut down and evict its recycled
+        // View so no live CEF browser crosses the re-parent (see the cross-dock MoveDockable note). Same-window
+        // *tab* moves (Fill drops) resolve both roots to the same window and are skipped — the recycled View
+        // stays for instant tab switching.
+        //
+        // NOTE: an edge-SPLIT is different. Dock builds a brand-new, still-ownerless DocumentDock and moves the
+        // book into it BEFORE attaching it to a window, so GetRootOwner(target) is null here even for a
+        // same-window split. That falls into the "can't confirm same window → dispose" default below, so a
+        // same-window split DOES rebuild the browser (a brief flicker + a position-preserving reload). That is
+        // deliberate and must stay: the unresolved-target dispose is the ONLY thing protecting a cross-window
+        // split (the SplitToDock guard never sees the book — its dockable is the intermediate dock). Erring
+        // toward disposing when the window can't be confirmed is the safe side: a needless rebuild only
+        // flickers, whereas carrying a live browser crashes. (#458)
+        private void PrepareCrossWindowMove(IDockable? dockable, IDock? targetDock)
+        {
+            if (dockable is not (BookDisplayViewModel or PdfDisplayViewModel)) return;
+            if (targetDock == null) return;
+
+            var sourceRoot = GetRootOwner(dockable);
+            var targetRoot = GetRootOwner(targetDock);
+
+            // Skip ONLY when both roots resolve and are the same window.
+            if (sourceRoot != null && targetRoot != null && ReferenceEquals(sourceRoot, targetRoot))
+                return;
+
+            // Preserve reading position across the rebuild: queue the last-known token so the fresh
+            // destination View restores it, exactly as the float/unfloat paths seed initialPositionToken. (#434)
+            if (dockable is BookDisplayViewModel bookVm && bookVm.LastPositionToken is { } token)
+                bookVm.QueuePositionRestore(token);
+
+            Log.Information("#458: cross-window move of {Id} — disposing live WebView before re-parent", dockable.Id);
+            DisposeAndEvictRecycledView(dockable);
+        }
+
+        // The IRootDock at the top of a dockable's ownership chain — its window's layout root. Two dockables
+        // are in the same window iff this returns the same instance (each HostWindow.Layout is its own
+        // RootDock). Returns the NEAREST root ancestor so a floating window resolves to its own root, not the
+        // main one. (#458)
+        internal static IRootDock? GetRootOwner(IDockable? dockable)
+        {
+            var current = dockable;
+            for (int i = 0; current != null && i < 64; i++)
+            {
+                if (current is IRootDock root) return root;
+                current = current.Owner;
+            }
+            return null;
         }
         
         // Override AddDockable to trigger cleanup 

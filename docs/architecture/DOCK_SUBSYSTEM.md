@@ -36,7 +36,7 @@ Root (RootDock, Id="Root")
   is removed (failure mode #4) and the View-menu can't bring the panels back. The overhaul should make
   the dock layer handle empty/missing docks correctly (recreate structure on demand) so such keep-alive
   workarounds aren't needed — at which point the welcome page could itself become closeable.
-- Floating windows are `CstHostWindow`s tracked in `CstDockFactory.HostWindows`; each has its own `Layout` (an independent dock tree with its own `DocumentDock`). A floating window can hold **multiple books** — dragging one floated window's tab onto another combines them into one window (an **intended grouping feature to preserve**). Like all window-change drags, the combine *does* go through the View's detach→reattach dispose+recreate (§4) — but that recreate fires on **re-attach, after** the framework has already moved the View (the drag-time "hide" only sets `IsVisible=false`, it does not dispose the browser). So it's cleanup after the risky moment, not prevention — which is the suspected reason drags are intermittently crash-prone and the button path (dispose **before** move) is not. Exact NativeControlHost timing during the drop is not yet confirmed.
+- Floating windows are `CstHostWindow`s tracked in `CstDockFactory.HostWindows`; each has its own `Layout` (an independent dock tree with its own `DocumentDock`). A floating window can hold **multiple books** — dragging one floated window's tab onto another combines them into one window (an **intended grouping feature to preserve**). **CORRECTION (#458): the combine did NOT go through any dispose+recreate.** The earlier claim here was false — the recreate branch in `BookDisplayView.OnAttachedToVisualTree` is dead code (`OnDetachedFromVisualTree` nulls `_currentWindow`, so every re-attach takes the "first time" path; zero "WINDOW CONTEXT CHANGED" log lines ever). The cross-window drag path (`MoveDockable`/`SwapDockable` 4-arg overloads, `SplitToDock` across windows) carried the **live** browser into the new window, and the crash is **deterministic**, not intermittent: it fires on the first re-attach after the browser's birth window is destroyed (e.g. the emptied source float auto-closes). **Fixed (#458):** `CstDockFactory` now overrides those cross-dock overloads and calls `DisposeAndEvictRecycledView` **before** the move for a book/PDF crossing windows — the same dispose-before-move the buttons use — so a fresh browser is built at the destination. `BookDisplayView` carries a `_browserBirthWindow` invariant check that logs an Error if a live browser ever re-attaches to a different window.
 
 ---
 
@@ -127,14 +127,17 @@ remove this cost entirely by keeping the live browser; the free middle path cann
   only sets `IsVisible=false` — it does **not** dispose the browser, so a live CEF surface still exists
   through the drop.
 
-**Why buttons are safe and drags crash:** the button path tears down and rebuilds the browser in a
-**controlled, sequenced** way *before/after* the dock move (`PrepareForFloat`→dispose, move,
-`RestoreAfterFloat`→recreate) — no live browser exists during the move. A **drag** instead lets the
-framework move the View while the browser is still alive (only hidden); the dispose+recreate fires on
-**re-attach, *after* the move** (`OnAttachedToVisualTree` window-change branch). So for drags the
-recreate is *cleanup after* the risky moment, not *prevention* of it — the suspected crash window. The
-dividing line is **dispose-before-move (buttons) vs dispose-after-move (drags)**. *(Exact
-NativeControlHost timing during the drop is not yet confirmed — the overhaul should pin it down.)*
+**Why buttons are safe and drags crashed:** the button path tears down and rebuilds the browser in a
+**controlled, sequenced** way *before* the dock move (dispose+evict, move, fresh browser at the
+destination) — no live browser exists during the move. A **cross-window drag** instead let the framework
+move the live View across windows; the `OnAttachedToVisualTree` window-change "recreate" branch that was
+supposed to catch this is **dead code** (see the #458 correction under Floating windows above), so nothing
+disposed the browser. The dividing line was **dispose-before-move (buttons) vs carry-live-browser
+(drags)**. **Fixed (#458):** `CstDockFactory` now overrides the cross-dock `MoveDockable`/`SwapDockable`
+overloads and cross-window `SplitToDock` to dispose-before-move for books/PDFs, so the drag paths match the
+buttons. The crash was **deterministic** (fires on the first re-attach after the browser's birth window is
+destroyed), not a timing race — it only looked intermittent because many different drag sequences were
+being exercised.
 
 **Pre-move hooks available** (for a dispose-*before*-move on drags): Avalonia has **no** pre-detach
 event (only `DetachedFromVisualTree`, post). Dock's factory events are all post (`DockableMoved`/
