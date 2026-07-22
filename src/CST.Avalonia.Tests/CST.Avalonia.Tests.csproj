@@ -40,6 +40,7 @@
     <ProjectReference Include="..\CST.Avalonia\CST.Avalonia.csproj" />
     <ProjectReference Include="..\CST.Lucene\CST.Lucene.csproj" />
     <ProjectReference Include="..\CST.Lemma\CST.Lemma.csproj" />
+    <ProjectReference Include="..\CST.Lexicon\CST.Lexicon.csproj" />
   </ItemGroup>
 
 </Project>

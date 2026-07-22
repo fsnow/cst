@@ -27,6 +27,9 @@ src/CST.Core/obj/
 src/CST.Lemma/bin/
 src/CST.Lemma/obj/
 
+src/CST.Lexicon/bin/
+src/CST.Lexicon/obj/
+
 src/CST.Lucene/bin/
 src/CST.Lucene/obj/
 
