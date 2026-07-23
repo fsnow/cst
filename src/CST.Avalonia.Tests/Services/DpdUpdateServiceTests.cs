@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using CST.Avalonia.Services;
@@ -9,8 +10,9 @@ using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
 
-// Unit tests for DpdUpdateService's testable core (#390): manifest parsing, the two-axis version comparison,
-// the installed-meta read, and the verify→decompress→atomic-install with preservation of a good existing asset.
+// Unit tests for DpdUpdateService's testable core (#390/#468): CATALOG manifest parsing, the two-axis version
+// comparison, the per-asset version reads (a DPD lemma db vs a lexicon), and the verify→decompress→probe→atomic
+// install with preservation of a good existing asset.
 public sealed class DpdUpdateServiceTests : IDisposable
 {
     private readonly string _dir;
@@ -30,79 +32,104 @@ public sealed class DpdUpdateServiceTests : IDisposable
 
     private static string Sha(byte[] b) => Convert.ToHexString(SHA256.HashData(b)).ToLowerInvariant();
 
-    private static byte[] Manifest(string file, string dpd, string conv, string sha) =>
+    // A catalog with a single dpd entry.
+    private static byte[] Catalog(string id, string file, string src, string conv, string sha) =>
         Encoding.UTF8.GetBytes(
-            $$"""{"file":"{{file}}","dpdVersion":"{{dpd}}","converterVersion":"{{conv}}","schemaVersion":"2","scope":"full","sha256":"{{sha}}","compressedBytes":10,"rawBytes":20}""");
+            "{\"schemaVersion\":1,\"dictionaries\":[{\"id\":\"" + id + "\",\"file\":\"" + file +
+            "\",\"sourceVersion\":\"" + src + "\",\"converterVersion\":\"" + conv +
+            "\",\"sha256\":\"" + sha + "\",\"compressedBytes\":10,\"rawBytes\":20}]}");
 
-    // ---- ParseManifest ----
+    private static DpdUpdateService.ManifestEntry Entry(string id, string file, string src, string conv, string sha)
+        => DpdUpdateService.ParseCatalog(Catalog(id, file, src, conv, sha))!.Single();
+
+    // ---- ParseCatalog ----
 
     [Fact]
-    public void ParseManifest_reads_a_valid_manifest()
+    public void ParseCatalog_reads_valid_entries()
     {
-        var m = DpdUpdateService.ParseManifest(Manifest("dpd-cst-subset.db.gz", "v0.4.20260531", "3", "abc123"));
-        Assert.NotNull(m);
-        Assert.Equal("dpd-cst-subset.db.gz", m!.File);
-        Assert.Equal("v0.4.20260531", m.DpdVersion);
-        Assert.Equal("3", m.ConverterVersion);
-        Assert.Equal("abc123", m.Sha256);
-        Assert.Equal("full", m.Scope);
+        var json = Encoding.UTF8.GetBytes("""
+            {"schemaVersion":1,"dictionaries":[
+                {"id":"dpd","file":"dpd-cst-subset.db.gz","sourceVersion":"v0.4.20260531","converterVersion":"3","sha256":"abc","compressedBytes":10,"rawBytes":20},
+                {"id":"dppn","file":"dppn.db.gz","sourceVersion":"2025-08","converterVersion":"1","sha256":"def","compressedBytes":30,"rawBytes":40}
+            ]}
+            """);
+        var c = DpdUpdateService.ParseCatalog(json);
+        Assert.NotNull(c);
+        Assert.Equal(2, c!.Count);
+        var dpd = c.Single(e => e.Id == "dpd");
+        Assert.Equal("dpd-cst-subset.db.gz", dpd.File);
+        Assert.Equal("v0.4.20260531", dpd.SourceVersion);
+        Assert.Equal("3", dpd.ConverterVersion);
+        Assert.Equal("abc", dpd.Sha256);
+        Assert.Equal(20, dpd.RawBytes);
+    }
+
+    [Fact]
+    public void ParseCatalog_skips_incomplete_entries_but_keeps_good_ones()
+    {
+        var json = Encoding.UTF8.GetBytes("""
+            {"dictionaries":[
+                {"id":"dpd","sourceVersion":"v1","converterVersion":"3","sha256":"a"},
+                {"id":"dppn","file":"dppn.db.gz","sourceVersion":"2025-08","converterVersion":"1","sha256":"def"}
+            ]}
+            """);
+        var c = DpdUpdateService.ParseCatalog(json);
+        Assert.NotNull(c);
+        Assert.Single(c!);                         // the dpd entry (missing file) dropped
+        Assert.Equal("dppn", c!.Single().Id);
     }
 
     [Theory]
-    [InlineData("""{"dpdVersion":"v1","converterVersion":"3","sha256":"a"}""")]        // no file
-    [InlineData("""{"file":"x.gz","converterVersion":"3","sha256":"a"}""")]            // no dpdVersion
-    [InlineData("""{"file":"x.gz","dpdVersion":"v1","sha256":"a"}""")]                 // no converterVersion
-    [InlineData("""{"file":"x.gz","dpdVersion":"v1","converterVersion":"3"}""")]        // no sha256
     [InlineData("not json")]
-    [InlineData("[1,2,3]")]                                                             // not an object
-    public void ParseManifest_rejects_incomplete_or_malformed(string json)
-        => Assert.Null(DpdUpdateService.ParseManifest(Encoding.UTF8.GetBytes(json)));
+    [InlineData("[1,2,3]")]                                              // not an object
+    [InlineData("""{"schemaVersion":1}""")]                             // no dictionaries array
+    [InlineData("""{"dictionaries":{}}""")]                             // dictionaries not an array
+    public void ParseCatalog_rejects_malformed(string json)
+        => Assert.Null(DpdUpdateService.ParseCatalog(Encoding.UTF8.GetBytes(json)));
+
+    [Fact]
+    public void ParseCatalog_empty_array_is_an_empty_list_not_null()
+    {
+        var c = DpdUpdateService.ParseCatalog(Encoding.UTF8.GetBytes("""{"dictionaries":[]}"""));
+        Assert.NotNull(c);
+        Assert.Empty(c!);
+    }
 
     // ---- NeedsUpdate (two version axes) ----
 
     [Fact]
     public void NeedsUpdate_true_when_asset_absent()
-    {
-        var m = DpdUpdateService.ParseManifest(Manifest("x.gz", "v1", "3", "a"))!;
-        Assert.True(DpdUpdateService.NeedsUpdate(null, m));
-    }
+        => Assert.True(DpdUpdateService.NeedsUpdate(null, Entry("dpd", "x.gz", "v1", "3", "a")));
 
     [Fact]
     public void NeedsUpdate_false_when_both_axes_match()
-    {
-        var m = DpdUpdateService.ParseManifest(Manifest("x.gz", "v1", "3", "a"))!;
-        Assert.False(DpdUpdateService.NeedsUpdate(new DpdUpdateService.InstalledMeta("v1", "3"), m));
-    }
+        => Assert.False(DpdUpdateService.NeedsUpdate(
+            new DpdUpdateService.InstalledVersion("v1", "3"), Entry("dpd", "x.gz", "v1", "3", "a")));
 
     [Fact]
-    public void NeedsUpdate_true_on_a_new_dpd_version()
-    {
-        var m = DpdUpdateService.ParseManifest(Manifest("x.gz", "v2", "3", "a"))!;
-        Assert.True(DpdUpdateService.NeedsUpdate(new DpdUpdateService.InstalledMeta("v1", "3"), m));
-    }
+    public void NeedsUpdate_true_on_a_new_source_version()
+        => Assert.True(DpdUpdateService.NeedsUpdate(
+            new DpdUpdateService.InstalledVersion("v1", "3"), Entry("dpd", "x.gz", "v2", "3", "a")));
 
     [Fact]
-    public void NeedsUpdate_true_on_a_converter_bump_even_with_same_dpd()
-    {
-        // The second axis: our converter changed (e.g. the meaning_2 coalesce) with DPD unchanged.
-        var m = DpdUpdateService.ParseManifest(Manifest("x.gz", "v1", "4", "a"))!;
-        Assert.True(DpdUpdateService.NeedsUpdate(new DpdUpdateService.InstalledMeta("v1", "3"), m));
-    }
+    public void NeedsUpdate_true_on_a_converter_bump_even_with_same_source()
+        // The second axis: our converter changed with the source unchanged.
+        => Assert.True(DpdUpdateService.NeedsUpdate(
+            new DpdUpdateService.InstalledVersion("v1", "3"), Entry("dpd", "x.gz", "v1", "4", "a")));
 
-    // ---- InstallFromGzip: verify + decompress + atomic install + preservation ----
+    // ---- InstallFromGzip: verify + decompress + probe + atomic install + preservation ----
 
     [Fact]
     public void InstallFromGzip_verifies_decompresses_and_installs()
     {
-        // A REAL (tiny) valid asset db as the payload — InstallFromGzip now probes that the decompressed file is a
-        // usable asset before installing.
+        // A REAL (tiny) valid asset db as the payload — InstallFromGzip probes usability before installing.
         var gz = Gzip(BuildAssetDbBytes(dpd: "v1", conv: "3"));
         var final = Path.Combine(_dir, "sub", "dpd-cst-subset.db");   // note: a not-yet-existing subdir
 
-        DpdUpdateService.InstallFromGzip(gz, Sha(gz), final);
+        DpdUpdateService.InstallFromGzip(gz, Sha(gz), final, DpdUpdateService.ProbeDpdUsable);
 
         Assert.True(File.Exists(final));
-        Assert.Equal("v1", DpdUpdateService.ReadInstalledMeta(final)!.DpdVersion);  // installed + readable
+        Assert.Equal("v1", DpdUpdateService.ReadDpdVersion(final)!.SourceVersion);   // installed + readable
         Assert.False(File.Exists(final + ".new"));                    // temp cleaned up
     }
 
@@ -113,7 +140,8 @@ public sealed class DpdUpdateServiceTests : IDisposable
         File.WriteAllText(final, "GOOD-OLD-ASSET");
         var gz = Gzip(BuildAssetDbBytes("v1", "3"));
 
-        Assert.Throws<InvalidDataException>(() => DpdUpdateService.InstallFromGzip(gz, "deadbeef", final));
+        Assert.Throws<InvalidDataException>(() =>
+            DpdUpdateService.InstallFromGzip(gz, "deadbeef", final, DpdUpdateService.ProbeDpdUsable));
 
         Assert.Equal("GOOD-OLD-ASSET", File.ReadAllText(final));      // untouched
         Assert.False(File.Exists(final + ".new"));                    // temp cleaned up
@@ -122,15 +150,49 @@ public sealed class DpdUpdateServiceTests : IDisposable
     [Fact]
     public void InstallFromGzip_rejects_a_valid_gzip_that_is_not_a_usable_asset_and_preserves_existing()
     {
-        // Transport is fine (SHA matches its own bytes) but the decompressed content is NOT a usable dpd-cst-subset
-        // db — a bad PUBLISH must not clobber a good install. (fable review — preservation gap)
+        // Transport is fine (SHA matches its own bytes) but the decompressed content is NOT a usable asset — a bad
+        // PUBLISH must not clobber a good install. (fable review — preservation gap)
         var final = Path.Combine(_dir, "dpd-cst-subset.db");
         File.WriteAllText(final, "GOOD-OLD-ASSET");
         var gz = Gzip(Encoding.UTF8.GetBytes("decompresses fine but is not a sqlite asset"));
 
-        Assert.Throws<InvalidDataException>(() => DpdUpdateService.InstallFromGzip(gz, Sha(gz), final));
+        Assert.Throws<InvalidDataException>(() =>
+            DpdUpdateService.InstallFromGzip(gz, Sha(gz), final, DpdUpdateService.ProbeDpdUsable));
 
         Assert.Equal("GOOD-OLD-ASSET", File.ReadAllText(final));      // preserved despite a matching SHA
+        Assert.False(File.Exists(final + ".new"));
+    }
+
+    [Fact]
+    public void InstallFromGzip_installs_a_lexicon_asset_probed_by_the_lexicon_reader()
+    {
+        // The dppn path: a lexicon db installs when it probes usable via the lexicon reader.
+        var gz = Gzip(BuildLexiconDbBytes(src: "2025-08", conv: "1"));
+        var final = Path.Combine(_dir, "dppn", "dppn.db");
+
+        DpdUpdateService.InstallFromGzip(gz, Sha(gz), final, DpdUpdateService.ProbeLexiconUsable);
+
+        Assert.True(File.Exists(final));
+        var v = DpdUpdateService.ReadLexiconVersion(final);
+        Assert.Equal("2025-08", v!.SourceVersion);
+        Assert.Equal("1", v.ConverterVersion);
+    }
+
+    [Fact]
+    public void InstallFromGzip_rejects_a_lexicon_with_meta_but_no_entry_table_and_preserves_existing()
+    {
+        // A converter bug could publish a lexicon whose `meta` is well-stamped (OpenMeta passes) but whose `entry`
+        // table is missing — unusable at runtime. The probe uses full Open (not OpenMeta), so it must reject this
+        // and NOT clobber the good installed asset. (fable MED-2)
+        var final = Path.Combine(_dir, "dppn", "dppn.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(final)!);
+        File.WriteAllText(final, "GOOD-OLD-DPPN");
+        var gz = Gzip(BuildMetaOnlyLexiconDbBytes(src: "2025-08", conv: "1"));
+
+        Assert.Throws<InvalidDataException>(() =>
+            DpdUpdateService.InstallFromGzip(gz, Sha(gz), final, DpdUpdateService.ProbeLexiconUsable));
+
+        Assert.Equal("GOOD-OLD-DPPN", File.ReadAllText(final));   // preserved despite a matching SHA + valid meta
         Assert.False(File.Exists(final + ".new"));
     }
 
@@ -172,33 +234,44 @@ public sealed class DpdUpdateServiceTests : IDisposable
 
         using (var hold = new FileStream(final, FileMode.Open, FileAccess.Read, FileShare.None))   // live provider
         {
-            DpdUpdateService.InstallFromGzip(gz, Sha(gz), final);            // must NOT throw
+            DpdUpdateService.InstallFromGzip(gz, Sha(gz), final, DpdUpdateService.ProbeDpdUsable);   // must NOT throw
             Assert.True(File.Exists(final + ".pending"), "new asset staged for next launch");
             Assert.False(File.Exists(final + ".new"), "temp cleaned up");
         }
 
         // Lock released → applying the staged swap activates the new asset.
         Assert.True(DpdUpdateService.ApplyPendingInstall(final));
-        Assert.Equal("v1", DpdUpdateService.ReadInstalledMeta(final)!.DpdVersion);
+        Assert.Equal("v1", DpdUpdateService.ReadDpdVersion(final)!.SourceVersion);
         Assert.False(File.Exists(final + ".pending"));
     }
 
-    // ---- ReadInstalledMeta ----
+    // ---- per-asset version reads ----
 
     [Fact]
-    public void ReadInstalledMeta_reads_versions_from_a_real_asset()
+    public void ReadDpdVersion_reads_versions_from_a_real_asset()
     {
         var db = Path.Combine(_dir, "installed.db");
         BuildMetaFixture(db, dpd: "v0.4.20260531", conv: "3");
-        var m = DpdUpdateService.ReadInstalledMeta(db);
+        var m = DpdUpdateService.ReadDpdVersion(db);
         Assert.NotNull(m);
-        Assert.Equal("v0.4.20260531", m!.DpdVersion);
+        Assert.Equal("v0.4.20260531", m!.SourceVersion);
         Assert.Equal("3", m.ConverterVersion);
     }
 
     [Fact]
-    public void ReadInstalledMeta_null_when_absent() =>
-        Assert.Null(DpdUpdateService.ReadInstalledMeta(Path.Combine(_dir, "nope.db")));
+    public void ReadDpdVersion_null_when_absent() =>
+        Assert.Null(DpdUpdateService.ReadDpdVersion(Path.Combine(_dir, "nope.db")));
+
+    [Fact]
+    public void ReadLexiconVersion_reads_versions_from_a_real_lexicon() =>
+        Assert.Equal("2025-08", DpdUpdateService.ReadLexiconVersion(
+            BuildLexiconDb(Path.Combine(_dir, "lex.db"), src: "2025-08", conv: "1"))!.SourceVersion);
+
+    [Fact]
+    public void ReadLexiconVersion_null_when_absent() =>
+        Assert.Null(DpdUpdateService.ReadLexiconVersion(Path.Combine(_dir, "nope.db")));
+
+    // ---- fixtures ----
 
     private void BuildMetaFixture(string path, string dpd, string conv)
     {
@@ -216,12 +289,63 @@ public sealed class DpdUpdateServiceTests : IDisposable
         SqliteConnection.ClearAllPools();   // release the file handle so callers can read its bytes
     }
 
-    // A minimal but VALID dpd-cst-subset asset (has lemma + form_lemma + meta so SqliteLemmaProvider.IsAvailable),
-    // returned as the raw db bytes for use as a download payload.
+    // A minimal but VALID dpd-cst-subset asset (lemma + form_lemma + meta so SqliteLemmaProvider.IsAvailable),
+    // returned as raw db bytes for use as a download payload.
     private byte[] BuildAssetDbBytes(string dpd, string conv)
     {
         var p = Path.Combine(_dir, $"payload-{Guid.NewGuid():N}.db");
         BuildMetaFixture(p, dpd, conv);
+        var bytes = File.ReadAllBytes(p);
+        File.Delete(p);
+        return bytes;
+    }
+
+    // A minimal but VALID canonical lexicon (meta with schema/source/converter version + an entry) at `path`.
+    private string BuildLexiconDb(string path, string src, string conv)
+    {
+        using (var c = new SqliteConnection($"Data Source={path}"))
+        {
+            c.Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = @"
+                CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+                CREATE TABLE entry (id INTEGER PRIMARY KEY, headword TEXT NOT NULL, body_html TEXT);
+                INSERT INTO meta VALUES
+                    ('schema_version','1'),('source_id','dppn'),('display_name','DPPN'),
+                    ('definition_language','en'),('source_version','" + src + @"'),
+                    ('converter_version','" + conv + @"');
+                INSERT INTO entry (headword, body_html) VALUES ('Nāgita','<p>a monk</p>');";
+            cmd.ExecuteNonQuery();
+        }
+        SqliteConnection.ClearAllPools();
+        return path;
+    }
+
+    private byte[] BuildLexiconDbBytes(string src, string conv)
+    {
+        var p = BuildLexiconDb(Path.Combine(_dir, $"lex-{Guid.NewGuid():N}.db"), src, conv);
+        var bytes = File.ReadAllBytes(p);
+        File.Delete(p);
+        return bytes;
+    }
+
+    // A lexicon with a valid, stamped `meta` but NO `entry` table — OpenMeta succeeds, Open fails.
+    private byte[] BuildMetaOnlyLexiconDbBytes(string src, string conv)
+    {
+        var p = Path.Combine(_dir, $"lexmeta-{Guid.NewGuid():N}.db");
+        using (var c = new SqliteConnection($"Data Source={p}"))
+        {
+            c.Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = @"
+                CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+                INSERT INTO meta VALUES
+                    ('schema_version','1'),('source_id','dppn'),('display_name','DPPN'),
+                    ('definition_language','en'),('source_version','" + src + @"'),
+                    ('converter_version','" + conv + @"');";
+            cmd.ExecuteNonQuery();
+        }
+        SqliteConnection.ClearAllPools();
         var bytes = File.ReadAllBytes(p);
         File.Delete(p);
         return bytes;

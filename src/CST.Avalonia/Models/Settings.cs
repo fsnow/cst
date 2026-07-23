@@ -104,7 +104,7 @@ namespace CST.Avalonia.Models
     {
         public bool EnablePolling { get; set; } = true;
         public string RepositoryOwner { get; set; } = "fsnow";
-        public string RepositoryName { get; set; } = "dpd-cst-subset";
+        public string RepositoryName { get; set; } = "cst-dictionaries";
     }
     
     public class FontSettings

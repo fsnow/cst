@@ -154,12 +154,12 @@ public partial class App : Application
         ConfigureServices(services);
         ServiceProvider = services.BuildServiceProvider();
 
-        // Apply any staged dpd-cst-subset update BEFORE anything opens the asset db. On Windows a running-app
-        // install can't replace the open db, so it stages a ".pending" swap that we apply here on the next launch.
-        // Unconditional (not tied to whether/when the lemma provider is resolved) and a no-op when nothing is
-        // staged / on macOS/Linux. (#394)
+        // Apply any staged dictionary-asset updates (dpd-cst-subset, dppn, …) BEFORE anything opens those dbs. On
+        // Windows a running-app install can't replace an open db, so it stages a ".pending" swap that we apply here
+        // on the next launch. Covers ALL known asset paths; unconditional (not tied to whether/when a provider is
+        // resolved) and a no-op when nothing is staged / on macOS/Linux. (#394/#468)
         if (DpdUpdateService.ApplyPendingInstall())
-            Log.Information("Applied a staged dpd-cst-subset update on launch.");
+            Log.Information("Applied one or more staged dictionary-asset updates on launch.");
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -1057,9 +1057,7 @@ public partial class App : Application
         // reading/search feature; availability is driven by FILE PRESENCE alone (no setting), degrading to "off"
         // when absent. Seeded/downloaded to <app-support>/CSTReader/dpd-cst-subset/. (Opened once at startup, so a
         // manually dropped-in file activates on the next launch.)
-        var dpdCstSubsetPath = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            AppConstants.AppDataDirectoryName, "dpd-cst-subset", "dpd-cst-subset.db");
+        var dpdCstSubsetPath = Services.DpdUpdateService.DpdSubsetPath;
         services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new CST.Lemma.SqliteLemmaProvider(dpdCstSubsetPath));
         services.AddSingleton<ILemmaSearchService, LemmaSearchService>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
@@ -1073,9 +1071,7 @@ public partial class App : Application
         // NOTE: the source set is fixed when the registry is first resolved. A DERIVED asset (dpd-cst-subset,
         // dppn.db) installed mid-session still flips available (its source checks the file live); a flat-file
         // language dir ADDED mid-session only becomes a source on the next launch. (fable LOW-2)
-        var dppnPath = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            AppConstants.AppDataDirectoryName, "dppn", "dppn.db");
+        var dppnPath = Services.DpdUpdateService.DppnLexiconPath;
         services.AddSingleton(sp => Services.Dictionaries.DictionarySourceFactory.Build(
             sp.GetRequiredService<IDictionaryService>(),
             sp.GetRequiredService<CST.Lemma.ILemmaProvider>(),
