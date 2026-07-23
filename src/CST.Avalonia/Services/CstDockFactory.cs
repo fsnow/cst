@@ -1469,7 +1469,7 @@ namespace CST.Avalonia.Services
         // detach and must be torn down explicitly on close, or the closed tab strands a browser +
         // renderer for the session. (BookDisplayViewModel also exposes a live-view backref as a
         // cache-miss fallback; PdfDisplayViewModel has none, so it relies on the cache lookup.)
-        private void DisposeAndEvictRecycledView(IDockable dockable)
+        internal void DisposeAndEvictRecycledView(IDockable dockable)
         {
             var recycling = GetControlRecycling();
 
@@ -1486,6 +1486,7 @@ namespace CST.Avalonia.Services
                 {
                     case BookDisplayView bookView: bookView.Shutdown(); break;  // release the CEF WebView — the actual leak
                     case PdfDisplayView pdfView: pdfView.Shutdown(); break;
+                    case DictionaryPanel dictView: dictView.Shutdown(); break;  // #466: the dictionary tool's meaning WebView
                 }
 
                 if (recycling == null)
@@ -1658,7 +1659,9 @@ namespace CST.Avalonia.Services
         // `CanFloat = true` on books safe. (#39)
         public override void SplitToWindow(IDock dock, IDockable dockable, double x, double y, double width, double height)
         {
-            if (dockable is BookDisplayViewModel or PdfDisplayViewModel)
+            // DictionaryViewModel is a CEF-hosting TOOL (#466) — same re-parent hazard as the book/PDF
+            // documents, so it gets the same dispose-before-move.
+            if (dockable is BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel)
             {
                 if (dockable is BookDisplayViewModel bookVm && bookVm.LastPositionToken is { } token)
                     bookVm.QueuePositionRestore(token);
@@ -1693,7 +1696,8 @@ namespace CST.Avalonia.Services
         // flickers, whereas carrying a live browser crashes. (#458)
         private void PrepareCrossWindowMove(IDockable? dockable, IDock? targetDock)
         {
-            if (dockable is not (BookDisplayViewModel or PdfDisplayViewModel)) return;
+            // Books, PDFs, and the CEF-hosting Dictionary tool (#466) — everything that carries a live browser.
+            if (dockable is not (BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel)) return;
             if (targetDock == null) return;
 
             var sourceRoot = GetRootOwner(dockable);
@@ -2996,12 +3000,42 @@ namespace CST.Avalonia.Services
             // read as "close", so they are now really closed.)
             CloseDockablesInClosingWindow(hostWindow);
 
+            // A CEF-hosting TOOL (the dictionary, #466) floated into this window is NOT covered above:
+            // CloseDockablesInClosingWindow only walks DocumentDocks, and the tool is CanClose=false anyway.
+            // Left alone, its live WebView stays in the recycling cache (keyed by the singleton VM); the next
+            // View → Dictionary re-attaches that dead-window browser → SIGSEGV (#458). Dispose + evict it so a
+            // fresh panel with a fresh browser is built when it's next shown. (#466, Fable)
+            DisposeCefToolsInClosingWindow(hostWindow);
+
             // Update panel visibility state after removing window
             // This ensures menu checkmarks update correctly when panels were in the closed window
             if (App.MainWindow?.DataContext is LayoutViewModel layoutViewModel)
             {
                 layoutViewModel.UpdatePanelVisibility();
                 Log.Debug("*** Panel visibility updated after window close ***");
+            }
+        }
+
+        // Dispose + evict the recycled View of any CEF-hosting TOOL (the dictionary) in a closing floating
+        // window, so its live browser can't be re-attached from a destroyed window later. The tool's
+        // singleton VM survives; only its View/browser is released, and a fresh one is built when the tool is
+        // next shown. Skipped during shutdown (the whole app is going away). (#466)
+        private void DisposeCefToolsInClosingWindow(CstHostWindow hostWindow)
+        {
+            if (App.IsShuttingDown) return;
+            try
+            {
+                var leaves = new List<IDockable>();
+                CollectLeafDockables(hostWindow.Layout, leaves, 0);
+                foreach (var tool in leaves.OfType<DictionaryViewModel>())
+                {
+                    Log.Information("#466: disposing dictionary WebView with its closing floating window {WindowId}", hostWindow.Id);
+                    DisposeAndEvictRecycledView(tool);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "#466: error disposing CEF tool(s) in closing window {WindowId}", hostWindow.Id);
             }
         }
 

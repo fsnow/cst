@@ -133,8 +133,14 @@ public class DictionaryDialogState
     public int LanguageIndex { get; set; }
 
     /// <summary>Preferred definition-language code ("en"/"hi"); remembered across sessions (#25).
-    /// A robust code rather than an index, so it survives changes to the available-language order.</summary>
+    /// A robust code rather than an index, so it survives changes to the available-language order.
+    /// Superseded by <see cref="SourceId"/> (#466); kept for migration from older state.</summary>
     public string Language { get; set; } = "en";
+
+    /// <summary>Preferred dictionary SOURCE id ("en"/"hi"/"dpd"/"dppn"), remembered across sessions (#466).
+    /// A source identity, not a language — two sources can share a language. Empty until first set;
+    /// migrated from <see cref="Language"/> on load.</summary>
+    public string SourceId { get; set; } = string.Empty;
 }
 
 /// <summary>

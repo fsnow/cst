@@ -9,22 +9,24 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Services;
+using CST.Avalonia.Services.Dictionaries;
 using CST.Avalonia.ViewModels.Dock;
 using CST.Conversion;
+using CST.Tools;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
 
 namespace CST.Avalonia.ViewModels;
 
 /// <summary>
-/// The Pāli dictionary tool (#25). A dockable left-tool panel: pick a language, type a headword in
-/// any script (IPE-normalized by the service), pick from the matching Words, and read the definition.
-/// Definitions render natively (the data is plain text + <c>&lt;see&gt;</c> cross-references only, so no
-/// WebView is needed); <c>&lt;see&gt;</c> links look up the referenced word, with back/forward history.
+/// The Pāli dictionary tool (#25, #466). A dockable left-tool panel: pick a SOURCE (a specific dictionary —
+/// Childers, DPD, Pāli–Hindi, DPPN — not a language, since sources can share one), type a headword in any
+/// script, pick from the matching Words, and read the definition. Sources come from the shared
+/// <see cref="DictionarySourceRegistry"/>, the same set the /v1 API serves, so UI and API can't drift.
 /// </summary>
 public class DictionaryViewModel : ReactiveTool, IDisposable
 {
-    private readonly IDictionaryService _dictionaryService;
+    private readonly DictionarySourceRegistry _registry;
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
     private readonly IApplicationStateService _stateService;
@@ -40,20 +42,21 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private readonly Stack<string> _forwardStack = new();
 
     private string _searchText = "";
-    private string _selectedLanguage = "en";
+    private IDictionarySource? _selectedSource;
     private DictionaryEntryViewModel? _selectedWord;
-    private IReadOnlyList<MeaningSegment> _meaningSegments = Array.Empty<MeaningSegment>();
+    private string _meaningDocumentHtml = "";
+    private string _attribution = "";
     private bool _canGoBack;
     private bool _canGoForward;
 
     public DictionaryViewModel(
-        IDictionaryService dictionaryService,
+        DictionarySourceRegistry registry,
         IScriptService scriptService,
         IFontService fontService,
         IApplicationStateService stateService,
         ILogger<DictionaryViewModel> logger)
     {
-        _dictionaryService = dictionaryService;
+        _registry = registry;
         _scriptService = scriptService;
         _fontService = fontService;
         _stateService = stateService;
@@ -66,14 +69,20 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         CanFloat = true;    // floatable/moveable like the other tools
         CanDrag = true;
 
-        AvailableLanguages = _dictionaryService.AvailableLanguages.Count > 0
-            ? _dictionaryService.AvailableLanguages
-            : new[] { "en" };
-        // Restore the preferred definition language (#25); fall back to en, then whatever's available.
-        var savedLanguage = _stateService.Current.DictionaryDialog.Language;
-        _selectedLanguage = AvailableLanguages.Contains(savedLanguage) ? savedLanguage
-            : AvailableLanguages.Contains("en") ? "en"
-            : AvailableLanguages[0];
+        // The picker lists the installed SOURCES from the shared registry, shown by DisplayName. Only
+        // installed sources appear; a fresh install with no derived asset degrades cleanly to en/hi.
+        Sources = _registry.Available;
+        LongestSourceName = Sources.Select(s => s.DisplayName)
+            .OrderByDescending(n => n?.Length ?? 0)
+            .FirstOrDefault() ?? "";
+        // Restore the preferred SOURCE by id (#466), migrating from the older Language key; fall back to
+        // en, then the first available.
+        var savedId = _stateService.Current.DictionaryDialog.SourceId;
+        if (string.IsNullOrEmpty(savedId))
+            savedId = _stateService.Current.DictionaryDialog.Language;   // migrate #25 → #466
+        _selectedSource = Sources.FirstOrDefault(s => string.Equals(s.Id, savedId, StringComparison.OrdinalIgnoreCase))
+            ?? Sources.FirstOrDefault(s => string.Equals(s.Id, "en", StringComparison.OrdinalIgnoreCase))
+            ?? Sources.FirstOrDefault();
 
         Words = new ObservableCollection<DictionaryEntryViewModel>();
 
@@ -81,11 +90,11 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         ForwardCommand = ReactiveCommand.Create(GoForward, this.WhenAnyValue(x => x.CanGoForward));
         NavigateToWordCommand = ReactiveCommand.Create<string>(NavigateToWord);
 
-        // Real-time lookup as the query or language changes (throttled, like the Search tool). The
+        // Real-time lookup as the query or source changes (throttled, like the Search tool). The
         // throttle fires off the UI thread; LookupAsync marshals its collection updates back.
-        this.WhenAnyValue(x => x.SearchText, x => x.SelectedLanguage)
+        this.WhenAnyValue(x => x.SearchText, x => x.SelectedSource)
             .Throttle(TimeSpan.FromMilliseconds(300))
-            .Subscribe(pair => { _ = LookupAsync(SearchText); })
+            .Subscribe(change => { _ = LookupAsync(SearchText); })
             .DisposeWith(_disposables);
 
         // Rebuild the meaning display whenever the selected headword changes.
@@ -93,14 +102,22 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             .Subscribe(_ => UpdateMeaning())
             .DisposeWith(_disposables);
 
-        // Remember the preferred definition language across sessions. Skip(1) ignores the initial value
-        // set above so construction doesn't write state. (#25)
-        this.WhenAnyValue(x => x.SelectedLanguage)
+        // Per-source attribution line, refreshed when the source changes (initial value included — no Skip).
+        this.WhenAnyValue(x => x.SelectedSource)
+            .Subscribe(source => Attribution = FormatAttribution(source?.Attribution))
+            .DisposeWith(_disposables);
+
+        // Remember the preferred source across sessions. Skip(1) ignores the initial value set above so
+        // construction doesn't write state. (#466)
+        this.WhenAnyValue(x => x.SelectedSource)
             .Skip(1)
-            .Subscribe(lang =>
+            .Subscribe(source =>
             {
-                _stateService.Current.DictionaryDialog.Language = lang;
-                _stateService.MarkDirty();   // persist via the timer/shutdown save, not a full off-thread save per change (STATE-2)
+                if (source != null)
+                {
+                    _stateService.Current.DictionaryDialog.SourceId = source.Id;
+                    _stateService.MarkDirty();   // persist via the timer/shutdown save, not a full off-thread save per change (STATE-2)
+                }
             })
             .DisposeWith(_disposables);
 
@@ -118,16 +135,23 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         {
             this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
             this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+            UpdateMeaning();   // re-render the meaning document at the new font (#466)
         });
         _fontService.FontSettingsChanged += _fontChangedHandler;
     }
 
-    public IReadOnlyList<string> AvailableLanguages { get; }
+    /// <summary>The installed dictionary sources for the picker (shown by <c>DisplayName</c>). (#466)</summary>
+    public IReadOnlyList<IDictionarySource> Sources { get; }
 
-    public string SelectedLanguage
+    /// <summary>The longest source <c>DisplayName</c> — a hidden measurer renders it to pin the picker
+    /// column to a fixed width (the longest name), so the box + dropdown don't resize as you switch
+    /// sources. (#466)</summary>
+    public string LongestSourceName { get; }
+
+    public IDictionarySource? SelectedSource
     {
-        get => _selectedLanguage;
-        set => this.RaiseAndSetIfChanged(ref _selectedLanguage, value);
+        get => _selectedSource;
+        set => this.RaiseAndSetIfChanged(ref _selectedSource, value);
     }
 
     public string SearchText
@@ -144,11 +168,34 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         set => this.RaiseAndSetIfChanged(ref _selectedWord, value);
     }
 
-    /// <summary>The selected definition, split into plain-text and clickable link segments.</summary>
-    public IReadOnlyList<MeaningSegment> MeaningSegments
+    /// <summary>The selected definition as a full HTML document for the meaning WebView — the source's
+    /// MeaningHtml wrapped in a CSP host page, with &lt;see&gt; cross-references turned into links. (#466)</summary>
+    public string MeaningDocumentHtml
     {
-        get => _meaningSegments;
-        private set => this.RaiseAndSetIfChanged(ref _meaningSegments, value);
+        get => _meaningDocumentHtml;
+        private set => this.RaiseAndSetIfChanged(ref _meaningDocumentHtml, value);
+    }
+
+    /// <summary>A one-line citation for the selected source, shown under the meaning (never hard-coded — it
+    /// comes from the source's recorded attribution; blank when unrecorded). (#466, #268)</summary>
+    public string Attribution
+    {
+        get => _attribution;
+        private set => this.RaiseAndSetIfChanged(ref _attribution, value);
+    }
+
+    // Compose the recorded attribution fields into a compact one-liner, skipping any that are unset.
+    private static string FormatAttribution(CST.Tools.DictionarySourceInfo? a)
+    {
+        if (a == null) return "";
+        var parts = new System.Collections.Generic.List<string>();
+        void Add(string? s) { if (!string.IsNullOrWhiteSpace(s)) parts.Add(s.Trim()); }
+        Add(a.Title);
+        Add(a.Compiler);
+        Add(a.Edition);
+        Add(a.Year);
+        Add(a.Publisher);
+        return string.Join(" · ", parts);
     }
 
     public bool CanGoBack
@@ -173,21 +220,26 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     private async Task LookupAsync(string query)
     {
-        var lang = SelectedLanguage;   // capture: results are only valid if these still hold on completion
+        var source = SelectedSource;   // capture: results are only valid if these still hold on completion
         try
         {
-            var results = await _dictionaryService.LookupAsync(lang, query ?? "");
+            IReadOnlyList<DictionaryEntry> results = source == null
+                ? Array.Empty<DictionaryEntry>()
+                // The source returns Headword already in the requested output script and the definition as
+                // MeaningHtml (for flat-file, the same <see>-tagged text the native renderer handles). (#466)
+                : await source.LookupAsync(new DictionaryRequest(source.Id, query ?? "", _scriptService.CurrentScript, 500));
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                // Ignore a stale completion: a newer query/language has superseded this lookup, so its
-                // results must not clobber the current ones (e.g. a slow first-time Hindi load finishing
-                // after a fast cached English lookup). (DICT-3)
-                if (query != SearchText || lang != SelectedLanguage)
+                // Ignore a stale completion: a newer query/source has superseded this lookup, so its results
+                // must not clobber the current ones (e.g. a slow first-time load finishing after a fast
+                // cached lookup). (DICT-3)
+                if (query != SearchText || !ReferenceEquals(source, SelectedSource))
                     return;
 
                 Words.Clear();
-                foreach (var w in results)
-                    Words.Add(new DictionaryEntryViewModel(w, IpeToDisplay(w.Word)));
+                foreach (var e in results)
+                    Words.Add(new DictionaryEntryViewModel(e));
 
                 // Auto-select the best (first) match so the definition shows immediately, like CST4.
                 SelectedWord = Words.FirstOrDefault();
@@ -195,20 +247,19 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Lang})", query, lang);
+            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Source})", query, source?.Id);
         }
     }
 
     private void UpdateMeaning()
     {
-        MeaningSegments = MeaningParser.Parse(SelectedWord?.Source.Meaning, PaliToDisplay);
-    }
-
-    // A stored IPE headword -> the user's current display script.
-    private string IpeToDisplay(string ipe)
-    {
-        try { return ScriptConverter.Convert(ipe, Script.Ipe, _scriptService.CurrentScript); }
-        catch { return ipe; }
+        // Definitions are prose (mostly English/Hindi with Pāli terms); render just under the headword
+        // size — the current script font size minus one — as a comfortable reading size. (#466)
+        MeaningDocumentHtml = DictionaryHtmlRenderer.Render(
+            SelectedWord?.Source.MeaningHtml,
+            PaliToDisplay,
+            CurrentScriptFontFamily,
+            Math.Max(1, CurrentScriptFontSize - 1));
     }
 
     // A cross-reference word from a <see> tag (stored in Latin) -> current display script.
@@ -263,16 +314,17 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     }
 }
 
-/// <summary>A row in the Words list: the source entry plus its headword rendered in the display script.</summary>
+/// <summary>A row in the Words list: the source entry, whose Headword is already in the display script
+/// (the source converts it — no IPE reconstruction needed, which was lossy for proper names). (#466)</summary>
 public sealed class DictionaryEntryViewModel
 {
-    public DictionaryEntryViewModel(CST.Avalonia.Models.DictionaryWord source, string displayWord)
+    public DictionaryEntryViewModel(DictionaryEntry source)
     {
         Source = source;
-        DisplayWord = displayWord;
+        DisplayWord = source.Headword;
     }
 
-    public CST.Avalonia.Models.DictionaryWord Source { get; }
+    public DictionaryEntry Source { get; }
     public string DisplayWord { get; }
 }
 
