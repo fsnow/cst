@@ -25,7 +25,6 @@ namespace CST.Avalonia.ViewModels
         private string _statusText = "Loading...";
         private bool _isLoading = true;
         private bool _isWebViewAvailable = true;
-        private bool _isFloating = false;
         private string _pdfLocalPath = "";
         private string _pdfUrl = "";
         private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
@@ -66,8 +65,6 @@ namespace CST.Avalonia.ViewModels
             CanPin = false;
 
             // Initialize commands
-            FloatWindowCommand = ReactiveCommand.Create(FloatWindow);
-            UnfloatWindowCommand = ReactiveCommand.Create(UnfloatWindow);
             RefreshCommand = ReactiveCommand.CreateFromTask(LoadPdfAsync);
 
             _logger.Information("PdfDisplayViewModel created for {Book}, {Source}, page {Page}",
@@ -115,12 +112,6 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _isWebViewAvailable, value);
         }
 
-        public bool IsFloating
-        {
-            get => _isFloating;
-            set => this.RaiseAndSetIfChanged(ref _isFloating, value);
-        }
-
         public string PdfUrl
         {
             get => _pdfUrl;
@@ -151,8 +142,6 @@ namespace CST.Avalonia.ViewModels
 
         #region Commands
 
-        public ReactiveCommand<Unit, Unit> FloatWindowCommand { get; }
-        public ReactiveCommand<Unit, Unit> UnfloatWindowCommand { get; }
         public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
 
         #endregion
@@ -222,19 +211,6 @@ namespace CST.Avalonia.ViewModels
                 IsLoading = false;
                 _logger.Error(ex, "Failed to load PDF");
             }
-        }
-
-        private void FloatWindow()
-        {
-            // Float/unfloat for PDF not yet implemented
-            // Would need to add FloatDockableWithoutRecycling overload for PdfDisplayViewModel in CstDockFactory
-            _logger.Warning("Float not yet implemented for PDF windows");
-        }
-
-        private void UnfloatWindow()
-        {
-            // Float/unfloat for PDF not yet implemented
-            _logger.Warning("Unfloat not yet implemented for PDF windows");
         }
 
         // Build the browser URL for a local PDF at a given page: a properly-escaped file:// URI plus the

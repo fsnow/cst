@@ -408,12 +408,10 @@ namespace CST.Avalonia.Services
             // Add search icon to title for search results
             bookDisplayViewModel.Title = $"🔍 {bookDisplayViewModel.DisplayTitle}";
 
-            // Prevent drag-to-float, same as the regular open path (OpenBook): dragging a tab with a
-            // live CEF WebView across windows SIGSEGVs on macOS; floating goes through the button
-            // paths instead. The VM constructor defaults CanFloat to true, so without this a
-            // search-opened book was drag-floatable. (DOCK-1)
-            bookDisplayViewModel.CanDrag = true;   // Allow tab reordering
-            bookDisplayViewModel.CanFloat = false; // Prevent drag-to-float (use the float button instead)
+            // #39: drag-to-float is now safe (the SplitToWindow override disposes the live CEF browser
+            // before the new window is built), so books stay floatable — CanFloat keeps its ctor default of
+            // true. CanDrag allows tab reordering within a window.
+            bookDisplayViewModel.CanDrag = true;
 
             // Search terms are already passed to BookDisplayViewModel constructor for highlighting
 
@@ -522,12 +520,10 @@ namespace CST.Avalonia.Services
             bookDisplayViewModel.ShowFootnotes = showFootnotes;
             bookDisplayViewModel.ShowSearchTerms = showSearchTerms;
 
-            // Phase 1: Prevent drag-to-float for documents with CEF WebView
-            // CanDrag = true allows tab reordering within same window
-            // CanFloat = false prevents drag-to-float across windows (CEF crash mitigation)
-            // Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
-            bookDisplayViewModel.CanDrag = true;   // Allow tab reordering
-            bookDisplayViewModel.CanFloat = false; // Prevent drag-to-float (will use buttons instead)
+            // #39: drag-to-float is now safe (the SplitToWindow override disposes the live CEF browser
+            // before the new window is created), so books stay floatable by drag — CanFloat keeps its ctor
+            // default of true. CanDrag allows tab reordering within a window.
+            bookDisplayViewModel.CanDrag = true;
             _logger.Debug("Book docking capabilities set: CanDrag={CanDrag}, CanFloat={CanFloat}",
                 bookDisplayViewModel.CanDrag, bookDisplayViewModel.CanFloat);
 
@@ -1326,353 +1322,6 @@ namespace CST.Avalonia.Services
             Log.Debug("*** FloatDockable completed ***");
         }
 
-        /// <summary>
-        /// Float a book window by creating a brand new ViewModel instance
-        /// This forces ControlRecycling to create a fresh View with no CEF baggage
-        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
-        /// </summary>
-        public async void FloatDockableWithoutRecycling(BookDisplayViewModel oldVm)
-        {
-            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            Log.Information("FloatDockableWithoutRecycling called for: {BookFile}, OldInstance: {OldInstanceId}",
-                oldVm.Book.FileName, oldVm.Id);
-
-            try
-            {
-                // Step 1: Query WebView for actual current scroll position
-                string? currentAnchor = null;
-                ReadingPositionToken? positionToken = null;   // #434: exact reading position across the re-parent
-                if (oldVm.BookDisplayControl != null)
-                {
-                    Log.Information("Querying WebView for current scroll position...");
-                    currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
-                    positionToken = await oldVm.BookDisplayControl.GetCurrentPositionTokenAsync();
-                    Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
-                }
-                else
-                {
-                    // Fallback to last known VRI anchor / rolling token if the WebView isn't available.
-                    currentAnchor = oldVm.CurrentVriAnchor;
-                    positionToken = oldVm.LastPositionToken;
-                    Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
-                }
-
-                // Step 2: Capture all other state from old ViewModel
-                var book = oldVm.Book;
-                var searchTerms = oldVm.SearchTerms?.ToList();
-                var searchPositions = oldVm.SearchPositions?.ToList();
-                var bookScript = oldVm.BookScript;
-                var docId = oldVm.DocId;
-                var currentHitIndex = oldVm.CurrentHitIndex;
-                var totalHits = oldVm.TotalHits;
-                var showFootnotes = oldVm.ShowFootnotes;       // #224: carry View toggles across float/unfloat
-                var showSearchTerms = oldVm.ShowSearchTerms;
-                var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
-
-                Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
-                    searchTerms?.Count ?? 0, bookScript, currentHitIndex, totalHits, currentAnchor ?? "none");
-
-                // Step 2: Remove old ViewModel state from ApplicationState BEFORE removing from dock
-                RemoveBookWindowState(oldVm.Id);
-                Log.Information("Removed old ViewModel state from ApplicationState");
-
-                // Step 3: Remove old ViewModel from dock (auto-disposes View and WebView)
-                if (oldVm.Owner is IDock currentDock)
-                {
-                    RemoveDockable(oldVm, false);
-                    Log.Information("Removed old ViewModel from dock");
-                }
-
-                // The old ViewModel is permanently replaced by newVm below; its state was already
-                // captured above, so release its subscriptions and GoTo id now (avoids the leak) —
-                // and shut down + evict its recycled View: "dispose-before-move" is the documented
-                // discipline, but nothing implemented it (the PrepareForFloat/PrepareForUnfloat
-                // handler is dead code for books), so the detached View's live CEF browser survived
-                // in the app-lifetime ControlRecycling cache on every float/unfloat. (#193)
-                _goToSubscribedBooks.Remove(oldVm.Id);
-                DisposeAndEvictRecycledView(oldVm);
-                oldVm.Dispose();
-
-                // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
-                var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
-                var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
-                var fontService = App.ServiceProvider?.GetService<IFontService>();
-
-                var newVm = new BookDisplayViewModel(
-                    book: book,
-                    searchTerms: searchTerms,
-                    initialAnchor: currentAnchor,  // Restore scroll position
-                    chapterListsService: chapterListsService,
-                    settingsService: settingsService,
-                    fontService: fontService,
-                    docId: docId,
-                    searchPositions: searchPositions,
-                    windowId: null,  // CRITICAL: null = generates fresh GUID
-                    dockFactory: this,
-                    initialBookScript: bookScript,  // seed so the set below is a no-op (BOOK-3)
-                    initialPositionToken: positionToken  // #434: restore the exact reading position across float/unfloat
-                );
-
-                // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
-                newVm.BookScript = bookScript;
-                newVm.CurrentHitIndex = currentHitIndex;
-                newVm.TotalHits = totalHits;
-                newVm.ShowFootnotes = showFootnotes;
-                newVm.ShowSearchTerms = showSearchTerms;
-                newVm.IsFloating = true;
-                // Setting BookScript doesn't refresh the dockable Title (the tab binds to Title, not
-                // DisplayTitle), so carry the old tab title over — else it reverts to Devanagari (#6).
-                newVm.Title = title;
-
-                Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
-
-                // Subscribe to events for the new instance
-                EnsureBookEventSubscription(newVm);
-
-                // Step 5: Add new ViewModel to main dock first (FloatDockable requires it to have an Owner)
-                var mainDocDock = FindDocumentDock();
-                if (mainDocDock == null)
-                {
-                    Log.Error("Cannot float - main document dock not found");
-                    return;
-                }
-
-                AddDockable(mainDocDock, newVm);
-                Log.Information("Added new ViewModel to main dock");
-
-                // Step 6: Float the new ViewModel (creates fresh View in floating window)
-                newVm.CanFloat = true;
-                base.FloatDockable(newVm);
-                newVm.CanFloat = false;  // Restore to prevent drag-to-float
-
-                // A programmatic (button) float has no pointer position, so Dock lands the host window at the
-                // monitor boundary — which can be a different, possibly powered-off monitor (it landed at the
-                // left edge of the secondary screen). Reposition it onto the main window's screen. (#float-disappear)
-                PlaceAndRevealFloatingWindow(newVm);
-
-                Log.Information("Float operation completed - new instance in floating window");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "CRITICAL: Float operation failed for book: {BookFile}", oldVm.Book.FileName);
-            }
-
-            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        }
-
-        // Place a just-button-floated host window near the main window, CLAMPED to the main window's screen, so
-        // it never lands on another (possibly powered-off) monitor. A programmatic (button) float gives Dock no
-        // pointer position, so it defaults to a monitor boundary — on a multi-monitor setup that can be a second
-        // screen. This only repositions the already-shown window (no WebView is moved → the re-parent hard rule
-        // is unaffected) and brings it to front. The drag-to-float path is unaffected (Dock places it at the
-        // drop point). (#float-disappear)
-        private void PlaceAndRevealFloatingWindow(BookDisplayViewModel floatedVm)
-        {
-            try
-            {
-                var floatDock = floatedVm.Owner as IDock;
-                if (floatDock == null) return; // no owning dock (shouldn't happen post-float) → don't risk a null==null host match (fable)
-                CstHostWindow? host = null;
-                int hostCount = 0;
-                foreach (var hw in HostWindows)
-                {
-                    if (hw is CstHostWindow chw)
-                    {
-                        hostCount++;
-                        if (host == null && FindDocumentDockInLayout(chw.Layout) == floatDock) host = chw;
-                    }
-                }
-                if (host == null) return;
-
-                var main = CST.Avalonia.App.MainWindow;
-                if (main == null) { host.Activate(); return; }
-
-                // The screen the MAIN window is on (proven #430 pattern: WorkingArea contains the main position).
-                global::Avalonia.Platform.Screen? screen = null;
-                var all = host.Screens?.All;
-                if (all != null)
-                    foreach (var s in all)
-                        if (s.WorkingArea.Contains(main.Position)) { screen = s; break; }
-                screen ??= host.Screens?.Primary;
-
-                // Cascade near the main window; clamp inside that screen's work area.
-                int cascade = 30 * Math.Max(0, hostCount - 1);
-                int x = main.Position.X + 40 + cascade;
-                int y = main.Position.Y + 40 + cascade;
-                if (screen != null)
-                {
-                    var wa = screen.WorkingArea;                 // device px
-                    double scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
-                    int w = (int)(host.Width * scale);           // Width/Height are logical
-                    int h = (int)(host.Height * scale);
-                    x = Math.Max(wa.X, Math.Min(x, wa.X + wa.Width - w));
-                    y = Math.Max(wa.Y, Math.Min(y, wa.Y + wa.Height - h));
-                }
-                host.Position = new PixelPoint(x, y);
-                host.Activate();
-                Log.Information("Placed floating window on the main window's screen at {Pos}", host.Position);
-            }
-            catch (Exception ex) { Log.Warning(ex, "Failed to place/reveal new floating window"); }
-        }
-
-        /// <summary>
-        /// Unfloat a book window by creating a brand new ViewModel instance
-        /// This forces ControlRecycling to create a fresh View with no CEF baggage
-        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
-        /// </summary>
-        public async void UnfloatDockableWithoutRecycling(BookDisplayViewModel oldVm)
-        {
-            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            Log.Information("UnfloatDockableWithoutRecycling called for: {BookFile}, OldInstance: {OldInstanceId}",
-                oldVm.Book.FileName, oldVm.Id);
-
-            try
-            {
-                // Find main document dock
-                var mainDocDock = FindDocumentDock();
-                if (mainDocDock == null)
-                {
-                    Log.Error("Cannot unfloat - main document dock not found");
-                    return;
-                }
-
-                // Step 1: Query WebView for actual current scroll position
-                string? currentAnchor = null;
-                ReadingPositionToken? positionToken = null;   // #434: exact reading position across the re-parent
-                if (oldVm.BookDisplayControl != null)
-                {
-                    Log.Information("Querying WebView for current scroll position...");
-                    currentAnchor = await oldVm.BookDisplayControl.GetCurrentParagraphAnchorAsync();
-                    positionToken = await oldVm.BookDisplayControl.GetCurrentPositionTokenAsync();
-                    Log.Information("Current scroll position anchor: {Anchor}", currentAnchor ?? "none");
-                }
-                else
-                {
-                    // Fallback to last known VRI anchor / rolling token if the WebView isn't available.
-                    currentAnchor = oldVm.CurrentVriAnchor;
-                    positionToken = oldVm.LastPositionToken;
-                    Log.Warning("BookDisplayControl not available, using fallback VRI anchor: {Anchor}", currentAnchor ?? "none");
-                }
-
-                // Step 2: Capture all other state from old ViewModel
-                var book = oldVm.Book;
-                var searchTerms = oldVm.SearchTerms?.ToList();
-                var searchPositions = oldVm.SearchPositions?.ToList();
-                var bookScript = oldVm.BookScript;
-                var docId = oldVm.DocId;
-                var currentHitIndex = oldVm.CurrentHitIndex;
-                var totalHits = oldVm.TotalHits;
-                var showFootnotes = oldVm.ShowFootnotes;       // #224: carry View toggles across float/unfloat
-                var showSearchTerms = oldVm.ShowSearchTerms;
-                var title = oldVm.Title;  // preserve the exact tab title (current script + any prefix) across recreation
-
-                Log.Information("Captured state: SearchTerms={Count}, Script={Script}, HitIndex={Hit}/{Total}, Anchor={Anchor}",
-                    searchTerms?.Count ?? 0, bookScript, currentHitIndex, totalHits, currentAnchor ?? "none");
-
-                // Step 2: Remove old ViewModel state from ApplicationState BEFORE removing from dock
-                RemoveBookWindowState(oldVm.Id);
-                Log.Information("Removed old ViewModel state from ApplicationState");
-
-                // Step 3: Remove old ViewModel from floating dock (auto-disposes View and WebView)
-                // IMPORTANT: Track which host window this book is in BEFORE removing it
-                CstHostWindow? sourceHostWindow = null;
-                if (oldVm.Owner is IDock currentDock)
-                {
-                    // Find the host window that contains this dock — match against ANY of its panes, not
-                    // just the first, or unfloating from the second pane of a split float misidentifies the
-                    // source window. (#39 tab-loss)
-                    sourceHostWindow = HostWindows.OfType<CstHostWindow>()
-                        .FirstOrDefault(hw => FindAllDocumentDocksInLayout(hw.Layout).Contains(currentDock));
-
-                    Log.Information("Unfloating from host window: {WindowId}", sourceHostWindow?.Id ?? "unknown");
-
-                    RemoveDockable(oldVm, false);
-                    Log.Information("Removed old ViewModel from floating dock");
-                }
-
-                // The old ViewModel is permanently replaced by newVm below; its state was already
-                // captured above, so release its subscriptions and GoTo id now (avoids the leak) —
-                // and shut down + evict its recycled View: "dispose-before-move" is the documented
-                // discipline, but nothing implemented it (the PrepareForFloat/PrepareForUnfloat
-                // handler is dead code for books), so the detached View's live CEF browser survived
-                // in the app-lifetime ControlRecycling cache on every float/unfloat. (#193)
-                _goToSubscribedBooks.Remove(oldVm.Id);
-                DisposeAndEvictRecycledView(oldVm);
-                oldVm.Dispose();
-
-                // Step 4: Create brand new ViewModel with fresh GUID (NO windowId parameter!)
-                var chapterListsService = App.ServiceProvider?.GetService<ChapterListsService>();
-                var settingsService = App.ServiceProvider?.GetService<ISettingsService>();
-                var fontService = App.ServiceProvider?.GetService<IFontService>();
-
-                var newVm = new BookDisplayViewModel(
-                    book: book,
-                    searchTerms: searchTerms,
-                    initialAnchor: currentAnchor,  // Restore scroll position
-                    chapterListsService: chapterListsService,
-                    settingsService: settingsService,
-                    fontService: fontService,
-                    docId: docId,
-                    searchPositions: searchPositions,
-                    windowId: null,  // CRITICAL: null = generates fresh GUID
-                    dockFactory: this,
-                    initialBookScript: bookScript,  // seed so the set below is a no-op (BOOK-3)
-                    initialPositionToken: positionToken  // #434: restore the exact reading position across float/unfloat
-                );
-
-                // Restore additional state (BookScript set is a no-op given the seed; kept as a safety net)
-                newVm.BookScript = bookScript;
-                newVm.CurrentHitIndex = currentHitIndex;
-                newVm.TotalHits = totalHits;
-                newVm.ShowFootnotes = showFootnotes;
-                newVm.ShowSearchTerms = showSearchTerms;
-                newVm.IsFloating = false;
-                newVm.CanFloat = false; // Restore drag-to-float block (CEF crash mitigation); matches the open + float paths
-                // Carry the exact tab title across recreation (BookScript change doesn't refresh Title) — #6.
-                newVm.Title = title;
-
-                Log.Information("Created new ViewModel with fresh GUID: {NewInstanceId}", newVm.Id);
-
-                // Subscribe to events for the new instance
-                EnsureBookEventSubscription(newVm);
-
-                // Step 5: Add to main dock and set active (creates fresh View automatically)
-                AddDockable(mainDocDock, newVm);
-                SetActiveDockable(newVm);
-                SetFocusedDockable(mainDocDock, newVm);
-
-                // Clean up ONLY the specific floating window that this book came from
-                // DO NOT check all floating windows - this was causing other floating windows to disappear
-                if (sourceHostWindow != null)
-                {
-                    var documentDocks = FindAllDocumentDocksInLayout(sourceHostWindow.Layout);
-                    if (documentDocks.Count > 0)
-                    {
-                        // Empty only when NO pane holds a document — else unfloating from a split float would
-                        // close a window still showing books in its other pane. (#39 tab-loss)
-                        var docCount = documentDocks.Sum(d => d.VisibleDockables?.OfType<ReactiveDocument>().Count() ?? 0);
-                        if (docCount == 0)
-                        {
-                            Log.Information("Source floating window {WindowId} is now empty - closing it", sourceHostWindow.Id);
-                            CloseEmptyHostWindow(sourceHostWindow);
-                        }
-                        else
-                        {
-                            Log.Information("Source floating window {WindowId} still has {Count} documents - keeping it open",
-                                sourceHostWindow.Id, docCount);
-                        }
-                    }
-                }
-
-                Log.Information("Unfloat operation completed - new instance in main window");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "CRITICAL: Unfloat operation failed for book: {BookFile}", oldVm.Book.FileName);
-            }
-
-            Log.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        }
 
         /// <summary>
         /// Clean up empty floating windows after unfloat operations
@@ -1966,12 +1615,12 @@ namespace CST.Avalonia.Services
         }
 
         // The CROSS-DOCK move overload — the drag path that merges a tab into ANOTHER window's dock. This was
-        // NOT overridden before, so it skipped the dispose-before-move discipline the float/unfloat buttons
-        // follow: a book/PDF dragged into another window kept the same View with its LIVE CEF browser, and a
-        // browser cannot survive its birth window being destroyed — the next re-attach faults in
+        // NOT overridden before, so it skipped the dispose-before-move discipline: a book/PDF dragged into
+        // another window kept the same View with its LIVE CEF browser, and a browser cannot survive its birth
+        // window being destroyed — the next re-attach faults in
         // AvnNativeControlHostTopLevelAttachment::InitializeWithChildHandle (SIGSEGV). Dispose + evict first so
         // the destination rebuilds a fresh browser. (#458)
-        public override void MoveDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable targetDockable)
+        public override void MoveDockable(IDock sourceDock, IDock targetDock, IDockable sourceDockable, IDockable? targetDockable)
         {
             PrepareCrossWindowMove(sourceDockable, targetDock);
             base.MoveDockable(sourceDock, targetDock, sourceDockable, targetDockable);
@@ -1998,6 +1647,35 @@ namespace CST.Avalonia.Services
         private void ScheduleEmptyFloatingWindowCheck()
         {
             Dispatcher.UIThread.Post(CheckForEmptyFloatingWindows, DispatcherPriority.Background);
+        }
+
+        // Drag-to-float: creating a NEW floating window from a dragged tab. EVERY float-creation trigger funnels
+        // through here before the dockable's View detaches — release over empty space, drop on an invalid
+        // target, the "float" drop-indicator, tab double-click, and the tab context menu's Float — so this one
+        // override gives them all the same dispose-before-move discipline as the cross-window drag: shut down +
+        // evict the live browser first, then let the framework build a fresh one in the new window. Same-VM (no
+        // fresh-GUID recreate needed); reading position rides the queued #434 token. This is what makes
+        // `CanFloat = true` on books safe. (#39)
+        public override void SplitToWindow(IDock dock, IDockable dockable, double x, double y, double width, double height)
+        {
+            if (dockable is BookDisplayViewModel or PdfDisplayViewModel)
+            {
+                if (dockable is BookDisplayViewModel bookVm && bookVm.LastPositionToken is { } token)
+                    bookVm.QueuePositionRestore(token);
+                Log.Information("#39: drag-to-float of {Id} — disposing live WebView before new-window creation", dockable.Id);
+                DisposeAndEvictRecycledView(dockable);
+            }
+            base.SplitToWindow(dock, dockable, x, y, width, height);
+        }
+
+        // "Float all" tears every dockable in a dock out into one new window via its own inline
+        // CreateWindowFrom+AddWindow, bypassing SplitToWindow — so it would re-parent N live browsers at once
+        // AND sweep the Welcome tab (which is deliberately non-floatable and hosts its own CEF WebView), with no
+        // per-item CanFloat check. Nothing in the app needs it; block it rather than special-case every hazard.
+        // (#39)
+        public override void FloatAllDockables(IDockable dockable)
+        {
+            Log.Information("#39: FloatAllDockables suppressed — 'float all' would re-parent multiple live CEF browsers at once");
         }
 
         // When a book/PDF is about to move into a dock in a DIFFERENT window, shut down and evict its recycled
