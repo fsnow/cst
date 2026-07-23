@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:CST.Avalonia.ViewModels"
+             xmlns:dict="using:CST.Avalonia.Services.Dictionaries"
              xmlns:converters="using:CST.Avalonia.Converters"
              x:Class="CST.Avalonia.Views.DictionaryPanel"
              x:DataType="vm:DictionaryViewModel">
@@ -26,17 +27,36 @@
 
     <Grid RowDefinitions="Auto,Auto,2*,Auto,3*">
 
-        <!-- Search box + compact language picker -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="8,8,8,4">
-            <TextBox Grid.Column="0"
+        <!-- Search box stacked above the source picker, both in one Auto-width column so the column sizes
+             to its widest child (the dropdown, which fits the longest DisplayName) and both STRETCH to that
+             same width. Left-aligned so the block hugs its content instead of filling the panel. -->
+        <Grid Grid.Row="0" RowDefinitions="Auto,Auto" ColumnDefinitions="Auto"
+              HorizontalAlignment="Left" Margin="8,8,8,4">
+            <TextBox Grid.Row="0"
                      Text="{Binding SearchText}"
-                     Watermark="Look up a word…"/>
-            <ComboBox Grid.Column="1"
-                      Margin="6,0,0,0"
-                      MinWidth="64"
-                      ItemsSource="{Binding AvailableLanguages}"
-                      SelectedItem="{Binding SelectedLanguage}"
-                      ToolTip.Tip="Definition language"/>
+                     Watermark="Look up a word…"
+                     HorizontalAlignment="Stretch"
+                     Margin="0,0,0,4"/>
+            <!-- Hidden measurer: renders the longest DisplayName (plus room for the dropdown arrow) so the
+                 Auto column stays fixed at that width regardless of which — possibly short — source is
+                 selected. Opacity 0 + not hit-testable; shares the ComboBox's cell so it adds no height. -->
+            <TextBlock Grid.Row="1"
+                       Text="{Binding LongestSourceName}"
+                       Padding="12,0,34,0"
+                       Opacity="0"
+                       IsHitTestVisible="False"
+                       VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="1"
+                      HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding Sources}"
+                      SelectedItem="{Binding SelectedSource}"
+                      ToolTip.Tip="Dictionary source">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="dict:IDictionarySource">
+                        <TextBlock Text="{Binding DisplayName}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
         </Grid>
 
         <!-- Words -->

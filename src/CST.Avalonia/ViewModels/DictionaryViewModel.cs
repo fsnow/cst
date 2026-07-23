@@ -42,7 +42,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private readonly Stack<string> _forwardStack = new();
 
     private string _searchText = "";
-    private string _selectedLanguage = "en";
+    private IDictionarySource? _selectedSource;
     private DictionaryEntryViewModel? _selectedWord;
     private IReadOnlyList<MeaningSegment> _meaningSegments = Array.Empty<MeaningSegment>();
     private bool _canGoBack;
@@ -68,18 +68,20 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         CanFloat = true;    // floatable/moveable like the other tools
         CanDrag = true;
 
-        // The picker's items are SOURCE ids from the shared registry (Stage 2 will show DisplayName instead).
-        // Only installed sources appear; a fresh install with no derived asset degrades cleanly to en/hi.
-        var available = _registry.Available.Select(s => s.Id).ToList();
-        AvailableLanguages = available.Count > 0 ? available : new[] { "en" };
-        // Restore the preferred SOURCE (#466), migrating from the older Language key; fall back to en, then
-        // whatever's available.
-        var savedSource = _stateService.Current.DictionaryDialog.SourceId;
-        if (string.IsNullOrEmpty(savedSource))
-            savedSource = _stateService.Current.DictionaryDialog.Language;   // migrate #25 → #466
-        _selectedLanguage = AvailableLanguages.Contains(savedSource) ? savedSource
-            : AvailableLanguages.Contains("en") ? "en"
-            : AvailableLanguages[0];
+        // The picker lists the installed SOURCES from the shared registry, shown by DisplayName. Only
+        // installed sources appear; a fresh install with no derived asset degrades cleanly to en/hi.
+        Sources = _registry.Available;
+        LongestSourceName = Sources.Select(s => s.DisplayName)
+            .OrderByDescending(n => n?.Length ?? 0)
+            .FirstOrDefault() ?? "";
+        // Restore the preferred SOURCE by id (#466), migrating from the older Language key; fall back to
+        // en, then the first available.
+        var savedId = _stateService.Current.DictionaryDialog.SourceId;
+        if (string.IsNullOrEmpty(savedId))
+            savedId = _stateService.Current.DictionaryDialog.Language;   // migrate #25 → #466
+        _selectedSource = Sources.FirstOrDefault(s => string.Equals(s.Id, savedId, StringComparison.OrdinalIgnoreCase))
+            ?? Sources.FirstOrDefault(s => string.Equals(s.Id, "en", StringComparison.OrdinalIgnoreCase))
+            ?? Sources.FirstOrDefault();
 
         Words = new ObservableCollection<DictionaryEntryViewModel>();
 
@@ -87,11 +89,11 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         ForwardCommand = ReactiveCommand.Create(GoForward, this.WhenAnyValue(x => x.CanGoForward));
         NavigateToWordCommand = ReactiveCommand.Create<string>(NavigateToWord);
 
-        // Real-time lookup as the query or language changes (throttled, like the Search tool). The
+        // Real-time lookup as the query or source changes (throttled, like the Search tool). The
         // throttle fires off the UI thread; LookupAsync marshals its collection updates back.
-        this.WhenAnyValue(x => x.SearchText, x => x.SelectedLanguage)
+        this.WhenAnyValue(x => x.SearchText, x => x.SelectedSource)
             .Throttle(TimeSpan.FromMilliseconds(300))
-            .Subscribe(pair => { _ = LookupAsync(SearchText); })
+            .Subscribe(change => { _ = LookupAsync(SearchText); })
             .DisposeWith(_disposables);
 
         // Rebuild the meaning display whenever the selected headword changes.
@@ -99,14 +101,17 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             .Subscribe(_ => UpdateMeaning())
             .DisposeWith(_disposables);
 
-        // Remember the preferred definition language across sessions. Skip(1) ignores the initial value
-        // set above so construction doesn't write state. (#25)
-        this.WhenAnyValue(x => x.SelectedLanguage)
+        // Remember the preferred source across sessions. Skip(1) ignores the initial value set above so
+        // construction doesn't write state. (#466)
+        this.WhenAnyValue(x => x.SelectedSource)
             .Skip(1)
-            .Subscribe(sourceId =>
+            .Subscribe(source =>
             {
-                _stateService.Current.DictionaryDialog.SourceId = sourceId;
-                _stateService.MarkDirty();   // persist via the timer/shutdown save, not a full off-thread save per change (STATE-2)
+                if (source != null)
+                {
+                    _stateService.Current.DictionaryDialog.SourceId = source.Id;
+                    _stateService.MarkDirty();   // persist via the timer/shutdown save, not a full off-thread save per change (STATE-2)
+                }
             })
             .DisposeWith(_disposables);
 
@@ -128,12 +133,18 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         _fontService.FontSettingsChanged += _fontChangedHandler;
     }
 
-    public IReadOnlyList<string> AvailableLanguages { get; }
+    /// <summary>The installed dictionary sources for the picker (shown by <c>DisplayName</c>). (#466)</summary>
+    public IReadOnlyList<IDictionarySource> Sources { get; }
 
-    public string SelectedLanguage
+    /// <summary>The longest source <c>DisplayName</c> — a hidden measurer renders it to pin the picker
+    /// column to a fixed width (the longest name), so the box + dropdown don't resize as you switch
+    /// sources. (#466)</summary>
+    public string LongestSourceName { get; }
+
+    public IDictionarySource? SelectedSource
     {
-        get => _selectedLanguage;
-        set => this.RaiseAndSetIfChanged(ref _selectedLanguage, value);
+        get => _selectedSource;
+        set => this.RaiseAndSetIfChanged(ref _selectedSource, value);
     }
 
     public string SearchText
@@ -179,22 +190,21 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     private async Task LookupAsync(string query)
     {
-        var sourceId = SelectedLanguage;   // capture: results are only valid if these still hold on completion
+        var source = SelectedSource;   // capture: results are only valid if these still hold on completion
         try
         {
-            var source = _registry.ById(sourceId);
             IReadOnlyList<DictionaryEntry> results = source == null
                 ? Array.Empty<DictionaryEntry>()
                 // The source returns Headword already in the requested output script and the definition as
                 // MeaningHtml (for flat-file, the same <see>-tagged text the native renderer handles). (#466)
-                : await source.LookupAsync(new DictionaryRequest(sourceId, query ?? "", _scriptService.CurrentScript, 500));
+                : await source.LookupAsync(new DictionaryRequest(source.Id, query ?? "", _scriptService.CurrentScript, 500));
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 // Ignore a stale completion: a newer query/source has superseded this lookup, so its results
                 // must not clobber the current ones (e.g. a slow first-time load finishing after a fast
                 // cached lookup). (DICT-3)
-                if (query != SearchText || sourceId != SelectedLanguage)
+                if (query != SearchText || !ReferenceEquals(source, SelectedSource))
                     return;
 
                 Words.Clear();
@@ -207,7 +217,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Source})", query, sourceId);
+            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Source})", query, source?.Id);
         }
     }
 
