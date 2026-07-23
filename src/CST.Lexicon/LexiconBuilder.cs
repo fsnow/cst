@@ -68,25 +68,19 @@ namespace CST.Lexicon
 
                 using (var insert = conn.CreateCommand())
                 {
-                    insert.CommandText =
-                        "INSERT INTO entry(ipe_key, headword, homonym, body_html) VALUES ($k, $h, $n, $b)";
-                    var pk = insert.CreateParameter(); pk.ParameterName = "$k"; insert.Parameters.Add(pk);
+                    insert.CommandText = "INSERT INTO entry(headword, body_html) VALUES ($h, $b)";
                     var ph = insert.CreateParameter(); ph.ParameterName = "$h"; insert.Parameters.Add(ph);
-                    var pn = insert.CreateParameter(); pn.ParameterName = "$n"; insert.Parameters.Add(pn);
                     var pb = insert.CreateParameter(); pb.ParameterName = "$b"; insert.Parameters.Add(pb);
 
                     foreach (var raw in entries)
                     {
+                        // Store the clean PUBLISHED headword (HTML stripped, homonym number kept, e.g. "Nāgita 1").
+                        // The key and homonym are derived at READ time — the builder does no IPE work, so a
+                        // producer needs no CST.Core, and there is no build-vs-read key to keep in lockstep.
                         string stripped = LexiconKey.StripHtml(raw.Headword ?? string.Empty);
-                        if (string.IsNullOrWhiteSpace(stripped)) continue;   // nothing to key on
+                        if (string.IsNullOrWhiteSpace(stripped)) continue;   // nothing to index
 
-                        var (headBase, homonym) = LexiconKey.SplitHomonym(stripped);
-                        string key = LexiconKey.DeriveKey(headBase);
-                        if (string.IsNullOrEmpty(key)) continue;
-
-                        pk.Value = key;
-                        ph.Value = stripped;                 // verbatim published form (homonym number kept)
-                        pn.Value = homonym;
+                        ph.Value = stripped;
                         pb.Value = raw.BodyHtml ?? string.Empty;
                         insert.ExecuteNonQuery();
                         written++;

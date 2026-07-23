@@ -34,25 +34,29 @@ namespace CST.Lexicon
 
         /// <summary>
         /// Split a trailing homonym number off a headword: <c>"Nāgita 1"</c> → (<c>"Nāgita"</c>, 1);
-        /// <c>"Sāvatthī"</c> → (<c>"Sāvatthī"</c>, 0). A homonym marker is a final space-separated token of
-        /// digits ONLY. Not split: an interior number, a token with non-digits, or a DOTTED sub-homonym like
-        /// DPD's <c>"dhamma 1.01"</c> — this deliberately differs from <c>SqliteLemmaProvider.StripHomonym</c>
-        /// (which allows dots) because the proper-name/import sources this serves publish plain integer markers;
-        /// a dotted DPD-shaped source would keep its whole headword (harmless — still findable by prefix).
+        /// <c>"Sāvatthī"</c> → (<c>"Sāvatthī"</c>, 0). A homonym marker is a final space-separated token that is a
+        /// bare integer, or a hyphenated integer RANGE (<c>"Piyasutta 5-6"</c>, one entry covering homonyms 5–6,
+        /// as DPPN publishes) — the first number is the sort homonym. NOT split: an interior number, a token with
+        /// other non-digits, or a DOTTED sub-homonym like DPD's <c>"dhamma 1.01"</c> — this deliberately differs
+        /// from <c>SqliteLemmaProvider.StripHomonym</c> (which allows dots) because the proper-name/import sources
+        /// this serves publish plain integer markers; a dotted DPD-shaped source keeps its whole headword
+        /// (harmless — still findable by prefix).
         /// </summary>
         public static (string Base, int Homonym) SplitHomonym(string headword)
         {
             if (string.IsNullOrEmpty(headword)) return (headword, 0);
             int sp = headword.LastIndexOf(' ');
             if (sp <= 0 || sp + 1 >= headword.Length) return (headword, 0);
-            for (int i = sp + 1; i < headword.Length; i++)
-                if (!char.IsDigit(headword[i])) return (headword, 0);
+            var m = HomonymTail.Match(headword[(sp + 1)..]);
             // TryParse, not Parse: an absurdly long all-digit run overflows int and falls back to (whole, 0).
-            var tail = headword[(sp + 1)..];
-            return int.TryParse(tail, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+            return m.Success && int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int n)
                 ? (headword[..sp].TrimEnd(), n)
                 : (headword, 0);
         }
+
+        // A final token that is a bare integer or a hyphenated integer range ("5" / "5-6"). The first number is
+        // the sort homonym. A dotted token ("1.01") is not matched (see the doc above).
+        private static readonly Regex HomonymTail = new(@"^(\d+)(?:-\d+)?$", RegexOptions.Compiled);
 
         /// <summary>
         /// The IPE lookup key for a headword base (homonym + HTML already removed). Mirrors the runtime query

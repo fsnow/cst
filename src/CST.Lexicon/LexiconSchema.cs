@@ -2,9 +2,12 @@ namespace CST.Lexicon
 {
     /// <summary>
     /// The canonical lexicon SQLite schema — one place so the builder and reader can't drift. A lexicon is two
-    /// tables: <c>meta</c> (source id + attribution + version stamps, key/value) and <c>entry</c>
-    /// (IPE-keyed, homonym-aware, HTML-definition rows). Bumping <see cref="SchemaVersion"/> means an older
-    /// reader should refuse a newer file (the delivery layer gates on it).
+    /// tables: <c>meta</c> (source id + attribution + version stamps, key/value) and <c>entry</c>, which stores
+    /// just the published <c>headword</c> and its HTML <c>body</c>. The IPE lookup key and homonym number are
+    /// NOT stored — <see cref="LexiconReader"/> derives them at load from the headword, so a producer (a
+    /// build-time converter, or the in-app import) needs no knowledge of IPE and there is no build-vs-read key
+    /// to keep in lockstep: one derivation path serves both stored headwords and typed queries. Bumping
+    /// <see cref="SchemaVersion"/> means an older reader should refuse a newer file (the delivery layer gates on it).
     /// </summary>
     public static class LexiconSchema
     {
@@ -30,11 +33,8 @@ namespace CST.Lexicon
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE entry(
     id         INTEGER PRIMARY KEY,
-    ipe_key    TEXT NOT NULL,
     headword   TEXT NOT NULL,
-    homonym    INTEGER NOT NULL DEFAULT 0,
     body_html  TEXT NOT NULL
-);
-CREATE INDEX ix_entry_key ON entry(ipe_key);";
+);";
     }
 }
