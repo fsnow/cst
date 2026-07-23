@@ -45,10 +45,11 @@ namespace CST.Lexicon
     /// </summary>
     public sealed record RawEntry(string Headword, string BodyHtml);
 
-    /// <summary>A stored/looked-up lexicon entry.</summary>
-    /// <param name="IpeKey">The IPE lookup/sort key (homonym + HTML removed).</param>
+    /// <summary>A looked-up lexicon entry. Only <see cref="Headword"/> and <see cref="BodyHtml"/> are stored;
+    /// <see cref="IpeKey"/> and <see cref="Homonym"/> are DERIVED from the headword at load.</summary>
+    /// <param name="IpeKey">The IPE lookup/sort key (homonym + HTML removed), derived at read time.</param>
     /// <param name="Headword">The published headword, HTML stripped, homonym number kept (e.g. "Nāgita 1").</param>
-    /// <param name="Homonym">The parsed homonym number, or 0.</param>
+    /// <param name="Homonym">The homonym number parsed from the headword, or 0.</param>
     /// <param name="BodyHtml">The definition HTML fragment.</param>
     public sealed record LexiconEntry(string IpeKey, string Headword, int Homonym, string BodyHtml);
 }

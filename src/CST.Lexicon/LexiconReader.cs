@@ -42,15 +42,20 @@ namespace CST.Lexicon
             var list = new List<LexiconEntry>();
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "SELECT ipe_key, headword, homonym, body_html FROM entry";
+                cmd.CommandText = "SELECT headword, body_html FROM entry";
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
-                    list.Add(new LexiconEntry(r.GetString(0), r.GetString(1), r.GetInt32(2), r.GetString(3)));
+                {
+                    string headword = r.GetString(0);
+                    // Derive the lookup key + homonym HERE, from the stored headword — the single derivation
+                    // path (LexiconKey) also serves typed queries, so keys and queries can't drift.
+                    var (headBase, homonym) = LexiconKey.SplitHomonym(headword);
+                    string key = LexiconKey.DeriveKey(headBase);
+                    list.Add(new LexiconEntry(key, headword, homonym, r.GetString(1)));
+                }
             }
 
-            // Sort in-memory with the SAME ordinal (UTF-16 code-unit) comparison the binary search uses, rather
-            // than trusting SQL's BINARY (UTF-8 byte) ORDER BY — they agree for all-BMP strings (IPE tops out at
-            // U+1E6D) but making the collation invariant local removes the cross-system assumption. (fable LOW-4)
+            // Sort by the derived key with the SAME ordinal (UTF-16 code-unit) comparison the binary search uses.
             var arr = list.ToArray();
             Array.Sort(arr, (a, b) =>
             {
