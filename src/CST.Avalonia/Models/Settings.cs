@@ -95,14 +95,15 @@ namespace CST.Avalonia.Models
     }
 
     /// <summary>
-    /// Update settings for the derived <c>dpd-cst-subset</c> asset (lemma / dictionary / sandhi). <see cref="EnablePolling"/>
-    /// is the ONLY DPD-related setting — it toggles the background check-for-a-newer-release, NOT whether the
-    /// features work: availability is driven purely by the asset FILE being present, so a manually dropped-in
-    /// file works regardless of this flag. Points at the derived-asset repo's releases. (#390)
+    /// Update settings for the derived dictionary assets (dpd-cst-subset, dppn, …). <see cref="EnableAutomaticUpdates"/>
+    /// (named to match <see cref="XmlUpdateSettings.EnableAutomaticUpdates"/>) toggles the background
+    /// check-for-a-newer-release, NOT whether the features work: availability is driven purely by each asset FILE
+    /// being present, so a manually dropped-in file works regardless of this flag. Points at the cst-dictionaries
+    /// repo's releases. (#390/#468)
     /// </summary>
     public class DpdUpdateSettings
     {
-        public bool EnablePolling { get; set; } = true;
+        public bool EnableAutomaticUpdates { get; set; } = true;
         public string RepositoryOwner { get; set; } = "fsnow";
         public string RepositoryName { get; set; } = "cst-dictionaries";
     }

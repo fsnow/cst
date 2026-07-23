@@ -38,6 +38,7 @@ namespace CST.Avalonia.ViewModels
             var fontSettings = new AppearanceSettingsViewModel(_settingsService);
             var configurationSettings = new ConfigurationSettingsViewModel(_settingsService);
             var xmlUpdateSettings = new XmlUpdateSettingsViewModel(_settingsService);
+            var dpdUpdateSettings = new DpdUpdateSettingsViewModel(_settingsService);
             var aiSettings = new AiSettingsViewModel(_settingsService);
             var loggingSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
 
@@ -47,6 +48,7 @@ namespace CST.Avalonia.ViewModels
                 new SettingsCategoryViewModel("Pali Script Fonts", fontSettings),
                 new SettingsCategoryViewModel("Logging", loggingSettings),
                 new SettingsCategoryViewModel("XML Data Updates", xmlUpdateSettings),
+                new SettingsCategoryViewModel("Dictionary Data Updates", dpdUpdateSettings),
                 new SettingsCategoryViewModel("AI", aiSettings),
                 new SettingsCategoryViewModel("Directories", directoriesSettings),
                 new SettingsCategoryViewModel("Configuration", configurationSettings)
@@ -816,6 +818,71 @@ namespace CST.Avalonia.ViewModels
             {
                 this.RaiseAndSetIfChanged(ref _xmlRepositoryBranch, value);
                 _settingsService.Settings.XmlUpdateSettings.XmlRepositoryBranch = value;
+                _settingsService.RequestSave();
+            }
+        }
+    }
+
+    // Dictionary Data Updates category — parallels XmlUpdateSettingsViewModel, for the derived dictionary assets
+    // (dpd-cst-subset, dppn, …) delivered from the cst-dictionaries repo's releases. (#468)
+    public class DpdUpdateSettingsViewModel : ViewModelBase
+    {
+        private readonly ISettingsService _settingsService;
+        private bool _enableAutomaticUpdates;
+        private string _repositoryOwner;
+        private string _repositoryName;
+
+        public DpdUpdateSettingsViewModel(ISettingsService settingsService)
+        {
+            _settingsService = settingsService;
+            var s = _settingsService.Settings.DpdUpdateSettings;
+            _enableAutomaticUpdates = s.EnableAutomaticUpdates;
+            _repositoryOwner = s.RepositoryOwner;
+            _repositoryName = s.RepositoryName;
+
+            RestoreDefaultsCommand = ReactiveCommand.Create(RestoreDefaults);
+        }
+
+        // Reset the repository fields to the known-good defaults; leaves the "Enable automatic updates"
+        // checkbox alone (it's a preference, not part of the source). Mirrors the XML category. (#100)
+        public ReactiveCommand<Unit, Unit> RestoreDefaultsCommand { get; }
+
+        private void RestoreDefaults()
+        {
+            var defaults = new DpdUpdateSettings();
+            RepositoryOwner = defaults.RepositoryOwner;
+            RepositoryName = defaults.RepositoryName;
+        }
+
+        public bool EnableAutomaticUpdates
+        {
+            get => _enableAutomaticUpdates;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _enableAutomaticUpdates, value);
+                _settingsService.Settings.DpdUpdateSettings.EnableAutomaticUpdates = value;
+                _settingsService.RequestSave();
+            }
+        }
+
+        public string RepositoryOwner
+        {
+            get => _repositoryOwner;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _repositoryOwner, value);
+                _settingsService.Settings.DpdUpdateSettings.RepositoryOwner = value;
+                _settingsService.RequestSave();
+            }
+        }
+
+        public string RepositoryName
+        {
+            get => _repositoryName;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _repositoryName, value);
+                _settingsService.Settings.DpdUpdateSettings.RepositoryName = value;
                 _settingsService.RequestSave();
             }
         }
