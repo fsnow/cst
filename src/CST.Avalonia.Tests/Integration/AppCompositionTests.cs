@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
+using CST.Avalonia.Services.Dictionaries;
 using CST.Avalonia.Services.LocalApi;
 using CST.Avalonia.Services.Tools;
 using CST.Tools;
@@ -49,7 +50,10 @@ namespace CST.Avalonia.Tests.Integration
             services.AddSingleton(settings.Object);
             services.AddSingleton(dict.Object);
             services.AddSingleton<ISearchTool, SearchTool>();
-            services.AddSingleton<IDictionaryTool, DictionaryTool>();
+            // Dictionary tool via the production registry wiring: a source (flat-file en) -> registry -> tool.
+            services.AddSingleton<IDictionarySource>(new FlatFileDictionarySource(dict.Object, "en"));
+            services.AddSingleton<DictionarySourceRegistry>();
+            services.AddSingleton<IDictionaryTool, RegistryDictionaryTool>();
             services.AddSingleton<IPassageTool, PassageTool>();
             services.AddSingleton<IScriptTool, ScriptTool>();
             // Navigate (#187) is resolved ONLY by the factory, so it belongs in the seam this test guards.
@@ -81,7 +85,7 @@ namespace CST.Avalonia.Tests.Integration
 
             // ScriptTool - the exact endpoint the /v1/scripts-404 bug knocked out (a registered tool not passed).
             Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/v1/scripts")).StatusCode);
-            // DictionaryTool.
+            // Dictionary tool (RegistryDictionaryTool).
             Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/v1/dictionary/languages")).StatusCode);
             // SearchTool.
             Assert.Equal(HttpStatusCode.OK, (await http.PostAsync("/v1/search",
