@@ -1066,12 +1066,23 @@ public partial class App : Application
 
         // Surface-C tool wrappers (exposed over the local API). (#186)
         services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
-        // Dictionary tool = flat-file dictionaries UNIONed with DPD ("dpd" language) when the DPD-lemma asset is
-        // present; the flat tool is the fallback for every other language. (#109)
-        services.AddSingleton<Services.Tools.DictionaryTool>();
-        services.AddSingleton<CST.Tools.IDictionaryTool>(sp => new Services.Tools.CompositeDictionaryTool(
-            sp.GetRequiredService<Services.Tools.DictionaryTool>(),
-            sp.GetRequiredService<CST.Lemma.ILemmaProvider>()));
+
+        // The dictionary SOURCE registry — the single list the API (and later the UI, #466) enumerates and
+        // queries. Sources: each flat-file language (en/hi), DPD (when dpd-cst-subset is installed), and each
+        // downloaded lexicon (DPPN — present-iff its file exists). (#109/#466)
+        // NOTE: the source set is fixed when the registry is first resolved. A DERIVED asset (dpd-cst-subset,
+        // dppn.db) installed mid-session still flips available (its source checks the file live); a flat-file
+        // language dir ADDED mid-session only becomes a source on the next launch. (fable LOW-2)
+        var dppnPath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            AppConstants.AppDataDirectoryName, "dppn", "dppn.db");
+        services.AddSingleton(sp => Services.Dictionaries.DictionarySourceFactory.Build(
+            sp.GetRequiredService<IDictionaryService>(),
+            sp.GetRequiredService<CST.Lemma.ILemmaProvider>(),
+            dppnPath));
+        services.AddSingleton<CST.Tools.IDictionaryTool>(sp =>
+            new Services.Dictionaries.RegistryDictionaryTool(
+                sp.GetRequiredService<Services.Dictionaries.DictionarySourceRegistry>()));
         services.AddSingleton<CST.Tools.IPassageTool, Services.Tools.PassageTool>();
         services.AddSingleton<CST.Tools.IScriptTool, Services.Tools.ScriptTool>();
         services.AddTransient<TreeStateService>();
