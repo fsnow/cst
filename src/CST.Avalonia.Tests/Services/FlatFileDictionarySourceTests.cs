@@ -40,6 +40,20 @@ namespace CST.Avalonia.Tests.Services
         }
 
         [Fact]
+        public void DisplayName_prefers_the_displayName_field_over_the_citation_title()
+        {
+            // en's real case: a short picker label distinct from the full citation title.
+            var mock = new Mock<IDictionaryService>();
+            mock.Setup(d => d.SourceFor("en")).Returns(new DictionarySourceInfo(
+                "A Dictionary of the Pali Language", "Childers", null, "1875", null, null, null,
+                DisplayName: "Childers' Dictionary of the Pali Language"));
+
+            var en = new FlatFileDictionarySource(mock.Object, "en");
+            Assert.Equal("Childers' Dictionary of the Pali Language", en.DisplayName);   // displayName wins
+            Assert.Equal("A Dictionary of the Pali Language", en.Attribution?.Title);    // citation unchanged
+        }
+
+        [Fact]
         public async Task LookupAsync_attaches_the_source_title_to_each_entry()
         {
             var mock = new Mock<IDictionaryService>();

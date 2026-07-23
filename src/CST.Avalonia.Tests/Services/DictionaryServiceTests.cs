@@ -72,6 +72,21 @@ public class DictionaryServiceTests : IDisposable
     }
 
     [Fact]
+    public void SourceFor_surfaces_a_displayName_only_source()
+    {
+        // A source.json with ONLY a display name (hi's real case: "VRI Pāli-Hindi Dictionary" with no citation
+        // yet) must NOT collapse to null — else the picker falls back to the bare language code. (#466)
+        WriteLang("hi", "vri-pali-hindi-dictionary.txt", "buddha", "<p>bauddha</p>");
+        File.WriteAllText(Path.Combine(_root, "hi", "source.json"),
+            "{ \"displayName\": \"VRI Pāli-Hindi Dictionary\", \"title\": \"\", \"url\": \"\" }");
+
+        var hi = Service().SourceFor("hi");
+        Assert.NotNull(hi);
+        Assert.Equal("VRI Pāli-Hindi Dictionary", hi!.DisplayName);
+        Assert.True(string.IsNullOrEmpty(hi.Title));   // no citation title yet
+    }
+
+    [Fact]
     public void SourceFor_is_null_when_no_source_file()
     {
         WriteLang("en", "vri-pali-english-dictionary.txt", "buddha", "<p>awakened</p>");
