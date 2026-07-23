@@ -27,6 +27,7 @@ namespace CST.Avalonia.ViewModels;
 public class DictionaryViewModel : ReactiveTool, IDisposable
 {
     private readonly DictionarySourceRegistry _registry;
+    private readonly DictionarySourcePreferenceService _sourcePrefs;
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
     private readonly IApplicationStateService _stateService;
@@ -36,12 +37,16 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     // Live script/font-change handlers, so the panel re-renders in the new script/font (DICT-2).
     private Action<Script>? _scriptChangedHandler;
     private EventHandler? _fontChangedHandler;
+    // Live enable/order-preference handler, so the picker rebuilds when Settings changes the sources (#479).
+    private EventHandler? _sourcePrefsChangedHandler;
 
     // <see>-link navigation history (manual typing does NOT push history; only followed links do).
     private readonly Stack<string> _backStack = new();
     private readonly Stack<string> _forwardStack = new();
 
     private string _searchText = "";
+    private IReadOnlyList<IDictionarySource> _sources = Array.Empty<IDictionarySource>();
+    private string _longestSourceName = "";
     private IDictionarySource? _selectedSource;
     private DictionaryEntryViewModel? _selectedWord;
     private string _meaningDocumentHtml = "";
@@ -51,12 +56,14 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     public DictionaryViewModel(
         DictionarySourceRegistry registry,
+        DictionarySourcePreferenceService sourcePrefs,
         IScriptService scriptService,
         IFontService fontService,
         IApplicationStateService stateService,
         ILogger<DictionaryViewModel> logger)
     {
         _registry = registry;
+        _sourcePrefs = sourcePrefs;
         _scriptService = scriptService;
         _fontService = fontService;
         _stateService = stateService;
@@ -69,19 +76,17 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         CanFloat = true;    // floatable/moveable like the other tools
         CanDrag = true;
 
-        // The picker lists the installed SOURCES from the shared registry, shown by DisplayName. Only
-        // installed sources appear; a fresh install with no derived asset degrades cleanly to en/hi.
-        Sources = _registry.Available;
-        LongestSourceName = Sources.Select(s => s.DisplayName)
-            .OrderByDescending(n => n?.Length ?? 0)
-            .FirstOrDefault() ?? "";
-        // Restore the preferred SOURCE by id (#466), migrating from the older Language key; fall back to
-        // en, then the first available.
+        // The picker lists the ENABLED installed sources in the user's preferred order (#479), shown by
+        // DisplayName. Only installed sources appear; a fresh install with no derived asset degrades cleanly
+        // to en/hi. The preference is applied by the shared service — never in the registry/API path.
+        RebuildSources();
+        // Restore the preferred SOURCE by id (#466), migrating from the older Language key; fall back to the
+        // first enabled source (the #479 default). If the saved source is disabled/uninstalled, its id is
+        // no longer in the list and the first enabled wins.
         var savedId = _stateService.Current.DictionaryDialog.SourceId;
         if (string.IsNullOrEmpty(savedId))
             savedId = _stateService.Current.DictionaryDialog.Language;   // migrate #25 → #466
         _selectedSource = Sources.FirstOrDefault(s => string.Equals(s.Id, savedId, StringComparison.OrdinalIgnoreCase))
-            ?? Sources.FirstOrDefault(s => string.Equals(s.Id, "en", StringComparison.OrdinalIgnoreCase))
             ?? Sources.FirstOrDefault();
 
         Words = new ObservableCollection<DictionaryEntryViewModel>();
@@ -138,15 +143,80 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             UpdateMeaning();   // re-render the meaning document at the new font (#466)
         });
         _fontService.FontSettingsChanged += _fontChangedHandler;
+
+        // Rebuild the picker live when the enable/order preference changes in Settings (#479). A settings
+        // edit re-defaults the selection to the first enabled source (the user's rule). Unsubscribed in
+        // Dispose. Marshalled to the UI thread — the preference service raises on the caller's thread.
+        _sourcePrefsChangedHandler = (_, _) => Dispatcher.UIThread.Post(() => RebuildSources(preferFirstEnabled: true));
+        _sourcePrefs.Changed += _sourcePrefsChangedHandler;
     }
 
-    /// <summary>The installed dictionary sources for the picker (shown by <c>DisplayName</c>). (#466)</summary>
-    public IReadOnlyList<IDictionarySource> Sources { get; }
+    /// <summary>Recompute <see cref="Sources"/> (and the picker-width measurer) from the enable/order
+    /// preference. If the current selection is no longer enabled/available, fall back to the first enabled
+    /// source (the #479 default); a null selection is left alone until the user picks one. (#479)</summary>
+    private void RebuildSources(bool preferFirstEnabled = false)
+    {
+        var newSources = _sourcePrefs.GetEffectiveSources();
+        // Decide the selection BEFORE swapping the list. Assigning Sources revalidates the bound ComboBox,
+        // which pushes SelectedSource back to null when the old selection is absent from the new list — so a
+        // post-hoc "if null" guard would already have lost _selectedSource. Capture the intended selection
+        // first, then re-assert it unconditionally after (a still-valid selection re-set is a no-op). (#479, Fable HIGH-2)
+        // After a preference EDIT (preferFirstEnabled), the first enabled source becomes the default — the
+        // user's rule "first in the list is the default after a settings change". Otherwise keep the current
+        // selection if it survives, falling back to the first enabled.
+        IDictionarySource? desired;
+        if (preferFirstEnabled)
+            desired = newSources.FirstOrDefault();
+        else
+        {
+            var keep = _selectedSource != null
+                ? newSources.FirstOrDefault(s => string.Equals(s.Id, _selectedSource.Id, StringComparison.OrdinalIgnoreCase))
+                : null;
+            desired = keep ?? newSources.FirstOrDefault();
+        }
+
+        Sources = newSources;
+        LongestSourceName = newSources.Select(s => s.DisplayName)
+            .OrderByDescending(n => n?.Length ?? 0)
+            .FirstOrDefault() ?? "";
+        SelectedSource = desired;
+    }
+
+    /// <summary>
+    /// Re-read the source enable/order preference and the saved selection after the app state has loaded from
+    /// disk. The VM singleton is built during the dock layout build (<c>CstDockFactory.CreateLayout</c>),
+    /// BEFORE <c>LoadStateAsync</c> completes — so its constructor sees an empty <c>SourceOrder</c> (registry
+    /// order) and no saved <c>SourceId</c>. This reapplies both once state is available, mirroring
+    /// <c>SearchViewModel.ApplyState</c>. Must run on the UI thread (it updates bound properties). (#479)
+    /// </summary>
+    public void ApplyState()
+    {
+        RebuildSources();   // now sees the persisted SourceOrder → the user's order, not registry order
+        var savedId = _stateService.Current.DictionaryDialog.SourceId;
+        if (string.IsNullOrEmpty(savedId))
+            savedId = _stateService.Current.DictionaryDialog.Language;
+        var restored = Sources.FirstOrDefault(s => string.Equals(s.Id, savedId, StringComparison.OrdinalIgnoreCase))
+            ?? Sources.FirstOrDefault();
+        if (restored != null)
+            SelectedSource = restored;
+    }
+
+    /// <summary>The enabled dictionary sources for the picker (shown by <c>DisplayName</c>), in the user's
+    /// preferred order. Rebuilt live when the enable/order preference changes. (#466/#479)</summary>
+    public IReadOnlyList<IDictionarySource> Sources
+    {
+        get => _sources;
+        private set => this.RaiseAndSetIfChanged(ref _sources, value);
+    }
 
     /// <summary>The longest source <c>DisplayName</c> — a hidden measurer renders it to pin the picker
     /// column to a fixed width (the longest name), so the box + dropdown don't resize as you switch
     /// sources. (#466)</summary>
-    public string LongestSourceName { get; }
+    public string LongestSourceName
+    {
+        get => _longestSourceName;
+        private set => this.RaiseAndSetIfChanged(ref _longestSourceName, value);
+    }
 
     public IDictionarySource? SelectedSource
     {
@@ -310,6 +380,8 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             _scriptService.ScriptChanged -= _scriptChangedHandler;
         if (_fontChangedHandler != null)
             _fontService.FontSettingsChanged -= _fontChangedHandler;
+        if (_sourcePrefsChangedHandler != null)
+            _sourcePrefs.Changed -= _sourcePrefsChangedHandler;
         _disposables.Dispose();
     }
 }
