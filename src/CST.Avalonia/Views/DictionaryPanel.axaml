@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:CST.Avalonia.ViewModels"
              xmlns:dict="using:CST.Avalonia.Services.Dictionaries"
+             xmlns:wv="using:WebViewControl"
              xmlns:converters="using:CST.Avalonia.Converters"
              x:Class="CST.Avalonia.Views.DictionaryPanel"
              x:DataType="vm:DictionaryViewModel">
@@ -86,8 +87,8 @@
                       ResizeDirection="Rows"
                       Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
 
-        <!-- Meaning block: header + back/forward + definition together, so it's one resizable row. -->
-        <Grid Grid.Row="4" RowDefinitions="Auto,*">
+        <!-- Meaning block: header + back/forward + definition + attribution together, one resizable row. -->
+        <Grid Grid.Row="4" RowDefinitions="Auto,*,Auto">
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="8,4,8,2">
                 <TextBlock Grid.Column="0" Classes="pane-label" Text="Meaning"/>
                 <Button Grid.Column="1" Classes="nav"
@@ -100,15 +101,24 @@
                         ToolTip.Tip="Forward"/>
             </Grid>
 
-            <!-- Definition (native text; <see> links built in code-behind) -->
+            <!-- Definition: rendered as an HTML document in a WebView (#466). The source's MeaningHtml is
+                 wrapped in a CSP host page by DictionaryHtmlRenderer; <see>/lemma links are intercepted in
+                 code-behind via BeforeNavigate (no script). -->
             <Border Grid.Row="1" Margin="8,0,8,8"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                <ScrollViewer Padding="8" VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="MeaningText" TextWrapping="Wrap"/>
-                </ScrollViewer>
+                <wv:WebView x:Name="MeaningWebView"/>
             </Border>
+
+            <!-- Per-source attribution (from the source's recorded citation; hidden when blank). -->
+            <TextBlock Grid.Row="2"
+                       Text="{Binding Attribution}"
+                       IsVisible="{Binding Attribution, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       FontSize="10"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Margin="8,4,8,6"/>
         </Grid>
     </Grid>
 </UserControl>

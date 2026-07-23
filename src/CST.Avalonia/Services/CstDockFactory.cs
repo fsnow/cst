@@ -1486,6 +1486,7 @@ namespace CST.Avalonia.Services
                 {
                     case BookDisplayView bookView: bookView.Shutdown(); break;  // release the CEF WebView — the actual leak
                     case PdfDisplayView pdfView: pdfView.Shutdown(); break;
+                    case DictionaryPanel dictView: dictView.Shutdown(); break;  // #466: the dictionary tool's meaning WebView
                 }
 
                 if (recycling == null)
@@ -1658,7 +1659,9 @@ namespace CST.Avalonia.Services
         // `CanFloat = true` on books safe. (#39)
         public override void SplitToWindow(IDock dock, IDockable dockable, double x, double y, double width, double height)
         {
-            if (dockable is BookDisplayViewModel or PdfDisplayViewModel)
+            // DictionaryViewModel is a CEF-hosting TOOL (#466) — same re-parent hazard as the book/PDF
+            // documents, so it gets the same dispose-before-move.
+            if (dockable is BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel)
             {
                 if (dockable is BookDisplayViewModel bookVm && bookVm.LastPositionToken is { } token)
                     bookVm.QueuePositionRestore(token);
@@ -1693,7 +1696,8 @@ namespace CST.Avalonia.Services
         // flickers, whereas carrying a live browser crashes. (#458)
         private void PrepareCrossWindowMove(IDockable? dockable, IDock? targetDock)
         {
-            if (dockable is not (BookDisplayViewModel or PdfDisplayViewModel)) return;
+            // Books, PDFs, and the CEF-hosting Dictionary tool (#466) — everything that carries a live browser.
+            if (dockable is not (BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel)) return;
             if (targetDock == null) return;
 
             var sourceRoot = GetRootOwner(dockable);

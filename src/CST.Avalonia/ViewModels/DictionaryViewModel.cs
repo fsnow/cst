@@ -44,7 +44,8 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private string _searchText = "";
     private IDictionarySource? _selectedSource;
     private DictionaryEntryViewModel? _selectedWord;
-    private IReadOnlyList<MeaningSegment> _meaningSegments = Array.Empty<MeaningSegment>();
+    private string _meaningDocumentHtml = "";
+    private string _attribution = "";
     private bool _canGoBack;
     private bool _canGoForward;
 
@@ -101,6 +102,11 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             .Subscribe(_ => UpdateMeaning())
             .DisposeWith(_disposables);
 
+        // Per-source attribution line, refreshed when the source changes (initial value included — no Skip).
+        this.WhenAnyValue(x => x.SelectedSource)
+            .Subscribe(source => Attribution = FormatAttribution(source?.Attribution))
+            .DisposeWith(_disposables);
+
         // Remember the preferred source across sessions. Skip(1) ignores the initial value set above so
         // construction doesn't write state. (#466)
         this.WhenAnyValue(x => x.SelectedSource)
@@ -129,6 +135,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         {
             this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
             this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+            UpdateMeaning();   // re-render the meaning document at the new font (#466)
         });
         _fontService.FontSettingsChanged += _fontChangedHandler;
     }
@@ -161,11 +168,34 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         set => this.RaiseAndSetIfChanged(ref _selectedWord, value);
     }
 
-    /// <summary>The selected definition, split into plain-text and clickable link segments.</summary>
-    public IReadOnlyList<MeaningSegment> MeaningSegments
+    /// <summary>The selected definition as a full HTML document for the meaning WebView — the source's
+    /// MeaningHtml wrapped in a CSP host page, with &lt;see&gt; cross-references turned into links. (#466)</summary>
+    public string MeaningDocumentHtml
     {
-        get => _meaningSegments;
-        private set => this.RaiseAndSetIfChanged(ref _meaningSegments, value);
+        get => _meaningDocumentHtml;
+        private set => this.RaiseAndSetIfChanged(ref _meaningDocumentHtml, value);
+    }
+
+    /// <summary>A one-line citation for the selected source, shown under the meaning (never hard-coded — it
+    /// comes from the source's recorded attribution; blank when unrecorded). (#466, #268)</summary>
+    public string Attribution
+    {
+        get => _attribution;
+        private set => this.RaiseAndSetIfChanged(ref _attribution, value);
+    }
+
+    // Compose the recorded attribution fields into a compact one-liner, skipping any that are unset.
+    private static string FormatAttribution(CST.Tools.DictionarySourceInfo? a)
+    {
+        if (a == null) return "";
+        var parts = new System.Collections.Generic.List<string>();
+        void Add(string? s) { if (!string.IsNullOrWhiteSpace(s)) parts.Add(s.Trim()); }
+        Add(a.Title);
+        Add(a.Compiler);
+        Add(a.Edition);
+        Add(a.Year);
+        Add(a.Publisher);
+        return string.Join(" · ", parts);
     }
 
     public bool CanGoBack
@@ -223,7 +253,14 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     private void UpdateMeaning()
     {
-        MeaningSegments = MeaningParser.Parse(SelectedWord?.Source.MeaningHtml, PaliToDisplay);
+        // Definitions are prose (mostly English/Hindi with Pāli terms); render just under the headword
+        // size — the current script font size minus one — as a comfortable reading size. (#466)
+        MeaningDocumentHtml = DictionaryHtmlRenderer.Render(
+            SelectedWord?.Source.MeaningHtml,
+            PaliToDisplay,
+            DictionaryService.MeaningSeparator,
+            CurrentScriptFontFamily,
+            Math.Max(1, CurrentScriptFontSize - 1));
     }
 
     // A cross-reference word from a <see> tag (stored in Latin) -> current display script.
