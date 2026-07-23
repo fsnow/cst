@@ -363,6 +363,26 @@ public class StateValidationTests
     }
 
     [Fact]
+    public void Settings_Sanitize_repairs_a_null_DpdUpdateSettings_and_blank_repo_fields()
+    {
+        // #468: a hand-edited "dpdUpdateSettings": null would NRE DpdUpdateSettingsViewModel's ctor and brick the
+        // Settings window (the #319 A7-2 failure mode) — repair like every other section, plus blank repo fields.
+        var s1 = new Settings();
+        s1.DpdUpdateSettings = null!;
+        var fixes1 = SettingsValidator.Sanitize(s1);
+        Assert.NotNull(s1.DpdUpdateSettings);
+        Assert.False(string.IsNullOrWhiteSpace(s1.DpdUpdateSettings.RepositoryOwner));
+        Assert.False(string.IsNullOrWhiteSpace(s1.DpdUpdateSettings.RepositoryName));
+
+        var s2 = new Settings();
+        s2.DpdUpdateSettings.RepositoryOwner = "";
+        s2.DpdUpdateSettings.RepositoryName = "   ";
+        SettingsValidator.Sanitize(s2);
+        Assert.False(string.IsNullOrWhiteSpace(s2.DpdUpdateSettings.RepositoryOwner));
+        Assert.False(string.IsNullOrWhiteSpace(s2.DpdUpdateSettings.RepositoryName));
+    }
+
+    [Fact]
     public void Settings_Sanitize_ClampsNonPositiveFontSizes()
     {
         var s = new Settings();

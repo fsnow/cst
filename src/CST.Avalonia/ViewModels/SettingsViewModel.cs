@@ -844,7 +844,7 @@ namespace CST.Avalonia.ViewModels
         }
 
         // Reset the repository fields to the known-good defaults; leaves the "Enable automatic updates"
-        // checkbox alone (it's a preference, not part of the source). Mirrors the XML category. (#100)
+        // checkbox alone (it's a preference, not part of the source). Mirrors the XML category. (#468)
         public ReactiveCommand<Unit, Unit> RestoreDefaultsCommand { get; }
 
         private void RestoreDefaults()
