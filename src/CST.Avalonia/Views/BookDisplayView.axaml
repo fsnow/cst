@@ -48,31 +48,12 @@
     </UserControl.Styles>
 
     <DockPanel>
-        <!-- Toolbar (#104): DockPanel pins Float/Dock to the right (always reachable); the tool
-             groups live in a WrapPanel so they wrap to a second row instead of clipping off the
-             right edge when the window is narrow. Footprint trimmed: no "Script:"/"Chapter:" text
-             labels (tooltips instead), no separator bars (spacing instead), narrower Chapter combo. -->
+        <!-- Toolbar (#104): the tool groups live in a WrapPanel so they wrap to a second row instead
+             of clipping off the right edge when the window is narrow. Footprint trimmed: no
+             "Script:"/"Chapter:" text labels (tooltips instead), no separator bars (spacing instead),
+             narrower Chapter combo. The Float/Dock buttons were removed in #39 — floating is now done
+             by dragging a tab out to a new window and dragging it back to re-dock. -->
         <DockPanel DockPanel.Dock="Top" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}" MinHeight="40">
-
-            <!-- Window Management (Float/Dock) - pinned right, always visible -->
-            <Button DockPanel.Dock="Right"
-                    Command="{Binding FloatWindowCommand}"
-                    IsVisible="{Binding !IsFloating}"
-                    ToolTip.Tip="Open this book in a separate window"
-                    Margin="5,0"
-                    Padding="8,4"
-                    VerticalAlignment="Center">
-                <TextBlock Text="↗" FontSize="16" VerticalAlignment="Center"/>
-            </Button>
-            <Button DockPanel.Dock="Right"
-                    Command="{Binding UnfloatWindowCommand}"
-                    IsVisible="{Binding IsFloating}"
-                    ToolTip.Tip="Move this book back to main window"
-                    Margin="5,0"
-                    Padding="8,4"
-                    VerticalAlignment="Center">
-                <TextBlock Text="↙" FontSize="16" VerticalAlignment="Center"/>
-            </Button>
 
             <!-- Tool groups; wrap to a second row instead of clipping when the window is narrow -->
             <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">

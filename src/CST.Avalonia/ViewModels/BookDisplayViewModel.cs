@@ -102,7 +102,6 @@ namespace CST.Avalonia.ViewModels
         private string _htmlContent = "";
         private bool _isWebViewAvailable = true; // Start optimistically to avoid fallback flash
         private bool _updatingChapterFromScroll = false;
-        private bool _isFloating = false; // True when this book is in a floating window
         private bool _isInitializing = true;
         private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
         private WebViewState? _savedWebViewState = null; // Saved state during float/unfloat
@@ -205,10 +204,6 @@ namespace CST.Avalonia.ViewModels
             // WebView edit commands
             CopyCommand = ReactiveCommand.Create(ExecuteCopy);
             SelectAllCommand = ReactiveCommand.Create(ExecuteSelectAll);
-
-            // Window management commands (Float/Unfloat)
-            FloatWindowCommand = ReactiveCommand.Create(FloatWindow);
-            UnfloatWindowCommand = ReactiveCommand.Create(UnfloatWindow);
 
             // View Source PDF commands — disabled until the current Myanmar page resolves (the status bar
             // shows "*" until then, and the target PDF page is derived from it). Clicking before that was a
@@ -344,8 +339,6 @@ namespace CST.Avalonia.ViewModels
         public ReactiveCommand<Unit, Unit> OpenTikaCommand { get; }
         public ReactiveCommand<Unit, Unit> CopyCommand { get; }
         public ReactiveCommand<Unit, Unit> SelectAllCommand { get; }
-        public ReactiveCommand<Unit, Unit> FloatWindowCommand { get; }
-        public ReactiveCommand<Unit, Unit> UnfloatWindowCommand { get; }
         public ReactiveCommand<Unit, Unit> ShowSource1957Command { get; }
         public ReactiveCommand<Unit, Unit> ShowSource2010Command { get; }
 
@@ -376,12 +369,6 @@ namespace CST.Avalonia.ViewModels
         {
             get => _isLoading;
             set => this.RaiseAndSetIfChanged(ref _isLoading, value);
-        }
-
-        public bool IsFloating
-        {
-            get => _isFloating;
-            set => this.RaiseAndSetIfChanged(ref _isFloating, value);
         }
 
         public WebViewLifecycleOperation WebViewLifecycleOperation
@@ -1430,50 +1417,6 @@ namespace CST.Avalonia.ViewModels
             _logger.Debug("*** EXECUTE SELECT ALL COMMAND CALLED ***");
             // Signal the view to execute select all directly
             NavigateToHighlightRequested?.Invoke(-2); // Use -2 as a special signal for select all
-        }
-
-        /// <summary>
-        /// Float this book window - opens book in a separate floating window
-        /// Creates a brand new ViewModel instance in the floating window
-        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
-        /// </summary>
-        private void FloatWindow()
-        {
-            _logger.Information("FloatWindow command called for book: {BookFile}, Instance: {InstanceId}",
-                Book.FileName, Id);
-
-            // Factory creates brand new ViewModel with same book/state in floating window
-            // This ViewModel instance will be disposed when removed from main dock
-            if (_dockFactory != null)
-            {
-                _dockFactory.FloatDockableWithoutRecycling(this);
-            }
-            else
-            {
-                _logger.Error("Factory not available - cannot float window");
-            }
-        }
-
-        /// <summary>
-        /// Unfloat this book window - moves book back to main window
-        /// Creates a brand new ViewModel instance in the main window
-        /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
-        /// </summary>
-        private void UnfloatWindow()
-        {
-            _logger.Information("UnfloatWindow command called for book: {BookFile}, Instance: {InstanceId}",
-                Book.FileName, Id);
-
-            // Factory creates brand new ViewModel with same book/state in main window
-            // This ViewModel instance will be disposed when removed from floating dock
-            if (_dockFactory != null)
-            {
-                _dockFactory.UnfloatDockableWithoutRecycling(this);
-            }
-            else
-            {
-                _logger.Error("Factory not available - cannot unfloat window");
-            }
         }
 
         /// <summary>
