@@ -72,6 +72,40 @@ public class DictionaryServiceTests : IDisposable
     }
 
     [Fact]
+    public void SeedDictionaries_refreshes_a_changed_source_json_but_never_clobbers_data()
+    {
+        var src = Path.Combine(_root, "bundle");
+        var dst = Path.Combine(_root, "appsupport");
+        Directory.CreateDirectory(Path.Combine(src, "hi"));
+        Directory.CreateDirectory(Path.Combine(dst, "hi"));
+        // Bundle has the NEW metadata + a (newer) data file; app-support has the OLD blank metadata + user data.
+        File.WriteAllText(Path.Combine(src, "hi", "source.json"), "{ \"displayName\": \"VRI Pāli-Hindi Dictionary\" }");
+        File.WriteAllText(Path.Combine(src, "hi", "dict.txt"), "NEW DATA");
+        File.WriteAllText(Path.Combine(dst, "hi", "source.json"), "{ \"title\": \"\" }");           // stale metadata
+        File.WriteAllText(Path.Combine(dst, "hi", "dict.txt"), "EXISTING DATA");                     // must NOT be clobbered
+
+        DictionaryService.SeedDictionaries(src, dst);
+
+        // Metadata refreshed from the bundle...
+        Assert.Contains("VRI Pāli-Hindi Dictionary", File.ReadAllText(Path.Combine(dst, "hi", "source.json")));
+        // ...but existing dictionary data is left exactly as it was.
+        Assert.Equal("EXISTING DATA", File.ReadAllText(Path.Combine(dst, "hi", "dict.txt")));
+    }
+
+    [Fact]
+    public void SeedDictionaries_copies_missing_files_and_leaves_an_unchanged_source_json_alone()
+    {
+        var src = Path.Combine(_root, "bundle2");
+        var dst = Path.Combine(_root, "appsupport2");
+        Directory.CreateDirectory(Path.Combine(src, "en"));
+        File.WriteAllText(Path.Combine(src, "en", "source.json"), "{ \"displayName\": \"Childers\" }");
+        File.WriteAllText(Path.Combine(src, "en", "dict.txt"), "DATA");
+
+        Assert.Equal(2, DictionaryService.SeedDictionaries(src, dst));   // both copied into a fresh install
+        Assert.Equal(0, DictionaryService.SeedDictionaries(src, dst));   // second run: nothing changed -> no copies
+    }
+
+    [Fact]
     public void SourceFor_surfaces_a_displayName_only_source()
     {
         // A source.json with ONLY a display name (hi's real case: "VRI Pāli-Hindi Dictionary" with no citation

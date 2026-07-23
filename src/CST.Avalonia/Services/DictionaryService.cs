@@ -62,38 +62,58 @@ public sealed class DictionaryService : IDictionaryService
     {
         try
         {
-            // NOTE: we no longer early-return when already populated. The copy loop below only writes MISSING
-            // files, so it's cheap to re-check every launch — and it means a file ADDED to a bundled dictionary
-            // (e.g. a new source.json attribution, #268) reaches an existing install on its next launch, not
-            // just fresh installs. Existing dictionary data is never overwritten.
             var source = ResolveBundledDictionariesDir();
             if (source == null)
             {
                 _logger.LogWarning("No bundled dictionaries found to seed {Path}", _dictionariesDirectory);
                 return;
             }
-
-            int copied = 0;
-            foreach (var langDir in Directory.GetDirectories(source))
-            {
-                var destLangDir = Path.Combine(_dictionariesDirectory, Path.GetFileName(langDir));
-                Directory.CreateDirectory(destLangDir);
-                foreach (var file in Directory.GetFiles(langDir))
-                {
-                    var dest = Path.Combine(destLangDir, Path.GetFileName(file));
-                    if (!File.Exists(dest))
-                    {
-                        File.Copy(file, dest);
-                        copied++;
-                    }
-                }
-            }
-            _logger.LogInformation("Seeded {Count} bundled dictionary file(s) into {Path}", copied, _dictionariesDirectory);
+            int copied = SeedDictionaries(source, _dictionariesDirectory);
+            _logger.LogInformation("Seeded/refreshed {Count} bundled dictionary file(s) into {Path}", copied, _dictionariesDirectory);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to seed bundled dictionaries into {Path}", _dictionariesDirectory);
         }
+    }
+
+    // Copy bundled dictionary files into the app-support tree. Re-checked every launch (cheap).
+    //   - Dictionary DATA files are written only when MISSING — an existing install's data is never clobbered.
+    //   - source.json is app-owned METADATA (display name + attribution, #268/#466): REFRESH it whenever the
+    //     bundled copy differs, so a metadata change (e.g. a new displayName) reaches an existing install on its
+    //     next launch, not just fresh installs. (Otherwise the write-if-missing rule pins the stale copy forever.)
+    internal static int SeedDictionaries(string sourceRoot, string destRoot)
+    {
+        int copied = 0;
+        foreach (var langDir in Directory.GetDirectories(sourceRoot))
+        {
+            var destLangDir = Path.Combine(destRoot, Path.GetFileName(langDir));
+            Directory.CreateDirectory(destLangDir);
+            foreach (var file in Directory.GetFiles(langDir))
+            {
+                var dest = Path.Combine(destLangDir, Path.GetFileName(file));
+                bool isMeta = string.Equals(Path.GetFileName(file), "source.json", StringComparison.OrdinalIgnoreCase);
+                if (!File.Exists(dest))
+                {
+                    File.Copy(file, dest);
+                    copied++;
+                }
+                else if (isMeta && !FilesEqual(file, dest))
+                {
+                    File.Copy(file, dest, overwrite: true);
+                    copied++;
+                }
+            }
+        }
+        return copied;
+    }
+
+    private static bool FilesEqual(string a, string b)
+    {
+        var fa = new FileInfo(a);
+        var fb = new FileInfo(b);
+        if (!fa.Exists || !fb.Exists || fa.Length != fb.Length) return false;
+        return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
     }
 
     // The bundled dictionaries live in the dev project dir, or under Resources/ in a packaged .app.
