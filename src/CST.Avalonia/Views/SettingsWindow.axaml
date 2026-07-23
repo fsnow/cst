@@ -270,7 +270,7 @@
                             <StackPanel>
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
-                                        <TextBlock Text="XML Data Updates" Classes="SettingLabel"/>
+                                        <TextBlock Text="Tipitaka Updates" Classes="SettingLabel"/>
                                         <TextBlock Text="Configure automatic updates for Tipitaka XML files from GitHub" 
                                                   Classes="SettingDescription"/>
                                         
@@ -322,7 +322,7 @@
                             <StackPanel>
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
-                                        <TextBlock Text="Dictionary Data Updates" Classes="SettingLabel"/>
+                                        <TextBlock Text="Dictionary Updates" Classes="SettingLabel"/>
                                         <TextBlock Text="Configure automatic updates for the downloadable dictionary data (DPD, DPPN) from GitHub. Installed dictionaries keep working with this off."
                                                   Classes="SettingDescription"/>
 
