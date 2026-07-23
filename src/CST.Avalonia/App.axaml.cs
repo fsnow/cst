@@ -1066,12 +1066,29 @@ public partial class App : Application
 
         // Surface-C tool wrappers (exposed over the local API). (#186)
         services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
-        // Dictionary tool = flat-file dictionaries UNIONed with DPD ("dpd" language) when the DPD-lemma asset is
-        // present; the flat tool is the fallback for every other language. (#109)
-        services.AddSingleton<Services.Tools.DictionaryTool>();
-        services.AddSingleton<CST.Tools.IDictionaryTool>(sp => new Services.Tools.CompositeDictionaryTool(
-            sp.GetRequiredService<Services.Tools.DictionaryTool>(),
-            sp.GetRequiredService<CST.Lemma.ILemmaProvider>()));
+
+        // The dictionary SOURCE registry — the single list the API (and later the UI, #466) enumerates and
+        // queries. Sources: each flat-file language (en/hi), DPD (when dpd-cst-subset is installed), and each
+        // downloaded lexicon (DPPN — present-iff its file exists). (#109/#466)
+        var dppnPath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            AppConstants.AppDataDirectoryName, "dppn", "dppn.db");
+        services.AddSingleton(sp =>
+        {
+            var dict = sp.GetRequiredService<IDictionaryService>();
+            var sources = new List<Services.Dictionaries.IDictionarySource>();
+            // One source per flat-file language; the flat loader owns en/hi.
+            foreach (var lang in dict.AvailableLanguages)
+                sources.Add(new Services.Dictionaries.FlatFileDictionarySource(dict, lang));
+            // DPD reserves "dpd" (registered AFTER the flat languages so it wins the id, unavailable when absent).
+            sources.Add(new Services.Dictionaries.DpdDictionarySource(sp.GetRequiredService<CST.Lemma.ILemmaProvider>()));
+            // Downloaded lexicons (present-iff installed).
+            sources.Add(new Services.Dictionaries.SqliteDictionarySource(dppnPath, "dppn"));
+            return new Services.Dictionaries.DictionarySourceRegistry(sources);
+        });
+        services.AddSingleton<CST.Tools.IDictionaryTool>(sp =>
+            new Services.Dictionaries.RegistryDictionaryTool(
+                sp.GetRequiredService<Services.Dictionaries.DictionarySourceRegistry>()));
         services.AddSingleton<CST.Tools.IPassageTool, Services.Tools.PassageTool>();
         services.AddSingleton<CST.Tools.IScriptTool, Services.Tools.ScriptTool>();
         services.AddTransient<TreeStateService>();
