@@ -141,6 +141,26 @@ public class DictionaryDialogState
     /// A source identity, not a language — two sources can share a language. Empty until first set;
     /// migrated from <see cref="Language"/> on load.</summary>
     public string SourceId { get; set; } = string.Empty;
+
+    /// <summary>User-managed enable/order preference for the dictionary sources (#479). The picker shows
+    /// only enabled sources, in this order; disabled ones are hidden but retained here so they can be
+    /// re-enabled. A source not listed here (a fresh install) is treated as enabled and appended. Empty
+    /// until the user first customizes it — until then every installed source shows, in registry order.</summary>
+    public List<DictionarySourcePreference> SourceOrder { get; set; } = new();
+}
+
+/// <summary>One row of the dictionary source enable/order preference (#479): a source id and whether it
+/// appears in the picker. List position carries the order.</summary>
+public class DictionarySourcePreference
+{
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Whether this source shows in the picker. Always serialized — the state writer's global
+    /// <c>WhenWritingDefault</c> would otherwise omit <c>Enabled == false</c> (a bool's default), so a
+    /// disabled source would silently re-enable on the next launch. <see cref="JsonIgnoreCondition.Never"/>
+    /// overrides that per-property. (#479)</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public bool Enabled { get; set; } = true;
 }
 
 /// <summary>

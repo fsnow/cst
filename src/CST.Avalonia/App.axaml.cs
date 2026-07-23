@@ -606,6 +606,15 @@ public partial class App : Application
             var searchViewModel = ServiceProvider?.GetService<SearchViewModel>();
             searchViewModel?.ApplyState(searchState);
         });
+
+        // Same story for the Dictionary panel: its VM singleton is built during the dock layout build, before
+        // this load completes, so it reads registry order + no saved source. Reapply the persisted source
+        // enable/order preference and selection now that state is available. (#479)
+        Dispatcher.UIThread.Post(() =>
+        {
+            var dictionaryViewModel = ServiceProvider?.GetService<DictionaryViewModel>();
+            dictionaryViewModel?.ApplyState();
+        });
         
         // Restore main window state (dimensions, position, etc.) - MUST be on UI thread
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&
@@ -1079,6 +1088,10 @@ public partial class App : Application
         services.AddSingleton<CST.Tools.IDictionaryTool>(sp =>
             new Services.Dictionaries.RegistryDictionaryTool(
                 sp.GetRequiredService<Services.Dictionaries.DictionarySourceRegistry>()));
+        // The user's enable/order preference for the sources (#479). Shared by the Settings editor (mutates)
+        // and the dictionary panel VM (consumes + rebuilds its picker). Applied only here, never in the
+        // registry/API path — an agent still sees every installed source.
+        services.AddSingleton<Services.Dictionaries.DictionarySourcePreferenceService>();
         services.AddSingleton<CST.Tools.IPassageTool, Services.Tools.PassageTool>();
         services.AddSingleton<CST.Tools.IScriptTool, Services.Tools.ScriptTool>();
         services.AddTransient<TreeStateService>();
@@ -1458,7 +1471,8 @@ public partial class App : Application
             var settingsService = ServiceProvider?.GetRequiredService<ISettingsService>();
             if (settingsService != null && MainWindow != null)
             {
-                var settingsViewModel = new SettingsViewModel(settingsService);
+                var sourcePrefs = ServiceProvider!.GetRequiredService<Services.Dictionaries.DictionarySourcePreferenceService>();
+                var settingsViewModel = new SettingsViewModel(settingsService, sourcePrefs);
                 var settingsWindow = new SettingsWindow
                 {
                     DataContext = settingsViewModel

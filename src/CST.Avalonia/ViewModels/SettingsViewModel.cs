@@ -22,13 +22,15 @@ namespace CST.Avalonia.ViewModels
     public class SettingsViewModel : ViewModelBase
     {
         private readonly ISettingsService _settingsService;
+        private readonly Services.Dictionaries.DictionarySourcePreferenceService _sourcePrefs;
         private readonly ILogger _logger;
         private SettingsCategoryViewModel? _selectedCategory;
         private bool _hasUnsavedChanges;
 
-        public SettingsViewModel(ISettingsService settingsService)
+        public SettingsViewModel(ISettingsService settingsService, Services.Dictionaries.DictionarySourcePreferenceService sourcePrefs)
         {
             _settingsService = settingsService;
+            _sourcePrefs = sourcePrefs;
             _logger = Log.ForContext<SettingsViewModel>();
 
 
@@ -39,6 +41,10 @@ namespace CST.Avalonia.ViewModels
             var configurationSettings = new ConfigurationSettingsViewModel(_settingsService);
             var xmlUpdateSettings = new XmlUpdateSettingsViewModel(_settingsService);
             var dpdUpdateSettings = new DpdUpdateSettingsViewModel(_settingsService);
+            // One "Dictionary" category (#479) folds the source enable/order preference together with the
+            // existing update settings — two groups under a single nav entry, not two "Dictionary…" entries.
+            var dictionarySettings = new DictionaryCategoryViewModel(
+                new DictionarySourceSettingsViewModel(_sourcePrefs), dpdUpdateSettings);
             var aiSettings = new AiSettingsViewModel(_settingsService);
             var loggingSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
 
@@ -48,7 +54,7 @@ namespace CST.Avalonia.ViewModels
                 new SettingsCategoryViewModel("Pali Script Fonts", fontSettings),
                 new SettingsCategoryViewModel("Logging", loggingSettings),
                 new SettingsCategoryViewModel("Tipitaka Updates", xmlUpdateSettings),
-                new SettingsCategoryViewModel("Dictionary Updates", dpdUpdateSettings),
+                new SettingsCategoryViewModel("Dictionary", dictionarySettings),
                 new SettingsCategoryViewModel("AI", aiSettings),
                 new SettingsCategoryViewModel("Directories", directoriesSettings),
                 new SettingsCategoryViewModel("Configuration", configurationSettings)
@@ -884,6 +890,110 @@ namespace CST.Avalonia.ViewModels
                 this.RaiseAndSetIfChanged(ref _repositoryName, value);
                 _settingsService.Settings.DpdUpdateSettings.RepositoryName = value;
                 _settingsService.RequestSave();
+            }
+        }
+    }
+
+    /// <summary>The "Dictionary" settings category (#479): two groups under one nav entry — the source
+    /// enable/order preference (<see cref="Sources"/>) and the existing update settings (<see cref="Updates"/>).</summary>
+    public class DictionaryCategoryViewModel : ViewModelBase
+    {
+        public DictionarySourceSettingsViewModel Sources { get; }
+        public DpdUpdateSettingsViewModel Updates { get; }
+
+        public DictionaryCategoryViewModel(DictionarySourceSettingsViewModel sources, DpdUpdateSettingsViewModel updates)
+        {
+            Sources = sources;
+            Updates = updates;
+        }
+    }
+
+    /// <summary>Editor for the dictionary source enable/order preference (#479): a row per installed source
+    /// with an enable checkbox and up/down reorder. Edits go straight to the shared preference service, which
+    /// the live dictionary panel observes to rebuild its picker.</summary>
+    public class DictionarySourceSettingsViewModel : ViewModelBase
+    {
+        private readonly Services.Dictionaries.DictionarySourcePreferenceService _prefs;
+        private bool _rebuilding;
+
+        public ObservableCollection<DictionarySourceRowViewModel> Rows { get; } = new();
+
+        public DictionarySourceSettingsViewModel(Services.Dictionaries.DictionarySourcePreferenceService prefs)
+        {
+            _prefs = prefs;
+            RebuildRows();
+        }
+
+        private void RebuildRows()
+        {
+            _rebuilding = true;
+            Rows.Clear();
+            var rows = _prefs.GetRows();
+            var enabledCount = rows.Count(r => r.Enabled);
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var r = rows[i];
+                Rows.Add(new DictionarySourceRowViewModel(this, r.Source.Id, r.Source.DisplayName, r.Enabled)
+                {
+                    // The last remaining enabled source can't be unchecked — the picker must never be empty.
+                    CanDisable = !(r.Enabled && enabledCount <= 1),
+                    CanMoveUp = i > 0,
+                    CanMoveDown = i < rows.Count - 1,
+                });
+            }
+            _rebuilding = false;
+        }
+
+        internal void OnRowEnabledChanged(DictionarySourceRowViewModel row, bool enabled)
+        {
+            if (_rebuilding) return;
+            _prefs.SetEnabled(row.Id, enabled);
+            // Defer the row rebuild off the checkbox's own binding-write callback — mutating the bound
+            // ItemsSource from inside the originating write is the kind of re-entrancy Avalonia tolerates
+            // unreliably. The next dispatcher turn refreshes the last-enabled guard on every row. (Fable LOW-6)
+            Dispatcher.UIThread.Post(RebuildRows);
+        }
+
+        internal void MoveRow(DictionarySourceRowViewModel row, int delta)
+        {
+            _prefs.Move(row.Id, delta);
+            RebuildRows();
+        }
+    }
+
+    /// <summary>One source row in the Dictionary → Sources editor (#479).</summary>
+    public class DictionarySourceRowViewModel : ViewModelBase
+    {
+        private readonly DictionarySourceSettingsViewModel _parent;
+        private bool _enabled;
+
+        public string Id { get; }
+        public string DisplayName { get; }
+        public bool CanDisable { get; init; } = true;
+        public bool CanMoveUp { get; init; }
+        public bool CanMoveDown { get; init; }
+
+        public ReactiveCommand<Unit, Unit> MoveUpCommand { get; }
+        public ReactiveCommand<Unit, Unit> MoveDownCommand { get; }
+
+        public DictionarySourceRowViewModel(DictionarySourceSettingsViewModel parent, string id, string displayName, bool enabled)
+        {
+            _parent = parent;
+            Id = id;
+            DisplayName = displayName;
+            _enabled = enabled;   // set the field directly so rebuilding rows never re-enters SetEnabled
+            MoveUpCommand = ReactiveCommand.Create(() => _parent.MoveRow(this, -1));
+            MoveDownCommand = ReactiveCommand.Create(() => _parent.MoveRow(this, +1));
+        }
+
+        public bool Enabled
+        {
+            get => _enabled;
+            set
+            {
+                if (_enabled == value) return;
+                this.RaiseAndSetIfChanged(ref _enabled, value);
+                _parent.OnRowEnabledChanged(this, value);
             }
         }
     }
