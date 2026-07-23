@@ -26,7 +26,7 @@ namespace CST.Avalonia.Services.Dictionaries
         public DpdDictionarySource(ILemmaProvider lemma) => _lemma = lemma;
 
         public string Id => SourceId;
-        public string DisplayName => "DPD";
+        public string DisplayName => "Digital Pāḷi Dictionary";
         public string DefinitionLanguage => "en";
         public DictionarySourceKind Kind => DictionarySourceKind.General;
         public bool IsAvailable => _lemma.IsAvailable;

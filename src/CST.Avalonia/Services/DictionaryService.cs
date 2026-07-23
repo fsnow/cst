@@ -164,7 +164,11 @@ public sealed class DictionaryService : IDictionaryService
         return info;
     }
 
+    // A DisplayName counts as metadata worth keeping: a source.json that sets ONLY a display name (e.g. hi's
+    // "VRI Pāli-Hindi Dictionary", with no citation yet) must still surface so the picker shows the real name
+    // rather than the bare language code. (#466)
     private static bool IsUnattributed(DictionarySourceInfo s) =>
+        string.IsNullOrWhiteSpace(s.DisplayName) &&
         string.IsNullOrWhiteSpace(s.Title) && string.IsNullOrWhiteSpace(s.Compiler) &&
         string.IsNullOrWhiteSpace(s.Edition) && string.IsNullOrWhiteSpace(s.Year) &&
         string.IsNullOrWhiteSpace(s.Publisher) && string.IsNullOrWhiteSpace(s.License) &&

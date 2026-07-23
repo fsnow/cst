@@ -28,7 +28,10 @@ namespace CST.Tools
     public sealed record DictionaryLanguageInfo(string Language, DictionarySourceInfo? Source);
 
     /// <summary>Authoritative citation for a dictionary — populated verbatim from the dictionary's own
-    /// <c>source.json</c>, never inferred. Every field is optional; an unpopulated source is null. (#268)</summary>
+    /// <c>source.json</c>, never inferred. Every field is optional; an unpopulated source is null. (#268)
+    /// <para><see cref="DisplayName"/> is the short label the source picker shows (e.g. "Childers' Dictionary of
+    /// the Pali Language"), distinct from <see cref="Title"/> (the work's actual title, used in the citation
+    /// block). Mirrors the lexicon format's <c>display_name</c> meta. (#466)</para></summary>
     public sealed record DictionarySourceInfo(
         string? Title,
         string? Compiler,
@@ -36,7 +39,8 @@ namespace CST.Tools
         string? Year,
         string? Publisher,
         string? License,
-        string? Url);
+        string? Url,
+        string? DisplayName = null);
 
     /// <summary>A dictionary lookup request.</summary>
     public sealed record DictionaryRequest(
