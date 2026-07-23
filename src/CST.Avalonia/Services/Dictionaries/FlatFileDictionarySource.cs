@@ -15,7 +15,7 @@ namespace CST.Avalonia.Services.Dictionaries
     /// </summary>
     public sealed class FlatFileDictionarySource : IDictionarySource
     {
-        private const int MaxDictEntries = 500;   // mirror DictionaryTool's clamp (#305)
+        private const int MaxDictEntries = 500;   // mirror the tool contract's clamp (#305)
 
         private readonly IDictionaryService _dictionary;
 
