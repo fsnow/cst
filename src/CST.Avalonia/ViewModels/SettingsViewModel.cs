@@ -47,8 +47,8 @@ namespace CST.Avalonia.ViewModels
             {
                 new SettingsCategoryViewModel("Pali Script Fonts", fontSettings),
                 new SettingsCategoryViewModel("Logging", loggingSettings),
-                new SettingsCategoryViewModel("XML Data Updates", xmlUpdateSettings),
-                new SettingsCategoryViewModel("Dictionary Data Updates", dpdUpdateSettings),
+                new SettingsCategoryViewModel("Tipitaka Updates", xmlUpdateSettings),
+                new SettingsCategoryViewModel("Dictionary Updates", dpdUpdateSettings),
                 new SettingsCategoryViewModel("AI", aiSettings),
                 new SettingsCategoryViewModel("Directories", directoriesSettings),
                 new SettingsCategoryViewModel("Configuration", configurationSettings)
