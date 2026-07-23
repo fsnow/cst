@@ -102,6 +102,14 @@ public static class SettingsValidator
         if (string.IsNullOrWhiteSpace(xml.XmlRepositoryName)) { xml.XmlRepositoryName = "tipitaka-xml"; fixes.Add("xml repo name -> tipitaka-xml"); }
         if (string.IsNullOrWhiteSpace(xml.XmlRepositoryBranch)) { xml.XmlRepositoryBranch = "main"; fixes.Add("xml repo branch -> main"); }
 
+        // Dictionary-asset update repository fields — same null/blank repair as XML, so a hand-edited
+        // "dpdUpdateSettings": null can't NRE DpdUpdateSettingsViewModel's ctor and lock the Settings window
+        // shut (the #319 A7-2 failure mode), and a blanked owner/name can't dead-end the background check. (#468)
+        var dpd = settings.DpdUpdateSettings ??= new DpdUpdateSettings();
+        var dpdDefaults = new DpdUpdateSettings();
+        if (string.IsNullOrWhiteSpace(dpd.RepositoryOwner)) { dpd.RepositoryOwner = dpdDefaults.RepositoryOwner; fixes.Add($"dictionary repo owner -> {dpdDefaults.RepositoryOwner}"); }
+        if (string.IsNullOrWhiteSpace(dpd.RepositoryName)) { dpd.RepositoryName = dpdDefaults.RepositoryName; fixes.Add($"dictionary repo name -> {dpdDefaults.RepositoryName}"); }
+
         // Fonts
         var fonts = settings.FontSettings ??= new FontSettings();
         if (fonts.LocalizationFontSize <= 0) { fonts.LocalizationFontSize = 12; fixes.Add("localization font size -> 12"); }

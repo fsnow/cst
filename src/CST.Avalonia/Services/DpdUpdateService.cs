@@ -73,9 +73,9 @@ public sealed class DpdUpdateService : IDpdUpdateService
         try
         {
             var cfg = _settings.Settings.DpdUpdateSettings ?? new DpdUpdateSettings();
-            if (!cfg.EnablePolling)
+            if (!cfg.EnableAutomaticUpdates)
             {
-                _logger.LogInformation("dictionary-asset polling disabled; skipping update check (present files still work).");
+                _logger.LogInformation("dictionary-asset automatic updates disabled; skipping update check (present files still work).");
                 return;
             }
             // Hard bound on the WHOLE check+download (HttpClient.Timeout doesn't cover a streamed body). (fable)
