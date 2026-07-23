@@ -258,7 +258,6 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         MeaningDocumentHtml = DictionaryHtmlRenderer.Render(
             SelectedWord?.Source.MeaningHtml,
             PaliToDisplay,
-            DictionaryService.MeaningSeparator,
             CurrentScriptFontFamily,
             Math.Max(1, CurrentScriptFontSize - 1));
     }

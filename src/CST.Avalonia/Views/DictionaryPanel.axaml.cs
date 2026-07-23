@@ -60,6 +60,7 @@ public partial class DictionaryPanel : UserControl
             if (_meaningWebView != null)
             {
                 _meaningWebView.BeforeNavigate -= OnBeforeNavigate;
+                _meaningWebView.PopupOpening -= OnPopupOpening;
                 _meaningWebView.Dispose();
             }
         }
@@ -78,11 +79,15 @@ public partial class DictionaryPanel : UserControl
         _meaningWebView ??= this.FindControl<WebView>("MeaningWebView");
         if (_meaningWebView != null)
         {
-            // Intercept <see>/lemma link clicks (cst-see: … ) — the CSP host page runs no script, so
-            // navigation is the channel. Cancel the navigation and look the referenced word up instead;
-            // real content is loaded via LoadHtml (about:blank), never navigated to. (#466)
+            // Intercept navigations. The content is rendered via LoadHtml (an internal URL that never
+            // reaches BeforeNavigate), so ANYTHING that does reach here is a link the user (or a future
+            // asset's <a>/meta-refresh) tried to follow. Handle our own cst-see: cross-references, and
+            // CANCEL everything else — the meaning pane must never navigate away or hit the network. A
+            // no-op popup handler blocks target="_blank" from spawning an external browser. (#466, Fable)
             _meaningWebView.BeforeNavigate -= OnBeforeNavigate;
             _meaningWebView.BeforeNavigate += OnBeforeNavigate;
+            _meaningWebView.PopupOpening -= OnPopupOpening;
+            _meaningWebView.PopupOpening += OnPopupOpening;
         }
 
         if (DataContext is DictionaryViewModel vm)
@@ -113,9 +118,16 @@ public partial class DictionaryPanel : UserControl
         }
     }
 
+    // Real external schemes the meaning pane must never navigate to or fetch. The content itself loads over
+    // WebViewControl's internal scheme (not in this list), so cancelling these can't break rendering.
+    private static readonly string[] ExternalSchemes =
+        { "http:", "https:", "file:", "ftp:", "mailto:", "javascript:" };
+
     private void OnBeforeNavigate(WebViewControl.Request request)
     {
         var url = request.Url ?? string.Empty;
+
+        // Our own cross-reference links: cancel the navigation and look the word up instead.
         if (url.StartsWith(DictionaryHtmlRenderer.SeeScheme, StringComparison.OrdinalIgnoreCase))
         {
             request.Cancel();
@@ -123,6 +135,21 @@ public partial class DictionaryPanel : UserControl
             var vm = _vm;
             if (vm != null && !string.IsNullOrWhiteSpace(target))
                 Dispatcher.UIThread.Post(() => vm.NavigateToWordCommand.Execute(target).Subscribe());
+            return;
         }
+
+        // Block any real link-out (a future asset's <a href>/meta-refresh) — the pane must never leave its
+        // rendered content or hit the network. The internal content load uses a custom scheme not listed
+        // here, so it is allowed through and renders. (#466, Fable)
+        foreach (var scheme in ExternalSchemes)
+            if (url.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+            {
+                request.Cancel();
+                return;
+            }
     }
+
+    // Never spawn a popup/external browser from the meaning pane (a target="_blank" would otherwise reach
+    // the system browser). Handling the event with no action suppresses it.
+    private void OnPopupOpening(string url) { }
 }

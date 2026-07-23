@@ -28,19 +28,21 @@ public static class DictionaryHtmlRenderer
     public const string SeeScheme = "cst-see:";
 
     /// <summary>
-    /// Render <paramref name="meaningHtml"/> (one entry's definition, possibly multi-definition) into a full
-    /// host document. <paramref name="linkDisplay"/> maps a <c>&lt;see&gt;</c> target (stored in Latin) to
-    /// its current-script display form; <paramref name="separator"/> is the merge sentinel between a merged
-    /// headword's definitions.
+    /// Render <paramref name="meaningHtml"/> (one entry's definition) into a full host document.
+    /// <paramref name="linkDisplay"/> maps a <c>&lt;see&gt;</c> target (stored in Latin) to its current-script
+    /// display form.
     /// </summary>
     public static string Render(
         string? meaningHtml,
         Func<string, string> linkDisplay,
-        string separator,
         string fontFamily,
         double fontSizePt)
     {
-        var body = BuildBody(meaningHtml, linkDisplay, separator);
+        // The fragment is rendered as-is (with <see> turned into links). We do NOT split on the flat-file
+        // merge sentinel <hr/>: it also occurs as real content in some HTML sources (e.g. DPPN entries), and
+        // a plain <hr/> already renders as the divider a merged flat-file headword wants — so passing it
+        // through is both correct for HTML sources and visually right for flat-file. (#466, Fable)
+        var body = string.IsNullOrEmpty(meaningHtml) ? "" : TransformSeeTags(meaningHtml, linkDisplay);
         var family = WebUtility.HtmlEncode(fontFamily);
         // POINTS, not px, to match the book pages (tipitaka-*.xsl size body text in pt). The WebView renders
         // px smaller than the app's font setting implies; pt keeps the meaning in scale with the reader,
@@ -66,37 +68,17 @@ public static class DictionaryHtmlRenderer
                 word-wrap: break-word;
               }
               a.see { color: #0b5cad; text-decoration: underline; cursor: pointer; }
-              hr.def-sep { border: none; border-top: 1px solid #d0d0d0; margin: 10px 0; }
+              hr { border: none; border-top: 1px solid #d0d0d0; margin: 10px 0; }
               @media (prefers-color-scheme: dark) {
                 body { color: #e0e0e0; }
                 a.see { color: #6db3f2; }
-                hr.def-sep { border-top-color: #444; }
+                hr { border-top-color: #444; }
               }
             </style>
             </head>
             <body>{{body}}</body>
             </html>
             """;
-    }
-
-    private static string BuildBody(string? meaningHtml, Func<string, string> linkDisplay, string separator)
-    {
-        if (string.IsNullOrEmpty(meaningHtml))
-            return string.Empty;
-
-        // A merged headword's definitions are joined by the separator sentinel; render each with a rule
-        // between, so the boundary reads as a divider rather than the raw marker. (DICT-1, now in HTML)
-        var definitions = meaningHtml.Split(new[] { separator }, StringSplitOptions.None);
-        var sb = new StringBuilder();
-        for (int i = 0; i < definitions.Length; i++)
-        {
-            if (i > 0)
-                sb.Append("<hr class=\"def-sep\">");
-            sb.Append("<div class=\"def\">")
-              .Append(TransformSeeTags(definitions[i].Trim(), linkDisplay))
-              .Append("</div>");
-        }
-        return sb.ToString();
     }
 
     // Replace <see>word</see> with an anchor to the cst-see scheme; the link text is the word in the

@@ -379,6 +379,14 @@ namespace CST.Avalonia.ViewModels
 
             if (parentDock?.VisibleDockables != null)
             {
+                // #466: hiding a CEF-hosting tool (the dictionary) that lives in a FLOATING window is about to
+                // close that window; release its WebView first, or its browser (born in the closing window)
+                // lingers in the recycling cache and the next re-show re-attaches it to a destroyed window →
+                // SIGSEGV (#458). A docked hide re-shows into the same main window, so no dispose is needed
+                // there. (Fable)
+                if (sourceHostWindow != null && tool is DictionaryViewModel && _factory is CstDockFactory cefFactory)
+                    cefFactory.DisposeAndEvictRecycledView(tool);
+
                 parentDock.VisibleDockables.Remove(tool);
                 Log.Information("[Layout] Removed tool {ToolId} from parent dock {ParentId}",
                     tool.Id, parentDock.Id);
