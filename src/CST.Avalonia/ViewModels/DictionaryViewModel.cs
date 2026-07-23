@@ -9,22 +9,24 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Services;
+using CST.Avalonia.Services.Dictionaries;
 using CST.Avalonia.ViewModels.Dock;
 using CST.Conversion;
+using CST.Tools;
 using Microsoft.Extensions.Logging;
 using ReactiveUI;
 
 namespace CST.Avalonia.ViewModels;
 
 /// <summary>
-/// The Pāli dictionary tool (#25). A dockable left-tool panel: pick a language, type a headword in
-/// any script (IPE-normalized by the service), pick from the matching Words, and read the definition.
-/// Definitions render natively (the data is plain text + <c>&lt;see&gt;</c> cross-references only, so no
-/// WebView is needed); <c>&lt;see&gt;</c> links look up the referenced word, with back/forward history.
+/// The Pāli dictionary tool (#25, #466). A dockable left-tool panel: pick a SOURCE (a specific dictionary —
+/// Childers, DPD, Pāli–Hindi, DPPN — not a language, since sources can share one), type a headword in any
+/// script, pick from the matching Words, and read the definition. Sources come from the shared
+/// <see cref="DictionarySourceRegistry"/>, the same set the /v1 API serves, so UI and API can't drift.
 /// </summary>
 public class DictionaryViewModel : ReactiveTool, IDisposable
 {
-    private readonly IDictionaryService _dictionaryService;
+    private readonly DictionarySourceRegistry _registry;
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
     private readonly IApplicationStateService _stateService;
@@ -47,13 +49,13 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private bool _canGoForward;
 
     public DictionaryViewModel(
-        IDictionaryService dictionaryService,
+        DictionarySourceRegistry registry,
         IScriptService scriptService,
         IFontService fontService,
         IApplicationStateService stateService,
         ILogger<DictionaryViewModel> logger)
     {
-        _dictionaryService = dictionaryService;
+        _registry = registry;
         _scriptService = scriptService;
         _fontService = fontService;
         _stateService = stateService;
@@ -66,12 +68,16 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         CanFloat = true;    // floatable/moveable like the other tools
         CanDrag = true;
 
-        AvailableLanguages = _dictionaryService.AvailableLanguages.Count > 0
-            ? _dictionaryService.AvailableLanguages
-            : new[] { "en" };
-        // Restore the preferred definition language (#25); fall back to en, then whatever's available.
-        var savedLanguage = _stateService.Current.DictionaryDialog.Language;
-        _selectedLanguage = AvailableLanguages.Contains(savedLanguage) ? savedLanguage
+        // The picker's items are SOURCE ids from the shared registry (Stage 2 will show DisplayName instead).
+        // Only installed sources appear; a fresh install with no derived asset degrades cleanly to en/hi.
+        var available = _registry.Available.Select(s => s.Id).ToList();
+        AvailableLanguages = available.Count > 0 ? available : new[] { "en" };
+        // Restore the preferred SOURCE (#466), migrating from the older Language key; fall back to en, then
+        // whatever's available.
+        var savedSource = _stateService.Current.DictionaryDialog.SourceId;
+        if (string.IsNullOrEmpty(savedSource))
+            savedSource = _stateService.Current.DictionaryDialog.Language;   // migrate #25 → #466
+        _selectedLanguage = AvailableLanguages.Contains(savedSource) ? savedSource
             : AvailableLanguages.Contains("en") ? "en"
             : AvailableLanguages[0];
 
@@ -97,9 +103,9 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         // set above so construction doesn't write state. (#25)
         this.WhenAnyValue(x => x.SelectedLanguage)
             .Skip(1)
-            .Subscribe(lang =>
+            .Subscribe(sourceId =>
             {
-                _stateService.Current.DictionaryDialog.Language = lang;
+                _stateService.Current.DictionaryDialog.SourceId = sourceId;
                 _stateService.MarkDirty();   // persist via the timer/shutdown save, not a full off-thread save per change (STATE-2)
             })
             .DisposeWith(_disposables);
@@ -173,21 +179,27 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     private async Task LookupAsync(string query)
     {
-        var lang = SelectedLanguage;   // capture: results are only valid if these still hold on completion
+        var sourceId = SelectedLanguage;   // capture: results are only valid if these still hold on completion
         try
         {
-            var results = await _dictionaryService.LookupAsync(lang, query ?? "");
+            var source = _registry.ById(sourceId);
+            IReadOnlyList<DictionaryEntry> results = source == null
+                ? Array.Empty<DictionaryEntry>()
+                // The source returns Headword already in the requested output script and the definition as
+                // MeaningHtml (for flat-file, the same <see>-tagged text the native renderer handles). (#466)
+                : await source.LookupAsync(new DictionaryRequest(sourceId, query ?? "", _scriptService.CurrentScript, 500));
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                // Ignore a stale completion: a newer query/language has superseded this lookup, so its
-                // results must not clobber the current ones (e.g. a slow first-time Hindi load finishing
-                // after a fast cached English lookup). (DICT-3)
-                if (query != SearchText || lang != SelectedLanguage)
+                // Ignore a stale completion: a newer query/source has superseded this lookup, so its results
+                // must not clobber the current ones (e.g. a slow first-time load finishing after a fast
+                // cached lookup). (DICT-3)
+                if (query != SearchText || sourceId != SelectedLanguage)
                     return;
 
                 Words.Clear();
-                foreach (var w in results)
-                    Words.Add(new DictionaryEntryViewModel(w, IpeToDisplay(w.Word)));
+                foreach (var e in results)
+                    Words.Add(new DictionaryEntryViewModel(e));
 
                 // Auto-select the best (first) match so the definition shows immediately, like CST4.
                 SelectedWord = Words.FirstOrDefault();
@@ -195,20 +207,13 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Lang})", query, lang);
+            _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Source})", query, sourceId);
         }
     }
 
     private void UpdateMeaning()
     {
-        MeaningSegments = MeaningParser.Parse(SelectedWord?.Source.Meaning, PaliToDisplay);
-    }
-
-    // A stored IPE headword -> the user's current display script.
-    private string IpeToDisplay(string ipe)
-    {
-        try { return ScriptConverter.Convert(ipe, Script.Ipe, _scriptService.CurrentScript); }
-        catch { return ipe; }
+        MeaningSegments = MeaningParser.Parse(SelectedWord?.Source.MeaningHtml, PaliToDisplay);
     }
 
     // A cross-reference word from a <see> tag (stored in Latin) -> current display script.
@@ -263,16 +268,17 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     }
 }
 
-/// <summary>A row in the Words list: the source entry plus its headword rendered in the display script.</summary>
+/// <summary>A row in the Words list: the source entry, whose Headword is already in the display script
+/// (the source converts it — no IPE reconstruction needed, which was lossy for proper names). (#466)</summary>
 public sealed class DictionaryEntryViewModel
 {
-    public DictionaryEntryViewModel(CST.Avalonia.Models.DictionaryWord source, string displayWord)
+    public DictionaryEntryViewModel(DictionaryEntry source)
     {
         Source = source;
-        DisplayWord = displayWord;
+        DisplayWord = source.Headword;
     }
 
-    public CST.Avalonia.Models.DictionaryWord Source { get; }
+    public DictionaryEntry Source { get; }
     public string DisplayWord { get; }
 }
 
