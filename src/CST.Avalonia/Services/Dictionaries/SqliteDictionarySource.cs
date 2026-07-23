@@ -13,9 +13,13 @@ namespace CST.Avalonia.Services.Dictionaries
 {
     /// <summary>
     /// A dictionary source backed by a downloaded/imported <see cref="CST.Lexicon"/> asset (DPPN first, and
-    /// later user imports). Present-iff the lexicon file exists; the file is opened lazily on first use (a large
-    /// lexicon is only loaded when actually queried, and a not-installed source costs nothing). Identity and
-    /// attribution come from the lexicon's own <c>meta</c> — never hard-coded. (#466)
+    /// later user imports).
+    ///
+    /// <para>Two-level laziness, keyed on the file's (length, mtime): the cheap <c>meta</c> table is loaded to
+    /// answer identity/attribution and availability; the full (possibly large) entry set is loaded only on the
+    /// first real lookup. Neither a failed nor a successful load is memoized forever — if the file changes on
+    /// disk (the delivery layer replacing it, a mid-write completing), the next access reloads. So a
+    /// just-installed asset flips available and a transient partial file self-heals, as the contract promises.</para>
     /// </summary>
     public sealed class SqliteDictionarySource : IDictionarySource
     {
@@ -24,34 +28,36 @@ namespace CST.Avalonia.Services.Dictionaries
 
         private readonly string _path;
         private readonly string _id;
-        private readonly Lazy<LexiconReader?> _reader;
+
+        private readonly object _gate = new();
+        private (long Length, long MtimeTicks)? _stamp;   // the file state the caches below reflect
+        private LexiconMeta? _meta;
+        private LexiconReader? _reader;
+        private bool _metaTried, _readerTried;
 
         /// <param name="path">The lexicon .db path.</param>
         /// <param name="sourceId">The source id, known ahead of opening the file so the registry can list it and
-        /// route to it without loading the (possibly large) lexicon.</param>
+        /// route to it without loading the lexicon.</param>
         public SqliteDictionarySource(string path, string sourceId)
         {
             _path = path;
             _id = sourceId;
-            _reader = new Lazy<LexiconReader?>(OpenReader, LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
         public string Id => _id;
-        public string DisplayName => _reader.Value?.Meta.DisplayName is { Length: > 0 } d ? d : _id;
-        public string DefinitionLanguage => _reader.Value?.Meta.DefinitionLanguage ?? "en";
+        public string DisplayName => Meta()?.DisplayName is { Length: > 0 } d ? d : _id;
+        public string DefinitionLanguage => Meta()?.DefinitionLanguage ?? "en";
         public DictionarySourceKind Kind =>
-            _reader.Value?.Meta.Kind == LexiconKind.ProperNames
-                ? DictionarySourceKind.ProperNames : DictionarySourceKind.General;
+            Meta()?.Kind == LexiconKind.ProperNames ? DictionarySourceKind.ProperNames : DictionarySourceKind.General;
 
-        // Cheap: the file's presence is availability; the reader is only loaded on lookup. A file that exists but
-        // is unreadable/corrupt is reported unavailable (the lazy open returned null).
-        public bool IsAvailable => File.Exists(_path) && (!_reader.IsValueCreated || _reader.Value is not null);
+        // Available iff a valid lexicon is present (its meta reads) — a cheap meta-only open, retried on change.
+        public bool IsAvailable => Meta() is not null;
 
         public DictionarySourceInfo? Attribution
         {
             get
             {
-                var m = _reader.Value?.Meta;
+                var m = Meta();
                 if (m is null) return null;
                 var info = new DictionarySourceInfo(
                     Title: NullIfBlank(m.Title),
@@ -72,13 +78,15 @@ namespace CST.Avalonia.Services.Dictionaries
         private IReadOnlyList<DictionaryEntry> Lookup(DictionaryRequest request, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            var reader = _reader.Value;
-            if (reader is null || string.IsNullOrWhiteSpace(request.Query))
-                return Array.Empty<DictionaryEntry>();
+            int cap = Math.Clamp(request.MaxEntries, 0, MaxDictEntries);
+            // Contract (#305): a non-positive request asks for zero. Guard BEFORE the lexicon reader, whose
+            // own max=0 means "unbounded" — the opposite. (fable MED-1)
+            if (cap == 0 || string.IsNullOrWhiteSpace(request.Query)) return Array.Empty<DictionaryEntry>();
+
+            var reader = Reader();
+            if (reader is null) return Array.Empty<DictionaryEntry>();
 
             string? source = Attribution?.Title;
-            int cap = Math.Clamp(request.MaxEntries, 0, MaxDictEntries);
-            // The lexicon reader derives the key from the query and returns exact + prefix / nearest hits.
             return reader.Lookup(request.Query, cap)
                 .Select(e => new DictionaryEntry(
                     // The stored headword is the published form (Latin, e.g. "Nāgita 1"); project to the output
@@ -89,15 +97,60 @@ namespace CST.Avalonia.Services.Dictionaries
                 .ToList();
         }
 
-        private LexiconReader? OpenReader()
+        // Current file stamp, or null if the file is absent/unreadable.
+        private (long, long)? Stamp()
         {
-            if (!File.Exists(_path)) return null;
-            try { return LexiconReader.Open(_path); }
-            catch (Exception ex)
+            try
             {
-                _logger.Warning(ex, "Could not open lexicon {Path}; source {Id} is unavailable.", _path, _id);
-                return null;
+                var fi = new FileInfo(_path);
+                return fi.Exists ? (fi.Length, fi.LastWriteTimeUtc.Ticks) : null;
             }
+            catch { return null; }
+        }
+
+        private LexiconMeta? Meta()
+        {
+            lock (_gate)
+            {
+                if (!SyncStamp()) return null;               // file gone → nothing available
+                if (!_metaTried)
+                {
+                    _metaTried = true;
+                    try { _meta = LexiconReader.OpenMeta(_path); }
+                    catch (Exception ex) { _logger.Warning(ex, "Could not read lexicon meta {Path}", _path); _meta = null; }
+                }
+                return _meta;
+            }
+        }
+
+        private LexiconReader? Reader()
+        {
+            lock (_gate)
+            {
+                if (!SyncStamp()) return null;
+                if (!_readerTried)
+                {
+                    _readerTried = true;
+                    try { _reader = LexiconReader.Open(_path); }
+                    catch (Exception ex) { _logger.Warning(ex, "Could not open lexicon {Path}", _path); _reader = null; }
+                }
+                return _reader;
+            }
+        }
+
+        // Reset the caches when the file changes since they were populated, so a replaced/completed file is
+        // re-read rather than a stale (or failed) result being served forever. Returns false when the file is
+        // absent. Caller holds _gate.
+        private bool SyncStamp()
+        {
+            var s = Stamp();
+            if (s is null) { _stamp = null; _meta = null; _reader = null; _metaTried = _readerTried = false; return false; }
+            if (_stamp != s)
+            {
+                _stamp = s;
+                _meta = null; _reader = null; _metaTried = _readerTried = false;
+            }
+            return true;
         }
 
         // A headword is stored in Latin; only its letters convert. Latin/IPE/Unknown output return it as-is.

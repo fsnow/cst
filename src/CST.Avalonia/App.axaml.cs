@@ -1070,22 +1070,16 @@ public partial class App : Application
         // The dictionary SOURCE registry — the single list the API (and later the UI, #466) enumerates and
         // queries. Sources: each flat-file language (en/hi), DPD (when dpd-cst-subset is installed), and each
         // downloaded lexicon (DPPN — present-iff its file exists). (#109/#466)
+        // NOTE: the source set is fixed when the registry is first resolved. A DERIVED asset (dpd-cst-subset,
+        // dppn.db) installed mid-session still flips available (its source checks the file live); a flat-file
+        // language dir ADDED mid-session only becomes a source on the next launch. (fable LOW-2)
         var dppnPath = System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             AppConstants.AppDataDirectoryName, "dppn", "dppn.db");
-        services.AddSingleton(sp =>
-        {
-            var dict = sp.GetRequiredService<IDictionaryService>();
-            var sources = new List<Services.Dictionaries.IDictionarySource>();
-            // One source per flat-file language; the flat loader owns en/hi.
-            foreach (var lang in dict.AvailableLanguages)
-                sources.Add(new Services.Dictionaries.FlatFileDictionarySource(dict, lang));
-            // DPD reserves "dpd" (registered AFTER the flat languages so it wins the id, unavailable when absent).
-            sources.Add(new Services.Dictionaries.DpdDictionarySource(sp.GetRequiredService<CST.Lemma.ILemmaProvider>()));
-            // Downloaded lexicons (present-iff installed).
-            sources.Add(new Services.Dictionaries.SqliteDictionarySource(dppnPath, "dppn"));
-            return new Services.Dictionaries.DictionarySourceRegistry(sources);
-        });
+        services.AddSingleton(sp => Services.Dictionaries.DictionarySourceFactory.Build(
+            sp.GetRequiredService<IDictionaryService>(),
+            sp.GetRequiredService<CST.Lemma.ILemmaProvider>(),
+            dppnPath));
         services.AddSingleton<CST.Tools.IDictionaryTool>(sp =>
             new Services.Dictionaries.RegistryDictionaryTool(
                 sp.GetRequiredService<Services.Dictionaries.DictionarySourceRegistry>()));

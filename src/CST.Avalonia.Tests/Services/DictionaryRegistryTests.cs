@@ -123,23 +123,59 @@ public sealed class DictionaryRegistryTests : IDisposable
         Assert.Empty(await src.LookupAsync(new DictionaryRequest("dppn", "sāvatthī", Script.Latin)));
     }
 
+    [Fact]
+    public async Task A_non_positive_maxEntries_returns_zero_not_the_unbounded_prefix_run()
+    {
+        // fable MED-1: the lexicon reader treats max<=0 as UNBOUNDED; the tool contract (#305) is that a
+        // non-positive ask returns zero. The source must guard, or a maxEntries:0 lookup dumps the whole run.
+        var src = new SqliteDictionarySource(BuildLexicon(), "dppn");
+        Assert.Empty(await src.LookupAsync(new DictionaryRequest("dppn", "j", Script.Latin, MaxEntries: 0)));
+        Assert.Empty(await src.LookupAsync(new DictionaryRequest("dppn", "j", Script.Latin, MaxEntries: -5)));
+        Assert.NotEmpty(await src.LookupAsync(new DictionaryRequest("dppn", "jetavana", Script.Latin, MaxEntries: 5)));
+    }
+
+    [Fact]
+    public async Task A_just_installed_lexicon_flips_available_it_is_not_a_frozen_failure()
+    {
+        // fable MED-2: a source pointed at a not-yet-present file must become available once the file appears,
+        // rather than caching the initial "absent" forever.
+        string path = Path.Combine(_dir, "late.db");
+        var src = new SqliteDictionarySource(path, "dppn");
+        Assert.False(src.IsAvailable);                       // not installed yet
+
+        File.Copy(BuildLexicon(sourceId: "late-src"), path); // "download" completes
+        Assert.True(src.IsAvailable);                        // flips available without a restart
+        Assert.NotEmpty(await src.LookupAsync(new DictionaryRequest("dppn", "sāvatthī", Script.Latin)));
+    }
+
     // ---- the registry + RegistryDictionaryTool ----
 
     [Fact]
-    public void The_registry_lists_only_available_sources_and_a_reserved_id_wins()
+    public void The_registry_lists_only_available_sources_and_de_dups_by_id_first_wins()
     {
-        var flatEn = new FakeSource("en", available: true);
-        var flatDpdShadow = new FakeSource("dpd", available: true, display: "Flat DPD");   // must be shadowed
-        var dpd = Dpd();                                                                   // the real "dpd"
-        var absent = new FakeSource("hi", available: false);                               // not installed
+        var first = new FakeSource("dpd", available: true, display: "First");
+        var second = new FakeSource("dpd", available: true, display: "Second");   // same id → deduped
+        var absent = new FakeSource("hi", available: false);                       // not installed
+        var en = new FakeSource("en", available: true);
 
-        // Registration order: flat languages, THEN the reserved dpd — first registration of an id wins, so the
-        // real DPD is registered before the shadow to claim "dpd".
-        var registry = new DictionarySourceRegistry(new IDictionarySource[] { flatEn, dpd, flatDpdShadow, absent });
+        var registry = new DictionarySourceRegistry(new IDictionarySource[] { en, first, second, absent });
 
-        Assert.Equal(new[] { "en", "dpd" }, registry.Available.Select(s => s.Id));   // hi absent; shadow deduped
-        Assert.Same(dpd, registry.ById("DPD"));                                       // case-insensitive, real DPD
-        Assert.Null(registry.ById("hi"));                                             // unavailable → not routable
+        Assert.Equal(new[] { "en", "dpd" }, registry.Available.Select(s => s.Id));   // hi absent; dup deduped
+        Assert.Same(first, registry.ById("DPD"));                                    // first registration wins, case-insensitive
+        Assert.Null(registry.ById("hi"));                                            // unavailable → not routable
+    }
+
+    [Fact]
+    public void The_factory_gives_reserved_ids_to_their_sources_not_a_flat_dir_of_the_same_name()
+    {
+        // fable HIGH-1: the real composition path. A flat-file dir literally named "dpd" must NOT shadow the
+        // real DPD source; the factory owns that ordering, and the DI wiring routes through it.
+        var flat = new FakeDictionaryService("dpd", "en");   // a stray "dpd" flat dir alongside "en"
+        var registry = DictionarySourceFactory.Build(flat, new SqliteLemmaProvider(_dpdPath), Path.Combine(_dir, "no-dppn.db"));
+
+        var dpd = registry.ById("dpd");
+        Assert.IsType<DpdDictionarySource>(dpd);             // the real composed DPD, not the flat dir
+        Assert.Contains("en", registry.Available.Select(s => s.Id));   // the genuine flat language survives
     }
 
     [Fact]
@@ -167,6 +203,16 @@ public sealed class DictionaryRegistryTests : IDisposable
     }
 
     // ---- fixtures ----
+
+    private sealed class FakeDictionaryService : CST.Avalonia.Services.IDictionaryService
+    {
+        private readonly string[] _langs;
+        public FakeDictionaryService(params string[] langs) => _langs = langs;
+        public IReadOnlyList<string> AvailableLanguages => _langs;
+        public DictionarySourceInfo? SourceFor(string language) => null;
+        public Task<IReadOnlyList<CST.Avalonia.Models.DictionaryWord>> LookupAsync(string language, string query, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<CST.Avalonia.Models.DictionaryWord>>(Array.Empty<CST.Avalonia.Models.DictionaryWord>());
+    }
 
     private sealed class FakeSource : IDictionarySource
     {

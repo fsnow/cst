@@ -23,19 +23,32 @@ namespace CST.Lexicon
 
         public int Count => _entries.Length;
 
+        // Pooling=false: a pooled read-only handle would block the delivery layer from replacing the lexicon
+        // file (File.Move/Delete) on Windows. Open-once/close-once — pooling buys nothing. (fable HIGH-1)
+        private static SqliteConnection OpenConn(string dbPath)
+        {
+            var csb = new SqliteConnectionStringBuilder
+            { DataSource = dbPath, Mode = SqliteOpenMode.ReadOnly, Pooling = false };
+            var conn = new SqliteConnection(csb.ToString());
+            conn.Open();
+            return conn;
+        }
+
+        /// <summary>
+        /// Read ONLY the <c>meta</c> table (source id, attribution, version stamps) — cheap, no entry load. Lets
+        /// a caller show a source's identity/attribution without pulling its (possibly large) entry set into
+        /// memory. Throws for a missing/malformed/too-new file, same as <see cref="Open"/>.
+        /// </summary>
+        public static LexiconMeta OpenMeta(string dbPath)
+        {
+            using var conn = OpenConn(dbPath);
+            return ReadMeta(conn);
+        }
+
         /// <summary>Open a lexicon file, or throw if it is missing/malformed/too new for this schema.</summary>
         public static LexiconReader Open(string dbPath)
         {
-            // Pooling=false: a pooled read-only handle would block the delivery layer from replacing the lexicon
-            // file (File.Move/Delete) on Windows. Open-once/close-once — pooling buys nothing. (fable HIGH-1)
-            var csb = new SqliteConnectionStringBuilder
-            {
-                DataSource = dbPath,
-                Mode = SqliteOpenMode.ReadOnly,
-                Pooling = false
-            };
-            using var conn = new SqliteConnection(csb.ToString());
-            conn.Open();
+            using var conn = OpenConn(dbPath);
 
             var meta = ReadMeta(conn);
 
