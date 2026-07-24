@@ -621,6 +621,11 @@ public partial class App : Application
     
     private async Task InitializeFromLoadedState(ApplicationState state)
     {
+        // #91: capture the saved active left-tool id NOW, before the window is shown/interactive, so a user
+        // clicking a tool tab during startup can't overwrite Current.ActiveLeftToolId before we restore it
+        // (state IS Current). Applied on the UI thread after the window state restore below.
+        var savedActiveLeftToolId = state.ActiveLeftToolId;
+
         // Initialize script service with loaded script preference
         var scriptService = ServiceProvider?.GetRequiredService<IScriptService>();
         if (scriptService != null)
@@ -657,6 +662,12 @@ public partial class App : Application
             desktop.MainWindow is SimpleTabbedWindow mainWindow)
         {
             await Dispatcher.UIThread.InvokeAsync(() => mainWindow.RestoreWindowState());
+            // #91: restore which left-tool tab (Select a Book / Search / Dictionary) was active at last close.
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (mainWindow.DataContext is LayoutViewModel layoutViewModel)
+                    layoutViewModel.Factory.RestoreActiveLeftTool(savedActiveLeftToolId);
+            });
         }
         
         // Restore book windows if any exist
