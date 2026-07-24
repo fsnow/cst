@@ -1200,38 +1200,7 @@ namespace CST.Avalonia.Services
                 Log.Error(ex, "*** Error in SetEqualProportions ***");
             }
         }
-        
-        /// <summary>
-        /// Find the parent dock of a given dockable
-        /// </summary>
-        private IDock? FindParentDock(IDockable target)
-        {
-            if (_context is not RootDock rootDock)
-                return null;
-                
-            return FindParentDockRecursive(rootDock, target);
-        }
-        
-        private IDock? FindParentDockRecursive(IDock dock, IDockable target)
-        {
-            if (dock.VisibleDockables?.Contains(target) == true)
-            {
-                return dock;
-            }
-            
-            if (dock.VisibleDockables != null)
-            {
-                foreach (var child in dock.VisibleDockables.OfType<IDock>())
-                {
-                    var found = FindParentDockRecursive(child, target);
-                    if (found != null)
-                        return found;
-                }
-            }
-            
-            return null;
-        }
-        
+
         /// <summary>
         /// Replace a child dockable in a parent dock
         /// </summary>
