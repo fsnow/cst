@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -85,17 +84,6 @@ public partial class BookDisplayView : UserControl
 
     // Cache the last successfully captured anchor for shutdown save
 
-    // Timer-based drag monitoring fields
-    private System.Timers.Timer? _dragMonitoringTimer;
-    private DateTime _lastPointerPressedTime = DateTime.MinValue;
-    private DateTime _webViewHiddenTime = DateTime.MinValue;
-    private Point _lastPointerPressedPosition;
-    private bool _isDragInProgress = false;
-    private bool _isPointerPressed = false;
-    private const double DRAG_THRESHOLD = 5.0; // pixels
-    private const int DRAG_TIMER_INTERVAL = 50; // milliseconds
-    private const int MIN_WEBVIEW_HIDE_DURATION = 500; // milliseconds - minimum time WebView stays hidden
-    private const int DRAG_TIME_THRESHOLD = 150; // milliseconds - wait before treating pointer movement as drag (filters out tab clicks)
 
     // Window context tracking for CEF handle invalidation detection
     private Window? _currentWindow = null;
@@ -337,10 +325,6 @@ public partial class BookDisplayView : UserControl
         // recycled view whose ViewModel already has TotalHits set (no fresh PropertyChanged). (#196)
         UpdateHitCounterWidth();
         SetupCSharpScrollTracking();
-
-        // Monitor drag operations to temporarily hide WebView for drop indicators
-        _logger.Information("Calling SetupDragMonitoring from OnLoaded");
-        SetupDragMonitoring();
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -3055,225 +3039,6 @@ public partial class BookDisplayView : UserControl
             _resizeSettleTimer = null;
             _resizeInProgress = false;
             _resizeRestoreToken = null;
-        }
-
-        if (_dragMonitoringTimer != null)
-        {
-            _dragMonitoringTimer.Stop();
-            _dragMonitoringTimer.Dispose();
-            _dragMonitoringTimer = null;
-            _logger.Debug("Disposed drag monitoring timer");
-        }
-    }
-
-    private void SetupDragMonitoring()
-    {
-        _logger.Information("Drag monitoring disabled in BookDisplayView - SimpleTabbedWindow handles all drag detection");
-        // BookDisplayView's local drag monitoring is DISABLED because:
-        // 1. SimpleTabbedWindow already has comprehensive drag detection for ALL windows
-        // 2. Duplicate monitoring causes CEF crashes when WebViews are hidden/shown during tab switches
-        // 3. ControlRecycling + repeated WebView hide/show operations invalidate CEF native handles
-        // 4. The crash: AvnNativeControlHostTopLevelAttachment::InitializeWithChildHandle null pointer dereference
-    }
-
-    private void OnDragMonitoringTimer(object? sender, System.Timers.ElapsedEventArgs e)
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            var now = DateTime.Now;
-            
-            // Check if a drag operation might be in progress
-            if (_isPointerPressed && !_isDragInProgress)
-            {
-                var timeSincePress = now - _lastPointerPressedTime;
-                if (timeSincePress.TotalMilliseconds > 200) // Drag threshold time
-                {
-                    _logger.Information("*** TIMER DETECTED POTENTIAL DRAG - HIDING WebView ***");
-                    _isDragInProgress = true;
-                    HideWebViewForDrag();
-                }
-            }
-            
-            // If drag ended, restore WebView (but only after minimum hide duration)
-            if (!_isPointerPressed && _isDragInProgress)
-            {
-                var timeSinceHidden = now - _webViewHiddenTime;
-                if (timeSinceHidden.TotalMilliseconds >= MIN_WEBVIEW_HIDE_DURATION)
-                {
-                    _logger.Information("*** TIMER DETECTED DRAG END - RESTORING WebView (hidden for {HideDuration}ms) ***", timeSinceHidden.TotalMilliseconds);
-                    _isDragInProgress = false;
-                    RestoreWebViewAfterDrag();
-                }
-                else
-                {
-                    _logger.Debug("*** Drag ended but WebView hidden for only {HideDuration}ms - waiting for minimum {MinDuration}ms ***", 
-                        timeSinceHidden.TotalMilliseconds, MIN_WEBVIEW_HIDE_DURATION);
-                }
-            }
-            
-            // Fallback: If WebView has been hidden for too long (>10 seconds), restore it
-            if (_isDragInProgress)
-            {
-                var timeSinceDragStart = now - _lastPointerPressedTime;
-                if (timeSinceDragStart.TotalMilliseconds > 10000) // 10 second timeout
-                {
-                    _logger.Information("*** FALLBACK TIMEOUT - RESTORING WebView after 10 seconds ***");
-                    _isDragInProgress = false;
-                    _isPointerPressed = false;
-                    RestoreWebViewAfterDrag();
-                }
-            }
-        });
-    }
-
-    private void HideWebViewForDrag()
-    {
-        _logger.Information("Hiding all WebViews across all windows to allow dock drop indicators");
-        _webViewHiddenTime = DateTime.Now;
-        
-        // Hide WebViews in all application windows for cross-window drag support
-        HideAllWebViewsInAllWindows();
-    }
-    
-    private void HideAllWebViewsInWindow(Window window)
-    {
-        var webViews = window.GetVisualDescendants().OfType<WebViewControl.WebView>();
-        foreach (var webView in webViews)
-        {
-            if (webView.IsVisible)
-            {
-                _logger.Information("Hiding WebView for drag operation");
-                webView.IsVisible = false;
-                webView.IsHitTestVisible = false;
-            }
-        }
-    }
-
-    private void RestoreWebViewAfterDrag()
-    {
-        _logger.Information("Restoring all WebViews across all windows after drag operation");
-        
-        // Restore WebViews in all application windows for cross-window drag support
-        RestoreAllWebViewsInAllWindows();
-    }
-    
-    private void HideAllWebViewsInAllWindows()
-    {
-        try
-        {
-            // Get all application windows
-            var app = Application.Current;
-            if (app?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                foreach (var window in desktop.Windows)
-                {
-                    HideAllWebViewsInWindow(window);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning(ex, "Error hiding WebViews across all windows");
-            // Fallback to hiding just current WebView
-            if (_webView != null && _webView.IsVisible)
-            {
-                _logger.Information("Fallback: Hiding only current WebView");
-                _webView.IsVisible = false;
-                _webView.IsHitTestVisible = false;
-            }
-        }
-    }
-    
-    private void RestoreAllWebViewsInAllWindows()
-    {
-        try
-        {
-            // Get all application windows
-            var app = Application.Current;
-            if (app?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                foreach (var window in desktop.Windows)
-                {
-                    RestoreAllWebViewsInWindow(window);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning(ex, "Error restoring WebViews across all windows");
-            // Fallback to restoring just current WebView
-            if (_webView != null && !_webView.IsVisible && _viewModel?.IsWebViewAvailable == true)
-            {
-                _logger.Information("Fallback: Restoring only current WebView");
-                _webView.IsVisible = true;
-                _webView.IsHitTestVisible = true;
-            }
-        }
-    }
-    
-    private void RestoreAllWebViewsInWindow(Window window)
-    {
-        var webViews = window.GetVisualDescendants().OfType<WebViewControl.WebView>();
-        foreach (var webView in webViews)
-        {
-            if (!webView.IsVisible)
-            {
-                _logger.Information("Restoring WebView after drag operation");
-                webView.IsVisible = true;
-                webView.IsHitTestVisible = true;
-            }
-        }
-    }
-
-    private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        _isPointerPressed = true;
-        _lastPointerPressedTime = DateTime.Now;
-        _lastPointerPressedPosition = e.GetPosition(this);
-        _logger.Debug("Pointer pressed - monitoring for potential drag");
-    }
-
-    private void OnWindowPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        _isPointerPressed = false;
-        _logger.Debug("Pointer released - ending drag monitoring");
-        
-        // Ensure WebView is restored when pointer is released
-        if (_isDragInProgress)
-        {
-            var timeSinceHidden = DateTime.Now - _webViewHiddenTime;
-            _logger.Information("*** POINTER RELEASED - RESTORING WebView (hidden for {HideDuration}ms) ***", timeSinceHidden.TotalMilliseconds);
-            _isDragInProgress = false;
-            RestoreWebViewAfterDrag();
-        }
-    }
-
-    private void OnWindowPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (_isPointerPressed && !_isDragInProgress)
-        {
-            // Check if pointer has been pressed long enough to be a drag (not just a tab click)
-            var timeSincePress = DateTime.Now - _lastPointerPressedTime;
-            if (timeSincePress.TotalMilliseconds < DRAG_TIME_THRESHOLD)
-            {
-                _logger.Debug("Pointer movement ignored - too soon after press ({Duration}ms < {Threshold}ms)",
-                    timeSincePress.TotalMilliseconds, DRAG_TIME_THRESHOLD);
-                return;
-            }
-
-            var currentPosition = e.GetPosition(this);
-            var distance = Math.Sqrt(
-                Math.Pow(currentPosition.X - _lastPointerPressedPosition.X, 2) +
-                Math.Pow(currentPosition.Y - _lastPointerPressedPosition.Y, 2)
-            );
-
-            if (distance > DRAG_THRESHOLD)
-            {
-                _logger.Information("*** POINTER MOVEMENT DETECTED DRAG - HIDING WebView (after {Duration}ms) ***",
-                    timeSincePress.TotalMilliseconds);
-                _isDragInProgress = true;
-                HideWebViewForDrag();
-            }
         }
     }
 
