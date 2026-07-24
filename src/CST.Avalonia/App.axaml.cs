@@ -57,6 +57,11 @@ public partial class App : Application
     /// must be skipped. (DOCK-2)
     /// </summary>
     public static bool IsShuttingDown { get; private set; }
+    // Guards the ShutdownRequested handler against re-entrancy: desktop.Shutdown() re-raises ShutdownRequested,
+    // so without this the handler would cancel the very shutdown it just initiated (leaving the app alive with
+    // its menu bar) and re-run the save against a disposed ServiceProvider. 0 = not started, 1 = cleanup
+    // running, 2 = cleanup done (let shutdown proceed).
+    private int _shutdownState;
     private bool _hasRestoredInitialBooks = false;
 
     // Menu items for updating checkmarks across all windows
@@ -289,34 +294,58 @@ public partial class App : Application
                 desktop.TryShutdown();
             };
 
-            // Handle application shutdown to save state
+            // Handle application shutdown to save state. desktop.Shutdown() below RE-RAISES ShutdownRequested,
+            // so this handler is re-entrant and must be guarded (_shutdownState), or it cancels the very
+            // shutdown it initiated — the "close the main window and the app (menu) stays alive" regression.
             desktop.ShutdownRequested += async (sender, args) =>
             {
+                // Cleanup already finished — this is the re-raise from our own desktop.Shutdown(); let it
+                // proceed (do NOT cancel, do NOT re-save against the disposed ServiceProvider).
+                if (_shutdownState == 2)
+                {
+                    Log.Information("SHUTDOWN: cleanup already complete — allowing shutdown to proceed");
+                    return;
+                }
+
+                // Cleanup is in flight from an earlier request (e.g. a second window closing). Cancel this one;
+                // the in-flight sequence will finish and exit the app.
+                if (_shutdownState == 1)
+                {
+                    args.Cancel = true;
+                    return;
+                }
+
+                _shutdownState = 1;
                 Log.Information("SHUTDOWN: ShutdownRequested event triggered");
 
                 // From here on, window Closing events are part of shutdown, not user actions. (DOCK-2)
                 IsShuttingDown = true;
 
-                // Cancel shutdown temporarily to allow async save to complete
+                // Cancel THIS shutdown so the async save/dispose can complete before the process exits.
                 args.Cancel = true;
-                
+
+                var cleanupFailed = false;
                 try
                 {
                     await SaveApplicationStateAsync();
-                    
+
                     // Dispose ServiceProvider to trigger disposal of all singleton services
                     ServiceProvider?.Dispose();
-                    
+
                     Log.Information("SHUTDOWN: All cleanup completed, proceeding with shutdown");
-                    
-                    // Now allow shutdown to proceed
-                    desktop.Shutdown(0);
                 }
                 catch (Exception ex)
                 {
                     Log.Error(ex, "SHUTDOWN: Error during shutdown sequence");
-                    // Force shutdown even if save failed
-                    desktop.Shutdown(1);
+                    cleanupFailed = true;
+                }
+                finally
+                {
+                    // Cleanup done (or failed) — re-request shutdown; the re-raise hits the _shutdownState == 2
+                    // guard above and is allowed through, so the app actually exits exactly once. (On macOS the
+                    // OS re-raise ultimately drives exit code 0; the non-zero code still applies on Win/Linux.)
+                    _shutdownState = 2;
+                    desktop.Shutdown(cleanupFailed ? 1 : 0);
                 }
             };
         }
