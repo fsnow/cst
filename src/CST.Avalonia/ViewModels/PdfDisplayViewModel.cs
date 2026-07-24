@@ -226,6 +226,7 @@ namespace CST.Avalonia.ViewModels
                 Sources.SourceType.Burmese1957 => "Burmese 1957",
                 Sources.SourceType.Burmese2010 => "Burmese 2010",
                 Sources.SourceType.VriPrint => "VRI Print",
+                Sources.SourceType.BurmeseAnya => "Source PDF",
                 _ => sourceType.ToString()
             };
         }

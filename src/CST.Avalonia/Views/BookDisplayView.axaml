@@ -157,17 +157,23 @@
                     </ToggleButton>
                 </StackPanel>
 
-                <!-- View Source PDF buttons -->
-                <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
-                    <Button Command="{Binding ShowSource1957Command}"
-                            ToolTip.Tip="View Burmese 1957 edition PDF (Cmd+E)" Margin="2">
-                        <TextBlock Text="1957"/>
-                    </Button>
-                    <Button Command="{Binding ShowSource2010Command}"
-                            ToolTip.Tip="View Burmese 2010 edition PDF (Shift+Cmd+E)" Margin="2">
-                        <TextBlock Text="2010"/>
-                    </Button>
-                </StackPanel>
+                <!-- View Source PDF buttons: one per source the book actually has (1957 / 2010 / PDF). -->
+                <ItemsControl ItemsSource="{Binding AvailableSources}" Margin="5" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding $parent[ItemsControl].((vm:BookDisplayViewModel)DataContext).ShowSourceCommand}"
+                                    CommandParameter="{Binding SourceType}"
+                                    ToolTip.Tip="View source PDF" Margin="2">
+                                <TextBlock Text="{Binding Label}"/>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
             </WrapPanel>
         </DockPanel>

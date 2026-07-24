@@ -45,6 +45,15 @@ public class Sources
 	private static string Burmese1957Tika => $"{Burmese1957Base}/{Tika1957}";
 	private static string Burmese2010Mula => $"{Burmese2010Base}/{Mula2010}";
 	private static string BurmeseAnyaVisuddhimagga => $"{BurmeseAnyaBase}/{Anya_Visuddhimagga}";
+	// Anya groups 2–9 (folder names copied byte-for-byte from SharePoint). (#418)
+	private static string BurmeseAnyaSangayana => $"{BurmeseAnyaBase}/2. Saṅgāyana-puccha vissajjanā";
+	private static string BurmeseAnyaLedi => $"{BurmeseAnyaBase}/3. Leḍī sayāḍo gantha-saṅgaho";
+	private static string BurmeseAnyaBuddhaVandana => $"{BurmeseAnyaBase}/4. Buddha-vandanā gantha-saṅgaho";
+	private static string BurmeseAnyaVamsa => $"{BurmeseAnyaBase}/5. Vaṃsa-gantha-saṅgaho";
+	private static string BurmeseAnyaByakarana => $"{BurmeseAnyaBase}/6. Byākaraṇa gantha-saṅgaho";
+	private static string BurmeseAnyaNiti => $"{BurmeseAnyaBase}/7. Nīti-gantha-saṅgaho";
+	private static string BurmeseAnyaPakinnaka => $"{BurmeseAnyaBase}/8. Pakiṇṇaka-gantha-saṅgaho";
+	private static string BurmeseAnyaSihala => $"{BurmeseAnyaBase}/9. Sihaḷa-gantha-saṅgaho";
 
 	// ===========================================
 	// 1957 Edition PDF filenames
@@ -555,11 +564,70 @@ public class Sources
 		// --- Visuddhimagga ---
 		// e0101n and e0102n are Mula (root text), e0103n and e0104n are Mahatika (sub-commentary)
 		// e0105n is the Nidanakatha (introduction/origin story)
-		addSource("e0101n.mul.xml", SourceType.Burmese1957, 7, $"{BurmeseAnyaVisuddhimagga}/{Anya_Visuddhimagga1}");
-		addSource("e0102n.mul.xml", SourceType.Burmese1957, 6, $"{BurmeseAnyaVisuddhimagga}/{Anya_Visuddhimagga2}");
-		addSource("e0103n.att.xml", SourceType.Burmese1957, 8, $"{BurmeseAnyaVisuddhimagga}/{Anya_VisuddhimaggaMahatika1}");
-		addSource("e0104n.att.xml", SourceType.Burmese1957, 8, $"{BurmeseAnyaVisuddhimagga}/{Anya_VisuddhimaggaMahatika2}");
-		addSource("e0105n.nrf.xml", SourceType.Burmese1957, 2, $"{BurmeseAnyaVisuddhimagga}/{Anya_VisuddhimaggaNidanakatha}");
+		addSource("e0101n.mul.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaVisuddhimagga}/{Anya_Visuddhimagga1}");
+		addSource("e0102n.mul.xml", SourceType.BurmeseAnya, 6, $"{BurmeseAnyaVisuddhimagga}/{Anya_Visuddhimagga2}");
+		addSource("e0103n.att.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaVisuddhimagga}/{Anya_VisuddhimaggaMahatika1}");
+		addSource("e0104n.att.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaVisuddhimagga}/{Anya_VisuddhimaggaMahatika2}");
+		addSource("e0105n.nrf.xml", SourceType.BurmeseAnya, 2, $"{BurmeseAnyaVisuddhimagga}/{Anya_VisuddhimaggaNidanakatha}");
+
+		// --- Anya groups 2–9 (#418) ---
+		// PATHS are mapped here; page offsets are placeholder 1 pending per-PDF inspection (a separate step).
+		// Books whose text has no source PDF in the Anya set are intentionally left unmapped (no button).
+
+		// Saṅgāyana Pucchā-Vissajjanā. Multi-volume texts map to Vol 1 for now (Vol 2 → #76). e0907 has no PDF.
+		addSource("e0901n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/1. Dīghanikāya (Pu-Vi).pdf");
+		addSource("e0902n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/2. Majjhimanikāya (Pu-Vi)_Vol 1.pdf");
+		addSource("e0903n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/3. Saṃyuttanikāya (Pu-Vi)_Vol 1.pdf");
+		addSource("e0904n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/4. Aṅguttaranikāya (Pu-Vi)_Vol 1.pdf");
+		addSource("e0905n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/5. Vinayapiṭaka (Pu-Vi)_Vol 1.pdf");
+		addSource("e0906n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/6. Abhidhammapiṭaka (Pu-Vi).pdf");
+
+		// Leḍī Sayāḍo. e0301 (Paramatthadīpanī) has no PDF.
+		addSource("e0201n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaLedi}/1. Niruttidīpanī.pdf");
+		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf");
+		addSource("e0501n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaLedi}/4. Paṭṭhānuddesa dīpanīpāṭha_printed.pdf");
+
+		// Buddha-vandanā. e0603–e0608 have no PDF.
+		addSource("e0601n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaBuddhaVandana}/1. Namakkāraṭīkā.pdf");
+		addSource("e0602n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaBuddhaVandana}/2. Mahāpaṇāmapāṭha.pdf");
+
+		// Vaṃsa. e0701 (Cūḷagandhavaṃsa) has no PDF. e0703 (Mahāvaṃsa) is multi-vol → Vol 1.
+		addSource("e0702n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaVamsa}/3. Sāsanavaṃsappadīpikā.pdf");
+		addSource("e0703n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaVamsa}/2. Mahāvaṃsa (Vol-1).pdf");
+
+		// Byākaraṇa (grammar). e0808/e0809/e0811 share one combined PDF (offsets to distinguish → deferred).
+		// e0812 (Subodhālaṅkāraṭīkā) has no PDF.
+		addSource("e0801n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/2. Moggallānabyākaraṇaṃ.pdf");
+		addSource("e0802n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/1. Kaccāyanabyākaraṇaṃ_1990.pdf");
+		addSource("e0803n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/3. Saddanītippakaraṇaṃ (padamālā).pdf");
+		addSource("e0804n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/4. Saddanītippakaraṇaṃ (dhātumālā).pdf");
+		addSource("e0805n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/6. Padarūpasiddhi.pdf");
+		addSource("e0806n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/7. Moggallānapañcikā.pdf");
+		addSource("e0807n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/8. Payogasiddhipāṭha.pdf");
+		addSource("e0808n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
+		addSource("e0809n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
+		addSource("e0810n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/11. Abhidhānappadīpikāṭīkā.pdf");
+		addSource("e0811n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
+		addSource("e0813n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/14. Bālāvatāra gaṇṭhipadatthavinicchayasāra.pdf");
+
+		// Nīti. e1002 (Nītimañjarī), e1005 (Lokanīti), e1006 (Suttantanīti) have no PDF.
+		addSource("e1001n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/6. Kavidappaṇanīti.pdf");
+		addSource("e1003n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/5. Dhammanīti.pdf");
+		addSource("e1004n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/4. Mahārahanīti.pdf");
+		addSource("e1007n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/3. Sūrassatinīti.pdf");
+		addSource("e1008n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/10. Cāṇakyanīti.pdf");
+		addSource("e1009n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/8. Naradakkhadīpanī.pdf");
+		addSource("e1010n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaNiti}/9. Caturārakkhadīpanī and Kāyapaccavekkhana.pdf");
+
+		// Pakiṇṇaka. e1102 (Sīmavisodhanī) has no PDF.
+		addSource("e1101n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaPakinnaka}/1. Rasavāhinī.pdf");
+		addSource("e1103n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaPakinnaka}/3. Vessantaragīti.pdf");
+
+		// Sīhaḷa. e1203 (Dāṭhāvaṃsa) + e1205 (Dhātuvaṃsa) share one combined PDF. The other 11 texts have no PDF.
+		addSource("e1201n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/1. Moggallāna vuttivivaraṇapañcikā (with Moggallānabyākaraṇaṃ).pdf");
+		addSource("e1203n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf");
+		addSource("e1205n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/3. and 5. Dāṭhāvaṃsa_Dhātuvaṃsa.pdf");
+		addSource("e1209n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSihala}/9. Telakaṭāhagāthā Pali Burmese English.pdf");
 	}
 
 	private void addSource(string filename, SourceType sourceType, int pageStart, string path)
@@ -583,8 +651,41 @@ public class Sources
 	{
 		Burmese1957,
 		Burmese2010,
-		VriPrint
+		VriPrint,
+		// Anya (extra-canonical) texts have a single Burmese source set that is NOT split into dated
+		// editions (see _Source/01 - Burmese-CST/Anya, a sibling of the "1957 edition" / "2010 edition"
+		// folders). They surface as a single "PDF" button rather than "1957" / "2010". (#418)
+		BurmeseAnya
 	}
+
+	// Fixed display order for a book's source buttons (dated editions first, then the undated Anya PDF).
+	private static readonly SourceType[] sourceOrder =
+		{ SourceType.Burmese1957, SourceType.Burmese2010, SourceType.VriPrint, SourceType.BurmeseAnya };
+
+	/// <summary>
+	/// The source editions available for a book, in display order. Empty if the book has no source PDF.
+	/// The UI renders one button per entry (labelled via <see cref="GetSourceLabel"/>).
+	/// </summary>
+	public IReadOnlyList<SourceType> GetAvailableSources(string filename)
+	{
+		if (!sourcesMap.TryGetValue(filename, out var d))
+			return System.Array.Empty<SourceType>();
+		var result = new List<SourceType>();
+		foreach (var st in sourceOrder)
+			if (d.ContainsKey(st))
+				result.Add(st);
+		return result;
+	}
+
+	/// <summary>Short toolbar-button label for a source type ("1957" / "2010" / "PDF").</summary>
+	public static string GetSourceLabel(SourceType sourceType) => sourceType switch
+	{
+		SourceType.Burmese1957 => "1957",
+		SourceType.Burmese2010 => "2010",
+		SourceType.VriPrint => "VRI",
+		SourceType.BurmeseAnya => "PDF",
+		_ => sourceType.ToString()
+	};
 
 	public class Source
 	{
