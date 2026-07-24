@@ -2530,6 +2530,98 @@ public partial class BookDisplayView : UserControl
         }
     }
 
+    /// <summary>
+    /// #112 native-print probe: open the platform print dialog for the whole book via window.print(). Uses
+    /// ExecuteScript (fire-and-forget) — EvaluateScript returns null in this CEF build, and printing needs no
+    /// return value, so this rides the same JS path the rest of the view uses. On macOS this routes into
+    /// Chromium's platform print; whether that dialog is usable in this CEF-120 build is exactly what this
+    /// probe validates. If inadequate, the fallback is CefBrowserHost.PrintToPdf (#112).
+    /// </summary>
+    public void Print()
+    {
+        if (_webView == null) return;
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(Print);
+            return;
+        }
+        try
+        {
+            _logger.Information("Print (Cmd+P): invoking window.print() on the book WebView");
+            // Defensively drop any stranded print-selection isolation (if a prior selection print's afterprint
+            // cleanup never fired) so a whole-book print can't silently print only the old selection. (#112, Fable)
+            _webView.ExecuteScript("document.body.classList.remove('cst-printing-selection'); window.print();");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Print failed | {Details}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// #112 print selection: print only the current selection. Selection-isolation pre-step (dialog-agnostic,
+    /// works with the native window.print() route): clone the selection into a dedicated print container, add
+    /// a body class that an <c>@media print</c> rule uses to hide everything else, print, then clean up on
+    /// afterprint. Falls back to whole-book print when there is no selection. (Egret addendum)
+    /// </summary>
+    public void PrintSelection()
+    {
+        if (_webView == null) return;
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(PrintSelection);
+            return;
+        }
+        try
+        {
+            _logger.Information("Print Selection (Shift+Cmd+P): isolating the selection and invoking window.print()");
+            _webView.ExecuteScript(PrintSelectionScript);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("PrintSelection failed | {Details}", ex.Message);
+        }
+    }
+
+    // Isolates the current selection for printing: no/empty selection falls back to a whole-book print;
+    // otherwise clone the selected range(s) into #cst-print-selection and let the injected @media print rule
+    // hide every other direct child of body. Cleaned up on afterprint so the on-screen view is untouched.
+    private const string PrintSelectionScript = @"
+        (function() {
+            // Start from a clean slate in case a prior run's afterprint cleanup never fired.
+            document.body.classList.remove('cst-printing-selection');
+            var sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { window.print(); return; }
+            if (!document.getElementById('cst-print-selection-style')) {
+                var style = document.createElement('style');
+                style.id = 'cst-print-selection-style';
+                style.textContent =
+                    // Hidden on screen at all times (so the cloned selection never shows as a duplicate in the
+                    // live view, even if afterprint cleanup never fires); shown, and everything else hidden,
+                    // only in print media.
+                    '#cst-print-selection{display:none;}'
+                    + ' @media print { body.cst-printing-selection > *:not(#cst-print-selection){display:none !important;}'
+                    + ' #cst-print-selection{display:block !important;} }';
+                document.head.appendChild(style);
+            }
+            var container = document.getElementById('cst-print-selection');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'cst-print-selection';
+                document.body.appendChild(container);
+            }
+            container.innerHTML = '';
+            for (var i = 0; i < sel.rangeCount; i++) { container.appendChild(sel.getRangeAt(i).cloneContents()); }
+            document.body.classList.add('cst-printing-selection');
+            var cleanup = function() {
+                document.body.classList.remove('cst-printing-selection');
+                if (container && container.parentNode) { container.parentNode.removeChild(container); }
+                window.removeEventListener('afterprint', cleanup);
+            };
+            window.addEventListener('afterprint', cleanup);
+            window.print();
+        })();";
+
     // #224: apply the per-book search-term highlight toggle. Routed through cstSearchHighlights because it
     // owns the inline blue/red colors on the .hit spans (which override the CSS rule). ON re-applies the
     // blue/red styling; OFF clears it so matched words show as normal text (CST4's "remove highlight, keep

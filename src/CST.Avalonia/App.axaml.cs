@@ -1374,10 +1374,20 @@ public partial class App : Application
             var selectBookMenuItem = new NativeMenuItem { Header = "Select a Book", Gesture = KeyGesture.Parse("Cmd+O") };
             selectBookMenuItem.Click += (s, e) => SimpleTabbedWindow.RevealSelectBookPanel();
 
+            // #112: Print (Cmd+P) and Print Selection (Shift+Cmd+P) the floated book — same native
+            // window.print() path as the main window.
+            var printItem = new NativeMenuItem { Header = "Print…", Gesture = KeyGesture.Parse("Cmd+P") };
+            printItem.Click += (s, e) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.Print();
+            var printSelectionItem = new NativeMenuItem { Header = "Print Selection…", Gesture = KeyGesture.Parse("Cmd+Shift+P") };
+            printSelectionItem.Click += (s, e) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.PrintSelection();
+
             var fileMenu = new NativeMenu();
             fileMenu.Add(selectBookMenuItem);
             // #44: this window's "Open Recent" submenu (populated by RebuildRecentMenus below).
             fileMenu.Add(new NativeMenuItem { Header = "Open Recent", Menu = new NativeMenu() });
+            fileMenu.Add(new NativeMenuItemSeparator());
+            fileMenu.Add(printItem);
+            fileMenu.Add(printSelectionItem);
             fileMenu.Add(new NativeMenuItemSeparator());
             fileMenu.Add(closeTabItem);
 
