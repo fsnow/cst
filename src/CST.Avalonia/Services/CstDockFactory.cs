@@ -75,6 +75,9 @@ namespace CST.Avalonia.Services
                 CanDrag = true,
                 CanDrop = true
             };
+            // #91: persist the active tool tab on switch. Attached AFTER the ActiveDockable=openBookTool
+            // initializer above, so the startup default doesn't spuriously overwrite the saved id.
+            AttachLeftToolDockMonitor(leftToolDock);
 
             // Wrap ToolDock in ProportionalDock to enable docking indicators
             var leftTools = new ProportionalDock
@@ -1370,6 +1373,45 @@ namespace CST.Avalonia.Services
         /// their windows closed (failure mode #4). This is what lets View → Show Search / Select-a-Book
         /// always bring panels back instead of no-op'ing on a corrupted layout.
         /// </summary>
+        // #91: persist which left-tool tab is active on every switch, so it can be restored next launch.
+        // Shared by CreateLayout and EnsureLeftToolDock's recreate path so persistence survives dock recreation
+        // (failure mode #4). Resolves the state service and dereferences Current at FIRE time — never captures
+        // the MainWindow/state object (they get replaced). MarkDirty routes through the timer/shutdown save.
+        private void AttachLeftToolDockMonitor(ToolDock leftToolDock)
+        {
+            if (leftToolDock is not System.ComponentModel.INotifyPropertyChanged npc) return;
+            npc.PropertyChanged += (sender, e) =>
+            {
+                if (e.PropertyName != nameof(leftToolDock.ActiveDockable)) return;
+                var id = leftToolDock.ActiveDockable?.Id;
+                if (string.IsNullOrEmpty(id)) return;
+                var stateService = App.ServiceProvider?.GetService<IApplicationStateService>();
+                if (stateService?.Current != null)
+                {
+                    stateService.Current.ActiveLeftToolId = id;
+                    stateService.MarkDirty();
+                }
+            };
+        }
+
+        // #91: restore the left-tool tab that was active at last close. Direct ActiveDockable assignment
+        // (matching the precedent elsewhere in this factory) rather than SetActiveDockable — the setter still
+        // routes focus via InitActiveDockable but skips the OnDockableActivated event, and this runs BEFORE
+        // RestoreBookWindowsAsync and the #56 startup focus-return, so a restored book document still ends up
+        // focused (with no books, the tool keeps focus — desirable). Empty/absent/unknown id → leave the
+        // default (Select a Book). Must run on the UI thread.
+        internal void RestoreActiveLeftTool(string? toolId)
+        {
+            if (string.IsNullOrEmpty(toolId)) return;
+            var dock = EnsureLeftToolDock();
+            var tool = dock?.VisibleDockables?.FirstOrDefault(d => d.Id == toolId);
+            if (tool != null)
+            {
+                dock!.ActiveDockable = tool;
+                Log.Information("[#91] Restored active left-tool tab: {ToolId}", toolId);
+            }
+        }
+
         internal ToolDock? EnsureLeftToolDock()
         {
             // Reuse an existing LeftToolDock anywhere in the main layout (it may be nested after drags).
@@ -1397,6 +1439,9 @@ namespace CST.Avalonia.Services
                 VisibleDockables = CreateList<IDockable>(),
                 Factory = this
             };
+            // #91: the recreated dock is born empty (ActiveDockable null); attach the monitor now so the tools
+            // re-added via ShowToolPanel record their active-tab switches too.
+            AttachLeftToolDockMonitor(leftToolDock);
             var leftTools = new ProportionalDock
             {
                 Id = "LeftTools",

@@ -23,6 +23,11 @@ public class ApplicationState
     // Main Window State
     public MainWindowState MainWindow { get; set; } = new();
 
+    /// <summary>Which left-tool tab was active at last close — "OpenBookTool" / "SearchTool" / "DictionaryTool"
+    /// (a dockable Id). Restored on startup so the tool dock reopens on the tab the user left it on. Empty until
+    /// first set; empty restores the default (Select a Book). (#91)</summary>
+    public string ActiveLeftToolId { get; set; } = string.Empty;
+
     // Open Book Dialog State  
     public OpenBookDialogState OpenBookDialog { get; set; } = new();
 

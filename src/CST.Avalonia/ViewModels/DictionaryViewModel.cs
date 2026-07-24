@@ -126,6 +126,18 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             })
             .DisposeWith(_disposables);
 
+        // Remember the last looked-up word across sessions (#91), so restoring the Dictionary tab also
+        // restores its content — the parallel to the Search pane (#87). Skip(1) ignores the construction-time
+        // empty value; MarkDirty defers the write to the timer/shutdown save (STATE-2).
+        this.WhenAnyValue(x => x.SearchText)
+            .Skip(1)
+            .Subscribe(text =>
+            {
+                _stateService.Current.DictionaryDialog.UserText = text ?? string.Empty;
+                _stateService.MarkDirty();
+            })
+            .DisposeWith(_disposables);
+
         // Re-render headwords + meaning when the global script or font settings change (mirrors the
         // Search tool). Unsubscribed in Dispose. (DICT-2)
         _scriptChangedHandler = script => Dispatcher.UIThread.Post(() =>
@@ -199,6 +211,12 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             ?? Sources.FirstOrDefault();
         if (restored != null)
             SelectedSource = restored;
+
+        // #91: restore the last looked-up word too (the parallel to the Search pane's #87 term restore).
+        // Setting SearchText triggers the throttled lookup, so the last definition reappears on launch.
+        var savedText = _stateService.Current.DictionaryDialog.UserText;
+        if (!string.IsNullOrEmpty(savedText))
+            SearchText = savedText;
     }
 
     /// <summary>The enabled dictionary sources for the picker (shown by <c>DisplayName</c>), in the user's
