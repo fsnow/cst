@@ -211,8 +211,11 @@ namespace CST.Avalonia.ViewModels
             // automatically once the page is known. (#54)
             var canShowSource = this.WhenAnyValue(x => x.MyanmarPage,
                 page => !string.IsNullOrEmpty(page) && page != "*");
-            ShowSource1957Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese1957), canShowSource);
-            ShowSource2010Command = ReactiveCommand.Create(() => ShowSource(Sources.SourceType.Burmese2010), canShowSource);
+            ShowSourceCommand = ReactiveCommand.Create<Sources.SourceType>(ShowSource, canShowSource);
+
+            // Populate the source buttons from what this book actually has (empty → no buttons shown).
+            foreach (var st in Sources.Inst.GetAvailableSources(_book.FileName))
+                AvailableSources.Add(new SourceButton(st));
 
             // Subscribe to script changes - reload from source like CST4 does
             this.WhenAnyValue(x => x.BookScript)
@@ -339,8 +342,24 @@ namespace CST.Avalonia.ViewModels
         public ReactiveCommand<Unit, Unit> OpenTikaCommand { get; }
         public ReactiveCommand<Unit, Unit> CopyCommand { get; }
         public ReactiveCommand<Unit, Unit> SelectAllCommand { get; }
-        public ReactiveCommand<Unit, Unit> ShowSource1957Command { get; }
-        public ReactiveCommand<Unit, Unit> ShowSource2010Command { get; }
+        // View Source PDF: one command parameterised by source type, one button per source the book
+        // actually has. Canonical Mūla → "1957"/"2010"; Aṭṭhakathā/Ṭīkā → "1957" only (2010 is Mūla-only);
+        // Anya (extra-canonical) → a single "PDF". (#418)
+        public ReactiveCommand<Sources.SourceType, Unit> ShowSourceCommand { get; }
+
+        /// <summary>The source-PDF buttons to render for this book, in display order (may be empty).</summary>
+        public ObservableCollection<SourceButton> AvailableSources { get; } = new();
+
+        public sealed class SourceButton
+        {
+            public Sources.SourceType SourceType { get; }
+            public string Label { get; }
+            public SourceButton(Sources.SourceType sourceType)
+            {
+                SourceType = sourceType;
+                Label = Sources.GetSourceLabel(sourceType);
+            }
+        }
 
         public Script BookScript
         {
@@ -1434,9 +1453,19 @@ namespace CST.Avalonia.ViewModels
         private readonly List<Sources.SourceType> _pendingSourceRequests = new();
         private IDisposable? _pendingSourceSubscription;
 
-        public void RequestShowSource(bool source2010)
+        // secondary=false → the book's primary source (Cmd+E): "1957" for canonical, "PDF" for Anya.
+        // secondary=true  → its secondary source (Shift+Cmd+E): "2010" where present, else a no-op.
+        public void RequestShowSource(bool secondary)
         {
-            var sourceType = source2010 ? Sources.SourceType.Burmese2010 : Sources.SourceType.Burmese1957;
+            var sources = Sources.Inst.GetAvailableSources(_book.FileName);
+            var index = secondary ? 1 : 0;
+            if (index >= sources.Count)
+            {
+                _logger.Debug("View Source ({Which}) requested but the book has no such source",
+                    secondary ? "secondary" : "primary");
+                return;
+            }
+            var sourceType = sources[index];
             if (_myanmarPage != "*" && !string.IsNullOrEmpty(_myanmarPage))
             {
                 ShowSource(sourceType);
