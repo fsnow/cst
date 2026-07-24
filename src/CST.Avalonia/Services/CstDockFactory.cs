@@ -28,7 +28,7 @@ namespace CST.Avalonia.Services
 {
     public class CstDockFactory : Factory
     {
-        private object? _context;
+        internal object? _context;   // the root layout; internal so tests can seed a handcrafted main tree (#494)
         private readonly ILogger _logger;
 
         // Store the user's desired main dock proportions (LeftTools / MainDocumentDock)
@@ -761,14 +761,22 @@ namespace CST.Avalonia.Services
         public void CloseBook(string bookId)
         {
             var dockable = FindDockable(bookId);
-            if (dockable != null)
+            if (dockable == null)
             {
-                // Remove book window state before removing the document
-                RemoveBookWindowState(dockable.Id);
-
-                RemoveDocumentFromLayout(dockable);
-                _logger.Debug("Closed book: {BookId}", bookId);
+                _logger.Debug("CloseBook: no dockable found for {BookId}", bookId);
+                return;
             }
+            // Route through the real close path. CloseDockable removes by Owner (works whether the book is in the
+            // main OR a floating window), disposes the CEF View before its window closes, clears the book window
+            // state, and funnels the emptied-floating-window cleanup — none of which the old raw-remove path did.
+            // NOTE for a future caller (an API/MCP "close book"): this mutates the dock model, so it must run on
+            // the UI thread (which also makes the deferred empty-window close land after this returns). (#494)
+            CloseDockable(dockable);
+            if (FindDockable(bookId) != null)
+                // Tripwire: base.CloseDockable declined the removal (e.g. CanClose=false, or a null Owner). (#494)
+                _logger.Debug("CloseBook: {BookId} still present after CloseDockable (close declined)", bookId);
+            else
+                _logger.Debug("Closed book: {BookId}", bookId);
         }
 
         public WelcomeViewModel? GetWelcomeViewModel()
@@ -780,16 +788,13 @@ namespace CST.Avalonia.Services
 
         public void ShowWelcomeScreen()
         {
-            // Show the Welcome document tab as active
+            // Activate the Welcome doc within the dock that actually owns it, rather than assuming the main
+            // document dock — so it can never set ActiveDockable on a dock that doesn't contain it. (#494)
             var welcomeDoc = FindDockable("WelcomeDocument");
-            if (welcomeDoc != null)
+            if (welcomeDoc?.Owner is IDock ownerDock)
             {
-                var documentDock = FindDocumentDock();
-                if (documentDock != null)
-                {
-                    documentDock.ActiveDockable = welcomeDoc;
-                    _logger.Debug("Welcome screen activated");
-                }
+                ownerDock.ActiveDockable = welcomeDoc;
+                _logger.Debug("Welcome screen activated");
             }
         }
 
@@ -801,11 +806,17 @@ namespace CST.Avalonia.Services
         }
 
         // Generic dockable finder - works for ReactiveDocument/ReactiveTool as well as Document/Tool
+        // Search the main window's dock tree, then each floating window's — so close-by-id and lookups reach a
+        // book that has been floated out, not just the main window. Mirrors FindParentDock(IDock). (#494)
         private IDockable? FindDockable(string id)
         {
-            if (_context is RootDock rootDock && rootDock.VisibleDockables != null)
+            var roots = _context is IDock main
+                ? new[] { main }.Concat(GetFloatingLayouts())
+                : GetFloatingLayouts();
+            foreach (var root in roots)
             {
-                foreach (var dockable in rootDock.VisibleDockables)
+                if (root.VisibleDockables == null) continue;
+                foreach (var dockable in root.VisibleDockables)
                 {
                     var found = FindDockableRecursive(dockable, id);
                     if (found != null) return found;
@@ -813,6 +824,11 @@ namespace CST.Avalonia.Services
             }
             return null;
         }
+
+        // The floating windows' dock layouts. Overridable so tests can inject handcrafted layouts without a
+        // real CstHostWindow (which needs an Avalonia platform the headless test host lacks). (#494)
+        internal virtual IEnumerable<IDock> GetFloatingLayouts() =>
+            HostWindows.OfType<CstHostWindow>().Select(w => w.Layout).OfType<IDock>();
 
         private IDockable? FindDockableRecursive(IDockable dockable, string id)
         {
@@ -882,28 +898,6 @@ namespace CST.Avalonia.Services
             Log.Warning("*** WARNING: Could not find document dock to add book ***");
             _logger.Warning("Could not find document dock to add book");
             return false;
-        }
-        
-        private void RemoveDocumentFromLayout(IDockable dockable)
-        {
-            var documentDock = FindDocumentDock();
-            if (documentDock != null && documentDock.VisibleDockables != null)
-            {
-                Log.Debug("*** REMOVING DOCUMENT FROM LAYOUT: {DocumentId} ***", dockable.Id);
-                var countBefore = documentDock.VisibleDockables.Count;
-                documentDock.VisibleDockables.Remove(dockable);
-                var countAfter = documentDock.VisibleDockables.Count;
-                Log.Debug("*** DOCUMENT REMOVAL: Before={CountBefore}, After={CountAfter} ***", countBefore, countAfter);
-
-                // If this was the active document, activate another one
-                if (documentDock.ActiveDockable == dockable)
-                {
-                    // Find the Welcome document first, then fall back to last document
-                    var welcomeDoc = documentDock.VisibleDockables.FirstOrDefault(d => d.Id == "WelcomeDocument");
-                    documentDock.ActiveDockable = welcomeDoc ?? documentDock.VisibleDockables.LastOrDefault();
-                    Log.Debug("*** ACTIVATED NEW DOCUMENT: {NewActiveDocument} ***", documentDock.ActiveDockable?.Id ?? "null");
-                }
-            }
         }
         
         private DocumentDock? FindDocumentDock()
