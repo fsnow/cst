@@ -243,6 +243,25 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- Recent Books MRU (#44) -->
+                                <Border Classes="SettingGroup">
+                                    <StackPanel>
+                                        <TextBlock Text="Recent Books" Classes="SettingLabel"/>
+                                        <TextBlock Text="The File → Open Recent menu lists books you have recently opened. Set how many it remembers (0 turns the list off)."
+                                                  Classes="SettingDescription" TextWrapping="Wrap"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="10">
+                                            <TextBlock Text="Books to remember:" VerticalAlignment="Center"/>
+                                            <NumericUpDown Value="{Binding MaxRecentBooks}"
+                                                          Minimum="0" Maximum="50" Increment="1"
+                                                          FormatString="0" Width="120"/>
+                                            <Button Content="Clear List"
+                                                   Command="{Binding ClearRecentBooksCommand}"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip.Tip="Empty the recent-books list now"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Configuration" Classes="SettingLabel"/>

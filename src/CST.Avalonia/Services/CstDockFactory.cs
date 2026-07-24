@@ -351,6 +351,21 @@ namespace CST.Avalonia.Services
         
         // Returns TRUE when the book was actually opened, FALSE when the duplicate-suppression window
         // swallowed it — so a non-UI caller (the #187 present-tool) can't report a false success.
+        // Record a genuine (user-initiated) book open into the recent-books MRU list (#44). Best-effort:
+        // a failure here must never break opening a book. Session-RESTORE opens are excluded by the caller
+        // (OpenBook only records when windowId == null, i.e. a fresh open, not a restored one).
+        private static void TryRecordRecent(CST.Book book)
+        {
+            try
+            {
+                App.ServiceProvider?.GetService<RecentBooksService>()?.Record(book);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to record recent book {BookFile}", book?.FileName);
+            }
+        }
+
         public bool OpenBookInNewTab(CST.Book book, List<string> searchTerms, List<TermPosition> positions)
         {
             _logger.Information("Opening book from search: {BookFile} with {SearchTermCount} search terms and {PositionCount} positions",
@@ -372,6 +387,8 @@ namespace CST.Avalonia.Services
                 _lastSearchOpenTime = now;
                 _lastSearchOpenedBook = book.FileName;
             }
+
+            TryRecordRecent(book);   // a search-result open is a genuine user open (#44)
 
             // Get required services from DI container
             var scriptService = App.ServiceProvider?.GetRequiredService<IScriptService>();
@@ -493,8 +510,13 @@ namespace CST.Avalonia.Services
                     _lastRegularOpenTime = now;
                     _lastRegularOpenedBook = book.FileName;
                 }
+
+                // Record only fresh opens (windowId == null) — session RESTORE passes a windowId and must not
+                // reshuffle the MRU on every launch. Inside this block so a duplicate open (returned above)
+                // isn't recorded. (#44)
+                TryRecordRecent(book);
             }
-            
+
             // Allow multiple copies of the same book to be opened
             // This is useful for comparing the same text in different scripts
             
@@ -1547,6 +1569,11 @@ namespace CST.Avalonia.Services
                 // close path, not the recycled detach/reorder path.)
                 if (dockable is BookDisplayViewModel closedBookVm)
                 {
+                    // Closing a book you were reading is a strong "recent" signal — promote it to the top of
+                    // the MRU (Record de-dupes, so it just moves up). This is the real close path (not the
+                    // recycled tab-switch/float-detach path), so it won't fire spuriously. (#44)
+                    TryRecordRecent(closedBookVm.Book);
+
                     _goToSubscribedBooks.Remove(closedBookVm.Id);
                     // Release the recycled View's CEF WebView and drop the cache entry, or the closed
                     // tab leaks a live browser + its rendered DOM + HtmlContent for the session. (BOOK-1)

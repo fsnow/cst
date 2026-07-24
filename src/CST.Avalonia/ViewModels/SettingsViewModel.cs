@@ -679,7 +679,10 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ILogger _logger;
         private readonly ISettingsService _settingsService;
+        private readonly IApplicationStateService? _stateService;
+        private readonly Services.RecentBooksService? _recentBooks;
         private bool _useHardwareAcceleration;
+        private int _maxRecentBooks;
 
         public ConfigurationSettingsViewModel(ISettingsService settingsService)
         {
@@ -688,7 +691,38 @@ namespace CST.Avalonia.ViewModels
             _useHardwareAcceleration = settingsService.Settings.UseHardwareAcceleration;
             SettingsFilePath = settingsService.GetSettingsFilePath();
             OpenSettingsFileCommand = ReactiveCommand.Create(OpenSettingsFile);
+
+            // Recent-books (MRU) size + clear (#44). MaxRecentBooks lives in ApplicationState.Preferences, not
+            // the settings file, so resolve those services from the container (this VM is constructed directly).
+            _stateService = App.ServiceProvider?.GetService<IApplicationStateService>();
+            _recentBooks = App.ServiceProvider?.GetService<Services.RecentBooksService>();
+            _maxRecentBooks = _stateService?.Current.Preferences.MaxRecentBooks ?? 10;
+            ClearRecentBooksCommand = ReactiveCommand.Create(() => _recentBooks?.Clear());
         }
+
+        /// <summary>How many recently-opened books the File → Open Recent menu remembers (#44). 0 disables the
+        /// list. Persists to ApplicationState.Preferences and trims the current list immediately.</summary>
+        public int MaxRecentBooks
+        {
+            get => _maxRecentBooks;
+            set
+            {
+                var clamped = Math.Max(0, value);
+                if (clamped == _maxRecentBooks)
+                    return;   // no spurious dirty-mark on an unchanged value (Fable NIT-8)
+                this.RaiseAndSetIfChanged(ref _maxRecentBooks, clamped);
+                if (_stateService != null)
+                {
+                    _stateService.Current.Preferences.MaxRecentBooks = clamped;
+                    _stateService.MarkDirty();
+                    // The new cap is enforced as books are opened (and by the state validator on load). We do
+                    // NOT trim the stored list here: nudging the number down then back up while experimenting
+                    // must not irreversibly delete history. (Fable MEDIUM-1)
+                }
+            }
+        }
+
+        public ReactiveCommand<Unit, Unit> ClearRecentBooksCommand { get; }
 
         // Hardware acceleration for the embedded WebView. OFF forces software compositing, avoiding the CEF
         // off-screen-rendering "black view" stall seen under some GPUs / virtualized drivers on Windows. Applied

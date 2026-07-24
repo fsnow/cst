@@ -18,6 +18,10 @@
                     <!-- #111: ⌘O reveals the book tree and focuses it; it never hides the panel
                          (the View menu checkbox does that). CST4's Ctrl+O opened the book dialog. -->
                     <NativeMenuItem Header="Select a Book" Click="OnSelectBookClick" Gesture="cmd+o" />
+                    <!-- #44: populated at runtime from the recent-books MRU list by App.RebuildRecentMenus -->
+                    <NativeMenuItem Header="Open Recent">
+                        <NativeMenu />
+                    </NativeMenuItem>
                     <NativeMenuItemSeparator />
                     <NativeMenuItem Header="Close Tab" Click="OnCloseTabClick" Gesture="cmd+w" />
                 </NativeMenu>

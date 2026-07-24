@@ -69,6 +69,9 @@ public partial class App : Application
     // change title, or change activation. macOS shows the menu bar of the active window, so every window
     // carries its own copy of the (identical) list.
     private readonly Dictionary<Window, NativeMenu> _windowMenus = new();
+    // #44: each window's File → "Open Recent" submenu, repopulated from the MRU list on any change.
+    private readonly Dictionary<Window, NativeMenu> _recentMenus = new();
+    private bool _recentBooksSubscribed;
 
     public override void Initialize()
     {
@@ -615,6 +618,10 @@ public partial class App : Application
             var dictionaryViewModel = ServiceProvider?.GetService<DictionaryViewModel>();
             dictionaryViewModel?.ApplyState();
         });
+
+        // #44: the recent-books menu reads the (now-loaded) persisted MRU list; refresh it so the saved list
+        // shows on launch even if the window's menu was registered before this load finished.
+        Dispatcher.UIThread.Post(RebuildRecentMenus);
         
         // Restore main window state (dimensions, position, etc.) - MUST be on UI thread
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop &&
@@ -1056,6 +1063,8 @@ public partial class App : Application
         services.AddSingleton<IFontService, FontService>();
         services.AddSingleton<IApplicationStateService, ApplicationStateService>();
         services.AddSingleton<ChapterListsService>();
+        // Recently-opened-books (MRU) list backing the File → Open Recent menu (#44).
+        services.AddSingleton<RecentBooksService>();
         // services.AddSingleton<IBookService, BookService>();
         services.AddSingleton<ISearchService, SearchService>();
         // The single "present the reader in context" command shared by every surface (#187).
@@ -1203,6 +1212,9 @@ public partial class App : Application
             // #284: register the main window's "Window" submenu (declared empty in XAML) and fill the list.
             RegisterWindowMenu(MainWindow);
             RebuildWindowMenus();
+            // #44: register the main window's "Open Recent" submenu and fill it from the MRU list.
+            RegisterRecentMenu(MainWindow);
+            RebuildRecentMenus();
         }
     }
 
@@ -1335,6 +1347,8 @@ public partial class App : Application
 
             var fileMenu = new NativeMenu();
             fileMenu.Add(selectBookMenuItem);
+            // #44: this window's "Open Recent" submenu (populated by RebuildRecentMenus below).
+            fileMenu.Add(new NativeMenuItem { Header = "Open Recent", Menu = new NativeMenu() });
             fileMenu.Add(new NativeMenuItemSeparator());
             fileMenu.Add(closeTabItem);
 
@@ -1349,6 +1363,9 @@ public partial class App : Application
             // Register + populate the Window list (this new window now also appears in every window's list).
             RegisterWindowMenu(window);
             RebuildWindowMenus();
+            // #44: register + populate this window's Open Recent submenu.
+            RegisterRecentMenu(window);
+            RebuildRecentMenus();
 
             Log.Information("Floating window menu built - tracked toggle items: {SelectBookCount} select-book, {SearchCount} search",
                 _selectBookMenuItems.Count, _searchMenuItems.Count);
@@ -1461,6 +1478,135 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to activate window from Window menu");
+        }
+    }
+
+    // ===== #44: File → "Open Recent" menu (recently-opened-books MRU) =====
+    // Each window carries an "Open Recent" submenu under File (macOS shows the active window's menu bar).
+    // It is repopulated from the shared RecentBooksService whenever the MRU list changes, or the display
+    // script changes (labels are script-aware, like book tabs).
+
+    // Locate a window's "Open Recent" submenu (nested under File), register it for population, and drop it
+    // when the window closes. Subscribes once to the list/script change signals.
+    private void RegisterRecentMenu(Window owner)
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        var menu = NativeMenu.GetMenu(owner);
+        var fileItem = menu?.OfType<NativeMenuItem>().FirstOrDefault(i => (i.Header as string) == "File");
+        var recentItem = (fileItem?.Menu)?.OfType<NativeMenuItem>().FirstOrDefault(i => (i.Header as string) == "Open Recent");
+        if (recentItem?.Menu is not NativeMenu submenu) return;
+
+        _recentMenus[owner] = submenu;
+        owner.Closed += (_, _) => _recentMenus.Remove(owner);
+
+        if (!_recentBooksSubscribed)
+        {
+            var recent = ServiceProvider?.GetService<RecentBooksService>();
+            if (recent != null)
+            {
+                // Latch only after a successful subscribe, so an (unexpected) early null resolution doesn't
+                // permanently wedge the menus to window-create-only refreshes. (Fable LOW-2)
+                _recentBooksSubscribed = true;
+                recent.Changed += (_, _) => Dispatcher.UIThread.Post(RebuildRecentMenus);
+                var scriptService = ServiceProvider?.GetService<IScriptService>();
+                if (scriptService != null)
+                    scriptService.ScriptChanged += _ => Dispatcher.UIThread.Post(RebuildRecentMenus);
+            }
+        }
+    }
+
+    // Repopulate every registered "Open Recent" submenu from the current MRU list. Called on list/script
+    // change, window-create, and once after state has loaded.
+    private void RebuildRecentMenus()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        try
+        {
+            var recent = ServiceProvider?.GetService<RecentBooksService>();
+            if (recent == null) return;
+            var script = ServiceProvider?.GetService<IScriptService>()?.CurrentScript ?? Script.Latin;
+            var items = recent.Items.ToList();
+            foreach (var submenu in _recentMenus.Values.ToList())
+                PopulateRecentMenu(submenu, items, script);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to rebuild Open Recent menus");
+        }
+    }
+
+    private void PopulateRecentMenu(NativeMenu submenu, List<RecentBookItem> items, Script script)
+    {
+        submenu.Items.Clear();
+
+        if (items.Count == 0)
+        {
+            submenu.Add(new NativeMenuItem { Header = "No Recent Books", IsEnabled = false });
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            var menuItem = new NativeMenuItem { Header = RecentLabel(item, script) };
+            menuItem.Click += (_, _) => OpenRecentBook(item);   // per-iteration capture (C# 5+)
+            submenu.Add(menuItem);
+        }
+
+        submenu.Add(new NativeMenuItemSeparator());
+        var clear = new NativeMenuItem { Header = "Clear Menu" };
+        clear.Click += (_, _) => ServiceProvider?.GetService<RecentBooksService>()?.Clear();
+        submenu.Add(clear);
+    }
+
+    // A live, current-script label from the resolved book (matching its tab title); falls back to the label
+    // stored when it was recorded, then the filename.
+    private static string RecentLabel(RecentBookItem item, Script script)
+    {
+        try
+        {
+            if (item.BookIndex >= 0 && item.BookIndex < Books.Inst.Count)
+            {
+                var book = Books.Inst[item.BookIndex];
+                if (book.FileName == item.BookFileName)
+                    return RecentBooksService.DisplayName(book, script);
+            }
+        }
+        catch { /* fall through to the stored name */ }
+        return string.IsNullOrEmpty(item.DisplayName) ? item.BookFileName : item.DisplayName;
+    }
+
+    // Open a recent book in the main window. Resolves by index (validated against filename) then by filename,
+    // so a stale entry from a changed corpus is skipped rather than opening the wrong text.
+    private void OpenRecentBook(RecentBookItem item)
+    {
+        try
+        {
+            Book? book = null;
+            if (item.BookIndex >= 0 && item.BookIndex < Books.Inst.Count)
+            {
+                var candidate = Books.Inst[item.BookIndex];
+                if (candidate.FileName == item.BookFileName)
+                    book = candidate;
+            }
+            if (book == null && !string.IsNullOrEmpty(item.BookFileName))
+            {
+                try { book = Books.Inst[item.BookFileName]; } catch { book = null; }
+            }
+            if (book == null)
+            {
+                Log.Warning("Recent book no longer resolvable: {BookFile} (index {Index})", item.BookFileName, item.BookIndex);
+                return;
+            }
+
+            if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+            {
+                ActivateWindow(MainWindow);
+                layoutViewModel.OpenBook(book);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to open recent book {BookFile}", item.BookFileName);
         }
     }
 
