@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -192,13 +193,18 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly ISettingsService _settingsService;
         private readonly IFontService _fontService;
+        private readonly Func<Action, Task> _uiInvoke;   // dispatcher hop, injectable for tests
         private ScriptFontSettingViewModel? _selectedScript;
-        internal bool _isChangingScript = false;
+        private CancellationTokenSource? _fontLoadCts;    // cancels the previous script's in-flight load (#67)
 
-        public AppearanceSettingsViewModel(ISettingsService settingsService)
+        // fontService/uiInvoke are injectable for unit tests; production resolves the service and uses the
+        // real UI-thread dispatcher hop.
+        public AppearanceSettingsViewModel(ISettingsService settingsService,
+            IFontService? fontService = null, Func<Action, Task>? uiInvoke = null)
         {
             _settingsService = settingsService;
-            _fontService = App.ServiceProvider!.GetRequiredService<IFontService>();
+            _fontService = fontService ?? App.ServiceProvider!.GetRequiredService<IFontService>();
+            _uiInvoke = uiInvoke ?? (async a => await Dispatcher.UIThread.InvokeAsync(a));
             
             // Initialize script font settings
             ScriptFontSettings = new ObservableCollection<ScriptFontSettingViewModel>();
@@ -230,22 +236,19 @@ namespace CST.Avalonia.ViewModels
             LocalizationFontSize = fontSettings.LocalizationFontSize;
             
             
+            // Load fonts for the selected script; a new selection cancels the previous in-flight load so a
+            // stale result can't overwrite newer state. WhenAnyValue emits the current SelectedScript on
+            // subscribe, so the initial (default) script loads here too. No preload loop: FontService already
+            // warms every script's cache at app startup (App.InitializeFontsAsync), and other scripts load
+            // lazily on first selection — which also removes the off-UI-thread load that seeded #67's races. (#67)
             this.WhenAnyValue(x => x.SelectedScript)
                 .Where(s => s != null)
-                .Subscribe(s => _ = LoadAvailableFontsForScript(s!));
-
-            // Pre-load fonts for all scripts to prevent empty dropdown on first click. The load
-            // marshals its own UI-bound property writes, so awaiting it here (off the UI thread) is
-            // safe. (XCUT-3)
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(100); // Small delay to let UI initialize first
-                foreach (var script in ScriptFontSettings)
+                .Subscribe(s =>
                 {
-                    await LoadAvailableFontsForScript(script);
-                    await Task.Delay(10); // Small delay between scripts to avoid overwhelming the UI
-                }
-            });
+                    _fontLoadCts?.Cancel();
+                    _fontLoadCts = new CancellationTokenSource();
+                    _ = LoadAvailableFontsForScript(s!, _fontLoadCts.Token);
+                });
         }
 
         public ObservableCollection<ScriptFontSettingViewModel> ScriptFontSettings { get; }
@@ -253,14 +256,10 @@ namespace CST.Avalonia.ViewModels
         public ScriptFontSettingViewModel? SelectedScript
         {
             get => _selectedScript;
-            set 
+            set
             {
                 Log.Debug("[Settings] SelectedScript setter called: {ScriptName}", value?.ScriptName ?? "null");
-                
-                // Set flag to prevent font changes during script switching
-                _isChangingScript = true;
                 this.RaiseAndSetIfChanged(ref _selectedScript, value);
-                _isChangingScript = false;
             }
         }
         
@@ -318,93 +317,64 @@ namespace CST.Avalonia.ViewModels
             return Task.CompletedTask;
         }
         
-        private async Task LoadAvailableFontsForScript(ScriptFontSettingViewModel scriptVm)
+        private async Task LoadAvailableFontsForScript(ScriptFontSettingViewModel scriptVm, CancellationToken ct)
         {
-            // No loading state needed since fonts are pre-cached
             var scriptEnum = ScriptFontSettingViewModel.GetScriptFromName(scriptVm.ScriptName);
-            
+            int version = scriptVm.BeginLoad();   // latest-wins: a stale load can't apply over a newer one
             Log.Debug("[Settings] Loading fonts for {ScriptName}", scriptVm.ScriptName);
-            
+
             try
             {
-                // Always use await to ensure we get the cached or fresh fonts properly
-                var fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
-                Log.Debug("[Settings] {ScriptName}: {FontCount} fonts found", scriptVm.ScriptName, fonts?.Count ?? 0);
-                
-                if (fonts == null || fonts.Count == 0)
-                {
-                    Log.Debug("[Settings] {ScriptName}: No fonts found - retrying...", scriptVm.ScriptName);
-                    // Retry once after a small delay
-                    await Task.Delay(100);
-                    fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum);
-                    Log.Debug("[Settings] {ScriptName}: Retry got {FontCount} fonts", scriptVm.ScriptName, fonts?.Count ?? 0);
-                }
-                
-                // Create a copy to avoid modifying the cached list
+                var fonts = await _fontService.GetAvailableFontsForScriptAsync(scriptEnum).ConfigureAwait(false);
+                if (ct.IsCancellationRequested) return;
+
+                // "System Default" first, then the enumerated fonts. (The empty-list retry was removed: the
+                // font service caches empty results too, so retrying could only re-read the same list. (#67))
                 var fontsCopy = new List<string>(fonts ?? new List<string>());
-                
-                // Add a "System Default" option to the top of the list (safe since we have a copy)
                 fontsCopy.Insert(0, "System Default");
-                
-                // Get the saved font from settings
-                var savedFontFamily = scriptVm.FontFamily; // This comes from the saved settings
-                
-                // Log for debugging
-                Log.Debug("[Settings] {ScriptName}: {TotalFonts} fonts total (saved: {SavedFont})", 
-                    scriptVm.ScriptName, fontsCopy.Count, savedFontFamily ?? "null");
-                
-                // Decide the selection off-thread (pure computation), then marshal the UI-bound
-                // writes below in one hop. Handle both null and empty saved font as "unset".
-                string selectedFont;
-                if (!string.IsNullOrWhiteSpace(savedFontFamily))
-                {
-                    var matchingFont = fontsCopy.FirstOrDefault(f =>
-                        string.Equals(f?.Trim(), savedFontFamily.Trim(), StringComparison.OrdinalIgnoreCase));
-                    selectedFont = matchingFont ?? "System Default";
-                    Log.Debug("[Settings] {ScriptName}: {Result}", scriptVm.ScriptName,
-                        matchingFont != null ? $"selected font {matchingFont}"
-                                             : $"font '{savedFontFamily}' not found, using System Default");
-                }
-                else
-                {
-                    Log.Debug("[Settings] {ScriptName}: no saved font, using System Default", scriptVm.ScriptName);
-                    selectedFont = "System Default";
-                }
+                Log.Debug("[Settings] {ScriptName}: {FontCount} fonts", scriptVm.ScriptName, fontsCopy.Count);
 
-                // Marshal the UI-bound writes to the UI thread. This method runs on a thread-pool
-                // thread when driven by the ctor's preload loop, so raising PropertyChanged into live
-                // ComboBox bindings from here corrupts them (and previously needed Task.Delay hacks to
-                // paper over the resulting timing). Setting both on the UI thread in order lets the
-                // ComboBox apply the collection then the selection cleanly. (XCUT-3)
-                await Dispatcher.UIThread.InvokeAsync(() =>
+                await _uiInvoke(() =>
                 {
-                    scriptVm.AvailableFonts = new ObservableCollection<string>(fontsCopy);
-                    scriptVm.SelectedFontFamily = selectedFont;
-                });
+                    // Apply only if this is still the newest load for the script and it wasn't cancelled, and
+                    // compute the selection HERE against the CURRENT saved font — so a stale load can't revert a
+                    // font the user changed while it was in flight. (#67 Bug A)
+                    if (ct.IsCancellationRequested || !scriptVm.IsCurrentLoad(version)) return;
+                    scriptVm.ApplyLoadedFonts(fontsCopy, ResolveFontSelection(fontsCopy, scriptVm.FontFamily));
+                }).ConfigureAwait(false);
 
-                // System default font info (display only); it marshals its own UI-bound writes.
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await scriptVm.LoadSystemDefaultFontAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Debug("[Settings] {ScriptName}: Failed to load system default font info - {Message}",
-                            scriptVm.ScriptName, ex.Message);
-                    }
-                });
+                if (ct.IsCancellationRequested) return;
+                _ = LoadSystemDefaultSafe(scriptVm);   // system default font NAME (display only)
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "[Settings] {ScriptName}: Error loading fonts", scriptVm.ScriptName);
-                // Fallback (marshaled, same reason as above). (XCUT-3)
-                await Dispatcher.UIThread.InvokeAsync(() =>
+                if (ct.IsCancellationRequested) return;
+                await _uiInvoke(() =>
                 {
-                    scriptVm.AvailableFonts = new ObservableCollection<string> { "System Default" };
-                    scriptVm.SelectedFontFamily = "System Default";
-                });
+                    if (ct.IsCancellationRequested || !scriptVm.IsCurrentLoad(version)) return;
+                    scriptVm.ApplyLoadedFonts(new List<string> { "System Default" }, "System Default");
+                }).ConfigureAwait(false);
+            }
+        }
+
+        // The selection the ComboBox should show for a saved font: the matching enumerated font, or
+        // "System Default" when unset or the saved font isn't currently installed. Pure — unit-tested. (#67)
+        internal static string ResolveFontSelection(IReadOnlyList<string> fonts, string? savedFont)
+        {
+            if (string.IsNullOrWhiteSpace(savedFont)) return "System Default";
+            var match = fonts.FirstOrDefault(f =>
+                string.Equals(f?.Trim(), savedFont.Trim(), StringComparison.OrdinalIgnoreCase));
+            return match ?? "System Default";
+        }
+
+        private async Task LoadSystemDefaultSafe(ScriptFontSettingViewModel scriptVm)
+        {
+            try { await scriptVm.LoadSystemDefaultFontAsync(); }
+            catch (Exception ex)
+            {
+                Log.Debug("[Settings] {ScriptName}: Failed to load system default font info - {Message}",
+                    scriptVm.ScriptName, ex.Message);
             }
         }
     }
@@ -420,6 +390,9 @@ namespace CST.Avalonia.ViewModels
         private bool _isLoadingFonts;
         private ObservableCollection<string> _availableFonts = new();
         private string? _systemDefaultFontName;
+        private string _selectedFontFamily = "System Default";   // ComboBox display, decoupled from _fontFamily (#67)
+        private bool _applyingLoadResult;                         // true while a load applies its result (#67 Bug B)
+        private int _loadVersion;                                 // latest-wins guard for concurrent loads (#67)
         
         public string ScriptName
         {
@@ -509,28 +482,42 @@ namespace CST.Avalonia.ViewModels
             }
         }
         
+        // The ComboBox's two-way-bound selection (SelectedItem). Its display value is decoupled from the saved
+        // FontFamily so a load can show "System Default" for a temporarily-missing font WITHOUT erasing the
+        // saved value. Only a genuine user pick persists. (#67)
         public string SelectedFontFamily
         {
-            get {
-                var result = string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily;
-                Log.Debug("[Settings] SelectedFontFamily getter: Script={ScriptName}, Returning={Result}", ScriptName, result);
-                return result;
-            }
-            set 
+            get => _selectedFontFamily;
+            set
             {
-                Log.Debug("[Settings] SelectedFontFamily setter: Script={ScriptName}, Input={Input}, CurrentGet={Current}", 
-                    ScriptName, value, string.IsNullOrWhiteSpace(_fontFamily) ? "System Default" : _fontFamily);
-                
-                // Ignore font changes during script switching to prevent overwriting other scripts' fonts
-                if (Parent is AppearanceSettingsViewModel parent && parent._isChangingScript)
-                {
-                    Log.Debug("[Settings] Ignoring font change for {ScriptName} during script switching", ScriptName);
-                    return;
-                }
-                
-                FontFamily = value;
+                // Ignore write-backs that aren't a genuine user pick: the ItemsSource-reset null push (Avalonia
+                // clears SelectedItem when AvailableFonts is swapped) and anything during a programmatic apply.
+                // "System Default" is the only legitimate unset token; null is always an artifact. (#67 Bug B)
+                if (_applyingLoadResult || value is null || value == _selectedFontFamily) return;
+                Log.Debug("[Settings] SelectedFontFamily user pick: Script={ScriptName}, Value={Value}", ScriptName, value);
+                this.RaiseAndSetIfChanged(ref _selectedFontFamily, value);
+                FontFamily = value;   // persist the user's choice
             }
         }
+
+        // Apply a completed font load in one dispatcher frame: swap the list, then set the ComboBox selection
+        // for DISPLAY only. The apply flag makes the ItemsSource-reset write-back and this selection set NOT
+        // persist, so a load can never wipe a still-saved font (e.g. one temporarily uninstalled). (#67 Bug B)
+        internal void ApplyLoadedFonts(IReadOnlyList<string> fonts, string selected)
+        {
+            _applyingLoadResult = true;
+            try
+            {
+                AvailableFonts = new ObservableCollection<string>(fonts);
+                _selectedFontFamily = selected;
+                this.RaisePropertyChanged(nameof(SelectedFontFamily));   // force re-select after the ItemsSource swap
+            }
+            finally { _applyingLoadResult = false; }
+        }
+
+        // Latest-wins guard so a slower/stale load can't apply over a newer one for the same script. (#67 Bug A)
+        internal int BeginLoad() => Interlocked.Increment(ref _loadVersion);
+        internal bool IsCurrentLoad(int version) => Volatile.Read(ref _loadVersion) == version;
         
         public int FontSize
         {
