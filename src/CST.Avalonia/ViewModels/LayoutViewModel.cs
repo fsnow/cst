@@ -146,48 +146,52 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        public void ShowSelectBookPanel()
+        // Ensure a tool panel exists in the layout and mark it visible, recreating the LeftToolDock under
+        // MainDock if it was removed (failure mode #4). Shared by the three Show*Panel entry points. The VM IS
+        // a ReactiveTool (its Id/Title/flags are set in its constructor), so it's added directly — exactly as
+        // CreateLayout does at startup; wrapping it in a generic Tool { Context } renders an empty panel
+        // because the view locator resolves by dockable type. (#84)
+        private void ShowToolPanel(string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName)
         {
-            Log.Information("[Layout] ShowSelectBookPanel requested");
+            Log.Information("[Layout] Show {Panel} panel requested", panelName);
 
-            // Check if panel already exists in the layout (might be in a floating window)
-            if (FindTool("OpenBookTool") != null)
+            // Already present somewhere (possibly a floating window) — just mark it visible.
+            if (FindTool(toolId) != null)
             {
-                Log.Information("[Layout] Select a Book panel already exists (possibly in floating window)");
-                IsSelectBookPanelVisible = true;
+                Log.Information("[Layout] {Panel} panel already exists (possibly in floating window)", panelName);
+                markVisible();
                 PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
-            // Panel doesn't exist, create and add it to the existing ToolDock
-            var openBookViewModel = App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>();
-            if (openBookViewModel == null)
+            var tool = resolveVm();
+            if (tool == null)
             {
-                Log.Error("[Layout] Cannot add Select a Book panel - OpenBookDialogViewModel not available");
+                Log.Error("[Layout] Cannot add {Panel} panel - view model not available", panelName);
                 return;
             }
 
-            // Get the tool container, recreating it under MainDock if it was removed (failure mode #4).
             var leftToolDock = _factory.EnsureLeftToolDock();
             if (leftToolDock == null)
             {
-                Log.Error("[Layout] Cannot add Select a Book panel - MainDock unavailable.");
+                Log.Error("[Layout] Cannot add {Panel} panel - MainDock unavailable.", panelName);
                 return;
             }
 
-            // The VM IS a ReactiveTool (its Id/Title/flags are set in its constructor), so add it
-            // directly — exactly as CreateLayout does at startup. Wrapping it in a generic Tool { Context }
-            // renders an empty panel because the view locator resolves by dockable type.
-            openBookViewModel.Factory = _factory;
-            _factory.AddDockable(leftToolDock, openBookViewModel);
-            _factory.SetActiveDockable(openBookViewModel);
-            _factory.SetFocusedDockable(leftToolDock, openBookViewModel);
+            tool.Factory = _factory;
+            _factory.AddDockable(leftToolDock, tool);
+            _factory.SetActiveDockable(tool);
+            _factory.SetFocusedDockable(leftToolDock, tool);
 
-            Log.Information("[Layout] Select a Book panel added to LeftToolDock");
+            Log.Information("[Layout] {Panel} panel added to LeftToolDock", panelName);
 
-            IsSelectBookPanelVisible = true;
+            markVisible();
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
         }
+
+        public void ShowSelectBookPanel() =>
+            ShowToolPanel("OpenBookTool", () => App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>(),
+                () => IsSelectBookPanelVisible = true, "Select a Book");
 
         public void ToggleSearchPanel()
         {
@@ -213,144 +217,44 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        public void ShowSearchPanel()
+        public void ShowSearchPanel() =>
+            ShowToolPanel("SearchTool", () => App.ServiceProvider?.GetRequiredService<SearchViewModel>(),
+                () => IsSearchPanelVisible = true, "Search");
+
+        // Remove a tool panel from the layout (wherever it lives) and mark it hidden. Shared by the three
+        // Hide*Panel entry points. (#84)
+        private void HideToolPanel(string toolId, Action markHidden, string panelName)
         {
-            Log.Information("[Layout] ShowSearchPanel requested");
+            Log.Information("[Layout] Hide {Panel} panel requested", panelName);
 
-            // Check if panel already exists in the layout (might be in a floating window)
-            if (FindTool("SearchTool") != null)
+            var tool = FindTool(toolId);
+            if (tool == null)
             {
-                Log.Information("[Layout] Search panel already exists (possibly in floating window)");
-                IsSearchPanelVisible = true;
-                PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
+                Log.Information("[Layout] {Panel} panel already hidden", panelName);
                 return;
             }
 
-            // Panel doesn't exist, create and add it to the existing ToolDock
-            var searchViewModel = App.ServiceProvider?.GetRequiredService<SearchViewModel>();
-            if (searchViewModel == null)
-            {
-                Log.Error("[Layout] Cannot add Search panel - SearchViewModel not available");
-                return;
-            }
+            RemoveToolFromLayout(tool);
 
-            // Get the tool container, recreating it under MainDock if it was removed (failure mode #4).
-            var leftToolDock = _factory.EnsureLeftToolDock();
-            if (leftToolDock == null)
-            {
-                Log.Error("[Layout] Cannot add Search panel - MainDock unavailable.");
-                return;
-            }
-
-            // The VM IS a ReactiveTool (its Id/Title/flags are set in its constructor), so add it
-            // directly — exactly as CreateLayout does at startup. Wrapping it in a generic Tool { Context }
-            // renders an empty panel because the view locator resolves by dockable type.
-            searchViewModel.Factory = _factory;
-            _factory.AddDockable(leftToolDock, searchViewModel);
-            _factory.SetActiveDockable(searchViewModel);
-            _factory.SetFocusedDockable(leftToolDock, searchViewModel);
-
-            Log.Information("[Layout] Search panel added to LeftToolDock");
-
-            IsSearchPanelVisible = true;
+            markHidden();
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
+            Log.Information("[Layout] {Panel} panel hidden", panelName);
         }
 
-        public void HideSelectBookPanel()
-        {
-            Log.Information("[Layout] HideSelectBookPanel requested");
+        public void HideSelectBookPanel() =>
+            HideToolPanel("OpenBookTool", () => IsSelectBookPanelVisible = false, "Select a Book");
 
-            var openBookTool = FindTool("OpenBookTool");
-            if (openBookTool == null)
-            {
-                Log.Information("[Layout] Select a Book panel already hidden");
-                return;
-            }
+        // Recreate-on-demand so the View menu toggle and Cmd+D (Look Up in Dictionary) can reopen a closed
+        // pane — LookUpInDictionaryAsync calls this then immediately proceeds, so it must stay synchronous. (#466)
+        public void ShowDictionaryPanel() =>
+            ShowToolPanel("DictionaryTool", () => App.ServiceProvider?.GetRequiredService<DictionaryViewModel>(),
+                () => IsDictionaryPanelVisible = true, "Dictionary");
 
-            // Remove the tool from its parent dock
-            RemoveToolFromLayout(openBookTool);
+        public void HideDictionaryPanel() =>
+            HideToolPanel("DictionaryTool", () => IsDictionaryPanelVisible = false, "Dictionary");
 
-            IsSelectBookPanelVisible = false;
-            PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
-            Log.Information("[Layout] Select a Book panel hidden");
-        }
-
-        // Ensure the Dictionary tool exists in the layout and mark it visible, recreating it under the
-        // LeftToolDock if it was closed — same recreate-on-demand pattern as ShowSearchPanel. Used by the
-        // View menu toggle and by Cmd+D (Look Up in Dictionary), which must be able to reopen a closed pane.
-        public void ShowDictionaryPanel()
-        {
-            Log.Information("[Layout] ShowDictionaryPanel requested");
-
-            if (FindTool("DictionaryTool") != null)
-            {
-                Log.Information("[Layout] Dictionary panel already exists (possibly in floating window)");
-                IsDictionaryPanelVisible = true;
-                PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
-                return;
-            }
-
-            var dictionaryViewModel = App.ServiceProvider?.GetRequiredService<DictionaryViewModel>();
-            if (dictionaryViewModel == null)
-            {
-                Log.Error("[Layout] Cannot add Dictionary panel - DictionaryViewModel not available");
-                return;
-            }
-
-            var leftToolDock = _factory.EnsureLeftToolDock();
-            if (leftToolDock == null)
-            {
-                Log.Error("[Layout] Cannot add Dictionary panel - MainDock unavailable.");
-                return;
-            }
-
-            dictionaryViewModel.Factory = _factory;
-            _factory.AddDockable(leftToolDock, dictionaryViewModel);
-            _factory.SetActiveDockable(dictionaryViewModel);
-            _factory.SetFocusedDockable(leftToolDock, dictionaryViewModel);
-
-            Log.Information("[Layout] Dictionary panel added to LeftToolDock");
-
-            IsDictionaryPanelVisible = true;
-            PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        public void HideDictionaryPanel()
-        {
-            Log.Information("[Layout] HideDictionaryPanel requested");
-
-            var dictionaryTool = FindTool("DictionaryTool");
-            if (dictionaryTool == null)
-            {
-                Log.Information("[Layout] Dictionary panel already hidden");
-                return;
-            }
-
-            RemoveToolFromLayout(dictionaryTool);
-
-            IsDictionaryPanelVisible = false;
-            PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
-            Log.Information("[Layout] Dictionary panel hidden");
-        }
-
-        public void HideSearchPanel()
-        {
-            Log.Information("[Layout] HideSearchPanel requested");
-
-            var searchTool = FindTool("SearchTool");
-            if (searchTool == null)
-            {
-                Log.Information("[Layout] Search panel already hidden");
-                return;
-            }
-
-            // Remove the tool from its parent dock
-            RemoveToolFromLayout(searchTool);
-
-            IsSearchPanelVisible = false;
-            PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
-            Log.Information("[Layout] Search panel hidden");
-        }
+        public void HideSearchPanel() =>
+            HideToolPanel("SearchTool", () => IsSearchPanelVisible = false, "Search");
 
         private void RemoveToolFromLayout(ITool tool)
         {
@@ -447,15 +351,44 @@ namespace CST.Avalonia.ViewModels
 
         public void UpdatePanelVisibility()
         {
-            // Check actual visibility state in layout
-            IsSelectBookPanelVisible = FindTool("OpenBookTool") != null;
-            IsSearchPanelVisible = FindTool("SearchTool") != null;
-            IsDictionaryPanelVisible = FindTool("DictionaryTool") != null;
+            // One traversal of the main layout + every floating-window layout collecting the ids of the tools
+            // present, instead of three separate full walks (one per FindTool). Existence-only, so match order
+            // is irrelevant; the tools are singletons, so an id appears at most once. (#84)
+            var present = new HashSet<string>(StringComparer.Ordinal);
+            CollectToolIds(Layout, present);
+            if (_factory is CstDockFactory factory)
+            {
+                foreach (var hostWindow in factory.HostWindows)
+                {
+                    if (hostWindow is CstHostWindow cstHostWindow && cstHostWindow.Layout != null)
+                        CollectToolIds(cstHostWindow.Layout, present);
+                }
+            }
+
+            IsSelectBookPanelVisible = present.Contains("OpenBookTool");
+            IsSearchPanelVisible = present.Contains("SearchTool");
+            IsDictionaryPanelVisible = present.Contains("DictionaryTool");
 
             Log.Debug("[Layout] Panel visibility updated - SelectBook: {SelectBook}, Search: {Search}, Dictionary: {Dictionary}",
                 IsSelectBookPanelVisible, IsSearchPanelVisible, IsDictionaryPanelVisible);
 
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        // Collect the ids of every ITool in a dockable subtree into <paramref name="ids"/> (single pass).
+        // Mirrors FindToolRecursive's traversal but gathers all tool ids at once. (#84)
+        private static void CollectToolIds(IDockable? dockable, HashSet<string> ids)
+        {
+            if (dockable == null) return;
+
+            if (dockable is ITool tool && tool.Id != null)
+                ids.Add(tool.Id);
+
+            if (dockable is IDock dock && dock.VisibleDockables != null)
+            {
+                foreach (var child in dock.VisibleDockables)
+                    CollectToolIds(child, ids);
+            }
         }
 
         private ITool? FindTool(string toolId)
