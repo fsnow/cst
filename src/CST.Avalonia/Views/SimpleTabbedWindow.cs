@@ -683,6 +683,32 @@ public partial class SimpleTabbedWindow : Window
 
     // "Look Up in Dictionary" (Cmd+D): take the word selected in the active book's WebView, drop it into
     // the Dictionary tool's search box, and bring the Dictionary tab forward. (#25)
+    // #112: print the active book. Native probe — routes to window.print() on the book's WebView.
+    private void OnPrintClick(object? sender, EventArgs e)
+    {
+        _logger.Information("Print (Cmd+P) from window: {WindowTitle}", this.Title);
+        var book = FindActiveBookInThisWindow();
+        if (book?.BookDisplayControl == null)
+        {
+            _logger.Information("Print: no active book to print");
+            return;
+        }
+        book.BookDisplayControl.Print();
+    }
+
+    // #112: print the current selection in the active book (falls back to whole-book when nothing is selected).
+    private void OnPrintSelectionClick(object? sender, EventArgs e)
+    {
+        _logger.Information("Print Selection (Shift+Cmd+P) from window: {WindowTitle}", this.Title);
+        var book = FindActiveBookInThisWindow();
+        if (book?.BookDisplayControl == null)
+        {
+            _logger.Information("Print Selection: no active book");
+            return;
+        }
+        book.BookDisplayControl.PrintSelection();
+    }
+
     private async void OnLookUpInDictionaryClick(object? sender, EventArgs e)
     {
         _logger.Information("Look Up in Dictionary (Cmd+D) from window: {WindowTitle}", this.Title);

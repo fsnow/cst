@@ -23,6 +23,10 @@
                         <NativeMenu />
                     </NativeMenuItem>
                     <NativeMenuItemSeparator />
+                    <!-- #112: print the active book via the platform print dialog (window.print()) -->
+                    <NativeMenuItem Header="Print…" Click="OnPrintClick" Gesture="cmd+p" />
+                    <NativeMenuItem Header="Print Selection…" Click="OnPrintSelectionClick" Gesture="cmd+shift+p" />
+                    <NativeMenuItemSeparator />
                     <NativeMenuItem Header="Close Tab" Click="OnCloseTabClick" Gesture="cmd+w" />
                 </NativeMenu>
             </NativeMenuItem>
