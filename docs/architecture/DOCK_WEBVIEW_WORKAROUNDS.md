@@ -45,6 +45,7 @@ candidate to *replace* (not re-add) in the overhaul.
 | Hide **all** WebViews across all windows during a drag, restore after | SimpleTabbedWindow ~518–583 | Native CEF surface (airspace) occludes Dock's drop indicators; hide reveals them. (Hide ≠ dispose — browser stays live.) |
 | Drag state machine: 50 ms poll, **150 ms** drag threshold, **100 ms** min-hide, 10 s fallback restore | SimpleTabbedWindow ~33–41, 432–516 | Filter flickering `IsDraggingDock`; prevent WebView flashing; recover if a drag hangs. |
 | Cross-window `DragEnter`/`Drop`/`DragLeave` → hide/restore WebViews | SimpleTabbedWindow ~61–99 | Event-based path for explicit drag-drop (complements the timer). |
+| Drag-time WebView hide/restore has a **single owner** (SimpleTabbedWindow) — no per-view monitor | invariant | A second monitor in BookDisplayView (repeated hide/show during tab switches) invalidated CEF native handles → `InitializeWithChildHandle` null-deref crash. Its long-disabled copy was **deleted in #85**; do not reintroduce per-view drag monitoring. |
 | `CanDrag=true`, `CanFloat=false` on books | CstDockFactory ~511–517 | Allow tab reorder; block drag-to-float (the live-reparent crash) → force the float button. |
 
 ## D. Dock structure / Dock.Avalonia gaps
