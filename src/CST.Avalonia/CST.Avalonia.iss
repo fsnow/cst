@@ -6,8 +6,11 @@
 #ifndef AppVersion
   #define AppVersion "5.0.0"
 #endif
+#ifndef Arch
+  #define Arch "x64"
+#endif
 #ifndef PublishDir
-  #define PublishDir "bin\Release\net10.0\win-x64\publish"
+  #define PublishDir "bin\Release\net10.0\win-" + Arch + "\publish"
 #endif
 #ifndef OutputDir
   #define OutputDir "dist"
@@ -27,13 +30,20 @@ DefaultGroupName=CST Reader
 UninstallDisplayName=CST Reader
 UninstallDisplayIcon={app}\CST.Avalonia.exe
 OutputDir={#OutputDir}
-OutputBaseFilename=CST-Reader-{#AppVersion}-win-x64-setup
+OutputBaseFilename=CST-Reader-{#AppVersion}-win-{#Arch}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; x64compatible requires Inno Setup 6.3+ (also allows install on ARM64 via x64 emulation). Built with 6.7.x.
+; Requires Inno Setup 6.3+ for the "x64compatible"/"arm64" identifiers. Built with 6.7.x.
+; The two installers share an AppId on purpose: on an ARM64 machine either will install (the x64 one runs under
+; emulation), and installing the native arm64 build over an existing x64 install upgrades it in place.
+#if Arch == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 ; Per-user install so no UAC prompt; {autopf} resolves to %LOCALAPPDATA%\Programs under lowest privileges.
 PrivilegesRequired=lowest
 

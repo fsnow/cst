@@ -83,12 +83,19 @@
     <!-- WebView packages for different architectures -->
     <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'osx-arm64'" />
     <PackageReference Include="WebViewControl-Avalonia" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'osx-x64'" />
-    <!-- Windows (#20/#28): the plain WebViewControl-Avalonia package carries the Windows (win-x64 / win-arm64) CEF natives. -->
+    <!-- Windows (#20/#28): the CEF natives are split by arch across two packages. The plain
+         WebViewControl-Avalonia carries chromiumembeddedframework.runtime.win-x64; the -ARM64 variant carries
+         chromiumembeddedframework.runtime.win-arm64 (both at CEF 120.1.8). CefGlue.Common.targets already
+         handles win-arm64 - it copies from chromiumembeddedframework.runtime.$(CefGlueTargetPlatform) - so
+         picking the right package is all that's needed. Getting this wrong publishes with NO libcef.dll at all
+         (RID-mismatched natives are silently dropped) and every WebView fails at CEF init. -->
     <PackageReference Include="WebViewControl-Avalonia" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'win-x64'" />
-    <PackageReference Include="WebViewControl-Avalonia" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'win-arm64'" />
+    <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == 'win-arm64'" />
     <!-- Fallback for development when RuntimeIdentifier is not set (plain `dotnet run`): pick by host OS so
-         `dotnet run` works everywhere without an explicit -r. Windows host -> plain (Windows) package;
-         everything else keeps the macOS/Linux ARM64 package (the Apple-Silicon dev default). -->
+         `dotnet run` works everywhere without an explicit -r. On an ARM64 Windows host this Windows branch is
+         not reached - Directory.Build.props pins RuntimeIdentifier=win-arm64 there (see the comment in that
+         file for why it has to happen that early), so the win-arm64 reference above wins. That leaves this
+         line covering x64 Windows hosts. -->
     <PackageReference Include="WebViewControl-Avalonia" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT'" />
     <PackageReference Include="WebViewControl-Avalonia-ARM64" Version="3.120.9" Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' != 'Windows_NT'" />
     <PackageReference Include="Mono.Cecil" Version="0.11.6" />

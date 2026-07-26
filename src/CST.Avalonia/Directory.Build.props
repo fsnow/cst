@@ -1,0 +1,35 @@
+<Project>
+
+  <!--
+    ARM64 Windows dev builds: pin the RID so CEF resolves to the ARM64 natives.
+
+    Why this file exists (#28): CefGlue.Common.props derives $(CefGlueTargetPlatform) from
+    $(RuntimeIdentifier), and when no RID is set on Windows it falls back to win-x64 unconditionally -
+    it only honours $(Platform) == 'ARM64', which the SDK leaves at 'AnyCPU'. So on an ARM64 Windows
+    box a bare `dotnet build` / `dotnet run` wires the x64 CEF paths (native libcef.dll *and* the
+    per-arch CefGlueBrowserProcess helper) into an arm64 process, and every WebView dies at CEF init.
+
+    Setting the RID here rather than in the .csproj is deliberate: Directory.Build.props is imported by
+    Microsoft.Common.props BEFORE the NuGet-generated nuget.g.props that pulls in CefGlue.Common.props,
+    so CefGlue sees a non-empty RuntimeIdentifier and takes its '$(RuntimeIdentifier)' != '' branch.
+    The same assignment inside CST.Avalonia.csproj would land too late - CefGlueTargetPlatform, and the
+    CefGlueBrowserProcessFiles item built from it, are already evaluated by then.
+
+    Scope is intentionally narrow - it only fires when ALL of these hold:
+      - no explicit RID (an explicit `-r` always wins; this never overrides the packaging script)
+      - Windows host (macOS/Linux are untouched)
+      - ARM64 host (x64 Windows keeps its existing RID-less behaviour and output paths)
+
+    Side effect: output moves to bin\<Config>\net10.0\win-arm64\. That is expected.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''
+                        and '$(OS)' == 'Windows_NT'
+                        and '$(PROCESSOR_ARCHITECTURE)' == 'ARM64'">
+    <RuntimeIdentifier>win-arm64</RuntimeIdentifier>
+    <!-- Framework-dependent: keeps plain `dotnet build` fast and matches the previous RID-less
+         behaviour. package-windows.ps1 passes an explicit RID and self-contained flag, so the
+         packaging path never reaches this PropertyGroup. -->
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+</Project>
