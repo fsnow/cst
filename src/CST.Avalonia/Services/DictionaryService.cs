@@ -116,24 +116,9 @@ public sealed class DictionaryService : IDictionaryService
         return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
     }
 
-    // The bundled dictionaries live in the dev project dir, or under Resources/ in a packaged .app.
-    private static string? ResolveBundledDictionariesDir()
-    {
-        var asmDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? "";
-        // Development: bin/<cfg>/<tfm>/ -> ../../../dictionaries (the project's dictionaries/ folder)
-        var dev = Path.Combine(asmDir, "..", "..", "..", "dictionaries");
-        if (Directory.Exists(dev))
-            return dev;
-        // Packaged beside the executable (Windows/Linux self-contained publish): <app>/dictionaries. (#403)
-        var beside = Path.Combine(asmDir, "dictionaries");
-        if (Directory.Exists(beside))
-            return beside;
-        // Packaged .app: Contents/MacOS/ -> ../Resources/dictionaries
-        var bundle = Path.Combine(asmDir, "..", "Resources", "dictionaries");
-        if (Directory.Exists(bundle))
-            return bundle;
-        return null;
-    }
+    // The bundled dictionaries live in the dev project dir, beside the executable, or under Resources/
+    // in a packaged .app. See BundledResourceLocator for why the dev lookup cannot use a fixed hop count.
+    private static string? ResolveBundledDictionariesDir() => BundledResourceLocator.Resolve("dictionaries");
 
     public IReadOnlyList<string> AvailableLanguages
     {

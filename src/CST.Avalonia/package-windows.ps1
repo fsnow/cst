@@ -10,17 +10,20 @@
   Both land in dist/. Distribution is via GitHub Releases + WinGet (fsnow.CSTReader); unsigned for beta. (#28)
 
 .PARAMETER Arch
-  Target architecture. Only x64 is supported for now (ARM64 deferred, #28).
+  Target architecture: x64 or arm64. Each produces its own zip + installer; both are shipped per release.
+  The two builds differ in more than the RID - CST.Avalonia.csproj selects WebViewControl-Avalonia (x64) vs
+  WebViewControl-Avalonia-ARM64 (arm64), which is what supplies the matching native CEF.
 
 .PARAMETER NoInstaller
   Skip the InnoSetup step (portable zip only).
 
 .EXAMPLE
   ./package-windows.ps1
+  ./package-windows.ps1 -Arch arm64
   ./package-windows.ps1 -NoInstaller
 #>
 param(
-    [ValidateSet('x64')]
+    [ValidateSet('x64','arm64')]
     [string]$Arch = 'x64',
     [switch]$NoInstaller
 )
@@ -103,7 +106,7 @@ if (-not $iscc) {
 }
 
 Write-Host "`nBuilding InnoSetup installer with $iscc ..." -ForegroundColor Yellow
-& $iscc "/DAppVersion=$Version" "/DPublishDir=$PublishDir" "/DOutputDir=$DistDir" (Join-Path $ProjectDir 'CST.Avalonia.iss')
+& $iscc "/DAppVersion=$Version" "/DArch=$Arch" "/DPublishDir=$PublishDir" "/DOutputDir=$DistDir" (Join-Path $ProjectDir 'CST.Avalonia.iss')
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
 
 $setup = Join-Path $DistDir "CST-Reader-$Version-$RID-setup.exe"

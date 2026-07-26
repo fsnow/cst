@@ -1290,44 +1290,14 @@ namespace CST.Avalonia.ViewModels
         {
             try
             {
-                string? sourceXslDir = null;
-
-                // First, try to find XSL files in development environment
-                var assemblyLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
-                var projectXslPath = Path.Combine(
-                    Path.GetDirectoryName(assemblyLocation) ?? "",
-                    "..", "..", "..", "Xsl");
-
-                if (Directory.Exists(projectXslPath))
-                {
-                    sourceXslDir = projectXslPath;
-                    _logger.Information("Found XSL files in development directory: {Path}", projectXslPath);
-                }
-                else
-                {
-                    // Packaged beside the executable (Windows/Linux self-contained publish): <app>/xsl. (#403)
-                    var besideExePath = Path.Combine(
-                        Path.GetDirectoryName(assemblyLocation) ?? "", "xsl");
-
-                    // Try app bundle location for production (macOS: Contents/MacOS -> ../Resources/xsl)
-                    var bundleResourcesPath = Path.Combine(
-                        Path.GetDirectoryName(assemblyLocation) ?? "",
-                        "..", "Resources", "xsl");
-
-                    if (Directory.Exists(besideExePath))
-                    {
-                        sourceXslDir = besideExePath;
-                        _logger.Information("Found XSL files next to the executable: {Path}", besideExePath);
-                    }
-                    else if (Directory.Exists(bundleResourcesPath))
-                    {
-                        sourceXslDir = bundleResourcesPath;
-                        _logger.Information("Found XSL files in app bundle: {Path}", bundleResourcesPath);
-                    }
-                }
-
+                // Dev source tree, beside the executable, or the macOS .app Resources dir. The dev lookup
+                // deliberately walks ancestors instead of hopping a fixed number of levels - see
+                // BundledResourceLocator. (#28)
+                string? sourceXslDir = BundledResourceLocator.Resolve("xsl");
                 if (sourceXslDir != null)
                 {
+                    _logger.Information("Found XSL files at: {Path}", sourceXslDir);
+
                     var xslFiles = Directory.GetFiles(sourceXslDir, "*.xsl");
                     int copiedCount = 0;
                     foreach (var xslFile in xslFiles)
