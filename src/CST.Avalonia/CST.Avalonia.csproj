@@ -102,8 +102,9 @@
     <PackageReference Include="ReactiveUI" Version="23.2.28" />
     <!-- MCP surface (#191): Streamable HTTP transport mounted in-process at /mcp on the loopback API server. -->
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.9" />
+    <!-- Microsoft.Extensions.DependencyInjection / .Logging are deliberately NOT referenced here: the
+         Microsoft.AspNetCore.App FrameworkReference above already supplies them, and referencing them
+         explicitly warned NU1510 ("will not be pruned"). -->
     <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
