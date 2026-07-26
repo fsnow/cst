@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
+using CST.Avalonia.Input;
 using CST;
 using CST.Conversion;
 using Serilog;
@@ -56,7 +57,12 @@ public partial class SimpleTabbedWindow : Window
         
         // Initialize window state management
         InitializeWindowStateManagement();
-        
+
+        // #28: off macOS the menu's gestures are decorative until we bind them ourselves.
+        RegisterMenuShortcutKeyBindings();
+        // #28: and Settings has no entry point off macOS until we add one.
+        AddSettingsMenuItemOffMacOS();
+
         // Add diagnostic logging for focus and keyboard events
         GotFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow GotFocus. Source: {Source}", e.Source?.GetType().Name);
         LostFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow LostFocus. Source: {Source}", e.Source?.GetType().Name);
@@ -645,6 +651,107 @@ public partial class SimpleTabbedWindow : Window
                 webView.IsHitTestVisible = true;
                 _logger.Information("Restored WebView in window: {WindowTitle}", window.Title);
             }
+        }
+    }
+
+    // Minimal ICommand for the KeyBindings below. KeyBinding needs an ICommand and these are plain
+    // void handlers, so a relay is all that is required - no ReactiveCommand scheduler in a Window.
+    private sealed class MenuShortcutCommand : System.Windows.Input.ICommand
+    {
+        private readonly Action _invoke;
+        public MenuShortcutCommand(Action invoke) => _invoke = invoke;
+        public event EventHandler? CanExecuteChanged { add { } remove { } }
+        public bool CanExecute(object? parameter) => true;
+        public void Execute(object? parameter) => _invoke();
+    }
+
+    /// <summary>
+    /// Binds the menu shortcuts as real window accelerators on Windows/Linux.
+    ///
+    /// The in-window &lt;NativeMenuBar/&gt; only ever *displayed* them: NativeMenuBarPresenter binds
+    /// NativeMenuItem.Gesture to MenuItem.InputGesture, which is decoration, and never to MenuItem.HotKey,
+    /// which is what registers an accelerator. So off macOS every menu shortcut was dead - the menu showed
+    /// "Ctrl+D" and pressing it did nothing. Only ⌘/Ctrl+G, W, E, C and A appeared to work, because those
+    /// are separately forwarded out of the book WebView by JavaScript. (#28)
+    ///
+    /// macOS is deliberately excluded: the system menu bar already registers these gestures, and a second
+    /// binding here would invoke each command twice.
+    ///
+    /// This covers focus anywhere in Avalonia's own controls. When a book WebView holds focus, CEF takes
+    /// the keystroke before Avalonia sees it - that case is handled by the JS capture in BookDisplayView.
+    /// </summary>
+    private void RegisterMenuShortcutKeyBindings()
+    {
+        if (OperatingSystem.IsMacOS()) return;
+
+        void Bind(string gesture, Action invoke) => KeyBindings.Add(new KeyBinding
+        {
+            Gesture = PlatformGesture.Parse(gesture),
+            Command = new MenuShortcutCommand(invoke)
+        });
+
+        // Same set, and the same handlers, as the NativeMenu declarations in SimpleTabbedWindow.axaml.
+        Bind("o", () => OnSelectBookClick(this, EventArgs.Empty));
+        Bind("p", () => OnPrintClick(this, EventArgs.Empty));
+        Bind("shift+p", () => OnPrintSelectionClick(this, EventArgs.Empty));
+        Bind("w", () => OnCloseTabClick(this, EventArgs.Empty));
+        Bind("g", () => OnGoToMenuItemClick(this, EventArgs.Empty));
+        Bind("d", () => OnLookUpInDictionaryClick(this, EventArgs.Empty));
+        Bind("f", () => OnSearchForSelectionClick(this, EventArgs.Empty));
+        Bind("e", () => OnViewSource1957Click(this, EventArgs.Empty));
+        Bind("shift+e", () => OnViewSource2010Click(this, EventArgs.Empty));
+        // Settings lives in the macOS app menu, so it has no NativeMenu declaration here to mirror -
+        // see AddSettingsMenuItemOffMacOS, which adds the Tools entry this shortcut matches.
+        Bind("OemComma", () => _ = App.ShowSettingsWindow());
+
+        _logger.Information("Registered {Count} menu shortcut key bindings (NativeMenuBar gestures are display-only off macOS)", KeyBindings.Count);
+    }
+
+    /// <summary>
+    /// Adds Tools &gt; Settings on Windows/Linux.
+    ///
+    /// Preferences is declared in App.axaml's *application*-level NativeMenu, which Avalonia only ever
+    /// realises as the macOS application menu. Off macOS the in-window &lt;NativeMenuBar/&gt; renders the
+    /// *window's* menu (File/View/Tools/Window), so that declaration is never shown and the Settings
+    /// dialog was completely unreachable - no menu item, and no working shortcut either. (#28)
+    ///
+    /// Added here rather than in SimpleTabbedWindow.axaml because it must not appear on macOS, where
+    /// Preferences belongs in the application menu per the platform convention.
+    /// </summary>
+    private void AddSettingsMenuItemOffMacOS()
+    {
+        if (OperatingSystem.IsMacOS()) return;
+
+        try
+        {
+            var toolsMenu = NativeMenu.GetMenu(this)?
+                .Items.OfType<NativeMenuItem>()
+                .FirstOrDefault(i => i.Header?.ToString() == "Tools")?.Menu;
+
+            if (toolsMenu == null)
+            {
+                _logger.Warning("Tools menu not found - Settings will be reachable only via its keyboard shortcut");
+                return;
+            }
+
+            var settingsItem = new NativeMenuItem
+            {
+                Header = "Settings…",
+                Gesture = PlatformGesture.Parse("OemComma")
+            };
+            settingsItem.Click += async (s, e) =>
+            {
+                _logger.Information("Settings opened from the Tools menu");
+                await App.ShowSettingsWindow();
+            };
+
+            toolsMenu.Add(new NativeMenuItemSeparator());
+            toolsMenu.Add(settingsItem);
+            _logger.Information("Added Tools > Settings (macOS shows Preferences in the application menu instead)");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to add the Settings menu item");
         }
     }
 

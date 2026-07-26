@@ -2021,6 +2021,49 @@ public partial class BookDisplayView : UserControl
                 _logger.Error("Error processing Go To request from JavaScript | {Details}", ex.Message);
             }
         }
+        // #28: Look Up in Dictionary requested from JavaScript (⌘/Ctrl+D while this book's WebView has
+        // focus). Like CST_GOTO, the message arrives on the focused book's own view, so it is inherently
+        // the right book. LookUpInDictionaryAsync then does its own title round-trip to pull the current
+        // selection (CST_LOOKUP_SEL), which is why this must not run on the CEF thread.
+        else if (title != null && title.StartsWith("CST_LOOKUP_REQUESTED:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Debug("*** LOOK UP IN DICTIONARY REQUESTED FROM JAVASCRIPT ***");
+                    Dispatcher.UIThread.Post(async () =>
+                        await SimpleTabbedWindow.LookUpInDictionaryAsync(_viewModel));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing Look Up in Dictionary request from JavaScript | {Details}", ex.Message);
+            }
+        }
+        // #28: Search for Selection requested from JavaScript (⌘/Ctrl+F while this book's WebView has focus).
+        else if (title != null && title.StartsWith("CST_SEARCH_SELECTION_REQUESTED:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    _logger.Debug("*** SEARCH FOR SELECTION REQUESTED FROM JAVASCRIPT ***");
+                    Dispatcher.UIThread.Post(async () =>
+                        await SimpleTabbedWindow.SearchForSelectionAsync(_viewModel));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing Search for Selection request from JavaScript | {Details}", ex.Message);
+            }
+        }
         // Check for JS log messages
         else if (title != null && title.StartsWith("CST_LOG_MSG::"))
         {
@@ -2147,6 +2190,32 @@ public partial class BookDisplayView : UserControl
                                     if (event.repeat) return false;
                                     window.cstLogger.log('DEBUG', 'Go To shortcut detected in JavaScript');
                                     document.title = 'CST_GOTO:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                // #28: Cmd+D / Ctrl+D (Look Up in Dictionary). Same reason as Go To below -
+                                // CEF holds focus while reading, so the window KeyBindings never see this.
+                                // On Windows this is the whole shortcut: NativeMenuBar gestures are
+                                // display-only there, so without this forward Ctrl+D is a dead key in a book.
+                                // Match 'd' and 'D' (Caps Lock yields 'D' in Chromium); !shiftKey keeps any
+                                // future ⇧⌘D free. preventDefault also stops Chromium's bookmark dialog.
+                                if ((event.key === 'd' || event.key === 'D') && !event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.repeat) return false;
+                                    window.cstLogger.log('DEBUG', 'Look Up in Dictionary shortcut detected in JavaScript');
+                                    document.title = 'CST_LOOKUP_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                // #28: Cmd+F / Ctrl+F (Search for Selection). preventDefault also suppresses
+                                // Chromium's own find bar, which would otherwise open over the book.
+                                if ((event.key === 'f' || event.key === 'F') && !event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.repeat) return false;
+                                    window.cstLogger.log('DEBUG', 'Search for Selection shortcut detected in JavaScript');
+                                    document.title = 'CST_SEARCH_SELECTION_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
 

@@ -6,6 +6,7 @@
              xmlns:vm="using:CST.Avalonia.ViewModels"
              xmlns:views="using:CST.Avalonia.Views"
              xmlns:dock="using:Dock.Model.Mvvm.Controls"
+             xmlns:input="using:CST.Avalonia.Input"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
@@ -92,8 +93,10 @@
     <!-- Native Menu for macOS - Application level (goes into CST Reader app menu) -->
     <NativeMenu.Menu>
         <NativeMenu>
-            <!-- Preferences in app menu following macOS convention -->
-            <NativeMenuItem Header="Preferences..." Gesture="Cmd+OemComma" />
+            <!-- Preferences in app menu following macOS convention. This application-level NativeMenu is
+                 only realised as the macOS app menu, so the gesture is ⌘, in practice - but it resolves
+                 per platform like every other shortcut rather than hardcoding the modifier. (#28) -->
+            <NativeMenuItem Header="Preferences..." Gesture="{input:CommandGesture OemComma}" />
         </NativeMenu>
     </NativeMenu.Menu>
 </Application>

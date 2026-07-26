@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:dock="using:Dock.Avalonia.Controls"
         xmlns:vm="using:CST.Avalonia.ViewModels"
+        xmlns:input="using:CST.Avalonia.Input"
         x:Class="CST.Avalonia.Views.SimpleTabbedWindow"
         x:DataType="vm:LayoutViewModel"
         Title="CST Reader"
@@ -12,22 +13,25 @@
     <!-- Native Menu for macOS - Window level (creates top-level menus in menu bar) -->
     <NativeMenu.Menu>
         <NativeMenu>
-            <!-- File Menu (#110): ⌘W closes the active document tab (book or PDF) in the focused window -->
+            <!-- File Menu (#110): ⌘/Ctrl+W closes the active document tab (book or PDF) in the focused window.
+                 Gestures use {input:CommandGesture} so the modifier resolves per platform - ⌘ on macOS,
+                 Ctrl on Windows/Linux. Spelling "cmd+w" here bound them to the Windows key, which Windows
+                 itself reserves for most of these letters. (#28) -->
             <NativeMenuItem Header="File">
                 <NativeMenu>
-                    <!-- #111: ⌘O reveals the book tree and focuses it; it never hides the panel
+                    <!-- #111: ⌘/Ctrl+O reveals the book tree and focuses it; it never hides the panel
                          (the View menu checkbox does that). CST4's Ctrl+O opened the book dialog. -->
-                    <NativeMenuItem Header="Select a Book" Click="OnSelectBookClick" Gesture="cmd+o" />
+                    <NativeMenuItem Header="Select a Book" Click="OnSelectBookClick" Gesture="{input:CommandGesture o}" />
                     <!-- #44: populated at runtime from the recent-books MRU list by App.RebuildRecentMenus -->
                     <NativeMenuItem Header="Open Recent">
                         <NativeMenu />
                     </NativeMenuItem>
                     <NativeMenuItemSeparator />
                     <!-- #112: print the active book via the platform print dialog (window.print()) -->
-                    <NativeMenuItem Header="Print…" Click="OnPrintClick" Gesture="cmd+p" />
-                    <NativeMenuItem Header="Print Selection…" Click="OnPrintSelectionClick" Gesture="cmd+shift+p" />
+                    <NativeMenuItem Header="Print…" Click="OnPrintClick" Gesture="{input:CommandGesture p}" />
+                    <NativeMenuItem Header="Print Selection…" Click="OnPrintSelectionClick" Gesture="{input:CommandGesture shift+p}" />
                     <NativeMenuItemSeparator />
-                    <NativeMenuItem Header="Close Tab" Click="OnCloseTabClick" Gesture="cmd+w" />
+                    <NativeMenuItem Header="Close Tab" Click="OnCloseTabClick" Gesture="{input:CommandGesture w}" />
                 </NativeMenu>
             </NativeMenuItem>
 
@@ -43,11 +47,11 @@
             <!-- Tools Menu -->
             <NativeMenuItem Header="Tools">
                 <NativeMenu>
-                    <NativeMenuItem Header="Go To..." Click="OnGoToMenuItemClick" Gesture="cmd+g" />
-                    <NativeMenuItem Header="Look Up in Dictionary" Click="OnLookUpInDictionaryClick" Gesture="cmd+d" />
-                    <NativeMenuItem Header="Search for Selection" Click="OnSearchForSelectionClick" Gesture="cmd+f" />
-                    <NativeMenuItem Header="View Source (1957 ed.)" Click="OnViewSource1957Click" Gesture="cmd+e" />
-                    <NativeMenuItem Header="View Source (2010 ed.)" Click="OnViewSource2010Click" Gesture="cmd+shift+e" />
+                    <NativeMenuItem Header="Go To..." Click="OnGoToMenuItemClick" Gesture="{input:CommandGesture g}" />
+                    <NativeMenuItem Header="Look Up in Dictionary" Click="OnLookUpInDictionaryClick" Gesture="{input:CommandGesture d}" />
+                    <NativeMenuItem Header="Search for Selection" Click="OnSearchForSelectionClick" Gesture="{input:CommandGesture f}" />
+                    <NativeMenuItem Header="View Source (1957 ed.)" Click="OnViewSource1957Click" Gesture="{input:CommandGesture e}" />
+                    <NativeMenuItem Header="View Source (2010 ed.)" Click="OnViewSource2010Click" Gesture="{input:CommandGesture shift+e}" />
                 </NativeMenu>
             </NativeMenuItem>
 

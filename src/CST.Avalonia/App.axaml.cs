@@ -22,6 +22,7 @@ using CST.Avalonia.Views;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
 using CST.Avalonia.Constants;
+using CST.Avalonia.Input;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using CST;
@@ -1346,7 +1347,7 @@ public partial class App : Application
             viewMenu.Add(dictionaryItem);
 
             // Tools menu: Go To... + View Source (floating windows are book-centric)
-            var goToItem = new NativeMenuItem { Header = "Go To...", Gesture = KeyGesture.Parse("Cmd+G") };
+            var goToItem = new NativeMenuItem { Header = "Go To...", Gesture = PlatformGesture.Parse("G") };
             goToItem.Click += (s, e) =>
             {
                 Log.Information("Go To menu item clicked via Tools menu (floating window)");
@@ -1354,19 +1355,19 @@ public partial class App : Application
             };
 
             // View Source as app-level shortcuts so they work without the WebView having focus. (Cmd+E/Shift+Cmd+E)
-            var viewSource1957Item = new NativeMenuItem { Header = "View Source (1957 ed.)", Gesture = KeyGesture.Parse("Cmd+E") };
+            var viewSource1957Item = new NativeMenuItem { Header = "View Source (1957 ed.)", Gesture = PlatformGesture.Parse("E") };
             viewSource1957Item.Click += (s, e) => OnViewSourceFromFloatingWindow(window, source2010: false);
-            var viewSource2010Item = new NativeMenuItem { Header = "View Source (2010 ed.)", Gesture = KeyGesture.Parse("Cmd+Shift+E") };
+            var viewSource2010Item = new NativeMenuItem { Header = "View Source (2010 ed.)", Gesture = PlatformGesture.Parse("Shift+E") };
             viewSource2010Item.Click += (s, e) => OnViewSourceFromFloatingWindow(window, source2010: true);
 
             // #448: Look Up in Dictionary (Cmd+D) and Search for Selection (Cmd+F). These were declared only
             // in the main window's Tools menu, and macOS shows the menu bar of whichever window is active —
             // so with a floated book focused they were dead keys. Both act on the floated book's selection
             // and reveal their tool in the main window.
-            var lookUpItem = new NativeMenuItem { Header = "Look Up in Dictionary", Gesture = KeyGesture.Parse("Cmd+D") };
+            var lookUpItem = new NativeMenuItem { Header = "Look Up in Dictionary", Gesture = PlatformGesture.Parse("D") };
             lookUpItem.Click += async (s, e) =>
                 await SimpleTabbedWindow.LookUpInDictionaryAsync(FindActiveBookInFloatingWindow(window));
-            var searchSelectionItem = new NativeMenuItem { Header = "Search for Selection", Gesture = KeyGesture.Parse("Cmd+F") };
+            var searchSelectionItem = new NativeMenuItem { Header = "Search for Selection", Gesture = PlatformGesture.Parse("F") };
             searchSelectionItem.Click += async (s, e) =>
                 await SimpleTabbedWindow.SearchForSelectionAsync(FindActiveBookInFloatingWindow(window));
 
@@ -1378,18 +1379,18 @@ public partial class App : Application
             toolsMenu.Add(viewSource2010Item);
 
             // #110: File > Close Tab (⌘W) — closes the active document tab in this floating window.
-            var closeTabItem = new NativeMenuItem { Header = "Close Tab", Gesture = KeyGesture.Parse("Cmd+W") };
+            var closeTabItem = new NativeMenuItem { Header = "Close Tab", Gesture = PlatformGesture.Parse("W") };
             closeTabItem.Click += (s, e) => OnCloseTabFromFloatingWindow(window);
             // #111: Select a Book (Cmd+O) — the tree lives in the main window, so this reveals and focuses
             // it there, the same as the main window's File menu item.
-            var selectBookMenuItem = new NativeMenuItem { Header = "Select a Book", Gesture = KeyGesture.Parse("Cmd+O") };
+            var selectBookMenuItem = new NativeMenuItem { Header = "Select a Book", Gesture = PlatformGesture.Parse("O") };
             selectBookMenuItem.Click += (s, e) => SimpleTabbedWindow.RevealSelectBookPanel();
 
             // #112: Print (Cmd+P) and Print Selection (Shift+Cmd+P) the floated book — same native
             // window.print() path as the main window.
-            var printItem = new NativeMenuItem { Header = "Print…", Gesture = KeyGesture.Parse("Cmd+P") };
+            var printItem = new NativeMenuItem { Header = "Print…", Gesture = PlatformGesture.Parse("P") };
             printItem.Click += (s, e) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.Print();
-            var printSelectionItem = new NativeMenuItem { Header = "Print Selection…", Gesture = KeyGesture.Parse("Cmd+Shift+P") };
+            var printSelectionItem = new NativeMenuItem { Header = "Print Selection…", Gesture = PlatformGesture.Parse("Shift+P") };
             printSelectionItem.Click += (s, e) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.PrintSelection();
 
             var fileMenu = new NativeMenu();
@@ -1496,7 +1497,7 @@ public partial class App : Application
         submenu.Items.Clear();
 
         // Minimize acts on the window whose menu bar is showing (its owner).
-        var minimize = new NativeMenuItem { Header = "Minimize", Gesture = KeyGesture.Parse("Cmd+M") };
+        var minimize = new NativeMenuItem { Header = "Minimize", Gesture = PlatformGesture.Parse("M") };
         minimize.Click += (_, _) => { try { owner.WindowState = global::Avalonia.Controls.WindowState.Minimized; } catch { /* ignore */ } };
         submenu.Add(minimize);
 
@@ -1660,7 +1661,10 @@ public partial class App : Application
         }
     }
 
-    private async Task ShowSettingsWindow()
+    // #28: also invoked from the Windows/Linux Tools menu. The macOS Preferences item lives in the
+    // application-level NativeMenu, which is only ever realised as the macOS app menu - off macOS the
+    // in-window <NativeMenuBar/> renders the *window's* menu, so Settings had no entry point at all.
+    internal static async Task ShowSettingsWindow()
     {
         try
         {
