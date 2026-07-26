@@ -60,6 +60,8 @@ public partial class SimpleTabbedWindow : Window
 
         // #28: off macOS the menu's gestures are decorative until we bind them ourselves.
         RegisterMenuShortcutKeyBindings();
+        // #28: and Settings has no entry point off macOS until we add one.
+        AddSettingsMenuItemOffMacOS();
 
         // Add diagnostic logging for focus and keyboard events
         GotFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow GotFocus. Source: {Source}", e.Source?.GetType().Name);
@@ -698,8 +700,59 @@ public partial class SimpleTabbedWindow : Window
         Bind("f", () => OnSearchForSelectionClick(this, EventArgs.Empty));
         Bind("e", () => OnViewSource1957Click(this, EventArgs.Empty));
         Bind("shift+e", () => OnViewSource2010Click(this, EventArgs.Empty));
+        // Settings lives in the macOS app menu, so it has no NativeMenu declaration here to mirror -
+        // see AddSettingsMenuItemOffMacOS, which adds the Tools entry this shortcut matches.
+        Bind("OemComma", () => _ = App.ShowSettingsWindow());
 
         _logger.Information("Registered {Count} menu shortcut key bindings (NativeMenuBar gestures are display-only off macOS)", KeyBindings.Count);
+    }
+
+    /// <summary>
+    /// Adds Tools &gt; Settings on Windows/Linux.
+    ///
+    /// Preferences is declared in App.axaml's *application*-level NativeMenu, which Avalonia only ever
+    /// realises as the macOS application menu. Off macOS the in-window &lt;NativeMenuBar/&gt; renders the
+    /// *window's* menu (File/View/Tools/Window), so that declaration is never shown and the Settings
+    /// dialog was completely unreachable - no menu item, and no working shortcut either. (#28)
+    ///
+    /// Added here rather than in SimpleTabbedWindow.axaml because it must not appear on macOS, where
+    /// Preferences belongs in the application menu per the platform convention.
+    /// </summary>
+    private void AddSettingsMenuItemOffMacOS()
+    {
+        if (OperatingSystem.IsMacOS()) return;
+
+        try
+        {
+            var toolsMenu = NativeMenu.GetMenu(this)?
+                .Items.OfType<NativeMenuItem>()
+                .FirstOrDefault(i => i.Header?.ToString() == "Tools")?.Menu;
+
+            if (toolsMenu == null)
+            {
+                _logger.Warning("Tools menu not found - Settings will be reachable only via its keyboard shortcut");
+                return;
+            }
+
+            var settingsItem = new NativeMenuItem
+            {
+                Header = "Settings…",
+                Gesture = PlatformGesture.Parse("OemComma")
+            };
+            settingsItem.Click += async (s, e) =>
+            {
+                _logger.Information("Settings opened from the Tools menu");
+                await App.ShowSettingsWindow();
+            };
+
+            toolsMenu.Add(new NativeMenuItemSeparator());
+            toolsMenu.Add(settingsItem);
+            _logger.Information("Added Tools > Settings (macOS shows Preferences in the application menu instead)");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to add the Settings menu item");
+        }
     }
 
     private void OnGoToMenuItemClick(object? sender, EventArgs e)

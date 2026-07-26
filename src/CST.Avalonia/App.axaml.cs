@@ -1661,7 +1661,10 @@ public partial class App : Application
         }
     }
 
-    private async Task ShowSettingsWindow()
+    // #28: also invoked from the Windows/Linux Tools menu. The macOS Preferences item lives in the
+    // application-level NativeMenu, which is only ever realised as the macOS app menu - off macOS the
+    // in-window <NativeMenuBar/> renders the *window's* menu, so Settings had no entry point at all.
+    internal static async Task ShowSettingsWindow()
     {
         try
         {
