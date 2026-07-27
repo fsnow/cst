@@ -89,7 +89,7 @@ language code**, with each source's files **prefixed by source id**:
   loose in `Reference/`; both are now under a language-code dir.
 
 **Repo source-of-truth.** The bundled dictionary files live in the Avalonia
-project, mirroring the runtime layout (and the `src/CST.Avalonia/Xsl/` precedent):
+project, mirroring the runtime layout (and the `src/CST.Avalonia/xsl/` precedent):
 
 ```
 src/CST.Avalonia/dictionaries/
