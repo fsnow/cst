@@ -265,7 +265,7 @@ xattr -rd com.apple.quarantine ~/Downloads/CST-Reader-arm64.dmg
 
 ## Related Issues
 
-- **AVALONIA_HIGH_CPU.md**: macOS performance issue (separate from notarization)
+- **Issue #523**: macOS idle CPU usage (separate from notarization)
 - **CEF_HELPER_PACKAGING.md**: CEF subprocess packaging (resolved)
 - **CODE_SIGNING.md**: Code signing implementation (working correctly)
 
