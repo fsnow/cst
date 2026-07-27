@@ -33,11 +33,16 @@ public sealed class DpdUpdateService : IDpdUpdateService
     // provider holds it open). Applied by ApplyPendingInstall() before the db is opened at startup. (#394)
     private const string PendingSuffix = ".pending";
 
-    // The installed asset paths (must match the DI wiring in App.axaml.cs).
+    // The installed asset paths (must match the DI wiring in App.axaml.cs). Every dictionary — the bundled
+    // flat-file ones and these downloaded derived assets alike — lives under <data>/dictionaries/, so the
+    // user data directory has one place to look for dictionary content rather than three.
     public static string DpdSubsetPath =>
-        Path.Combine(AppConstants.DataDirectory, "dpd-cst-subset", "dpd-cst-subset.db");
+        Path.Combine(AppConstants.DataDirectory, DictionariesDirectoryName, "dpd-cst-subset", "dpd-cst-subset.db");
     public static string DppnLexiconPath =>
-        Path.Combine(AppConstants.DataDirectory, "dppn", "dppn.db");
+        Path.Combine(AppConstants.DataDirectory, DictionariesDirectoryName, "dppn", "dppn.db");
+
+    /// <summary>The single root every dictionary lives under, shared with <see cref="DictionaryService"/>.</summary>
+    internal const string DictionariesDirectoryName = "dictionaries";
 
     private readonly ILogger<DpdUpdateService> _logger;
     private readonly ISettingsService _settings;

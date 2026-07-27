@@ -127,8 +127,12 @@ public sealed class DictionaryService : IDictionaryService
             if (!Directory.Exists(_dictionariesDirectory))
                 return Array.Empty<string>();
 
+            // Require an actual flat-file dictionary (*.txt), not merely "some file". The derived assets
+            // (dpd-cst-subset, dppn) now live under this same root so all dictionaries share one directory,
+            // and they hold .db files — without this filter they'd be reported as flat-file dictionaries and
+            // the loader would try to parse SQLite as headword/definition line pairs.
             return Directory.EnumerateDirectories(_dictionariesDirectory)
-                .Where(dir => Directory.EnumerateFiles(dir).Any())
+                .Where(dir => Directory.EnumerateFiles(dir, "*.txt").Any())
                 .Select(dir => Path.GetFileName(dir))
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList();
@@ -254,7 +258,11 @@ public sealed class DictionaryService : IDictionaryService
             // headword's definitions are joined rather than double-listed.
             var merged = new Dictionary<string, string>(StringComparer.Ordinal);
 
-            foreach (var file in Directory.GetFiles(languageDir).OrderBy(f => f, StringComparer.Ordinal))
+            // *.txt only — the dictionary DATA. Reading every file swept in the app-owned source.json metadata
+            // and parsed its JSON as headword/definition line pairs, injecting junk entries keyed on "{" and
+            // the like. Harmless in practice (nobody looks those up) but wrong, and now that the derived .db
+            // assets share this root the filter is load-bearing rather than cosmetic.
+            foreach (var file in Directory.GetFiles(languageDir, "*.txt").OrderBy(f => f, StringComparer.Ordinal))
             {
                 ct.ThrowIfCancellationRequested();   // a client timeout stops the load, not just the caller's await
                 var lines = await File.ReadAllLinesAsync(file, ct).ConfigureAwait(false);

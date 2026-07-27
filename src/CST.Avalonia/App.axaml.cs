@@ -1131,7 +1131,7 @@ public partial class App : Application
         services.AddSingleton<CST.Tools.ISearchTool, Services.Tools.SearchTool>();
 
         // The dictionary SOURCE registry — the single list the API (and later the UI, #466) enumerates and
-        // queries. Sources: each flat-file language (en/hi), DPD (when dpd-cst-subset is installed), and each
+        // queries. Sources: each bundled flat-file dictionary, DPD (when dpd-cst-subset is installed), and each
         // downloaded lexicon (DPPN — present-iff its file exists). (#109/#466)
         // NOTE: the source set is fixed when the registry is first resolved. A DERIVED asset (dpd-cst-subset,
         // dppn.db) installed mid-session still flips available (its source checks the file live); a flat-file

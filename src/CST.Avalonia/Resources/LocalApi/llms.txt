@@ -257,7 +257,9 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `POST /v1/dictionary/lookup` - `{ language, query, outputScript?, maxEntries? }`
   -> entries `{ headword, meaningHtml, source, lemmaId? }`, where `source` is the dictionary's title for inline
   attribution (null if unrecorded; the full citation is in `/v1/dictionary/languages`).
-  The bundled flat dictionaries (`en`, `hi`) do exact/prefix/nearest-neighbor matching.
+  The bundled flat dictionaries (`vri-childers`, `vri-hindi`) do exact/prefix/nearest-neighbor matching.
+  `language` is a dictionary SOURCE id, not a language code - list them with `/v1/dictionary/languages`
+  rather than assuming `"en"`.
 <!--dpd-->
   When the dpd-cst-subset dataset is installed, `language:"dpd"` looks a word up in the **Digital Pāḷi
   Dictionary** — an inflected word resolves through the same form->lemma index as the lemma endpoints (EXACT

@@ -27,7 +27,6 @@ namespace CST.Avalonia.Services.Dictionaries
 
         public string Id => SourceId;
         public string DisplayName => "Digital Pāḷi Dictionary";
-        public string DefinitionLanguage => "en";
         public DictionarySourceKind Kind => DictionarySourceKind.General;
         public bool IsAvailable => _lemma.IsAvailable;
         public DictionarySourceInfo? Attribution => DpdSource();

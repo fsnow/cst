@@ -25,8 +25,8 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             IDictionaryTool dictionary,
             [Description("The headword to look up, in any script.")]
             string word,
-            [Description("Dictionary language code (see dictionary_languages), e.g. 'en'.")]
-            string language = "en",
+            [Description("Dictionary source id (see dictionary_languages), e.g. 'vri-childers', 'dpd'.")]
+            string language,
             [Description("Script for returned headwords.")]
             OutputScript outputScript = OutputScript.Latin,
             [Description("Maximum entries to return.")]
@@ -42,7 +42,7 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         }
 
         [McpServerTool(Name = "dictionary_languages")]
-        [Description("List the available dictionaries: each language code (for dictionary_lookup) plus its "
+        [Description("List the available dictionaries: each source id (for dictionary_lookup) plus its "
             + "source attribution (title, compiler, edition, publisher, license…) when recorded — cite this as "
             + "the gloss's source. 'source' is null for a dictionary with no recorded attribution.")]
         public static IReadOnlyList<DictionaryLanguageInfo> Languages(IDictionaryTool dictionary) => dictionary.Languages;

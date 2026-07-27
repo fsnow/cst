@@ -15,7 +15,7 @@ namespace CST.Avalonia.Services.Dictionaries
     }
 
     /// <summary>
-    /// One dictionary the reader can look a word up in — a flat-file dictionary (en/hi), DPD, a downloaded
+    /// One dictionary the reader can look a word up in — a flat-file dictionary (vri-childers/vri-hindi), DPD, a downloaded
     /// lexicon (DPPN), or a user import. The <see cref="DictionarySourceRegistry"/> is the single place both the
     /// UI and the <c>/v1/dictionary</c> tool enumerate and query sources, so they can't drift (#466). A source
     /// that is not installed reports <see cref="IsAvailable"/> false rather than being absent, so the set is
@@ -23,14 +23,12 @@ namespace CST.Avalonia.Services.Dictionaries
     /// </summary>
     public interface IDictionarySource
     {
-        /// <summary>Stable id, also the wire value on <c>/v1/dictionary</c> (e.g. "en", "hi", "dpd", "dppn").</summary>
+        /// <summary>Stable id, also the wire value on <c>/v1/dictionary</c> — the dictionary's own identity
+        /// (e.g. "vri-childers", "vri-hindi", "dpd", "dppn"), never a language code.</summary>
         string Id { get; }
 
         /// <summary>Human-readable name for a source picker (e.g. "DPD", "Childers 1875").</summary>
         string DisplayName { get; }
-
-        /// <summary>The language definitions are written in ("en", "hi"). Two sources may share it.</summary>
-        string DefinitionLanguage { get; }
 
         DictionarySourceKind Kind { get; }
 

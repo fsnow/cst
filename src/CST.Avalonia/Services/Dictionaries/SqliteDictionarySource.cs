@@ -46,7 +46,6 @@ namespace CST.Avalonia.Services.Dictionaries
 
         public string Id => _id;
         public string DisplayName => Meta()?.DisplayName is { Length: > 0 } d ? d : _id;
-        public string DefinitionLanguage => Meta()?.DefinitionLanguage ?? "en";
         public DictionarySourceKind Kind =>
             Meta()?.Kind == LexiconKind.ProperNames ? DictionarySourceKind.ProperNames : DictionarySourceKind.General;
 

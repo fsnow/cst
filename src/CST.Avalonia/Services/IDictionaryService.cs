@@ -14,8 +14,9 @@ namespace CST.Avalonia.Services;
 public interface IDictionaryService
 {
     /// <summary>
-    /// Two-letter language codes that currently have dictionary data on disk (e.g. <c>"en"</c>,
-    /// <c>"hi"</c>). Empty if the dictionaries directory is missing.
+    /// Ids of the flat-file dictionaries that currently have data on disk — the directory name under
+    /// <c>dictionaries/</c> (e.g. <c>"vri-childers"</c>, <c>"vri-hindi"</c>), which is the source's identity,
+    /// not a language code. Empty if the dictionaries directory is missing.
     /// </summary>
     IReadOnlyList<string> AvailableLanguages { get; }
 

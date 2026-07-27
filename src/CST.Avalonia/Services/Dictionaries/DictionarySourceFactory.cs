@@ -22,7 +22,7 @@ namespace CST.Avalonia.Services.Dictionaries
         {
             var sources = new List<IDictionarySource>();
 
-            // Flat-file languages first (so en/hi lead the list — the natural default), EXCLUDING any that
+            // Flat-file dictionaries first (so the bundled VRI ones lead the list — the natural default), EXCLUDING any that
             // collide with a reserved id, which a dedicated source owns.
             foreach (var lang in dictionary.AvailableLanguages)
                 if (!ReservedIds.Contains(lang))
