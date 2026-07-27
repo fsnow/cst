@@ -208,6 +208,12 @@ public partial class App : Application
 
             // Show the window BEFORE starting initialization
             MainWindow.Show();
+            // ...and make it the KEY window. macOS renders window-level menus (File/View/Tools/Window, declared
+            // in SimpleTabbedWindow.axaml) only for the key window — without this the app can come up frontmost
+            // but keyless, showing just the inert application menu from App.axaml until the user clicks the
+            // window. Show() alone leaves that to OS goodwill, which doesn't hold when the launching process
+            // keeps focus (e.g. started from a terminal). (#510)
+            MainWindow.Activate();
 
             // Start background initialization tasks that depend on settings
             var initTask = Task.Run(async () =>
