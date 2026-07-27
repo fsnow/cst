@@ -2064,6 +2064,44 @@ public partial class BookDisplayView : UserControl
                 _logger.Error("Error processing Search for Selection request from JavaScript | {Details}", ex.Message);
             }
         }
+        // #28: window-level shortcuts forwarded out of a focused book WebView. Unlike the book commands
+        // above these are not tab-scoped actions, but they still arrive tab-tagged so a background tab's
+        // WebView can never act on a keystroke the user aimed at the visible one.
+        else if (title != null && (title.StartsWith("CST_SELECT_BOOK_REQUESTED:")
+                                || title.StartsWith("CST_SETTINGS_REQUESTED:")
+                                || title.StartsWith("CST_PRINT_REQUESTED:")
+                                || title.StartsWith("CST_PRINT_SELECTION_REQUESTED:")))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    var command = parts[0];
+                    _logger.Debug("*** WINDOW SHORTCUT REQUESTED FROM JAVASCRIPT: {Command} ***", command);
+
+                    // OnTitleChanged runs on the CEF thread; all of these touch the UI (dock layout, a
+                    // modal dialog, or the print dialog), so they must be posted. (BOOK-2)
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (command.StartsWith("CST_SELECT_BOOK_REQUESTED"))
+                            SimpleTabbedWindow.RevealSelectBookPanel();
+                        else if (command.StartsWith("CST_SETTINGS_REQUESTED"))
+                            _ = App.ShowSettingsWindow();
+                        else if (command.StartsWith("CST_PRINT_SELECTION_REQUESTED"))
+                            PrintSelection();
+                        else
+                            Print();
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing window shortcut request from JavaScript | {Details}", ex.Message);
+            }
+        }
         // Check for JS log messages
         else if (title != null && title.StartsWith("CST_LOG_MSG::"))
         {
@@ -2216,6 +2254,38 @@ public partial class BookDisplayView : UserControl
                                     if (event.repeat) return false;
                                     window.cstLogger.log('DEBUG', 'Search for Selection shortcut detected in JavaScript');
                                     document.title = 'CST_SEARCH_SELECTION_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                // #28: the remaining window-level shortcuts. These are not book commands, but
+                                // CEF holds focus while reading, so the window KeyBindings never see them and
+                                // they would otherwise be dead keys inside a book. preventDefault also
+                                // suppresses Chromium's own Ctrl+O (open file) and Ctrl+P (print) dialogs.
+                                if ((event.key === 'o' || event.key === 'O') && !event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.repeat) return false;
+                                    window.cstLogger.log('DEBUG', 'Select a Book shortcut detected in JavaScript');
+                                    document.title = 'CST_SELECT_BOOK_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                if ((event.key === 'p' || event.key === 'P') && (event.metaKey || event.ctrlKey)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.repeat) return false;
+                                    window.cstLogger.log('DEBUG', 'Print shortcut detected in JavaScript (shift=' + event.shiftKey + ')');
+                                    document.title = (event.shiftKey ? 'CST_PRINT_SELECTION_REQUESTED:' : 'CST_PRINT_REQUESTED:')
+                                        + '|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                if (event.key === ',' && (event.metaKey || event.ctrlKey)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.repeat) return false;
+                                    window.cstLogger.log('DEBUG', 'Settings shortcut detected in JavaScript');
+                                    document.title = 'CST_SETTINGS_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
 

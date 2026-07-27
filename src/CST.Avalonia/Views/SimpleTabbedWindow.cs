@@ -702,7 +702,13 @@ public partial class SimpleTabbedWindow : Window
         Bind("shift+e", () => OnViewSource2010Click(this, EventArgs.Empty));
         // Settings lives in the macOS app menu, so it has no NativeMenu declaration here to mirror -
         // see AddSettingsMenuItemOffMacOS, which adds the Tools entry this shortcut matches.
-        Bind("OemComma", () => _ = App.ShowSettingsWindow());
+        Bind("OemComma", () =>
+        {
+            // Logged like the menu handlers above: without it the log cannot answer "did the shortcut
+            // fire, or did the dialog fail to open?", which is exactly the question that comes up.
+            _logger.Information("Settings opened via keyboard shortcut from window: {WindowTitle}", this.Title);
+            _ = App.ShowSettingsWindow();
+        });
 
         _logger.Information("Registered {Count} menu shortcut key bindings (NativeMenuBar gestures are display-only off macOS)", KeyBindings.Count);
     }
