@@ -1328,12 +1328,28 @@ namespace CST.Avalonia.ViewModels
         }
 
         // Returns the saved hit to restore, clamped to [1, totalHits]; falls back to 1
-        // for a fresh open (no saved index) or an out-of-range value.
+        // for a fresh open (no saved index).
         private int ResolveRestoreHitIndex(int totalHits)
+            => ClampRestoreHitIndex(_initialCurrentHitIndex, totalHits);
+
+        /// <summary>
+        /// Resolves a saved hit index against the book's real hit count.
+        ///
+        /// An out-of-range saved index clamps DOWN to the last hit rather than collapsing to 1, so this
+        /// agrees with the viewport, which does its own <c>Math.Min(savedHit, total)</c> in
+        /// <c>BookDisplayView.OnBookContentLoaded</c>. The two used to disagree: the reader scrolled to the
+        /// last hit while the counter read "1 of M", and stepping to the next hit then started from the
+        /// wrong place. Reachable from any caller supplying an index it didn't derive from the current
+        /// result set — restored state, and <c>POST /v1/navigate</c> with a hit beyond the match count
+        /// (whose clamping is already documented in llms.txt). (#441)
+        ///
+        /// Pure and static so it is directly testable — constructing a BookDisplayViewModel needs live services.
+        /// </summary>
+        internal static int ClampRestoreHitIndex(int? savedHitIndex, int totalHits)
         {
             if (totalHits <= 0) return 1;
-            if (_initialCurrentHitIndex is int saved && saved >= 1 && saved <= totalHits)
-                return saved;
+            if (savedHitIndex is int saved && saved >= 1)
+                return Math.Min(saved, totalHits);
             return 1;
         }
 
