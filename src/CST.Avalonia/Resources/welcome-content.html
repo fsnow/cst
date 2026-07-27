@@ -337,14 +337,15 @@
 <body>
     <div class="header">
         <div class="logo"><img src="buddha-transparent.png" alt="Buddha"></div>
-        <h1>Chaṭṭha Saṅgāyana Tipiṭaka Reader</h1>
-        <p class="subtitle">Modern Pāli Text Reader</p>
-        <p class="version">Version 5.0.0-beta.5 - June 2026</p>
+        <h1>CST Reader</h1>
+        <p class="subtitle">A Pāli Text Reader for the Chaṭṭha Saṅgāyana Tipiṭaka</p>
+        <p class="version">Version 5.0.0-beta.5 &bull; July 2026</p>
     </div>
 
     <div class="beta-notice">
-        <strong>⚠️ Important for Users Before Beta 4</strong>
-        <p>If you tested any version before Beta 4, please delete the contents of <code>~/Library/Application Support/CSTReader/</code> before running Beta 4. This will ensure a clean start with the new version.</p>
+        <strong>⚠️ Please start clean</strong>
+        <p>If you tested any earlier version, delete your CST Reader data directory before running Beta 5 &mdash; several on-disk layouts changed and the beta line carries no migration.</p>
+        <p style="margin-top: 8px;"><strong>macOS:</strong> <code>~/Library/Application Support/CSTReader/</code> &nbsp;&bull;&nbsp; <strong>Windows:</strong> <code>%APPDATA%\CSTReader\</code></p>
     </div>
 
     <div class="focus-areas">
@@ -352,58 +353,55 @@
         <p>Thank you for testing CST Reader! Your feedback will help shape the final release.</p>
 
         <h3 style="margin-top: 24px; margin-bottom: 16px;">Focus Areas</h3>
-        <p>We especially need feedback on these features:</p>
+        <p>Beta 5 is the first release at feature parity with CST4. These areas are new or changed, so feedback on them is especially valuable:</p>
 
         <div class="focus-item">
-            <strong>Dock Layout & Window Management</strong>
+            <strong>Windows &mdash; brand new in this release</strong>
             <ul>
-                <li><strong>Rearrange book tabs:</strong> Drag book tabs within the main window to reorder them</li>
-                <li><strong>Float/dock books:</strong> Use the Float/Dock buttons in book tabs to move them to separate windows or back to the main window</li>
-                <li><strong>Drag panels:</strong> The search panel and book tree can be dragged out and back (watch for the blue drop target indicators)</li>
-                <li><strong>Arrange panels:</strong> Resize the book tree, search panel, and book content areas</li>
+                <li>Install and first launch: does the text download and index build complete?</li>
+                <li>Everyday reading, searching and dictionary lookups</li>
+                <li>Keyboard shortcuts: Ctrl+O, Ctrl+G, Ctrl+D, Ctrl+F, Ctrl+P, Ctrl+, for Settings</li>
+                <li>If book text appears blank, turn off hardware acceleration in Settings and restart</li>
             </ul>
-            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">Do the Float/Dock buttons work smoothly? Are the panel drop targets clear? Any layout issues?</p>
+            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">This is the least-tested part of the release. Anything at all that looks wrong is worth reporting.</p>
         </div>
 
         <div class="focus-item">
-            <strong>Multi-Script Search</strong>
+            <strong>Dictionaries</strong>
             <ul>
-                <li>Search in all 14 Pāli scripts (Devanagari, Myanmar, Sinhala, Thai, Telugu, Tibetan, etc.)</li>
-                <li>Try phrase search with quotes (e.g., "evaṃ me sutaṃ")</li>
-                <li>Test multi-word proximity search (adjust word distance with slider - 1 to 50 words)</li>
-                <li>Test wildcard search with asterisks (*)</li>
-                <li>Try book filtering before searching</li>
-            </ul>
-        </div>
-
-        <div class="focus-item">
-            <strong>Session Persistence</strong>
-            <ul>
-                <li>Open several books, perform searches, change scripts, scroll to different positions</li>
-                <li>Quit and restart - do all books, search highlights, and scroll positions restore correctly?</li>
-                <li>Are your script selections and search terms remembered?</li>
+                <li>Switch between sources with the picker: the VRI dictionaries, the Digital Pāḷi Dictionary, and the Dictionary of Pāḷi Proper Names</li>
+                <li>Choose which dictionaries appear, and in what order, under Settings &rsaquo; Dictionary</li>
+                <li>The extra dictionaries download on first run &mdash; did that complete without trouble?</li>
             </ul>
         </div>
 
         <div class="focus-item">
-            <strong>Dark Mode Support</strong>
+            <strong>Printing</strong>
             <ul>
-                <li>Toggle Dark Mode in your system settings</li>
-                <li>Verify all UI panels (toolbar, search, settings) adapt correctly</li>
-                <li>Check that book content displays with dark background and inverted colors</li>
-                <li>Test search highlighting in both light and dark modes</li>
+                <li>Print a whole book, and print a selection (&#8984;P / Ctrl+P, &#8679;&#8984;P / Ctrl+Shift+P)</li>
+                <li>Check that search highlights remain legible on paper</li>
             </ul>
-            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">Does everything remain readable? Any contrast or color issues?</p>
+        </div>
+
+        <div class="focus-item">
+            <strong>Windows and tabs</strong>
+            <ul>
+                <li><strong>Float a book by dragging its tab out</strong> of the main window, and drag it back to re-dock (the old Float and Dock buttons are gone)</li>
+                <li>Drag the book tree and search panel out and back &mdash; watch for the drop-target indicators</li>
+                <li>Reorder book tabs, and split the reading area</li>
+            </ul>
+            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">Does your reading position survive floating, re-docking and restarting?</p>
         </div>
     </div>
 
     <div class="quick-start">
         <h3>🚀 Quick Start</h3>
         <ul>
-            <li><strong>Open books:</strong> Double-click any text in the left panel</li>
+            <li><strong>Open books:</strong> Double-click any text in the left panel, or select it and press Enter</li>
             <li><strong>Change script:</strong> Use the dropdown at the top (applies to all open books)</li>
             <li><strong>Search:</strong> Click search icon, enter Pāli text, optionally filter by book categories</li>
-            <li><strong>Settings:</strong> Customize UI fonts for each script</li>
+            <li><strong>Dictionary:</strong> Select a word and press &#8984;D / Ctrl+D</li>
+            <li><strong>Settings:</strong> Choose fonts for each script, and which dictionaries to use</li>
         </ul>
     </div>
 
@@ -437,8 +435,9 @@
     <div class="collapsible">
         <h2>Known Limitations</h2>
         <ul>
+            <li>The texts are presented in Pāli only &mdash; CST Reader does not include translations. The built-in dictionaries give the meaning of individual words.</li>
+            <li>Menus and dialogs are English only. CST4 offers 24 interface languages; that work is still ahead.</li>
             <li>Book content fonts not yet customizable (UI fonts for each script are customizable in Settings)</li>
-            <li>UI currently English-only (multi-language localization planned)</li>
             <li>macOS: Elevated CPU usage (~30% idle) is an Avalonia framework limitation, not specific to CST Reader</li>
         </ul>
     </div>
@@ -454,7 +453,7 @@
 
     <div class="update-note">
         <p>This welcome page updates automatically with new releases.</p>
-        <p>CST Reader 5.0.0-beta.5 • June 2026</p>
+        <p>CST Reader 5.0.0-beta.5 • July 2026</p>
     </div>
 </body>
 </html>

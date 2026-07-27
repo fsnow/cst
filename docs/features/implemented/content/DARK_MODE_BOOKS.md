@@ -432,7 +432,7 @@ private void ApplyDarkModeStyles()
 
 ## Related Documentation
 
-- `/markdown/notes/AVALONIA_HIGH_CPU.md` - CPU usage considerations
+- Issue #523 - macOS idle CPU usage considerations
 - `CLAUDE.md` - Project overview and Beta 3 priorities
 - `/Xsl/tipitaka-latn.xsl` - Reference XSL stylesheet with current CSS
 

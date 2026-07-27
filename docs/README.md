@@ -27,7 +27,6 @@ Core technical documentation about how the system works:
 ### 🔧 **implementation/** - Implementation Notes & Postmortems
 Lessons learned, known issues, and technical challenges:
 - [Cyrillic Encoding Limitation](implementation/CYRILLIC_ENCODING_LIMITATION.md) - Permanent encoding ambiguity
-- [Avalonia High CPU on macOS](implementation/AVALONIA_HIGH_CPU.md) - Framework-level CPU usage issue
 - [CEF Packaging](implementation/CEF_PACKAGING_ISSUE.md) - Chromium helper app bundling
 - [Control Recycling CEF Crash](implementation/CONTROL_RECYCLING_CEF_CRASH.md) - WebView crash with dock control recycling
 - [Code Signing](implementation/CODE_SIGNING.md) - macOS Developer ID signing
