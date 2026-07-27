@@ -131,6 +131,30 @@ p {
     color: white;
   }
 }
+
+/* Print (#500). Browsers omit backgrounds when printing, so the white-on-blue/green
+   highlight spans print white-on-white - invisible. Reset them to plain black text,
+   keeping hits bold so they stay findable on paper.
+   !important is required on two counts: it overrides the dark-mode rules above, and it
+   beats the inline colors the highlight script sets on each span (BookDisplayView, #224)
+   - those are normal inline declarations, which lose to an important rule.
+   The body/.note resets make dark-mode printing deterministic instead of depending on
+   whether the browser forces a light color-scheme for print. */
+@media print {
+  body { background: white !important; color: black !important; }
+  .note { color: black !important; }
+  .hit {
+    background: none !important;
+    background-color: transparent !important;
+    color: black !important;
+    font-weight: bold;
+  }
+  .context {
+    background: none !important;
+    background-color: transparent !important;
+    color: black !important;
+  }
+}
 </style>
 </head>
 <body>
