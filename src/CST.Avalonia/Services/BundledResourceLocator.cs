@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace CST.Avalonia.Services;
 
@@ -34,21 +35,62 @@ public static class BundledResourceLocator
         var ancestor = Directory.GetParent(asmDir);
         for (var i = 0; i < MaxSourceTreeDepth && ancestor != null; i++, ancestor = ancestor.Parent)
         {
-            var candidate = Path.Combine(ancestor.FullName, resourceDirName);
-            if (Directory.Exists(candidate))
-                return candidate;
+            if (FindDirectory(ancestor.FullName, resourceDirName) is { } sourceTree)
+                return sourceTree;
         }
 
         // Packaged beside the executable (Windows/Linux self-contained publish): <app>/<name>. (#403)
-        var beside = Path.Combine(asmDir, resourceDirName);
-        if (Directory.Exists(beside))
+        if (FindDirectory(asmDir, resourceDirName) is { } beside)
             return beside;
 
         // Packaged .app: Contents/MacOS/ -> ../Resources/<name>
-        var bundle = Path.Combine(asmDir, "..", "Resources", resourceDirName);
-        if (Directory.Exists(bundle))
+        if (FindDirectory(Path.Combine(asmDir, ".."), Path.Combine("Resources", resourceDirName)) is { } bundle)
             return bundle;
 
         return null;
+    }
+
+    /// <summary>
+    /// Locates a child directory, falling back to a case-insensitive match.
+    ///
+    /// The casing genuinely differs by location and no single spelling is correct: the source tree has
+    /// <c>Xsl</c>, while both packaging scripts stage it as <c>xsl</c> (macOS
+    /// <c>Contents/Resources/xsl</c>, Windows <c>&lt;app&gt;/xsl</c>) - they only manage to read the
+    /// source directory at all because macOS and Windows are case-insensitive. An exact match would
+    /// therefore fail somewhere on Linux, or on a case-sensitive APFS volume. (#28)
+    /// </summary>
+    internal static string? FindDirectory(string parent, string name)
+    {
+        var exact = Path.Combine(parent, name);
+        if (Directory.Exists(exact))
+            return exact;
+
+        // Walk the name segment by segment so an intermediate component ("Resources") can differ in case
+        // too, not just the leaf.
+        var current = parent;
+        foreach (var segment in name.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            if (segment.Length == 0 || segment == ".")
+                continue;
+
+            string? match;
+            try
+            {
+                match = Directory.EnumerateDirectories(current)
+                    .FirstOrDefault(d => string.Equals(Path.GetFileName(d), segment, StringComparison.OrdinalIgnoreCase));
+            }
+            catch (Exception)
+            {
+                // Unreadable or missing ancestor - treat as "not here" and let the caller try the next location.
+                return null;
+            }
+
+            if (match == null)
+                return null;
+
+            current = match;
+        }
+
+        return current;
     }
 }
