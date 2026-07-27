@@ -27,8 +27,21 @@
 
   <ItemGroup>
     <Folder Include="Models\" />
-    <AvaloniaResource Include="Assets\**" />
-    <AvaloniaResource Include="Styles\DockStyles.axaml" />
+    <!-- Both of these previously produced a resource embedded TWICE under one avares path, and Avalonia's
+         AssemblyDescriptor builds a Dictionary keyed by that path - so a duplicate throws
+         "An item with the same key has already been added" during AppBuilder.Setup(), i.e. an instant
+         startup crash with no window and a stack trace that names Avalonia internals rather than this file.
+         It normally stayed latent because the duplicates collapse when the build writes obj/ cleanly; an
+         interrupted build (a sleeping VM, in the case that surfaced it) leaves obj/ inconsistent and bakes
+         both copies in. Keeping the item lists duplicate-free removes the trap rather than relying on luck.
+
+         cst.ico: <ApplicationIcon> already contributes it as an AvaloniaResource, so the Assets glob must
+         not add it a second time. Nothing references it by avares path, so excluding it here is safe. -->
+    <AvaloniaResource Include="Assets\**" Exclude="Assets\cst.ico" />
+    <!-- DockStyles.axaml is deliberately NOT listed: the SDK already includes every .axaml as AvaloniaXaml,
+         which embeds it at the same /Styles/DockStyles.axaml path. Listing it here as well was the exact
+         duplicate that crashed startup. -->
+
     <None Include="Info.plist" Condition="'$(OS)' == 'macOS'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
