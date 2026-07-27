@@ -10,7 +10,7 @@ namespace CST.Avalonia.Services.Dictionaries
 {
     /// <summary>
     /// A dictionary source over one flat-file language of the app's <see cref="IDictionaryService"/> (the two
-    /// bundled VRI dictionaries, en/hi). Definition text is the source HTML; the IPE headword is projected to
+    /// bundled VRI dictionaries, vri-childers/vri-hindi). Definition text is the source HTML; the IPE headword is projected to
     /// the requested output script. Wraps the existing loader unchanged. (#466)
     /// </summary>
     public sealed class FlatFileDictionarySource : IDictionarySource
@@ -31,7 +31,6 @@ namespace CST.Avalonia.Services.Dictionaries
             !string.IsNullOrWhiteSpace(Attribution?.DisplayName) ? Attribution!.DisplayName!
             : !string.IsNullOrWhiteSpace(Attribution?.Title) ? Attribution!.Title!
             : Id;
-        public string DefinitionLanguage => Id;
         public DictionarySourceKind Kind => DictionarySourceKind.General;
         public bool IsAvailable => _dictionary.AvailableLanguages.Contains(Id, StringComparer.OrdinalIgnoreCase);
         public DictionarySourceInfo? Attribution => _dictionary.SourceFor(Id);

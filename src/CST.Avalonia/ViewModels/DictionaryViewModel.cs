@@ -78,14 +78,12 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
         // The picker lists the ENABLED installed sources in the user's preferred order (#479), shown by
         // DisplayName. Only installed sources appear; a fresh install with no derived asset degrades cleanly
-        // to en/hi. The preference is applied by the shared service — never in the registry/API path.
+        // to the bundled dictionaries. The preference is applied by the shared service — never in the registry/API path.
         RebuildSources();
         // Restore the preferred SOURCE by id (#466), migrating from the older Language key; fall back to the
         // first enabled source (the #479 default). If the saved source is disabled/uninstalled, its id is
         // no longer in the list and the first enabled wins.
         var savedId = _stateService.Current.DictionaryDialog.SourceId;
-        if (string.IsNullOrEmpty(savedId))
-            savedId = _stateService.Current.DictionaryDialog.Language;   // migrate #25 → #466
         _selectedSource = Sources.FirstOrDefault(s => string.Equals(s.Id, savedId, StringComparison.OrdinalIgnoreCase))
             ?? Sources.FirstOrDefault();
 
@@ -205,8 +203,6 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     {
         RebuildSources();   // now sees the persisted SourceOrder → the user's order, not registry order
         var savedId = _stateService.Current.DictionaryDialog.SourceId;
-        if (string.IsNullOrEmpty(savedId))
-            savedId = _stateService.Current.DictionaryDialog.Language;
         var restored = Sources.FirstOrDefault(s => string.Equals(s.Id, savedId, StringComparison.OrdinalIgnoreCase))
             ?? Sources.FirstOrDefault();
         if (restored != null)
