@@ -25,15 +25,30 @@ The release process consists of five main steps:
 
 ### Shipping matrix
 
-Beta 5 ships **four** builds. Each is built natively on its own architecture — there is no
-cross-compilation step, so each row needs a machine (or VM) of that architecture.
+Beta 5 ships **four** builds. You need **one machine per OS, not one per architecture** — both
+architectures cross-build fine from a single host of the right OS.
 
-| Platform | Arch  | Built on            | Artifacts |
-|----------|-------|---------------------|-----------|
-| macOS    | arm64 | Caracara / Kestrel  | `CST-Reader-arm64.dmg` (notarized) |
-| macOS    | x64   | Caracara            | `CST-Reader-x64.dmg` (notarized) |
-| Windows  | x64   | Windows x64 machine | `CST-Reader-<ver>-win-x64-setup.exe`, `…-win-x64-portable.zip` |
-| Windows  | arm64 | Windows arm64 VM    | `CST-Reader-<ver>-win-arm64-setup.exe`, `…-win-arm64-portable.zip` |
+| Platform | Arch  | Build on              | Test on           | Artifacts |
+|----------|-------|-----------------------|-------------------|-----------|
+| macOS    | arm64 | Caracara (Intel)      | Egret / Kestrel   | `CST-Reader-arm64.dmg` (notarized) |
+| macOS    | x64   | Caracara              | Caracara          | `CST-Reader-x64.dmg` (notarized) |
+| Windows  | x64   | Placid (Win 10 x64 VM)| Kingfisher        | `CST-Reader-<ver>-win-x64-setup.exe`, `…-win-x64-portable.zip` |
+| Windows  | arm64 | Placid                | Merlin (arm64 VM) | `CST-Reader-<ver>-win-arm64-setup.exe`, `…-win-arm64-portable.zip` |
+
+**Building is cross-architecture; testing is not.** Nothing in either packaging pipeline is bound to
+the host's architecture: `dotnet publish -r <rid>` pulls the target runtime pack from NuGet, the CEF
+natives are ordinary NuGet packages, and Inno Setup only *packages* files (`ArchitecturesAllowed=arm64`
+is metadata it writes, not code it runs). This is already how the macOS side works — Caracara is an
+Intel Mac and builds the Apple Silicon DMG. Verified on the Windows side too: the complete win-x64
+package (installer included) was built on an ARM64 host, with every native confirmed x64 by PE header.
+
+What you *cannot* do is run an arm64 build on an x64 machine, so each arm64 artifact still needs a
+machine of its own architecture to smoke-test — hence the separate "Test on" column.
+
+Rough disk budget for a two-architecture Windows run: ~1 GB of publish trees, ~0.8 GB of artifacts in
+`dist/`, and a NuGet cache that reaches ~5 GB (both CEF packages are 0.7 GB of that). Allow ~8 GB free.
+Inno Setup's lzma2 compression is single-threaded and dominates the wall clock (~5 min per
+architecture on a fast machine, longer on a small VM), so give the build VM as many cores as you can.
 
 **The two Windows builds are not interchangeable.** `CST.Avalonia.csproj` selects a different CEF
 native package per RID — `WebViewControl-Avalonia` for `win-x64`, `WebViewControl-Avalonia-ARM64` for
@@ -58,8 +73,10 @@ If missing, install via the official `.pkg` from https://dotnet.microsoft.com/do
 
 **Windows build machines** additionally need:
 
-- **.NET 10 SDK matching the machine's architecture** — install the arm64 SDK on an arm64 machine.
-  Verify with `dotnet --info`; the `RID:` line should read `win-arm64` (or `win-x64`).
+- **.NET 10 SDK for the machine's own architecture** — the arm64 SDK on an arm64 host, the x64 SDK on an
+  x64 host. Verify with `dotnet --info`; the `RID:` line should read `win-x64` (or `win-arm64`). This is
+  about the SDK running natively, *not* about which targets it can build: either SDK builds both
+  `win-x64` and `win-arm64`, pulling the target runtime pack from NuGet.
 - **Inno Setup 6.3+** for the installer step: `winget install JRSoftware.InnoSetup`. The script finds
   `ISCC.exe` on PATH or in the standard Program Files / `%LOCALAPPDATA%\Programs` locations. Without it
   the script warns and still produces the portable zip. 6.3+ is required for the `x64compatible` and
@@ -178,8 +195,9 @@ open dist/CST-Reader-arm64.dmg
 
 ## Step 1b: Build Windows Packages
 
-**Machine:** a Windows x64 machine for the x64 build, and a Windows arm64 machine/VM for the arm64
-build. Run the script **once per architecture, on that architecture** — see the shipping matrix above.
+**Machine:** any Windows machine — Placid (the Windows 10 x64 VM on Caracara) builds **both**
+architectures. Run the script once per architecture on that one host; it does not need to match the
+target. See the shipping matrix above for why, and for what still has to be tested natively.
 
 ### Pull Latest Code
 
@@ -193,10 +211,8 @@ git pull
 ```powershell
 cd src\CST.Avalonia
 
-# On the x64 machine
+# Both, on the same machine — the host's own architecture does not matter
 .\package-windows.ps1              # -Arch x64 is the default
-
-# On the arm64 machine
 .\package-windows.ps1 -Arch arm64
 ```
 
@@ -219,6 +235,10 @@ Artifacts land in `src\CST.Avalonia\dist\`:
 Save the printed **SHA256** of each `setup.exe` — you need both for the WinGet manifest.
 
 ### Test Installation
+
+**Each installer must be tested on a machine of its own architecture** — this is the step that does not
+cross-build. The arm64 installer will refuse to run on Placid (`ArchitecturesAllowed=arm64`), so test it
+on Merlin; test the x64 one on Kingfisher or Placid itself.
 
 There is no notarization to verify, so the smoke test is the whole check:
 
