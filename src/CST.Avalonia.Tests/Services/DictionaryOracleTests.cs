@@ -21,7 +21,15 @@ public class DictionaryOracleTests
         Environment.GetEnvironmentVariable("HOME") ?? "/Users/fsnow",
         "Library/Application Support/CSTReader/dictionaries");
 
-    private static bool DataPresent => Directory.Exists(Root);
+    // Source ids are the directory names under dictionaries/ (#522 renamed en -> vri-childers, hi -> vri-hindi).
+    private const string Childers = "vri-childers";
+    private const string Hindi = "vri-hindi";
+
+    // Guard on the SPECIFIC dictionary a test needs, not just the root. A root-only check kept returning
+    // true after #522 renamed the language directories, so these tests ran against ids that no longer
+    // existed and failed instead of no-op'ing the way the class contract says they should.
+    private static bool DataPresent(string sourceId) =>
+        Directory.Exists(Path.Combine(Root, sourceId));
 
     private static async Task<(string[] words, string firstMeaning)> LookupLatn(string lang, string query)
     {
@@ -37,8 +45,8 @@ public class DictionaryOracleTests
     [Fact]
     public async Task Samayam_English_ResolvesToSamayo()
     {
-        if (!DataPresent) return;
-        var (words, meaning) = await LookupLatn("en", Samayam);
+        if (!DataPresent(Childers)) return;
+        var (words, meaning) = await LookupLatn(Childers, Samayam);
         Assert.Equal(new[] { "samayo" }, words);
         Assert.Contains("Agreement, combination", meaning);
     }
@@ -46,16 +54,16 @@ public class DictionaryOracleTests
     [Fact]
     public async Task Samayam_Hindi_ResolvesToSamayaAndSamayantara()
     {
-        if (!DataPresent) return;
-        var (words, _) = await LookupLatn("hi", Samayam);
+        if (!DataPresent(Hindi)) return;
+        var (words, _) = await LookupLatn(Hindi, Samayam);
         Assert.Equal(new[] { "samaya", "samayantara" }, words);
     }
 
     [Fact]
     public async Task Abbhuto_English_MergesDuplicateHeadword()
     {
-        if (!DataPresent) return;
-        var (words, meaning) = await LookupLatn("en", "abbhuto");
+        if (!DataPresent(Childers)) return;
+        var (words, meaning) = await LookupLatn(Childers, "abbhuto");
         Assert.Equal("abbhuto", words[0]);
         // Both definitions of the repeated headword, joined by the separator sentinel (the renderer
         // turns that sentinel into a visual break — see MeaningParserTests, DICT-1).
