@@ -1,33 +1,39 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-06-21T12:00:00Z",
+  "lastUpdated": "2026-07-29T12:00:00Z",
   "currentVersion": {
     "stable": "4.5.0-this-version-is-not-real",
-    "beta": "5.0.0-beta.4"
+    "beta": "5.0.0-beta.5"
   },
   "messages": {
     "5.0.0-beta.1": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.4",
-      "content": "CST Reader 5.0.0-beta.4 is available, with View Source PDF (Burmese editions), Go To navigation (Cmd+G), phrase/proximity search, and major dock stability improvements. Before installing, please delete the contents of ~/Library/Application Support/CSTReader/ for a clean start.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.4"
+      "title": "New Beta Available - 5.0.0-beta.5",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
     },
     "5.0.0-beta.2": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.4",
-      "content": "CST Reader 5.0.0-beta.4 is available, with View Source PDF (Burmese editions), Go To navigation (Cmd+G), phrase/proximity search, and major dock stability improvements. Before installing, please delete the contents of ~/Library/Application Support/CSTReader/ for a clean start.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.4"
+      "title": "New Beta Available - 5.0.0-beta.5",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
     },
     "5.0.0-beta.3": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.4",
-      "content": "CST Reader 5.0.0-beta.4 is available, with View Source PDF (Burmese editions), Go To navigation (Cmd+G), phrase/proximity search, and major dock stability improvements. Before installing, please delete the contents of ~/Library/Application Support/CSTReader/ for a clean start.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.4"
+      "title": "New Beta Available - 5.0.0-beta.5",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
     },
     "5.0.0-beta.4": {
+      "type": "upgrade",
+      "title": "New Beta Available - 5.0.0-beta.5",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
+    },
+    "5.0.0-beta.5": {
       "type": "info",
-      "title": "You're Running Beta 4",
-      "content": "Thank you for testing CST Reader Beta 4! Known issue: dragging a floated book tab back into the main window can occasionally crash the app, so please use the unfloat toolbar button instead. Please report any issues on GitHub."
+      "title": "You're Running Beta 5",
+      "content": "Thank you for testing CST Reader Beta 5. This is the first release at feature parity with CST4, and the first with Windows builds — reports from Windows are especially useful. Please report anything you find on GitHub."
     },
     "default": {
       "type": "warning",
@@ -38,12 +44,17 @@
   },
   "announcements": [
     {
-      "id": "2026-06-beta4-release",
-      "date": "2026-06-21T00:00:00Z",
-      "title": "CST Reader Beta 4 Released",
-      "content": "Beta 4 adds View Source PDF, Go To navigation, richer phrase/proximity search, and substantial dock and stability improvements. See the release notes on GitHub for details.",
-      "showUntil": "2026-09-30T00:00:00Z",
-      "targetVersions": ["5.0.0-beta.1", "5.0.0-beta.2", "5.0.0-beta.3"]
+      "id": "2026-07-beta5-release",
+      "date": "2026-07-29T00:00:00Z",
+      "title": "CST Reader Beta 5 Released",
+      "content": "Beta 5 is the milestone release: feature parity with CST4, plus Windows support (x64 and ARM64), a multi-source dictionary panel, and printing. A clean start is required — see the release notes.",
+      "showUntil": "2026-10-31T00:00:00Z",
+      "targetVersions": [
+        "5.0.0-beta.1",
+        "5.0.0-beta.2",
+        "5.0.0-beta.3",
+        "5.0.0-beta.4"
+      ]
     }
   ],
   "criticalNotices": []
