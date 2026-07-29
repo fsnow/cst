@@ -9,25 +9,25 @@
     "5.0.0-beta.1": {
       "type": "upgrade",
       "title": "New Beta Available - 5.0.0-beta.5",
-      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds a multi-source dictionary panel with the Digital Pāḷi Dictionary, printing, and the first Windows builds.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of ~/Library/Application Support/CSTReader/ — an index built by an earlier beta will mis-match and mis-highlight your search results.",
       "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
     },
     "5.0.0-beta.2": {
       "type": "upgrade",
       "title": "New Beta Available - 5.0.0-beta.5",
-      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds a multi-source dictionary panel with the Digital Pāḷi Dictionary, printing, and the first Windows builds.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of ~/Library/Application Support/CSTReader/ — an index built by an earlier beta will mis-match and mis-highlight your search results.",
       "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
     },
     "5.0.0-beta.3": {
       "type": "upgrade",
       "title": "New Beta Available - 5.0.0-beta.5",
-      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds a multi-source dictionary panel with the Digital Pāḷi Dictionary, printing, and the first Windows builds.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of ~/Library/Application Support/CSTReader/ — an index built by an earlier beta will mis-match and mis-highlight your search results.",
       "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
     },
     "5.0.0-beta.4": {
       "type": "upgrade",
       "title": "New Beta Available - 5.0.0-beta.5",
-      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds Windows support, a multi-source dictionary panel with the Digital Pāḷi Dictionary, and printing.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of your data directory — macOS: ~/Library/Application Support/CSTReader/ , Windows: %APPDATA%\\CSTReader\\ . An index built by an earlier beta will mis-match and mis-highlight your search results.",
+      "content": "CST Reader 5.0.0-beta.5 is available — the milestone release. It matches or exceeds CST4 in features (except the interface is still English only), and adds a multi-source dictionary panel with the Digital Pāḷi Dictionary, printing, and the first Windows builds.\n\nIMPORTANT: the search index format changed. Before installing, delete the contents of ~/Library/Application Support/CSTReader/ — an index built by an earlier beta will mis-match and mis-highlight your search results.",
       "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
     },
     "5.0.0-beta.5": {
