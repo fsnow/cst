@@ -383,10 +383,16 @@ Not sure which Windows build you need? Settings → System → About → "System
 also runs on ARM64 under emulation, but the ARM64 build is faster.
 
 ### First Launch — macOS
-If you see a security warning:
-1. Open System Settings → Privacy & Security
-2. Scroll down and click "Open Anyway"
-3. Confirm when prompted
+CST Reader is signed and notarized by Apple. On first launch macOS asks you to confirm you want to open
+an app downloaded from the internet — click **Open**. That is the ordinary quarantine prompt, not a
+warning.
+
+> Do **not** tell users to go to Privacy & Security → "Open Anyway". That is the path for an app that
+> FAILED the Gatekeeper check, and printing it implies the build is not properly signed. A stapled,
+> notarized DMG does not need it — verified on Egret, which downloads from GitHub with quarantine applied
+> and opens with only the standard confirmation. (Kestrel does demand Open Anyway, but that is its own
+> machine-wide inability to validate any vendor's stapled ticket — see
+> [NOTARIZATION_TICKET_ISSUE.md](../implementation/NOTARIZATION_TICKET_ISSUE.md) — not something users hit.)
 
 ### First Launch — Windows
 These beta builds are not code-signed, so Windows SmartScreen will warn you:
