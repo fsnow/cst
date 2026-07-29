@@ -383,10 +383,16 @@ Not sure which Windows build you need? Settings → System → About → "System
 also runs on ARM64 under emulation, but the ARM64 build is faster.
 
 ### First Launch — macOS
-If you see a security warning:
-1. Open System Settings → Privacy & Security
-2. Scroll down and click "Open Anyway"
-3. Confirm when prompted
+CST Reader is signed and notarized by Apple. On first launch macOS asks you to confirm you want to open
+an app downloaded from the internet — click **Open**. That is the ordinary quarantine prompt, not a
+warning.
+
+> Do **not** tell users to go to Privacy & Security → "Open Anyway". That is the path for an app that
+> FAILED the Gatekeeper check, and printing it implies the build is not properly signed. A stapled,
+> notarized DMG does not need it — verified on Egret, which downloads from GitHub with quarantine applied
+> and opens with only the standard confirmation. (Kestrel does demand Open Anyway, but that is its own
+> machine-wide inability to validate any vendor's stapled ticket — see
+> [NOTARIZATION_TICKET_ISSUE.md](../implementation/NOTARIZATION_TICKET_ISSUE.md) — not something users hit.)
 
 ### First Launch — Windows
 These beta builds are not code-signed, so Windows SmartScreen will warn you:
@@ -484,63 +490,86 @@ The `welcome-updates.json` file controls update notifications shown in the app's
 
 ### File Location
 
-The file should be stored in the repository at a location accessible via GitHub raw content URL (e.g., `docs/welcome-updates.json` or similar).
+**`welcome-updates.json` in the REPOSITORY ROOT.** `WelcomeUpdateService` fetches exactly this URL:
+
+```
+https://raw.githubusercontent.com/fsnow/cst/main/welcome-updates.json
+```
+
+> A second, stale copy used to sit at `docs/welcome-updates.json` with an older schema. It was never
+> fetched by anything, so editing it silently notified nobody. It has been deleted — if you find another
+> copy, the root file is the live one.
 
 ### Format
 
+The live schema (`schemaVersion: 1`) — note `currentVersion` is an object with `stable` and `beta`
+channels, and per-version notices live under `messages`, keyed by the version the user is *running*:
+
 ```json
 {
-  "latestVersion": "5.0.0-beta.3",
-  "releaseDate": "2025-11-22",
-  "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.3",
-  "minimumVersion": "5.0.0-beta.1",
+  "schemaVersion": 1,
+  "lastUpdated": "2026-07-29T12:00:00Z",
+  "currentVersion": {
+    "stable": "4.5.0-this-version-is-not-real",
+    "beta": "5.0.0-beta.5"
+  },
+  "messages": {
+    "5.0.0-beta.4": {
+      "type": "upgrade",
+      "title": "New Beta Available - 5.0.0-beta.5",
+      "content": "... Before installing, please delete the contents of your CST Reader data directory for a clean start.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.5"
+    },
+    "5.0.0-beta.5": {
+      "type": "info",
+      "title": "You're Running Beta 5",
+      "content": "Thank you for testing CST Reader Beta 5! Please report any issues on GitHub."
+    },
+    "default": {
+      "type": "warning",
+      "title": "Outdated Version",
+      "content": "A newer version is available.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/latest"
+    }
+  },
   "announcements": [
     {
-      "id": "beta3-release",
-      "title": "Beta 3 Released",
-      "content": "CST Reader Beta 3 is now available with scroll position restoration and improved session management.",
-      "date": "2025-11-22",
-      "showUntil": "2025-12-31",
-      "targetVersions": ["5.0.0-beta.1", "5.0.0-beta.2"],
-      "severity": "info"
+      "id": "2026-07-beta5-release",
+      "date": "2026-07-29T00:00:00Z",
+      "title": "CST Reader Beta 5 Released",
+      "content": "...",
+      "showUntil": "2026-10-31T00:00:00Z",
+      "targetVersions": ["5.0.0-beta.1", "5.0.0-beta.2", "5.0.0-beta.3", "5.0.0-beta.4"]
     }
   ],
-  "criticalNotices": [],
-  "versionMessages": {
-    "5.0.0-beta.3": {
-      "type": "info",
-      "title": "You're Running Beta 3",
-      "content": "Thank you for testing Beta 3! Please report any issues on GitHub."
-    },
-    "5.0.0-beta.2": {
-      "type": "warning",
-      "title": "Beta 3 Available",
-      "content": "A newer beta is available with scroll position restoration and other improvements.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.3"
-    }
-  }
+  "criticalNotices": []
 }
 ```
+
+`type` is one of `info`, `upgrade`, `warning`. A `messages` entry for the version being released should be
+`info` ("You're Running Beta X"); entries for older versions should be `upgrade` and carry a `downloadUrl`.
+`default` catches anything unlisted.
 
 ### Update Process
 
 1. **Edit the file:**
    ```bash
    # Edit welcome-updates.json with new version info
-   nano docs/welcome-updates.json  # or use your editor
+   nano welcome-updates.json   # repo ROOT, not docs/
    ```
 
 2. **Update these fields:**
-   - `latestVersion` - Set to new version (e.g., "5.0.0-beta.3")
-   - `releaseDate` - Set to today's date (ISO format)
-   - `downloadUrl` - Point to new release page
-   - Add announcement for the new release
-   - Update `versionMessages` for new and previous versions
+   - `currentVersion.beta` - the new version (e.g. "5.0.0-beta.5")
+   - `lastUpdated` - today, ISO 8601 with timezone
+   - `messages` - an `info` entry for the new version, and `upgrade` entries (with `downloadUrl`) for each
+     older version still in the wild
+   - `announcements` - one entry for the release, with `targetVersions` listing the versions that should
+     see it and a `showUntil` a few months out
 
 3. **Commit and push:**
    ```bash
-   git add docs/welcome-updates.json
-   git commit -m "Update welcome-updates.json for Beta 3 release"
+   git add welcome-updates.json
+   git commit -m "Update welcome-updates.json for Beta 5 release"
    git push
    ```
 
@@ -562,7 +591,7 @@ The app fetches this file from GitHub main branch. After pushing:
 After completing all steps, verify:
 
 - [ ] Release appears on GitHub releases page
-- [ ] Both DMG files are downloadable
+- [ ] All six artifacts are downloadable (2 DMG + 2 setup.exe + 2 portable zip)
 - [ ] Release is marked as pre-release (for betas)
 - [ ] welcome-updates.json is committed and pushed
 - [ ] App shows correct version when launched from DMG
@@ -701,4 +730,9 @@ git push origin v5.0.0-beta.X
 
 ## Document History
 
+- **2026-07-29:** Corrected Step 5 — the live file is `welcome-updates.json` in the repo ROOT, not
+  `docs/`, and the documented JSON was an older schema. Deleted the stale `docs/` copy. Fixed the
+  post-release checklist, which still spoke of two DMGs.
+- **2026-07-27:** Build machines cross-compile; only testing needs native hardware (#521).
+- **2026-07-25:** Windows release path added (four builds, InnoSetup, WinGet).
 - **2025-11-22:** Initial release process documentation for Beta 3
