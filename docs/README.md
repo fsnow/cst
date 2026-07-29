@@ -118,6 +118,7 @@ External resources and CST4 feature references:
 - [Beta 3 Testing](testing/BETA_3_TESTING.md) - Beta 3 test results and notes
 - [Dictionary CST4 Capture Plan](testing/DICTIONARY_CST4_CAPTURE_PLAN.md) - CST4 Dictionary lookups to screenshot as regression oracles (#25)
 - [CST4 Parity Checklist](testing/CST4_PARITY_CHECKLIST.md) - CST4↔Avalonia feature-by-feature comparison to drive a side-by-side review
+- [Notarization fresh-user test](testing/NOTARIZATION_FRESH_USER_TEST.md) - step-by-step throwaway-account procedure to decide whether Kestrel's stapled-ticket failure is user-level or machine-wide
 
 ### 📝 **blog/** - Blog Posts & Articles
 - [Git Hash Comparison for File Sync](blog/GIT_HASH_COMPARE.md) - Blog post on efficient GitHub file syncing

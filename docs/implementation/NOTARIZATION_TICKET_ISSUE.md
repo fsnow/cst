@@ -391,3 +391,111 @@ The ticket parsing issue on Kestrel remains **unresolved** even after upgrading 
 **Impact:** Cannot use Kestrel for release builds or validation testing
 **Workaround:** Use Caracara for all release packaging and stapling
 **Root Cause:** Unknown - Either Kestrel-specific corruption or Apple Silicon + Tahoe + Dev Tools incompatibility
+
+## Note: June 21, 2026 - Revisit / debug on Kestrel (TODO)
+
+Flagging this to revisit and debug on Kestrel. Releases are still cut on Caracara in the meantime (Beta 4 is being built/notarized there now).
+
+**Kestrel environment confirmed intact today** (so this is not a creds/cert regression — the failure is still the ticket parsing/staple step):
+- macOS **26.5.1** (build 25F80), Apple Silicon — i.e. a later Tahoe point release than the 26.0.1 in the Oct 2025 entry above
+- Developer ID signing cert valid: `Developer ID Application: Frank Snow (69M77LM9K3)` (1 valid identity)
+- `APPLE_ID` and `APPLE_APP_PASSWORD` env vars set; `APPLE_TEAM_ID` = 69M77LM9K3
+- `xcrun notarytool` 1.1.2 (41); Xcode CLT / Xcode at `/Applications/Xcode.app/Contents/Developer`
+
+**When debugging, capture (didn't this time — was deferred):**
+- The live failure symptom on a fresh DMG: `xcrun stapler staple -v dist/CST-Reader-arm64.dmg` and whether it's still Error 65 "Could not validate ticket"
+- syspolicyd logs during a validate attempt: `log show --predicate 'process == "syspolicyd"' --last 5m` (compare to the "Unable to parse ticket" signature above)
+- `xcrun notarytool history` / `notarytool log <submission-id>` to confirm auth + a clean Accepted ticket
+- Whether the later Tahoe point release (26.5.1) changes the outcome vs. 26.0.1
+- Open thread from Oct 2025: is this Apple-Silicon-+-Tahoe-+-dev-tools, or Kestrel-specific corruption? (Egret without dev tools validated fine.)
+
+## June 21, 2026 - Deep debug session: root cause localized (still unfixed)
+
+Spent a full session debugging on Kestrel (macOS 26.5.1, Apple Silicon) against the Beta 4 arm64 DMG downloaded from GitHub (quarantined). **Outcome: root cause localized to corrupted data-volume security state; not fixable by any targeted reset we could apply. Releases unaffected — Caracara builds + Egret validates; Beta 4 shipped fine.**
+
+### Conclusively established
+- **It is NOT a build problem.** The Beta 4 DMG is correctly notarized AND stapled — `stapler validate` "worked!" and `spctl` "Notarized Developer ID / accepted" on **Caracara** (Intel/Sequoia) and it opens clean on **Egret** (Apple Silicon, no dev tools, downloaded from GitHub → only the benign "downloaded from the internet" prompt). Apple `notarytool history` shows both DMGs **Accepted**.
+- **It is SYSTEMIC on Kestrel, not CST-specific.** `stapler validate` exits 65 for **every vendor's** stapled ticket too — Brave, Chrome, VS Code, Slack all fail identically (Zoom is merely "not stapled", a different case). And **beta.3** — which previously validated on Kestrel — now fails identically. So Kestrel cannot validate *any* notarization ticket; it regressed at some point (an OS update, between when beta.3 worked and now).
+- **Exact failure path** (from live `log stream` of syspolicyd/securityd/trustd):
+  ```
+  stapler → SecAssessmentTicketRegisterXPC
+          → Security::CodeSigning::registerStapledTicketWithSystem
+          → DiskImageRep::registerStapledTicket()
+  syspolicyd: "Unable to parse ticket."  →  "error registering ticket: -1"
+  securityd:  Error registering stapled ticket: NSOSStatusErrorDomain Code=-1
+  ```
+  The ticket's CMS signature **verifies fine** (`SecKeyVerifySignature` succeeds in trustd) — then syspolicyd fails to **parse/register** the ticket blob with a generic `-1`. (The "-1 / Could not parse the request/response" string is just the catalog of meanings for OSStatus −1, not a literal HTTP error.) Recurring nearby: `securityd[xpc] no query dict ... for system keychain: Code=-50` — possibly noise, possibly relevant.
+
+### Ruled out
+- Build / notarization / stapling (good on Caracara + Egret; Apple-side Accepted).
+- Network (TLS to Apple connects; and the stapled-parse failure happens *before* any network).
+- Disk space (227 GB free; no `SQLITE_FULL`).
+- Trust-setting overrides (user domain empty; admin domain has Apple Root CA - G3 + Developer ID CA with 0 settings, which is the **normal default** for Developer ID validation, not an artifact).
+- Date/clock (correct), SIP (was enabled; we later disabled it to test), MDM/profiles (none).
+
+### Fixes ATTEMPTED that did NOT work
+- **Reset the local notarization Tickets DB.** `/var/db/SystemPolicyConfiguration/Tickets` was wedged (main DB frozen **Dec 2 2025** with a stale **1.8 MB** WAL that never checkpointed across many reboots + the OS upgrade → every registration failing into the WAL). But this is SIP-protected, so:
+  - `sudo rm`, `sudo killall syspolicyd`, `sudo launchctl kickstart` all refused while SIP engaged ("Operation not permitted while System Integrity Protection is engaged").
+  - **Disabled SIP** (Recovery → `csrutil disable`), then `sudo rm -f Tickets Tickets-shm Tickets-wal` + `sudo launchctl kickstart -k system/com.apple.security.syspolicy`. DB was recreated fresh (4 KB) with a new syspolicyd → **still exit 65 / rejected.** So the wedged DB was a *symptom* (registrations can't commit), not the cause.
+- **Restarted syspolicyd + trustd** (`sudo killall trustd syspolicyd`, SIP off) → no change.
+
+### Why it survives everything
+An OS upgrade replaces the sealed **system** volume but never the **data** volume. The corrupt state lives on the data volume (in the security subsystem), so upgrades, reboots, and the Tickets-DB reset all leave it intact. The parser itself is sealed OS code (can't be corrupt), so it's failing on some data-volume state it consults during parse.
+
+### Realistic remaining options (not yet tried)
+- **Fresh-user-account test** — cheap diagnostic to tell user-level vs machine-wide corruption (if a new user validates → user-level/keychain, fixable without erase; if it still fails → machine-wide).
+- **`softwareupdate --background-critical`** / reset trustd's `valid.sqlite3` + Supplementals — force re-download of security config assets (low-to-moderate odds).
+- **Erase-install** — the hammer that would actually clear data-volume corruption. An **in-place reinstall would NOT help** (spares the data volume).
+
+### Decision
+Recommendation: wind down — keep the **Caracara-build / Egret-verify** workflow (the documented status quo); not worth an erase-install for a dev-box quirk that doesn't block releases.
+
+~~**ACTION STILL PENDING:** SIP was left **DISABLED** during this session (Recovery → `csrutil disable`). Re-enable it: Recovery → Terminal → `csrutil enable` → reboot. Until then Kestrel is running with SIP off.~~ — **RESOLVED:** verified 2026-07-28, `csrutil status` reports **enabled**.
+
+## July 28, 2026 - Process-lock theory ruled out; daemon confirmed healthy
+
+Prompted by an outside suggestion that a frozen Tickets DB is usually caused by (a) a third-party app holding syspolicyd in an evaluation loop, (b) a stuck daemon, or (c) stale SQLite `-shm`/`-wal` files. (b) and (c) were already tried in the June 21 session above; (a) had not been, so it was checked today. **All three are now accounted for, and none is the cause.**
+
+### (a) Active process lock — RULED OUT
+`sudo lsof -p $(pgrep syspolicyd)` is entirely clean: the binary itself, Apple frameworks (Security, CFNetwork, SystemPolicy, LocalAuthenticationCore), ICU/timezone data, the policy databases, `/dev/null` on stdio, and one system socket (`com.apple.netsrc`). **No third-party binary, no attached disk image, no `.dmg`, nothing looping.** syspolicyd holds `Tickets`, `Tickets-wal` and `Tickets-shm` open read/write itself, unobstructed.
+
+Supporting: syspolicyd (PID 449) has been up **22 days at 0.0% CPU** — no spin, no contention. A process lock also could not survive the reboots and OS upgrade this failure has already outlived, nor explain that *every* vendor's stapled ticket fails (Brave, Chrome, VS Code, Slack).
+
+### New evidence: the daemon is healthy; only the ticket path is broken
+Comparing the WAL files syspolicyd currently holds open:
+
+| Database | WAL size | Last written |
+|---|---|---|
+| `ExecPolicy-wal` | 1.5 MB | **Jul 27, 2026** (actively committing) |
+| `KextPolicy-wal` | 338 KB | Jul 6, 2026 |
+| `Tickets-wal` | 74 KB | **Jun 23, 2026** (frozen) |
+
+syspolicyd is reading and writing its other SQLite databases normally — so this is **not** a broken daemon, a file-access problem, or SQLite generally. The failure is narrowly confined to ticket **parse/register**, exactly where the June 21 log trace put it (`SecKeyVerifySignature` succeeds in trustd, then syspolicyd reports `Unable to parse ticket` → `-1`).
+
+Also note the Tickets DB **re-wedged immediately after the June 21 reset**: the fresh 4 KB `Tickets` is still stamped Jun 21 15:55, and its WAL stopped growing Jun 23 — registrations resumed failing into the WAL right away, then activity ceased. Consistent with the "symptom, not cause" reading.
+
+### Status unchanged
+Root cause remains localized to data-volume security state. The remaining options are still the three listed above, of which the **fresh-user-account test** is the only cheap one and is still untried. The Caracara-build / Egret-verify workflow stands; releases are unaffected.
+
+## July 28, 2026 - Fresh-user-account test: MACHINE-WIDE confirmed. Investigation closed.
+
+Ran the procedure in [docs/testing/NOTARIZATION_FRESH_USER_TEST.md](../testing/NOTARIZATION_FRESH_USER_TEST.md): created a throwaway standard account (`GK-Test`), logged in as a real login session, and re-ran `stapler validate` against the same stapled reference app used for the baseline.
+
+**Result: identical failure in the fresh account.**
+
+A brand-new user has a fresh login keychain and clean per-user security state, so this eliminates the entire user-level hypothesis. The corruption lives in **data-volume state shared by all users** — consistent with the Tickets DB being root-owned and machine-wide, and with the failure surviving reboots and an OS upgrade.
+
+### Every hypothesis is now closed
+| Hypothesis | Verdict |
+|---|---|
+| Build / notarization / stapling defect | Ruled out — validates on Caracara + Egret; Apple-side **Accepted** |
+| Wedged Tickets DB | Ruled out — reset to a fresh 4 KB DB (SIP off), still exit 65 → symptom, not cause |
+| Stuck syspolicyd / trustd | Ruled out — restarted + kickstarted, no change |
+| Third-party process lock | Ruled out — `lsof` clean, daemon idle 0.0% CPU for 22 days |
+| Network, disk space, clock, MDM, trust-setting overrides | Ruled out (Jun 21) |
+| **User-level corruption (keychain / per-user state)** | **Ruled out — Jul 28, fresh account fails identically** |
+
+### Final decision
+The only remaining remedy is an **erase-install** (an in-place reinstall would not help — it spares the data volume). That is not justified for a development-box quirk that does not block releases.
+
+**Closed.** Standing workflow: **build + notarize on Caracara, verify on Egret.** Kestrel remains unable to validate any vendor's stapled ticket; this is a known, understood, and accepted limitation of that machine. Do not re-investigate without new evidence — the hypothesis space above is exhausted.
