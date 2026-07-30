@@ -29,6 +29,9 @@ public partial class SimpleTabbedWindow : Window
     private ComboBox? _paliScriptCombo;
     private readonly ILogger _logger;
     private bool _isInitialized = false;
+    // Set once Closing has taken its final geometry capture; blocks any later capture from overwriting it
+    // with a destroyed window's 0,0 Position. (#535)
+    private bool _geometryCaptureFrozen = false;
     private DateTime _lastSaveTime = DateTime.MinValue;
 
     // Drag monitoring fields
@@ -122,7 +125,19 @@ public partial class SimpleTabbedWindow : Window
         // Final geometry capture, bypassing the debounce: the 500ms leading-edge throttle drops the
         // trailing events of a resize/move, so without this the last ~500ms of geometry changes were
         // lost when the window was closed with the red button. (DOCK-6)
-        SaveWindowState(force: true);
+        //
+        // Skipped once shutdown is underway. On Cmd+Q the ShutdownRequested handler has ALREADY captured
+        // this window's geometry while it was still alive (App.SaveApplicationStateAsync) and has since
+        // DISPOSED the ServiceProvider — so capturing again here only resolves a disposed provider and
+        // throws ObjectDisposedException, which the catch below swallowed after logging an Error on every
+        // clean quit. On the red-button path IsShuttingDown is still false (Closing runs before
+        // ShutdownRequested), so the capture below is the good one and still runs. (#535, DOCK-2)
+        if (!App.IsShuttingDown)
+            SaveWindowState(force: true);
+        // This is the last moment the native window can report a real Position. Freeze geometry capture
+        // so the shutdown-path capture that runs after the window is destroyed can't replace it with
+        // 0,0. Set AFTER the capture above, which is the good one. (#535)
+        _geometryCaptureFrozen = true;
 
         // Clean up drag monitoring timer
         if (_dragMonitoringTimer != null)
@@ -415,6 +430,28 @@ public partial class SimpleTabbedWindow : Window
     {
         try
         {
+            // Once Closing has captured the final geometry, refuse every later capture. `Position` is
+            // platform-backed and reads 0,0 after the native window is destroyed, while Width/Height are
+            // styled properties that keep their values — so a post-close capture silently replaced a good
+            // position with the origin, and the window reopened at 0,0 with the right size.
+            //
+            // That is exactly what happened on the red-button path: Closing captured the true position,
+            // the window was destroyed, then the lifetime raised ShutdownRequested and
+            // App.SaveApplicationStateAsync's forced capture ran against the dead window and overwrote it.
+            // (Cmd+Q was unaffected: there ShutdownRequested runs BEFORE Closing, while the window is
+            // still alive.) Freezing here fixes both orderings at a single point, and is safe because no
+            // capture after Closing can be more accurate than the one Closing just took. (#535)
+            //
+            // The flag is never reset, which is correct while ShutdownMode is OnMainWindowClose (closing
+            // this window IS quitting, so the instance is never reused). If a future handler ever CANCELS
+            // the main window's Closing — nothing does today — the window would stay alive with geometry
+            // persistence silently switched off, and this would need to reset on the cancelled close.
+            if (_geometryCaptureFrozen)
+            {
+                _logger.Debug("Skipping window-state capture: geometry frozen at close (#535)");
+                return;
+            }
+
             // Debounce saves to prevent excessive updates during window resizing; the debounce is
             // leading-edge, so the trailing events are covered by the forced captures at closing
             // and shutdown. (DOCK-6)
