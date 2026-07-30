@@ -17,6 +17,11 @@ public interface IDpdUpdateService
     /// <summary>Human-readable progress for a status banner (same UX as the XML update).</summary>
     event Action<string>? StatusChanged;
 
+    /// <summary>Raised with the asset id ("dpd", "dppn") when an asset has been installed and is USABLE NOW.
+    /// A staged install (swapped on next launch, #394) does not raise it. Consumers use this to go live
+    /// without a restart — reopening the lemma provider and rebuilding the dictionary picker. (#536)</summary>
+    event Action<string>? AssetInstalled;
+
     /// <summary>Download progress: (bytesSoFar, totalBytes). totalBytes may be 0 if the length is unknown.</summary>
     event Action<long, long>? DownloadProgressChanged;
 

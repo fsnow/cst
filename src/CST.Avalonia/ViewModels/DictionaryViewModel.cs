@@ -28,6 +28,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 {
     private readonly DictionarySourceRegistry _registry;
     private readonly DictionarySourcePreferenceService _sourcePrefs;
+    private readonly IDpdUpdateService _dpdUpdates;
     private readonly IScriptService _scriptService;
     private readonly IFontService _fontService;
     private readonly IApplicationStateService _stateService;
@@ -39,6 +40,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private EventHandler? _fontChangedHandler;
     // Live enable/order-preference handler, so the picker rebuilds when Settings changes the sources (#479).
     private EventHandler? _sourcePrefsChangedHandler;
+    private Action<string>? _assetInstalledHandler;
 
     // <see>-link navigation history (manual typing does NOT push history; only followed links do).
     private readonly Stack<string> _backStack = new();
@@ -57,6 +59,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     public DictionaryViewModel(
         DictionarySourceRegistry registry,
         DictionarySourcePreferenceService sourcePrefs,
+        IDpdUpdateService dpdUpdates,
         IScriptService scriptService,
         IFontService fontService,
         IApplicationStateService stateService,
@@ -64,6 +67,7 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     {
         _registry = registry;
         _sourcePrefs = sourcePrefs;
+        _dpdUpdates = dpdUpdates;
         _scriptService = scriptService;
         _fontService = fontService;
         _stateService = stateService;
@@ -159,6 +163,13 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         // Dispose. Marshalled to the UI thread — the preference service raises on the caller's thread.
         _sourcePrefsChangedHandler = (_, _) => Dispatcher.UIThread.Post(() => RebuildSources(preferFirstEnabled: true));
         _sourcePrefs.Changed += _sourcePrefsChangedHandler;
+
+        // A downloaded dictionary (DPD, DPPN) that lands mid-session must show up without a restart (#536).
+        // The registry evaluates availability live, so the picker just has to re-query — but nothing told it
+        // to. On a FIRST RUN the assets download after startup, which is exactly when this matters.
+        // preferFirstEnabled is deliberately false: an asset arriving must not move the user's selection.
+        _assetInstalledHandler = _ => Dispatcher.UIThread.Post(() => RebuildSources());
+        _dpdUpdates.AssetInstalled += _assetInstalledHandler;
     }
 
     /// <summary>Recompute <see cref="Sources"/> (and the picker-width measurer) from the enable/order
@@ -396,6 +407,8 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
             _fontService.FontSettingsChanged -= _fontChangedHandler;
         if (_sourcePrefsChangedHandler != null)
             _sourcePrefs.Changed -= _sourcePrefsChangedHandler;
+        if (_assetInstalledHandler != null)
+            _dpdUpdates.AssetInstalled -= _assetInstalledHandler;
         _disposables.Dispose();
     }
 }

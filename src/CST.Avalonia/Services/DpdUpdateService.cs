@@ -51,6 +51,8 @@ public sealed class DpdUpdateService : IDpdUpdateService
     private int _busy;
 
     public event Action<string>? StatusChanged;
+    /// <inheritdoc />
+    public event Action<string>? AssetInstalled;
     public event Action<long, long>? DownloadProgressChanged;
     public bool IsBusy => Volatile.Read(ref _busy) == 1;
 
@@ -152,7 +154,7 @@ public sealed class DpdUpdateService : IDpdUpdateService
         }
 
         StatusChanged?.Invoke(
-            anyInstalled ? "Dictionary data installed (active after restart)."
+            anyInstalled ? "Dictionary data installed."
             : anyFailed  ? "Could not update some dictionary data."
             : "Dictionary data is up to date.");
     }
@@ -180,10 +182,22 @@ public sealed class DpdUpdateService : IDpdUpdateService
         var archiveBytes = await DownloadWithProgressAsync(archiveAsset.BrowserDownloadUrl, entry.CompressedBytes, ct).ConfigureAwait(false);
 
         StatusChanged?.Invoke("Installing dictionary data...");
-        InstallFromGzip(archiveBytes, entry.Sha256, desc.InstallPath, desc.ProbeUsable);
+        var staged = InstallFromGzip(archiveBytes, entry.Sha256, desc.InstallPath, desc.ProbeUsable);
 
-        _logger.LogInformation("Installed {Id} (source {Src}, converter {Conv}, ~{Mb} MB). Active on next launch.",
+        // Only claim a restart is needed when the asset actually WAS staged. It normally goes live in place,
+        // and saying otherwise both misled users and made the (real) "needs a restart to appear" bug look
+        // like intended behaviour. (#536)
+        _logger.LogInformation(
+            staged
+                ? "Installed {Id} (source {Src}, converter {Conv}, ~{Mb} MB). Staged — active on next launch."
+                : "Installed {Id} (source {Src}, converter {Conv}, ~{Mb} MB). Active now.",
             desc.Id, entry.SourceVersion, entry.ConverterVersion, entry.RawBytes / 1024 / 1024);
+
+        // Tell the app an asset landed so it can pick it up WITHOUT a restart: the DPD lemma provider binds
+        // its availability at construction and must be reopened, and the dictionary picker has to re-query
+        // the registry. A staged install is deliberately NOT announced — it is not live yet. (#536)
+        if (!staged)
+            AssetInstalled?.Invoke(desc.Id);
         return true;
     }
 
@@ -328,8 +342,11 @@ public sealed class DpdUpdateService : IDpdUpdateService
     // Verify the gzip archive's SHA-256, decompress to a temp file, probe it is a USABLE asset, then atomically
     // install (or stage for next launch on Windows). The existing asset is untouched until then, so a
     // failed/corrupt/wrong-schema download never destroys a good install. (fable — preservation)
-    internal static void InstallFromGzip(byte[] archive, string expectedSha256, string finalPath, Func<string, bool> probeUsable)
+    /// <returns>true when the asset was STAGED for next launch (the target was locked); false when it went
+    /// live in place and is usable immediately. (#536)</returns>
+    internal static bool InstallFromGzip(byte[] archive, string expectedSha256, string finalPath, Func<string, bool> probeUsable)
     {
+        bool staged = false;
         string actual = Convert.ToHexString(SHA256.HashData(archive)).ToLowerInvariant();
         if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException(
@@ -354,6 +371,7 @@ public sealed class DpdUpdateService : IDpdUpdateService
             try
             {
                 File.Move(tmp, finalPath, overwrite: true);
+                staged = false;
                 // Supersede any earlier staged install so a stale one can't later regress the asset. (fable, #394)
                 // Log a failed delete: if it lingers, ApplyPendingInstall would move the OLDER file back over this
                 // fresh one on next launch (self-heals on the next update check, but worth surfacing). (fable LOW-1)
@@ -373,12 +391,15 @@ public sealed class DpdUpdateService : IDpdUpdateService
             {
                 // Windows: the live db is open → stage beside it and swap on next launch (existing asset intact). (#394)
                 File.Move(tmp, finalPath + PendingSuffix, overwrite: true);
+                staged = true;
             }
         }
         finally
         {
             if (File.Exists(tmp)) { try { File.Delete(tmp); } catch { /* best effort */ } }
         }
+
+        return staged;
     }
 
     /// <summary>

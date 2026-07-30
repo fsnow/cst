@@ -580,6 +580,21 @@ public partial class App : Application
             if (dpdUpdateService != null)
             {
                 dpdUpdateService.StatusChanged += message => Log.Information("DPD Asset Status: {Message}", message);
+                // An asset that lands mid-session must become usable WITHOUT a restart (#536). The registry
+                // already evaluates IsAvailable live, so the only thing that cannot notice on its own is the
+                // DPD lemma provider, which binds availability at construction — reopen it here. The dictionary
+                // panel rebuilds its own picker off this same event.
+                dpdUpdateService.AssetInstalled += id =>
+                {
+                    if (!string.Equals(id, "dpd", StringComparison.OrdinalIgnoreCase))
+                        return;
+                    if (ServiceProvider?.GetService<CST.Lemma.ILemmaProvider>() is Services.ReopenableLemmaProvider reopenable)
+                    {
+                        reopenable.Reopen();
+                        Log.Information("Reopened the lemma provider after the {Id} asset was installed; available={Available}",
+                            id, reopenable.IsAvailable);
+                    }
+                };
                 _ = Task.Run(() => dpdUpdateService.CheckAndUpdateAsync());
             }
         }
@@ -1120,10 +1135,12 @@ public partial class App : Application
 
         // Lemma/dictionary/sandhi (dpd-cst-subset asset — our derived DPD subset for CST). NOT AI-gated — a core
         // reading/search feature; availability is driven by FILE PRESENCE alone (no setting), degrading to "off"
-        // when absent. Seeded/downloaded to <app-support>/CSTReader/dpd-cst-subset/. (Opened once at startup, so a
-        // manually dropped-in file activates on the next launch.)
+        // when absent. Seeded/downloaded to <app-support>/CSTReader/dpd-cst-subset/.
+        // Wrapped in ReopenableLemmaProvider because SqliteLemmaProvider binds IsAvailable in its constructor:
+        // on a first run the asset downloads AFTER startup, so the raw provider stayed unavailable for the whole
+        // session and DPD only appeared after a restart. The wrapper is reopened on AssetInstalled. (#536)
         var dpdCstSubsetPath = Services.DpdUpdateService.DpdSubsetPath;
-        services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new CST.Lemma.SqliteLemmaProvider(dpdCstSubsetPath));
+        services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new Services.ReopenableLemmaProvider(dpdCstSubsetPath));
         services.AddSingleton<ILemmaSearchService, LemmaSearchService>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
@@ -1133,9 +1150,11 @@ public partial class App : Application
         // The dictionary SOURCE registry — the single list the API (and later the UI, #466) enumerates and
         // queries. Sources: each bundled flat-file dictionary, DPD (when dpd-cst-subset is installed), and each
         // downloaded lexicon (DPPN — present-iff its file exists). (#109/#466)
-        // NOTE: the source set is fixed when the registry is first resolved. A DERIVED asset (dpd-cst-subset,
-        // dppn.db) installed mid-session still flips available (its source checks the file live); a flat-file
-        // language dir ADDED mid-session only becomes a source on the next launch. (fable LOW-2)
+        // NOTE: the source set is fixed when the registry is first resolved, but AVAILABILITY is live —
+        // Registry.Available re-evaluates IsAvailable on every read. A DERIVED asset (dpd-cst-subset, dppn.db)
+        // installed mid-session therefore goes live once something re-queries: DpdUpdateService.AssetInstalled
+        // reopens the lemma provider and the dictionary panel rebuilds its picker (#536). A flat-file language
+        // dir ADDED mid-session still only becomes a source on the next launch. (fable LOW-2)
         var dppnPath = Services.DpdUpdateService.DppnLexiconPath;
         services.AddSingleton(sp => Services.Dictionaries.DictionarySourceFactory.Build(
             sp.GetRequiredService<IDictionaryService>(),
