@@ -1096,6 +1096,7 @@ public partial class BookDisplayView : UserControl
                         pageAnchors: {{}},
                         paragraphAnchors: {{}},
                         chapterAnchors: {{}},
+                        headingPages: [],
                         // Add properties to hold the pre-sorted lists for performance
                         sortedPageAnchors: {{ V: [], M: [], P: [], T: [], O: [] }},
                         sortedParagraphAnchors: [],
@@ -1192,6 +1193,11 @@ public partial class BookDisplayView : UserControl
                             for (var cn in this.chapterAnchors) this.sortedAllAnchors.push({{ name: cn, position: this.chapterAnchors[cn] }});
                             this.sortedAllAnchors.sort(function(a, b) {{ return a.position - b.position; }});
 
+                            // #542: resolve each heading region's pages now that every anchor list is built
+                            // and sorted. Runs BEFORE isBuilt so a query can never see a populated cache with an
+                            // empty heading table; a failure degrades to the unchanged last-marker rule.
+                            try {{ this.buildHeadingPages(); }} catch (e) {{ this.headingPages = []; }}
+
                             // Populated — status queries may now trust this cache. Set BEFORE the title
                             // signal so the C# side can never observe CACHE_BUILT ahead of the data. (#423)
                             this.isBuilt = true;
@@ -1202,9 +1208,123 @@ public partial class BookDisplayView : UserControl
                             document.title = 'CST_STATUS_UPDATE:CACHE_BUILT=' + Object.keys(this.pageAnchors).length + ',' + Object.keys(this.paragraphAnchors).length + ',' + Object.keys(this.chapterAnchors).length + '|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                         }},
                         
+                        // #542: precompute the page references that apply to each HEADING region.
+                        //
+                        // A section's page marker sits AFTER the first word of the first body paragraph following the
+                        // heading -- the markers derive from page-number footnotes, and a heading is never left dangling
+                        // at the foot of a page, so it travels with its text onto the new page. So for a position inside
+                        // a heading, the governing marker may be the NEXT one rather than the last.
+                        //
+                        // Decided PER EDITION, because the editions break pages in different places. At the heading
+                        // '(7) 2. Sukhavaggavannana' the next V marker (2.0052) sits after the first word of the very next
+                        // paragraph and DOES apply, while the next M marker (2.0054) is nine paragraphs later and does NOT
+                        // -- M stays 2.0053. Only the geometry distinguishes them.
+                        //
+                        // Resolved once here rather than on every scroll tick: the status path stays a lookup, the result
+                        // is inspectable, and two queries inside one heading cannot disagree.
+
+                        buildHeadingPages: function() {{
+                            var BODY = {{ bodytext:1, indent:1, unindented:1, hangnum:1,
+                                         gatha1:1, gatha2:1, gatha3:1, gathalast:1 }};
+                            var TOL = 12;   // same-line tolerance: the marker follows the first word of the paragraph
+
+                            function markerFor(list, regionStart, paraStart) {{
+                                if (!list || list.length === 0) return null;
+                                var last = null, next = null;
+                                for (var i = 0; i < list.length; i++) {{
+                                    if (list[i].position <= regionStart) {{ last = list[i]; }}
+                                    else {{ next = list[i]; break; }}
+                                }}
+                                // The next marker governs the heading only when it sits at the START of the first body
+                                // paragraph (same line as the paragraph number). A marker further into that paragraph
+                                // means the page broke mid-paragraph, so the heading is still on the previous page.
+                                if (next && paraStart >= 0 && Math.abs(next.position - paraStart) <= TOL) return next;
+                                return last;
+                            }}
+
+                            var blocks = document.querySelectorAll('p[class]');
+                            var regions = [], runStart = -1, prevBodyTop = -1;
+                            for (var b = 0; b < blocks.length; b++) {{
+                                var el = blocks[b];
+                                var top = Math.round(el.getBoundingClientRect().top + window.pageYOffset);
+                                if (BODY[el.className || '']) {{
+                                    if (runStart >= 0) {{
+                                        regions.push({{ start: runStart, paraStart: top, prevBody: prevBodyTop }});
+                                        runStart = -1;
+                                    }}
+                                    prevBodyTop = top;
+                                }} else if (runStart < 0) {{
+                                    runStart = top;
+                                }}
+                            }}
+
+                            // A run split by a div boundary: only the part ADJACENT to the body paragraph may look ahead.
+                            // At a book boundary the previous book's closing attribution and the new book's salutation are
+                            // both class 'centered' and adjacent, but the div opens between them, and the closings belong to
+                            // the OLD page. So anything before the last div anchor in the run keeps the previous marker.
+                            var divs = this.sortedChapterAnchors || [];
+                            this.headingPages = [];
+                            for (var r = 0; r < regions.length; r++) {{
+                                var reg = regions[r], lastDiv = -1;
+                                for (var d = 0; d < divs.length; d++) {{
+                                    var dp = divs[d].position;
+                                    // Chapter-list navigation scrolls to the div ANCHOR, which sits just above the
+                                    // heading it introduces. Without this, the landing position falls in the gap
+                                    // ABOVE the region and resolves by the old rule -- the page read one short
+                                    // until you scrolled a few pixels. Pull the region start up to the anchor.
+                                    if (dp < reg.start && dp > reg.prevBody) reg.start = dp;
+                                    // Split ONLY at a BOOK-level anchor (id with no underscore). That is where the
+                                    // previous book's closing attribution meets the new book's salutation -- both
+                                    // class 'centered', with the div between them -- and the closings belong to the
+                                    // OLD page. A NESTED div (pannasaka, vagga) lies entirely past the page turn,
+                                    // so splitting there wrongly denied the look-ahead to the heading above it:
+                                    // '3. Tatiyapannasakam' read 2.56 instead of 2.57 because the nested an2_3_1
+                                    // anchor cut the heading run in two.
+                                    if (dp > reg.start && dp <= reg.paraStart && divs[d].name.indexOf('_') === -1) lastDiv = dp;
+                                }}
+                                if (lastDiv > reg.start) {{
+                                    this.headingPages.push(this.resolveRegion(reg.start, lastDiv, -1, markerFor));
+                                    this.headingPages.push(this.resolveRegion(lastDiv, reg.paraStart, reg.paraStart, markerFor));
+                                }} else {{
+                                    this.headingPages.push(this.resolveRegion(reg.start, reg.paraStart, reg.paraStart, markerFor));
+                                }}
+                            }}
+                            this.headingPages.sort(function(a, b) {{ return a.start - b.start; }});
+                        }},
+
+                        resolveRegion: function(start, end, paraStart, markerFor) {{
+                            var sp = this.sortedPageAnchors;
+                            function nm(a) {{ return a ? a.name : '*'; }}
+                            return {{ start: start, end: end, pages: {{
+                                vri:     nm(markerFor(sp.V, start, paraStart)),
+                                myanmar: nm(markerFor(sp.M, start, paraStart)),
+                                pts:     nm(markerFor(sp.P, start, paraStart)),
+                                thai:    nm(markerFor(sp.T, start, paraStart)),
+                                other:   nm(markerFor(sp.O, start, paraStart))
+                            }} }};
+                        }},
+
+                        headingPageAt: function(docPos) {{
+                            var hp = this.headingPages;
+                            if (!hp || hp.length === 0) return null;
+                            for (var i = 0; i < hp.length; i++) {{
+                                if (hp[i].start > docPos) break;
+                                if (docPos >= hp[i].start && docPos < hp[i].end) return hp[i].pages;
+                            }}
+                            return null;
+                        }},
+
                         getPageReferences: function(scrollY) {{
                             var result = {{ vri: '*', myanmar: '*', pts: '*', thai: '*', other: '*' }};
                             var docPos = scrollY + 20; // CST4 algorithm offset
+
+                            // #542: inside a heading the governing marker may be the next one rather than the
+                            // last, and which it is differs per edition. Resolved at cache-build time; a lookup
+                            // here. Outside a heading, fall through to the unchanged rule below.
+                            var headingPages = this.headingPageAt(docPos);
+                            if (headingPages) {{
+                                return headingPages;
+                            }}
 
                             // PERFORMANCE OPTIMIZATION: Use pre-sorted lists instead of expensive sorting on every call
                             // The findBestAnchor function now works on the pre-sorted lists
