@@ -1228,14 +1228,29 @@ public partial class BookDisplayView : UserControl
                             //
                             // Books with no div markup have no chapter anchors, so sectionStart stays -1 and the
                             // behaviour is exactly as before — no regression where the markup is absent.
-                            var sectionStart = -1;
+                            // Only a BOOK-level div starts a new printed page. A vagga / sutta / samyutta /
+                            // pannasaka boundary falls mid-page, so the heading there is still on the PREVIOUS
+                            // marker's page and 'last at or before' is already correct — looking forward at those
+                            // boundaries jumps a page early. Verified: '(7) 2. Sukhavaggavannana' (div an2_2_2,
+                            // type=vagga) sits on printed Myanmar page 53, and <pb M 2.0053/> precedes it.
+                            //
+                            // Book-level divs are identifiable from the anchor name alone: across the s-corpus
+                            // every type='book' id has NO underscore (88/88) and every other type has one
+                            // (vagga, sutta, samyutta, pannasaka, nipata, peyyala, chapter, intro, vimana).
+                            // The DOM anchors carry exactly these ids, so no extra markup is needed.
+                            // Track the most recent BOOK-level anchor, not merely the last anchor: a book div is
+                            // immediately followed by its nested pannasaka/vagga divs, so by the time you reach the
+                            // title or vagga heading the LAST anchor is a nested one and the book start would be
+                            // missed.
+                            var bookStart = -1;
                             var chapterList = this.sortedChapterAnchors;
                             if (chapterList && chapterList.length > 0) {{
                                 for (var ci = 0; ci < chapterList.length; ci++) {{
-                                    if (chapterList[ci].position <= docPos) {{
-                                        sectionStart = chapterList[ci].position;
-                                    }} else {{
+                                    if (chapterList[ci].position > docPos) {{
                                         break;
+                                    }}
+                                    if (chapterList[ci].name.indexOf('_') === -1) {{
+                                        bookStart = chapterList[ci].position;
                                     }}
                                 }}
                             }}
@@ -1258,10 +1273,11 @@ public partial class BookDisplayView : UserControl
                                     }}
                                 }}
 
-                                // No marker since this section began ⇒ we are ahead of the marker that governs
-                                // it ⇒ look DOWN. A marker exactly AT the section start does govern it, hence <.
-                                if (sectionStart >= 0 && firstAfter &&
-                                    (!bestAnchor || bestAnchor.position < sectionStart)) {{
+                                // A new BOOK starts a new printed page, and its marker sits after the heading
+                                // stack — so with no marker since this book began we are ahead of the one that
+                                // governs it: look DOWN. A marker exactly AT the section start governs it, hence <.
+                                if (bookStart >= 0 && firstAfter &&
+                                    (!bestAnchor || bestAnchor.position < bookStart)) {{
                                     return firstAfter;
                                 }}
 
