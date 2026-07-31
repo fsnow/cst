@@ -1208,31 +1208,65 @@ public partial class BookDisplayView : UserControl
 
                             // PERFORMANCE OPTIMIZATION: Use pre-sorted lists instead of expensive sorting on every call
                             // The findBestAnchor function now works on the pre-sorted lists
-                            // Two cases:
-                            // 1. Normal/scrolled: last anchor at or before the current position
-                            // 2. Above the FIRST marker (book title / namo tassa / a chapter heading that
-                            //    precedes the first page marker): resolve to the first anchor in the book.
-                            //    This fallback was previously gated on scrollY < 100, but a chapter-list
-                            //    jump can land the scroll above the first markers yet past 100px, which
-                            //    returned '*' — the #423 case-2 defect. Anywhere above the first marker,
-                            //    the first page IS the current page, so no threshold. (#423)
+                            //
+                            // Which marker governs a position (#542):
+                            // 1. Normally the last marker at or before it — you are inside the region it governs.
+                            // 2. But a section's page marker sits AFTER its heading block(s): the markers derive
+                            //    from page-number footnotes in the CST texts, and for a sutta the marker lands
+                            //    after the first word of the first body paragraph. So anywhere between a section's
+                            //    start and its first marker, 'last at or before' returns the PREVIOUS section's
+                            //    last page — one page early, or at a sub-book boundary an entire sub-book early.
+                            //    There the governing marker is the next one DOWN, not the last one up.
+                            // 3. Case 2 of the old code (above the very first marker in the document) is the same
+                            //    phenomenon at the top of the book, and is subsumed by the rule below.
+                            //
+                            // The <div> is the signal, not the heading styling: div boundaries were placed by hand
+                            // and coincide with the printed page turn, whereas rend classes do not — at the
+                            // Tikanipāta boundary in s0402a.att.xml, rend='centre' is used BOTH for the previous
+                            // book's closing attribution (old page) and for the salutation that opens the new one
+                            // (new page). The div opens exactly at the salutation, so it separates them correctly.
+                            //
+                            // Books with no div markup have no chapter anchors, so sectionStart stays -1 and the
+                            // behaviour is exactly as before — no regression where the markup is absent.
+                            var sectionStart = -1;
+                            var chapterList = this.sortedChapterAnchors;
+                            if (chapterList && chapterList.length > 0) {{
+                                for (var ci = 0; ci < chapterList.length; ci++) {{
+                                    if (chapterList[ci].position <= docPos) {{
+                                        sectionStart = chapterList[ci].position;
+                                    }} else {{
+                                        break;
+                                    }}
+                                }}
+                            }}
+
                             function findBestAnchor(sortedAnchors) {{
                                 if (!sortedAnchors || sortedAnchors.length === 0) {{
                                     return null;
                                 }}
 
-                                // Case 1: Linear search for anchor at or before current position
+                                // Last marker at or before the position, and the first one after it.
                                 var bestAnchor = null;
+                                var firstAfter = null;
                                 for (var i = 0; i < sortedAnchors.length; i++) {{
                                     if (sortedAnchors[i].position <= docPos) {{
                                         bestAnchor = sortedAnchors[i];
                                     }} else {{
-                                        // Since the list is sorted, we can stop here
+                                        // Since the list is sorted, the first one past docPos is the next marker.
+                                        firstAfter = sortedAnchors[i];
                                         break;
                                     }}
                                 }}
 
-                                // Case 2: No anchor at-or-before ⇒ we are above the first marker — return it
+                                // No marker since this section began ⇒ we are ahead of the marker that governs
+                                // it ⇒ look DOWN. A marker exactly AT the section start does govern it, hence <.
+                                if (sectionStart >= 0 && firstAfter &&
+                                    (!bestAnchor || bestAnchor.position < sectionStart)) {{
+                                    return firstAfter;
+                                }}
+
+                                // Above the first marker with nothing following (or no section info): the first
+                                // marker in the book IS the current page. (former Case 2, #423)
                                 if (!bestAnchor) {{
                                     bestAnchor = sortedAnchors[0];
                                 }}
