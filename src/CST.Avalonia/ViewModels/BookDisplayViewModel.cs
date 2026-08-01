@@ -1535,9 +1535,10 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
-            // Calculate target PDF page using CST4 formula: pdfPage = source.PageStart + (currentMyanmarPage - 1)
-            int pdfPage = source.PageStart + (currentPage - 1);
-            if (pdfPage < 1) pdfPage = 1;
+            // CST4's formula was PageStart + (page - 1), which assumes every printed page occupies a page
+            // of the PDF. Blank pages the scanner passed over break that, and the error accumulates down
+            // the volume, so the page count comes from the source itself now. (#540)
+            int pdfPage = source.PdfPageFor(currentPage);
 
             _logger.Information("Showing source PDF: {SourceType} for {BookFilename}, Myanmar page {MyanmarPage} -> PDF page {PdfPage}",
                 sourceType, _book.FileName, currentPage, pdfPage);
