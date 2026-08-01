@@ -94,6 +94,7 @@ Exploratory research and investigations:
 - [MAUI Blazor POC Results](research/MAUI_BLAZOR_POC_RESULTS.md) - POC findings and conclusions
 - [Rendering Requirements](research/RENDERING_REQUIREMENTS.md) - Content rendering needs analysis
 - [Search Index Shrink Spike](research/SEARCH_INDEX_SHRINK_SPIKE.md) - #55 dropping redundant term vectors / norms / payloads (~135 MB → ~75 MB)
+- [Source PDF Pagination](research/SOURCE_PDF_PAGINATION.md) - #540 pages missing from the scans (derived from XML page-marker gaps; fixed for navigation) and why two-page spreads reverse (Chrome's fixed pairing vs Preview's; why not to patch the PDFs)
 - [Structural Markup Inventory](research/STRUCTURAL_MARKUP_INVENTORY.md) - corpus `<div>` coverage (78/217 structured); ground truth for the book-mapping / navigation cluster (#24/#76/#174/#314/#266). Regenerable via `structural_markup_inventory.py`
 - [Strategic Technology Options](research/STRATEGIC_TECHNOLOGY_OPTIONS.md) - Technology direction evaluation
 
