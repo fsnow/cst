@@ -85,7 +85,8 @@ namespace CST.Avalonia.Tests.Models
                 "abh03a.att.xml", "abh03m10.mul.xml", "abh03m11.mul.xml", "abh03m4.mul.xml",
                 "abh03t.tik.xml", "s0201m.mul.xml", "s0402a.att.xml", "s0403a.att.xml",
                 "s0403t.tik.xml", "s0404a.att.xml", "s0404t.tik.xml", "s0508a2.att.xml",
-                "s0510m2.mul.xml", "s0514a2.att.xml", "s0514a3.att.xml", "vin02t.tik.xml",
+                "s0510m2.mul.xml", "s0511m.mul.xml", "s0512m.mul.xml", "s0514a2.att.xml",
+                "s0514a3.att.xml", "vin02t.tik.xml",
             };
             var seen = 0;
             foreach (var book in books)
@@ -100,7 +101,32 @@ namespace CST.Avalonia.Tests.Models
                     Assert.Equal(s.MissingPages.Distinct().Count(), s.MissingPages.Length);
                 }
             }
-            Assert.Equal(21, seen);
+            Assert.Equal(23, seen);
+        }
+
+        [Fact]
+        public void MissingPagesPropagateToSiblingBooksSharingOnePdf()
+        {
+            // A missing page belongs to the PDF, not the book. Where several books share one scan and
+            // one continuous page sequence, a gap found in the book that CONTAINS it shifts every
+            // sibling that follows it — but the gap is only visible in that one book's XML, so the
+            // seeding pass missed the siblings. (Apadāna-2 page 186, found in QA.)
+            foreach (var book in new[] { "s0511m.mul.xml", "s0512m.mul.xml" })
+            {
+                var s = Sources.Inst.GetSource(book, Sources.SourceType.Burmese2010);
+                Assert.NotNull(s);
+                Assert.Equal(new[] { 186 }, s!.MissingPages);
+            }
+
+            // s0404a continues s0403a's sequence in the same PDF, so it carries that book's blanks too.
+            var an = Sources.Inst.GetSource("s0404a.att.xml", Sources.SourceType.Burmese1957);
+            Assert.Equal(new[] { 86, 144, 256, 286, 342 }, an!.MissingPages);
+
+            // The counter-case: s0404t's PageStart (18, against s0403t's 19) ALREADY absorbs the blank
+            // at 148. Adding it would double-count and land a page early. Pinned so it stays empty.
+            var tik = Sources.Inst.GetSource("s0404t.tik.xml", Sources.SourceType.Burmese1957);
+            Assert.Equal(new[] { 266 }, tik!.MissingPages);
+            Assert.Equal(18, tik.PageStart);
         }
 
         [Fact]
