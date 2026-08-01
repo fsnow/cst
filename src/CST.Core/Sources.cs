@@ -420,8 +420,8 @@ public class Sources
 		addSource("s0509m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_VimanavattuTherigatha_2010}");
 		addSource("s0510m1.mul.xml", SourceType.Burmese2010, 25, $"{Burmese2010Mula}/{KN_Apadana1_2010}");
 		addSource("s0510m2.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}", new[] { 186 });
-		addSource("s0511m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}");
-		addSource("s0512m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}");
+		addSource("s0511m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}", new[] { 186 });
+		addSource("s0512m.mul.xml", SourceType.Burmese2010, 19, $"{Burmese2010Mula}/{KN_Apadana2Buddhavamsa_2010}", new[] { 186 });
 		addSource("s0513m.mul.xml", SourceType.Burmese2010, 31, $"{Burmese2010Mula}/{KN_Jataka1_2010}");
 		addSource("s0514m.mul.xml", SourceType.Burmese2010, 9, $"{Burmese2010Mula}/{KN_Jataka2_2010}");
 		addSource("s0515m.mul.xml", SourceType.Burmese2010, 9, $"{Burmese2010Mula}/{KN_Mahaniddesa_2010}");
@@ -480,7 +480,7 @@ public class Sources
 		addSource("s0401a.att.xml", SourceType.Burmese1957, 3, $"{Burmese1957Atthakatha}/{Att_AN_Ekakanipata_1957}");
 		addSource("s0402a.att.xml", SourceType.Burmese1957, 19, $"{Burmese1957Atthakatha}/{Att_AN_DukaTikaCatukka_1957}", new[] { 68, 248 });
 		addSource("s0403a.att.xml", SourceType.Burmese1957, 27, $"{Burmese1957Atthakatha}/{Att_AN_Pancakanipata_1957}", new[] { 86, 144 });
-		addSource("s0404a.att.xml", SourceType.Burmese1957, 27, $"{Burmese1957Atthakatha}/{Att_AN_Pancakanipata_1957}", new[] { 256, 286, 342 });
+		addSource("s0404a.att.xml", SourceType.Burmese1957, 27, $"{Burmese1957Atthakatha}/{Att_AN_Pancakanipata_1957}", new[] { 86, 144, 256, 286, 342 });
 
 		// --- KN Atthakatha ---
 		addSource("s0501a.att.xml", SourceType.Burmese1957, 4, $"{Burmese1957Atthakatha}/{Att_KN_Khuddakapatha_1957}");
