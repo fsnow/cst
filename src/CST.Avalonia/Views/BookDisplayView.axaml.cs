@@ -71,9 +71,9 @@ public partial class BookDisplayView : UserControl
         catch { /* temp dir unavailable — ignore */ }
     }
 
-    // C# scroll tracking for reliable status bar updates
-    private int _lastKnownScrollY = 0;
-    private DateTime _lastScrollTime = DateTime.MinValue;
+    // C# scroll tracking for reliable status bar updates. The timer drives the status tick; the scroll
+    // position itself is NOT tracked here — the status values are computed JS-side from the live scrollY
+    // and arrive as strings, and the reading position is carried by the #434 token. (#552)
     private System.Timers.Timer? _scrollTimer;
     private string _lastKnownVri = "*";
     private string _lastKnownMyanmar = "*";
@@ -780,10 +780,6 @@ public partial class BookDisplayView : UserControl
         if (_scrollTimer != null) return;
 
         _logger.Debug("SetupCSharpScrollTracking called");
-
-        // Set up initial scroll position tracking
-        _lastKnownScrollY = 0;
-        _lastScrollTime = DateTime.Now;
 
         // Create the timer immediately on the UI thread.
         _logger.Debug("Creating scroll timer");
@@ -1886,9 +1882,6 @@ public partial class BookDisplayView : UserControl
                 {
                     // Handle status update
                     _logger.Debug("Status values - VRI: {Vri}, Myanmar: {Myanmar}, PTS: {Pts}, Thai: {Thai}, Other: {Other}, Para: {Para}, Chapter: {Chapter}, Anchor: {Anchor}, Scroll: {ScrollY}", vri, myanmar, pts, thai, other, para, chapter, anchor, scrollY);
-
-                    // Update scroll position
-                    if (scrollY > 0) _lastKnownScrollY = scrollY;
 
                     // #434 rolling capture: keep the freshest reading-position token so a tab reattach can
                     // restore the exact position (#31). Computed via the unit-tested ReadingPositionMath. Only
