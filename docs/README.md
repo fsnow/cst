@@ -115,6 +115,7 @@ External resources and CST4 feature references:
 
 ### 🧪 **testing/** - Test Plans & Results
 - [AI testing prompts](testing/ai-prompts/README.md) - prompts handed to a cold AI agent to exercise the local API / MCP surface; doubles as a fixed eval set across model releases
+- [Local API cold tests](testing/LOCAL_API_COLD_TESTS.md) - the five cold-agent prompts the AI features were actually developed against, plus the model matrix (Opus / Fable / Sonnet / Haiku / Codex) and the four signals each run is scored on
 - [UI Smoke Test](testing/UI_SMOKE_TEST.md) - printable click-through checklist for validating a build on a target machine (esp. bare-metal Windows), with a Windows-specific risk map
 - [Beta 3 Testing](testing/BETA_3_TESTING.md) - Beta 3 test results and notes
 - [Dictionary CST4 Capture Plan](testing/DICTIONARY_CST4_CAPTURE_PLAN.md) - CST4 Dictionary lookups to screenshot as regression oracles (#25)
