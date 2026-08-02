@@ -269,6 +269,97 @@ namespace CST.Avalonia.Tests.Integration
             Assert.Contains("dhamma", text + structured);
         }
 
+        [Fact]
+        public async Task Mcp_serves_the_2026_07_28_stateless_core()
+        {
+            // #530. The integration tests above drive the SDK client against the SDK server, so they pass
+            // whether or not the transport is stateless — both ends moved to 2.0.0 together. These assert the
+            // wire behaviour the 2026-07-28 revision actually requires, so a future SDK bump that silently
+            // reverts to session affinity fails here rather than in a user's client.
+
+            // The SDK's own default, pinned. 2.0.0 made stateless the default per SEP-2567; if a later release
+            // flips it back, the two assertions below would start passing for the wrong reason.
+            Assert.True(new ModelContextProtocol.AspNetCore.HttpServerTransportOptions().Stateless);
+
+            using var http = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) };
+            http.DefaultRequestHeaders.Add("Authorization", "Bearer " + _api.Token);
+            http.DefaultRequestHeaders.Add("Accept", "application/json, text/event-stream");
+
+            // A stateless server mints no session, so it must not hand back an Mcp-Session-Id for a client to
+            // echo. A tool call is the strongest probe: under the old core this is exactly where affinity was
+            // required, since the call had to reach the process that ran initialize.
+            var call = await http.PostAsync("/mcp", Json(
+                """{"jsonrpc":"2.0","id":1,"method":"tools/list"}"""));
+            Assert.Equal(HttpStatusCode.OK, call.StatusCode);
+            Assert.False(call.Headers.Contains("Mcp-Session-Id"),
+                "stateless servers must not mint a session id");
+
+            // ...and the call must succeed with NO prior initialize on this connection. Under the pre-2026-07-28
+            // core an uninitialized session was an error; statelessly it is the normal case.
+            var body = await call.Content.ReadAsStringAsync();
+            Assert.Contains("search", body);
+            Assert.DoesNotContain("\"error\"", body);
+
+            // The standalone SSE endpoint is disabled in stateless mode (no unsolicited server-to-client
+            // messages), so a GET must not open a stream. Anything but 200-with-a-stream is acceptable.
+            var sse = await http.GetAsync("/mcp", HttpCompletionOption.ResponseHeadersRead);
+            Assert.NotEqual("text/event-stream", sse.Content.Headers.ContentType?.MediaType);
+        }
+
+        [Fact]
+        public async Task Mcp_serves_both_the_2026_07_28_contract_and_down_level_clients()
+        {
+            // #530. Two callers must both work, and only one of them is exercised by the SDK-client tests:
+            //
+            //   modern  — declares MCP-Protocol-Version, and must then ALSO send the Mcp-Method / Mcp-Name
+            //             routing headers and the _meta block. The server enforces all of it: omit any one
+            //             and the request is rejected, which is easy to get wrong by hand.
+            //   legacy  — sends none of it and is served anyway (the fallback the SDK promises for a mixed
+            //             ecosystem). The stateless test above is the legacy path.
+            //
+            // Both are verified here so a future SDK bump cannot quietly drop either half.
+            using var http = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) };
+            http.DefaultRequestHeaders.Add("Authorization", "Bearer " + _api.Token);
+            http.DefaultRequestHeaders.Add("Accept", "application/json, text/event-stream");
+
+            const string Version = "2026-07-28";
+            const string Meta = "\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"" + Version + "\","
+                              + "\"io.modelcontextprotocol/clientCapabilities\":{}}";
+
+            async Task<string> PostAsync(string method, string? name, string paramsBody, bool sendRouting)
+            {
+                var req = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+                {
+                    Content = Json("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"" + method
+                                 + "\",\"params\":{" + paramsBody + "}}"),
+                };
+                req.Headers.Add("MCP-Protocol-Version", Version);
+                if (sendRouting)
+                {
+                    req.Headers.Add("Mcp-Method", method);
+                    if (name is not null) req.Headers.Add("Mcp-Name", name);
+                }
+                var resp = await http.SendAsync(req);
+                return await resp.Content.ReadAsStringAsync();
+            }
+
+            // server/discover replaces the initialize handshake, and must advertise the revision we claim.
+            var discover = await PostAsync("server/discover", null, Meta, sendRouting: true);
+            Assert.Contains(Version, discover);
+            Assert.DoesNotContain("\"error\"", discover);
+
+            // A real tool call over the modern contract reaches the tool layer and returns corpus data.
+            var call = await PostAsync("tools/call", "search",
+                Meta + ",\"name\":\"search\",\"arguments\":{\"query\":\"dhamma\"}", sendRouting: true);
+            Assert.DoesNotContain("\"error\"", call);
+            Assert.Contains("dhamma", call);
+
+            // Declaring the version but omitting the routing headers is an error, not a silent success — this
+            // is what proves the server really enforces the new contract rather than ignoring the headers.
+            var rejected = await PostAsync("tools/list", null, Meta, sendRouting: false);
+            Assert.Contains("\"error\"", rejected);
+        }
+
         // Connects the real MCP client over Streamable HTTP with the bearer, as Claude Desktop's mcp-remote
         // bridge does.
         private async Task<McpClient> ConnectMcpAsync()

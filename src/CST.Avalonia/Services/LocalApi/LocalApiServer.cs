@@ -178,6 +178,13 @@ namespace CST.Avalonia.Services.LocalApi
             // app's --mcp-bridge relay; code-capable agents keep hitting /v1 directly. Registered only when the
             // MCP permission is on (#278 Phase 4) — separate from the /v1 surface. Tool groups are registered only
             // when their backing service is present (mirroring the /v1 wiring); 'books' needs no service.
+            //
+            // SDK 2.0.0 implements MCP 2026-07-28 (#530). The transport is STATELESS BY DEFAULT there (SEP-2567):
+            // no session is minted, no Mcp-Session-Id is issued, the standalone SSE endpoint is off, and
+            // server/discover replaces the initialize handshake — with the SDK falling back for down-level
+            // clients, so a mixed ecosystem is its problem rather than ours. Nothing below opts into it; it is
+            // simply the default, and a wire-level test pins that so a later SDK bump can't quietly revert us to
+            // session affinity. Stateless also disables sampling, elicitation and roots — we use none of them.
             if (_mcpEnabled)
             {
                 var mcp = builder.Services.AddMcpServer().WithHttpTransport();
@@ -221,9 +228,15 @@ namespace CST.Avalonia.Services.LocalApi
             // unbounded, so a subagent fan-out (or Chat + Cowork + Code at once) can saturate the thread pool and
             // starve the UI — and, because Claude Desktop is one-error-and-done, a single load-induced timeout
             // permanently kills that client's session. Gate the heavy tool CALLS (POSTs to /v1 + /mcp) to
-            // ~ProcessorCount-1 concurrent and QUEUE the rest (FIFO). GETs — discovery, books, and the long-lived
-            // MCP SSE stream — are left unlimited so a stream can't hold a permit forever. Queue is deep because a
-            // 503 rejection would itself be the fatal one-error; we queue rather than reject under realistic load.
+            // ~ProcessorCount-1 concurrent and QUEUE the rest (FIFO). GETs — discovery and books — are left
+            // unlimited. Queue is deep because a 503 rejection would itself be the fatal one-error; we queue
+            // rather than reject under realistic load.
+            //
+            // The original rationale for exempting GETs was also to stop a long-lived MCP SSE stream from holding
+            // a permit forever. That stream is gone since the 2026-07-28 stateless core (#530) — the standalone
+            // SSE endpoint is disabled — so ALL MCP traffic is now POST, including the cheap discovery and
+            // tools/list calls that used to ride the session. They take a permit briefly; the cap is on
+            // concurrency, not rate, so this costs nothing but is worth knowing when reading the numbers.
             int toolPermits = Math.Max(1, Environment.ProcessorCount - 1);
             builder.Services.AddRateLimiter(options =>
             {
