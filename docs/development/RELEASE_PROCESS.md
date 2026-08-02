@@ -2,30 +2,49 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** July 25, 2026
-**Current Version:** 5.0.0-beta.5
+**Last Updated:** August 2, 2026
+**Current Version:** 5.0.0-beta.6 (in development; Beta 5 released 2026-07)
 
-> ⚠️ **Beta 5 — mandatory clean start (put at the TOP of the GitHub release notes).** The search
-> index offset format changed in #53 (offsets standardized to Lucene-exclusive). An index built by
-> an earlier beta will mis-match / mis-highlight, so users **must** delete the contents of
-> `~/Library/Application Support/CSTReader/` before running Beta 5. Lead the release notes with this
-> instruction — not buried in "Upgrade Notes."
-> General rule: whenever the tokenizer or index format changes, the clean-start instruction goes first.
+> **Clean-start status for Beta 6: NOT required from Beta 5.** No on-disk format change is expected
+> between Beta 5 and Beta 6, so Beta 5 users upgrade in place. Only users coming from **Beta 4 or
+> earlier** must delete the data directory (`~/Library/Application Support/CSTReader/` on macOS,
+> `%APPDATA%\CSTReader\` on Windows) — the Beta 5 index-offset change (#53) is what they are crossing.
+> **Re-confirm this before publishing:** if anything lands during Beta 6 development that changes the
+> tokenizer, index format, or an on-disk layout, this flips to a mandatory clean start.
+>
+> General rule: whenever the tokenizer or index format changes, the clean-start instruction goes FIRST
+> in the release notes — not buried in "Upgrade Notes." When it is *not* required, say so explicitly,
+> because the beta line has trained users to wipe.
 
 ---
 
 ## Overview
 
-The release process consists of five main steps:
+The release process consists of six main steps:
 1. **Build packages** — macOS (build + notarize on Caracara) and Windows (build on a Windows machine)
 2. **Create a git tag** for the release
-3. **Create a GitHub release** with release notes
-4. **Attach binary files** (DMG + Windows installers/zips) to the release
-5. **Update welcome-updates.json** to notify users
+3. **Create the GitHub release AS A DRAFT**, with release notes
+4. **Attach binaries** to the draft, then **publish** it (flip draft → published)
+5. **Post-publish: update `welcome-updates.json`** to notify users
+6. **Post-publish: update `README.md`** to the newly released version
+
+### The draft → attach → publish order is load-bearing
+
+Create the release as a **draft**, attach every artifact, and only then flip it to published. Two things
+depend on that order:
+
+- A published release with missing assets is visible to users, and the download links 404.
+- **Nothing that points users at the release may be pushed before the release exists.**
+  `welcome-updates.json` is fetched live by every running copy of the app, and its `downloadUrl` points at
+  the release page. Push it while the release is still a draft and you have announced a release that
+  users cannot download. Same for `README.md`.
+
+So steps 5 and 6 are **post-publish by definition**, not merely last. See "Version strings: two timing
+buckets" below for which files move when.
 
 ### Shipping matrix
 
-Beta 5 ships **four** builds. You need **one machine per OS, not one per architecture** — both
+Each release ships **four** builds. You need **one machine per OS, not one per architecture** — both
 architectures cross-build fine from a single host of the right OS.
 
 | Platform | Arch  | Build on              | Test on           | Artifacts |
@@ -95,21 +114,78 @@ Before starting the release process, verify on Kestrel:
 
 - [ ] .NET 10 SDK present (`dotnet --list-sdks` shows 10.0.x) — see Toolchain Requirements
 
-- [ ] All version strings updated and consistent (full list — these all drifted before Beta 4):
-  - `CST.Avalonia.csproj` - Version / InformationalVersion / AssemblyVersion / FileVersion + CFBundleVersion / CFBundleShortVersionString (canonical source)
-  - `Info.plist` - CFBundleVersion + CFBundleShortVersionString
-  - `package-macos.sh` - helper-bundle CFBundleVersion / CFBundleShortVersionString
-  - `Resources/welcome-content.html` - header version + footer version/date
-  - `Services/WelcomeUpdateService.cs` - `CurrentAppVersion` default
-  - `ViewModels/WelcomeViewModel.cs` - version fallback string
-  - `CLAUDE.md` - header, status, dates
-  Note: the Windows packaging path reads `<Version>` straight out of `CST.Avalonia.csproj` and passes it
-  to Inno Setup as `/DAppVersion`, so `CST.Avalonia.iss` and `package-windows.ps1` cannot drift — but the
-  `.iss` **AppId must never change** (it keys uninstall/upgrade detection and the WinGet ProductCode).
+- [ ] All version strings updated and consistent — see **Version strings: two timing buckets** below.
+      By release time, bucket A should already be done (it is bumped at the *start* of the cycle);
+      verify it rather than discovering it here. These all drifted before Beta 4.
 - [ ] Build succeeds: `dotnet build`
 - [ ] Tests pass: `dotnet test` (or acceptable skip rate documented)
 - [ ] All changes committed and pushed to `main` branch
 - [ ] No critical bugs or blockers
+
+---
+
+## Version strings: two timing buckets
+
+Version strings do **not** all move at the same moment. Treating them as one list is what produced the
+drift before Beta 4. There are two buckets, and the difference is whether the string describes *what is
+being built* or *what has been released*.
+
+### Bucket A — bump at the START of a development cycle
+
+Do this **immediately after publishing** the previous release, not on the eve of the next one. From this
+point every dev build self-identifies as the new version, which is what makes bug reports legible.
+
+| File | What |
+|---|---|
+| `CST.Avalonia.csproj` | `Version`, `InformationalVersion`, `CFBundleVersion`, `CFBundleShortVersionString`, `AssemblyVersion`, `FileVersion` — **canonical source** |
+| `Info.plist` | `CFBundleVersion` + `CFBundleShortVersionString` |
+| `package-macos.sh` | helper-bundle `CFBundleVersion` / `CFBundleShortVersionString` |
+| `Resources/welcome-content.html` | header version + footer version/date |
+| `Services/WelcomeUpdateService.cs` | `CurrentAppVersion` default |
+| `ViewModels/WelcomeViewModel.cs` | version fallback string |
+| `CLAUDE.md` | status line ("Beta N in development") |
+| `docs/development/RELEASE_PROCESS.md` | this file's `Current Version` + `Last Updated` + clean-start banner |
+
+**`AssemblyVersion` / `FileVersion` are 4-part numerics and cannot hold a `-beta.N` suffix.** The
+convention is that the **fourth field carries the beta number**: `5.0.0-beta.6` → `5.0.0.6`. Do not set
+them to `5.0.0.0` and do not leave them behind — they are what Windows shows in file properties.
+
+**The Windows packaging path cannot drift, by construction.** `package-windows.ps1` reads `<Version>`
+straight out of `CST.Avalonia.csproj` and passes it to Inno Setup as `/DAppVersion`, so neither
+`CST.Avalonia.iss` nor the script carries its own copy — bumping the csproj is enough. But the `.iss`
+**`AppId` must NEVER change**: it keys uninstall/upgrade detection and the WinGet `ProductCode`. Changing
+it strands every existing installation as a separate product.
+
+### Bucket B — update AFTER the release is published
+
+These announce the release to users. Pushing them early points people at something that does not exist.
+
+| File | What | Why post-publish |
+|---|---|---|
+| `welcome-updates.json` (repo ROOT) | `currentVersion.beta`, `messages`, `announcements` | Fetched live by every running app; `downloadUrl` targets the release page |
+| `README.md` | `**Status: 5.0.0-beta.N.**` + the surrounding description | It is the repo's front page; it should state the newest **published** version, never an unreleased one |
+
+Update both **immediately after flipping the release from draft to published** — not days later. A
+README still advertising the previous beta is the most visible form of release drift.
+
+### Not version strings — do not bulk-replace
+
+These contain the version text but must be left alone; a blind find-and-replace corrupts them:
+
+- `Services/VersionComparer.cs` and `Tests/Services/VersionComparerTests.cs` — SemVer parsing **fixtures**
+  (e.g. `"5.0.0-beta.5+abc1234"` testing build-metadata stripping). Version-agnostic by design.
+- `Tests/ViewModels/WelcomeViewModelTests.cs` — constructed test data, not an assertion about the app's
+  own version.
+- `docs/architecture/LEMMA_EXPANSION.md` and similar — **historical statements** ("implemented in Beta 5")
+  that stay true.
+
+### Release-specific narrative — not a version string, but it goes stale
+
+`Resources/welcome-content.html` also carries prose about the *particular* release: the "please start
+clean" notice, the Focus Areas intro, and per-item blurbs like "Windows — brand new in this release".
+Renumbering these mechanically produces false claims. Rewrite them as **content, close to release**, once
+the cycle's actual changes are known — and check the clean-start notice against the banner at the top of
+this document.
 
 ---
 
@@ -340,7 +416,7 @@ This ensures accurate release notes based on actual changes, not assumptions.
 ```markdown
 # CST Reader 5.0.0-beta.X
 
-**Release Date:** November XX, 2025
+**Release Date:** <Month DD, YYYY>
 
 ## What's New
 
@@ -586,16 +662,51 @@ The app fetches this file from GitHub main branch. After pushing:
 
 ---
 
+## Step 6: Update README.md
+
+**Do this in the same sitting as Step 5**, right after the release is published. `README.md` is the repo's
+front page — for anyone arriving from GitHub search or a link, it *is* the product description, and a
+stale version line there is the most visible release drift there is.
+
+Update `README.md:5` and the surrounding paragraph:
+
+```markdown
+**Status: 5.0.0-beta.N.** <one or two sentences on what this release is>
+```
+
+It should name the newest **published** version — never the in-development one. (Bucket A above bumps the
+app's own version at the start of a cycle; the README deliberately lags behind it until release day.)
+
+Check the rest of the file at the same time: the "Known Gaps" section and any feature claims may have been
+overtaken by the release you just shipped.
+
+```bash
+git add README.md
+git commit -m "README: update for Beta N"
+git push
+```
+
+---
+
 ## Post-Release Verification
 
 After completing all steps, verify:
 
-- [ ] Release appears on GitHub releases page
+- [ ] Release appears on GitHub releases page and is **published, not still a draft**
 - [ ] All six artifacts are downloadable (2 DMG + 2 setup.exe + 2 portable zip)
 - [ ] Release is marked as pre-release (for betas)
-- [ ] welcome-updates.json is committed and pushed
+- [ ] `welcome-updates.json` (repo ROOT) is committed and pushed — Step 5
+- [ ] `README.md` states the version just published — Step 6
 - [ ] App shows correct version when launched from DMG
 - [ ] Update notification appears for users on older versions (test with old version if possible)
+
+### Then open the next cycle
+
+- [ ] **Bump Bucket A to the next version** (see "Version strings: two timing buckets"). Do it now, while
+      the release is fresh — this is the step that has historically been skipped, and every dev build and
+      bug report between here and the next release is mislabelled until it happens.
+- [ ] Update this document's `Current Version`, `Last Updated`, and the clean-start banner for the new
+      cycle (state explicitly whether a wipe is required, and from which version).
 
 ---
 
@@ -605,7 +716,7 @@ If critical issues are discovered after release:
 
 1. **Delete the release** (not the tag) from GitHub
 2. **Fix the issues** in the code
-3. **Increment patch version** (e.g., beta.3 → beta.3.1)
+3. **Increment patch version** (e.g., beta.N → beta.N.1)
 4. **Follow release process again** with new version
 
 **Do not reuse version numbers** - each release should have a unique version.
@@ -730,6 +841,14 @@ git push origin v5.0.0-beta.X
 
 ## Document History
 
+- **2026-08-02:** Opened the Beta 6 cycle. Split the version strings into **two timing buckets** — those
+  bumped at the *start* of a cycle vs. those updated only *after* the release is published — after the
+  old single list proved incomplete (`README.md` was missing entirely) and timing-blind. Added `README.md`
+  as **Step 6**, documented the `AssemblyVersion`/`FileVersion` 4th-field convention, called out the
+  fixtures that must NOT be bulk-replaced, made the **draft → attach → publish** ordering an explicit
+  principle with the reason (nothing announcing a release may be pushed before it exists), added a
+  "then open the next cycle" checklist, and replaced the Beta 5 mandatory-clean-start banner with the
+  Beta 6 status (not required from Beta 5; required from Beta 4 or earlier).
 - **2026-07-29:** Corrected Step 5 — the live file is `welcome-updates.json` in the repo ROOT, not
   `docs/`, and the documented JSON was an older schema. Deleted the stale `docs/` copy. Fixed the
   post-release checklist, which still spoke of two DMGs.
