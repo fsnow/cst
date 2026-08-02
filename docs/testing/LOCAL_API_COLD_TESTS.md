@@ -103,6 +103,30 @@ because "report the matching word-forms" leads there once the tools exist. Capab
 acquire coverage as the surface grows, so the table is only trustworthy when rebuilt from what the
 cells actually called.
 
+## Scrub credentials before a friction report leaves the scratch directory
+
+**Cold-agent runs routinely persist the live bearer token.** In the 2026-08-02 rounds it ended up in
+**22 files across every cell** — inside finished report markdown, inside per-task shell scripts, and
+inside the Codex transcript. One harness flagged it; the behaviour was universal.
+
+That is not a boundary violation on its own: the token is loopback-only and the project's threat
+model already says same-user local processes are the OS's boundary, not ours. **The risk is the
+report travelling.** These reports are written to be read, pasted into issues, and quoted in commit
+messages — which is exactly how a loopback credential escapes the machine it was scoped to.
+
+So, before any report is quoted, attached or committed:
+
+```bash
+TOK=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser(
+  '~/Library/Application Support/CSTReader/local-api.json')))['token'])")
+grep -rl "$TOK" /tmp/<scratch-dirs>      # find it
+# ...then replace with a placeholder before sharing
+```
+
+Treat the token as disclosed once a run has finished, and prefer to restart the app between a test
+round and anything that shares its output — the handshake file is rewritten with a fresh token on
+each start, which makes rotation free.
+
 ## Deciding what to act on — a judgment call, not a queue
 
 **These runs are non-deterministic.** The same prompt, model and surface can produce a different
