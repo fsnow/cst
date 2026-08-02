@@ -453,11 +453,24 @@ The newest part of the surface, and the least exercised: sandhi deconstruction, 
 back-lookup, the attested paradigm, the multi-lemma union, and the lemma dossier. Written
 capability-shaped like prompt 3 — no endpoint is named, so it stays valid as the surface grows.
 
-The design leans on two real traps rather than invented ones. `paññāya` is genuinely both the
+The design leans on real traps rather than invented ones. `paññāya` is genuinely both the
 instrumental/locative of the noun *paññā* and the absolutive of *pajānāti* — the exact homograph
-`search.md` warns about, so task 2 cannot be answered by counting surface strings. And task 3 asks
-for **one combined figure**, which a per-lemma endpoint cannot give; an agent that reports several
-totals for the reader to add up has missed the union.
+`search.md` warns about, so task 2 cannot be answered by counting surface strings. Task 3 asks for **one combined figure** for
+the family, and task 4 then narrows it to an **arbitrary subset** — the noun, the gerund and the
+adjective. That distinction is load-bearing: the family total is reachable from a flag on the
+per-lemma endpoint, but an arbitrary set of senses is not, so only task 4 forces the union.
+The first draft had task 3 alone, and cells split: one reached `POST /v1/forms`, another answered
+with the family flag — leaving coverage dependent on which path a model happened to pick. Task 4
+removes that chance. This is the coverage illusion the suite exists to prevent, caught in the suite's
+own material.
+
+Two further corrections came from the first runs. The original task 1 asserted that `kiñcāpi` "isn't
+in the dictionary" — **false**, DPD carries it as a headword with pos `sandhi`, and two cells said so.
+A prompt must not contain a premise the surface will contradict, or the run scores the prompt rather
+than the API. And "family of closely-related headwords" turns out to be ambiguous in the API's own
+terms: nothing distinguishes case-split siblings of one lexeme from same-root different words. That
+ambiguity is left in deliberately — it is a real property of the data, and how a cell handles it is
+worth observing.
 
 Note the extra friction-log question about **response format**: at the time of writing, one endpoint
 in this group returns styled HTML rather than JSON without saying so in the docs.
@@ -477,8 +490,8 @@ you're tempted to look at the source, note it as a finding instead.
 I am reading a commentary and keep running into forms I can't look up directly.
 
 Tasks:
-1. I meet the word "kiñcāpi" in the text. It isn't in the dictionary as it stands.
-   What is it actually made of, and what does the whole thing mean?
+1. I meet the word "kiñcāpi" in the text. It looks like several small words fused
+   together. What is it actually made of, and what does the whole thing mean?
 2. The form "paññāya" is ambiguous — I'm told it can be two quite different words.
    Which ones? Give the sense of each, and tell me what would let me decide which
    is meant in a given sentence.
@@ -486,9 +499,13 @@ Tasks:
    how often each occurs. Then give me a single combined figure for the whole
    family of closely-related headwords together — one total, not a per-headword
    list I have to add up myself.
-4. Give me the derivation of that noun: its root, how it is built, and anything
+4. Now narrow it. I do NOT want the whole family — only three senses I actually
+   care about: the feminine noun, the gerund, and the adjective. Give me one
+   combined occurrence figure for just those three, counted once each even where
+   they share a form. Again: a single number, not three I have to reconcile.
+5. Give me the derivation of that noun: its root, how it is built, and anything
    the reference says about its formation.
-5. Finally, ground it: find a passage where the ambiguous form occurs, quote it,
+6. Finally, ground it: find a passage where the ambiguous form occurs, quote it,
    and cite it precisely enough that I could find it in a printed edition.
 
 Report:
@@ -503,6 +520,7 @@ Report:
 **Expected outcome** (for the human scoring the run, not part of the pasted prompt): `kiñcāpi`
 resolves to three elements; `paññāya` yields both a feminine noun and a gerund among its candidates;
 the noun's paradigm comes back with per-form counts; the family total arrives as a single number; the
+three-sense subset arrives as a *different* single number, reached by a different call; the
 derivation names the root; and the final citation carries a book and page, not just a paragraph.
 
 **Failure signals**: reporting `kiñcāpi` as unanalysable; treating `paññāya` as one word; answering
@@ -527,7 +545,7 @@ having consulted the doc slice that covers it.
 | `navigate` (drive the reader) | | | | | | ● |
 | `lemma_lookup` / `/v1/lemma/{form}` | | | | ● | | |
 | `lemma_forms` / `/v1/forms/{id}` | | | | ● | | |
-| **`lemma_forms_union` / `POST /v1/forms`** | | | | | | |
+| `lemma_forms_union` / `POST /v1/forms` | | | | | | |
 | **`sandhi_split` / `/v1/deconstruct`** | | | | | | |
 | **`/v1/lemma-report/{id}`** | | | | | | |
 | **`dictionary_languages`** | | | | | | |
