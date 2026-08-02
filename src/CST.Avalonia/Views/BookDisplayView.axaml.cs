@@ -995,7 +995,12 @@ public partial class BookDisplayView : UserControl
                     }} catch(ptErr) {{ }}
 
                     // ATOMIC UPDATE: Send all status info in one message with tab ID including chapter and best anchor
-                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + scrollY + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|TAB:__TAB_ID_PLACEHOLDER__';
+                    // SCROLL is ROUNDED. On a Retina display scroll offsets quantize to half CSS pixels, so
+                    // scrollIntoView (chapter jump / anchor restore) rests at the element's fractional layout
+                    // position and scrollY comes out like 76563.5. The C# side parsed that as an int, which
+                    // silently failed and left 0 — poisoning the reading-position token. Matches what
+                    // GetCurrentPositionTokenAsync has always emitted. (#551)
+                    document.title = 'CST_STATUS_UPDATE:VRI=' + vri + '|MYANMAR=' + myanmar + '|PTS=' + pts + '|THAI=' + thai + '|OTHER=' + other + '|PARA=' + para + '|CHAPTER=' + currentChapter + '|ANCHOR=' + bestAnchor + '|SCROLL=' + Math.round(scrollY) + '|PTA=' + ptA + '|PTAP=' + ptAP + '|PTB=' + ptB + '|PTBP=' + ptBP + '|TAB:__TAB_ID_PLACEHOLDER__';
                 }} catch(e) {{
                     // Emit nothing on error — an all-'*' title would clobber a good readout (#432
                     // constraint). The next scroll tick retries. (#423)
@@ -1845,7 +1850,19 @@ public partial class BookDisplayView : UserControl
                     else if (part.StartsWith("PTA=")) ptA = part.Substring(4);
                     else if (part.StartsWith("PTBP=")) ptBP = part.Substring(5);
                     else if (part.StartsWith("PTB=")) ptB = part.Substring(4);
-                    else if (part.StartsWith("SCROLL=")) int.TryParse(part.Substring(7), out scrollY);
+                    // Parse as a DOUBLE with InvariantCulture, then round. `int.TryParse` here silently failed
+                    // on a fractional value (Retina half-pixel scroll offsets, e.g. "76563.5") and left the
+                    // out-param at 0 — which made the reading-position capture compute fraction 0 and pin the
+                    // restore to the anchor ABOVE the reader. The JS now rounds too; this is the second line of
+                    // defence so an unrounded value degrades to a half-pixel error instead of a silent zero.
+                    // InvariantCulture is required: JS always emits '.' as the decimal separator, which a
+                    // comma-decimal locale would otherwise reject the same way. (#551)
+                    else if (part.StartsWith("SCROLL="))
+                    {
+                        if (double.TryParse(part.Substring(7), System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture, out var scrollParsed))
+                            scrollY = (int)Math.Round(scrollParsed);
+                    }
                     else if (part.StartsWith("CACHE_BUILT="))
                     {
                         isCacheBuilt = true;
