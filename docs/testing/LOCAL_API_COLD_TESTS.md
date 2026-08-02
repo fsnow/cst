@@ -48,6 +48,61 @@ Two consequences worth holding onto:
   model. It is the reason the Codex cell matters more than its share of the grid, and the reason a
   new model shipping is a reason to re-run rather than to assume the surface still teaches.
 
+## Re-running the loop on a mature surface
+
+The section above describes the loop that *built* the surface. Running it again later is a different
+exercise, and the first re-run (2026-08-02, four Claude cells + Codex on prompt 4) is where these
+were learned.
+
+**The yield changes character.** During development, friction reports drove design: agents could not
+complete tasks, and the fixes were structural. On a mature surface the tasks all succeed — every
+cell completed all five, none was blocked — and what surfaces instead is *edge material the original
+loop never probed*: an auth exception, a metadata contract, a misnamed key, a doc section that reads
+as truncated. Do not read "no blocking failures" as "nothing to fix"; read it as the loop having
+moved from construction to diagnosis.
+
+**Doc drift is the dominant failure mode on a re-run, and only this loop catches it.** The sharpest
+find was `search.md` describing lemma lookup as available *"if/when the API offers it"* — accurate
+when written, obsolete once `/v1/forms/{lemmaId}` shipped, and never updated. Every cell dutifully
+built the inferior regex family and discovered the better tool only at the last task. No unit test
+can see that: the code is correct, the docs merely describe a shipped feature as hypothetical. It is
+a **regression introduced by success**, and a cold agent is the only detector we have for it.
+Whenever the surface grows, assume the docs now lie somewhere and re-run.
+
+**Sloppiness in the runner is a feature.** Two real defects were found by making the mistake
+naturally rather than by testing for it — sending `highlight` instead of `terms` to `navigate`, and
+omitting the required `language` from `dictionary_lookup`. A careful operator who reads the docs
+first will not find these. When re-running, let the first attempt at each call be the naive one.
+
+**Treat a cell's report as a lead, not a result.** Every actionable claim from this round was
+re-verified by hand before it reached an issue, and several first probes were confounded — a 409 that
+was duplicate-suppression rather than a rejected key, a 404 that was a non-existent bookId rather
+than a bad parameter, an `awk` range that silently matched its own terminator. Cross-cell
+corroboration is the strongest signal available: of this round's findings only one (`/v1/status`
+answering unauthenticated) was found independently by two cells, and it needed no verification.
+
+**Separate harness artifacts from surface findings.** They look identical in a report. This round
+produced two: the Codex cell died on a usage quota mid-run, and one Claude cell's `Write` was refused
+by subagent policy (*"Subagents should return findings as text"*), so prompt 4's "write the report to
+a markdown file" silently failed for that cell alone while the others complied. Neither says anything
+about the API.
+
+**Match the prompt to the cell's constraints.** Prompt 4 was the wrong choice for a quota-limited
+cell: it writes its report only at the end, so the quota took the report with it. Prompt 1 exists for
+exactly this and writes per task. Comparability across cells is worth less than surviving the run.
+
+**Equalise the harnesses deliberately.** The Codex cell gets isolation for free by running from
+`/tmp/<workdir>`; a Claude Code subagent starts *inside the repo* and can satisfy the whole task by
+reading `llms.txt` from source — passing for entirely the wrong reason. Each cell was therefore given
+a scratch directory and told the working directory was off limits. That is harness setup, not a
+change to the prompt, and it must be applied to every cell or the cells are not comparable.
+
+**Derive coverage from observed runs, not from reading the prompts.** The coverage table below was
+written by reading prompt texts and was wrong within hours: prompt 4 does reach the lemma surface,
+because "report the matching word-forms" leads there once the tools exist. Capability-shaped prompts
+acquire coverage as the surface grows, so the table is only trustworthy when rebuilt from what the
+cells actually called.
+
 ## What makes it a valid test
 
 Every prompt carries the same hard constraint: **use only the API and what it says about itself** —
