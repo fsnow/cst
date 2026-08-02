@@ -103,6 +103,38 @@ because "report the matching word-forms" leads there once the tools exist. Capab
 acquire coverage as the surface grows, so the table is only trustworthy when rebuilt from what the
 cells actually called.
 
+## Deciding what to act on — a judgment call, not a queue
+
+**These runs are non-deterministic.** The same prompt, model and surface can produce a different
+path and a different set of complaints on the next run. A friction report is evidence, not a work
+list, and turning every item into an issue would bloat the docs and over-constrain the API — which
+would itself damage the pointer-index shape the loop was built to protect.
+
+Questions worth asking of each finding, roughly in order of weight:
+
+- **Does it MISLEAD, or merely annoy?** This is the main axis. `search.md` describing a shipped
+  feature as available *"if/when the API offers it"* sent every cell down the inferior path — that
+  misleads, and is worth fixing at once. "`search.md` is dense prose that punishes skimming" is a
+  style opinion from one cell about a doc that nevertheless taught it correctly; acting on it risks
+  trading precision for readability in a document whose precision is the point.
+- **Did more than one cell find it independently?** The strongest available signal. Of this round's
+  findings only `/v1/status` answering unauthenticated was hit separately by two cells, and it needed
+  no further verification.
+- **Does it reproduce by hand?** Necessary before filing anything. Several first probes this round
+  were confounded by unrelated behaviour.
+- **Is the friction actually the docs WORKING?** An agent grumbling about noise in the regex
+  inflection family is not reporting a defect: the doc warns about exactly that noise, and the
+  warning is load-bearing. Agents sometimes complain about a difficulty the surface has already told
+  them is inherent.
+- **Would fixing it help the target audience?** The surface targets frontier models. A complaint only
+  a weak cell raised, which every frontier cell handled cleanly, is usually not worth doc bulk.
+- **Is it a defect or a feature request?** "No sutta-level addressing" is a real gap, but it belongs
+  in the feature backlog, not in a friction fix. The loop finds both; only the first kind belongs in
+  this cycle.
+
+A finding that fails these tests is not necessarily wrong — non-determinism cuts both ways, and an
+unreproduced item may simply be rare. Record it and move on rather than fixing it or deleting it.
+
 ## What makes it a valid test
 
 Every prompt carries the same hard constraint: **use only the API and what it says about itself** —
