@@ -19,9 +19,15 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
     /// The <c>--mcp-bridge</c> relay (#278): a TRANSPARENT stdio ↔ <c>/mcp</c> pump. An MCP chat client (Claude
     /// Desktop) spawns CST Reader with <c>--mcp-bridge</c> and pipes its stdio; this relays JSON-RPC between that
     /// stdio and the running app's loopback <c>/mcp</c> (Streamable HTTP + bearer). So the client config carries
-    /// no port/token and the API can stay ephemeral. Transparent = no tool re-declaration: the client's own
-    /// <c>initialize</c> bootstraps the session and the HTTP transport manages <c>Mcp-Session-Id</c> + the SSE
-    /// stream around it (verified against the SDK internals — <c>ConnectAsync</c> does no handshake).
+    /// no port/token and the API can stay ephemeral. Transparent = no tool re-declaration: whatever bootstrap the
+    /// client performs is relayed through untouched (verified against the SDK internals — <c>ConnectAsync</c> does
+    /// no handshake of its own).
+    ///
+    /// <para>Since MCP 2026-07-28 the server is stateless (#530): there is no <c>Mcp-Session-Id</c> to carry and no
+    /// standalone SSE stream to hold open, and <c>server/discover</c> replaces the <c>initialize</c> handshake. That
+    /// makes the relay's job strictly simpler — being transparent, it needed no change. A DOWN-LEVEL client that
+    /// still sends <c>initialize</c> also keeps working: the SDK falls back for it, and the bridge is not the thing
+    /// deciding.</para>
     /// </summary>
     internal static class McpBridge
     {
