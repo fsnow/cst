@@ -103,6 +103,30 @@ because "report the matching word-forms" leads there once the tools exist. Capab
 acquire coverage as the surface grows, so the table is only trustworthy when rebuilt from what the
 cells actually called.
 
+## Scrub credentials before a friction report leaves the scratch directory
+
+**Cold-agent runs routinely persist the live bearer token.** In the 2026-08-02 rounds it ended up in
+**22 files across every cell** — inside finished report markdown, inside per-task shell scripts, and
+inside the Codex transcript. One harness flagged it; the behaviour was universal.
+
+That is not a boundary violation on its own: the token is loopback-only and the project's threat
+model already says same-user local processes are the OS's boundary, not ours. **The risk is the
+report travelling.** These reports are written to be read, pasted into issues, and quoted in commit
+messages — which is exactly how a loopback credential escapes the machine it was scoped to.
+
+So, before any report is quoted, attached or committed:
+
+```bash
+TOK=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser(
+  '~/Library/Application Support/CSTReader/local-api.json')))['token'])")
+grep -rl "$TOK" /tmp/<scratch-dirs>      # find it
+# ...then replace with a placeholder before sharing
+```
+
+Treat the token as disclosed once a run has finished, and prefer to restart the app between a test
+round and anything that shares its output — the handshake file is rewritten with a fresh token on
+each start, which makes rotation free.
+
 ## Deciding what to act on — a judgment call, not a queue
 
 **These runs are non-deterministic.** The same prompt, model and surface can produce a different
@@ -443,6 +467,91 @@ Prompt 4's tasks, posed in Hindi, requiring Devanagari output and Hindi commenta
 - Write the report to markdown file (in English) and return the path
 ```
 
+### 6. Morphology — sandhi, homographs, and the lemma family
+
+**Reconstructs a lost prompt.** One covering this corner existed during development and was not
+captured, so the morphology endpoints have no run on record — the coverage gap is in the record, and
+not necessarily in the history.
+
+The newest part of the surface, and the least exercised: sandhi deconstruction, form→lemma
+back-lookup, the attested paradigm, the multi-lemma union, and the lemma dossier. Written
+capability-shaped like prompt 3 — no endpoint is named, so it stays valid as the surface grows.
+
+The design leans on real traps rather than invented ones. `paññāya` is genuinely both the
+instrumental/locative of the noun *paññā* and the absolutive of *pajānāti* — the exact homograph
+`search.md` warns about, so task 2 cannot be answered by counting surface strings. Task 3 asks for **one combined figure** for
+the family, and task 4 then narrows it to an **arbitrary subset** — the noun, the gerund and the
+adjective. That distinction is load-bearing: the family total is reachable from a flag on the
+per-lemma endpoint, but an arbitrary set of senses is not, so only task 4 forces the union.
+The first draft had task 3 alone, and cells split: one reached `POST /v1/forms`, another answered
+with the family flag — leaving coverage dependent on which path a model happened to pick. Task 4
+removes that chance. This is the coverage illusion the suite exists to prevent, caught in the suite's
+own material.
+
+Two further corrections came from the first runs. The original task 1 asserted that `kiñcāpi` "isn't
+in the dictionary" — **false**, DPD carries it as a headword with pos `sandhi`, and two cells said so.
+A prompt must not contain a premise the surface will contradict, or the run scores the prompt rather
+than the API. And "family of closely-related headwords" turns out to be ambiguous in the API's own
+terms: nothing distinguishes case-split siblings of one lexeme from same-root different words. That
+ambiguity is left in deliberately — it is a real property of the data, and how a cell handles it is
+worth observing.
+
+Note the extra friction-log question about **response format**: at the time of writing, one endpoint
+in this group returns styled HTML rather than JSON without saying so in the docs.
+
+```text
+Read  ~/Library/Application Support/CSTReader/local-api.json
+(on Windows: %APPDATA%\CSTReader\local-api.json)
+
+Figure out how to use the API from there — it's meant to be self-describing —
+and complete the research tasks below. Use curl.
+
+Constraint (this is the actual test): rely ONLY on the API itself. Do NOT read
+CST Reader's source code, its git repo, or any on-disk docs — the point is to
+find out whether the API documents itself well enough for a fresh agent. If
+you're tempted to look at the source, note it as a finding instead.
+
+I am reading a commentary and keep running into forms I can't look up directly.
+
+Tasks:
+1. I meet the word "kiñcāpi" in the text. It looks like several small words fused
+   together. What is it actually made of, and what does the whole thing mean?
+2. The form "paññāya" is ambiguous — I'm told it can be two quite different words.
+   Which ones? Give the sense of each, and tell me what would let me decide which
+   is meant in a given sentence.
+3. For the NOUN, list the inflected forms that actually occur in the corpus, with
+   how often each occurs. Then give me a single combined figure for the whole
+   family of closely-related headwords together — one total, not a per-headword
+   list I have to add up myself.
+4. Now narrow it. I do NOT want the whole family — only three senses I actually
+   care about: the feminine noun, the gerund, and the adjective. Give me one
+   combined occurrence figure for just those three, counted once each even where
+   they share a form. Again: a single number, not three I have to reconcile.
+5. Give me the derivation of that noun: its root, how it is built, and anything
+   the reference says about its formation.
+6. Finally, ground it: find a passage where the ambiguous form occurs, quote it,
+   and cite it precisely enough that I could find it in a printed edition.
+
+Report:
+- Per task: did it work? Show the exact requests and a short result.
+- A friction log: anything unclear, missing, or surprising; anything you had to
+  guess; any endpoint that errored; anything whose RESPONSE FORMAT was not what
+  the documentation led you to expect; and whether you could finish everything
+  without looking at the source.
+- Write the report to a markdown file and return the path
+```
+
+**Expected outcome** (for the human scoring the run, not part of the pasted prompt): `kiñcāpi`
+resolves to three elements; `paññāya` yields both a feminine noun and a gerund among its candidates;
+the noun's paradigm comes back with per-form counts; the family total arrives as a single number; the
+three-sense subset arrives as a *different* single number, reached by a different call; the
+derivation names the root; and the final citation carries a book and page, not just a paragraph.
+
+**Failure signals**: reporting `kiñcāpi` as unanalysable; treating `paññāya` as one word; answering
+task 3 with several totals rather than one; substituting a hand-built regex family for the lemma
+tools; quoting a passage without a page-level citation; or claiming a task is impossible without
+having consulted the doc slice that covers it.
+
 ## Coverage — and what no prompt reaches
 
 | Surface | 1 | 2 | 3 | 4 | 5 | ai-prompts |
@@ -458,10 +567,17 @@ Prompt 4's tasks, posed in Hindi, requiring Devanagari output and Hindi commenta
 | `convert` / `scripts` | | | ● | | | |
 | status / health | | ● | | | | |
 | `navigate` (drive the reader) | | | | | | ● |
-| **`lemma_lookup`, `lemma_forms`, `lemma_forms_union`** | | | | | | |
-| **`sandhi_split`** | | | | | | |
+| `lemma_lookup` / `/v1/lemma/{form}` | | | | ● | | |
+| `lemma_forms` / `/v1/forms/{id}` | | | | ● | | |
+| `lemma_forms_union` / `POST /v1/forms` | | | | | | |
+| **`sandhi_split` / `/v1/deconstruct`** | | | | | | |
+| **`/v1/lemma-report/{id}`** | | | | | | |
 | **`dictionary_languages`** | | | | | | |
 | **`llms.txt` as an MCP *resource*** | | | | | | |
+
+Prompt 6 (below) is written to cover the four bolded `/v1` rows. The `●` in column 4 for the first
+two lemma rows is **observed, not designed**: round 1 showed cells reaching them from "report the
+matching word-forms", which is the capability-shaped effect at work.
 
 The bolded rows have **no cold-agent prompt at all**. They matter disproportionately because several
 of them require the agent to *discover a required argument* — `dictionary_lookup` needs `language`,
@@ -515,7 +631,15 @@ error messages; their friction reports were not kept in the repo.
   *chat-client* surface, i.e. the wrong harness for what changed. The tool descriptions have not been
   re-exercised by a client that must rely on them. Owed: a Chat + MCP run, and a coding-agent run
   over `/v1`.
-- Prompts 1, 3, 4 and 5 have no recorded run in any cell; only the smoke test has been logged.
+- Prompts 1, 3, 5 and 6 have no recorded run in any cell.
+- **No prompt is MCP-shaped.** All six read `local-api.json` and most mandate `curl`, so every one is
+  a coding-agent `/v1` prompt — a chat client cannot even start them, since it has no filesystem. By
+  the audience rule above, half the surface and the whole chat-client audience are untested. An
+  MCP-shaped prompt, opening at the tool list rather than at a handshake file, is the largest
+  remaining gap.
+- **`/v1/lemma-report/{id}` returns styled HTML, not JSON**, while the docs describe it beside
+  `/v1/forms/{id}` as a "full dossier" with no mention of the format. Verified 2026-08-02. Prompt 6's
+  friction log asks about response format specifically so a future run catches this class.
 - No prompt covers the lemma family, `dictionary_languages`, or the `llms.txt` MCP resource.
 - The results log is empty: the runs that built the surface predate this file.
 
