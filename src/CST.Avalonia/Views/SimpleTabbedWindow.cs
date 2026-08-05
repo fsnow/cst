@@ -691,17 +691,6 @@ public partial class SimpleTabbedWindow : Window
         }
     }
 
-    // Minimal ICommand for the KeyBindings below. KeyBinding needs an ICommand and these are plain
-    // void handlers, so a relay is all that is required - no ReactiveCommand scheduler in a Window.
-    private sealed class MenuShortcutCommand : System.Windows.Input.ICommand
-    {
-        private readonly Action _invoke;
-        public MenuShortcutCommand(Action invoke) => _invoke = invoke;
-        public event EventHandler? CanExecuteChanged { add { } remove { } }
-        public bool CanExecute(object? parameter) => true;
-        public void Execute(object? parameter) => _invoke();
-    }
-
     /// <summary>
     /// Binds the menu shortcuts as real window accelerators on Windows/Linux.
     ///
@@ -721,33 +710,54 @@ public partial class SimpleTabbedWindow : Window
     {
         if (OperatingSystem.IsMacOS()) return;
 
-        void Bind(string gesture, Action invoke) => KeyBindings.Add(new KeyBinding
+        // A bubbling AddHandler, NOT KeyBindings. Measured on Windows: with a ComboBox dropdown open the
+        // keystroke reaches BookDisplayView's AddHandler (logged, Source=ComboBoxItem) but never fires
+        // Window.KeyBindings - an open dropdown lives in its own PopupRoot, so the event routes through the
+        // logical chain without reaching the Window. The original KeyBindings form of this method therefore
+        // left every shortcut dead whenever a dropdown had focus. Confirmed by direct A/B: the same
+        // keystroke in the same state worked in a floating window (AddHandler) and did nothing here. (#511)
+        //
+        // Bubble, and NOT handledEventsToo, is what keeps this single-dispatch: BookDisplayView registers a
+        // TUNNEL handler, and the whole tunnel phase completes before any bubble handler runs - so it claims
+        // G/C/A and sets e.Handled first, and this handler only sees keystrokes nothing has claimed. (It is
+        // the tunnel/bubble ordering that guarantees this, not proximity in the tree. fable review)
+        var shortcuts = new (KeyGesture Gesture, Action Invoke)[]
         {
-            Gesture = PlatformGesture.Parse(gesture),
-            Command = new MenuShortcutCommand(invoke)
-        });
+            // Same set, and the same handlers, as the NativeMenu declarations in SimpleTabbedWindow.axaml.
+            (PlatformGesture.Parse("o"),       () => OnSelectBookClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("p"),       () => OnPrintClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("shift+p"), () => OnPrintSelectionClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("w"),       () => OnCloseTabClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("g"),       () => OnGoToMenuItemClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("d"),       () => OnLookUpInDictionaryClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("f"),       () => OnSearchForSelectionClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("e"),       () => OnViewSource1957Click(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("shift+e"), () => OnViewSource2010Click(this, EventArgs.Empty)),
+            // Settings lives in the macOS app menu, so it has no NativeMenu declaration here to mirror -
+            // see AddSettingsMenuItemOffMacOS, which adds the Tools entry this shortcut matches.
+            (PlatformGesture.Parse("OemComma"), () =>
+            {
+                // Logged like the menu handlers above: without it the log cannot answer "did the shortcut
+                // fire, or did the dialog fail to open?", which is exactly the question that comes up.
+                _logger.Information("Settings opened via keyboard shortcut from window: {WindowTitle}", this.Title);
+                _ = App.ShowSettingsWindow();
+            }),
+        };
 
-        // Same set, and the same handlers, as the NativeMenu declarations in SimpleTabbedWindow.axaml.
-        Bind("o", () => OnSelectBookClick(this, EventArgs.Empty));
-        Bind("p", () => OnPrintClick(this, EventArgs.Empty));
-        Bind("shift+p", () => OnPrintSelectionClick(this, EventArgs.Empty));
-        Bind("w", () => OnCloseTabClick(this, EventArgs.Empty));
-        Bind("g", () => OnGoToMenuItemClick(this, EventArgs.Empty));
-        Bind("d", () => OnLookUpInDictionaryClick(this, EventArgs.Empty));
-        Bind("f", () => OnSearchForSelectionClick(this, EventArgs.Empty));
-        Bind("e", () => OnViewSource1957Click(this, EventArgs.Empty));
-        Bind("shift+e", () => OnViewSource2010Click(this, EventArgs.Empty));
-        // Settings lives in the macOS app menu, so it has no NativeMenu declaration here to mirror -
-        // see AddSettingsMenuItemOffMacOS, which adds the Tools entry this shortcut matches.
-        Bind("OemComma", () =>
+        AddHandler(KeyDownEvent, (object? s, KeyEventArgs e) =>
         {
-            // Logged like the menu handlers above: without it the log cannot answer "did the shortcut
-            // fire, or did the dialog fail to open?", which is exactly the question that comes up.
-            _logger.Information("Settings opened via keyboard shortcut from window: {WindowTitle}", this.Title);
-            _ = App.ShowSettingsWindow();
-        });
+            foreach (var (gesture, invoke) in shortcuts)
+            {
+                if (!gesture.Matches(e)) continue;
 
-        _logger.Information("Registered {Count} menu shortcut key bindings (NativeMenuBar gestures are display-only off macOS)", KeyBindings.Count);
+                _logger.Debug("*** MAIN WINDOW SHORTCUT: {Gesture} ***", gesture);
+                e.Handled = true;
+                invoke();
+                return;
+            }
+        }, RoutingStrategies.Bubble);
+
+        _logger.Information("Registered {Count} menu shortcuts (NativeMenuBar gestures are display-only off macOS)", shortcuts.Length);
     }
 
     /// <summary>

@@ -1312,6 +1312,75 @@ public partial class App : Application
 
     // Public method to set up menu events for floating windows
     /// <summary>
+    /// Registers the floating window's shortcuts as real key bindings on Windows/Linux. (#511)
+    ///
+    /// macOS gets these from the system menu bar that <see cref="SetupFloatingWindowMenu"/> builds, and its
+    /// accelerators are real OS-level key equivalents. Off macOS there is no such menu - and even where one
+    /// is rendered, Avalonia's NativeMenuBarPresenter binds a gesture to the display-only
+    /// <c>MenuItem.InputGesture</c> and never to <c>MenuItem.HotKey</c>, so a menu dispatches nothing. The
+    /// bindings below are therefore the only route once focus leaves the book's WebView.
+    ///
+    /// Verified before this change: inside a floated book the JS relay in BookDisplayView already handled
+    /// these, and BookDisplayView.OnKeyDown covered G/C/A across the whole view subtree - but D, F, O and P
+    /// were no-ops anywhere outside the WebView, with Avalonia receiving the keystroke and nothing acting
+    /// on it. Every action here is the same one the macOS menu item invokes.
+    ///
+    /// macOS is excluded deliberately: a binding here plus the system menu's accelerator would fire twice.
+    /// </summary>
+    public void RegisterFloatingWindowShortcuts(Window window)
+    {
+        if (OperatingSystem.IsMacOS()) return;
+
+        try
+        {
+            // Deliberately a bubbling AddHandler rather than window.KeyBindings. Measured on Windows: with a
+            // ComboBox dropdown open the keystroke reaches BookDisplayView's AddHandler (logged, with
+            // Source=ComboBoxItem) but never fires Window.KeyBindings - an open dropdown lives in its own
+            // PopupRoot, so the event routes through the logical chain without reaching the Window. A handler
+            // on the same routed-event path sees everything the view sees. (#511)
+            //
+            // Bubble, and NOT handledEventsToo, is what keeps this single-dispatch: BookDisplayView
+            // registers a TUNNEL handler, and the whole tunnel phase completes before any bubble handler
+            // runs - so it claims G/C/A and sets e.Handled first, and this handler then only sees
+            // keystrokes nothing has claimed. (It is the tunnel/bubble ordering that guarantees this, not
+            // proximity in the tree. fable review)
+            var shortcuts = new (KeyGesture Gesture, Action Invoke)[]
+            {
+                (PlatformGesture.Parse("g"),        () => OnGoToMenuItemClickFromFloatingWindow(window)),
+                (PlatformGesture.Parse("e"),        () => OnViewSourceFromFloatingWindow(window, source2010: false)),
+                (PlatformGesture.Parse("shift+e"),  () => OnViewSourceFromFloatingWindow(window, source2010: true)),
+                (PlatformGesture.Parse("d"),        () => _ = SimpleTabbedWindow.LookUpInDictionaryAsync(FindActiveBookInFloatingWindow(window))),
+                (PlatformGesture.Parse("f"),        () => _ = SimpleTabbedWindow.SearchForSelectionAsync(FindActiveBookInFloatingWindow(window))),
+                (PlatformGesture.Parse("w"),        () => OnCloseTabFromFloatingWindow(window)),
+                (PlatformGesture.Parse("o"),        () => SimpleTabbedWindow.RevealSelectBookPanel()),
+                (PlatformGesture.Parse("p"),        () => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.Print()),
+                (PlatformGesture.Parse("shift+p"),  () => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.PrintSelection()),
+                (PlatformGesture.Parse("OemComma"), () => _ = ShowSettingsWindow()),
+            };
+
+            window.AddHandler(InputElement.KeyDownEvent, (object? s, KeyEventArgs e) =>
+            {
+                foreach (var (gesture, invoke) in shortcuts)
+                {
+                    if (!gesture.Matches(e)) continue;
+
+                    Log.Debug("*** FLOATING WINDOW SHORTCUT: {Gesture} ***", gesture);
+                    e.Handled = true;
+                    invoke();
+                    return;
+                }
+            }, global::Avalonia.Interactivity.RoutingStrategies.Bubble);
+
+            Log.Information("Registered {Count} shortcuts for floating window: {WindowTitle}",
+                shortcuts.Length, window.Title);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to register floating-window key bindings");
+        }
+    }
+
+    /// <summary>
     /// Builds and wires the native View/Tools menu for a floating dock window (macOS). This is the single
     /// source for the floating-window menu - it creates the items, syncs their initial state, attaches the
     /// click handlers, tracks the toggle items for cross-window state sync, and assigns the menu to the

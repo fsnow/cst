@@ -1868,14 +1868,14 @@ namespace CST.Avalonia.Services
                 hostWindow.Factory = this;
                 HostWindows.Add(hostWindow);
 
-                // Set up View menu for this floating window (macOS only)
-                if (OperatingSystem.IsMacOS())
+                // Give this floating window its shortcuts. The two calls are complementary and each guards
+                // its own platform: the native menu is macOS-only, the key bindings are everywhere else,
+                // because off macOS a NativeMenuBar gesture is decoration and dispatches nothing. (#511)
+                if (Application.Current is App app)
                 {
-                    if (Application.Current is App app)
-                    {
-                        app.SetupFloatingWindowMenu(hostWindow);
-                        Log.Debug("*** View menu setup completed for floating window ***");
-                    }
+                    app.SetupFloatingWindowMenu(hostWindow);          // no-op off macOS
+                    app.RegisterFloatingWindowShortcuts(hostWindow);  // no-op on macOS
+                    Log.Debug("*** Menu/shortcut setup completed for floating window ***");
                 }
 
                 Log.Debug("*** Host window created successfully ***");
