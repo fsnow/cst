@@ -3,6 +3,7 @@ using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using CST.Avalonia.Input;
 using CST.Avalonia.Services;
 using CST.Avalonia.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,10 @@ public partial class DictionaryPanel : UserControl
     private IDisposable? _meaningSub;
     private WebView? _meaningWebView;
     private DictionaryViewModel? _vm;
+
+    // Tags this view's shortcut messages so a background WebView can't act on a keystroke aimed at the
+    // visible one - the same guard BookDisplayView applies with its tab id. (#518)
+    private readonly string _shortcutViewId = "dict_" + Guid.NewGuid().ToString("n").Substring(0, 8);
 
     public DictionaryPanel()
     {
@@ -61,6 +66,8 @@ public partial class DictionaryPanel : UserControl
             {
                 _meaningWebView.BeforeNavigate -= OnBeforeNavigate;
                 _meaningWebView.PopupOpening -= OnPopupOpening;
+                _meaningWebView.Navigated -= OnMeaningNavigated;
+                _meaningWebView.TitleChanged -= OnShortcutTitleChanged;
                 _meaningWebView.Dispose();
             }
         }
@@ -88,6 +95,13 @@ public partial class DictionaryPanel : UserControl
             _meaningWebView.BeforeNavigate += OnBeforeNavigate;
             _meaningWebView.PopupOpening -= OnPopupOpening;
             _meaningWebView.PopupOpening += OnPopupOpening;
+
+            // #518: CEF swallows keystrokes while the meaning pane has focus, so window shortcuts were
+            // dead here. Navigated fires for LoadHtml too, which is where the relay gets (re-)injected.
+            _meaningWebView.Navigated -= OnMeaningNavigated;
+            _meaningWebView.Navigated += OnMeaningNavigated;
+            _meaningWebView.TitleChanged -= OnShortcutTitleChanged;
+            _meaningWebView.TitleChanged += OnShortcutTitleChanged;
         }
 
         if (DataContext is DictionaryViewModel vm)
@@ -102,6 +116,27 @@ public partial class DictionaryPanel : UserControl
                 .Throttle(TimeSpan.FromMilliseconds(60))
                 .Subscribe(html => Dispatcher.UIThread.Post(() => LoadMeaning(html)));
         }
+    }
+
+    // #518: re-inject after every load - LoadHtml replaces the document, dropping the previous listener.
+    // The script is idempotent, so repeating it is harmless.
+    private void OnMeaningNavigated(string url, string frameName)
+    {
+        try
+        {
+            _meaningWebView?.ExecuteScript(WebViewShortcutRelay.BuildScript(_shortcutViewId));
+            Serilog.Log.Debug("DictionaryPanel: shortcut relay injected (view {ViewId})", _shortcutViewId);
+        }
+        catch (Exception)
+        {
+            // Mid-teardown or re-parent: the next load re-injects. Shortcuts staying dead here is not
+            // worth risking the CEF lifecycle over.
+        }
+    }
+
+    private void OnShortcutTitleChanged()
+    {
+        WebViewShortcutRelay.TryHandle(_meaningWebView?.Title, _shortcutViewId, Serilog.Log.Logger);
     }
 
     private void LoadMeaning(string? html)
