@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using WebViewControl;
+using CST.Avalonia.Input;
 using CST.Avalonia.ViewModels;
 using Serilog;
 
@@ -17,6 +18,10 @@ namespace CST.Avalonia.Views
         private bool _isWebViewReady = false;
         private bool _hasLoadedContent = false;
 
+        // Tags this view's shortcut messages so a background WebView can't act on a keystroke aimed at
+        // the visible one - the same guard BookDisplayView applies with its tab id. (#518)
+        private readonly string _shortcutViewId = "welcome_" + Guid.NewGuid().ToString("n").Substring(0, 8);
+
         public WelcomeView()
         {
             InitializeComponent();
@@ -28,6 +33,7 @@ namespace CST.Avalonia.Views
             {
                 _webView.WebViewInitialized += OnWebViewInitialized;
                 _webView.Navigated += OnNavigated;
+                _webView.TitleChanged += OnShortcutTitleChanged;   // #518
 
                 // Log WebView state
                 Log.Information("WelcomeView: WebView control found and event handlers attached");
@@ -98,9 +104,37 @@ namespace CST.Avalonia.Views
             _ = TryLoadHtmlContent();
         }
 
+        // #518: the Welcome page is a CEF WebView with no keyboard capture, so while it has focus every
+        // shortcut was dead - and it is the tab that holds focus at startup, making it the first thing a
+        // new user tries a shortcut from. Inject the relay once the page is up.
+        private void InjectShortcutRelay()
+        {
+            if (_webView == null) return;
+
+            try
+            {
+                _webView.ExecuteScript(WebViewShortcutRelay.BuildScript(_shortcutViewId));
+                Log.Debug("WelcomeView: shortcut relay injected");
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: the page still works, the shortcuts simply stay dead here.
+                Log.Warning("WelcomeView: failed to inject shortcut relay | {Details}", ex.Message);
+            }
+        }
+
+        private void OnShortcutTitleChanged()
+        {
+            WebViewShortcutRelay.TryHandle(_webView?.Title, _shortcutViewId, Log.Logger);
+        }
+
         private void OnNavigated(string url, string frameName)
         {
             Log.Information("WelcomeView: WebView navigated to: {Url} in frame: {Frame}", url, frameName);
+
+            // Re-inject after every navigation: a reload drops the previous document's listener. The
+            // script guards itself against double-binding, so repeating it is safe.
+            InjectShortcutRelay();
 
             // Check if this is an external URL that we need to redirect
             if (IsExternalUrl(url))

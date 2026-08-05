@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ReactiveUI;
 using WebViewControl;
+using CST.Avalonia.Input;
 using CST.Avalonia.ViewModels;
 using Serilog;
 
@@ -35,6 +36,7 @@ public partial class PdfDisplayView : UserControl
             if (_webView != null)
             {
                 _webView.Navigated += OnNavigationCompleted;
+                _webView.TitleChanged += OnShortcutTitleChanged;   // #518
                 _logger.Debug("PDF WebView control found and events attached");
             }
             else
@@ -49,6 +51,45 @@ public partial class PdfDisplayView : UserControl
         }
     }
 
+    // Tags this view's shortcut messages so a background WebView can't act on a keystroke aimed at the
+    // visible one - the same guard BookDisplayView applies with its tab id. (#518)
+    private readonly string _shortcutViewId = "pdf_" + Guid.NewGuid().ToString("n").Substring(0, 8);
+
+    // #518: the PDF viewer is a CEF WebView with no keyboard capture, so window shortcuts are dead while
+    // it has focus. Unlike the other two this loads a URL rather than LoadHtml, but the injection point is
+    // the same - after navigation completes.
+    //
+    // MEASURED LIMITATION (Windows, 2026-08-05): this does NOT actually restore shortcuts here. The relay
+    // injects cleanly - twice, in fact, since Navigated fires per frame - but Ctrl+D and Ctrl+F produce
+    // nothing. Chromium renders the PDF in an internal plugin frame that ExecuteScript cannot reach and
+    // that consumes keystrokes itself, so our listener never sees them. Predicted in review before it was
+    // tested, and confirmed.
+    //
+    // Kept rather than removed: it is inert, it costs nothing, and it starts working the moment this view
+    // shows anything that is not a plugin-rendered PDF. Ctrl+F is deliberately excluded (includeFind:
+    // false) so that if the plugin frame ever does become reachable, we do not take find-in-page away.
+    // The PDF viewer therefore remains an open item on #518.
+    private void InjectShortcutRelay()
+    {
+        try
+        {
+            // includeFind: false — leave Ctrl+F to Chromium's find-in-page, which is the shortcut that
+            // actually matters in a PDF. (fable review)
+            _webView?.ExecuteScript(WebViewShortcutRelay.BuildScript(_shortcutViewId, includeFind: false));
+            _logger.Debug("PdfDisplayView: shortcut relay injected (view {ViewId})", _shortcutViewId);
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal: the PDF still displays, the shortcuts simply stay dead here.
+            _logger.Warning("PdfDisplayView: failed to inject shortcut relay | {Details}", ex.Message);
+        }
+    }
+
+    private void OnShortcutTitleChanged()
+    {
+        WebViewShortcutRelay.TryHandle(_webView?.Title, _shortcutViewId, _logger);
+    }
+
     private void DisposeWebView()
     {
         if (_webView != null)
@@ -57,6 +98,7 @@ public partial class PdfDisplayView : UserControl
             {
                 _logger.Information("Disposing PDF WebView");
                 _webView.Navigated -= OnNavigationCompleted;
+                _webView.TitleChanged -= OnShortcutTitleChanged;   // #518
                 _webView.Dispose();
                 _webView = null;
                 _hasPdfLoaded = false;  // Reset so PDF reloads after recreate
@@ -150,9 +192,16 @@ public partial class PdfDisplayView : UserControl
         }
     }
 
-    private void OnNavigationCompleted(object? sender, string url)
+    // WebViewControl's Navigated delegate is (string url, string frameName). This previously declared
+    // (object? sender, string url), which bound contravariantly and silently shifted the arguments - the
+    // log printed the frame name as the URL. (fable review)
+    private void OnNavigationCompleted(string url, string frameName)
     {
-        _logger.Information("PDF navigation completed: {Url}", url);
+        _logger.Information("PDF navigation completed: {Url} (frame: {Frame})", url, frameName);
+
+        // Re-inject after every navigation - a new document drops the previous listener. The script
+        // guards itself against double-binding, so repeating it is safe. (#518)
+        InjectShortcutRelay();
     }
 
     private void OnWebViewLifecycleOperationChanged(WebViewLifecycleOperation operation)
