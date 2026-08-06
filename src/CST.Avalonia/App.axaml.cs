@@ -1538,12 +1538,21 @@ public partial class App : Application
 
         _windowMenus[owner] = submenu;
 
-        // #322 follow-up: the active-window checkmark renders win.IsActive, so refresh whenever ANY window's
-        // active state changes. The Activated event alone was insufficient — it never fired on focus LOSS and
-        // its timing vs. IsActive was unreliable — and once A8-5 removed the incidental title-path rebuilds
-        // that used to paper over the gap, the checkmark went stale until an unrelated rebuild (e.g. a global
-        // script change). Tracking IsActive directly is the exact signal, and fires on both sides of a switch.
+        // Historically (#322) this existed to keep the active-window CHECKMARK fresh, back when the mark was
+        // rendered from each window's Window.IsActive. It no longer serves that purpose — PopulateWindowMenu
+        // now marks this menu's own owner, which cannot go stale. Kept as a cheap belt-and-braces refresh of
+        // the window LIST itself (open/close/retitle are covered by Opened/Closed/UpdateHostWindowTitle, so
+        // this is defensive rather than load-bearing).
         var activeSub = owner.GetObservable(Window.IsActiveProperty).Subscribe(new AnonymousObserver<bool>(_ => RebuildWindowMenus()));
+
+        // #565a: rebuild once the window is actually SHOWN. Registration happens inside
+        // CstDockFactory.CreateCstHostWindow — before Dock shows the window — and GetListedWindows()
+        // enumerates desktop.Windows, which only holds shown windows. So the rebuild above ran with the new
+        // window still invisible to it, and nothing re-ran afterwards: a freshly floated window was missing
+        // from every Window menu until some unrelated activation change happened to refresh them (switching
+        // apps and back). Hooking Opened makes the refresh independent of whether the new window takes focus.
+        owner.Opened += (_, _) => RebuildWindowMenus();
+
         owner.Closed += (_, _) => { activeSub.Dispose(); _windowMenus.Remove(owner); RebuildWindowMenus(); };
     }
 
@@ -1597,7 +1606,19 @@ public partial class App : Application
 
         submenu.Add(new NativeMenuItemSeparator());
 
-        // One entry per open window; checkmark on the active one; click brings it to the front.
+        // One entry per open window; checkmark on the frontmost one; click brings it to the front.
+        //
+        // The checkmark is `win == owner` — this menu's OWN window — not a global "who is active" lookup.
+        // macOS only displays a window's menu bar while that window is frontmost (the premise this whole
+        // per-window menu design rests on), so the menu you are looking at necessarily belongs to the front
+        // window, and marking its owner is exact by construction.
+        //
+        // Every previous attempt here tried to keep a global guess in sync and drifted out of it: reading
+        // each window's Window.IsActive ticked SEVERAL entries at once (it can read true for more than one
+        // window after the app itself loses and regains focus, #565b), and tracking the most recently
+        // activated window put the mark on the wrong window, because WindowBase raises Activated BEFORE it
+        // sets IsActive. Resolving locally removes that entire class of bug — there is no shared state left
+        // to go stale. (#565b, and the #322 staleness it supersedes)
         foreach (var (win, title) in windows)
         {
             var target = win;
@@ -1605,7 +1626,7 @@ public partial class App : Application
             {
                 Header = title,
                 ToggleType = NativeMenuItemToggleType.CheckBox,
-                IsChecked = win.IsActive
+                IsChecked = ReferenceEquals(win, owner)
             };
             item.Click += (_, _) => ActivateWindow(target);
             submenu.Add(item);
