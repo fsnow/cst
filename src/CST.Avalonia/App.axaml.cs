@@ -1531,7 +1531,7 @@ public partial class App : Application
     // SetupFloatingWindowMenu), register it for population, and keep it fresh as this window closes/activates.
     private void RegisterWindowMenu(Window owner)
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        // Not macOS-only (#564): the in-window NativeMenuBar renders this submenu too, so it must be registered there.
         var menu = NativeMenu.GetMenu(owner);
         var windowItem = menu?.OfType<NativeMenuItem>().FirstOrDefault(i => (i.Header as string) == "Window");
         if (windowItem?.Menu is not NativeMenu submenu) return;
@@ -1580,7 +1580,7 @@ public partial class App : Application
     // windows); called on window open/close/retitle/activate. Public so CstDockFactory can call it.
     public void RebuildWindowMenus()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        // No platform guard (#564): _windowMenus only holds windows that registered.
         try
         {
             var windows = GetListedWindows();
@@ -1612,6 +1612,10 @@ public partial class App : Application
         // macOS only displays a window's menu bar while that window is frontmost (the premise this whole
         // per-window menu design rests on), so the menu you are looking at necessarily belongs to the front
         // window, and marking its owner is exact by construction.
+        //
+        // The same holds on Windows/Linux, for a different reason (#564): only the main window carries an
+        // in-window NativeMenuBar there (floating windows get none), and opening that menu requires clicking
+        // it, which activates its window. So by the time the list is visible, owner is frontmost either way.
         //
         // Every previous attempt here tried to keep a global guess in sync and drifted out of it: reading
         // each window's Window.IsActive ticked SEVERAL entries at once (it can read true for more than one
@@ -1656,7 +1660,7 @@ public partial class App : Application
     // when the window closes. Subscribes once to the list/script change signals.
     private void RegisterRecentMenu(Window owner)
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        // Not macOS-only (#564): File > Open Recent lives in the same in-window menu bar, blank for the same reason.
         var menu = NativeMenu.GetMenu(owner);
         var fileItem = menu?.OfType<NativeMenuItem>().FirstOrDefault(i => (i.Header as string) == "File");
         var recentItem = (fileItem?.Menu)?.OfType<NativeMenuItem>().FirstOrDefault(i => (i.Header as string) == "Open Recent");
@@ -1685,7 +1689,7 @@ public partial class App : Application
     // change, window-create, and once after state has loaded.
     private void RebuildRecentMenus()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        // No platform guard (#564): _recentMenus only holds windows that registered.
         try
         {
             var recent = ServiceProvider?.GetService<RecentBooksService>();

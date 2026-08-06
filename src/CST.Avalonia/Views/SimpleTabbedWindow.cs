@@ -733,6 +733,9 @@ public partial class SimpleTabbedWindow : Window
             (PlatformGesture.Parse("f"),       () => OnSearchForSelectionClick(this, EventArgs.Empty)),
             (PlatformGesture.Parse("e"),       () => OnViewSource1957Click(this, EventArgs.Empty)),
             (PlatformGesture.Parse("shift+e"), () => OnViewSource2010Click(this, EventArgs.Empty)),
+            // #564: the Window menu's Minimize item declares this gesture, and a NativeMenuBar gesture
+            // dispatches nothing off macOS - so without this entry the menu would advertise a dead shortcut.
+            (PlatformGesture.Parse("m"), () => WindowState = global::Avalonia.Controls.WindowState.Minimized),
             // Settings lives in the macOS app menu, so it has no NativeMenu declaration here to mirror -
             // see AddSettingsMenuItemOffMacOS, which adds the Tools entry this shortcut matches.
             (PlatformGesture.Parse("OemComma"), () =>
