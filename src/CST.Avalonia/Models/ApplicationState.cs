@@ -40,6 +40,14 @@ public class ApplicationState
     // Open Book Windows (tabs)
     public List<BookWindowState> BookWindows { get; set; } = new();
 
+    /// <summary>
+    /// Ids of on-disk data migrations already applied (see <see cref="Services.DataMigrations"/>).
+    /// Tracked by id rather than a version number so migrations can be added out of order and each runs
+    /// exactly once. Distinct from <see cref="Version"/>, which versions the shape of THIS file; these
+    /// migrate the user data directory around it (dictionaries, indexes, downloaded assets). (#564)
+    /// </summary>
+    public List<string> AppliedDataMigrations { get; set; } = new();
+
     // Application Preferences
     public ApplicationPreferences Preferences { get; set; } = new();
 }

@@ -606,6 +606,34 @@ public partial class App : Application
     }
 
     /// <summary>
+    // #564: apply any pending user-data migrations and persist the record of what ran. Failures are
+    // logged and left unrecorded so they retry next launch; they never block startup.
+    private static void RunDataMigrations(IApplicationStateService stateService)
+    {
+        try
+        {
+            var context = new DataMigrations.Context
+            {
+                DataDirectory = AppConstants.DataDirectory,
+                BundledDictionariesDirectory = BundledResourceLocator.Resolve("dictionaries"),
+            };
+
+            var notes = DataMigrations.Run(stateService.Current, context);
+            foreach (var note in notes)
+                Log.Information("Data migration: {Note}", note);
+
+            // Only dirty the state when something was actually recorded, so a clean install does not
+            // rewrite the state file on every launch just to say nothing happened.
+            if (notes.Count > 0)
+                stateService.MarkDirty();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Data migrations failed; continuing startup");
+        }
+    }
+
+    /// <summary>
     /// Load application state on startup - equivalent to CST4 AppState.Deserialize()
     /// </summary>
     private async Task LoadApplicationStateAsync()
@@ -619,6 +647,12 @@ public partial class App : Application
                 stateService.StateChanged += OnApplicationStateChanged;
                 
                 await stateService.LoadStateAsync();
+
+                // #564: migrate the user DATA directory before anything reads it. Runs here rather
+                // than inside a service so ordering is explicit: DictionaryService seeds on
+                // construction, and a migration that needed the seeded result would be too late on
+                // the very launch that matters (the first one after an upgrade).
+                RunDataMigrations(stateService);
 
                 // Manually handle initial state restoration without StateChanged events
                 await InitializeFromLoadedState(stateService.Current);
