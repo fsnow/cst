@@ -51,6 +51,13 @@ public static class DataMigrations
         Retry,
     }
 
+    /// <summary>
+    /// Marks a note describing a migration that threw. The startup logger keys its Error level off this,
+    /// so it lives here rather than being spelled out at both ends - a reworded note would otherwise
+    /// silently demote failures back to Information.
+    /// </summary>
+    public const string FailureMarker = "FAILED";
+
     public sealed record Migration(string Id, string Description, Func<Context, List<string>, Outcome> Apply);
 
     /// <summary>Ordered. Append new migrations; never renumber or rename existing ids.</summary>
@@ -108,7 +115,7 @@ public static class DataMigrations
             }
             catch (Exception ex)
             {
-                notes.Add($"migration {migration.Id} FAILED (will retry next launch): {ex.Message}");
+                notes.Add($"migration {migration.Id} {FailureMarker} (will retry next launch): {ex.Message}");
             }
         }
 
@@ -119,20 +126,21 @@ public static class DataMigrations
 
     /// <summary>
     /// #522 renamed the bundled dictionary ids (en to vri-childers, hi to vri-hindi) but nothing removed the
-    /// superseded directories from an existing install, and seeding only ever writes what is MISSING. So an
-    /// install carried over from beta 5 ends up with both generations on disk. Because
-    /// <c>DictionaryService.AvailableLanguages</c> enumerates directories, and each retired id carries the
-    /// same displayName as its replacement, every affected user sees each dictionary listed twice. (#564)
+    /// superseded directories from an install that already had them, and seeding only ever writes what is
+    /// MISSING - so both generations end up on disk. Because <c>DictionaryService.AvailableLanguages</c>
+    /// enumerates directories, and each retired id carries the same displayName as its replacement, every
+    /// affected install lists each dictionary twice. (#564)
+    ///
+    /// Who is actually affected: builds from between 2026-07-01 (6f9548b, when seeding was introduced) and
+    /// 2026-07-27 (9e046cd, the rename). NO released build ever seeded en/hi - the rename landed the day
+    /// before the beta 5 tag, and betas 1-4 shipped no bundled dictionaries at all. So this targets
+    /// development and source installs, not upgraders from a release. An earlier version of this comment
+    /// claimed beta 5 was the source, which git disproves.
     ///
     /// Keyed off the BUNDLED dictionaries rather than the seeded copy in the data directory. Both happen to
     /// be present by the time this runs today - DictionaryService is constructed during layout creation,
     /// well before the state load this hangs off - but that ordering is an accident of DI resolution and not
     /// something a destructive migration should depend on. What the app SHIPS is the stable fact.
-    ///
-    /// Downgrade note: beta 5 re-seeds en/hi from its own bundle, and its serializer drops the unknown
-    /// appliedDataMigrations property when it next saves - so downgrade-then-upgrade usually erases the
-    /// record and this simply runs again. If beta 5 never rewrites the state file, the duplicates return
-    /// and stay.
     /// </summary>
     private static Outcome RetireEnHiDictionaryIds(Context context, List<string> notes)
     {
@@ -150,6 +158,8 @@ public static class DataMigrations
         var dictionaries = Path.Combine(context.DataDirectory, "dictionaries");
         if (!Directory.Exists(dictionaries)) return Outcome.Done;
 
+        var kept = false;
+
         foreach (var (oldId, newId) in retired)
         {
             var oldDir = Path.Combine(dictionaries, oldId);
@@ -160,6 +170,7 @@ public static class DataMigrations
             if (!Directory.Exists(replacement))
             {
                 notes.Add($"retire-en-hi: '{oldId}' kept - the app does not ship '{newId}'");
+                kept = true;
                 continue;
             }
 
@@ -171,10 +182,16 @@ public static class DataMigrations
             else
             {
                 notes.Add($"retire-en-hi: '{oldId}' kept - {reason}");
+                kept = true;
             }
         }
 
-        return Outcome.Done;
+        // A directory we declined to remove is NOT a finished job. Recording Done here would freeze that
+        // decision forever: the duplicate listing would persist for the life of the install even after the
+        // reason disappeared - the user deletes their added glossary, or a later release ships bytes that
+        // match again. Re-evaluating costs one directory-existence check per launch, and every precondition
+        // is re-read from disk each time, so the retry can never act on a stale decision.
+        return kept ? Outcome.Retry : Outcome.Done;
     }
 
     /// <summary>
@@ -209,6 +226,9 @@ public static class DataMigrations
             if (string.Equals(name, "source.json", StringComparison.OrdinalIgnoreCase))
                 continue;   // app-owned metadata, refreshed from the bundle anyway
 
+            if (IsOperatingSystemJunk(name))
+                continue;   // see below - not content, and not a reason to keep a superseded directory
+
             var counterpart = Path.Combine(replacement, name);
             if (!File.Exists(counterpart))
             {
@@ -226,6 +246,21 @@ public static class DataMigrations
         reason = "";
         return true;
     }
+
+    /// <summary>
+    /// Files the operating system drops into any folder a user browses. They are not content, and treating
+    /// them as "something we did not ship" would make the migration decline permanently on precisely the
+    /// machines it targets - a developer install whose dictionaries folder was ever opened in Finder picks
+    /// up a .DS_Store and would then never be cleaned up.
+    ///
+    /// Only these exact names, and they are deleted along with the directory rather than preserved: the
+    /// OS regenerates them on demand and they carry nothing the user would miss.
+    /// </summary>
+    private static bool IsOperatingSystemJunk(string name) =>
+        string.Equals(name, ".DS_Store", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "Thumbs.db", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "desktop.ini", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, ".localized", StringComparison.OrdinalIgnoreCase);
 
     private static bool FilesEqual(string a, string b)
     {

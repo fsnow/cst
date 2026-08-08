@@ -631,15 +631,16 @@ public partial class App : Application
             {
                 // A failure is worth more than an Information line: it means a migration will be retried
                 // and may keep failing, which nobody will notice buried among ordinary startup chatter.
-                if (note.Contains("FAILED", StringComparison.Ordinal))
+                if (note.Contains(DataMigrations.FailureMarker, StringComparison.Ordinal))
                     Log.Error("Data migration: {Note}", note);
                 else
                     Log.Information("Data migration: {Note}", note);
             }
 
-            // Any note at all means the runner touched the record (applied an id) or has something worth
-            // persisting a retry for, so dirty the state. A clean install still produces the "nothing to
-            // do" note, which is what gets the id written down the first time.
+            // Dirty the state whenever anything happened. Strictly this over-fires: a deferral or a failure
+            // records nothing, so those launches rewrite an unchanged file. That is one cheap write on a
+            // launch that already had something go wrong, and the alternative - inspecting the notes to
+            // guess whether an id was added - would couple this to the note wording again.
             if (notes.Count > 0)
                 stateService.MarkDirty();
         }

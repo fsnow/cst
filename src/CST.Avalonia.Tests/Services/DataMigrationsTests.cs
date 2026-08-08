@@ -9,8 +9,9 @@ using Xunit;
 namespace CST.Avalonia.Tests.Services;
 
 // #564: #522 renamed the bundled dictionary ids (en -> vri-childers, hi -> vri-hindi) but nothing removed
-// the superseded directories, and seeding only writes what is MISSING - so an install carried over from
-// beta 5 held both generations and the Settings Dictionary tab listed every entry twice.
+// the superseded directories, and seeding only writes what is MISSING - so an install that already had
+// them keeps both generations and the Settings Dictionary tab lists every entry twice. The affected
+// installs are development/source builds from 2026-07-01..07-27; no released build ever seeded en/hi.
 //
 // This migration DELETES user-visible content, so the guards matter far more than the happy path: most of
 // these tests pin the cases where it must decline to act.
@@ -138,6 +139,9 @@ public class DataMigrationsTests : IDisposable
 
         Assert.True(File.Exists(Path.Combine(DataPath("en"), "my-glossary.txt")));
         Assert.Contains(notes, n => n.Contains("my-glossary.txt") && n.Contains("does not ship"));
+        // Declining is not finishing: recording it would freeze the duplicate listing in permanently, even
+        // after the user removes the glossary.
+        Assert.False(Applied(state));
     }
 
     [Fact]
@@ -153,6 +157,7 @@ public class DataMigrationsTests : IDisposable
 
         Assert.True(Directory.Exists(DataPath("en")));
         Assert.Contains(notes, n => n.Contains("differs from the shipped copy"));
+        Assert.False(Applied(state));
     }
 
     [Fact]
@@ -166,6 +171,7 @@ public class DataMigrationsTests : IDisposable
 
         Assert.True(Directory.Exists(DataPath("en")));
         Assert.Contains(notes, n => n.Contains("does not ship"));
+        Assert.False(Applied(state));
     }
 
     [Fact]
@@ -180,6 +186,7 @@ public class DataMigrationsTests : IDisposable
 
         Assert.True(Directory.Exists(DataPath("en")));
         Assert.Contains(notes, n => n.Contains("subdirectory"));
+        Assert.False(Applied(state));
     }
 
     // ===== runner contract: retry vs record =====
@@ -306,5 +313,87 @@ public class DataMigrationsTests : IDisposable
         var ids = DataMigrations.All.Select(m => m.Id).ToList();
         Assert.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
         Assert.All(ids, id => Assert.False(string.IsNullOrWhiteSpace(id)));
+    }
+
+    [Fact]
+    public void CleansUpOnALaterLaunch_OnceTheReasonForKeepingIsGone()
+    {
+        // The point of not recording a decline: the user removes their added file, and the next launch
+        // finishes the job instead of the duplicate listing being frozen in forever.
+        SeededDictionary("en");
+        var glossary = Path.Combine(DataPath("en"), "my-glossary.txt");
+        File.WriteAllText(glossary, "my own notes");
+        BundledDictionary("vri-childers");
+        var state = new ApplicationState();
+
+        DataMigrations.Run(state, Context());
+        Assert.True(Directory.Exists(DataPath("en")));
+        Assert.False(Applied(state));
+
+        File.Delete(glossary);
+        DataMigrations.Run(state, Context());
+
+        Assert.False(Directory.Exists(DataPath("en")));
+        Assert.True(Applied(state));
+    }
+
+    [Theory]
+    [InlineData(".DS_Store")]
+    [InlineData("Thumbs.db")]
+    [InlineData("desktop.ini")]
+    public void RemovesRetiredId_DespiteOperatingSystemJunkFiles(string junk)
+    {
+        // A dictionaries folder that was ever browsed in Finder or Explorer picks these up. Treating them
+        // as user content would make the migration a permanent no-op on exactly the developer installs it
+        // targets.
+        SeededDictionary("en");
+        File.WriteAllText(Path.Combine(DataPath("en"), junk), "junk");
+        BundledDictionary("vri-childers");
+        var state = new ApplicationState();
+
+        DataMigrations.Run(state, Context());
+
+        Assert.False(Directory.Exists(DataPath("en")));
+        Assert.True(Applied(state));
+    }
+
+    [Fact]
+    public void ADeferredMigrationDoesNotBlockLaterOnes()
+    {
+        var state = new ApplicationState();
+        var migrations = new[]
+        {
+            new DataMigrations.Migration("defers", "not ready", (_, notes) =>
+            {
+                notes.Add("deferred on purpose");
+                return DataMigrations.Outcome.Retry;
+            }),
+            new DataMigrations.Migration("after", "runs anyway", (_, notes) =>
+            {
+                notes.Add("after ran");
+                return DataMigrations.Outcome.Done;
+            }),
+        };
+
+        DataMigrations.Run(state, Context(), migrations);
+
+        Assert.DoesNotContain("defers", state.AppliedDataMigrations);
+        Assert.Contains("after", state.AppliedDataMigrations);
+    }
+
+    [Fact]
+    public void FailureNotesCarryTheSharedMarkerTheLoggerKeysOff()
+    {
+        // App.RunDataMigrationsAsync raises these to Error by matching DataMigrations.FailureMarker.
+        var state = new ApplicationState();
+        var migrations = new[]
+        {
+            new DataMigrations.Migration("boom", "throws",
+                (_, _) => throw new InvalidOperationException("nope")),
+        };
+
+        var notes = DataMigrations.Run(state, Context(), migrations);
+
+        Assert.Contains(notes, n => n.Contains(DataMigrations.FailureMarker, StringComparison.Ordinal));
     }
 }

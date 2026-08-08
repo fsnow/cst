@@ -141,11 +141,12 @@ public sealed class DictionaryService : IDictionaryService
             }
             catch (DirectoryNotFoundException)
             {
-                // A directory vanished mid-enumeration. Data migrations delete retired dictionary ids on a
-                // background thread while the registry, the local API and the dictionary panel can all be
-                // reading this property, so the window is small but real. Reporting "no dictionaries" for
-                // one call is recoverable - every caller re-reads - whereas letting it escape surfaces as a
-                // failure in whatever happened to be asking. (#564)
+                // A directory vanished mid-enumeration. Data migrations delete retired dictionary ids at
+                // startup, and while that now runs on the UI thread, this property is read off it too - the
+                // source registry is a lazily-resolved singleton and the local dictionary API serves
+                // requests on its own threads. The window is small but real. Reporting "no dictionaries" for
+                // one call is recoverable, since every caller re-reads, whereas letting it escape surfaces
+                // as a failure in whatever happened to be asking. (#564)
                 return Array.Empty<string>();
             }
         }
