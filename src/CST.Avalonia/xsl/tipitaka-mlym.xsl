@@ -1,13 +1,13 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" >
 
-<xsl:template match = "/" >
+<xsl:template match = "/" > 
 <html>
 <head>
 <title></title>
 <script>
 function setHitsVisibility(isVisible)
-{
+{ 
   var c = getStyleClass('hit');
   if (isVisible)
   {
@@ -48,12 +48,12 @@ function getStyleClass (className) {
 			}
 		}
 	}
-
+	
 	return null;
 }
 </script>
 <style>
-body {
+body { 
   font-family: Kartika;
   background: white;
 }
@@ -75,7 +75,7 @@ p {
 
 .bodytext { font-size: 12pt; text-indent: 2em;}
 
-.hangnum { font-size: 12pt; margin-bottom: -13pt; text-indent: 2em;}
+.hangnum { font-size: 12pt; margin-bottom: -14.4pt; text-indent: 2em;}
 
 /* Namo tassa, and nitthita -- no unique structural distinction */
 .centered { font-size: 12pt; text-align:center;}
@@ -174,7 +174,7 @@ p {
 
 <xsl:template match='p[@rend="bodytext"]'>
 <p class="bodytext">
-  <!-- if the n attribute is set, create an HTML anchor for the paragraph in the form pr### -->
+  <!-- if the n attribute is set, create an HTML anchor for the paragraph in the form para### -->
   <xsl:if test="@n">
     <a>
       <xsl:attribute name="name">
@@ -343,13 +343,12 @@ p {
 </p>
 </xsl:template>
 
-  <xsl:template match="pb">
-    <a>
-      <xsl:attribute name="name">
-        <xsl:value-of select="@ed"/>
-        <xsl:value-of select="@n"/>
-      </xsl:attribute>
-    </a>
-  </xsl:template>
+<xsl:template match="pb">
+<a>
+<xsl:attribute name="name">
+<xsl:value-of select="@ed"/><xsl:value-of select="@n"/>
+</xsl:attribute>
+</a>
+</xsl:template>
 
 </xsl:stylesheet>

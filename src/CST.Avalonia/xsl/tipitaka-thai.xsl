@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" > 
+<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" >
 
 <xsl:template match = "/" > 
 <html>
@@ -71,40 +71,40 @@ p {
   margin-top: 0in; margin-bottom: 0.5cm;
 }
 
-.indent { font-size: 15pt; text-indent: 2em; margin-left: 3em;}
+.indent { font-size: 12pt; text-indent: 2em; margin-left: 3em;}
 
-.bodytext { font-size: 15pt; text-indent: 2em;}
+.bodytext { font-size: 12pt; text-indent: 2em;}
 
-.hangnum { font-size: 15pt; margin-bottom: -18pt; text-indent: 2em;}
+.hangnum { font-size: 12pt; margin-bottom: -14.4pt; text-indent: 2em;}
 
 /* Namo tassa, and nitthita -- no unique structural distinction */
-.centered { font-size: 15pt; text-align:center;}
+.centered { font-size: 12pt; text-align:center;}
 
-.unindented { font-size: 15pt;}
+.unindented { font-size: 12pt;}
 
-.book { font-size: 25pt; text-align:center; font-weight: bold;}
+.book { font-size: 21pt; text-align:center; font-weight: bold;}
 
-.chapter { font-size: 21pt; text-align:center; font-weight: bold;}
+.chapter { font-size: 18pt; text-align:center; font-weight: bold;}
 
-.nikaya { font-size: 30pt; text-align:center; font-weight: bold;}
+.nikaya { font-size: 24pt; text-align:center; font-weight: bold;}
 
-.title { font-size: 15pt; text-align:center; font-weight: bold;}
+.title { font-size: 12pt; text-align:center; font-weight: bold;}
 
-.subhead { font-size: 15pt; text-align:center; font-weight: bold;}
+.subhead { font-size: 12pt; text-align:center; font-weight: bold;}
 
 .subsubhead { font-size: 12pt; text-align:center; font-weight: bold;}
 
 /* Gatha line 1 */
-.gatha1 { font-size: 15pt; margin-bottom: 0em; margin-left: 4em;}
+.gatha1 { font-size: 12pt; margin-bottom: 0em; margin-left: 4em;}
 
 /* Gatha line 2 */
-.gatha2 { font-size: 15pt; margin-bottom: 0em; margin-left: 4em;}
+.gatha2 { font-size: 12pt; margin-bottom: 0em; margin-left: 4em;}
 
 /* Gatha line 3 */
-.gatha3 { font-size: 15pt; margin-bottom: 0em; margin-left: 4em;}
+.gatha3 { font-size: 12pt; margin-bottom: 0em; margin-left: 4em;}
 
 /* Gatha last line */
-.gathalast { font-size: 15pt; margin-bottom: 0.5cm; margin-left: 4em;}
+.gathalast { font-size: 12pt; margin-bottom: 0.5cm; margin-left: 4em;}
 
 /* Dark Mode Support */
 @media (prefers-color-scheme: dark) {
@@ -343,13 +343,12 @@ p {
 </p>
 </xsl:template>
 
-  <xsl:template match="pb">
-    <a>
-      <xsl:attribute name="name">
-        <xsl:value-of select="@ed"/>
-        <xsl:value-of select="@n"/>
-      </xsl:attribute>
-    </a>
-  </xsl:template>
+<xsl:template match="pb">
+<a>
+<xsl:attribute name="name">
+<xsl:value-of select="@ed"/><xsl:value-of select="@n"/>
+</xsl:attribute>
+</a>
+</xsl:template>
 
 </xsl:stylesheet>
