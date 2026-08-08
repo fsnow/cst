@@ -341,6 +341,7 @@ public class DataMigrationsTests : IDisposable
     [InlineData(".DS_Store")]
     [InlineData("Thumbs.db")]
     [InlineData("desktop.ini")]
+    [InlineData(".localized")]
     public void RemovesRetiredId_DespiteOperatingSystemJunkFiles(string junk)
     {
         // A dictionaries folder that was ever browsed in Finder or Explorer picks these up. Treating them
@@ -395,5 +396,50 @@ public class DataMigrationsTests : IDisposable
         var notes = DataMigrations.Run(state, Context(), migrations);
 
         Assert.Contains(notes, n => n.Contains(DataMigrations.FailureMarker, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PartialSuccess_DeletesTheCleanDirectory_KeepsTheOther_AndRecordsNothing()
+    {
+        // The mixed case: one retired id is redundant, the other is not. The successful half must still
+        // happen, and the migration must stay unrecorded so the kept half is re-evaluated later.
+        SeededDictionary("en");
+        File.WriteAllText(Path.Combine(DataPath("en"), "my-glossary.txt"), "my own notes");
+        SeededDictionary("hi");
+        BundledDictionary("vri-childers");
+        BundledDictionary("vri-hindi");
+        var state = new ApplicationState();
+
+        DataMigrations.Run(state, Context());
+
+        Assert.False(Directory.Exists(DataPath("hi")));   // clean: removed
+        Assert.True(Directory.Exists(DataPath("en")));    // has user content: kept
+        Assert.False(Applied(state));                     // unrecorded, so en/ gets another look
+    }
+
+    [Fact]
+    public void PartialSuccess_ReRunIsANoOpForTheHalfAlreadyDone()
+    {
+        // Because nothing was recorded, the whole migration runs again next launch. The already-deleted
+        // directory must not produce a second note or any further action.
+        SeededDictionary("en");
+        var glossary = Path.Combine(DataPath("en"), "my-glossary.txt");
+        File.WriteAllText(glossary, "my own notes");
+        SeededDictionary("hi");
+        BundledDictionary("vri-childers");
+        BundledDictionary("vri-hindi");
+        var state = new ApplicationState();
+
+        DataMigrations.Run(state, Context());
+
+        var second = DataMigrations.Run(state, Context());
+        Assert.DoesNotContain(second, n => n.Contains("'hi'"));
+
+        // ...and once the blocker is gone, the remaining half completes and the migration is recorded.
+        File.Delete(glossary);
+        DataMigrations.Run(state, Context());
+
+        Assert.False(Directory.Exists(DataPath("en")));
+        Assert.True(Applied(state));
     }
 }

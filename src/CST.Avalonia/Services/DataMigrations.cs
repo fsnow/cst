@@ -44,9 +44,15 @@ public static class DataMigrations
         Done,
 
         /// <summary>
-        /// The environment was not in a state where the migration could decide safely - not a failure, and
-        /// not "nothing to do". Leave it UNRECORDED so it re-attempts next launch. Recording an environment
-        /// problem would forfeit the migration permanently on the strength of one bad launch.
+        /// Either the migration could not decide safely, or it decided AGAINST acting for a reason that
+        /// may later stop applying. Not a failure, and not "nothing to do". Leave it UNRECORDED so it
+        /// re-evaluates next launch.
+        ///
+        /// Both halves matter. Recording an environment problem would forfeit the migration permanently on
+        /// the strength of one bad launch; recording a deliberate decline would freeze that decision in
+        /// even after the reason disappeared - the user removes the file that blocked it, or a later
+        /// release ships content that now matches. A migration that declines should return this, not
+        /// <see cref="Done"/>.
         /// </summary>
         Retry,
     }
@@ -131,7 +137,7 @@ public static class DataMigrations
     /// enumerates directories, and each retired id carries the same displayName as its replacement, every
     /// affected install lists each dictionary twice. (#564)
     ///
-    /// Who is actually affected: builds from between 2026-07-01 (6f9548b, when seeding was introduced) and
+    /// Who is actually affected: builds from between 2026-07-01 (3ce8e63, when seeding was introduced) and
     /// 2026-07-27 (9e046cd, the rename). NO released build ever seeded en/hi - the rename landed the day
     /// before the beta 5 tag, and betas 1-4 shipped no bundled dictionaries at all. So this targets
     /// development and source installs, not upgraders from a release. An earlier version of this comment
@@ -238,7 +244,10 @@ public static class DataMigrations
 
             if (!FilesEqual(file, counterpart))
             {
-                reason = $"'{name}' differs from the shipped copy (edited in place?)";
+                // Deliberately does not accuse the user: an install seeded before 3dd483e (2026-07-05,
+                // a one-line fix to the English dictionary) holds the older bytes through no action of
+                // theirs, and seeding is write-if-missing so it kept them.
+                reason = $"'{name}' differs from the shipped copy (edited, or seeded by an older build)";
                 return false;
             }
         }

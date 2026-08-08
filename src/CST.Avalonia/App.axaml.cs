@@ -637,10 +637,12 @@ public partial class App : Application
                     Log.Information("Data migration: {Note}", note);
             }
 
-            // Dirty the state whenever anything happened. Strictly this over-fires: a deferral or a failure
-            // records nothing, so those launches rewrite an unchanged file. That is one cheap write on a
-            // launch that already had something go wrong, and the alternative - inspecting the notes to
-            // guess whether an id was added - would couple this to the note wording again.
+            // Dirty the state whenever anything happened. Strictly this over-fires: a deferral records
+            // nothing, so that launch rewrites an unchanged file. And for an install that deliberately
+            // keeps a retired directory - a glossary of its own in en/ - the deferral is the steady state,
+            // so that redundant write recurs every launch rather than being a one-off after something went
+            // wrong. One small file write at startup is not worth the alternative, which would mean
+            // inspecting the notes to guess whether an id was added and coupling this to their wording.
             if (notes.Count > 0)
                 stateService.MarkDirty();
         }
