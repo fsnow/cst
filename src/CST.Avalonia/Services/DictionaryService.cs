@@ -131,11 +131,37 @@ public sealed class DictionaryService : IDictionaryService
             // (dpd-cst-subset, dppn) now live under this same root so all dictionaries share one directory,
             // and they hold .db files — without this filter they'd be reported as flat-file dictionaries and
             // the loader would try to parse SQLite as headword/definition line pairs.
-            return Directory.EnumerateDirectories(_dictionariesDirectory)
-                .Where(dir => Directory.EnumerateFiles(dir, "*.txt").Any())
-                .Select(dir => Path.GetFileName(dir))
-                .OrderBy(name => name, StringComparer.Ordinal)
-                .ToList();
+            try
+            {
+                return Directory.EnumerateDirectories(_dictionariesDirectory)
+                    .Where(dir => HasFlatFileDictionary(dir))
+                    .Select(dir => Path.GetFileName(dir))
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToList();
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // A directory vanished mid-enumeration. Data migrations delete retired dictionary ids on a
+                // background thread while the registry, the local API and the dictionary panel can all be
+                // reading this property, so the window is small but real. Reporting "no dictionaries" for
+                // one call is recoverable - every caller re-reads - whereas letting it escape surfaces as a
+                // failure in whatever happened to be asking. (#564)
+                return Array.Empty<string>();
+            }
+        }
+    }
+
+    // Same "is this a flat-file dictionary?" test as above, with the same tolerance for a directory being
+    // removed underneath us mid-enumeration.
+    private static bool HasFlatFileDictionary(string dir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(dir, "*.txt").Any();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
         }
     }
 

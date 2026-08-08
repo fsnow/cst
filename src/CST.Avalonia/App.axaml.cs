@@ -606,9 +606,10 @@ public partial class App : Application
     }
 
     /// <summary>
-    // #564: apply any pending user-data migrations and persist the record of what ran. Failures are
-    // logged and left unrecorded so they retry next launch; they never block startup.
-    private static void RunDataMigrations(IApplicationStateService stateService)
+    /// #564: apply any pending user-data migrations and persist the record of what ran. A migration that
+    /// fails or defers is left unrecorded so it retries next launch; nothing here blocks startup.
+    /// </summary>
+    private static async Task RunDataMigrationsAsync(IApplicationStateService stateService)
     {
         try
         {
@@ -618,12 +619,27 @@ public partial class App : Application
                 BundledDictionariesDirectory = BundledResourceLocator.Resolve("dictionaries"),
             };
 
-            var notes = DataMigrations.Run(stateService.Current, context);
-            foreach (var note in notes)
-                Log.Information("Data migration: {Note}", note);
+            // Mutate state on the UI thread. ApplicationStateService's snapshot-free serialization rests on
+            // "all mutations happen on the UI thread" (STATE-2), and this runs on the startup background
+            // task - so without the hop, the 60-second save timer can serialize AppliedDataMigrations while
+            // the runner is still adding to it. Migrations themselves are I/O, but they are brief and this
+            // already runs before the window is interactive. (#564)
+            IReadOnlyList<string> notes = Array.Empty<string>();
+            await Dispatcher.UIThread.InvokeAsync(() => notes = DataMigrations.Run(stateService.Current, context));
 
-            // Only dirty the state when something was actually recorded, so a clean install does not
-            // rewrite the state file on every launch just to say nothing happened.
+            foreach (var note in notes)
+            {
+                // A failure is worth more than an Information line: it means a migration will be retried
+                // and may keep failing, which nobody will notice buried among ordinary startup chatter.
+                if (note.Contains("FAILED", StringComparison.Ordinal))
+                    Log.Error("Data migration: {Note}", note);
+                else
+                    Log.Information("Data migration: {Note}", note);
+            }
+
+            // Any note at all means the runner touched the record (applied an id) or has something worth
+            // persisting a retry for, so dirty the state. A clean install still produces the "nothing to
+            // do" note, which is what gets the id written down the first time.
             if (notes.Count > 0)
                 stateService.MarkDirty();
         }
@@ -648,11 +664,15 @@ public partial class App : Application
                 
                 await stateService.LoadStateAsync();
 
-                // #564: migrate the user DATA directory before anything reads it. Runs here rather
-                // than inside a service so ordering is explicit: DictionaryService seeds on
-                // construction, and a migration that needed the seeded result would be too late on
-                // the very launch that matters (the first one after an upgrade).
-                RunDataMigrations(stateService);
+                // #564: migrate the user DATA directory, in one explicit place rather than scattered
+                // through the services that own each part of it.
+                //
+                // Do NOT read an ordering guarantee into this position. DictionaryService is already
+                // constructed (and has already seeded) by the time this runs - it is resolved during
+                // layout creation, well before this startup task - so this is not "before anything reads
+                // the data". A migration must therefore be safe to run against a data directory that is
+                // already live, and must not depend on running before or after any particular service.
+                await RunDataMigrationsAsync(stateService);
 
                 // Manually handle initial state restoration without StateChanged events
                 await InitializeFromLoadedState(stateService.Current);
