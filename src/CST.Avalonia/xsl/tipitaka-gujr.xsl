@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" > 
+<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" >
 
 <xsl:template match = "/" > 
 <html>
@@ -75,7 +75,7 @@ p {
 
 .bodytext { font-size: 12pt; text-indent: 2em;}
 
-.hangnum { font-size: 12pt; margin-bottom: -18pt; text-indent: 2em;}
+.hangnum { font-size: 12pt; margin-bottom: -14.4pt; text-indent: 2em;}
 
 /* Namo tassa, and nitthita -- no unique structural distinction */
 .centered { font-size: 12pt; text-align:center;}

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" > 
+<xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" >
 
 <xsl:template match = "/" > 
 <html>
@@ -53,7 +53,6 @@ function getStyleClass (className) {
 }
 </script>
 <style>
-
 body { 
   font-family: "BN BIDISHA Opentype", Vrinda;
   background: white;
@@ -72,40 +71,40 @@ p {
   margin-top: 0in; margin-bottom: 0.5cm;
 }
 
-.indent { font-size: 14pt; text-indent: 2em; margin-left: 3em;}
+.indent { font-size: 12pt; text-indent: 2em; margin-left: 3em;}
 
-.bodytext { font-size: 14pt; text-indent: 2em;}
+.bodytext { font-size: 12pt; text-indent: 2em;}
 
-.hangnum { font-size: 14pt; margin-bottom: -16pt; text-indent: 2em;}
+.hangnum { font-size: 12pt; margin-bottom: -14.4pt; text-indent: 2em;}
 
 /* Namo tassa, and nitthita -- no unique structural distinction */
-.centered { font-size: 14pt; text-align:center;}
+.centered { font-size: 12pt; text-align:center;}
 
-.unindented { font-size: 14pt;}
+.unindented { font-size: 12pt;}
 
-.book { font-size: 24pt; text-align:center; font-weight: bold;}
+.book { font-size: 21pt; text-align:center; font-weight: bold;}
 
-.chapter { font-size: 22pt; text-align:center; font-weight: bold;}
+.chapter { font-size: 18pt; text-align:center; font-weight: bold;}
 
-.nikaya { font-size: 28pt; text-align:center; font-weight: bold;}
+.nikaya { font-size: 24pt; text-align:center; font-weight: bold;}
 
-.title { font-size: 14pt; text-align:center; font-weight: bold;}
+.title { font-size: 12pt; text-align:center; font-weight: bold;}
 
-.subhead { font-size: 14pt; text-align:center; font-weight: bold;}
+.subhead { font-size: 12pt; text-align:center; font-weight: bold;}
 
-.subsubhead { font-size: 14pt; text-align:center; font-weight: bold;}
+.subsubhead { font-size: 12pt; text-align:center; font-weight: bold;}
 
 /* Gatha line 1 */
-.gatha1 { font-size: 14pt; margin-bottom: 0em; margin-left: 4em;}
+.gatha1 { font-size: 12pt; margin-bottom: 0em; margin-left: 4em;}
 
 /* Gatha line 2 */
-.gatha2 { font-size: 14pt; margin-bottom: 0em; margin-left: 4em;}
+.gatha2 { font-size: 12pt; margin-bottom: 0em; margin-left: 4em;}
 
 /* Gatha line 3 */
-.gatha3 { font-size: 14pt; margin-bottom: 0em; margin-left: 4em;}
+.gatha3 { font-size: 12pt; margin-bottom: 0em; margin-left: 4em;}
 
 /* Gatha last line */
-.gathalast { font-size: 14pt; margin-bottom: 0.5cm; margin-left: 4em;}
+.gathalast { font-size: 12pt; margin-bottom: 0.5cm; margin-left: 4em;}
 
 /* Dark Mode Support */
 @media (prefers-color-scheme: dark) {
@@ -351,5 +350,5 @@ p {
 </xsl:attribute>
 </a>
 </xsl:template>
-  
+
 </xsl:stylesheet>
