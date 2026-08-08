@@ -131,11 +131,38 @@ public sealed class DictionaryService : IDictionaryService
             // (dpd-cst-subset, dppn) now live under this same root so all dictionaries share one directory,
             // and they hold .db files — without this filter they'd be reported as flat-file dictionaries and
             // the loader would try to parse SQLite as headword/definition line pairs.
-            return Directory.EnumerateDirectories(_dictionariesDirectory)
-                .Where(dir => Directory.EnumerateFiles(dir, "*.txt").Any())
-                .Select(dir => Path.GetFileName(dir))
-                .OrderBy(name => name, StringComparer.Ordinal)
-                .ToList();
+            try
+            {
+                return Directory.EnumerateDirectories(_dictionariesDirectory)
+                    .Where(dir => HasFlatFileDictionary(dir))
+                    .Select(dir => Path.GetFileName(dir))
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToList();
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // A directory vanished mid-enumeration. Data migrations delete retired dictionary ids at
+                // startup, and while that now runs on the UI thread, this property is read off it too - the
+                // source registry is a lazily-resolved singleton and the local dictionary API serves
+                // requests on its own threads. The window is small but real. Reporting "no dictionaries" for
+                // one call is recoverable, since every caller re-reads, whereas letting it escape surfaces
+                // as a failure in whatever happened to be asking. (#564)
+                return Array.Empty<string>();
+            }
+        }
+    }
+
+    // Same "is this a flat-file dictionary?" test as above, with the same tolerance for a directory being
+    // removed underneath us mid-enumeration.
+    private static bool HasFlatFileDictionary(string dir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(dir, "*.txt").Any();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
         }
     }
 
