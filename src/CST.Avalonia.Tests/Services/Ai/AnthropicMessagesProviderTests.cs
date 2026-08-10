@@ -21,9 +21,10 @@ namespace CST.Avalonia.Tests.Services.Ai;
 public class AnthropicMessagesProviderTests
 {
     private static AnthropicMessagesProvider Provider(
-        StubHttpMessageHandler handler, string? key = "sk-test", string? baseUrl = null, TimeSpan? idle = null) =>
-        new(new HttpClient(handler), new AnthropicOptions(key, baseUrl),
-            NullLogger<AnthropicMessagesProvider>.Instance, idle);
+        StubHttpMessageHandler handler, string? key = "sk-test", string? baseUrl = null,
+        TimeSpan? idle = null, TimeSpan? firstEvent = null) =>
+        new(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, new AnthropicOptions(key, baseUrl),
+            NullLogger<AnthropicMessagesProvider>.Instance, idle, firstEvent);
 
     private static ChatRequest Request(string? system = null) =>
         new("claude-opus-5", 1024, system, new[] { new ChatMessage(ChatRole.User, "Explain this passage.") });
@@ -279,13 +280,80 @@ public class AnthropicMessagesProviderTests
     }
 
     [Fact]
-    public async Task A_silent_stream_is_abandoned_by_the_idle_timeout()
+    public async Task A_stream_that_never_starts_is_abandoned_by_the_first_event_timeout()
     {
-        var provider = Provider(StubHttpMessageHandler.Hangs(), idle: TimeSpan.FromMilliseconds(150));
+        // Time-to-first-token has its own, longer window than the between-lines idle timeout: a local runner
+        // evaluating a large injected passage can legitimately sit silent for minutes before saying anything.
+        var provider = Provider(
+            StubHttpMessageHandler.Hangs(),
+            idle: TimeSpan.FromMinutes(5),
+            firstEvent: TimeSpan.FromMilliseconds(150));
 
         var deltas = await CollectAsync(provider);
 
         var error = Assert.Single(deltas, d => d.Kind == ChatDeltaKind.Error).Error!;
         Assert.Equal(AiErrorKind.Network, error.Kind);
+    }
+
+    [Fact]
+    public async Task A_200_carrying_no_events_is_reported_rather_than_answered_blank()
+    {
+        // The wrong-endpoint case: something answers 200 with a page that is not a stream. Saying nothing would
+        // leave the user unable to tell a misconfiguration from a model that declined to speak.
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse("<html>not an api</html>")));
+
+        var error = Assert.Single(deltas, d => d.Kind == ChatDeltaKind.Error).Error!;
+        Assert.Equal(AiErrorKind.Provider, error.Kind);
+    }
+
+    [Fact]
+    public async Task A_chunk_of_an_unexpected_json_shape_does_not_crash_the_stream()
+    {
+        // `data: null` parses successfully and then faults on the first property read; a `delta` that is a
+        // string rather than an object faults the same way. Both must be skipped, not thrown out of the
+        // iterator as an unclassified crash mid-answer. (A numeric `type` is NOT in this fixture: it falls
+        // back to the SSE event name, which is the right behaviour rather than a skip.)
+        const string stream = """
+            event: ping
+            data: null
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","delta":"not-an-object"}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Survived."}}
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("Survived.", Text(deltas));
+        Assert.DoesNotContain(deltas, d => d.Kind == ChatDeltaKind.Error);
+    }
+
+    [Fact]
+    public async Task A_provider_code_that_is_not_token_shaped_is_dropped_rather_than_logged()
+    {
+        // A wrong endpoint can put anything in `type`, including echoed request material.
+        var handler = StubHttpMessageHandler.Error(
+            HttpStatusCode.BadRequest,
+            """{"type":"error","error":{"type":"rejected while handling 'Explain Dhp 21: appamado amatapadam'"}}""");
+
+        var error = await Assert.ThrowsAsync<AiException>(() => CollectAsync(Provider(handler)));
+
+        Assert.Null(error.Error.ProviderCode);
+        Assert.DoesNotContain("appamado", error.Error.Message);
+    }
+
+    [Fact]
+    public void A_client_with_a_finite_timeout_is_refused_at_construction()
+    {
+        // A finite HttpClient.Timeout truncates a long stream and reports it as a cancellation — close to
+        // undiagnosable from a bug report, so it fails loudly here instead.
+        var http = new HttpClient(StubHttpMessageHandler.Sse(HappyStream)) { Timeout = TimeSpan.FromSeconds(100) };
+
+        Assert.Throws<ArgumentException>(() =>
+            new AnthropicMessagesProvider(
+                http, new AnthropicOptions("sk-test"), NullLogger<AnthropicMessagesProvider>.Instance));
     }
 }

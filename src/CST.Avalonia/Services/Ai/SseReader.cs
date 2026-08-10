@@ -21,16 +21,28 @@ internal sealed record SseEvent(string? Name, string Data, AiError? Failure = nu
 /// Minimal Server-Sent Events reader, shared by both providers because both speak SSE and only differ in what
 /// the JSON payloads mean.
 ///
-/// <para><b>The idle timeout is the point of this class.</b> <see cref="System.Net.Http.HttpClient"/>'s own
+/// <para><b>The liveness timeouts are the point of this class.</b> <see cref="System.Net.Http.HttpClient"/>'s own
 /// timeout is a whole-request deadline, which is useless for a stream that is legitimately allowed to run for
-/// minutes — so the client is configured with an infinite timeout and liveness is enforced here instead, as a
-/// per-read deadline that resets on every byte. A provider that accepts the connection and then goes silent is
-/// otherwise indistinguishable from a slow answer, and would hang until the process exits.</para>
+/// minutes — so the client is configured with an infinite timeout and liveness is enforced here instead. A
+/// provider that accepts the connection and then goes silent is otherwise indistinguishable from a slow answer,
+/// and would hang until the process exits.</para>
 /// </summary>
 internal static class SseReader
 {
-    /// <summary>How long a stream may produce nothing at all before we call it dead.</summary>
+    /// <summary>
+    /// How long the stream may produce nothing between lines before we call it dead. Note this is per LINE, not
+    /// per byte: a line that trickles in over a long period is fine, and a stream that sends no newline at all
+    /// is not — which matches SSE, where nothing is actionable until a line completes.
+    /// </summary>
     internal static readonly TimeSpan DefaultIdleTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// A longer allowance for the FIRST line, which is the only one that includes the model's time-to-first-token.
+    /// A local runner doing prompt evaluation over an injected passage on modest hardware can legitimately sit
+    /// silent for minutes before emitting anything — folding that into the ordinary idle window would abandon the
+    /// fully-local path exactly when it is working hardest.
+    /// </summary>
+    internal static readonly TimeSpan DefaultFirstEventTimeout = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Read events until the stream ends. Never throws for stream failures — an abnormal end arrives as a final
@@ -40,17 +52,24 @@ internal static class SseReader
     internal static async IAsyncEnumerable<SseEvent> ReadAsync(
         Stream stream,
         TimeSpan idleTimeout,
+        TimeSpan firstEventTimeout,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 
-        // Linked so a real cancellation still propagates; CancelAfter is rescheduled on every successful read,
-        // which is what makes this an idle timeout rather than a total one.
-        using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        idle.CancelAfter(idleTimeout);
+        // Linked so a real cancellation still propagates; the deadline is rescheduled after every successful
+        // read, which is what makes this an idle timeout rather than a total one.
+        //
+        // Benign race: the timer can fire in the window between a read returning and the reschedule below. The
+        // token is then permanently cancelled and the next read reports an idle timeout even though data had just
+        // arrived. It needs the stream to go quiet for the whole window and then deliver a line within
+        // microseconds of expiry; the cost is one spurious "stopped responding" that a retry clears.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(firstEventTimeout);
 
         string? name = null;
         var data = new StringBuilder();
+        var sawAnyLine = false;
 
         while (true)
         {
@@ -59,8 +78,8 @@ internal static class SseReader
 
             try
             {
-                line = await reader.ReadLineAsync(idle.Token).ConfigureAwait(false);
-                idle.CancelAfter(idleTimeout);
+                line = await reader.ReadLineAsync(deadline.Token).ConfigureAwait(false);
+                deadline.CancelAfter(idleTimeout);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -68,10 +87,11 @@ internal static class SseReader
             }
             catch (OperationCanceledException)
             {
+                var window = sawAnyLine ? idleTimeout : firstEventTimeout;
                 line = null;
                 failure = new AiError(
                     AiErrorKind.Network,
-                    $"The model stopped responding (no data for {idleTimeout.TotalSeconds:0}s).");
+                    $"The model stopped responding (no data for {window.TotalSeconds:0}s).");
             }
             catch (Exception ex) when (ex is IOException or System.Net.Http.HttpRequestException)
             {
@@ -101,6 +121,8 @@ internal static class SseReader
                     yield return new SseEvent(name, data.ToString());
                 yield break;
             }
+
+            sawAnyLine = true;
 
             // Blank line dispatches the event being accumulated.
             if (line.Length == 0)

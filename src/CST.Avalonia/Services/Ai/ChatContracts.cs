@@ -40,7 +40,12 @@ public enum ChatDeltaKind
     /// </summary>
     Reasoning,
 
-    /// <summary>Token accounting. May arrive more than once; later values supersede earlier ones.</summary>
+    /// <summary>
+    /// Token accounting. May arrive more than once, and <b>must be merged per field, not wholesale</b>: the
+    /// Anthropic stream reports the two halves separately (input at the start, output at the end), so a consumer
+    /// that lets a later value supersede an earlier one erases the input count. A null field means "not reported
+    /// in this delta", never zero.
+    /// </summary>
     Usage,
 
     /// <summary>
@@ -98,8 +103,10 @@ public enum AiErrorKind
 /// <para><b>Nothing here echoes request material.</b> <see cref="Message"/> is composed by us, never lifted from
 /// the provider's error body: those bodies routinely quote the offending request back, which for surface B means
 /// corpus text and the user's own question. <see cref="ProviderCode"/> carries only the provider's short
-/// machine-readable token (<c>rate_limit_error</c>, <c>context_length_exceeded</c>) — bounded vocabulary, safe to
-/// log and genuinely useful when diagnosing.</para>
+/// machine-readable token (<c>rate_limit_error</c>, <c>context_length_exceeded</c>) — genuinely useful when
+/// diagnosing, and safe to log because it is clamped by <c>AiHttp.SanitizeProviderCode</c> to a token-shaped
+/// value. That clamp is what makes the claim true rather than merely intended: the field is provider-controlled,
+/// and "OpenAI-compatible" means an arbitrary user-pasted endpoint that could put anything there.</para>
 /// </summary>
 public sealed record AiError(
     AiErrorKind Kind,

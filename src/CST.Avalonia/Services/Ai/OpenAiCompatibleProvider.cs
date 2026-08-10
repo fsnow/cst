@@ -35,17 +35,20 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
     private readonly OpenAiCompatibleOptions _options;
     private readonly ILogger<OpenAiCompatibleProvider> _logger;
     private readonly TimeSpan _idleTimeout;
+    private readonly TimeSpan _firstEventTimeout;
 
     public OpenAiCompatibleProvider(
         HttpClient http,
         OpenAiCompatibleOptions options,
         ILogger<OpenAiCompatibleProvider> logger,
-        TimeSpan? idleTimeout = null)
+        TimeSpan? idleTimeout = null,
+        TimeSpan? firstEventTimeout = null)
     {
-        _http = http;
+        _http = AiHttp.EnsureStreamable(http);
         _options = options;
         _logger = logger;
         _idleTimeout = idleTimeout ?? SseReader.DefaultIdleTimeout;
+        _firstEventTimeout = firstEventTimeout ?? SseReader.DefaultFirstEventTimeout;
     }
 
     public string Id => "openai-compatible";
@@ -90,8 +93,10 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
 
             var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             var think = new ThinkTagFilter();
+            var produced = false;
 
-            await foreach (var sse in SseReader.ReadAsync(stream, _idleTimeout, ct).ConfigureAwait(false))
+            await foreach (var sse in SseReader.ReadAsync(stream, _idleTimeout, _firstEventTimeout, ct)
+                               .ConfigureAwait(false))
             {
                 if (sse.Failure is { } failure)
                 {
@@ -101,22 +106,45 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
                     yield break;
                 }
 
+                produced = true;
+
                 if (sse.Data == "[DONE]")
                     break;
 
                 foreach (var delta in Interpret(sse, think))
+                {
+                    // An Error delta is terminal by contract (see ChatDeltaKind.Error) — a gateway that keeps
+                    // streaming after reporting a failure must not have that content appended to the answer.
+                    // Held-back think-tag text is flushed FIRST so it cannot arrive after the error.
+                    if (delta.Kind == ChatDeltaKind.Error)
+                    {
+                        foreach (var tail in FlushThink(think)) yield return tail;
+                        yield return delta;
+                        yield break;
+                    }
+
                     yield return delta;
+                }
             }
 
             foreach (var tail in FlushThink(think)) yield return tail;
+
+            // A 200 that carried no events at all is not success. The usual cause is an endpoint that is not the
+            // API — a proxy or portal answering 200 with HTML — and reporting nothing would leave the user with
+            // a blank answer and no way to tell a misconfiguration from a model that declined to speak.
+            if (!produced)
+            {
+                _logger.LogWarning("OpenAI-compatible endpoint returned a 200 with no stream events");
+                yield return ChatDelta.ForError(AiHttp.EmptyResponse());
+            }
         }
     }
 
     private static IEnumerable<ChatDelta> FlushThink(ThinkTagFilter think)
     {
         var (visible, reasoning) = think.Flush();
-        if (visible.Length > 0) yield return ChatDelta.ForText(visible);
         if (reasoning.Length > 0) yield return ChatDelta.ForReasoning(reasoning);
+        if (visible.Length > 0) yield return ChatDelta.ForText(visible);
     }
 
     private static string BuildBody(ChatRequest request)
@@ -157,6 +185,12 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
+    /// <summary>
+    /// Translate one SSE chunk into zero or more deltas. Every property read goes through <see cref="AiJson"/>:
+    /// a provider payload is untrusted input, and a raw <c>GetString()</c> on an unexpected kind throws out of
+    /// this iterator as an unclassified crash mid-answer. OpenRouter reporting a NUMERIC <c>error.code</c> is a
+    /// real instance of exactly that.
+    /// </summary>
     private static IEnumerable<ChatDelta> Interpret(SseEvent sse, ThinkTagFilter think)
     {
         JsonElement root;
@@ -170,83 +204,76 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
             yield break;   // one bad chunk does not end an otherwise healthy stream
         }
 
+        if (!AiJson.IsObject(root))
+            yield break;
+
         // Some providers report an error as a normal 200 chunk rather than an HTTP status.
-        if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
+        if (AiJson.Object(root, "error") is { } error)
         {
-            var code = error.TryGetProperty("code", out var codeElement) ? codeElement.GetString() : null;
-            code ??= error.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
             yield return ChatDelta.ForError(new AiError(
                 AiErrorKind.Provider,
                 "The model stopped part-way through: the provider reported an error.",
-                ProviderCode: code));
+                ProviderCode: AiHttp.SanitizeProviderCode(
+                    AiJson.Code(error, "code") ?? AiJson.Code(error, "type"))));
             yield break;
         }
 
-        if (root.TryGetProperty("choices", out var choices) &&
-            choices.ValueKind == JsonValueKind.Array &&
+        if (AiJson.Array(root, "choices") is { } choices &&
             choices.GetArrayLength() > 0 &&
-            choices[0].TryGetProperty("delta", out var delta))
+            AiJson.Object(choices[0], "delta") is { } delta)
         {
             // Structured reasoning (DeepSeek and others) — never merged into the answer.
-            if (delta.TryGetProperty("reasoning_content", out var reasoning) &&
-                reasoning.ValueKind == JsonValueKind.String)
-            {
-                var value = reasoning.GetString();
-                if (!string.IsNullOrEmpty(value)) yield return ChatDelta.ForReasoning(value);
-            }
+            if (AiJson.String(delta, "reasoning_content") is { Length: > 0 } reasoning)
+                yield return ChatDelta.ForReasoning(reasoning);
 
-            if (delta.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
+            if (AiJson.String(delta, "content") is { Length: > 0 } content)
             {
-                var value = content.GetString();
-                if (!string.IsNullOrEmpty(value))
-                {
-                    // Inline <think> tags are the other reasoning convention; strip them across chunk boundaries.
-                    var (visible, inlineReasoning) = think.Feed(value);
-                    if (inlineReasoning.Length > 0) yield return ChatDelta.ForReasoning(inlineReasoning);
-                    if (visible.Length > 0) yield return ChatDelta.ForText(visible);
-                }
+                // Inline <think> tags are the other reasoning convention; strip them across chunk boundaries.
+                var (visible, inlineReasoning) = think.Feed(content);
+                if (inlineReasoning.Length > 0) yield return ChatDelta.ForReasoning(inlineReasoning);
+                if (visible.Length > 0) yield return ChatDelta.ForText(visible);
             }
         }
 
-        if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
+        if (AiJson.Object(root, "usage") is { } usage)
         {
             yield return ChatDelta.ForUsage(new ChatUsage(
-                InputTokens: ReadInt(usage, "prompt_tokens"),
-                OutputTokens: ReadInt(usage, "completion_tokens")));
+                InputTokens: AiJson.Int(usage, "prompt_tokens"),
+                OutputTokens: AiJson.Int(usage, "completion_tokens")));
         }
     }
 
-    private static int? ReadInt(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) ? number : null;
-
     /// <summary>
-    /// Classify a non-2xx response. As with the Anthropic adapter the body is read for classification only:
-    /// <c>error.code</c> is a bounded token and is kept, while <c>error.message</c> can quote the request back
-    /// and is discarded.
+    /// Classify a non-2xx response. As with the Anthropic adapter the body is read for classification only, and
+    /// bounded: <c>error.code</c> is a short token and is kept (after sanitizing), while <c>error.message</c> can
+    /// quote the request back and is discarded.
     /// </summary>
     private async Task<AiError> ClassifyAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var kind = AiHttp.KindFor(response.StatusCode);
         string? code = null;
 
-        try
-        {
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            using var document = JsonDocument.Parse(body);
-            if (document.RootElement.TryGetProperty("error", out var error) &&
-                error.ValueKind == JsonValueKind.Object)
-            {
-                code = error.TryGetProperty("code", out var codeElement) && codeElement.ValueKind == JsonValueKind.String
-                    ? codeElement.GetString()
-                    : null;
-                code ??= error.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
+        var body = await AiHttp
+            .ReadBoundedBodyAsync(response.Content, TimeSpan.FromSeconds(10), ct)
+            .ConfigureAwait(false);
 
-                if (string.Equals(code, "context_length_exceeded", StringComparison.OrdinalIgnoreCase))
-                    kind = AiErrorKind.ContextTooLong;
-            }
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException or HttpRequestException or IOException)
+        if (body.Length > 0)
         {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                if (AiJson.Object(document.RootElement, "error") is { } error)
+                {
+                    code = AiHttp.SanitizeProviderCode(
+                        AiJson.Code(error, "code") ?? AiJson.Code(error, "type"));
+
+                    if (string.Equals(code, "context_length_exceeded", StringComparison.OrdinalIgnoreCase))
+                        kind = AiErrorKind.ContextTooLong;
+                }
+            }
+            catch (JsonException)
+            {
+            }
         }
 
         _logger.LogWarning(

@@ -35,17 +35,20 @@ public sealed class AnthropicMessagesProvider : IChatProvider
     private readonly AnthropicOptions _options;
     private readonly ILogger<AnthropicMessagesProvider> _logger;
     private readonly TimeSpan _idleTimeout;
+    private readonly TimeSpan _firstEventTimeout;
 
     public AnthropicMessagesProvider(
         HttpClient http,
         AnthropicOptions options,
         ILogger<AnthropicMessagesProvider> logger,
-        TimeSpan? idleTimeout = null)
+        TimeSpan? idleTimeout = null,
+        TimeSpan? firstEventTimeout = null)
     {
-        _http = http;
+        _http = AiHttp.EnsureStreamable(http);
         _options = options;
         _logger = logger;
         _idleTimeout = idleTimeout ?? SseReader.DefaultIdleTimeout;
+        _firstEventTimeout = firstEventTimeout ?? SseReader.DefaultFirstEventTimeout;
     }
 
     public string Id => "anthropic";
@@ -90,8 +93,10 @@ public sealed class AnthropicMessagesProvider : IChatProvider
                 throw new AiException(await ClassifyAsync(response, ct).ConfigureAwait(false));
 
             var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            var produced = false;
 
-            await foreach (var sse in SseReader.ReadAsync(stream, _idleTimeout, ct).ConfigureAwait(false))
+            await foreach (var sse in SseReader.ReadAsync(stream, _idleTimeout, _firstEventTimeout, ct)
+                               .ConfigureAwait(false))
             {
                 if (sse.Failure is { } failure)
                 {
@@ -100,12 +105,23 @@ public sealed class AnthropicMessagesProvider : IChatProvider
                     yield break;
                 }
 
+                produced = true;
+
                 foreach (var delta in Interpret(sse))
                 {
                     yield return delta;
                     if (delta.Kind == ChatDeltaKind.Error)
                         yield break;
                 }
+            }
+
+            // A 200 that carried no events at all is not success. The usual cause is an endpoint that is not the
+            // API — a proxy or portal answering 200 with HTML — and reporting nothing would leave the user with
+            // a blank answer and no way to tell a misconfiguration from a model that declined to speak.
+            if (!produced)
+            {
+                _logger.LogWarning("Anthropic returned a 200 with no stream events");
+                yield return ChatDelta.ForError(AiHttp.EmptyResponse());
             }
         }
     }
@@ -140,7 +156,11 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    /// <summary>Translate one SSE event into zero or more deltas.</summary>
+    /// <summary>
+    /// Translate one SSE event into zero or more deltas. Every property read goes through <see cref="AiJson"/>:
+    /// a provider payload is untrusted input, and a raw <c>GetString()</c> on an unexpected kind throws out of
+    /// this iterator as an unclassified crash mid-answer.
+    /// </summary>
     private static IEnumerable<ChatDelta> Interpret(SseEvent sse)
     {
         JsonElement root;
@@ -156,65 +176,55 @@ public sealed class AnthropicMessagesProvider : IChatProvider
             yield break;
         }
 
-        var type = root.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : sse.Name;
+        if (!AiJson.IsObject(root))
+            yield break;   // e.g. a bare `data: null` keep-alive — parses fine, has no properties
+
+        var type = AiJson.String(root, "type") ?? sse.Name;
 
         switch (type)
         {
             case "content_block_delta":
-                if (root.TryGetProperty("delta", out var delta))
+                if (AiJson.Object(root, "delta") is { } delta)
                 {
-                    var deltaType = delta.TryGetProperty("type", out var dt) ? dt.GetString() : null;
-                    if (deltaType == "text_delta" && delta.TryGetProperty("text", out var text))
+                    switch (AiJson.String(delta, "type"))
                     {
-                        var value = text.GetString();
-                        if (!string.IsNullOrEmpty(value)) yield return ChatDelta.ForText(value);
-                    }
-                    else if (deltaType == "thinking_delta" && delta.TryGetProperty("thinking", out var thinking))
-                    {
-                        var value = thinking.GetString();
-                        if (!string.IsNullOrEmpty(value)) yield return ChatDelta.ForReasoning(value);
+                        case "text_delta" when AiJson.String(delta, "text") is { Length: > 0 } text:
+                            yield return ChatDelta.ForText(text);
+                            break;
+                        case "thinking_delta" when AiJson.String(delta, "thinking") is { Length: > 0 } thinking:
+                            yield return ChatDelta.ForReasoning(thinking);
+                            break;
                     }
                 }
                 break;
 
             case "message_start":
-                if (root.TryGetProperty("message", out var start) &&
-                    start.TryGetProperty("usage", out var startUsage))
-                {
-                    yield return ChatDelta.ForUsage(new ChatUsage(
-                        InputTokens: ReadInt(startUsage, "input_tokens"),
-                        OutputTokens: ReadInt(startUsage, "output_tokens")));
-                }
+                if (AiJson.Object(root, "message") is { } start && AiJson.Object(start, "usage") is { } startUsage)
+                    yield return UsageDelta(startUsage);
                 break;
 
             case "message_delta":
-                if (root.TryGetProperty("usage", out var endUsage))
-                {
-                    yield return ChatDelta.ForUsage(new ChatUsage(
-                        InputTokens: ReadInt(endUsage, "input_tokens"),
-                        OutputTokens: ReadInt(endUsage, "output_tokens")));
-                }
+                if (AiJson.Object(root, "usage") is { } endUsage)
+                    yield return UsageDelta(endUsage);
                 break;
 
             case "error":
                 // The API can report a failure mid-stream (overloaded, and other transient states). The caller
                 // already has partial text on screen, so this is an Error delta rather than an exception.
-                var code = root.TryGetProperty("error", out var error) &&
-                           error.TryGetProperty("type", out var errorType)
-                    ? errorType.GetString()
-                    : null;
                 yield return ChatDelta.ForError(new AiError(
                     AiErrorKind.Provider,
                     "The model stopped part-way through: the provider reported an error.",
-                    ProviderCode: code));
+                    ProviderCode: AiHttp.SanitizeProviderCode(
+                        AiJson.Object(root, "error") is { } error ? AiJson.Code(error, "type") : null)));
                 break;
 
             // message_stop / content_block_start / content_block_stop / ping carry nothing we need.
         }
     }
 
-    private static int? ReadInt(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) ? number : null;
+    private static ChatDelta UsageDelta(JsonElement usage) => ChatDelta.ForUsage(new ChatUsage(
+        InputTokens: AiJson.Int(usage, "input_tokens"),
+        OutputTokens: AiJson.Int(usage, "output_tokens")));
 
     /// <summary>
     /// Classify a non-2xx response. The body IS read — it is the only way to tell a context-window overflow from
@@ -227,26 +237,31 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         var kind = AiHttp.KindFor(response.StatusCode);
         string? code = null;
 
-        try
-        {
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            using var document = JsonDocument.Parse(body);
-            if (document.RootElement.TryGetProperty("error", out var error))
-            {
-                code = error.TryGetProperty("type", out var type) ? type.GetString() : null;
+        var body = await AiHttp
+            .ReadBoundedBodyAsync(response.Content, TimeSpan.FromSeconds(10), ct)
+            .ConfigureAwait(false);
 
-                if (kind == AiErrorKind.Provider &&
-                    (int)response.StatusCode == 400 &&
-                    error.TryGetProperty("message", out var messageElement) &&
-                    LooksLikeContextOverflow(messageElement.GetString()))
+        if (body.Length > 0)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                if (AiJson.Object(document.RootElement, "error") is { } error)
                 {
-                    kind = AiErrorKind.ContextTooLong;
+                    code = AiHttp.SanitizeProviderCode(AiJson.Code(error, "type"));
+
+                    if (kind == AiErrorKind.Provider &&
+                        (int)response.StatusCode == 400 &&
+                        LooksLikeContextOverflow(AiJson.String(error, "message")))
+                    {
+                        kind = AiErrorKind.ContextTooLong;
+                    }
                 }
             }
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException or HttpRequestException or IOException)
-        {
-            // An unparseable body tells us nothing extra; the status code already classified it.
+            catch (JsonException)
+            {
+                // An unparseable body tells us nothing extra; the status code already classified it.
+            }
         }
 
         _logger.LogWarning(

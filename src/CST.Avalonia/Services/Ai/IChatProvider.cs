@@ -16,11 +16,18 @@ public interface IChatProvider
     /// <summary>
     /// Stream a response. Deltas arrive as they are produced; the enumerable completes when the model stops.
     ///
-    /// <para><b>Failure has two shapes, deliberately.</b> A failure before any content — unreachable host, 401,
-    /// a request the provider rejected outright — throws <see cref="AiException"/>, because there is nothing on
-    /// screen yet and an exception is the cleaner contract. A failure once deltas have started yields a
-    /// <see cref="ChatDeltaKind.Error"/> delta and completes normally, so the caller keeps the partial answer it
-    /// has already shown the user.</para>
+    /// <para><b>Failure has two shapes, and the boundary is the HTTP response — not the first delta.</b> A
+    /// failure while establishing the response — unreachable host, 401, a request the provider rejected
+    /// outright — throws <see cref="AiException"/>, because nothing can be on screen yet. Once a successful
+    /// response has been accepted, every failure yields a <see cref="ChatDeltaKind.Error"/> delta and the
+    /// enumerable completes normally, so the caller keeps whatever partial answer it has already shown.</para>
+    ///
+    /// <para><b>A caller must therefore handle an Error delta arriving with no preceding text.</b> A stream can
+    /// fail after the response is accepted but before it produces anything — a first event that is an error, a
+    /// connection dropped immediately after the headers, a provider that accepts and then goes silent, or a 200
+    /// carrying no events at all. That is not the same as "there is a partial answer to preserve".</para>
+    ///
+    /// <para>An <see cref="ChatDeltaKind.Error"/> delta is terminal: no further deltas follow it.</para>
     ///
     /// <para>Cancellation via <paramref name="ct"/> is neither: it throws
     /// <see cref="System.OperationCanceledException"/> like any other .NET async method, and is never reported as

@@ -22,6 +22,7 @@ internal sealed class ThinkTagFilter
 
     private bool _inside;
     private string _held = string.Empty;
+    private bool _emittedVisible;
 
     /// <summary>Feed one content delta. Returns the text to show and the text to treat as reasoning.</summary>
     internal (string Visible, string Reasoning) Feed(string chunk)
@@ -37,6 +38,24 @@ internal sealed class ThinkTagFilter
         {
             var tag = _inside ? Close : Open;
             var sink = _inside ? reasoning : visible;
+
+            // A close tag arriving while we are NOT inside means the stream began mid-reasoning: some runner
+            // chat templates pre-fill the opening <think> into the prompt, so the model's output starts inside
+            // the block and only the closing tag is ever streamed. Without this the whole reasoning renders as
+            // the answer, followed by a literal </think> — the exact failure this filter exists to prevent.
+            if (!_inside)
+            {
+                var open = buffer.IndexOf(Open, position, StringComparison.OrdinalIgnoreCase);
+                var stray = buffer.IndexOf(Close, position, StringComparison.OrdinalIgnoreCase);
+                if (stray >= 0 && (open < 0 || stray < open))
+                {
+                    // Text before it is reasoning if nothing has reached the user yet. Once visible text HAS
+                    // been emitted we cannot retract it — but we can still refuse to render the tag itself.
+                    (_emittedVisible ? visible : reasoning).Append(buffer, position, stray - position);
+                    position = stray + Close.Length;
+                    continue;
+                }
+            }
 
             var hit = buffer.IndexOf(tag, position, StringComparison.OrdinalIgnoreCase);
             if (hit >= 0)
@@ -55,6 +74,7 @@ internal sealed class ThinkTagFilter
             position += rest;
         }
 
+        if (visible.Length > 0) _emittedVisible = true;
         return (visible.ToString(), reasoning.ToString());
     }
 

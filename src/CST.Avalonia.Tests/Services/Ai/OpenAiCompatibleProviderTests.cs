@@ -24,9 +24,10 @@ public class OpenAiCompatibleProviderTests
         StubHttpMessageHandler handler,
         string? baseUrl = "https://api.deepseek.com/v1",
         string? key = "sk-test",
-        TimeSpan? idle = null) =>
-        new(new HttpClient(handler), new OpenAiCompatibleOptions(baseUrl, key),
-            NullLogger<OpenAiCompatibleProvider>.Instance, idle);
+        TimeSpan? idle = null,
+        TimeSpan? firstEvent = null) =>
+        new(new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }, new OpenAiCompatibleOptions(baseUrl, key),
+            NullLogger<OpenAiCompatibleProvider>.Instance, idle, firstEvent);
 
     private static ChatRequest Request(string? system = null) =>
         new("deepseek-chat", 1024, system, new[] { new ChatMessage(ChatRole.User, "Explain this passage.") });
@@ -309,5 +310,141 @@ public class OpenAiCompatibleProviderTests
         cts.CancelAfter(TimeSpan.FromMilliseconds(100));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pump);
+    }
+
+    [Fact]
+    public async Task A_numeric_error_code_does_not_crash_the_stream()
+    {
+        // OpenRouter reports mid-stream failures with a NUMERIC code. Reading it as a string throws
+        // InvalidOperationException straight out of the iterator — an unclassified crash where the contract
+        // promises an Error delta.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"Heed"}}]}
+
+            data: {"error":{"code":403,"message":"moderation"}}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("Heed", Text(deltas));
+        var error = Assert.Single(deltas, d => d.Kind == ChatDeltaKind.Error).Error!;
+        Assert.Equal("403", error.ProviderCode);
+    }
+
+    [Fact]
+    public async Task Nothing_is_appended_to_the_answer_after_an_error_delta()
+    {
+        // A gateway can report a failure and keep streaming. The Error delta is terminal by contract.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"Heed"}}]}
+
+            data: {"error":{"code":"server_error"}}
+
+            data: {"choices":[{"delta":{"content":" MORE"}}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("Heed", Text(deltas));
+        Assert.Equal(ChatDeltaKind.Error, deltas[^1].Kind);
+    }
+
+    [Fact]
+    public async Task A_chunk_of_an_unexpected_json_shape_does_not_crash_the_stream()
+    {
+        const string stream = """
+            data: null
+
+            data: {"choices":"not-an-array"}
+
+            data: {"choices":[{"delta":{"content":"Survived."}}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("Survived.", Text(deltas));
+        Assert.DoesNotContain(deltas, d => d.Kind == ChatDeltaKind.Error);
+    }
+
+    [Fact]
+    public async Task A_200_carrying_no_events_is_reported_rather_than_answered_blank()
+    {
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse("<html>not an api</html>")));
+
+        var error = Assert.Single(deltas, d => d.Kind == ChatDeltaKind.Error).Error!;
+        Assert.Equal(AiErrorKind.Provider, error.Kind);
+    }
+
+    [Fact]
+    public async Task A_stream_that_begins_inside_a_think_block_is_still_segregated()
+    {
+        // Some runner chat templates pre-fill the opening <think> into the prompt, so the model's output starts
+        // inside the block and only the closing tag is ever streamed.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"weighing options</think>The answer."}}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("The answer.", Text(deltas));
+        Assert.Equal("weighing options", Reasoning(deltas));
+    }
+
+    [Fact]
+    public async Task An_unclosed_think_block_is_flushed_as_reasoning_not_as_the_answer()
+    {
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"<think>still musing"}}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("", Text(deltas));
+        Assert.Equal("still musing", Reasoning(deltas));
+    }
+
+    [Fact]
+    public async Task Pali_diacritics_split_across_a_read_boundary_survive_intact()
+    {
+        // The corpus is full of multi-byte characters; a UTF-8 sequence straddling a buffer boundary must not
+        // be mangled into replacement characters.
+        var text = string.Concat(System.Linq.Enumerable.Repeat("appamado amatapadam thana ", 400))
+            .Replace("appamado", "appam\u0101do").Replace("amatapadam", "amatapada\u1E41")
+            .Replace("thana", "\u1E6Dh\u0101na");
+        var stream =
+            "data: {\"choices\":[{\"delta\":{\"content\":\"" + text + "\"}}]}\n\n" +
+            "data: [DONE]\n\n";
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal(text, Text(deltas));
+        Assert.DoesNotContain("\uFFFD", Text(deltas));
+    }
+
+    [Theory]
+    [InlineData("https://host/v1?api-version=2024-01", "https://host/v1/chat/completions?api-version=2024-01")]
+    [InlineData("https://HOST/V1/CHAT/COMPLETIONS", "https://host/V1/CHAT/COMPLETIONS")]
+    [InlineData("https://host/mychat/completions", "https://host/mychat/completions/chat/completions")]
+    public async Task Endpoint_resolution_survives_the_awkward_base_urls(string baseUrl, string expected)
+    {
+        var handler = StubHttpMessageHandler.Sse(HappyStream);
+        await CollectAsync(Provider(handler, baseUrl: baseUrl));
+
+        Assert.Equal(expected, handler.RequestedUrls.Single().ToString());
     }
 }
