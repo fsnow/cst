@@ -176,9 +176,17 @@ needs.
 glossing needing form→lemma resolution; with glosses gone, DPD is a prerequisite only for the *grammatical*
 presets, and surface B v1 runs without it.
 
-**Lemma data survives, for grammar and word-by-word only** — and survives on exactly the logic that condemns
-glossing. It is scoped to what the **user selected**, so the relevance signal comes from the user rather than
-from a heuristic of ours, and it is grammatical analysis rather than a definition to be believed.
+**Lemma data survives, for grammar and word-by-word only** — on exactly the logic that condemns glossing. It is
+scoped to what the **user selected**, so the relevance signal comes from the user rather than from a heuristic
+of ours, and it is grammatical analysis rather than a definition to be believed.
+
+**Whether it earns its place is an empirical question, deliberately left open** (fsnow, 2026-08-10): *"let's
+wait and see how real non-frontier models do with this before we rip it out."* The reasoning that removed
+glosses — clutter competing with the passage — applies here too in principle, and the difference is a judgement
+call that evidence can settle better than argument. **#587 should run it as a paired comparison**: the same
+grammar and word-by-word cases, with lemma data injected and withheld, across the model matrix. The interesting
+cell is the sub-frontier one, since a frontier model may carry the morphology anyway while a smaller model may
+be the one that needs it — or the one most crowded out by it. Do not remove it before that comparison exists.
 
 > **A DPD defect recorded here so it is not rediscovered.** DPD distinguishes homographs with numeric suffixes
 > on the lemma (`mata 1.1`), and those suffixed strings do not appear in the form index — roughly a quarter of
