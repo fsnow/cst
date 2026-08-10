@@ -32,13 +32,13 @@ public class AiContextBundlerTests : IDisposable
     // chars) while fitting the largest, so truncation can be asserted in both directions. `appamado` appears
     // so a gloss can be matched to a real word from the text.
     private static readonly string Verse =
-        string.Concat(Enumerable.Repeat("appamado amatapadam। pamado maccuno padam। ", 20));
+        string.Concat(Enumerable.Repeat("appam\u0101do amatapada\u1E41\u0964 pam\u0101do maccuno pada\u1E41\u0964 ", 20));
 
     private static readonly string Xml =
         "<body><div id=\"dn1\" type=\"book\">" +
         "<pb ed=\"V\" n=\"1.0001\"/>" +
         "<p rend=\"bodytext\" n=\"5\">" + Verse + "</p>" +
-        "<p rend=\"bodytext\" n=\"6\">appamatta na miyanti। ye pamatta yatha mata।</p>" +
+        "<p rend=\"bodytext\" n=\"6\">appamatt\u0101 na m\u012Byanti\u0964 ye pamatt\u0101 yath\u0101 mat\u0101\u0964</p>" +
         "</div></body>";
 
     private readonly string _dir;
@@ -52,42 +52,11 @@ public class AiContextBundlerTests : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    private ISettingsService Settings()
+    private ISettingsService Settings(string? dir = null)
     {
         var m = new Mock<ISettingsService>();
-        m.SetupGet(s => s.Settings).Returns(new Settings { XmlBooksDirectory = _dir });
+        m.SetupGet(s => s.Settings).Returns(new Settings { XmlBooksDirectory = dir ?? _dir });
         return m.Object;
-    }
-
-    /// <summary>A dictionary with a fixed set of headwords; anything else is a miss.</summary>
-    private sealed class StubDictionary : IDictionaryTool
-    {
-        private readonly Dictionary<string, string> _entries;
-
-        internal StubDictionary(Dictionary<string, string>? entries = null, bool anyInstalled = true)
-        {
-            _entries = entries ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            Languages = anyInstalled
-                ? new[] { new DictionaryLanguageInfo("dpd", new DictionarySourceInfo("Digital Pāḷi Dictionary",
-                    null, null, null, null, null, null)) }
-                : Array.Empty<DictionaryLanguageInfo>();
-        }
-
-        public IReadOnlyList<DictionaryLanguageInfo> Languages { get; }
-
-        public Task<IReadOnlyList<DictionaryEntry>> LookupAsync(
-            DictionaryRequest request, CancellationToken ct = default)
-        {
-            // Mirrors the real tool: an exact hit, otherwise the NEAREST headword rather than nothing.
-            if (_entries.TryGetValue(request.Query, out var meaning))
-                return Task.FromResult<IReadOnlyList<DictionaryEntry>>(
-                    new[] { new DictionaryEntry(request.Query, meaning, "Digital Pāḷi Dictionary", 42L) });
-
-            var neighbour = _entries.Keys.FirstOrDefault();
-            return Task.FromResult<IReadOnlyList<DictionaryEntry>>(neighbour is null
-                ? Array.Empty<DictionaryEntry>()
-                : new[] { new DictionaryEntry(neighbour, _entries[neighbour], "Digital Pāḷi Dictionary", 7L) });
-        }
     }
 
     private sealed class StubLemmas : ILemmaSearchService
@@ -120,16 +89,16 @@ public class AiContextBundlerTests : IDisposable
             Task.FromResult<LemmaSearchResult?>(null);
     }
 
-    private AiContextBundler Bundler(IDictionaryTool? dictionary = null, ILemmaSearchService? lemmas = null) =>
-        new(new PassageTool(Settings()),
-            dictionary ?? new StubDictionary(),
+    private AiContextBundler Bundler(ILemmaSearchService? lemmas = null, string? booksDir = null) =>
+        new(new PassageTool(Settings(booksDir)),
             lemmas,
             appVersion: "6.0.0-test",
             NullLogger<AiContextBundler>.Instance);
 
     private static AiContextRequest Request(
-        AiTask task = AiTask.Explain, string? selection = null, string language = "English") =>
-        new(task, BookId, new NavigationReference.Paragraph(5), selection, language);
+        AiTask task = AiTask.Explain, string? selection = null, string language = "English",
+        int paragraph = 5) =>
+        new(task, BookId, language, new NavigationReference.Paragraph(paragraph), selection);
 
     private static BundlePart Part(AiContextBundle bundle, string name) =>
         bundle.Budget.Parts.Single(p => p.Name == name);
@@ -139,7 +108,7 @@ public class AiContextBundlerTests : IDisposable
     {
         var bundle = await Bundler().BuildAsync(Request());
 
-        Assert.Contains("appamado", bundle.Passage.Text);
+        Assert.Contains("appam\u0101do", bundle.Passage.Text);
         Assert.Equal(5, bundle.Passage.ParagraphNumber);
     }
 
@@ -171,128 +140,12 @@ public class AiContextBundlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Projects_gloss_html_to_plain_text()
-    {
-        // MeaningHtml is an HTML fragment; markup in the prompt wastes tokens and gets echoed into answers.
-        var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["appamado"] = "<b>heedfulness</b>, diligence &amp; vigilance<br/>",
-        });
-
-        var bundle = await Bundler(dictionary).BuildAsync(Request());
-
-        var gloss = Assert.Single(bundle.Glosses, g => g.Match == GlossMatch.Exact);
-        Assert.Equal("heedfulness, diligence & vigilance", gloss.Meaning);
-        Assert.Equal("Digital Pāḷi Dictionary", gloss.Attribution);
-    }
-
-    [Fact]
-    public async Task A_near_miss_is_labelled_as_one_rather_than_dropped_or_disguised()
-    {
-        // The lookup falls back to the nearest headword on a miss. Neither extreme is right: passing it off as
-        // a definition invents one, and dropping it silently makes the app judge relevance it cannot judge.
-        // It is carried with its provenance, for the model to weigh.
-        var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["something-else-entirely"] = "not a definition of anything in the passage",
-        });
-
-        var bundle = await Bundler(dictionary).BuildAsync(Request());
-
-        // Nothing in the passage shares enough leading text with the sole headword to be a plausible
-        // candidate, so nothing is carried — and had one been, it would have been labelled a Neighbour.
-        Assert.All(bundle.Glosses, g => Assert.Equal(GlossMatch.Neighbour, g.Match));
-        Assert.True(bundle.Glosses.Count <= 5);
-    }
-
-    [Fact]
-    public async Task An_inflected_form_is_glossed_through_its_lemma()
-    {
-        // The case a headword-matching filter gets wrong for most of running Pāli: the text says `appamado`,
-        // the dictionary says `appamada`. Without lemma resolution the correct entry is simply missed.
-        var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["appamada"] = "heedfulness, diligence",
-        });
-        var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["appamado"] = new[] { new LemmaCandidate(1, "appamada", "masc", "heedfulness", null) },
-        });
-
-        var bundle = await Bundler(dictionary, lemmas).BuildAsync(Request(selection: "appamado"));
-
-        var gloss = Assert.Single(bundle.Glosses, g => g.Match == GlossMatch.ViaLemma);
-        Assert.Equal("appamado", gloss.Form);
-        Assert.Equal("appamada", gloss.Headword);
-    }
-
-    [Fact]
-    public async Task A_homograph_yields_every_reading_for_the_model_to_choose_between()
-    {
-        // DPD returns several candidates for a homographic form and says the caller disambiguates. Dropping
-        // any of them would be the app quietly making a call only the context can settle.
-        var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["mata1"] = "dead",
-            ["mata2"] = "thought, known",
-        });
-        var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["mata"] = new[]
-            {
-                new LemmaCandidate(1, "mata1", "pp", "dead", null),
-                new LemmaCandidate(2, "mata2", "pp", "thought", null),
-            },
-        });
-
-        var bundle = await Bundler(dictionary, lemmas).BuildAsync(Request(selection: "mata"));
-
-        var readings = bundle.Glosses.Where(g => g.Form == "mata").ToList();
-        Assert.Equal(2, readings.Count);
-        Assert.All(readings, g => Assert.Equal(GlossMatch.ViaLemma, g.Match));
-    }
-
-    [Fact]
-    public async Task Glosses_key_off_the_selection_when_there_is_one()
-    {
-        var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["appamado"] = "heedfulness",
-            ["maccuno"] = "of death",
-        });
-
-        var bundle = await Bundler(dictionary).BuildAsync(Request(selection: "appamado"));
-
-        Assert.Equal("appamado", Assert.Single(bundle.Glosses).Form);
-    }
-
-    [Fact]
     public async Task A_selection_absent_from_the_window_is_flagged_rather_than_hidden()
     {
         var bundle = await Bundler().BuildAsync(Request(selection: "nowhere in this book"));
 
         Assert.False(bundle.Selection!.FoundInWindow);
         Assert.Contains("not found", Part(bundle, BundlePartNames.Selection).Detail);
-    }
-
-    [Fact]
-    public async Task A_truncated_passage_is_reported_so_the_answer_can_be_badged()
-    {
-        // Word-by-word has the smallest window and the fixture overflows it. A translation labelled as being
-        // of this passage, silently truncated, is the fidelity hazard this flag exists to surface.
-        var bundle = await Bundler().BuildAsync(Request(AiTask.WordByWord));
-
-        Assert.True(bundle.Budget.PassageWasTrimmed);
-        Assert.Equal(BundlePartState.TrimmedForBudget, Part(bundle, BundlePartNames.Passage).State);
-    }
-
-    [Fact]
-    public async Task A_passage_that_fits_is_not_reported_as_trimmed()
-    {
-        var bundle = await Bundler().BuildAsync(Request(AiTask.Translate));
-
-        Assert.False(bundle.Budget.PassageWasTrimmed);
-        Assert.Equal(BundlePartState.Included, Part(bundle, BundlePartNames.Passage).State);
     }
 
     [Fact]
@@ -321,10 +174,10 @@ public class AiContextBundlerTests : IDisposable
     {
         var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
         {
-            ["appamado"] = new[] { new LemmaCandidate(1, "appamāda", "masc", "heedfulness", null) },
+            ["appam\u0101do"] = new[] { new LemmaCandidate(1, "appam\u0101da", "masc", "heedfulness", null) },
         });
 
-        var bundle = await Bundler(lemmas: lemmas).BuildAsync(Request(AiTask.Grammar, selection: "appamado"));
+        var bundle = await Bundler(lemmas: lemmas).BuildAsync(Request(AiTask.Grammar, selection: "appam\u0101do"));
 
         var entry = Assert.Single(bundle.Lemmas);
         Assert.Equal("appamāda", entry.Lemma);
@@ -337,7 +190,7 @@ public class AiContextBundlerTests : IDisposable
         // A paradigm is not what "explain this passage" needs, and every lookup costs.
         var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
         {
-            ["appamado"] = new[] { new LemmaCandidate(1, "appamāda", "masc", "heedfulness", null) },
+            ["appam\u0101do"] = new[] { new LemmaCandidate(1, "appam\u0101da", "masc", "heedfulness", null) },
         });
 
         var bundle = await Bundler(lemmas: lemmas).BuildAsync(Request(AiTask.Explain));
@@ -347,39 +200,94 @@ public class AiContextBundlerTests : IDisposable
     }
 
     [Fact]
-    public async Task No_dictionaries_installed_is_reported_as_unavailable()
-    {
-        var bundle = await Bundler(new StubDictionary(anyInstalled: false)).BuildAsync(Request());
-
-        Assert.Equal(BundlePartState.Unavailable, Part(bundle, BundlePartNames.Glosses).State);
-        Assert.Empty(bundle.Glosses);
-    }
-
-    [Fact]
     public async Task Stamps_provenance_so_an_eval_regression_is_attributable()
     {
         var bundle = await Bundler().BuildAsync(Request());
 
         Assert.Equal("6.0.0-test", bundle.Provenance.AppVersion);
-        Assert.Contains("Digital Pāḷi Dictionary", bundle.Provenance.DictionarySources);
+        Assert.Null(bundle.Provenance.LemmaAssetVersion);   // no asset in this fixture
     }
 
     [Fact]
     public async Task An_unknown_book_fails_loudly_rather_than_bundling_an_empty_passage()
     {
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => Bundler().BuildAsync(new AiContextRequest(AiTask.Explain, "not-a-book.xml")));
+        await Assert.ThrowsAsync<AiContextException>(
+            () => Bundler().BuildAsync(new AiContextRequest(AiTask.Explain, "not-a-book.xml", "English")));
     }
 
     [Fact]
     public async Task The_bundle_is_data_and_survives_a_round_trip_to_json()
     {
         // Being inspectable data rather than a prompt string is what makes this testable and dumpable at all.
+        // Deserializing rather than substring-matching, because the default encoder escapes the diacritics to
+        // \uXXXX — which round-trips correctly but would make a text assertion test the encoder, not the bundle.
         var bundle = await Bundler().BuildAsync(Request());
 
         var json = System.Text.Json.JsonSerializer.Serialize(bundle);
+        var back = System.Text.Json.JsonSerializer.Deserialize<AiContextBundle>(json)!;
 
-        Assert.Contains("appamado", json);
-        Assert.Contains("paragraph 5", json);
+        Assert.Equal(bundle.Passage.Text, back.Passage.Text);
+        Assert.Contains("appam\u0101do", back.Passage.Text);
+        Assert.Equal(bundle.Citation.NormalizedReference, back.Citation.NormalizedReference);
+    }
+
+    [Fact]
+    public async Task A_catalogued_book_whose_xml_is_missing_fails_loudly()
+    {
+        // Reachable on a partial download. The passage tool signals it as EMPTY TEXT with the reason left in
+        // NormalizedReference — so bundling it would put "book not available" in the citation the app renders
+        // as authoritative.
+        var empty = Path.Combine(Path.GetTempPath(), "cst-bundle-empty-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(empty);
+        try
+        {
+            var error = await Assert.ThrowsAsync<AiContextException>(
+                () => Bundler(booksDir: empty).BuildAsync(Request()));
+
+            Assert.Contains("No passage text", error.Message);
+        }
+        finally
+        {
+            Directory.Delete(empty, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_reference_the_book_does_not_have_fails_loudly()
+    {
+        var error = await Assert.ThrowsAsync<AiContextException>(
+            () => Bundler().BuildAsync(Request(paragraph: 9999)));
+
+        Assert.Contains("No passage text", error.Message);
+    }
+
+    [Fact]
+    public async Task An_empty_apparatus_is_reported_as_empty_not_as_unavailable()
+    {
+        // Unavailable means "an asset is not installed". A window with no print notes is healthy — most windows
+        // outside mula texts have none — and conflating the two would nag about a missing download.
+        var bundle = await Bundler().BuildAsync(Request());
+
+        Assert.Equal(BundlePartState.Empty, Part(bundle, BundlePartNames.Apparatus).State);
+    }
+
+    [Fact]
+    public async Task The_window_reports_that_it_may_extend_past_the_cited_reference()
+    {
+        // The reader takes a character budget from the reference and flows on into what follows, so the text can
+        // carry more than the citation names. That is what is actually known — there is deliberately no
+        // "was truncated" flag, since NextCursor means end-of-FILE, not end-of-paragraph.
+        var bundle = await Bundler().BuildAsync(Request(AiTask.WordByWord));
+
+        Assert.True(bundle.Budget.WindowMayExtendPastReference);
+    }
+
+    [Fact]
+    public async Task Diacritics_survive_the_round_trip_into_the_bundle()
+    {
+        var bundle = await Bundler().BuildAsync(Request());
+
+        Assert.Contains("appam\u0101do", bundle.Passage.Text);
+        Assert.DoesNotContain("\uFFFD", bundle.Passage.Text);
     }
 }

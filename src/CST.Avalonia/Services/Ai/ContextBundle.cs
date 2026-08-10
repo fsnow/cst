@@ -30,9 +30,9 @@ public enum AiTask
 public sealed record AiContextRequest(
     AiTask Task,
     string BookId,
+    string OutputLanguage,
     CST.Navigation.NavigationReference? Reference = null,
     string? SelectionText = null,
-    string OutputLanguage = "English",
     string? UserQuestion = null);
 
 /// <summary>The user's selection, once the selection pipeline has normalized it.</summary>
@@ -41,57 +41,6 @@ public sealed record AiContextRequest(
 /// means the model is being shown a selection the surrounding passage may not contain — worth knowing, and
 /// recorded in the budget report rather than silently ignored.</param>
 public sealed record SelectionContext(string Text, bool FoundInWindow);
-
-/// <summary>
-/// How a dictionary entry was reached from the word in the text. Carried so the model can weigh it: the app
-/// reports provenance, the model judges fit.
-/// </summary>
-public enum GlossMatch
-{
-    /// <summary>The word in the text IS the headword.</summary>
-    Exact,
-
-    /// <summary>
-    /// The word was resolved to a lemma by DPD and the lemma's entry is what appears here. The normal case for
-    /// running text, where nearly every word is inflected — <c>appamādo</c> in the text, <c>appamāda</c> in the
-    /// dictionary.
-    /// </summary>
-    ViaLemma,
-
-    /// <summary>
-    /// Neither: the nearest headword sharing a leading prefix. <b>Weak — this is not a definition of the word.</b>
-    /// Kept rather than dropped because it is occasionally the right entry under an unusual sandhi, but it must
-    /// be labelled so the model does not read it as authoritative.
-    /// </summary>
-    Neighbour,
-}
-
-/// <summary>
-/// A dictionary gloss for a word in the passage, projected to PLAIN TEXT.
-///
-/// <para><c>DictionaryEntry.MeaningHtml</c> is an HTML fragment. Injecting markup wastes tokens on tags the
-/// model must ignore and invites it to echo them back into the answer, so the projection happens here rather
-/// than being left to the prompt template.</para>
-///
-/// <para><b>A gloss is a candidate, not a verdict — including an exact one.</b> A Pāli surface form can be a
-/// homograph of an entirely different word, not merely a different sense of the same one, and DPD models that
-/// directly: <c>ResolveWord</c> returns SEVERAL lemma candidates for such a form and says the caller
-/// disambiguates. So several entries here may share a <see cref="Form"/> while being alternative readings of
-/// it. Deciding which one the passage supports is a job only something reading the context can do; the app's
-/// responsibility is to report faithfully what it found and by what route (<see cref="Match"/>). A filter here
-/// that guessed on the model's behalf would just be a silent, less-informed version of the same judgement, and
-/// the prompt template says as much explicitly (#582).</para>
-/// </summary>
-/// <param name="Form">The word as it appears in the passage.</param>
-/// <param name="Attribution">The dictionary's own recorded citation, so a gloss the model repeats can be
-/// attributed honestly. Null when the dictionary records none — never inferred.</param>
-public sealed record GlossEntry(
-    string Form,
-    string Headword,
-    string Meaning,
-    GlossMatch Match,
-    string? Attribution,
-    long? LemmaId);
 
 /// <summary>A word's stem and grammatical analysis, from the optional DPD-lemma asset.</summary>
 public sealed record LemmaEntry(
@@ -122,11 +71,12 @@ public sealed record CitationRef(
 
 /// <summary>
 /// What produced this bundle. Stamped so a cross-release evaluation regression (#587) is attributable rather
-/// than mysterious — the corpus is corrected over time and dictionaries are separately versioned assets.
+/// than mysterious — the corpus is corrected over time and the lemma data is a separately versioned asset.
 /// </summary>
+/// <param name="LemmaAssetVersion">Null when no DPD-lemma asset is installed.</param>
 public sealed record Provenance(
     string AppVersion,
-    IReadOnlyList<string> DictionarySources);
+    string? LemmaAssetVersion);
 
 /// <summary>Why a part of the bundle is or is not present.</summary>
 public enum BundlePartState
@@ -143,28 +93,40 @@ public enum BundlePartState
     /// look like a budget problem, and sends whoever is debugging it to the wrong place entirely.
     /// </summary>
     Unavailable,
+
+    /// <summary>
+    /// Gathered successfully; there was simply nothing to gather. <b>Also distinct from
+    /// <see cref="Unavailable"/></b>, for the same reason: a window with no print apparatus is healthy — most
+    /// windows outside mūla texts have none — and reporting that as "unavailable" would have consumers nagging
+    /// about a missing asset on perfectly good bundles.
+    /// </summary>
+    Empty,
 }
 
 /// <summary>One gathered part and how it fared.</summary>
 public sealed record BundlePart(string Name, BundlePartState State, string? Detail = null);
 
 /// <summary>
-/// What was included, what was cut, and what was missing. Drives the "partial passage" badge (#582): a
-/// translation presented as being of a passage that was silently truncated is a fidelity hazard specific to
-/// this corpus, so trimming must be visible rather than merely logged.
+/// What was included, what was cut, and what was missing.
+///
+/// <para><b>There is deliberately no "the passage was truncated" flag.</b> An earlier version derived one from
+/// <c>PassageResult.NextCursor</c>, which was wrong: that cursor is non-null whenever the window ends before
+/// the end of the BOOK FILE, not before the end of the requested paragraph. On the real corpus it is set for
+/// almost every request, so the badge it drove would have fired always — and a fidelity signal that always
+/// fires is one users learn to ignore, which is worse than not having it. Reporting a genuine paragraph-scoped
+/// trim needs the passage reader to say whether the window covered the reference; until it can,
+/// <see cref="WindowMayExtendPastReference"/> states only what is actually known.</para>
 /// </summary>
-public sealed record BudgetReport(IReadOnlyList<BundlePart> Parts, int ApproximateTokens)
-{
-    public bool PassageWasTrimmed =>
-        Parts.Any(p => p.Name == BundlePartNames.Passage && p.State == BundlePartState.TrimmedForBudget);
-}
+public sealed record BudgetReport(
+    IReadOnlyList<BundlePart> Parts,
+    int ApproximateTokens,
+    bool WindowMayExtendPastReference);
 
 /// <summary>Stable part names, so consumers match on a constant rather than a string literal.</summary>
 public static class BundlePartNames
 {
     public const string Passage = "passage";
     public const string Selection = "selection";
-    public const string Glosses = "glosses";
     public const string Lemmas = "lemmas";
     public const string Apparatus = "apparatus";
 }
@@ -190,7 +152,6 @@ public sealed record AiContextBundle(
     string? UserQuestion,
     PassageResult Passage,
     SelectionContext? Selection,
-    IReadOnlyList<GlossEntry> Glosses,
     IReadOnlyList<LemmaEntry> Lemmas,
     BookContext Book,
     CitationRef Citation,
