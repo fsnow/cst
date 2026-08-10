@@ -248,6 +248,17 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   the checkbox "Allow agents to drive the reader (navigate and highlight)" (it sits under "Run the local API
   server"). That is the user's decision. If you get a 403, tell them that exact setting to turn on - do not
   look for another way to move their window.
+- `POST /v1/ai/context-preview` - `{ task, userQuestion?, outputLanguage? }` -> the CONTEXT BUNDLE the in-app AI
+  feature would send a model for WHAT THE READER IS CURRENTLY SHOWING: the passage window, the citation the app
+  renders (book, normalized reference, per-edition pages), the book's classification, lemma candidates for the
+  grammatical tasks, and a budget report of what was gathered, trimmed or unavailable. No model is called and no
+  key is involved - it is a read of local state, for INSPECTING what the model would be given. `task` is one of
+  `explain`, `translate`, `grammar`, `wordByWord` (it selects the passage budget and whether lemmas are
+  gathered, so the same position answers differently per task). NOTE the body carries ONLY what a user would
+  choose: the book, position and selection come from the LIVE reader, not from you - to preview a specific
+  passage, drive the reader with `/v1/navigate` first, then call this. Answers `409` with
+  `reason: "no-book-open"` or `reason: "position-unknown"` rather than guessing; the second means the reading
+  position (which is derived from scroll) has not settled, and is transient - retry after a moment.
 <!--/doc:navigate-->
 <!--doc:dictionary-->
 - `GET  /v1/dictionary/languages` - the available dictionaries: each `{ language, source }`, where `source` is
