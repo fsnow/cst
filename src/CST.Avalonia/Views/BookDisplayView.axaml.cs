@@ -52,7 +52,15 @@ public partial class BookDisplayView : UserControl
     private System.Timers.Timer? _resizeSettleTimer = null;
     private bool _resizeInProgress = false;
     private double _lastKnownWidth = 0, _lastKnownHeight = 0;
-    private const int ResizeSettleMs = 250;   // > the injected JS resize handler's 100ms cache rebuild
+    internal const int ResizeSettleMs = 250;   // debounce for a resize/zoom gesture, before restoring
+    /// <summary>
+    /// Trailing-edge debounce for the in-page anchor-cache rebuild, injected into the JS.
+    ///
+    /// MUST stay greater than <see cref="ResizeSettleMs"/>. The zoom restore waits for the CACHE_BUILT this
+    /// rebuild emits, and the ordering guarantee — that the signal cannot arrive before the restore is
+    /// waiting for it — rests entirely on this being the longer of the two. (fable review)
+    /// </summary>
+    internal const int AnchorRebuildDebounceMs = 300;
     private readonly string _tabId = $"tab_{DateTime.Now.Ticks}_{Guid.NewGuid().ToString("N")[..8]}";
     private string? _tempHtmlFilePath;   // the temp HTML file this View last loaded from; deleted on dispose (BOOK-8)
 
@@ -657,15 +665,26 @@ public partial class BookDisplayView : UserControl
     private System.Timers.Timer? _zoomSettleTimer = null;
     private ReadingPositionToken? _zoomRestoreToken = null;
     // Marks a zoom BURST in progress, exactly as _resizeInProgress does for a drag. Holding Cmd+ forwards
-    // auto-repeat, and the ~200ms status tick keeps re-capturing _lastPositionToken throughout — against a
-    // cache the in-page resize handler rebuilds ~100ms after each step. So by the second step the rolling
-    // token already describes the DRIFTED position, and re-snapshotting per step would commit that drift.
-    // Snapshot once, on the first step, while the token is still pre-zoom. (fable review)
+    // auto-repeat, and the ~200ms status tick keeps re-capturing _lastPositionToken throughout — so by the
+    // second step the rolling token already describes the DRIFTED position, and re-snapshotting per step
+    // would commit that drift. Snapshot once, on the first step, while the token is still pre-zoom.
+    // (fable review)
     private bool _zoomInProgress = false;
     // Bumped on every completed navigation. A deferred scroll restoration records the generation that armed
     // it, so one belonging to a superseded document can be recognised and dropped. -1 means none pending.
     private int _navGeneration = 0;
     private int _deferredScrollGeneration = -1;
+    // 1 while a finished zoom burst is waiting for the reflow to land before restoring the position.
+    private int _zoomAwaitingCacheBuilt = 0;
+    // Identifies the current await. DispatcherTimer.RunOnce cannot be cancelled, so a backstop from a
+    // superseded burst stays in flight; stamping it lets the stale one recognise itself and do nothing.
+    private int _zoomAwaitGeneration = 0;
+    // The navigation the current await belongs to, so a restore cannot be applied to a replaced document.
+    private int _zoomAwaitNavGeneration = -1;
+    // Backstop only. The real trigger is CACHE_BUILT; this bounds the wait if the page never reports one
+    // (the same failure the anchor-cache watchdog exists for). Generous, because firing early is the very
+    // bug this replaced — a late restore is merely visible, an early one is wrong.
+    private const int ZoomReflowBackstopMs = 1500;
 
     /// <summary>
     /// Subscribes this view to zoom changes for its script. Called once from the constructor.
@@ -701,6 +720,11 @@ public partial class BookDisplayView : UserControl
         _zoomSettleTimer?.Stop();
         _zoomSettleTimer?.Dispose();
         _zoomSettleTimer = null;
+
+        // Clear the await so a CACHE_BUILT or backstop arriving after shutdown cannot try to scroll a
+        // disposed browser. RestoreZoomTokenNow also checks _isShutDown; this makes it two locks on one door.
+        CancelPendingZoomAwait();
+        _zoomRestoreToken = null;
     }
 
     /// <summary>
@@ -746,6 +770,20 @@ public partial class BookDisplayView : UserControl
             return;
         }
 
+        if (preservePosition)
+        {
+            // A press arriving while the PREVIOUS burst is still waiting for its reflow signal is a
+            // continuation of that burst, not a new one — the user simply hesitated. Cancelling the pending
+            // await and resuming keeps the original pre-zoom token. Without this the await would be consumed
+            // mid-burst (restoring a half-zoomed position and nulling the token), and the real final restore
+            // would then find nothing to restore. (fable review)
+            if (CancelPendingZoomAwait())
+            {
+                _zoomInProgress = true;
+                _logger.Debug("Zoom resumed before the previous burst's reflow landed - keeping the original snapshot");
+            }
+        }
+
         // Snapshot BEFORE the reflow, and only on the FIRST step of a burst. The rolling token is refreshed
         // by the ~200ms status tick, so it is at most one tick stale but still pre-reflow — the best
         // available, because a zoom's resize event only arrives after layout has already moved. Re-taking it
@@ -779,11 +817,10 @@ public partial class BookDisplayView : UserControl
     /// <summary>
     /// Restores the reading position once the zoom reflow has settled.
     ///
-    /// The delay has to outlast the in-page resize handler's own 100ms debounce, because a browser zoom
-    /// fires <c>resize</c> and that handler rebuilds the anchor cache — restoring against the stale cache
-    /// would scroll to pre-zoom pixel positions. Same constant as the resize path, for the same reason.
-    /// A repeated press re-arms the timer, so holding Cmd+ restores once at the end rather than fighting
-    /// each intermediate step.
+    /// This detects only that the KEYPRESSES have stopped; it does not mean the reflow has landed, which is
+    /// why <see cref="RestoreAfterZoom"/> then waits for CACHE_BUILT rather than restoring here. A repeated
+    /// press re-arms the timer, so holding Cmd+ restores once at the end rather than fighting each
+    /// intermediate step.
     /// </summary>
     private void StartZoomSettle()
     {
@@ -807,11 +844,88 @@ public partial class BookDisplayView : UserControl
         _zoomInProgress = false;
         if (_isShutDown) return;
 
+        if (_zoomRestoreToken == null || !this.IsVisible)
+        {
+            _zoomRestoreToken = null;
+            return;
+        }
+
+        // The burst has ended, but that does NOT mean the reflow has landed. SetZoomLevel is a
+        // browser→renderer IPC round trip, so the keypresses stopping tells us nothing about whether the
+        // renderer has finished laying out at the new zoom. Restoring on a fixed delay computes the scroll
+        // target against whatever layout happens to exist at that moment — which is the old one whenever
+        // the renderer is slow.
+        //
+        // "Slow" is not hypothetical: with a second book open in a floating window, BOTH browsers reflow on
+        // every step, and a fast zoom in and out reliably lost the position on the focused book while the
+        // single-book case looked fine. Same open-loop weakness the load path had; this is the same fix.
+        //
+        // The zoom's own resize event drives the (debounced) anchor-cache rebuild in the page, and build()
+        // emits CACHE_BUILT only after reading real positions — so that signal means layout has genuinely
+        // settled at the new zoom. Wait for it, with a backstop in case it never comes.
+        //
+        // Ordering is correct BY CONSTRUCTION rather than by luck: the in-page debounce
+        // (AnchorRebuildDebounceMs) is deliberately longer than this settle (ResizeSettleMs), and its timer
+        // starts from the renderer's last resize — which necessarily postdates the last SetZoomLevel
+        // arriving. So the CACHE_BUILT that proves the reflow landed can never precede the await being
+        // armed here. An earlier revision instead compared a build counter to detect a signal that had
+        // already arrived; that was unsound, because a build could START before the zoom and have its title
+        // reach C# after, satisfying the counter while reflecting the OLD layout. Making the two delays
+        // ordered removes the hole rather than testing for it. (fable review)
+        var awaitGeneration = Interlocked.Increment(ref _zoomAwaitGeneration);
+        Volatile.Write(ref _zoomAwaitNavGeneration, Volatile.Read(ref _navGeneration));
+        Interlocked.Exchange(ref _zoomAwaitingCacheBuilt, 1);
+
+        _logger.Debug("Zoom burst ended - awaiting CACHE_BUILT before restoring (above={Above}, below={Below}, frac={Frac})",
+            _zoomRestoreToken.Above, _zoomRestoreToken.Below, _zoomRestoreToken.Fraction);
+
+        // Stamped with the await it belongs to: an uncancellable RunOnce from a PREVIOUS burst would
+        // otherwise still be in flight and could consume a later burst's await early — restoring against an
+        // unsettled layout, which is the very bug this waiting exists to prevent. (fable review)
+        DispatcherTimer.RunOnce(() => RestoreZoomTokenNow(awaitGeneration),
+            TimeSpan.FromMilliseconds(ZoomReflowBackstopMs));
+    }
+
+    /// <summary>
+    /// Cancels a pending post-zoom await, returning true if one was actually pending. Bumping the
+    /// generation is what neutralises the backstop timer already in flight for it.
+    /// </summary>
+    private bool CancelPendingZoomAwait()
+    {
+        if (Interlocked.Exchange(ref _zoomAwaitingCacheBuilt, 0) == 0) return false;
+        Interlocked.Increment(ref _zoomAwaitGeneration);
+        return true;
+    }
+
+    /// <summary>
+    /// Performs the post-zoom position restore exactly once, for the await identified by
+    /// <paramref name="awaitGeneration"/> — whichever of the CACHE_BUILT signal or the backstop reaches it
+    /// first. A stale caller (a backstop from a superseded burst, or a signal belonging to a document that
+    /// has since been replaced) is dropped.
+    /// </summary>
+    private void RestoreZoomTokenNow(int awaitGeneration)
+    {
+        if (Volatile.Read(ref _zoomAwaitGeneration) != awaitGeneration) return;
+
+        // A navigation since the await was armed means this token describes a document that no longer
+        // exists. Anchor names are stable across scripts, so the scroll would SUCCEED rather than no-op —
+        // landing the new document at the old position and fighting ExecutePendingRestoration. (fable review)
+        if (Volatile.Read(ref _navGeneration) != Volatile.Read(ref _zoomAwaitNavGeneration))
+        {
+            _logger.Debug("Dropping post-zoom restore - the document was replaced while waiting");
+            Interlocked.Exchange(ref _zoomAwaitingCacheBuilt, 0);
+            _zoomRestoreToken = null;
+            return;
+        }
+
+        // Interlocked: the signal and the backstop can both arrive, and only the first may act.
+        if (Interlocked.Exchange(ref _zoomAwaitingCacheBuilt, 0) == 0) return;
+
         var token = _zoomRestoreToken;
         _zoomRestoreToken = null;
-        if (token == null || !this.IsVisible) return;
+        if (token == null || _isShutDown || !this.IsVisible) return;
 
-        _logger.Debug("Zoom settled - restoring reading position (above={Above}, below={Below}, frac={Frac})",
+        _logger.Debug("Zoom reflow settled - restoring reading position (above={Above}, below={Below}, frac={Frac})",
             token.Above, token.Below, token.Fraction);
         ScrollToPositionToken(token);
     }
@@ -1759,11 +1873,29 @@ public partial class BookDisplayView : UserControl
                         cstBuildWhenReady();
                     }}
 
-                    // Rebuild cache when window is resized
+                    // Rebuild the cache once the resizing STOPS. (#572)
+                    //
+                    // This used to schedule an unconditional setTimeout(build, 100) on every resize event,
+                    // with no clearTimeout — so a burst of resizes queued one full rebuild each. A zoom
+                    // burst of ten steps meant ten complete rebuilds of a 1000+ anchor cache, and a window
+                    // drag was worse. Measured in the log as CACHE_BUILT firing six-plus times per burst,
+                    // ~150ms apart, still arriving well after the burst had ended.
+                    //
+                    // That made CACHE_BUILT useless as a 'layout has settled' signal — it only ever meant
+                    // 'a build queued 100ms ago just finished', which could easily predate the last resize.
+                    // The zoom restore waits on that signal, so it was restoring against a layout that was
+                    // still reflowing, and the position drifted. Debouncing makes the signal mean what its
+                    // name says, and removes the redundant rebuilds. (#434, #321)
+                    // The delay is deliberately LONGER than the C# zoom settle (ResizeSettleMs, 250ms), and
+                    // this timer starts from the renderer's last resize — which necessarily postdates the
+                    // last SetZoomLevel arriving. That ordering is what lets the zoom restore simply wait
+                    // for CACHE_BUILT: the signal can never arrive before something is waiting for it, so
+                    // no counter or already-arrived check is needed. Keep the two in step if either moves.
                     window.addEventListener('resize', function() {{
-                        setTimeout(function() {{
-                            window.cstAnchorCache.build();
-                        }}, 100); // Small delay to let text reflow
+                        clearTimeout(window.__cstResizeRebuildTimer);
+                        window.__cstResizeRebuildTimer = setTimeout(function() {{
+                            window.cstAnchorCache.build();   // emits CACHE_BUILT when the anchors are populated
+                        }}, {AnchorRebuildDebounceMs});
                     }});
                 }})();
             ";
@@ -2159,6 +2291,16 @@ public partial class BookDisplayView : UserControl
                     // trip that nothing here bounds. (fable review)
                     if (Volatile.Read(ref _deferredScrollGeneration) == Volatile.Read(ref _navGeneration))
                         Dispatcher.UIThread.Post(RunDeferredScrollRestoration);
+
+                    // #572: same signal, for a LIVE zoom. A finished zoom burst waits here rather than on a
+                    // fixed delay, because the burst ending says nothing about whether the renderer has
+                    // finished reflowing — and restoring against a not-yet-reflowed layout is what lost the
+                    // position when a second book was open.
+                    if (Volatile.Read(ref _zoomAwaitingCacheBuilt) == 1)
+                    {
+                        var awaitGen = Volatile.Read(ref _zoomAwaitGeneration);
+                        Dispatcher.UIThread.Post(() => RestoreZoomTokenNow(awaitGen));
+                    }
                     // Surface the resolved page NOW instead of waiting for the next scroll tick
                     // (≤200ms) plus its 200ms pre-lock delay. Same lock discipline as
                     // OnScrollPositionCheck: skip (don't block) if JS work is in progress —
