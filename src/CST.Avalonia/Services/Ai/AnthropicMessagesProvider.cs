@@ -65,7 +65,8 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         var endpoint = AiHttp.ResolveEndpoint(
             string.IsNullOrWhiteSpace(_options.BaseUrl) ? AnthropicOptions.DefaultBaseUrl : _options.BaseUrl!,
             versionedPath: "v1/messages",
-            path: "messages");
+            path: "messages",
+            convention: BaseUrlConvention.ExcludesVersion);
 
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {

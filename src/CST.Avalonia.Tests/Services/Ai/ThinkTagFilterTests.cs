@@ -93,6 +93,21 @@ public class ThinkTagFilterTests
     }
 
     [Fact]
+    public void The_guarantee_survives_three_way_chunkings_too()
+    {
+        // Two boundaries can force held text to be re-held rather than resolved, which two-way splits never
+        // exercise.
+        const string stream = "musing</think>The answer.";
+        for (var i = 1; i < stream.Length - 1; i++)
+        for (var j = i + 1; j < stream.Length; j++)
+        {
+            var (visible, _) = Run(stream[..i], stream[i..j], stream[j..]);
+            Assert.DoesNotContain("<", visible);
+            Assert.EndsWith("The answer.", visible);
+        }
+    }
+
+    [Fact]
     public void Text_already_emitted_is_not_retroactively_reclassified()
     {
         // Once visible text has been returned it cannot be recalled, so a later stray close tag must not move

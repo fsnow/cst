@@ -78,12 +78,11 @@ internal static class SseReader
 
             try
             {
-                line = await reader.ReadLineAsync(deadline.Token).ConfigureAwait(false);
-
-                // Until a DATA line has arrived we are still waiting on time-to-first-token, so each read keeps
-                // the long window. Rescheduling to the idle window here unconditionally would have flipped it on
-                // the first preamble comment, which is the same defect the sawAnyData pivot exists to close.
+                // Armed BEFORE the read, so the window in force always matches the pivot. Arming afterwards
+                // left one read carrying the previous line's verdict — harmless (always the more lenient of the
+                // two) but it made the timeout message name a window that had not applied.
                 deadline.CancelAfter(sawAnyData ? idleTimeout : firstEventTimeout);
+                line = await reader.ReadLineAsync(deadline.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

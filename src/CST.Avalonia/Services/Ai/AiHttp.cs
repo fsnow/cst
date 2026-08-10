@@ -10,6 +10,28 @@ using System.Threading.Tasks;
 
 namespace CST.Avalonia.Services.Ai;
 
+/// <summary>
+/// Which convention a provider's documented "base URL" follows — they differ, and guessing wrong turns a
+/// correctly-pasted setting into a 404.
+/// </summary>
+internal enum BaseUrlConvention
+{
+    /// <summary>
+    /// The base URL already carries the version segment: <c>OPENAI_BASE_URL=https://api.openai.com/v1</c>. The
+    /// documented value is the string you append <c>/chat/completions</c> to, so a pathed base is taken at its
+    /// word — Gemini's <c>/v1beta/openai</c>, Azure's <c>/openai/deployments/{d}</c> and Cloudflare's gateway
+    /// paths are all correct as given and must not be second-guessed.
+    /// </summary>
+    IncludesVersion,
+
+    /// <summary>
+    /// The base URL excludes the version segment: Anthropic's own SDK takes <c>https://api.anthropic.com</c> and
+    /// appends <c>/v1/messages</c> itself, so a gateway mounted at <c>/anthropic</c> serves
+    /// <c>/anthropic/v1/messages</c>.
+    /// </summary>
+    ExcludesVersion,
+}
+
 /// <summary>Shared HTTP plumbing for the chat providers.</summary>
 internal static class AiHttp
 {
@@ -56,17 +78,25 @@ internal static class AiHttp
     /// Resolve the request URL from a user-supplied base URL.
     ///
     /// <para>Users paste whatever their provider's docs showed them, and the variants are all legitimate:
-    /// <c>https://api.deepseek.com</c>, <c>https://api.deepseek.com/v1</c>,
-    /// <c>http://localhost:11434/v1</c>, <c>https://openrouter.ai/api/v1</c>. Getting this wrong produces a 404
-    /// that looks like a broken provider rather than a mistyped setting, so be forgiving: a bare host gains the
-    /// version segment, a base that already carries one does not, and a URL that already names the endpoint is
-    /// left alone. Any query string is preserved — Azure-style bases carry <c>?api-version=</c>, and appending
-    /// the path as raw text would bury it inside the query.</para>
+    /// <c>https://api.deepseek.com</c>, <c>https://api.deepseek.com/v1</c>, <c>http://localhost:11434/v1</c>,
+    /// <c>https://openrouter.ai/api/v1</c>. Getting this wrong produces a 404 that looks like a broken provider
+    /// rather than a mistyped setting, so: a bare host gains the version segment, a base that already carries one
+    /// does not, and a URL that already names the endpoint is left alone. Any query string is preserved — Azure
+    /// bases carry <c>?api-version=</c>, and appending the path as text would bury it inside the query.</para>
+    ///
+    /// <para><b>The one guess, and its limit.</b> A single-segment path with no version — <c>openrouter.ai/api</c>,
+    /// <c>api.groq.com/openai</c> — is the docs' URL with the <c>/v1</c> dropped, so under
+    /// <see cref="BaseUrlConvention.IncludesVersion"/> the version is added back. That rescue stops at ONE
+    /// segment on purpose: a longer path is somebody's documented base (Gemini's <c>/v1beta/openai</c>, Azure's
+    /// <c>/openai/deployments/{id}</c>, a Cloudflare gateway path), and rescuing a typo is not worth 404-ing a
+    /// setting that was pasted correctly.</para>
     /// </summary>
     /// <param name="baseUrl">The configured base URL.</param>
-    /// <param name="versionedPath">Path to use when the base URL is a bare host, e.g. <c>v1/chat/completions</c>.</param>
-    /// <param name="path">Path to use when the base URL already carries a path, e.g. <c>chat/completions</c>.</param>
-    internal static Uri ResolveEndpoint(string baseUrl, string versionedPath, string path)
+    /// <param name="versionedPath">Path used when the version segment must be added, e.g. <c>v1/chat/completions</c>.</param>
+    /// <param name="path">Path used when the base already carries the version, e.g. <c>chat/completions</c>.</param>
+    /// <param name="convention">Which convention the provider's own documentation follows.</param>
+    internal static Uri ResolveEndpoint(
+        string baseUrl, string versionedPath, string path, BaseUrlConvention convention)
     {
         var trimmed = (baseUrl ?? string.Empty).Trim();
         if (trimmed.Length == 0 || !Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
@@ -86,20 +116,26 @@ internal static class AiHttp
             return builder.Uri;   // already names the endpoint
         }
 
-        // Does the base already carry a version segment? The OpenAI convention is that a "base URL" ends in
-        // one (OPENAI_BASE_URL=https://api.openai.com/v1), so a path WITHOUT one is a mount point that still
-        // needs it — `https://openrouter.ai/api` is the docs' URL with the `/v1` dropped, and appending only
-        // `chat/completions` there yields a 404 that reads as a broken provider rather than a mistyped setting.
-        var lastSegment = existing.Length == 0
-            ? string.Empty
-            : existing[(existing.LastIndexOf('/') + 1)..];
-        var versioned = lastSegment.Length > 1 && (lastSegment[0] is 'v' or 'V') &&
-                        lastSegment[1..].All(char.IsAsciiDigit);
+        var segments = existing.Length == 0 ? Array.Empty<string>() : existing.Split('/');
+        var addVersion = segments.Length switch
+        {
+            0 => true,                                   // bare host always needs the version segment
+            _ when IsVersionSegment(segments[^1]) => false,   // already versioned
+            _ => convention == BaseUrlConvention.ExcludesVersion || segments.Length == 1,
+        };
 
-        var suffix = versioned ? path : versionedPath;
+        var suffix = addVersion ? versionedPath : path;
         builder.Path = existing.Length == 0 ? suffix : existing + "/" + suffix;
         return builder.Uri;
     }
+
+    /// <summary>
+    /// A path segment that names an API version — <c>v1</c>, <c>v2</c>, and also <c>v1beta</c> / <c>v1.0</c>,
+    /// which Gemini and others use. A leading <c>v</c> followed by a digit is the whole test; anything more
+    /// elaborate would start rejecting real version segments.
+    /// </summary>
+    private static bool IsVersionSegment(string segment) =>
+        segment.Length > 1 && segment[0] is 'v' or 'V' && char.IsAsciiDigit(segment[1]);
 
     /// <summary>The provider's requested backoff, when it sent one. Seconds and HTTP-date forms are both legal.</summary>
     internal static TimeSpan? RetryAfter(HttpResponseMessage response)

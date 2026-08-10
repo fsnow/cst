@@ -439,8 +439,20 @@ public class OpenAiCompatibleProviderTests
     [Theory]
     [InlineData("https://host/v1?api-version=2024-01", "https://host/v1/chat/completions?api-version=2024-01")]
     [InlineData("https://HOST/V1/CHAT/COMPLETIONS", "https://host/V1/CHAT/COMPLETIONS")]
-    [InlineData("https://host/mychat/completions", "https://host/mychat/completions/v1/chat/completions")]
+    [InlineData("https://host/mychat/completions", "https://host/mychat/completions/chat/completions")]
+    // A single unversioned segment is the docs URL with /v1 dropped — rescue it.
     [InlineData("https://openrouter.ai/api", "https://openrouter.ai/api/v1/chat/completions")]
+    [InlineData("https://api.groq.com/openai", "https://api.groq.com/openai/v1/chat/completions")]
+    // …but a LONGER path is somebody's documented base and must be taken at its word. These are all real:
+    // Gemini's OpenAI-compat base, Azure classic deployments, and a Cloudflare AI Gateway path.
+    [InlineData("https://generativelanguage.googleapis.com/v1beta/openai/",
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")]
+    [InlineData("https://r.openai.azure.com/openai/deployments/gpt?api-version=2024-02-01",
+        "https://r.openai.azure.com/openai/deployments/gpt/chat/completions?api-version=2024-02-01")]
+    [InlineData("https://gateway.ai.cloudflare.com/v1/acct/gw/compat",
+        "https://gateway.ai.cloudflare.com/v1/acct/gw/compat/chat/completions")]
+    // A version segment need not be bare digits.
+    [InlineData("https://host/v1beta", "https://host/v1beta/chat/completions")]
     public async Task Endpoint_resolution_survives_the_awkward_base_urls(string baseUrl, string expected)
     {
         var handler = StubHttpMessageHandler.Sse(HappyStream);

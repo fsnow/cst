@@ -21,7 +21,9 @@ namespace CST.Avalonia.Services.Ai;
 /// time the tag arrives, so it cannot be recalled; only when both fall in the same delta is it classified as
 /// reasoning. Fixing that properly would mean withholding output until a tag appears or the stream ends, which
 /// stalls the opening of every ordinary answer to serve a rare case. A literal <c>&lt;/think&gt;</c> written
-/// deliberately in answer prose is swallowed for the same reason — an accepted cost of the heuristic.</para>
+/// deliberately in answer prose is swallowed for the same reason — an accepted cost of the heuristic. And a
+/// stream SEVERED mid-tag flushes the fragment as text, since at end of input <c>"…&lt;/thi"</c> is
+/// indistinguishable from someone genuinely writing <c>"a &lt;th"</c>.</para>
 /// </summary>
 internal sealed class ThinkTagFilter
 {

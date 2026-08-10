@@ -63,7 +63,8 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
             throw new AiException(new AiError(AiErrorKind.NotConfigured, "No model is configured."));
 
         var endpoint = AiHttp.ResolveEndpoint(
-            _options.BaseUrl!, versionedPath: "v1/chat/completions", path: "chat/completions");
+            _options.BaseUrl!, versionedPath: "v1/chat/completions", path: "chat/completions",
+            convention: BaseUrlConvention.IncludesVersion);
 
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
