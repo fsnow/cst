@@ -3,7 +3,7 @@
 **Status:** Planned. Not started.
 **Parent:** [AI_INTEGRATION.md](AI_INTEGRATION.md) — the design of record for the A–E surface map. §11.1 there
 states the decided model-access *policy*; this document is the *implementation plan* for B.
-**Tracker:** epic #186 (`(later) B — Claude in-app` is the unfiled child this plan fills in).
+**Tracker:** epic #186 → children #578–#587 (filed 2026-08-09; the per-item numbers are in §12).
 **Prompted by:** Antonio's July 2026 question — *"do you have any plans to support DeepSeek as an AI provider
 directly… the current setup through MCP and third-party servers is quite complex for non-developers."*
 **Reviewed:** 2026-08-08 (Fable, adversarial) — see §15.
@@ -133,7 +133,7 @@ on failure**. So:
 
 1. **Convert display script → Latin** before any dictionary or lemma lookup. For a Burmese-script reader this
    is a hard prerequisite, not a refinement — which means it is a prerequisite for the two presets that
-   differentiate us. **Cyrillic does not round-trip** (known limitation) and needs an explicit degraded path.
+   differentiate us.
 2. **Normalize whitespace and locate the selection within the fetched passage window.** On no match, fall back
    to the whole window and record that in `BudgetReport` rather than silently ignoring the selection.
 3. **Handle the null/timeout case explicitly.** Otherwise it surfaces to the user as "the AI ignored my
@@ -278,9 +278,8 @@ Latin. Reason: if marking arrives in v1.1 the prompt shape changes *after* B9 ha
 nothing about per-model marker discipline in the meantime — which is precisely the data that decides whether
 conversion is safe to enable per model tier.
 
-v1.1 conversion provisos: **validate that marked content is actually convertible** (pure Pāli character set)
-and leave it Latin otherwise — models will occasionally mark English or emit malformed diacritics; and
-**exclude Cyrillic** until its round-trip revision lands.
+v1.1 conversion proviso: **validate that marked content is actually convertible** (pure Pāli character set)
+and leave it Latin otherwise — models will occasionally mark English or emit malformed diacritics.
 
 ---
 
@@ -323,18 +322,18 @@ know before starting:
 
 Ordered by dependency. **UI-free** items are `dotnet test`-verifiable and need no GUI work.
 
-| # | Work | UI-free | Depends on |
-|---|---|---|---|
-| **B1** | Provider layer: `IChatProvider`, **both** adapters, SSE, cancellation, normalized errors, per-provider quirks (§5) | ✅ | — |
-| **B2** | Credential storage: Keychain + DPAPI, lazy read, no-logging test | ⚠️ platform-gated | — |
-| **B3** | **Context bundler**: `AiContextBundle` + gathering, budgeting, availability states, `BookContext` source decision | ✅ | — |
-| **B3a** | **Selection pipeline**: display-script → Latin, normalization, window location, null/timeout, Cyrillic degradation | ✅ | — |
-| **B4** | Presets + system prompt + template rendering (embedded defaults, user-editable) | ✅ | B3 |
-| **B5** | Orchestrator: bundle → prompt → provider → stream, cancel-and-replace, usage accounting | ✅ | B1, B2, B4 |
-| **B6** | Model registry + fidelity advisory data | ✅ | — |
-| **B7** | Settings UI: provider, base URL, model, key entry, answer language, Pāli script, advisory | ✗ (Frank) | B2, B6 |
-| **B8** | In-app panel: invoke, stream, stop, scope + citation chrome, generated-text treatment, **input plumbing** | ✗ (Frank) | B5, B3a |
-| **B9** | Eval harness: fixed passages × presets × models, scored for grounding, citation accuracy, terminology, marker discipline | ✅ | B5 |
+| # | Issue | Work | UI-free | Depends on |
+|---|---|---|---|---|
+| **B1** | #578 | Provider layer: `IChatProvider`, **both** adapters, SSE, cancellation, normalized errors, per-provider quirks (§5) | ✅ | — |
+| **B2** | #579 | Credential storage: Keychain + DPAPI, lazy read, no-logging test | ⚠️ platform-gated | — |
+| **B3** | #580 | **Context bundler**: `AiContextBundle` + gathering, budgeting, availability states, `BookContext` source decision | ✅ | — |
+| **B3a** | #581 | **Selection pipeline**: display-script → Latin, normalization, window location, null/timeout | ✅ | — |
+| **B4** | #582 | Presets + system prompt + template rendering (embedded defaults, user-editable) | ✅ | B3 |
+| **B5** | #583 | Orchestrator: bundle → prompt → provider → stream, cancel-and-replace, usage accounting | ✅ | B1, B2, B4 |
+| **B6** | #584 | Model registry + fidelity advisory data | ✅ | — |
+| **B7** | #585 | Settings UI: provider, base URL, model, key entry, answer language, Pāli script, advisory | ✗ (Frank) | B2, B6 |
+| **B8** | #586 | In-app panel: invoke, stream, stop, scope + citation chrome, generated-text treatment, **input plumbing** | ✗ (Frank) | B5, B3a |
+| **B9** | #587 | Eval harness: fixed passages × presets × models, scored for grounding, citation accuracy, terminology, marker discipline | ✅ | B5 |
 
 **B2 is not fully UI-free**: DPAPI cannot be tested under `dotnet test` on macOS — it needs a Windows target
 (Merlin or Placid).
@@ -412,3 +411,9 @@ output quality, and it is far easier to critique as inspectable data than as a p
   baselines on the final prompt shape; no post-filtering for terminology — positive phrasing plus B9 scoring
   gating the recommended tier.
 - Verdict: sound enough to build from. B1/B2 can start as specced; B3 waits on the §2 corrections.
+
+**2026-08-09 (fsnow)** — **no special handling for Cyrillic.** The review had asked for an explicit degraded
+path in the selection pipeline and an exclusion from the v1.1 script conversion, on the grounds that Cyrillic
+is the one supported script that does not round-trip. That non-round-tripping is rare enough in practice not to
+earn a code path; removed from §3.1, §9 and the §12 table, and deliberately kept out of #581. Work items filed
+as #578–#587 under epic #186; issue numbers added to §12.

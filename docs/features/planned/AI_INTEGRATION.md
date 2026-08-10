@@ -33,6 +33,11 @@ Neither user needs to know which spine they are standing on.
 | **D** | **Retrieval substrate** | Semantic search / embeddings / RAG. Not a user feature on its own — the engine B and C stand on for "answer over the corpus." | internal | Research — #27 |
 | **E** | **Agent-driven "show me in context"** | Agent searches, then **drives the running reader** to present the result — open book, go to reference, highlight hits, scroll into view. | Local HTTP API (present-tool) / App Intents | This doc |
 
+> **Scope note on B.** The row above describes B as a companion "over the open text **or corpus**". **B v1 is the
+> open-text half only** — it assembles context around the passage the reader has open and sends one request; the
+> corpus half needs the model to choose its own searches and arrives with a later tool-calling tier. See
+> [AI_SURFACE_B.md](AI_SURFACE_B.md) (epic #186 → #578–#587).
+
 ## 3. The organizing principle
 
 > **The app is the abstraction boundary. Every AI surface is a thin adapter over an existing app service —
