@@ -542,6 +542,13 @@ namespace CST.Avalonia.Services.LocalApi
                         {
                             Services.Ai.ReaderStateProblem.PositionUnknown =>
                                 ("The reading position could not be determined.", "position-unknown"),
+                            Services.Ai.ReaderStateProblem.AmbiguousInMultiBook =>
+                                ("This is a multi-book volume, where a paragraph number needs a sub-book code " +
+                                 "the reader does not report — so the passage cannot be identified unambiguously.",
+                                 "ambiguous-multi-book"),
+                            Services.Ai.ReaderStateProblem.AmbiguousBookWindow =>
+                                ("More than one book window is active and none can be shown to be the one in use.",
+                                 "ambiguous-book-window"),
                             _ => ("No book is open.", "no-book-open"),
                         };
                         return Results.Json(new { error = message, reason }, statusCode: 409);
@@ -551,17 +558,36 @@ namespace CST.Avalonia.Services.LocalApi
                     if (task is null)
                         return Results.BadRequest(new { error = $"Unknown task '{req.Task}'.", reason = "unknown-task" });
 
-                    var bundle = await bundler.BuildAsync(
-                        new Services.Ai.AiContextRequest(
-                            task.Value,
-                            reader.BookId,
-                            req.OutputLanguage ?? "English",
-                            new NavigationReference.Paragraph(reader.Paragraph),
-                            reader.SelectionText,
-                            req.UserQuestion),
-                        ct);
+                    try
+                    {
+                        var bundle = await bundler.BuildAsync(
+                            new Services.Ai.AiContextRequest(
+                                task.Value,
+                                reader.BookId,
+                                req.OutputLanguage ?? "English",
+                                new NavigationReference.Paragraph(reader.Paragraph),
+                                reader.SelectionText,
+                                req.UserQuestion),
+                            ct);
 
-                    return Results.Json(bundle);
+                        return Results.Json(bundle);
+                    }
+                    catch (Services.Ai.AiContextException ex)
+                    {
+                        // Ordinary data states reach here, not just bugs: a paragraph the marker index does not
+                        // carry (ranged `@n` like "16-26" is not indexed at all — 86 of the 217 books contain
+                        // some, #444), or a catalogued book whose XML was never downloaded. Every other route on
+                        // this surface answers such states with shaped JSON; letting this one throw would give an
+                        // agent a bare 500, and llms.txt promises a 409.
+                        _logger.Debug("Context preview could not assemble a bundle: {Reason}", ex.Message);
+                        return Results.Json(
+                            new
+                            {
+                                error = "The passage the reader is on could not be read.",
+                                reason = "passage-unavailable",
+                            },
+                            statusCode: 409);
+                    }
                 });
             }
 

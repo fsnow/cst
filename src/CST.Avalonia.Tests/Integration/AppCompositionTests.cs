@@ -26,6 +26,15 @@ namespace CST.Avalonia.Tests.Integration
     /// </summary>
     public class AppCompositionTests : IAsyncLifetime
     {
+        /// <summary>Always "no book open" — enough to prove the route is mapped and reachable.</summary>
+        private sealed class HeadlessReaderState : CST.Avalonia.Services.Ai.IReaderStateService
+        {
+            public Task<CST.Avalonia.Services.Ai.ReaderStateResult> GetCurrentAsync(
+                CancellationToken ct = default) =>
+                Task.FromResult(CST.Avalonia.Services.Ai.ReaderStateResult.Fail(
+                    CST.Avalonia.Services.Ai.ReaderStateProblem.NoBookOpen));
+        }
+
         private string _dir = null!;
         private LocalApiServer _server = null!;
 
@@ -56,6 +65,19 @@ namespace CST.Avalonia.Tests.Integration
             services.AddSingleton<IDictionaryTool, RegistryDictionaryTool>();
             services.AddSingleton<IPassageTool, PassageTool>();
             services.AddSingleton<IScriptTool, ScriptTool>();
+
+            // Surface B (#580/#593). A stub reader state, not the real service: the real one marshals to the
+            // Avalonia dispatcher, and nothing pumps it in a headless test — the request would hang rather than
+            // report "no book open". What this test guards is the COMPOSITION seam (are both services resolved
+            // and passed to the factory), which a stub covers exactly as well.
+            services.AddSingleton<CST.Avalonia.Services.Ai.IReaderStateService>(new HeadlessReaderState());
+            services.AddSingleton<CST.Avalonia.Services.Ai.IAiContextBundler>(sp =>
+                new CST.Avalonia.Services.Ai.AiContextBundler(
+                    sp.GetRequiredService<IPassageTool>(),
+                    sp.GetService<CST.Avalonia.Services.ILemmaSearchService>(),
+                    "test",
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<
+                        CST.Avalonia.Services.Ai.AiContextBundler>.Instance));
             // Navigate (#187) is resolved ONLY by the factory, so it belongs in the seam this test guards.
             services.AddSingleton<CST.Avalonia.Services.Presentation.IPresentationService>(
                 new CST.Avalonia.Tests.TestSupport.RecordingPresentationService());
@@ -85,6 +107,13 @@ namespace CST.Avalonia.Tests.Integration
 
             // ScriptTool - the exact endpoint the /v1/scripts-404 bug knocked out (a registered tool not passed).
             Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/v1/scripts")).StatusCode);
+
+            // 409, not 404: the route must be REACHABLE. If FromServiceProvider stopped passing the two surface-B
+            // services, everything else here would still pass while production silently lost the endpoint — the
+            // /v1/scripts-404 bug class this test exists for, in a new place. (#593)
+            var preview = await http.PostAsync("/v1/ai/context-preview",
+                new StringContent("{\"task\":\"explain\"}", System.Text.Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.Conflict, preview.StatusCode);
             // Dictionary tool (RegistryDictionaryTool).
             Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/v1/dictionary/languages")).StatusCode);
             // SearchTool.
