@@ -1209,6 +1209,16 @@ public partial class App : Application
         var dpdCstSubsetPath = Services.DpdUpdateService.DpdSubsetPath;
         services.AddSingleton<CST.Lemma.ILemmaProvider>(_ => new Services.ReopenableLemmaProvider(dpdCstSubsetPath));
         services.AddSingleton<ILemmaSearchService, LemmaSearchService>();
+
+        // Surface B (#580/#593). The bundler takes the lemma service with GetService, not GetRequiredService:
+        // the DPD-lemma asset is a separate download, so its absence is a supported configuration that the
+        // bundler reports rather than a wiring error.
+        services.AddSingleton<Services.Ai.IReaderStateService, Services.Ai.ReaderStateService>();
+        services.AddSingleton<Services.Ai.IAiContextBundler>(sp => new Services.Ai.AiContextBundler(
+            sp.GetRequiredService<CST.Tools.IPassageTool>(),
+            sp.GetService<ILemmaSearchService>(),
+            typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown",
+            sp.GetRequiredService<ILogger<Services.Ai.AiContextBundler>>()));
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
         // Surface-C tool wrappers (exposed over the local API). (#186)

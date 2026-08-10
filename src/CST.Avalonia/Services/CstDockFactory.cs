@@ -903,6 +903,14 @@ namespace CST.Avalonia.Services
             return false;
         }
         
+        /// <summary>
+        /// The book document the reader is currently showing, or null if none is. Read-only view of the dock
+        /// for callers that need to know what the user is looking at rather than to drive it — surface B's
+        /// context assembly (#593). UI thread only, like everything else here.
+        /// </summary>
+        public BookDisplayViewModel? ActiveBookDocument =>
+            FindDocumentDock()?.ActiveDockable as BookDisplayViewModel;
+
         private DocumentDock? FindDocumentDock()
         {
             if (_context is RootDock rootDock && rootDock.VisibleDockables != null)

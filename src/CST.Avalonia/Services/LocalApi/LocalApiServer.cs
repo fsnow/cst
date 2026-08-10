@@ -61,6 +61,8 @@ namespace CST.Avalonia.Services.LocalApi
         private readonly IScriptTool? _script;
         private readonly ILemmaSearchService? _lemma;   // DPD-lemma back-lookup + forward-expansion (may be null / asset-absent)
         private readonly ILemmaReportService? _lemmaReport;   // the rendered lemma dossier
+        private readonly Services.Ai.IAiContextBundler? _contextBundler;   // surface B context assembly (#580)
+        private readonly Services.Ai.IReaderStateService? _readerState;    // what the reader is showing (#593)
         private readonly int _port;              // fixed loopback port, or <= 0 for ephemeral
         private readonly string? _configuredToken; // persisted bearer token, or null to generate one
         private readonly bool _restApiEnabled;   // map the /v1 REST tool endpoints
@@ -88,8 +90,12 @@ namespace CST.Avalonia.Services.LocalApi
             string? xmlBooksDirectory = null,
             Services.Presentation.IPresentationService? presentation = null,
             ISearchService? searchService = null,
-            Func<bool>? isRemoteControlAllowed = null)
+            Func<bool>? isRemoteControlAllowed = null,
+            Services.Ai.IAiContextBundler? contextBundler = null,
+            Services.Ai.IReaderStateService? readerState = null)
         {
+            _contextBundler = contextBundler;
+            _readerState = readerState;
             // Default the consent predicate to DENY: a caller that forgets to pass it must not accidentally
             // grant an agent control of the user's window. (#187)
             _navigate = presentation is null
@@ -139,7 +145,9 @@ namespace CST.Avalonia.Services.LocalApi
                 services.GetService<Services.Presentation.IPresentationService>(),
                 services.GetService<ISearchService>(),
                 // Read live so a Settings toggle applies without restarting the server. (#187)
-                () => services.GetService<ISettingsService>()?.Settings?.Ai?.RemoteControlAllowed ?? false);
+                () => services.GetService<ISettingsService>()?.Settings?.Ai?.RemoteControlAllowed ?? false,
+                services.GetService<Services.Ai.IAiContextBundler>(),
+                services.GetService<Services.Ai.IReaderStateService>());
 
         public async Task StartAsync(CancellationToken ct = default)
         {
@@ -514,6 +522,49 @@ namespace CST.Avalonia.Services.LocalApi
                 });
             }
 
+            if (_contextBundler is { } bundler && _readerState is { } readerState)
+            {
+                // What surface B would send a model for WHAT THE READER IS LOOKING AT — no model call, no key,
+                // nothing leaves the machine. The body carries only what the user chooses; book, position and
+                // selection come from live app state, because the input derivation is the part most worth
+                // previewing (#593). A preview that accepted them as parameters would skip the scroll-derived
+                // position and the WebView selection round-trip while appearing to validate the whole path.
+                app.MapPost(v + "/ai/context-preview",
+                    async (ContextPreviewRequest req, CancellationToken ct) =>
+                {
+                    var state = await readerState.GetCurrentAsync(ct);
+                    if (state.State is not { } reader)
+                    {
+                        // Refusals, never fallbacks: an unknown position must not read from the book start, or
+                        // the answer is a confident, app-cited response about a passage the user is not looking
+                        // at, with no signal that anything went wrong. (AI_SURFACE_B.md §6)
+                        var (message, reason) = state.Problem switch
+                        {
+                            Services.Ai.ReaderStateProblem.PositionUnknown =>
+                                ("The reading position could not be determined.", "position-unknown"),
+                            _ => ("No book is open.", "no-book-open"),
+                        };
+                        return Results.Json(new { error = message, reason }, statusCode: 409);
+                    }
+
+                    var task = ParseTask(req.Task);
+                    if (task is null)
+                        return Results.BadRequest(new { error = $"Unknown task '{req.Task}'.", reason = "unknown-task" });
+
+                    var bundle = await bundler.BuildAsync(
+                        new Services.Ai.AiContextRequest(
+                            task.Value,
+                            reader.BookId,
+                            req.OutputLanguage ?? "English",
+                            new NavigationReference.Paragraph(reader.Paragraph),
+                            reader.SelectionText,
+                            req.UserQuestion),
+                        ct);
+
+                    return Results.Json(bundle);
+                });
+            }
+
             if (_script is { } scriptTool)
             {
                 app.MapGet(v + "/scripts", () => Results.Json(scriptTool.Scripts));
@@ -641,6 +692,19 @@ namespace CST.Avalonia.Services.LocalApi
         private sealed record RootResponse(string Name, string App, string Api, string Docs, string Status);
 
         private sealed record StatusResponse(string App, string Api, string Status);
+
+        private static Services.Ai.AiTask? ParseTask(string? task) => task?.ToLowerInvariant() switch
+        {
+            "explain" => Services.Ai.AiTask.Explain,
+            "translate" => Services.Ai.AiTask.Translate,
+            "grammar" => Services.Ai.AiTask.Grammar,
+            "wordbyword" or "word-by-word" => Services.Ai.AiTask.WordByWord,
+            _ => null,
+        };
+
+        /// <summary>Body for /v1/ai/context-preview — only what the user chooses; the rest is live app state.</summary>
+        private sealed record ContextPreviewRequest(
+            string Task, string? UserQuestion = null, string? OutputLanguage = null);
 
         // Flat request for /v1/passage — avoids polymorphic JSON for NavigationReference. Paragraph (or none =
         // whole book) unless a Cursor from a prior response is supplied to page forward/backward.
