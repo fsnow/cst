@@ -248,6 +248,26 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   the checkbox "Allow agents to drive the reader (navigate and highlight)" (it sits under "Run the local API
   server"). That is the user's decision. If you get a 403, tell them that exact setting to turn on - do not
   look for another way to move their window.
+- `POST /v1/ai/context-preview` - `{ task, userQuestion?, outputLanguage? }` -> the CONTEXT BUNDLE the in-app AI
+  feature would send a model for WHAT THE READER IS CURRENTLY SHOWING: the passage window, the citation the app
+  renders (book, normalized reference, per-edition pages), the book's classification, lemma candidates for the
+  grammatical tasks, and a budget report of what was gathered, trimmed or unavailable. No model is called and no
+  key is involved - it is a read of local state, for INSPECTING what the model would be given. `task` is one of
+  `explain`, `translate`, `grammar`, `wordByWord` (it selects the passage budget and whether lemmas are
+  gathered, so the same position answers differently per task). NOTE the body carries ONLY what a user would
+  choose: the book, position and selection come from the LIVE reader, not from you - to preview a specific
+  passage, drive the reader with `/v1/navigate` first (which needs the remote-control permission described
+  above), then call this.
+  REFUSALS: it answers `409 { error, reason }` rather than guess, because a bundle describing a passage the user
+  is NOT looking at is worse than no bundle. `reason` is one of: `no-book-open`; `position-unknown` (the reading
+  position is derived from scroll and has not settled - transient, retry in a moment); `ambiguous-book-window`
+  (more than one book window is active and none can be shown to be the one in use - ask the user to close or
+  focus one); `ambiguous-multi-book` (a Multi volume, where paragraph numbers restart per sub-book and the
+  reader does not report the sub-book code, so the passage cannot be identified - NOT transient, and it affects
+  every Multi volume); `passage-unavailable` (the paragraph could not be read - most often a RANGED paragraph
+  anchor, which the marker index does not carry, or a book whose XML is not installed). Only `position-unknown`
+  is worth retrying; treat the rest as "this position cannot be previewed" and say so plainly rather than
+  looping.
 <!--/doc:navigate-->
 <!--doc:dictionary-->
 - `GET  /v1/dictionary/languages` - the available dictionaries: each `{ language, source }`, where `source` is

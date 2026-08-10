@@ -70,7 +70,9 @@ namespace CST.Avalonia.Tests.TestSupport
         public static async Task<LocalApiTestServer> StartAsync(
             bool withLemmaAsset = true,
             CST.Avalonia.Services.Presentation.IPresentationService? presentation = null,
-            Func<bool>? isRemoteControlAllowed = null)
+            Func<bool>? isRemoteControlAllowed = null,
+            CST.Avalonia.Services.Ai.IAiContextBundler? contextBundler = null,
+            CST.Avalonia.Services.Ai.IReaderStateService? readerState = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "cst-int-" + Guid.NewGuid().ToString("N"));
             var xmlDir = Path.Combine(root, "xml");
@@ -141,7 +143,10 @@ namespace CST.Avalonia.Tests.TestSupport
                 // breaks (#187) — without it validation degrades to "could not verify".
                 xmlBooksDirectory: xmlDir,
                 presentation: presentation, searchService: searchService,
-                isRemoteControlAllowed: isRemoteControlAllowed);
+                isRemoteControlAllowed: isRemoteControlAllowed,
+                // Surface B's context preview (#593). The real reader-state service reads the live dock, so a
+                // test supplies a fake — what is under test here is the endpoint's contract, not the dock.
+                contextBundler: contextBundler, readerState: readerState);
             await server.StartAsync();
 
             return new LocalApiTestServer(root, server, mula.FileName, attha.FileName);

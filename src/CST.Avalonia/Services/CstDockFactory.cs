@@ -903,6 +903,22 @@ namespace CST.Avalonia.Services
             return false;
         }
         
+        /// <summary>
+        /// The active book document of EVERY book window — the main dock and each floating one. Read-only view
+        /// for callers that need to know what the user is looking at rather than to drive it (surface B's
+        /// context assembly, #593). UI thread only, like everything else here.
+        ///
+        /// <para>Floating layouts are included deliberately: a floated book can be the one being read, and the
+        /// main dock alone would report the wrong book — or none at all when the only book is floated. This
+        /// mirrors <c>FindDockable</c>, which was fixed for the same reason in #494. Returning ALL of them
+        /// rather than a single "active" one is the honest shape: an API caller carries no focus signal, so
+        /// deciding which window wins belongs to the caller, which can refuse.</para>
+        /// </summary>
+        public IEnumerable<BookDisplayViewModel> ActiveBookDocuments =>
+            (_context is IDock main ? new[] { main }.Concat(GetFloatingLayouts()) : GetFloatingLayouts())
+                .Select(layout => FindDocumentDockInLayout(layout)?.ActiveDockable)
+                .OfType<BookDisplayViewModel>();
+
         private DocumentDock? FindDocumentDock()
         {
             if (_context is RootDock rootDock && rootDock.VisibleDockables != null)

@@ -108,15 +108,22 @@ Design rules, each load-bearing:
 - **`OutputLanguage` is not optional.** Translate — into what? Explain — in what language? The motivating user
   reads Burmese script; other testers are not Anglophone. This is the first knob a non-English user hits, and
   retrofitting it touches the bundle, every template, Settings, and the eval baseline.
-- **Glosses are projected to plain text.** `DictionaryEntry.MeaningHtml` is an HTML fragment
-  (`DictionaryToolContracts.cs:62`). Injecting raw markup wastes tokens and invites markup echo in the answer.
-  The projection is bundler work, not a footnote.
-- **Glosses carry their attribution.** `DictionarySourceInfo` records title/compiler/edition/license. Inject it
-  so a repeated gloss can be cited honestly — and note the bundled English dictionary is Childers 1875 (#378).
 - **Lemma data is our differentiator.** No general-purpose chat has stem + inflection for Pāli. But it is an
   *optional asset*, so see §4.
-- **`BudgetReport` distinguishes three states, not two**: included, **trimmed for budget**, and **unavailable
-  (asset not installed)**. Conflating the last two makes a missing DPD look like a budget problem.
+- **`BudgetReport` distinguishes four states**: included, **trimmed for budget**, **unavailable** (asset not
+  installed) and **empty** (gathered fine, nothing there). Conflating unavailable with trimmed makes a missing
+  download look like a budget problem; conflating it with empty makes a healthy window with no print apparatus
+  look like a missing asset.
+- **There is deliberately no "the passage was truncated" flag.** An earlier version derived one from
+  `PassageResult.NextCursor`, which is wrong: that cursor means the window ended before the end of the BOOK
+  FILE, not before the end of the requested paragraph, so on the real corpus it is set for nearly every request
+  and the badge would always fire. A fidelity signal that always fires is one users learn to ignore. The bundle
+  reports only what is known — `WindowMayExtendPastReference` — and a true paragraph-scoped trim signal needs
+  support from the passage reader.
+- **A failed fetch is loud.** The passage tool reports "book not available", "reference not found" and
+  unsupported reference kinds all as empty text with the reason in `NormalizedReference` — the field the app
+  renders as the citation. Bundling one produces a healthy-looking request citing *"book not available"*, so
+  the bundler throws instead.
 - **`Provenance` stamps app version, corpus revision, and dictionary source versions.** Trivial now; without
   it, B9's cross-release eval regressions are unattributable.
 
@@ -150,12 +157,43 @@ Templates are data (embedded resources), user-editable with reset-to-default, pe
 
 | Preset | Gathers | Requires | Notes |
 |---|---|---|---|
-| **Explain** | passage, book context, light glosses | — | The default. Free-form follow-up allowed. |
-| **Translate** | passage, full glosses, apparatus notes | — | Fidelity-sensitive (§7). Apparatus matters: variant readings change translations. |
-| **Grammar** | selection (or sentence), lemmas, glosses | B3a + lemma asset | Degrades to glosses-only without the asset — say so in the UI. |
-| **Word-by-word** | selection, lemmas + glosses per token | B3a + lemma asset | Most grounded preset; smallest hallucination surface. |
+| **Explain** | passage, book context | — | The default. Free-form follow-up allowed. |
+| **Translate** | passage, apparatus notes | — | Fidelity-sensitive (§7). Apparatus matters: variant readings change translations. |
+| **Grammar** | selection (or sentence), lemmas | B3a + DPD | Leans on lemma resolution. |
+| **Word-by-word** | selection, lemmas per token | B3a + DPD | Most grounded preset; smallest hallucination surface. |
 
-**Both lemma presets must have a defined no-asset behavior** — degrade visibly, never silently.
+### No dictionary glosses in v1 — decided 2026-08-10 (fsnow)
+
+An earlier cut of #580 injected dictionary glosses for words in the passage. They are out, and the reason is
+**context clutter with little expected benefit**: the app must choose which words to look up *before* anything
+has read the passage, so the choice is a heuristic guess, and the entries it produces then compete for context
+with the passage itself — the one thing certain to be relevant. On a small-context model that trade is plainly
+bad; on any model a confident but irrelevant gloss is worse than silence, because it hands over a plausible
+authority. Lookups belong to the **tool-calling tier**, where the model asks for the word it has decided it
+needs.
+
+**This supersedes the DPD-prerequisite decision recorded earlier the same day.** That decision followed from
+glossing needing form→lemma resolution; with glosses gone, DPD is a prerequisite only for the *grammatical*
+presets, and surface B v1 runs without it.
+
+**Lemma data survives, for grammar and word-by-word only** — on exactly the logic that condemns glossing. It is
+scoped to what the **user selected**, so the relevance signal comes from the user rather than from a heuristic
+of ours, and it is grammatical analysis rather than a definition to be believed.
+
+**Whether it earns its place is an empirical question, deliberately left open** (fsnow, 2026-08-10): *"let's
+wait and see how real non-frontier models do with this before we rip it out."* The reasoning that removed
+glosses — clutter competing with the passage — applies here too in principle, and the difference is a judgement
+call that evidence can settle better than argument. **#587 should run it as a paired comparison**: the same
+grammar and word-by-word cases, with lemma data injected and withheld, across the model matrix. The interesting
+cell is the sub-frontier one, since a frontier model may carry the morphology anyway while a smaller model may
+be the one that needs it — or the one most crowded out by it. Do not remove it before that comparison exists.
+
+> **A DPD defect recorded here so it is not rediscovered.** DPD distinguishes homographs with numeric suffixes
+> on the lemma (`mata 1.1`), and those suffixed strings do not appear in the form index — roughly a quarter of
+> its ~89,000 lemmas. Resolving a lemma back to a dictionary entry **by headword string therefore fails for
+> every homograph**, which is precisely the case such a lookup exists to serve. The correct join is on
+> `LemmaId`, which both `LemmaCandidate` and `DictionaryEntry` carry. This is a bug to fix when lookups return
+> in the tool-calling tier, not a reason against them.
 
 The **system prompt** is shared and carries: house terminology conventions (stated *positively* — §10), the
 grounding contract, the scope declaration (§6), the cross-corpus refusal (§6), and the Pāli-quote marking
@@ -306,6 +344,14 @@ and leave it Latin otherwise — models will occasionally mark English or emit m
 
 ## 11. Deliberately deferred: the tool-calling tier
 
+**The deferral costs more than capability, and it is worth being honest about what.** Under injection the app
+chooses what to retrieve *before the model has seen the passage* — the word set is a heuristic over the text,
+not a response to what is actually needed. Under tool calling the model reads first and then asks for the
+lookups it wants. So everything injected is best-effort by construction, and two things follow that #582's
+system prompt must state: **no injected entry is authoritative**, and **absence is not evidence** — a word with
+no gloss was missed by the heuristic, not found to be undefined. A model not told this will reasonably read the
+injected set as the relevant set. *(Decided 2026-08-10 with fsnow.)*
+
 When B eventually needs open-ended corpus research, the loop is additive, not a rewrite: the same tool
 interfaces become tool schemas, and the injection path stays as the fast path for scoped tasks. Two things to
 know before starting:
@@ -377,9 +423,10 @@ output quality, and it is far easier to critique as inspectable data than as a p
 
 - **Follow-up turns** — one-shot per invocation, or a short conversation over the same bundle? (One-shot covers
   the named use cases; conversation needs history management and re-budgeting.)
-- **`ICorpusTools`** — delete as dead, or implement it (with `INavigationTool`) as part of B3? (§2)
-- **Which dictionaries feed glosses by default** — DPD is the strong one; Childers 1875 is what "English"
-  currently means (#378). Probably DPD-first with Childers fallback, but that is a data-quality call.
+- ~~**`ICorpusTools`** — delete as dead, or implement it?~~ *Deleted in #580: no implementation, no consumer,
+  and one of its four members had no implementation at all.*
+- ~~**Which dictionaries feed glosses by default**~~ *Moot for v1: no glosses are injected (§4). Returns as a
+  question for the tool-calling tier.*
 - **Token estimation** — no local tokenizer, so `BudgetReport` uses a chars-per-token heuristic that is
   per-script inaccurate (Latin Pāli with diacritics tokenizes worse than English). Don't build budgeting that
   assumes a provider `count_tokens` endpoint.
@@ -411,6 +458,26 @@ output quality, and it is far easier to critique as inspectable data than as a p
   baselines on the final prompt shape; no post-filtering for terminology — positive phrasing plus B9 scoring
   gating the recommended tier.
 - Verdict: sound enough to build from. B1/B2 can start as specced; B3 waits on the §2 corrections.
+
+**2026-08-10, later (fsnow, during #580)** — **dictionary glosses are out of v1** (§4), superseding the DPD
+prerequisite recorded earlier the same day. Reason: context clutter, unlikely to help the model discern meaning.
+A Fable review of the removed code separately found it did not work against the real DPD asset (homograph
+suffixes absent from the form index) — a bug to fix when lookups return with tool calling, and explicitly *not*
+the argument for removing them. Same review caught two defects in code that survives: the trimmed-passage flag
+fired on nearly every request, and three reachable fetch failures bundled an empty passage with the error string
+as the citation. Both fixed.
+
+**2026-08-10 (fsnow, during #580)** — two decisions and a correction:
+- **DPD is a prerequisite for surface B**, not an optional enhancement (§4). Enforcement belongs to #583/#585;
+  the bundler reports absence honestly rather than assuming the precondition.
+- **Glosses are candidates carrying provenance, never filtered to "the right one" by the app** (§3). The first
+  implementation kept only exact headword matches, which both dropped the correct entry for most inflected
+  words and treated the survivors as authoritative. Homographs are emitted in full for the model to choose
+  between. fsnow: *"ultimately it is up to the model to decide on what gloss is correct in context… even a
+  dictionary 'hit' is not always a gloss"* — and *"it could be a homophone"*.
+- **Injection is best-effort by construction** (§11), because the app retrieves before the model has read
+  anything. The bundle now says so in its own data, so the prompt template inherits the caveat rather than
+  relying on someone remembering it.
 
 **2026-08-09 (fsnow)** — **no special handling for Cyrillic.** The review had asked for an explicit degraded
 path in the selection pipeline and an exclusion from the v1.1 script conversion, on the grounds that Cyrillic
