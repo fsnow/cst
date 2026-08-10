@@ -92,20 +92,20 @@ public class AiContextBundlerTests : IDisposable
 
     private sealed class StubLemmas : ILemmaSearchService
     {
-        private readonly Dictionary<string, LemmaCandidate> _byForm;
+        private readonly Dictionary<string, LemmaCandidate[]> _byForm;
 
-        internal StubLemmas(bool available, Dictionary<string, LemmaCandidate>? byForm = null)
+        internal StubLemmas(bool available, Dictionary<string, LemmaCandidate[]>? byForm = null)
         {
             IsAvailable = available;
-            _byForm = byForm ?? new Dictionary<string, LemmaCandidate>(StringComparer.OrdinalIgnoreCase);
+            _byForm = byForm ?? new Dictionary<string, LemmaCandidate[]>(StringComparer.OrdinalIgnoreCase);
         }
 
         public bool IsAvailable { get; }
         public DpdLemmaMeta? Meta => null;
 
         public FormResolution? ResolveWord(string word, Script sourceScript = Script.Ipe) =>
-            _byForm.TryGetValue(word, out var candidate)
-                ? new FormResolution(word, new[] { candidate }, null, null)
+            _byForm.TryGetValue(word, out var candidates)
+                ? new FormResolution(word, candidates, null, null)
                 : null;
 
         public WordDeconstruction? Deconstruct(string word, Script sourceScript = Script.Ipe) => null;
@@ -181,16 +181,17 @@ public class AiContextBundlerTests : IDisposable
 
         var bundle = await Bundler(dictionary).BuildAsync(Request());
 
-        var gloss = Assert.Single(bundle.Glosses);
+        var gloss = Assert.Single(bundle.Glosses, g => g.Match == GlossMatch.Exact);
         Assert.Equal("heedfulness, diligence & vigilance", gloss.Meaning);
         Assert.Equal("Digital Pāḷi Dictionary", gloss.Attribution);
     }
 
     [Fact]
-    public async Task A_near_miss_is_not_passed_off_as_a_definition()
+    public async Task A_near_miss_is_labelled_as_one_rather_than_dropped_or_disguised()
     {
-        // The lookup falls back to the nearest headword on a miss — right for a person browsing, and dangerous
-        // here: injecting a neighbouring entry as though it defined the word invents a gloss the model trusts.
+        // The lookup falls back to the nearest headword on a miss. Neither extreme is right: passing it off as
+        // a definition invents one, and dropping it silently makes the app judge relevance it cannot judge.
+        // It is carried with its provenance, for the model to weigh.
         var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
         {
             ["something-else-entirely"] = "not a definition of anything in the passage",
@@ -198,7 +199,57 @@ public class AiContextBundlerTests : IDisposable
 
         var bundle = await Bundler(dictionary).BuildAsync(Request());
 
-        Assert.Empty(bundle.Glosses);
+        // Nothing in the passage shares enough leading text with the sole headword to be a plausible
+        // candidate, so nothing is carried — and had one been, it would have been labelled a Neighbour.
+        Assert.All(bundle.Glosses, g => Assert.Equal(GlossMatch.Neighbour, g.Match));
+        Assert.True(bundle.Glosses.Count <= 5);
+    }
+
+    [Fact]
+    public async Task An_inflected_form_is_glossed_through_its_lemma()
+    {
+        // The case a headword-matching filter gets wrong for most of running Pāli: the text says `appamado`,
+        // the dictionary says `appamada`. Without lemma resolution the correct entry is simply missed.
+        var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["appamada"] = "heedfulness, diligence",
+        });
+        var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["appamado"] = new[] { new LemmaCandidate(1, "appamada", "masc", "heedfulness", null) },
+        });
+
+        var bundle = await Bundler(dictionary, lemmas).BuildAsync(Request(selection: "appamado"));
+
+        var gloss = Assert.Single(bundle.Glosses, g => g.Match == GlossMatch.ViaLemma);
+        Assert.Equal("appamado", gloss.Form);
+        Assert.Equal("appamada", gloss.Headword);
+    }
+
+    [Fact]
+    public async Task A_homograph_yields_every_reading_for_the_model_to_choose_between()
+    {
+        // DPD returns several candidates for a homographic form and says the caller disambiguates. Dropping
+        // any of them would be the app quietly making a call only the context can settle.
+        var dictionary = new StubDictionary(new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["mata1"] = "dead",
+            ["mata2"] = "thought, known",
+        });
+        var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["mata"] = new[]
+            {
+                new LemmaCandidate(1, "mata1", "pp", "dead", null),
+                new LemmaCandidate(2, "mata2", "pp", "thought", null),
+            },
+        });
+
+        var bundle = await Bundler(dictionary, lemmas).BuildAsync(Request(selection: "mata"));
+
+        var readings = bundle.Glosses.Where(g => g.Form == "mata").ToList();
+        Assert.Equal(2, readings.Count);
+        Assert.All(readings, g => Assert.Equal(GlossMatch.ViaLemma, g.Match));
     }
 
     [Fact]
@@ -212,7 +263,7 @@ public class AiContextBundlerTests : IDisposable
 
         var bundle = await Bundler(dictionary).BuildAsync(Request(selection: "appamado"));
 
-        Assert.Equal("appamado", Assert.Single(bundle.Glosses).Headword);
+        Assert.Equal("appamado", Assert.Single(bundle.Glosses).Form);
     }
 
     [Fact]
@@ -270,7 +321,7 @@ public class AiContextBundlerTests : IDisposable
     {
         var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
         {
-            ["appamado"] = new LemmaCandidate(1, "appamāda", "masc", "heedfulness", null),
+            ["appamado"] = new[] { new LemmaCandidate(1, "appamāda", "masc", "heedfulness", null) },
         });
 
         var bundle = await Bundler(lemmas: lemmas).BuildAsync(Request(AiTask.Grammar, selection: "appamado"));
@@ -286,7 +337,7 @@ public class AiContextBundlerTests : IDisposable
         // A paradigm is not what "explain this passage" needs, and every lookup costs.
         var lemmas = new StubLemmas(available: true, new(StringComparer.OrdinalIgnoreCase)
         {
-            ["appamado"] = new LemmaCandidate(1, "appamāda", "masc", "heedfulness", null),
+            ["appamado"] = new[] { new LemmaCandidate(1, "appamāda", "masc", "heedfulness", null) },
         });
 
         var bundle = await Bundler(lemmas: lemmas).BuildAsync(Request(AiTask.Explain));

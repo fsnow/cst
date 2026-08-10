@@ -61,6 +61,17 @@ public sealed class AiContextBundler : IAiContextBundler
     /// <summary>Words shorter than this are particles and inflectional debris; glossing them wastes the budget.</summary>
     private const int MinimumWordLength = 3;
 
+    /// <summary>A prefix neighbour is a weak signal; a wall of them crowds out the passage it should support.</summary>
+    private const int MaxNeighbourGlosses = 5;
+
+    /// <summary>
+    /// How much leading text a neighbour must share with the form to be worth carrying. Not a judgement about
+    /// MEANING — that is the model's — but about whether the entry is lexically close enough to be a plausible
+    /// candidate at all. Without it, a word the dictionary has nothing near returns whatever headword happens
+    /// to sort closest, and the passage arrives buried in entries related to nothing in it.
+    /// </summary>
+    private const int MinimumNeighbourPrefix = 4;
+
     private static readonly Regex WordSplitter = new(@"[^\p{L}Ā-ſḀ-ỿ]+", RegexOptions.Compiled);
     private static readonly Regex HtmlTag = new("<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
@@ -202,6 +213,18 @@ public sealed class AiContextBundler : IAiContextBundler
         return all.Take(max).ToList();
     }
 
+    /// <summary>
+    /// Gather candidate dictionary entries for the words in play.
+    ///
+    /// <para><b>Lemma resolution is the primary route, not a fallback.</b> Running Pāli is almost entirely
+    /// inflected — the text says <c>appamādo</c> where the dictionary says <c>appamāda</c> — so matching surface
+    /// forms against headwords misses the correct entry for most words. DPD resolves form to lemma; the lemma is
+    /// what gets glossed. This is why the DPD asset is a prerequisite for surface B rather than an enhancement.</para>
+    ///
+    /// <para>A form that resolves to SEVERAL lemmas is a homograph, and all of them are emitted: they are
+    /// alternative readings of the same word for the model to choose between, and dropping any of them would be
+    /// the app quietly making a call it cannot make.</para>
+    /// </summary>
     private async Task<IReadOnlyList<GlossEntry>> GatherGlossesAsync(
         IReadOnlyList<string> words, List<BundlePart> parts, bool truncatedWords, CancellationToken ct)
     {
@@ -213,42 +236,100 @@ public sealed class AiContextBundler : IAiContextBundler
             return Array.Empty<GlossEntry>();
         }
 
-        // One dictionary, deliberately: the point is a gloss per word, not every dictionary's take on each.
-        // Which one is a data-quality question for the settings layer (#585) — DPD where present, since it is
-        // the strong one, else whatever is installed.
+        // DPD where present — it is the strong one and the only structured source. Which dictionary feeds
+        // glosses by default is a data-quality question owned by the settings layer (#585).
         var language = languages.FirstOrDefault(l => l.Language.Contains("dpd", StringComparison.OrdinalIgnoreCase))
                        ?? languages[0];
 
+        var lemmasAvailable = _lemmas is { IsAvailable: true };
         var glosses = new List<GlossEntry>();
+        var neighbours = 0;
+
         foreach (var word in words)
         {
             ct.ThrowIfCancellationRequested();
 
-            var entries = await _dictionary
+            var resolvedAny = false;
+
+            if (lemmasAvailable && _lemmas!.ResolveWord(word, Script.Latin) is { } resolution)
+            {
+                foreach (var candidate in resolution.Candidates)
+                {
+                    var entry = await LookupHeadwordAsync(language.Language, candidate.Lemma, ct)
+                        .ConfigureAwait(false);
+                    if (entry is null) continue;
+
+                    resolvedAny = true;
+                    glosses.Add(Project(word, entry, GlossMatch.ViaLemma, language));
+                }
+            }
+
+            if (resolvedAny) continue;
+
+            // No lemma route — try the form itself, and keep a prefix neighbour only as a labelled last resort.
+            var direct = await _dictionary
                 .LookupAsync(new DictionaryRequest(language.Language, word, Script.Latin, MaxEntries: 1), ct)
                 .ConfigureAwait(false);
+            if (direct.Count == 0) continue;
 
-            // Only an EXACT headword match is a gloss for this word. The lookup falls back to the nearest
-            // prefix run on a miss, which is right for a person browsing and wrong here: injecting a
-            // neighbouring headword as though it defined the word invents a definition the model will trust.
-            var hit = entries.FirstOrDefault(e =>
-                string.Equals(e.Headword, word, StringComparison.OrdinalIgnoreCase));
-            if (hit is null) continue;
+            var hit = direct[0];
+            var exact = string.Equals(hit.Headword, word, StringComparison.OrdinalIgnoreCase);
+            if (!exact)
+            {
+                // Bounded, and required to be lexically plausible. Both are about noise, not meaning: the
+                // model decides whether an entry fits, but an entry sharing three letters with the word is
+                // not a candidate it should have to consider.
+                if (neighbours >= MaxNeighbourGlosses) continue;
+                if (SharedPrefixLength(word, hit.Headword) < MinimumNeighbourPrefix) continue;
+                neighbours++;
+            }
 
-            glosses.Add(new GlossEntry(
-                hit.Headword,
-                PlainText(hit.MeaningHtml),
-                hit.Source ?? language.Source?.Title,
-                hit.LemmaId));
+            glosses.Add(Project(word, hit, exact ? GlossMatch.Exact : GlossMatch.Neighbour, language));
         }
+
+        // Spelled out in the report because the template renders it and the model must not read a gap as a
+        // finding: the word set is chosen heuristically before anything has read the passage.
+        var detail =
+            $"{glosses.Count} candidate(s) for {words.Count} heuristically-chosen word(s) from " +
+            $"'{language.Language}'; candidates only, and absence means unmatched rather than undefined" +
+            (lemmasAvailable ? "" : " — WITHOUT lemma resolution, so inflected forms mostly went unmatched");
 
         parts.Add(new BundlePart(
             BundlePartNames.Glosses,
             truncatedWords ? BundlePartState.TrimmedForBudget : BundlePartState.Included,
-            $"{glosses.Count} of {words.Count} word(s) matched a headword in '{language.Language}'"));
+            detail));
 
         return glosses;
     }
+
+    private static int SharedPrefixLength(string a, string b)
+    {
+        var max = Math.Min(a.Length, b.Length);
+        var i = 0;
+        while (i < max && char.ToLowerInvariant(a[i]) == char.ToLowerInvariant(b[i])) i++;
+        return i;
+    }
+
+    /// <summary>An exact headword lookup, or null. Used for a lemma, which IS a headword by construction.</summary>
+    private async Task<DictionaryEntry?> LookupHeadwordAsync(
+        string language, string headword, CancellationToken ct)
+    {
+        var entries = await _dictionary
+            .LookupAsync(new DictionaryRequest(language, headword, Script.Latin, MaxEntries: 1), ct)
+            .ConfigureAwait(false);
+
+        return entries.FirstOrDefault(e =>
+            string.Equals(e.Headword, headword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static GlossEntry Project(
+        string form, DictionaryEntry entry, GlossMatch match, DictionaryLanguageInfo language) =>
+        new(form,
+            entry.Headword,
+            PlainText(entry.MeaningHtml),
+            match,
+            entry.Source ?? language.Source?.Title,
+            entry.LemmaId);
 
     private IReadOnlyList<LemmaEntry> GatherLemmas(
         IReadOnlyList<string> words, AiTask task, List<BundlePart> parts)

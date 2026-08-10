@@ -43,17 +43,53 @@ public sealed record AiContextRequest(
 public sealed record SelectionContext(string Text, bool FoundInWindow);
 
 /// <summary>
-/// A dictionary gloss, projected to PLAIN TEXT.
+/// How a dictionary entry was reached from the word in the text. Carried so the model can weigh it: the app
+/// reports provenance, the model judges fit.
+/// </summary>
+public enum GlossMatch
+{
+    /// <summary>The word in the text IS the headword.</summary>
+    Exact,
+
+    /// <summary>
+    /// The word was resolved to a lemma by DPD and the lemma's entry is what appears here. The normal case for
+    /// running text, where nearly every word is inflected — <c>appamādo</c> in the text, <c>appamāda</c> in the
+    /// dictionary.
+    /// </summary>
+    ViaLemma,
+
+    /// <summary>
+    /// Neither: the nearest headword sharing a leading prefix. <b>Weak — this is not a definition of the word.</b>
+    /// Kept rather than dropped because it is occasionally the right entry under an unusual sandhi, but it must
+    /// be labelled so the model does not read it as authoritative.
+    /// </summary>
+    Neighbour,
+}
+
+/// <summary>
+/// A dictionary gloss for a word in the passage, projected to PLAIN TEXT.
 ///
 /// <para><c>DictionaryEntry.MeaningHtml</c> is an HTML fragment. Injecting markup wastes tokens on tags the
 /// model must ignore and invites it to echo them back into the answer, so the projection happens here rather
 /// than being left to the prompt template.</para>
+///
+/// <para><b>A gloss is a candidate, not a verdict — including an exact one.</b> A Pāli surface form can be a
+/// homograph of an entirely different word, not merely a different sense of the same one, and DPD models that
+/// directly: <c>ResolveWord</c> returns SEVERAL lemma candidates for such a form and says the caller
+/// disambiguates. So several entries here may share a <see cref="Form"/> while being alternative readings of
+/// it. Deciding which one the passage supports is a job only something reading the context can do; the app's
+/// responsibility is to report faithfully what it found and by what route (<see cref="Match"/>). A filter here
+/// that guessed on the model's behalf would just be a silent, less-informed version of the same judgement, and
+/// the prompt template says as much explicitly (#582).</para>
 /// </summary>
+/// <param name="Form">The word as it appears in the passage.</param>
 /// <param name="Attribution">The dictionary's own recorded citation, so a gloss the model repeats can be
 /// attributed honestly. Null when the dictionary records none — never inferred.</param>
 public sealed record GlossEntry(
+    string Form,
     string Headword,
     string Meaning,
+    GlossMatch Match,
     string? Attribution,
     long? LemmaId);
 
@@ -139,6 +175,14 @@ public static class BundlePartNames
 /// <para>Keeping it data is what makes the feature testable: a bundle can be asserted against the real corpus
 /// with no API key, no network and no spend, and it can be dumped and read by a human deciding whether the
 /// model was given a fair chance. A prompt string can only be eyeballed. (#580, AI_SURFACE_B.md §3)</para>
+///
+/// <para><b>Everything here is best-effort, and until tool calling arrives it cannot be otherwise.</b> The app
+/// assembles this BEFORE the model has seen the passage, so its choice of which words to gloss is a heuristic
+/// over the text — length, distinctness, a cap — not a response to what the model actually needs. Under tool
+/// calling the model reads first and then asks for the lookups it wants; under injection we are guessing on its
+/// behalf. Two things follow, and <b>#582's system prompt must say both</b>: no entry here is authoritative, and
+/// <b>absence is not evidence</b> — a word with no gloss was missed by the heuristic, not found to be undefined
+/// or unimportant. A model told otherwise will reasonably read the injected set as the relevant set.</para>
 /// </summary>
 public sealed record AiContextBundle(
     AiTask Task,
