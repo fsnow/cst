@@ -118,6 +118,9 @@ public partial class BookDisplayView : UserControl
         this.AttachedToVisualTree += OnAttachedToVisualTree;
         this.DetachedFromVisualTree += OnDetachedFromVisualTree;
 
+        // Zoom is stored per script and applies to book text only, so every book view listens. (#572)
+        SubscribeToZoomChanges();
+
         // Try to create WebView browser
         TryCreateWebView();
     }
@@ -304,6 +307,11 @@ public partial class BookDisplayView : UserControl
     public void Shutdown()
     {
         _isShutDown = true;
+        // Released here rather than on detach: the zoom subscription is on a singleton, so leaving it
+        // attached would root this View (and its rendered DOM) for the session — the same leak shape BOOK-1
+        // describes for the browser itself. Detach is the recycled tab-switch/float path and must NOT
+        // unsubscribe, or a re-attached tab would stop following zoom changes. (#572)
+        UnsubscribeFromZoomChanges();
         DisposeWebView();
     }
 
@@ -637,6 +645,202 @@ public partial class BookDisplayView : UserControl
             token.Above, token.Below, token.Fraction);
         ScrollToPositionToken(token);
     }
+
+    #region Book text zoom (#572)
+
+    // Zoom is stored per script by BookZoomService and pushed into Chromium's own browser-level zoom, which
+    // scales every stylesheet class proportionally — including the heading ladder — for free. That is why
+    // this uses CefBrowserHost.SetZoomLevel rather than injecting CSS: #574 left the stylesheets with
+    // absolute pt sizes on ~15 classes, and CSS would have to override every one of them.
+    private IBookZoomService? _bookZoomService;
+    private EventHandler<BookZoomChangedEventArgs>? _zoomChangedHandler;
+    private System.Timers.Timer? _zoomSettleTimer = null;
+    private ReadingPositionToken? _zoomRestoreToken = null;
+    // Marks a zoom BURST in progress, exactly as _resizeInProgress does for a drag. Holding Cmd+ forwards
+    // auto-repeat, and the ~200ms status tick keeps re-capturing _lastPositionToken throughout — against a
+    // cache the in-page resize handler rebuilds ~100ms after each step. So by the second step the rolling
+    // token already describes the DRIFTED position, and re-snapshotting per step would commit that drift.
+    // Snapshot once, on the first step, while the token is still pre-zoom. (fable review)
+    private bool _zoomInProgress = false;
+    // Bumped on every completed navigation. A deferred scroll restoration records the generation that armed
+    // it, so one belonging to a superseded document can be recognised and dropped. -1 means none pending.
+    private int _navGeneration = 0;
+    private int _deferredScrollGeneration = -1;
+
+    /// <summary>
+    /// Subscribes this view to zoom changes for its script. Called once from the constructor.
+    ///
+    /// The subscription is on a singleton service, so it roots this View until released — the same leak
+    /// shape the FontService subscription had. <see cref="UnsubscribeFromZoomChanges"/> runs from the
+    /// existing shutdown path.
+    /// </summary>
+    private void SubscribeToZoomChanges()
+    {
+        _bookZoomService = App.ServiceProvider?.GetService(typeof(IBookZoomService)) as IBookZoomService;
+        if (_bookZoomService == null)
+        {
+            _logger.Debug("Book zoom service unavailable - zoom will not apply to this view");
+            return;
+        }
+
+        _zoomChangedHandler = (_, args) =>
+        {
+            // Zoom is per script, so a change fires for every open book; only those showing that script care.
+            if (_viewModel == null || _viewModel.BookScript != args.Script) return;
+            Dispatcher.UIThread.Post(() => ApplyZoom(args.Zoom, preservePosition: true));
+        };
+        _bookZoomService.ZoomChanged += _zoomChangedHandler;
+    }
+
+    private void UnsubscribeFromZoomChanges()
+    {
+        if (_bookZoomService != null && _zoomChangedHandler != null)
+            _bookZoomService.ZoomChanged -= _zoomChangedHandler;
+        _zoomChangedHandler = null;
+
+        _zoomSettleTimer?.Stop();
+        _zoomSettleTimer?.Dispose();
+        _zoomSettleTimer = null;
+    }
+
+    /// <summary>
+    /// Pushes this script's stored zoom into the browser without touching the reading position.
+    ///
+    /// Called from <c>OnNavigationCompleted</c>, which covers every route that produces a fresh browser:
+    /// first load, a script change (which reloads), and the float/unfloat cycle that disposes and recreates
+    /// the WebView. Chromium also keeps its own per-origin zoom inside the request context, and all books
+    /// share an origin — so without setting it explicitly on every load, a zoom set while reading one script
+    /// would leak into the next book regardless of its script. Setting it unconditionally here overwrites
+    /// whatever Chromium remembered, which is why this runs even when the value is 1.0.
+    /// </summary>
+    /// <returns>
+    /// True when a zoom other than 100% was applied, i.e. the document is about to reflow. The caller uses
+    /// this to defer resolving any scroll target until the new layout exists.
+    /// </returns>
+    private bool ApplyStoredZoomOnLoad()
+    {
+        if (_bookZoomService == null || _viewModel == null) return false;
+
+        var zoom = _bookZoomService.GetZoom(_viewModel.BookScript);
+        ApplyZoom(zoom, preservePosition: false);
+        return Math.Abs(zoom - 1.0) > 0.001;
+    }
+
+    /// <summary>
+    /// Sets the browser's zoom level.
+    ///
+    /// <paramref name="preservePosition"/> is false on a fresh load — there is no position to keep yet, and
+    /// the saved-anchor restoration in <c>ExecutePendingRestoration</c> owns where the page lands. It is true
+    /// for a live zoom change, where the reflow would otherwise move the text out from under the reader.
+    /// </summary>
+    private void ApplyZoom(double zoom, bool preservePosition)
+    {
+        if (_isShutDown || _webView == null || !_isBrowserInitialized) return;
+
+        var host = CefBrowserAccess.TryGetBrowserHost(_webView, _logger);
+        if (host == null)
+        {
+            // Either the reflection chain broke on a package upgrade (CefBrowserAccess.Probe says so at
+            // startup) or the browser is mid-teardown. Neither is worth an exception on a keystroke.
+            _logger.Debug("Zoom skipped - no browser host available");
+            return;
+        }
+
+        // Snapshot BEFORE the reflow, and only on the FIRST step of a burst. The rolling token is refreshed
+        // by the ~200ms status tick, so it is at most one tick stale but still pre-reflow — the best
+        // available, because a zoom's resize event only arrives after layout has already moved. Re-taking it
+        // on later steps would capture the drift instead. (Same two-part discipline as the resize path.)
+        if (preservePosition && !_zoomInProgress && _anchorCacheBuilt && this.IsVisible)
+        {
+            _zoomInProgress = true;
+            _zoomRestoreToken = _lastPositionToken;
+            _logger.Debug("Zoom started - snapshotted reading position (above={Above}, below={Below}, frac={Frac})",
+                _zoomRestoreToken?.Above, _zoomRestoreToken?.Below, _zoomRestoreToken?.Fraction);
+        }
+
+        try
+        {
+            var level = BookZoomService.ToCefZoomLevel(zoom);
+            host.SetZoomLevel(level);
+            _logger.Information("Applied book zoom {Zoom:P0} (CEF level {Level:0.###}) to {Script}",
+                zoom, level, _viewModel?.BookScript);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Failed to set zoom level | {Details}", ex.Message);
+            _zoomRestoreToken = null;
+            _zoomInProgress = false;   // or the burst flag would latch and suppress the next real snapshot
+            return;
+        }
+
+        if (preservePosition) StartZoomSettle();
+    }
+
+    /// <summary>
+    /// Restores the reading position once the zoom reflow has settled.
+    ///
+    /// The delay has to outlast the in-page resize handler's own 100ms debounce, because a browser zoom
+    /// fires <c>resize</c> and that handler rebuilds the anchor cache — restoring against the stale cache
+    /// would scroll to pre-zoom pixel positions. Same constant as the resize path, for the same reason.
+    /// A repeated press re-arms the timer, so holding Cmd+ restores once at the end rather than fighting
+    /// each intermediate step.
+    /// </summary>
+    private void StartZoomSettle()
+    {
+        if (_zoomSettleTimer == null)
+        {
+            _zoomSettleTimer = new System.Timers.Timer(ResizeSettleMs) { AutoReset = false };
+            _zoomSettleTimer.Elapsed += (_, __) => Dispatcher.UIThread.Post(RestoreAfterZoom);
+        }
+        _zoomSettleTimer.Stop();
+        _zoomSettleTimer.Start();
+    }
+
+    private void RestoreAfterZoom()
+    {
+        // Another zoom step landed while this was queued (or the user simply paused mid-burst) — the burst
+        // is still running, so keep the original pre-zoom snapshot and let the real settle restore it.
+        // Returning WITHOUT clearing _zoomInProgress is the point: it is what stops the next step
+        // re-snapshotting the drifted token. (Mirrors RestoreAfterResize.)
+        if (_zoomSettleTimer?.Enabled == true) return;
+
+        _zoomInProgress = false;
+        if (_isShutDown) return;
+
+        var token = _zoomRestoreToken;
+        _zoomRestoreToken = null;
+        if (token == null || !this.IsVisible) return;
+
+        _logger.Debug("Zoom settled - restoring reading position (above={Above}, below={Below}, frac={Frac})",
+            token.Above, token.Below, token.Fraction);
+        ScrollToPositionToken(token);
+    }
+
+    /// <summary>Zoom in one step. Public so the menu items and keyboard shortcuts can drive it.</summary>
+    public void ZoomIn() => StepZoom(s => s.ZoomIn(_viewModel!.BookScript), "in");
+
+    /// <summary>Zoom out one step.</summary>
+    public void ZoomOut() => StepZoom(s => s.ZoomOut(_viewModel!.BookScript), "out");
+
+    /// <summary>Back to 100% — the shipped stylesheet sizes exactly.</summary>
+    public void ResetZoom() => StepZoom(s => s.ResetZoom(_viewModel!.BookScript), "reset");
+
+    private void StepZoom(Func<IBookZoomService, double> step, string what)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => StepZoom(step, what));
+            return;
+        }
+        if (_bookZoomService == null || _viewModel == null || _isShutDown) return;
+
+        // The service persists and raises ZoomChanged; this view applies it through that event like any
+        // other, so a second tab showing the same script updates by exactly the same route.
+        var zoom = step(_bookZoomService);
+        _logger.Debug("Zoom {What} requested for {Script} - now {Zoom:P0}", what, _viewModel.BookScript, zoom);
+    }
+
+    #endregion
 
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -1610,6 +1814,9 @@ public partial class BookDisplayView : UserControl
                 // Mark browser as initialized for scroll tracking
                 _isBrowserInitialized = true;
 
+                // #572: a new document supersedes any deferred scroll restoration armed by the previous one.
+                Interlocked.Increment(ref _navGeneration);
+
                 // Signal the ViewModel that initialization is complete and navigation can be enabled
                 _viewModel.CompleteInitialization();
 
@@ -1622,6 +1829,11 @@ public partial class BookDisplayView : UserControl
                 // Set up JavaScript bridge after content loads
                 SetupJavaScriptBridge();
 
+                // BEFORE the anchor cache is built: zoom reflows the text, so a cache built at the old zoom
+                // would hold pixel positions that are wrong the moment this applies. The build itself waits
+                // for fonts.ready plus a paint frame, which also covers the relayout this triggers. (#572)
+                var zoomWillReflow = ApplyStoredZoomOnLoad();
+
                 // Build the anchor position cache — UNCONDITIONALLY, because this navigation just gave
                 // the page a fresh JS context (any previous window.cstAnchorCache is gone, whatever
                 // _anchorCacheBuilt claims). No fixed "let it settle" delay: the build itself waits for
@@ -1632,7 +1844,9 @@ public partial class BookDisplayView : UserControl
 
                 // The document is ready — execute any queued restoration (saved anchor or saved
                 // search hit) NOW, from the one signal that knows the DOM exists. (BOOK-7)
-                ExecutePendingRestoration();
+                // When a non-default zoom was just applied the scroll half waits for the reflow, or the
+                // target is computed against the pre-zoom layout. (#572, fable review)
+                ExecutePendingRestoration(zoomWillReflow ? ResizeSettleMs : 0);
             });
         }
     }
@@ -1687,7 +1901,20 @@ public partial class BookDisplayView : UserControl
     // mirroring InitializeAsync's #36 preference for the exact hit over its paragraph anchor.
     // Replaces three racing fixed-delay attempts (1000/500/300 ms) that silently no-opped when the
     // browser wasn't ready, leaving the book at the top on slow loads. (BOOK-7)
-    private void ExecutePendingRestoration()
+    /// <summary>
+    /// <paramref name="delayScrollMs"/> defers only the SCROLL half. (#572)
+    ///
+    /// A load-time zoom other than 100% reflows the document asynchronously — Chromium applies
+    /// <c>SetZoomLevel</c> over browser→renderer IPC, while the restoration scripts go out over a different
+    /// channel — so resolving a scroll target immediately can compute it against the pre-zoom layout and
+    /// land the reader somewhere else. Unlike a live zoom there is no rolling token yet to restore from, so
+    /// nothing would correct it. Every relaunch of a book in a zoomed script hits this. (fable review)
+    ///
+    /// The visibility half is deliberately NOT deferred: a fresh render shows all notes, so delaying
+    /// <see cref="ApplyFootnotesVisibility"/> would flash them for the length of the delay in exactly the
+    /// case we are trying to improve.
+    /// </summary>
+    private void ExecutePendingRestoration(int delayScrollMs = 0)
     {
         if (_viewModel == null || _webView == null || !_isBrowserInitialized)
             return;
@@ -1696,6 +1923,54 @@ public partial class BookDisplayView : UserControl
         // toggle state on every load/reload before the hit/anchor restoration branches below.
         ApplyFootnotesVisibility(_viewModel.ShowFootnotes);
         ApplySearchTermsVisibility(_viewModel.ShowSearchTerms);
+
+        if (delayScrollMs > 0)
+        {
+            // The pending intents are deliberately NOT taken yet — TakePending* consumes them, so reading
+            // them here and acting later would lose them if anything ran in between.
+            //
+            // Tagged with the current navigation. The primary trigger is the CACHE_BUILT signal (see
+            // OnTitleChanged); this timer is only a backstop for the case where the build never reports —
+            // the same failure the anchor-cache watchdog exists for. Whichever fires first wins, because
+            // RunDeferredScrollRestoration clears the tag atomically.
+            var generation = Volatile.Read(ref _navGeneration);
+            Volatile.Write(ref _deferredScrollGeneration, generation);
+            _logger.Debug("Deferring scroll restoration for the load-time zoom reflow (nav {Generation})", generation);
+
+            DispatcherTimer.RunOnce(RunDeferredScrollRestoration, TimeSpan.FromMilliseconds(delayScrollMs * 4));
+            return;
+        }
+
+        ExecutePendingScrollRestoration();
+    }
+
+    /// <summary>
+    /// Runs a deferred scroll restoration exactly once, and only for the navigation that armed it. (#572)
+    ///
+    /// <para>
+    /// The generation check is what stops a stale deferral from firing into a newer document. Without it, a
+    /// script change landing inside the deferral window would let the old timer consume the intents the new
+    /// navigation had just queued — the new load would then find them already taken and fall back to a
+    /// coarser position, which is worse than the race the deferral was added to fix. (fable review)
+    /// </para>
+    /// </summary>
+    private void RunDeferredScrollRestoration()
+    {
+        var generation = Volatile.Read(ref _navGeneration);
+        // Interlocked, not a plain compare-then-write: the CACHE_BUILT signal and the backstop timer can
+        // both arrive, and only the first may act.
+        if (Interlocked.CompareExchange(ref _deferredScrollGeneration, -1, generation) != generation)
+            return;
+
+        if (_isShutDown) return;
+        _logger.Debug("Zoom reflow settled - running deferred scroll restoration (nav {Generation})", generation);
+        ExecutePendingScrollRestoration();
+    }
+
+    private void ExecutePendingScrollRestoration()
+    {
+        if (_viewModel == null || _webView == null || !_isBrowserInitialized)
+            return;
 
         var pendingHit = _viewModel.TakePendingHitNavigation();
         var pendingToken = _viewModel.TakePendingPositionToken();
@@ -1876,6 +2151,14 @@ public partial class BookDisplayView : UserControl
                 {
                     _anchorCacheBuilt = true;
                     _anchorCacheBuildInFlight = false;
+
+                    // #572: a load-time zoom deferred its scroll restoration until the reflow landed. This
+                    // is that signal — build() runs after fonts.ready plus a paint frame, so a CACHE_BUILT
+                    // for the CURRENT navigation means layout has settled at the new zoom. Signal-driven
+                    // rather than a fixed delay, because the reflow's duration is a renderer-side IPC round
+                    // trip that nothing here bounds. (fable review)
+                    if (Volatile.Read(ref _deferredScrollGeneration) == Volatile.Read(ref _navGeneration))
+                        Dispatcher.UIThread.Post(RunDeferredScrollRestoration);
                     // Surface the resolved page NOW instead of waiting for the next scroll tick
                     // (≤200ms) plus its 200ms pre-lock delay. Same lock discipline as
                     // OnScrollPositionCheck: skip (don't block) if JS work is in progress —
@@ -2064,6 +2347,35 @@ public partial class BookDisplayView : UserControl
             catch (Exception ex)
             {
                 _logger.Error("Error processing copy request from JavaScript | {Details}", ex.Message);
+            }
+        }
+        // #572: zoom requested from inside the book WebView, where Chromium would otherwise apply its own
+        // script-blind, per-origin zoom. One branch for all three because they differ only in the action.
+        else if (title != null &&
+                 (title.StartsWith("CST_ZOOM_IN:") || title.StartsWith("CST_ZOOM_OUT:") || title.StartsWith("CST_ZOOM_RESET:")))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+
+                if (messageTabId == _tabId)
+                {
+                    var command = parts[0];
+                    _logger.Debug("*** ZOOM REQUESTED FROM JAVASCRIPT: {Command} ***", command);
+                    // Runs on the CEF thread. StepZoom marshals itself, but posting here keeps this branch
+                    // consistent with its neighbours and keeps the service call off the CEF thread. (BOOK-2)
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (command.StartsWith("CST_ZOOM_IN")) ZoomIn();
+                        else if (command.StartsWith("CST_ZOOM_OUT")) ZoomOut();
+                        else ResetZoom();
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing zoom request from JavaScript | {Details}", ex.Message);
             }
         }
         // Check for select all request from JavaScript
@@ -2378,6 +2690,41 @@ public partial class BookDisplayView : UserControl
                                     return false;
                                 }
 
+                                // #572: Cmd/Ctrl + plus/minus/0 (book zoom). Required for the same reason as
+                                // Go To and Look Up below, not a special case: while CEF holds focus,
+                                // Avalonia never sees the keystroke at all, so the window-level handlers and
+                                // the native menu are both unreachable from inside a book.
+                                //
+                                // It is NOT here to suppress a Chromium built-in. This is an alloy build, so
+                                // the keyboard zoom accelerators (which live in Chromium's chrome layer) are
+                                // absent — which is exactly why #572 reports Cmd+plus doing nothing on macOS
+                                // today, and why the only accidental zoom anyone found was Ctrl+*scroll*.
+                                // The wheel handler further down is the one that does suppress a real
+                                // built-in. preventDefault here is cheap hygiene, not the mechanism.
+                                // (Corrected after fable review; the earlier note claimed the opposite and
+                                // would have misdirected anyone optimising this later.)
+                                //
+                                // Key spellings, all of which reach here: '=' is the unshifted main-row key
+                                // (what Cmd++ actually produces), '+' is the shifted one and the numpad's,
+                                // '-'/'_' likewise, and '0' covers both main row and numpad.
+                                if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+                                    var zoomCmd = null;
+                                    if (event.key === '=' || event.key === '+') { zoomCmd = 'CST_ZOOM_IN'; }
+                                    else if (event.key === '-' || event.key === '_') { zoomCmd = 'CST_ZOOM_OUT'; }
+                                    else if (event.key === '0') { zoomCmd = 'CST_ZOOM_RESET'; }
+
+                                    if (zoomCmd !== null) {
+                                        window.cstLogger.log('DEBUG', 'Zoom shortcut detected in JavaScript: ' + zoomCmd);
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        // Auto-repeat IS forwarded, unlike the modal shortcuts above: holding
+                                        // Cmd+ to run the text up several steps is the expected behaviour of a
+                                        // zoom key, and the ladder plus the settle debounce already bound it.
+                                        document.title = zoomCmd + ':|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                        return false;
+                                    }
+                                }
+
                                 // #443: Cmd+G / Ctrl+G (Go To) - when this WebView has focus, CEF holds the
                                 // native focus so the window's focus resolution comes back empty and the
                                 // native-menu Go To falls back to the first split's book. Forward it like
@@ -2463,6 +2810,44 @@ public partial class BookDisplayView : UserControl
                                     return false;
                                 }
                             }, true); // Use capture phase to intercept before other handlers
+
+                            // #571/#572: Ctrl+scroll. This is the gesture a Windows user already found by
+                            // accident — it applied Chromium's own layout zoom, which reflowed the text and
+                            // lost their place, because nothing on the C# side ever knew it happened. A beta
+                            // tester built a copy-a-line-then-search ritual around exactly that (#570).
+                            //
+                            // Routing it here makes it the same operation as Cmd/Ctrl+plus: it steps the
+                            // per-script ladder, persists, and restores the reading position after the
+                            // reflow. preventDefault is what stops Chromium's parallel, script-blind zoom.
+                            //
+                            // macOS is excluded (cstZoomOnWheel is false there). Trackpad pinch arrives as
+                            // ctrl+wheel too, and pinch on macOS today is page-scale magnification that
+                            // preserves position and does not rewrap — a different, working behaviour that
+                            // this issue was not asked to replace.
+                            if ({_zoomOnWheel}) {
+                                // Trackpads emit a stream of small deltas where a mouse wheel emits one
+                                // notch of ~100, so stepping per event would race up the ladder on a
+                                // trackpad. Accumulate and step on threshold to make both feel the same.
+                                window.__cstWheelAcc = 0;
+                                document.addEventListener('wheel', function(event) {
+                                    if (!event.ctrlKey) { return; }
+                                    event.preventDefault();      // suppress Chromium's own zoom
+                                    event.stopPropagation();
+
+                                    window.__cstWheelAcc += event.deltaY;
+                                    if (Math.abs(window.__cstWheelAcc) < 50) { return; }
+                                    // deltaY is negative scrolling up/away, which is the zoom-IN direction.
+                                    var cmd = window.__cstWheelAcc < 0 ? 'CST_ZOOM_IN' : 'CST_ZOOM_OUT';
+                                    window.__cstWheelAcc = 0;
+                                    document.title = cmd + ':|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                // passive:false is required to preventDefault a wheel event, and it has a
+                                // known cost: a non-passive document-level wheel listener makes Chromium
+                                // wait on the main thread before every scroll, not just ctrl+scroll. That is
+                                // a scroll-latency tax on the largest books, on the platforms where this is
+                                // enabled. Unavoidable while the interception is conditional — the decision
+                                // to cancel can only be made in the handler. (fable review)
+                                }, { capture: true, passive: false });
+                            }
                             
                             window.cstLogger.log('DEBUG', 'Keyboard capture initialized');
                         }
@@ -2634,6 +3019,12 @@ public partial class BookDisplayView : UserControl
 
                 // Replace tab ID placeholder with actual tab ID value
                 script = script.Replace("{_tabId}", _tabId);
+                // #571/#572: Ctrl+scroll drives our per-script zoom on Windows/Linux only. On macOS the same
+                // ctrl+wheel event is what a trackpad pinch produces, and pinch there is page-scale
+                // magnification that keeps the reading position and does not rewrap — working behaviour this
+                // change was not asked to replace. Substituted as a JS literal the same way {_tabId} is: the
+                // script is a verbatim string, so it cannot be interpolated in place.
+                script = script.Replace("{_zoomOnWheel}", OperatingSystem.IsMacOS() ? "false" : "true");
 
                 _webView.ExecuteScript(script);
             }

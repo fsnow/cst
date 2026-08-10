@@ -706,8 +706,47 @@ public partial class SimpleTabbedWindow : Window
     /// This covers focus anywhere in Avalonia's own controls. When a book WebView holds focus, CEF takes
     /// the keystroke before Avalonia sees it - that case is handled by the JS capture in BookDisplayView.
     /// </summary>
+    /// <summary>
+    /// macOS-only: the zoom key spellings a NativeMenu cannot advertise. (#572, fable review)
+    ///
+    /// The View menu declares ⌘=, ⌘- and ⌘0, and on macOS those key equivalents are the only route while
+    /// focus is outside a book (the window-level handlers below all return early there, because a binding
+    /// plus the system menu would fire twice). But a menu item carries exactly one gesture, so ⌘⇧= — which
+    /// is what most people actually press for "⌘+" — and the numpad keys did nothing anywhere except
+    /// inside a book, where the JS capture accepts every spelling. Windows accepts them all everywhere.
+    ///
+    /// No double-fire risk: these are precisely the spellings the menu does NOT register, and with focus in
+    /// the WebView CEF consumes the keystroke before Avalonia sees it.
+    /// </summary>
+    private void RegisterMacZoomKeyBindings()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+
+        AddHandler(KeyDownEvent, (object? s, KeyEventArgs e) =>
+        {
+            // Skip what the View menu already claims, or ⌘= would zoom twice.
+            if (ZoomKeys.IsMacMenuEquivalent(e)) return;
+
+            var command = ZoomKeys.Match(e, PlatformGesture.CommandModifier);
+            if (command == null) return;
+
+            _logger.Debug("*** MAC ZOOM SHORTCUT: {Command} (key={Key}, physical={Physical}) ***",
+                command, e.Key, e.PhysicalKey);
+            e.Handled = true;
+            switch (command)
+            {
+                case ZoomCommand.In: OnZoomInClick(this, EventArgs.Empty); break;
+                case ZoomCommand.Out: OnZoomOutClick(this, EventArgs.Empty); break;
+                default: OnZoomResetClick(this, EventArgs.Empty); break;
+            }
+        }, RoutingStrategies.Bubble);
+
+        _logger.Information("Registered macOS zoom key spellings the View menu cannot declare (shifted + numpad)");
+    }
+
     private void RegisterMenuShortcutKeyBindings()
     {
+        RegisterMacZoomKeyBindings();
         if (OperatingSystem.IsMacOS()) return;
 
         // A bubbling AddHandler, NOT KeyBindings. Measured on Windows: with a ComboBox dropdown open the
@@ -733,6 +772,9 @@ public partial class SimpleTabbedWindow : Window
             (PlatformGesture.Parse("f"),       () => OnSearchForSelectionClick(this, EventArgs.Empty)),
             (PlatformGesture.Parse("e"),       () => OnViewSource1957Click(this, EventArgs.Empty)),
             (PlatformGesture.Parse("shift+e"), () => OnViewSource2010Click(this, EventArgs.Empty)),
+            // #572 book zoom is NOT in this list — it is matched separately below, by physical key as well
+            // as by produced character, because a non-Latin input source makes the KeyGesture route
+            // unreliable. See ZoomKeys.
             // #564: the Window menu's Minimize item declares this gesture, and a NativeMenuBar gesture
             // dispatches nothing off macOS - so without this entry the menu would advertise a dead shortcut.
             (PlatformGesture.Parse("m"), () => WindowState = global::Avalonia.Controls.WindowState.Minimized),
@@ -757,6 +799,20 @@ public partial class SimpleTabbedWindow : Window
                 e.Handled = true;
                 invoke();
                 return;
+            }
+
+            // #572 zoom, after the gesture list so it can never shadow a letter shortcut.
+            var zoom = ZoomKeys.Match(e, PlatformGesture.CommandModifier);
+            if (zoom == null) return;
+
+            _logger.Debug("*** MAIN WINDOW ZOOM SHORTCUT: {Command} (key={Key}, physical={Physical}) ***",
+                zoom, e.Key, e.PhysicalKey);
+            e.Handled = true;
+            switch (zoom)
+            {
+                case ZoomCommand.In: OnZoomInClick(this, EventArgs.Empty); break;
+                case ZoomCommand.Out: OnZoomOutClick(this, EventArgs.Empty); break;
+                default: OnZoomResetClick(this, EventArgs.Empty); break;
             }
         }, RoutingStrategies.Bubble);
 
@@ -857,6 +913,28 @@ public partial class SimpleTabbedWindow : Window
             return;
         }
         book.BookDisplayControl.Print();
+    }
+
+    // #572: book-text zoom. Acts on the active book only — zoom is stored per script, so the change then
+    // propagates through BookZoomService.ZoomChanged to every other open book showing that same script.
+    // "No active book" is a genuine state (an empty window, or focus in the tree), and doing nothing is the
+    // honest answer: zoom has no meaning without a book, and the chrome deliberately never scales.
+    private void OnZoomInClick(object? sender, EventArgs e) => InvokeZoom(b => b.ZoomIn(), "Zoom In");
+
+    private void OnZoomOutClick(object? sender, EventArgs e) => InvokeZoom(b => b.ZoomOut(), "Zoom Out");
+
+    private void OnZoomResetClick(object? sender, EventArgs e) => InvokeZoom(b => b.ResetZoom(), "Actual Size");
+
+    private void InvokeZoom(Action<BookDisplayView> action, string what)
+    {
+        var book = FindActiveBookInThisWindow();
+        if (book?.BookDisplayControl == null)
+        {
+            _logger.Debug("{What}: no active book in window {WindowTitle}", what, this.Title);
+            return;
+        }
+        _logger.Information("{What} from window: {WindowTitle}", what, this.Title);
+        action(book.BookDisplayControl);
     }
 
     // #112: print the current selection in the active book (falls back to whole-book when nothing is selected).
