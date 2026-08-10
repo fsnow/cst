@@ -14,6 +14,14 @@ namespace CST.Avalonia.Services.Ai;
 /// <c>"…done &lt;thi"</c> — so a naive per-chunk <c>Replace</c> both misses the tag and leaks its first half to
 /// the user. This holds back any trailing run that could still become a tag and re-examines it once more text
 /// arrives. <see cref="Flush"/> releases a held-back run that turned out to be ordinary text at end of stream.</para>
+///
+/// <para><b>What is guaranteed, and what is not.</b> Guaranteed: no tag, and no fragment of one, ever reaches
+/// the answer channel — on any chunking. NOT guaranteed: correct classification of text that precedes a closing
+/// tag when the stream <i>began</i> inside a block. That text has already been returned to the caller by the
+/// time the tag arrives, so it cannot be recalled; only when both fall in the same delta is it classified as
+/// reasoning. Fixing that properly would mean withholding output until a tag appears or the stream ends, which
+/// stalls the opening of every ordinary answer to serve a rare case. A literal <c>&lt;/think&gt;</c> written
+/// deliberately in answer prose is swallowed for the same reason — an accepted cost of the heuristic.</para>
 /// </summary>
 internal sealed class ThinkTagFilter
 {
@@ -49,9 +57,12 @@ internal sealed class ThinkTagFilter
                 var stray = buffer.IndexOf(Close, position, StringComparison.OrdinalIgnoreCase);
                 if (stray >= 0 && (open < 0 || stray < open))
                 {
-                    // Text before it is reasoning if nothing has reached the user yet. Once visible text HAS
+                    // Text before it is reasoning if nothing has reached the user yet. Once visible text has
                     // been emitted we cannot retract it — but we can still refuse to render the tag itself.
-                    (_emittedVisible ? visible : reasoning).Append(buffer, position, stray - position);
+                    // `visible.Length` matters as much as the flag: text appended earlier in THIS call is
+                    // returned in the same delta, so it is just as un-retractable as text from a prior one.
+                    var emitted = _emittedVisible || visible.Length > 0;
+                    (emitted ? visible : reasoning).Append(buffer, position, stray - position);
                     position = stray + Close.Length;
                     continue;
                 }
@@ -67,8 +78,20 @@ internal sealed class ThinkTagFilter
             }
 
             // No complete tag ahead. Anything that could still GROW into one has to wait for the next chunk.
+            //
+            // While OUTSIDE a block, BOTH tags matter. Holding back only prefixes of the tag we are hunting for
+            // is what let a split closing tag through: a stream that begins mid-reasoning ends "…options</thi",
+            // and if that tail is released as answer text the next chunk's "nk>" can never be recognised — the
+            // reasoning and the mangled tag both render as the answer, which is the failure this class exists
+            // to prevent, merely relocated to a chunk boundary.
+            var hold = _inside
+                ? LongestTagPrefixSuffix(buffer, position, Close)
+                : Math.Max(
+                    LongestTagPrefixSuffix(buffer, position, Open),
+                    LongestTagPrefixSuffix(buffer, position, Close));
+
             var rest = buffer.Length - position;
-            var holdFrom = buffer.Length - LongestTagPrefixSuffix(buffer, position, tag);
+            var holdFrom = buffer.Length - hold;
             sink.Append(buffer, position, holdFrom - position);
             _held = buffer[holdFrom..];
             position += rest;

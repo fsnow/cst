@@ -86,7 +86,17 @@ internal static class AiHttp
             return builder.Uri;   // already names the endpoint
         }
 
-        var suffix = existing.Length == 0 ? versionedPath : path;
+        // Does the base already carry a version segment? The OpenAI convention is that a "base URL" ends in
+        // one (OPENAI_BASE_URL=https://api.openai.com/v1), so a path WITHOUT one is a mount point that still
+        // needs it — `https://openrouter.ai/api` is the docs' URL with the `/v1` dropped, and appending only
+        // `chat/completions` there yields a 404 that reads as a broken provider rather than a mistyped setting.
+        var lastSegment = existing.Length == 0
+            ? string.Empty
+            : existing[(existing.LastIndexOf('/') + 1)..];
+        var versioned = lastSegment.Length > 1 && (lastSegment[0] is 'v' or 'V') &&
+                        lastSegment[1..].All(char.IsAsciiDigit);
+
+        var suffix = versioned ? path : versionedPath;
         builder.Path = existing.Length == 0 ? suffix : existing + "/" + suffix;
         return builder.Uri;
     }

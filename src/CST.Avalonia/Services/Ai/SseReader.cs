@@ -69,7 +69,7 @@ internal static class SseReader
 
         string? name = null;
         var data = new StringBuilder();
-        var sawAnyLine = false;
+        var sawAnyData = false;
 
         while (true)
         {
@@ -79,7 +79,11 @@ internal static class SseReader
             try
             {
                 line = await reader.ReadLineAsync(deadline.Token).ConfigureAwait(false);
-                deadline.CancelAfter(idleTimeout);
+
+                // Until a DATA line has arrived we are still waiting on time-to-first-token, so each read keeps
+                // the long window. Rescheduling to the idle window here unconditionally would have flipped it on
+                // the first preamble comment, which is the same defect the sawAnyData pivot exists to close.
+                deadline.CancelAfter(sawAnyData ? idleTimeout : firstEventTimeout);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -87,7 +91,7 @@ internal static class SseReader
             }
             catch (OperationCanceledException)
             {
-                var window = sawAnyLine ? idleTimeout : firstEventTimeout;
+                var window = sawAnyData ? idleTimeout : firstEventTimeout;
                 line = null;
                 failure = new AiError(
                     AiErrorKind.Network,
@@ -122,8 +126,6 @@ internal static class SseReader
                 yield break;
             }
 
-            sawAnyLine = true;
-
             // Blank line dispatches the event being accumulated.
             if (line.Length == 0)
             {
@@ -150,6 +152,12 @@ internal static class SseReader
                     name = value;
                     break;
                 case "data":
+                    // The pivot from the first-event window to the ordinary idle window is the first DATA line,
+                    // not merely the first line. A proxy that emits a preamble comment (OpenRouter sends
+                    // ": OPENROUTER PROCESSING") and then waits on a slow backend would otherwise collapse the
+                    // long time-to-first-token allowance to the short idle one — reintroducing exactly the
+                    // problem the two windows exist to separate.
+                    sawAnyData = true;
                     if (data.Length > 0) data.Append('\n');
                     data.Append(value);
                     break;

@@ -144,7 +144,7 @@ public class AnthropicMessagesProviderTests
     [Theory]
     [InlineData(null, "https://api.anthropic.com/v1/messages")]
     [InlineData("https://api.anthropic.com", "https://api.anthropic.com/v1/messages")]
-    [InlineData("https://gateway.example.com/anthropic", "https://gateway.example.com/anthropic/messages")]
+    [InlineData("https://gateway.example.com/anthropic", "https://gateway.example.com/anthropic/v1/messages")]
     [InlineData("https://gateway.example.com/v1/messages", "https://gateway.example.com/v1/messages")]
     public async Task Resolves_the_endpoint_from_assorted_base_urls(string? baseUrl, string expected)
     {

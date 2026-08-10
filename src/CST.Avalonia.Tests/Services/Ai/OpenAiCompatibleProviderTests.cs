@@ -439,12 +439,58 @@ public class OpenAiCompatibleProviderTests
     [Theory]
     [InlineData("https://host/v1?api-version=2024-01", "https://host/v1/chat/completions?api-version=2024-01")]
     [InlineData("https://HOST/V1/CHAT/COMPLETIONS", "https://host/V1/CHAT/COMPLETIONS")]
-    [InlineData("https://host/mychat/completions", "https://host/mychat/completions/chat/completions")]
+    [InlineData("https://host/mychat/completions", "https://host/mychat/completions/v1/chat/completions")]
+    [InlineData("https://openrouter.ai/api", "https://openrouter.ai/api/v1/chat/completions")]
     public async Task Endpoint_resolution_survives_the_awkward_base_urls(string baseUrl, string expected)
     {
         var handler = StubHttpMessageHandler.Sse(HappyStream);
         await CollectAsync(Provider(handler, baseUrl: baseUrl));
 
         Assert.Equal(expected, handler.RequestedUrls.Single().ToString());
+    }
+
+    [Fact]
+    public void A_client_with_a_finite_timeout_is_refused_at_construction()
+    {
+        // Pinned on BOTH adapters: a finite HttpClient.Timeout truncates a long stream and reports it as a
+        // cancellation, and #583's DI wiring is the place most likely to hand one over by accident.
+        var http = new HttpClient(StubHttpMessageHandler.Sse(HappyStream)) { Timeout = TimeSpan.FromSeconds(100) };
+
+        Assert.Throws<ArgumentException>(() =>
+            new OpenAiCompatibleProvider(
+                http, new OpenAiCompatibleOptions("https://x.example/v1"),
+                NullLogger<OpenAiCompatibleProvider>.Instance));
+    }
+
+    [Fact]
+    public async Task An_overlong_provider_code_is_dropped_rather_than_logged()
+    {
+        var handler = StubHttpMessageHandler.Error(
+            HttpStatusCode.BadRequest,
+            "{\"error\":{\"code\":\"" + new string('c', 200) + "\"}}");
+
+        var error = await Assert.ThrowsAsync<AiException>(() => CollectAsync(Provider(handler)));
+
+        Assert.Null(error.Error.ProviderCode);
+    }
+
+    [Fact]
+    public async Task Held_back_think_text_is_flushed_before_an_error_delta_not_after()
+    {
+        // A partial tag is in hand when the failure lands; releasing it after the error would put answer text
+        // beyond a delta the contract says is terminal.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"Answer <th"}}]}
+
+            data: {"error":{"code":"server_error"}}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("Answer <th", Text(deltas));
+        Assert.Equal(ChatDeltaKind.Error, deltas[^1].Kind);
     }
 }
