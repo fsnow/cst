@@ -505,4 +505,28 @@ public class OpenAiCompatibleProviderTests
         Assert.Equal("Answer <th", Text(deltas));
         Assert.Equal(ChatDeltaKind.Error, deltas[^1].Kind);
     }
+
+    [Fact]
+    public async Task Reasoning_on_the_undocumented_field_name_is_also_segregated()
+    {
+        // Captured from a live Ollama serving gpt-oss over its OpenAI-compatible surface: the reasoning arrives
+        // on `reasoning`, not the `reasoning_content` DeepSeek documents. Parsing only the documented name
+        // dropped the whole reasoning stream, which showed up as usage reporting 80 output tokens beside a
+        // one-line answer. OpenRouter uses the same short name.
+        const string stream = """
+            data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning":"The"}}]}
+
+            data: {"choices":[{"index":0,"delta":{"content":"","reasoning":" user asks."}}]}
+
+            data: {"choices":[{"index":0,"delta":{"content":"Appamada is heedfulness."}}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("Appamada is heedfulness.", Text(deltas));
+        Assert.Equal("The user asks.", Reasoning(deltas));
+    }
 }

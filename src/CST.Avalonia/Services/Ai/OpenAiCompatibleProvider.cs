@@ -223,8 +223,14 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
             choices.GetArrayLength() > 0 &&
             AiJson.Object(choices[0], "delta") is { } delta)
         {
-            // Structured reasoning (DeepSeek and others) — never merged into the answer.
-            if (AiJson.String(delta, "reasoning_content") is { Length: > 0 } reasoning)
+            // Structured reasoning — never merged into the answer. The field name is NOT standardised: DeepSeek
+            // documents `reasoning_content`, while Ollama's OpenAI-compat surface (and OpenRouter) use plain
+            // `reasoning`. Verified against a live Ollama serving gpt-oss: 73 of its deltas carried `reasoning`
+            // and none carried `reasoning_content`, so parsing only the documented name dropped the model's
+            // entire reasoning stream — leaving usage that says 80 output tokens next to a one-line answer.
+            if (AiJson.String(delta, "reasoning_content") is { Length: > 0 } reasoningContent)
+                yield return ChatDelta.ForReasoning(reasoningContent);
+            else if (AiJson.String(delta, "reasoning") is { Length: > 0 } reasoning)
                 yield return ChatDelta.ForReasoning(reasoning);
 
             if (AiJson.String(delta, "content") is { Length: > 0 } content)
