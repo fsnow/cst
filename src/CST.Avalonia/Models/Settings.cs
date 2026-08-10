@@ -149,5 +149,32 @@ namespace CST.Avalonia.Models
     {
         public string FontFamily { get; set; } = "";
         public int FontSize { get; set; } = 12;
+
+        /// <summary>
+        /// Book-text zoom for this script, as a multiplier on the stylesheet's own sizes. 1.0 renders the
+        /// shipped ladder exactly (body 12pt / chapter 18pt / book 21pt / nikaya 24pt). (#572)
+        ///
+        /// <para>
+        /// NOT a multiplier on <see cref="FontSize"/> above, despite sharing this class. <see cref="FontSize"/>
+        /// sizes app <i>chrome</i> for this script — the book tree, search results, the dictionary pane — and
+        /// zoom never touches any of those. Zoom applies only to book content, through Chromium's own
+        /// browser-level zoom, so it scales every stylesheet class proportionally including headings.
+        /// </para>
+        ///
+        /// <para>
+        /// It lives here because zoom is per script for the same reason the face is: #574 flattened the
+        /// stylesheets to one shared size ladder, so zoom became the only per-script size control, and it is
+        /// calibration for whatever face this script resolves to. Switching a book's script therefore has to
+        /// switch face and zoom together — keeping them in one record is what makes that a single lookup.
+        /// </para>
+        ///
+        /// <para>
+        /// Persisted through <c>SettingsService</c>, whose serializer does not set
+        /// <c>WhenWritingDefault</c> — so unlike <c>ApplicationState</c>, a 1.0 here survives a round-trip
+        /// rather than being silently omitted. Values are clamped on read regardless; see
+        /// <c>BookZoomService</c>.
+        /// </para>
+        /// </summary>
+        public double BookZoom { get; set; } = 1.0;
     }
 }

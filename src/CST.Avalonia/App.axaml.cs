@@ -432,7 +432,13 @@ public partial class App : Application
         try
         {
             Log.Information("InitializeFontsAsync() started");
-            
+
+            // Book zoom (#572) reaches CEF through two reflection hops into non-public members of
+            // WebViewControl/CefGlue. A package upgrade breaks that silently — the shortcut just stops
+            // working — so report resolvability once, here, where it lands in the log next to the other
+            // font/text startup lines. CefBrowserAccessTests fails the build for the same cause.
+            CefBrowserAccess.Probe(Log.Logger);
+
             var fontService = ServiceProvider?.GetRequiredService<IFontService>();
             if (fontService != null)
             {
@@ -1180,6 +1186,10 @@ public partial class App : Application
         services.AddSingleton<IScriptService, ScriptService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IFontService, FontService>();
+        // Per-script book-text zoom (#572). Separate from IFontService: that owns app chrome fonts, this
+        // owns book content size, and #574 made zoom the only per-script size control there is.
+        services.AddSingleton<IBookZoomService>(sp =>
+            new BookZoomService(sp.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IApplicationStateService, ApplicationStateService>();
         services.AddSingleton<ChapterListsService>();
         // Recently-opened-books (MRU) list backing the File → Open Recent menu (#44).
@@ -1384,9 +1394,43 @@ public partial class App : Application
     ///
     /// macOS is excluded deliberately: a binding here plus the system menu's accelerator would fire twice.
     /// </summary>
+    /// <summary>
+    /// Applies a book-zoom keystroke to <paramref name="window"/>'s active book, if it is one.
+    /// Returns true when handled. (#572)
+    /// </summary>
+    private bool ApplyZoomKey(KeyEventArgs e, Window window)
+    {
+        var command = ZoomKeys.Match(e, PlatformGesture.CommandModifier);
+        if (command == null) return false;
+
+        Log.Debug("*** FLOATING WINDOW ZOOM SHORTCUT: {Command} (key={Key}, physical={Physical}) ***",
+            command, e.Key, e.PhysicalKey);
+        e.Handled = true;
+
+        var book = FindActiveBookInFloatingWindow(window)?.BookDisplayControl;
+        switch (command)
+        {
+            case ZoomCommand.In: book?.ZoomIn(); break;
+            case ZoomCommand.Out: book?.ZoomOut(); break;
+            default: book?.ResetZoom(); break;
+        }
+        return true;
+    }
+
     public void RegisterFloatingWindowShortcuts(Window window)
     {
-        if (OperatingSystem.IsMacOS()) return;
+        // #572, fable review: on macOS the floating window's NativeMenu declares ⌘=, ⌘- and ⌘0, but a menu
+        // item carries one gesture each — so ⌘⇧= (what most people press for "⌘+") and the numpad keys were
+        // dead outside the WebView. Register exactly the spellings the menu does not, so nothing double-fires.
+        if (OperatingSystem.IsMacOS())
+        {
+            window.AddHandler(InputElement.KeyDownEvent, (object? s, KeyEventArgs e) =>
+            {
+                if (ZoomKeys.IsMacMenuEquivalent(e)) return;   // the View menu owns ⌘=, ⌘- and ⌘0
+                if (ApplyZoomKey(e, window)) return;
+            }, global::Avalonia.Interactivity.RoutingStrategies.Bubble);
+            return;
+        }
 
         try
         {
@@ -1412,6 +1456,7 @@ public partial class App : Application
                 (PlatformGesture.Parse("o"),        () => SimpleTabbedWindow.RevealSelectBookPanel()),
                 (PlatformGesture.Parse("p"),        () => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.Print()),
                 (PlatformGesture.Parse("shift+p"),  () => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.PrintSelection()),
+                // #572 zoom is matched separately below, by physical key as well as produced character.
                 (PlatformGesture.Parse("OemComma"), () => _ = ShowSettingsWindow()),
             };
 
@@ -1426,6 +1471,8 @@ public partial class App : Application
                     invoke();
                     return;
                 }
+
+                ApplyZoomKey(e, window);   // #572, after the gesture list so it cannot shadow a letter
             }, global::Avalonia.Interactivity.RoutingStrategies.Bubble);
 
             Log.Information("Registered {Count} shortcuts for floating window: {WindowTitle}",
@@ -1492,10 +1539,25 @@ public partial class App : Application
             };
             _dictionaryMenuItems.Add(dictionaryItem);
 
+            // #572: book zoom, mirroring the main window's View menu. macOS shows the menu bar of the
+            // ACTIVE window, so without these three a floated book would have dead zoom keys — the same
+            // hole #448 found for Cmd+D/Cmd+F. Only the "+" spelling can be advertised in a menu; the
+            // keyboard handler above also takes shift+OemPlus and the numpad keys.
+            var zoomInItem = new NativeMenuItem { Header = "Zoom In", Gesture = PlatformGesture.Parse("OemPlus") };
+            zoomInItem.Click += (s, e) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.ZoomIn();
+            var zoomOutItem = new NativeMenuItem { Header = "Zoom Out", Gesture = PlatformGesture.Parse("OemMinus") };
+            zoomOutItem.Click += (s, e) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.ZoomOut();
+            var zoomResetItem = new NativeMenuItem { Header = "Actual Size", Gesture = PlatformGesture.Parse("D0") };
+            zoomResetItem.Click += (s, e) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.ResetZoom();
+
             var viewMenu = new NativeMenu();
             viewMenu.Add(selectBookItem);
             viewMenu.Add(searchItem);
             viewMenu.Add(dictionaryItem);
+            viewMenu.Add(new NativeMenuItemSeparator());
+            viewMenu.Add(zoomInItem);
+            viewMenu.Add(zoomOutItem);
+            viewMenu.Add(zoomResetItem);
 
             // Tools menu: Go To... + View Source (floating windows are book-centric)
             var goToItem = new NativeMenuItem { Header = "Go To...", Gesture = PlatformGesture.Parse("G") };

@@ -41,6 +41,15 @@
                     <NativeMenuItem Header="Select a Book" />
                     <NativeMenuItem Header="Search" />
                     <NativeMenuItem Header="Dictionary" />
+                    <NativeMenuItemSeparator />
+                    <!-- #572 book zoom. The menu carries the discoverability: a beta tester asked for a way
+                         to enlarge the text and, finding none, invented a copy-a-line-then-search ritual
+                         instead (#570). Only the "+" spelling is advertised here - the keyboard handlers
+                         additionally accept shift+OemPlus and the numpad keys, which a menu cannot show.
+                         Zoom is stored per script and applies to book text only, never app chrome. -->
+                    <NativeMenuItem Header="Zoom In" Click="OnZoomInClick" Gesture="{input:CommandGesture OemPlus}" />
+                    <NativeMenuItem Header="Zoom Out" Click="OnZoomOutClick" Gesture="{input:CommandGesture OemMinus}" />
+                    <NativeMenuItem Header="Actual Size" Click="OnZoomResetClick" Gesture="{input:CommandGesture D0}" />
                 </NativeMenu>
             </NativeMenuItem>
 
