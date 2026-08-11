@@ -55,6 +55,10 @@
     <EmbeddedResource Include="Resources\welcome-content.html" />
     <EmbeddedResource Include="Resources\buddha-transparent.png" />
     <EmbeddedResource Include="Resources\LocalApi\llms.txt" />
+    <!-- Surface B prompt templates (#582). Embedded so they cannot go missing from an installed app; the user's
+         edits live beside settings.json and override these at load. Wildcard so adding a preset needs no csproj
+         edit — PromptTemplateNames.All is the list that matters, and a name there with no resource fails loudly. -->
+    <EmbeddedResource Include="Resources\Ai\*.md" />
   </ItemGroup>
 
   <ItemGroup>

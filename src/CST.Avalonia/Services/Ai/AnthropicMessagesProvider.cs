@@ -134,7 +134,8 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         {
             json.WriteStartObject();
             json.WriteString("model", request.Model);
-            json.WriteNumber("max_tokens", request.MaxTokens);   // required by the API
+            // Required by the API, so a null request cap becomes the universal ceiling rather than an omission.
+            json.WriteNumber("max_tokens", request.MaxTokens ?? AiLimits.UniversalMaxTokens);
             json.WriteBoolean("stream", true);
 
             if (!string.IsNullOrEmpty(request.System))
