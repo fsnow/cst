@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -72,19 +73,27 @@ public static class PromptPlaceholders
     };
 
     /// <summary>
-    /// What a template cannot do without. These are the load-bearing ones: a preset template that has lost
-    /// <c>{{passage}}</c> asks the model to explain nothing, and one that has lost <c>{{citation}}</c> invites an
-    /// answer with no scope attached — the exact failure AI_SURFACE_B.md §6 is written against. The system
-    /// template's requirements carry the marking instruction and the answer language.
+    /// What a template cannot do without. Two kinds, both load-bearing.
+    ///
+    /// <para><b>The grounding contract's inputs.</b> A preset template that has lost <c>{{passage}}</c> asks the
+    /// model to explain nothing; one that has lost <c>{{citation}}</c> invites an answer with no scope attached —
+    /// the exact failure AI_SURFACE_B.md §6 is written against. The system template's requirements carry the
+    /// marking instruction and the answer language.</para>
+    ///
+    /// <para><b>The user's own inputs.</b> <c>{{selection}}</c> and <c>{{userQuestion}}</c> are required for the
+    /// same reason, and arguably a stronger one: an override that drops them validates cleanly, and the user then
+    /// selects a phrase, types a question, and gets an answer that saw neither — with nothing to indicate it.
+    /// That is the one silence this design promises not to permit, and it is worse than the equivalent for the
+    /// passage because the user WATCHED themselves supply the input.</para>
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> Required { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
             [PromptTemplateNames.System] = new[] { OutputLanguage, Scope, PaliOpen, PaliClose },
-            [PromptTemplateNames.Explain] = new[] { Passage, Citation },
-            [PromptTemplateNames.Translate] = new[] { Passage, Citation },
-            [PromptTemplateNames.Grammar] = new[] { Passage, Citation, Lemmas },
-            [PromptTemplateNames.WordByWord] = new[] { Passage, Citation, Lemmas },
+            [PromptTemplateNames.Explain] = new[] { Passage, Citation, Selection, UserQuestion },
+            [PromptTemplateNames.Translate] = new[] { Passage, Citation, Selection, UserQuestion },
+            [PromptTemplateNames.Grammar] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
+            [PromptTemplateNames.WordByWord] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
         };
 }
 
@@ -152,7 +161,11 @@ public sealed class PromptTemplateStore : IPromptTemplateStore
 
     private readonly string _overrideDirectory;
     private readonly ILogger<PromptTemplateStore> _logger;
-    private readonly Dictionary<string, IReadOnlyList<string>> _rejected = new(StringComparer.Ordinal);
+    // Concurrent because this is a DI SINGLETON and Get mutates on every call, including the no-override path.
+    // #583's orchestrator and the surface-C endpoints can both be building a prompt at once — a user driving the
+    // panel while an MCP agent hits the API is the ordinary cold-agent test setup, not an exotic one — and a
+    // plain Dictionary under concurrent write corrupts or throws from deep inside prompt assembly.
+    private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _rejected = new(StringComparer.Ordinal);
 
     public PromptTemplateStore(ILogger<PromptTemplateStore> logger)
         : this(Path.Combine(AppConstants.DataDirectory, "ai-templates"), logger)
@@ -166,7 +179,9 @@ public sealed class PromptTemplateStore : IPromptTemplateStore
         _logger = logger;
     }
 
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> RejectedOverrides => _rejected;
+    /// <summary>A snapshot. Handing out the live map would let a caller enumerate it mid-write.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> RejectedOverrides =>
+        new Dictionary<string, IReadOnlyList<string>>(_rejected, StringComparer.Ordinal);
 
     public PromptTemplate Get(string name)
     {
@@ -178,7 +193,7 @@ public sealed class PromptTemplateStore : IPromptTemplateStore
         {
             if (!File.Exists(path))
             {
-                _rejected.Remove(name);
+                _rejected.TryRemove(name, out _);
                 return new PromptTemplate(name, builtIn, IsUserEdited: false);
             }
 
@@ -201,14 +216,13 @@ public sealed class PromptTemplateStore : IPromptTemplateStore
             return new PromptTemplate(name, builtIn, IsUserEdited: false);
         }
 
-        _rejected.Remove(name);
+        _rejected.TryRemove(name, out _);
         return new PromptTemplate(name, text, IsUserEdited: true);
     }
 
     public string GetDefault(string name)
     {
-        if (!PromptTemplateNames.All.Contains(name))
-            throw new ArgumentOutOfRangeException(nameof(name), name, "Not a prompt template name.");
+        EnsureKnown(name);
 
         // Missing means a build problem — the resource is embedded from this same project — so it fails loudly
         // rather than degrading to an empty prompt, which would produce confident answers about nothing.
@@ -223,23 +237,26 @@ public sealed class PromptTemplateStore : IPromptTemplateStore
 
         Directory.CreateDirectory(_overrideDirectory);
         File.WriteAllText(OverridePath(name), text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        _rejected.Remove(name);
+        _rejected.TryRemove(name, out _);
         _logger.LogInformation("Saved a user override for prompt template '{Name}'", name);
     }
 
     public void Reset(string name)
     {
+        // Validated like Get and Save. Without this Reset("../../notes") deletes an arbitrary .md — harmless
+        // while every caller is trusted, and not once #585 puts a Settings control in front of it.
+        EnsureKnown(name);
+
         var path = OverridePath(name);
         if (File.Exists(path)) File.Delete(path);
-        _rejected.Remove(name);
+        _rejected.TryRemove(name, out _);
         _logger.LogInformation("Reset prompt template '{Name}' to the built-in default", name);
     }
 
     /// <summary>Everything wrong with a template, all at once — an editor showing one error at a time is a chore.</summary>
     internal static IReadOnlyList<string> Validate(string name, string text)
     {
-        if (!PromptTemplateNames.All.Contains(name))
-            throw new ArgumentOutOfRangeException(nameof(name), name, "Not a prompt template name.");
+        EnsureKnown(name);
 
         var problems = new List<string>();
 
@@ -259,7 +276,25 @@ public sealed class PromptTemplateStore : IPromptTemplateStore
         foreach (var required in PromptPlaceholders.Required[name].Where(r => !used.Contains(r)))
             problems.Add($"{{{{{required}}}}} is required and is missing");
 
+        // Anything brace-shaped the identifier grammar could not see. {{user_question}}, {{word-by-word}},
+        // {{2lemmas}}, {{ pass age }} and an unclosed {{passage all fail to match, so without this pass they are
+        // INVISIBLE to the unknown-name check above and reach the model as literal braces — the precise outcome
+        // that check exists to prevent, arriving through the one door it does not cover.
+        var residue = PlaceholderPattern.Replace(text, string.Empty);
+        if (residue.Contains("{{", StringComparison.Ordinal) || residue.Contains("}}", StringComparison.Ordinal))
+        {
+            problems.Add(
+                "there is a '{{' or '}}' that is not a valid placeholder — check for a typo, a space, or a "
+                + "missing brace");
+        }
+
         return problems;
+    }
+
+    private static void EnsureKnown(string name)
+    {
+        if (!PromptTemplateNames.All.Contains(name))
+            throw new ArgumentOutOfRangeException(nameof(name), name, "Not a prompt template name.");
     }
 
     private string OverridePath(string name) => Path.Combine(_overrideDirectory, name + ".md");

@@ -45,10 +45,11 @@ public static class PaliQuoteMarkers
 /// still be the first half of a marker.
 ///
 /// <para><b>Unbalanced markers are stripped anyway, and counted.</b> A model that opens a quote and never closes
-/// it should not put a literal <c>[[</c> on screen — a visible defect in the answer for a rule the user never
-/// asked about. But the imbalance is real signal about that model's marker discipline, so
-/// <see cref="UnbalancedMarkers"/> records it for #587 rather than discarding it silently. <see cref="Quotes"/>
-/// counts the properly closed ones, which is the other half of the same measurement.</para>
+/// it — or that doubles or nests the markers, which wikitext-trained models do — should not put a literal
+/// <c>[[</c> on screen. That is a visible defect in the answer for a rule the user never asked about. But the
+/// imbalance is real signal about that model's marker discipline, so <see cref="UnbalancedMarkers"/> records it
+/// for #587 rather than discarding it silently. <see cref="Quotes"/> counts the properly closed ones, which is
+/// the other half of the same measurement.</para>
 ///
 /// <para><b>What this deliberately does not do:</b> it does not preserve span boundaries. v1 renders the Pāli
 /// verbatim, so it needs only removal; v1.1's converter needs the spans themselves and should read them from the
@@ -81,26 +82,27 @@ public sealed class PaliQuoteFilter
         {
             var marker = _inside ? PaliQuoteMarkers.Close : PaliQuoteMarkers.Open;
 
-            // Outside a quote a stray closer is still a marker: strip it, count the imbalance, and carry on.
-            // Leaving it in would render "]]" at the user, which is the one outcome worse than losing the span.
-            if (!_inside)
+            // A marker that cannot be the one we are hunting for is still a marker, and rendering it is the one
+            // outcome worse than losing the span. So whichever comes first wins: outside a quote a stray CLOSER
+            // is stripped and counted; inside one a second OPENER is stripped and counted, and the quote stays
+            // open. The second case is not hypothetical — [[…]] is wikitext link syntax, so a model that has
+            // seen a lot of it will double or nest the markers, and without this "[[[[appamāda]]]]" put a
+            // literal "[[" on screen.
+            var other = _inside ? PaliQuoteMarkers.Open : PaliQuoteMarkers.Close;
+            var mine = buffer.IndexOf(marker, position, StringComparison.Ordinal);
+            var theirs = buffer.IndexOf(other, position, StringComparison.Ordinal);
+            if (theirs >= 0 && (mine < 0 || theirs < mine))
             {
-                var open = buffer.IndexOf(PaliQuoteMarkers.Open, position, StringComparison.Ordinal);
-                var stray = buffer.IndexOf(PaliQuoteMarkers.Close, position, StringComparison.Ordinal);
-                if (stray >= 0 && (open < 0 || stray < open))
-                {
-                    output.Append(buffer, position, stray - position);
-                    position = stray + PaliQuoteMarkers.Close.Length;
-                    UnbalancedMarkers++;
-                    continue;
-                }
+                output.Append(buffer, position, theirs - position);
+                position = theirs + other.Length;
+                UnbalancedMarkers++;
+                continue;
             }
 
-            var hit = buffer.IndexOf(marker, position, StringComparison.Ordinal);
-            if (hit >= 0)
+            if (mine >= 0)
             {
-                output.Append(buffer, position, hit - position);
-                position = hit + marker.Length;
+                output.Append(buffer, position, mine - position);
+                position = mine + marker.Length;
                 if (_inside) Quotes++;
                 _inside = !_inside;
                 continue;

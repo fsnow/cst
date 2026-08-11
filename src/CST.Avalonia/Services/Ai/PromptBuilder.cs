@@ -54,8 +54,13 @@ public sealed class PromptBuilder : IPromptBuilder
     /// <summary>
     /// Output cap per preset. Sized to the shape of the answer rather than uniformly: a word-by-word reading of
     /// a 600-character window is one entry per word plus a running translation, which is far more output than an
-    /// explanation of a passage four times the length. The failure mode of setting these too low is an answer
-    /// truncated mid-list, so they are generous — but the user is paying, so not unboundedly.
+    /// explanation of the 1600-character window Explain gets. The failure mode of setting these too low is an
+    /// answer truncated mid-list, so they lean high — but the user is paying, so not unboundedly.
+    ///
+    /// <para><b>These are estimates and #587 should check them.</b> A full 600-character window is roughly 90
+    /// words; at an entry apiece plus compound splits plus a running translation, word-by-word could plausibly
+    /// run past 3000 and truncate exactly where it hurts most. There is no local tokenizer to size this against,
+    /// so the number is reasoning, not measurement.</para>
     /// </summary>
     private static readonly Dictionary<AiTask, int> OutputBudget = new()
     {
@@ -72,7 +77,8 @@ public sealed class PromptBuilder : IPromptBuilder
     public RenderedPrompt Build(AiContextBundle bundle)
     {
         if (!OutputBudget.TryGetValue(bundle.Task, out var maxTokens))
-            throw new ArgumentOutOfRangeException(nameof(bundle), bundle.Task, "No output budget for this task.");
+            throw new ArgumentOutOfRangeException(
+                $"{nameof(bundle)}.{nameof(bundle.Task)}", bundle.Task, "No output budget for this task.");
 
         var presetName = PromptTemplateNames.ForTask(bundle.Task);
         var system = _templates.Get(PromptTemplateNames.System);
@@ -80,7 +86,9 @@ public sealed class PromptBuilder : IPromptBuilder
 
         // Which parts the inventory may claim is decided by what the preset actually renders, so the two cannot
         // disagree — including after a user edit. Both templates are scanned because either may carry it.
-        var shown = PlaceholdersUsed(system.Text + preset.Text);
+        // Scanned with a separator: "{{" ending the system template and "apparatus}}" opening the preset are
+        // each harmless alone, but concatenated they synthesize a placeholder neither template contains.
+        var shown = PlaceholdersUsed(system.Text + "\n" + preset.Text);
         var values = BuildValues(bundle, shown);
 
         return new RenderedPrompt(
@@ -168,7 +176,10 @@ public sealed class PromptBuilder : IPromptBuilder
         var extent = bundle.Budget.WindowMayExtendPastReference
             ? "It is a reading window starting there — not the whole text, and it may run on past the end of the "
               + "cited reference into what follows it."
-            : "It is a reading window starting there and running to the end of the book file — not the whole text.";
+            // Not "not the whole text": a short book read from the start IS wholly in the window, and telling
+            // the model otherwise buys hedging on an answer that did not need it.
+            : "It is a reading window starting there and running to the end of the book file, which may be less "
+              + "than the whole text.";
 
         return $"an excerpt from {where}. {extent}";
     }
@@ -252,10 +263,21 @@ public sealed class PromptBuilder : IPromptBuilder
                  + "the words could not be analysed.";
         }
 
+        // Order matters. Candidates in hand are reported as candidates whatever the budget report says about
+        // them — the DATA is the ground truth here, and a bookkeeping mismatch must not hide real analysis.
         if (bundle.Lemmas.Count == 0)
         {
+            // No part at all means no lookup was ATTEMPTED — the bundler gathers lemmas only for the
+            // grammatical presets. Reachable through a user override that adds {{lemmas}} to Explain, and
+            // "the lookup returned no candidates" there would describe a lookup that never ran.
+            if (part is null)
+                return "No word analysis was gathered for this request — this preset does not use it.";
+
+            var why = part.State == BundlePartState.TrimmedForBudget
+                ? " The list was also cut to fit the budget."
+                : string.Empty;
             return "The lookup returned no candidates for the words in this passage. That is a gap in the "
-                 + "lookup, not a statement about the words.";
+                 + "lookup, not a statement about the words." + why;
         }
 
         var table = new StringBuilder();
@@ -264,7 +286,7 @@ public sealed class PromptBuilder : IPromptBuilder
         foreach (var entry in bundle.Lemmas)
         {
             table.AppendLine(
-                $"| {entry.Form} | {entry.Lemma} | {entry.PartOfSpeech ?? "—"} | {Cell(entry.Gloss)} |");
+                $"| {Cell(entry.Form)} | {Cell(entry.Lemma)} | {Cell(entry.PartOfSpeech)} | {Cell(entry.Gloss)} |");
         }
 
         if (part is { State: BundlePartState.TrimmedForBudget })
@@ -278,7 +300,11 @@ public sealed class PromptBuilder : IPromptBuilder
         return table.ToString().TrimEnd();
     }
 
-    /// <summary>A pipe in a gloss would break the row it sits in; a newline would break the table.</summary>
+    /// <summary>
+    /// A pipe in a cell would break the row it sits in; a newline would break the table. Applied to every field,
+    /// not just the gloss: the stem and part-of-speech come from the separately versioned DPD asset, which this
+    /// code should not assume will stay pipe-free.
+    /// </summary>
     private static string Cell(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? "—"

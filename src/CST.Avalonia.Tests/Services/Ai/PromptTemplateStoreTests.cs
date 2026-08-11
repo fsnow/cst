@@ -25,6 +25,9 @@ public class PromptTemplateStoreTests : IDisposable
         _store = new PromptTemplateStore(_dir, NullLogger<PromptTemplateStore>.Instance);
     }
 
+    /// <summary>The smallest override that passes validation for the Explain preset.</summary>
+    private const string ExplainMinimum = "{{citation}} {{passage}} {{selection}} {{userQuestion}}";
+
     public void Dispose()
     {
         if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
@@ -56,7 +59,7 @@ public class PromptTemplateStoreTests : IDisposable
     [Fact]
     public void A_valid_override_replaces_the_built_in()
     {
-        var text = "My own instructions.\n\n{{citation}}\n\n{{passage}}";
+        var text = "My own instructions.\n\n{{citation}}\n\n{{passage}}\n{{selection}}\n{{userQuestion}}";
         _store.Save(PromptTemplateNames.Explain, text);
 
         var template = _store.Get(PromptTemplateNames.Explain);
@@ -68,7 +71,7 @@ public class PromptTemplateStoreTests : IDisposable
     [Fact]
     public void Reset_goes_back_to_the_built_in()
     {
-        _store.Save(PromptTemplateNames.Explain, "{{citation}} {{passage}}");
+        _store.Save(PromptTemplateNames.Explain, ExplainMinimum);
         _store.Reset(PromptTemplateNames.Explain);
 
         var template = _store.Get(PromptTemplateNames.Explain);
@@ -91,7 +94,8 @@ public class PromptTemplateStoreTests : IDisposable
         // The failure this guards is silent and total: the model is asked to explain a passage it was never
         // given, and answers anyway.
         var error = Assert.Throws<PromptTemplateException>(
-            () => _store.Save(PromptTemplateNames.Explain, "Explain it. {{citation}}"));
+            () => _store.Save(PromptTemplateNames.Explain,
+                "Explain it. {{citation}} {{selection}} {{userQuestion}}"));
 
         Assert.Contains("{{passage}}", error.Problems.Single());
     }
@@ -102,7 +106,8 @@ public class PromptTemplateStoreTests : IDisposable
         // Left in, it would reach the model as a literal "{{glosses}}" — which reads to the model as a section
         // that should have been filled and was not.
         var error = Assert.Throws<PromptTemplateException>(
-            () => _store.Save(PromptTemplateNames.Explain, "{{citation}} {{passage}} {{glosses}}"));
+            () => _store.Save(PromptTemplateNames.Explain,
+                "{{citation}} {{passage}} {{selection}} {{userQuestion}} {{glosses}}"));
 
         Assert.Contains("{{glosses}}", error.Problems.Single());
     }
@@ -123,9 +128,9 @@ public class PromptTemplateStoreTests : IDisposable
     {
         var problems = PromptTemplateStore.Validate(PromptTemplateNames.Grammar, "{{nope}} {{alsoNope}}");
 
-        // Two unknown placeholders and three missing required ones — an editor that showed these one per save
+        // Two unknown placeholders and five missing required ones — an editor that showed these one per save
         // would be a chore to use.
-        Assert.Equal(5, problems.Count);
+        Assert.Equal(7, problems.Count);
     }
 
     [Fact]
@@ -140,7 +145,7 @@ public class PromptTemplateStoreTests : IDisposable
 
         Assert.False(template.IsUserEdited);
         Assert.Equal(_store.GetDefault(PromptTemplateNames.Explain), template.Text);
-        Assert.Equal(2, _store.RejectedOverrides[PromptTemplateNames.Explain].Count);
+        Assert.Equal(4, _store.RejectedOverrides[PromptTemplateNames.Explain].Count);
     }
 
     [Fact]
@@ -163,9 +168,64 @@ public class PromptTemplateStoreTests : IDisposable
         _store.Get(PromptTemplateNames.Explain);
         Assert.True(_store.RejectedOverrides.ContainsKey(PromptTemplateNames.Explain));
 
-        _store.Save(PromptTemplateNames.Explain, "{{citation}} {{passage}}");
+        _store.Save(PromptTemplateNames.Explain, ExplainMinimum);
         _store.Get(PromptTemplateNames.Explain);
 
+        Assert.False(_store.RejectedOverrides.ContainsKey(PromptTemplateNames.Explain));
+    }
+
+    [Theory]
+    [InlineData("{{citation}} {{passage}} {{selection}} {{userQuestion}} {{user_question}}")]
+    [InlineData("{{citation}} {{passage}} {{selection}} {{userQuestion}} {{2lemmas}}")]
+    [InlineData("{{citation}} {{passage}} {{selection}} {{userQuestion}} {{word-by-word}}")]
+    [InlineData("{{citation}} {{passage}} {{selection}} {{userQuestion}} {{pass age}}")]
+    [InlineData("{{citation}} {{passage}} {{selection}} {{userQuestion}} {{passage")]
+    public void A_near_miss_placeholder_is_caught_rather_than_sent_as_literal_braces(string text)
+    {
+        // Found by adversarial review. These do not match the identifier grammar, so the unknown-NAME check
+        // cannot see them at all — and without a second pass they sail through validation and reach the model
+        // as literal braces, which is the precise outcome that check exists to prevent.
+        var problems = PromptTemplateStore.Validate(PromptTemplateNames.Explain, text);
+
+        Assert.Contains(problems, p => p.Contains("not a valid placeholder"));
+    }
+
+    [Fact]
+    public void Save_refuses_a_template_that_drops_the_readers_own_selection_or_question()
+    {
+        // The one silence this design promises not to permit. The user selects a phrase, types a question, and
+        // gets an answer that saw neither — worse than the equivalent for the passage, because they WATCHED
+        // themselves supply the input.
+        var error = Assert.Throws<PromptTemplateException>(
+            () => _store.Save(PromptTemplateNames.Explain, "{{citation}} {{passage}}"));
+
+        Assert.Contains(error.Problems, p => p.Contains("{{selection}}"));
+        Assert.Contains(error.Problems, p => p.Contains("{{userQuestion}}"));
+    }
+
+    [Fact]
+    public void Reset_refuses_a_name_that_would_escape_the_override_directory()
+    {
+        // Trusted callers today; #585 puts a Settings control in front of it.
+        Assert.Throws<ArgumentOutOfRangeException>(() => _store.Reset("../../notes"));
+    }
+
+    [Fact]
+    public void Concurrent_reads_do_not_corrupt_the_rejection_map()
+    {
+        // The store is a DI singleton and Get mutates on EVERY call, including the no-override path. #583's
+        // orchestrator plus a surface-C agent hitting the API is concurrent Build by construction.
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "grammar.md"), "broken");
+
+        System.Threading.Tasks.Parallel.For(0, 200, _ =>
+        {
+            _store.Get(PromptTemplateNames.Explain);
+            _store.Get(PromptTemplateNames.Grammar);
+            _ = _store.RejectedOverrides.Count;
+        });
+
+        Assert.True(_store.RejectedOverrides.ContainsKey(PromptTemplateNames.Grammar));
         Assert.False(_store.RejectedOverrides.ContainsKey(PromptTemplateNames.Explain));
     }
 
@@ -174,7 +234,9 @@ public class PromptTemplateStoreTests : IDisposable
     {
         // "{{ passage }}" is the obvious thing to type and would otherwise fail as a MISSING required
         // placeholder — a message pointing at the one thing the user did include.
-        Assert.Empty(PromptTemplateStore.Validate(PromptTemplateNames.Explain, "{{ citation }} {{ passage }}"));
+        Assert.Empty(PromptTemplateStore.Validate(
+            PromptTemplateNames.Explain,
+            "{{ citation }} {{ passage }} {{ selection }} {{ userQuestion }}"));
     }
 
     [Fact]

@@ -53,7 +53,8 @@ from Pāli.
 ## Writing the answer
 
 - Write in {{outputLanguage}}. Quoted Pāli stays Pāli.
-- Call them "Pāli texts", "the Tipiṭaka", "the canon", or "VRI texts"; say "the tradition" or "the commentarial
-  tradition" where you mean those.
+- When you name these texts collectively, or the tradition they come from, call them "Pāli texts", "the
+  Tipiṭaka", "the canon", or "VRI texts", and say "the tradition" or "the commentarial tradition". Use those
+  terms in whatever language you are writing in, in place of whatever that language's default phrase would be.
 - Be concrete. Show the reader what is in the passage rather than summarizing it from a distance.
 - No preamble about what you are about to do. Answer.

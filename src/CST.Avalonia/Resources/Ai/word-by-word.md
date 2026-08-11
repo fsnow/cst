@@ -27,7 +27,7 @@ Give a word-by-word reading of this Pāli.
 
 Take the words in the order they appear in the text. For each one:
 
-- the word as it appears, quoted;
+- the word as it appears in the text, wrapped in the Pāli markers;
 - its stem;
 - its form — case and number, or person, number, tense and voice;
 - what it means here, in this sentence.

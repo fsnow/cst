@@ -38,6 +38,9 @@ public class PromptBuilderTests : IDisposable
         if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
     }
 
+    /// <summary>The smallest override that validates: every required placeholder, no prose.</summary>
+    private const string Minimal = "{{citation}}\n{{passage}}\n{{selection}}\n{{userQuestion}}";
+
     private static AiContextBundle Bundle(
         AiTask task = AiTask.Explain,
         string passage = "appamādo amatapadaṃ, pamādo maccuno padaṃ.",
@@ -199,6 +202,20 @@ public class PromptBuilderTests : IDisposable
     }
 
     [Fact]
+    public void A_preset_that_gathers_no_lemmas_says_so_rather_than_reporting_an_empty_lookup()
+    {
+        // Reachable by adding {{lemmas}} to a preset that does not gather them — the bundler records a lemmas
+        // part only for Grammar and WordByWord. Saying "the lookup returned no candidates" here would describe
+        // a lookup that never ran, which is the same class of false diagnostic as an empty section.
+        _store.Save(PromptTemplateNames.Explain, Minimal + "\n{{lemmas}}");
+
+        var prompt = _builder.Build(Bundle());
+
+        Assert.Contains("this preset does not use it", prompt.UserContent);
+        Assert.DoesNotContain("gap in the lookup", prompt.UserContent);
+    }
+
+    [Fact]
     public void Lemmas_render_as_a_table_and_a_pipe_in_a_gloss_does_not_break_a_row()
     {
         var prompt = _builder.Build(Bundle(
@@ -286,7 +303,7 @@ public class PromptBuilderTests : IDisposable
         // only the translate template rendered the notes, so on every other preset the model was told it had
         // been given something it could not see. Deriving the inventory from the template's own placeholders
         // makes the two agree by construction, including after a user edit.
-        _store.Save(PromptTemplateNames.Explain, "{{citation}}\n{{passage}}\n{{provisions}}");
+        _store.Save(PromptTemplateNames.Explain, Minimal + "\n{{provisions}}");
 
         var prompt = _builder.Build(Bundle(
             parts: new[]
@@ -303,7 +320,7 @@ public class PromptBuilderTests : IDisposable
     public void A_degradation_in_a_part_the_preset_does_not_use_is_not_reported_to_the_user()
     {
         // An Explain answer is not worse for the word-analysis download being absent — it never asked for one.
-        _store.Save(PromptTemplateNames.Explain, "{{citation}}\n{{passage}}\n{{provisions}}");
+        _store.Save(PromptTemplateNames.Explain, Minimal + "\n{{provisions}}");
 
         var prompt = _builder.Build(Bundle(
             parts: new[]
@@ -346,7 +363,7 @@ public class PromptBuilderTests : IDisposable
     [Fact]
     public void A_valid_prompt_edit_is_used_and_reported_as_nothing()
     {
-        _store.Save(PromptTemplateNames.Explain, "MY TEMPLATE\n{{citation}}\n{{passage}}");
+        _store.Save(PromptTemplateNames.Explain, "MY TEMPLATE\n" + Minimal);
 
         var prompt = _builder.Build(Bundle(windowMayExtendPastReference: false));
 

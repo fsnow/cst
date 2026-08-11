@@ -265,6 +265,15 @@ answer about three paragraphs. Three fences:
 4. **A trimmed passage gets a visible "partial passage" badge**, driven by `BudgetReport`. A *translation*
    labelled as of a passage that was silently truncated is a fidelity failure specific to this corpus.
 
+> **Fence 4 was not delivered as written — 2026-08-11 (#580/#582).** There is **no truncation flag** to drive
+> the badge. The obvious candidate, `PassageResult.NextCursor`, is non-null whenever the window ends before the
+> end of the *book file* rather than before the end of the requested reference, so on the real corpus it is set
+> for almost every request — a badge driven by it would fire always, and a fidelity signal that always fires is
+> one users learn to ignore. What ships instead is the weaker true statement, `WindowMayExtendPastReference`,
+> told to the model in the scope declaration (fence 1) and to the user as a notice. **A genuine
+> paragraph-scoped trim badge needs the passage reader to report whether the window covered the reference** —
+> unbuilt work, not an oversight in #582.
+
 Free-form follow-up on the Explain preset is the leak in the dam — keep it, but these are its seatbelts.
 
 ---

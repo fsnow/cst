@@ -78,6 +78,59 @@ public class PaliQuoteFilterTests
     }
 
     [Fact]
+    public void Doubled_markers_do_not_put_a_literal_bracket_on_screen()
+    {
+        // Found by adversarial review. [[…]] is wikitext link syntax, so a model with a lot of wiki in its
+        // training set will double the markers — and the earlier version, which hunted only for a CLOSER while
+        // inside a quote, passed the second opener through as content and rendered "[[appamāda" at the user.
+        var (text, filter) = FeedByCharacter("[[[[appamāda]]]]");
+
+        Assert.Equal("appamāda", text);
+        Assert.Equal(1, filter.Quotes);
+        Assert.Equal(2, filter.UnbalancedMarkers);
+    }
+
+    [Fact]
+    public void Nested_markers_are_flattened_rather_than_rendered()
+    {
+        var (text, filter) = FeedByCharacter("[[a [[b]] c]]");
+
+        Assert.Equal("a b c", text);
+        Assert.DoesNotContain("[", text);
+        Assert.DoesNotContain("]", text);
+        Assert.Equal(2, filter.UnbalancedMarkers);
+    }
+
+    [Fact]
+    public void No_input_can_put_a_marker_fragment_on_screen()
+    {
+        // The class's central promise, asserted over the shapes a confused model actually produces rather than
+        // over one hand-picked case.
+        var inputs = new[]
+        {
+            "[[a]]", "[[[[a]]]]", "[[a [[b]] c]]", "]]a[[", "[[a", "a]]", "[[]]", "[[[a]]]",
+            "a [[b]] c ]] d [[ e", "[[a]] [[b", "]]]]", "[[[[",
+        };
+
+        foreach (var input in inputs)
+        {
+            var (text, _) = FeedByCharacter(input);
+
+            Assert.DoesNotContain(PaliQuoteMarkers.Open, text);
+            Assert.DoesNotContain(PaliQuoteMarkers.Close, text);
+        }
+    }
+
+    [Fact]
+    public void An_empty_delta_is_harmless()
+    {
+        var filter = new PaliQuoteFilter();
+
+        Assert.Equal(string.Empty, filter.Feed(string.Empty));
+        Assert.Equal("a", filter.Feed("a") + filter.Flush());
+    }
+
+    [Fact]
     public void A_single_bracket_in_ordinary_prose_survives()
     {
         // Held back while it might grow into a marker, then released as the ordinary text it was.
