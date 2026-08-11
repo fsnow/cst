@@ -31,6 +31,56 @@ Two rules follow:
   passes grounded is direct evidence for that bet; the same verdict without the grounding state is nearly
   worthless.
 
+## The model matrix
+
+**The target audience is frontier models** (AI_INTEGRATION.md §11.1), and this file's verdicts are only
+meaningful against a matrix that includes them. What is listed here is the *sub-frontier* half — cheap to run,
+and the half that actually decides two open questions: whether #584's advisory has evidence behind it, and
+whether the lemma injection #580 kept "for grammar and word-by-word only" earns its place, since §4 records
+that **the interesting cell is the sub-frontier one**.
+
+### Ollama cloud, free tier (probed 2026-08-11, fsnow's account)
+
+Ollama's cloud catalogue is much larger than any one account can reach; most of it is subscription-gated. These
+are the models that actually answer on a free account, largest first:
+
+| Model tag | Parameters | Context |
+|---|---|---|
+| `nemotron-3-ultra:cloud` | 550B | 262K |
+| `minimax-m3:cloud` | MoE (not reported) | 524K |
+| `nemotron-3-super:cloud` | 120B | 262K |
+| `gpt-oss:120b-cloud` | 117B | 131K |
+| `gemma4:cloud` (= `gemma4:31b-cloud`) | 32.7B | 262K |
+| `nemotron-3-nano:30b-cloud` | 32B | 262K |
+| `gpt-oss:20b-cloud` | 20.9B | 131K |
+
+**Gated behind a paid plan**, so not available for routine runs: `glm-5.2`, `glm-5.1`, `deepseek-v4-flash`,
+`deepseek-v4-pro`, `kimi-k2.6`, `kimi-k2.7-code`, `minimax-m2.7`, `qwen3.5` (both cloud tags),
+`mistral-large-3:675b`. `kimi-k3` needs a plan *and* extra usage on top.
+
+> **`gpt-oss:120b` is not the best available and should stop being the default probe.** It is fourth of seven by
+> size, and it is only the one appearing in the observations below because it was the model at hand
+> (fsnow: *"you are testing with that one only because I am familiar with it… not because it is the best
+> available"*). **`nemotron-3-ultra:cloud` is 550B and free.** Re-running the case set across the tiers above is
+> the standing next step for #587 — a single-model column is not a matrix, and a failure observed on one
+> mid-tier model tells you about that model, not about the tier.
+
+### First cross-model observation (2026-08-11)
+
+The same Explain request, on the same passage, run across three of the tiers:
+
+| Model | Scope refusal | Marker discipline | Incidental glossing |
+|---|---|---|---|
+| `nemotron-3-ultra:cloud` | correct | correct, inline included | correct — *amatapadaṃ* as "the deathless state/path", *pamāda* as "heedlessness" |
+| `minimax-m3:cloud` | correct | correct, inline included | no glosses volunteered |
+| `gpt-oss:120b-cloud` | correct | correct after the prompt fix (Case 3) | **wrong** — "the unsurpassed foot-path", "the samsaric condition" |
+
+The fences from AI_SURFACE_B.md §6 held on every tier, which is the more reassuring half of this result. **Case 2
+was not re-tested**: neither larger model volunteered a full translation, so its failure signature had nothing
+to fire on. Running Case 2 properly needs the Translate preset, not Explain.
+
+---
+
 ## Adding a case
 
 A case earns its place when it has:
