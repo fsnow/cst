@@ -1,0 +1,183 @@
+using System;
+using System.Net.Http;
+using System.Threading;
+using CST.Avalonia.Models;
+using Microsoft.Extensions.Logging;
+
+namespace CST.Avalonia.Services.Ai;
+
+/// <summary>Which wire format a configured endpoint speaks.</summary>
+public enum ChatProviderKind
+{
+    /// <summary>The Anthropic Messages API. The standing default (AI_INTEGRATION.md §11.1).</summary>
+    Anthropic,
+
+    /// <summary>The OpenAI-compatible Chat Completions shape — DeepSeek, OpenRouter, Ollama, LM Studio, …</summary>
+    OpenAiCompatible,
+}
+
+/// <summary>
+/// Where the API key lives. <b>Declared here, implemented by #579</b> (Keychain on macOS, DPAPI on Windows).
+///
+/// <para>Resolved with <c>GetService</c> rather than <c>GetRequiredService</c>, exactly as the optional
+/// DPD-lemma asset is: its absence is a supported configuration that the resolver reports, not a wiring error.
+/// That is what lets surface B run today against a local endpoint that needs no key at all.</para>
+/// </summary>
+public interface IAiCredentialStore
+{
+    /// <summary>The stored key for a provider, or null when none is stored.</summary>
+    string? GetApiKey(ChatProviderKind provider);
+}
+
+/// <summary>
+/// A configured provider, ready to call.
+/// </summary>
+/// <param name="Model">The model id, verbatim as the user typed it. Never validated against a list — the
+/// OpenAI-compatible shape serves arbitrary endpoints, so any list we shipped would be wrong within a month.</param>
+public sealed record ChatProviderResolution(IChatProvider Provider, string Model);
+
+/// <summary>Resolves the configured provider, or explains why there isn't one.</summary>
+public interface IChatProviderResolver
+{
+    /// <summary>
+    /// The configured provider, or null with <paramref name="problem"/> describing what the user must set.
+    /// Returns rather than throws: "not configured" is the ordinary state of a feature that ships off, and the
+    /// panel needs to render an explanation, not an exception (AI_SURFACE_B.md §10).
+    /// </summary>
+    ChatProviderResolution? Resolve(out string? problem);
+}
+
+/// <summary>
+/// Builds a provider from settings. (#583)
+///
+/// <para><b>What this deliberately does not own.</b> The API key comes from <see cref="IAiCredentialStore"/>
+/// (#579) and the UI that sets any of this is #585. What lives here is only the resolution: settings plus a key
+/// in, a callable provider out. That split is why the orchestrator can be built and tested before either of
+/// those exists.</para>
+///
+/// <para><b>A missing key is not always a misconfiguration.</b> The motivating deployment for the
+/// OpenAI-compatible adapter is a local runner — Ollama, LM Studio — reached over loopback with no credential
+/// at all. So the key is required for Anthropic and optional for OpenAI-compatible, and "no key" is reported as
+/// a problem only where it actually is one.</para>
+/// </summary>
+public sealed class ChatProviderResolver : IChatProviderResolver
+{
+    private readonly ISettingsService _settings;
+    private readonly IAiCredentialStore? _credentials;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly HttpClient _http;
+
+    public ChatProviderResolver(
+        ISettingsService settings,
+        IAiCredentialStore? credentials,
+        ILoggerFactory loggerFactory)
+        : this(settings, credentials, loggerFactory, CreateHttpClient())
+    {
+    }
+
+    /// <summary>Test seam: supply a client over a stub handler instead of reaching the network.</summary>
+    internal ChatProviderResolver(
+        ISettingsService settings,
+        IAiCredentialStore? credentials,
+        ILoggerFactory loggerFactory,
+        HttpClient http)
+    {
+        _settings = settings;
+        _credentials = credentials;
+        _loggerFactory = loggerFactory;
+        _http = http;
+    }
+
+    /// <summary>
+    /// One client for the app's lifetime, and it <b>must</b> have an infinite timeout — the providers reject a
+    /// finite one outright. <c>HttpClient</c>'s 100-second default would silently kill a long generation, which
+    /// is why the adapters carry their own idle and first-event timeouts instead: those bound the gap BETWEEN
+    /// events, which is the thing that actually indicates a dead stream, rather than the total duration, which
+    /// on a long answer indicates nothing at all.
+    ///
+    /// <para>Reused rather than created per turn because a fresh <c>HttpClient</c> per request exhausts sockets
+    /// under any real usage. The usual counter-argument — stale DNS on a long-lived client — is weak here: the
+    /// endpoint is a user-configured address in a desktop app, not a rotating service mesh.</para>
+    /// </summary>
+    private static HttpClient CreateHttpClient() => new() { Timeout = Timeout.InfiniteTimeSpan };
+
+    public ChatProviderResolution? Resolve(out string? problem)
+    {
+        var chat = _settings.Settings.Ai.Chat;
+
+        if (!_settings.Settings.Ai.Enabled || !chat.Enabled)
+        {
+            problem = "AI features are turned off. Turn them on in Settings to use the assistant.";
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(chat.Model))
+        {
+            problem = "No model is configured. Choose one in Settings.";
+            return null;
+        }
+
+        if (!TryParseKind(chat.Provider, out var kind))
+        {
+            problem = $"'{chat.Provider}' is not a provider this build knows how to talk to.";
+            return null;
+        }
+
+        var apiKey = _credentials?.GetApiKey(kind);
+
+        switch (kind)
+        {
+            case ChatProviderKind.Anthropic when string.IsNullOrWhiteSpace(apiKey):
+                problem = "No API key is stored for Claude. Add one in Settings.";
+                return null;
+
+            case ChatProviderKind.Anthropic:
+                problem = null;
+                return new ChatProviderResolution(
+                    new AnthropicMessagesProvider(
+                        _http,
+                        new AnthropicOptions(apiKey, NullIfBlank(chat.BaseUrl)),
+                        _loggerFactory.CreateLogger<AnthropicMessagesProvider>()),
+                    chat.Model!.Trim());
+
+            case ChatProviderKind.OpenAiCompatible when string.IsNullOrWhiteSpace(chat.BaseUrl):
+                // No default is possible here — the base URL IS the provider. This is the field that makes one
+                // adapter serve DeepSeek, OpenRouter, Ollama and LM Studio.
+                problem = "No endpoint address is configured. Enter the provider's base URL in Settings.";
+                return null;
+
+            case ChatProviderKind.OpenAiCompatible:
+                // A key is deliberately NOT required — a local runner on loopback has none.
+                problem = null;
+                return new ChatProviderResolution(
+                    new OpenAiCompatibleProvider(
+                        _http,
+                        new OpenAiCompatibleOptions(chat.BaseUrl!.Trim(), NullIfBlank(apiKey)),
+                        _loggerFactory.CreateLogger<OpenAiCompatibleProvider>()),
+                    chat.Model!.Trim());
+
+            default:
+                problem = $"'{chat.Provider}' is not a provider this build knows how to talk to.";
+                return null;
+        }
+    }
+
+    internal static bool TryParseKind(string? value, out ChatProviderKind kind)
+    {
+        switch (value?.Trim().ToLowerInvariant())
+        {
+            case "anthropic" or "claude":
+                kind = ChatProviderKind.Anthropic;
+                return true;
+            // Hyphen and underscore both, because this string is hand-edited in settings.json until #585.
+            case "openai-compatible" or "openai_compatible" or "openai":
+                kind = ChatProviderKind.OpenAiCompatible;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+}

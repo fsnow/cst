@@ -1,8 +1,10 @@
 # Surface B — the in-app model, v1 by context injection (Planned)
 
 **Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B4 (#582, presets and
-the grounding contract), plus the reader-state read path and `POST /v1/ai/context-preview` (#593). No AI feature
-is user-visible yet — the orchestrator (B5, #583) is what first connects a prompt to a provider.
+the grounding contract), B5 (#583, orchestrator), plus the reader-state read path and
+`POST /v1/ai/context-preview` (#593). **The chain now runs end to end** — a live Translate turn against the real
+corpus and a real model works — but nothing is user-visible until the Settings UI (B7, #585) and the panel
+(B8, #586) exist.
 **Parent:** [AI_INTEGRATION.md](AI_INTEGRATION.md) — the design of record for the A–E surface map. §11.1 there
 states the decided model-access *policy*; this document is the *implementation plan* for B.
 **Tracker:** epic #186 → children #578–#587 (filed 2026-08-09; the per-item numbers are in §12).
@@ -551,3 +553,29 @@ unmarked while marking block quotes. The marker failure was fixed by naming the 
 "use the markers instead of italics, an italicised word is a word left behind in Latin" — where merely stating
 the requirement had not worked. The mistranslation was not fixable by prompting and is exactly the evidence
 #584's fidelity advisory exists to carry.
+
+**2026-08-11 (#583, the orchestrator)** — the pieces are now one feature. Decisions worth keeping:
+
+- **Nothing expected throws.** Not-configured, an unreadable passage, a dead network, a 401 — all arrive as a
+  terminal `Error` event. §10 requires the panel to render each as a sentence, and collapsing #578's two
+  failure shapes here spares every future caller from re-deriving that. #578's contract is unchanged: the
+  *provider* still throws before the response and yields an `Error` delta after it.
+- **A superseded turn ends quietly; the caller's own cancellation throws.** Being replaced is not a failure —
+  an error banner under an answer the reader abandoned would be both wrong and alarming — but a consumer that
+  cancels its own enumeration must not be told the turn succeeded. Two cancellation sources, two behaviours,
+  distinguished by which token fired.
+- **An empty answer is a named failure** (`AiErrorKind.EmptyAnswer`). A model can end a turn having produced
+  only reasoning (#601), and #578 is *right* to segregate reasoning from answer — which is exactly what makes
+  this failure invisible, leaving the caller a well-formed, successful, blank turn.
+- **`ChatSettings` and `IChatProviderResolver` are the seam** for B2/B7. The key is deliberately absent from
+  settings.json — it belongs in the OS credential store (#579) — and a key is required for Anthropic but *not*
+  for OpenAI-compatible, because the motivating deployment is a local runner on loopback with no credential.
+
+**A live end-to-end run found a scope bug the unit tests could not** — filed as **#602**. A Translate turn on
+Dhp 21 returned a good translation of roughly *thirty* verses, spanning into two later chapters, beside a
+citation reading "paragraph 21". The window is budgeted in **characters** and is structurally blind: 2,400
+characters of prose is a passage, but a Dhammapada verse is ~80 characters. `WindowMayExtendPastReference` fired
+and #582 surfaced its notice, which is true and reads like a rounding caveat rather than a warning that the
+answer covers twenty-nine paragraphs nobody asked about. §6 names truthful output over a *narrower* scope than
+assumed as the characteristic failure; this is that failure mirrored, and the app-rendered citation makes it
+worse rather than better. Fixing it also unblocks §6's fence 4, since the missing capability is the same one.

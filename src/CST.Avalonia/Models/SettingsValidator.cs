@@ -91,6 +91,7 @@ public static class SettingsValidator
         // again, and Settings is the only repair path. Repair like every other section. (#319 A7-2)
         if (settings.Ai == null) { settings.Ai = new AiSettings(); fixes.Add("ai settings were null; reset to default"); }
         if (settings.Ai.LocalApi == null) { settings.Ai.LocalApi = new LocalApiSettings(); fixes.Add("ai.localApi settings were null; reset to default"); }
+        if (settings.Ai.Chat == null) { settings.Ai.Chat = new ChatSettings(); fixes.Add("ai.chat settings were null; reset to default"); }
 
         // (The historical local-API Port/Token scrub is gone with those fields, removed in #280: the port is
         // ephemeral and the token per-session, both held only in local-api.json. A stale value left in an old
