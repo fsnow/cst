@@ -65,19 +65,66 @@ are the models that actually answer on a free account, largest first:
 > the standing next step for #587 — a single-model column is not a matrix, and a failure observed on one
 > mid-tier model tells you about that model, not about the tier.
 
-### First cross-model observation (2026-08-11)
+### Screening run — 2026-08-11
 
-The same Explain request, on the same passage, run across three of the tiers:
+All seven free-tier models, run **serially** (the account runs one cloud model at a time), on two items: Case 1
+ungrounded with no system prompt, and Case 2 grounded through the real Translate preset.
 
-| Model | Scope refusal | Marker discipline | Incidental glossing |
+| Model | Case 1 (ungrounded) | Case 2 (grounded translation) | Keep? |
 |---|---|---|---|
-| `nemotron-3-ultra:cloud` | correct | correct, inline included | correct — *amatapadaṃ* as "the deathless state/path", *pamāda* as "heedlessness" |
-| `minimax-m3:cloud` | correct | correct, inline included | no glosses volunteered |
-| `gpt-oss:120b-cloud` | correct | correct after the prompt fix (Case 3) | **wrong** — "the unsurpassed foot-path", "the samsaric condition" |
+| `nemotron-3-ultra:cloud` | PASS | **PASS** — all four lines | **yes** |
+| `nemotron-3-super:cloud` | PASS | **PASS** — all four lines | **yes**, with a caveat below |
+| `gemma4:cloud` | PASS | **PASS** — all four lines, concise | **yes** |
+| `minimax-m3:cloud` | PASS | **PASS** — all four lines | **yes**, budget-hungry (#601) |
+| `gpt-oss:120b-cloud` | PASS | **FAIL** — *matā* as "as they think" | no, for translation |
+| `nemotron-3-nano:30b-cloud` | PASS | **FAIL** — *matā* as "as a mother" | no |
+| `gpt-oss:20b-cloud` | **FAIL** — glossed *appamāda* as "failing or stumbling… to make a mistake" | **FAIL** — "free of pride… leads to annihilation"; "as mothers" | no |
 
-The fences from AI_SURFACE_B.md §6 held on every tier, which is the more reassuring half of this result. **Case 2
-was not re-tested**: neither larger model volunteered a full translation, so its failure signature had nothing
-to fire on. Running Case 2 properly needs the Translate preset, not Explain.
+**The shortlist is the top four.** `nemotron-3-ultra`, `nemotron-3-super`, `gemma4` and `minimax-m3` all render
+Dhp 21 correctly, mark inline Pāli, refuse cross-corpus questions, and handle the apparatus note sensibly.
+`gemma4` is the surprise: at 32.7B it matches the 550B model on this verse and is the cheapest capable option.
+
+**Set aside for Pāli work:** `gpt-oss:20b` is not usable — it fails the most basic vocabulary question in the
+canon. `nemotron-3-nano` and `gpt-oss:120b` both read the verse's key word wrongly (Case 4 below). Keep them
+only as *deliberately weak* cells, where the question is what a poor model does with good context.
+
+> **Encoding caveat on `nemotron-3-super`.** Its output contained mojibake where the niggahita should be —
+> `amatapada??` rather than `amatapadaṃ` — while the same model rendered other diacritics correctly. This
+> matters beyond cosmetics: **a mangled diacritic inside the quote markers cannot be script-converted**, which
+> is exactly what §9's v1.1 proviso ("validate that marked content is actually convertible") was written for.
+> Worth re-checking before this model is relied on, and worth being the first real test of that validator.
+
+### One reading of these results
+
+Every model passed the *ungrounded* vocabulary question except the smallest — but three then mistranslated the
+verse **with the verse in front of them**. Recall and reading are different capabilities, and surface B depends
+on the second. A matrix built only from "does it know what this word means" would have rated four of these
+models as fine.
+
+---
+
+## Case 4 — vowel length: `matā` (dead) read as `mātā` (mother)
+
+| | |
+|---|---|
+| **Prompt** | Translate Dhp 21 with the verse supplied. |
+| **Correct** | `ye pamattā yathā matā` — "those who are heedless are as if dead". *matā* is the past participle of *marati*, to die. |
+| **Authority** | The corpus. *matā* (short *a*) is "dead"; *mātā* (long *ā*) is "mother". **Vowel length is phonemic in Pāli** — they are different words, not spellings. The verse settles it independently: the same root supplies *amata*, *maccu* and *mīyanti* in the two lines around it, and "as a mother" is not a reading the sentence supports. |
+| **Failure signature** | "as a mother", "like a mother", "as mothers" — or any reading of *matā* not derived from *marati*, including *maññati* ("think"). |
+| **Why it discriminates** | Two of seven models made this exact error **independently**, and the four larger ones did not. It is mechanically checkable, it is invisible to a reader without Pāli, and it needs no judgement to score. It also probes the one thing romanized Pāli most needs from a model: that a macron is information, not decoration. |
+
+### Observations
+
+| Date | Model | Grounded | Verdict | Note |
+|---|---|---|---|---|
+| 2026-08-11 | `nemotron-3-nano:30b-cloud` | Yes | **FAIL** | "those who are heedless — as a mother —", then offered both "as a mother (does)" and "like a mother" as the ambiguity. It reported the line as ambiguous, which the prompt asks for — but between two readings that are both wrong. |
+| 2026-08-11 | `gpt-oss:20b-cloud` | Yes | **FAIL** | "those who are attached are as mothers". Also lost the rest of the verse entirely. |
+| 2026-08-11 | `gpt-oss:120b-cloud` | Yes | **FAIL** | Different error, same word: "as they think", reading *matā* from *maññati*. Reproduced across three runs. |
+| 2026-08-11 | `nemotron-3-ultra`, `nemotron-3-super`, `gemma4`, `minimax-m3` | Yes | **PASS** | All four: "as if dead" / "as the dead" / "like the dead". |
+
+**A model that volunteers an ambiguity note for the wrong pair of readings is more dangerous than one that just
+gets it wrong**, because the hedging reads as care. Worth remembering when #586 decides how much authority the
+panel's presentation lends an answer.
 
 ---
 
