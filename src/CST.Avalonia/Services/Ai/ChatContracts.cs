@@ -3,6 +3,24 @@ using System.Collections.Generic;
 
 namespace CST.Avalonia.Services.Ai;
 
+/// <summary>Ceilings that are facts about the provider APIs rather than choices of ours.</summary>
+public static class AiLimits
+{
+    /// <summary>
+    /// The largest <c>max_tokens</c> valid across every current Claude model, used where the Anthropic API
+    /// requires a number and the caller did not choose one.
+    ///
+    /// <para><b>Why 64K and not 128K.</b> Opus 5, Sonnet 5, Fable 5 and the Opus 4.x family all cap output at
+    /// 128K, but <b>Haiku 4.5 caps at 64K</b> — and the model id here is whatever the user typed into Settings,
+    /// so the adapter cannot know which it is. 64K is the largest value that cannot 400 on any of them. A user
+    /// who wants the full 128K on a large model can say so once #584 carries per-model limits.</para>
+    ///
+    /// <para>This is a runaway guard, not a size estimate. Streaming is what keeps a cap this high safe: a
+    /// non-streaming request anywhere near it would hit the HTTP timeout first, and both adapters stream.</para>
+    /// </summary>
+    public const int UniversalMaxTokens = 64_000;
+}
+
 /// <summary>Who authored a turn. There is no System role — the system prompt is its own request field.</summary>
 public enum ChatRole
 {
@@ -18,12 +36,21 @@ public sealed record ChatMessage(ChatRole Role, string Content);
 /// translate this into their own wire format, so nothing provider-specific leaks into the caller.
 /// </summary>
 /// <param name="Model">Provider-specific model id, verbatim as the user configured it.</param>
-/// <param name="MaxTokens">Output cap. Required — the Anthropic API rejects a request without one.</param>
+/// <param name="MaxTokens">
+/// Output cap, or null for "do not specify one". <b>Null is the ordinary case</b>: an answer-shaped cap has to
+/// predict output length, and on a reasoning model it cannot — reasoning tokens count against the same budget,
+/// so the cap silently truncates or produces an empty answer (#601). Cost is better controlled by showing the
+/// user what each call spent (AI_SURFACE_B.md §10) than by a limit they never see.
+///
+/// <para>The two adapters differ because the wire formats do: the OpenAI-compatible shape omits the field
+/// entirely, which is the honest expression of "no limit"; the Anthropic Messages API <b>requires</b> a number,
+/// so that adapter substitutes <see cref="AiLimits.UniversalMaxTokens"/>.</para>
+/// </param>
 /// <param name="System">System prompt, or null. Anthropic carries it in a top-level field; the
 /// OpenAI-compatible shape carries it as a leading message, which the adapter handles.</param>
 public sealed record ChatRequest(
     string Model,
-    int MaxTokens,
+    int? MaxTokens,
     string? System,
     IReadOnlyList<ChatMessage> Messages);
 

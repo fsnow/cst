@@ -155,7 +155,9 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
         {
             json.WriteStartObject();
             json.WriteString("model", request.Model);
-            json.WriteNumber("max_tokens", request.MaxTokens);
+            // Optional here, unlike Anthropic — omitting it is the honest expression of "no cap", and it lets
+            // a reasoning model spend what it needs on reasoning without starving the answer (#601).
+            if (request.MaxTokens is { } maxTokens) json.WriteNumber("max_tokens", maxTokens);
             json.WriteBoolean("stream", true);
 
             // Ask for usage on the final chunk. Providers that do not know the option ignore it.

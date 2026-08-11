@@ -230,6 +230,16 @@ public interface IChatProvider
   `reasoning_content` delta field, or inline think-tags). An adapter that naively concatenates deltas will
   render chain-of-thought into the answer panel. Skip or segregate reasoning fields, and defensively strip
   think-tags.
+- **`max_tokens` is not an answer budget — deferred rather than guessed (2026-08-11, fsnow).** An earlier cut of
+  #582 sized a cap per preset from the expected length of each answer. That is the wrong quantity to predict:
+  on a reasoning model the cap covers reasoning *and* answer, and reasoning volume varies by an order of
+  magnitude between models — `minimax-m3` needed 3,177 completion tokens to translate a two-line verse against
+  a 2,400 budget (#601). **The per-preset table remains, with every entry unset**, as the seam #584/#585 fills
+  in from Settings; today the OpenAI-compatible adapter *omits* the field and the Anthropic adapter — where it
+  is required — sends the largest value valid across every current Claude model. That is **64K, not 128K**:
+  Opus 5, Sonnet 5 and the Opus 4.x family all allow 128K, but **Haiku 4.5 caps at 64K**, and the model id is
+  whatever the user typed into Settings. Cost is controlled by reporting what each call spent (§10), not by a
+  truncation the user never sees.
 - **`HttpClient`'s 100 s default timeout will kill long generations.** Use `Timeout.InfiniteTimeSpan` with
   per-request cancellation, plus an adapter-level *idle* timeout.
 - **Mid-stream network drop is distinct from cancellation** — partial text is already on screen. Keep the

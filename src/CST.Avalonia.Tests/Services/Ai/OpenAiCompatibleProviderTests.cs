@@ -59,6 +59,20 @@ public class OpenAiCompatibleProviderTests
         """;
 
     [Fact]
+    public async Task An_unset_cap_omits_max_tokens_entirely()
+    {
+        // Unlike Anthropic, the field is optional here — so "no cap" is expressed by absence rather than by a
+        // number we invented. That matters most on a reasoning model, where a cap covers reasoning as well as
+        // the answer and can consume the whole budget before a word is written (#601).
+        var handler = StubHttpMessageHandler.Sse(HappyStream);
+        await CollectAsync(Provider(handler), Request() with { MaxTokens = null });
+
+        using var body = JsonDocument.Parse(handler.LastRequestBody);
+
+        Assert.False(body.RootElement.TryGetProperty("max_tokens", out _));
+    }
+
+    [Fact]
     public async Task Streams_text_deltas_in_order()
     {
         var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(HappyStream)));

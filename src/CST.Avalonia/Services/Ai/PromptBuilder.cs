@@ -11,7 +11,9 @@ namespace CST.Avalonia.Services.Ai;
 /// <summary>A prompt ready to send, plus what the panel should tell the user about how it was assembled.</summary>
 /// <param name="System">The shared system prompt, rendered.</param>
 /// <param name="UserContent">The single user turn: the context blocks and the preset's instruction.</param>
-/// <param name="MaxOutputTokens">Output cap for this preset. Required by the Anthropic API and sane everywhere.</param>
+/// <param name="MaxOutputTokens">Output cap for this preset, or null for "do not specify one" — the current
+/// default for every preset. See <see cref="PromptBuilder"/> for why, and <see cref="ChatRequest.MaxTokens"/>
+/// for what each adapter does with a null.</param>
 /// <param name="Notices">
 /// Degradations worth showing beside the answer — a missing asset, a trimmed part, a selection the window does
 /// not contain, a prompt edit that was rejected. The prompt states these to the MODEL; these state them to the
@@ -20,7 +22,7 @@ namespace CST.Avalonia.Services.Ai;
 public sealed record RenderedPrompt(
     string System,
     string UserContent,
-    int MaxOutputTokens,
+    int? MaxOutputTokens,
     IReadOnlyList<string> Notices);
 
 /// <summary>Turns a context bundle into a prompt. See <see cref="PromptBuilder"/>.</summary>
@@ -52,22 +54,28 @@ public interface IPromptBuilder
 public sealed class PromptBuilder : IPromptBuilder
 {
     /// <summary>
-    /// Output cap per preset. Sized to the shape of the answer rather than uniformly: a word-by-word reading of
-    /// a 600-character window is one entry per word plus a running translation, which is far more output than an
-    /// explanation of the 1600-character window Explain gets. The failure mode of setting these too low is an
-    /// answer truncated mid-list, so they lean high — but the user is paying, so not unboundedly.
+    /// Per-preset output cap — <b>the seam, deliberately unfilled</b>. Every entry is currently null, meaning
+    /// "do not specify a cap"; the table survives so #584/#585 can expose the cap per model in Settings without
+    /// reintroducing the concept (fsnow, 2026-08-11: <i>"that leaves a placeholder in case we want to expose
+    /// that in the model settings"</i>).
     ///
-    /// <para><b>These are estimates and #587 should check them.</b> A full 600-character window is roughly 90
-    /// words; at an entry apiece plus compound splits plus a running translation, word-by-word could plausibly
-    /// run past 3000 and truncate exactly where it hurts most. There is no local tokenizer to size this against,
-    /// so the number is reasoning, not measurement.</para>
+    /// <para><b>Why the values are gone.</b> An earlier version sized each preset to the expected length of its
+    /// answer — 1500 for Explain, 3000 for word-by-word. That is the wrong quantity to predict. On a reasoning
+    /// model the cap covers reasoning AND answer, and reasoning volume varies by an order of magnitude between
+    /// models: <c>minimax-m3</c> needed 3,177 completion tokens to translate a two-line verse, against a
+    /// budget of 2,400 (#601). The failure it buys is the worst-shaped one available — a translation cut off
+    /// mid-verse, or a blank panel, on a request the user already paid for. Cost is controlled by reporting
+    /// what each call spent (AI_SURFACE_B.md §10), not by a silent truncation.</para>
+    ///
+    /// <para>The table still earns its place at runtime: membership is what says a task is renderable at all,
+    /// so an <see cref="AiTask"/> added without a budget entry fails loudly here rather than silently.</para>
     /// </summary>
-    private static readonly Dictionary<AiTask, int> OutputBudget = new()
+    private static readonly Dictionary<AiTask, int?> OutputBudget = new()
     {
-        [AiTask.Explain] = 1500,
-        [AiTask.Translate] = 2400,
-        [AiTask.Grammar] = 1500,
-        [AiTask.WordByWord] = 3000,
+        [AiTask.Explain] = null,
+        [AiTask.Translate] = null,
+        [AiTask.Grammar] = null,
+        [AiTask.WordByWord] = null,
     };
 
     private readonly IPromptTemplateStore _templates;

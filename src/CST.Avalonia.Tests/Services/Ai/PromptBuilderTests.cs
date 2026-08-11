@@ -140,14 +140,20 @@ public class PromptBuilderTests : IDisposable
     }
 
     [Fact]
-    public void Every_preset_gets_an_output_budget_and_word_by_word_gets_the_largest()
+    public void No_preset_imposes_an_output_cap()
     {
-        // One entry per word plus a running translation is far more output than an explanation of a window four
-        // times the length; a cap sized for prose truncates it mid-list.
-        var budgets = Enum.GetValues<AiTask>().ToDictionary(t => t, t => _builder.Build(Bundle(t)).MaxOutputTokens);
+        // The cap is deliberately unset: it would have to predict output length, and on a reasoning model it
+        // cannot — reasoning and answer share the budget, so the cap truncates mid-answer or yields a blank
+        // panel (#601). The per-preset table survives as the seam #584/#585 fills in from Settings.
+        foreach (var task in Enum.GetValues<AiTask>())
+            Assert.Null(_builder.Build(Bundle(task)).MaxOutputTokens);
+    }
 
-        Assert.All(budgets.Values, b => Assert.True(b > 0));
-        Assert.Equal(budgets.Values.Max(), budgets[AiTask.WordByWord]);
+    [Fact]
+    public void A_task_with_no_budget_entry_fails_loudly_rather_than_rendering()
+    {
+        // What the all-null table still buys at runtime: membership says the task is renderable at all.
+        Assert.Throws<ArgumentOutOfRangeException>(() => _builder.Build(Bundle((AiTask)999)));
     }
 
     [Fact]

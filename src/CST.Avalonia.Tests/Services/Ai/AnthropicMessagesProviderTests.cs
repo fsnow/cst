@@ -121,6 +121,20 @@ public class AnthropicMessagesProviderTests
     }
 
     [Fact]
+    public async Task An_unset_cap_becomes_the_ceiling_every_current_model_accepts()
+    {
+        // The API requires the field, so null cannot mean "omit" here. 64K rather than 128K because the model
+        // id is whatever the user typed: Opus 5, Sonnet 5 and the Opus 4.x family all allow 128K, but Haiku 4.5
+        // caps at 64K, and this adapter cannot tell which one it is talking to.
+        var handler = StubHttpMessageHandler.Sse(HappyStream);
+        await CollectAsync(Provider(handler), Request() with { MaxTokens = null });
+
+        using var body = JsonDocument.Parse(handler.LastRequestBody);
+
+        Assert.Equal(AiLimits.UniversalMaxTokens, body.RootElement.GetProperty("max_tokens").GetInt32());
+    }
+
+    [Fact]
     public async Task Request_carries_the_api_key_and_version_headers()
     {
         var handler = StubHttpMessageHandler.Sse(HappyStream);
