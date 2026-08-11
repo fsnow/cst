@@ -1,6 +1,8 @@
 # Surface B — the in-app model, v1 by context injection (Planned)
 
-**Status:** Planned. Not started.
+**Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B4 (#582, presets and
+the grounding contract), plus the reader-state read path and `POST /v1/ai/context-preview` (#593). No AI feature
+is user-visible yet — the orchestrator (B5, #583) is what first connects a prompt to a provider.
 **Parent:** [AI_INTEGRATION.md](AI_INTEGRATION.md) — the design of record for the A–E surface map. §11.1 there
 states the decided model-access *policy*; this document is the *implementation plan* for B.
 **Tracker:** epic #186 → children #578–#587 (filed 2026-08-09; the per-item numbers are in §12).
@@ -319,6 +321,27 @@ conversion is safe to enable per model tier.
 v1.1 conversion proviso: **validate that marked content is actually convertible** (pure Pāli character set)
 and leave it Latin otherwise — models will occasionally mark English or emit malformed diacritics.
 
+### The marker is `[[…]]` — decided 2026-08-11 (#582)
+
+Two constraints. It must not occur in the corpus, and it must not occur in ordinary answer prose in **any**
+language a user might set as their answer language.
+
+A survey of all 217 XML books found **zero** occurrences of `[[`, `]]`, `«`, `»`, `⟦`, `⟧`, `{`, `}`, `|`, `~`
+and `¶`; `^` appears 3 times, `` ` `` 6 times, `§` 53 times. So corpus collision eliminates none of the leading
+candidates. (Incidentally: braces being absent from the source confirms that the ones around inline notes are
+added by the passage renderer.)
+
+The **second** constraint is what decides it. `«…»` is out: it is the standard quotation mark in Russian and
+French, so a user answering in either would have every ordinary quotation read as marked Pāli — a v1.1
+conversion bug seeded in v1. `⟦…⟧` is collision-free but measures a weak model's *Unicode fidelity* rather than
+its instruction-following, which inverts what B9 is trying to learn. `[[…]]` is emittable by any model, absent
+from the corpus, and claimed by no language's punctuation.
+
+**Unbalanced markers are stripped anyway and counted, never rendered.** A literal `[[` on screen is a visible
+defect in the answer for a rule the user never asked about; the imbalance is real signal about the model, so it
+is recorded for B9 rather than silently repaired. Marker fragments split across stream deltas are handled by a
+hold-back filter — the same hazard as the think-tag filter, and the same failure if ignored.
+
 ---
 
 ## 10. Failure, privacy, and terminology
@@ -484,3 +507,28 @@ path in the selection pipeline and an exclusion from the v1.1 script conversion,
 is the one supported script that does not round-trip. That non-round-tripping is rare enough in practice not to
 earn a code path; removed from §3.1, §9 and the §12 table, and deliberately kept out of #581. Work items filed
 as #578–#587 under epic #186; issue numbers added to §12.
+
+**2026-08-11 (#582, the prompt layer)** — three decisions worth keeping, all forced by evidence rather than
+argument:
+
+- **The Pāli-quote marker is `[[…]]`** — see §9. Decided by a corpus survey plus one constraint the plan had
+  not stated: the marker must not collide with ordinary answer prose in any language a user may select, which
+  is what eliminates the guillemets.
+- **The template engine is substitution-only** — no conditionals, no loops. These templates are user-editable
+  (B7), and control flow would make them a small programming language whose breakage we would then have to
+  diagnose. The cost is that a placeholder cannot be omitted when it has nothing to say, so every value renders
+  as a self-describing sentence instead: "the reader has not selected anything", "the word-analysis data is not
+  installed". That turns out to be the better prompt, and it is the mechanism that makes the plan's
+  "degrade visibly, never silently" requirement fall out of the design rather than rest on discipline.
+- **The provisions inventory is derived from the template's own placeholders.** Found by reading a dumped
+  prompt, not by a test: the inventory said `apparatus — given` on presets whose template never rendered the
+  apparatus, so the model was told it had been given something it could not see. Deriving the inventory from
+  what the template actually uses makes the two agree by construction, including after a user edit.
+
+**A live run against `gpt-oss:120b-cloud` was worth more than the third code review.** The fences held —
+cross-corpus refusal, scope naming, no invented references — but the model **mistranslated the verse it was
+looking at** (Case 2 in [PALI_FIDELITY_CASES.md](../../testing/PALI_FIDELITY_CASES.md)) and left inline Pāli
+unmarked while marking block quotes. The marker failure was fixed by naming the competing convention —
+"use the markers instead of italics, an italicised word is a word left behind in Latin" — where merely stating
+the requirement had not worked. The mistranslation was not fixable by prompting and is exactly the evidence
+#584's fidelity advisory exists to carry.

@@ -1219,6 +1219,12 @@ public partial class App : Application
             sp.GetService<ILemmaSearchService>(),
             typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown",
             sp.GetRequiredService<ILogger<Services.Ai.AiContextBundler>>()));
+
+        // The prompt layer (#582). Singleton so a rejected user override is reported once rather than
+        // re-discovered per request; the store re-reads the override FILE on every Get, so an edit made outside
+        // the app takes effect on the next invocation without a restart.
+        services.AddSingleton<Services.Ai.IPromptTemplateStore, Services.Ai.PromptTemplateStore>();
+        services.AddSingleton<Services.Ai.IPromptBuilder, Services.Ai.PromptBuilder>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
         // Surface-C tool wrappers (exposed over the local API). (#186)
