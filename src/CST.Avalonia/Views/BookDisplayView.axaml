@@ -203,6 +203,71 @@
                          Width="100" Height="16" Margin="8,0"/>
         </Grid>
 
+        <!-- #570: Find in Page.
+
+             Docked above the book, NOT floated over it. An overlay was tried first and does not work: an
+             Avalonia sibling cannot paint above this WebView's surface. Measured, with the bar correctly
+             laid out and still invisible —
+                 IsVisible=true EffectivelyVisible=true Bounds=729,8,377,36 Opacity=1 ZIndex=0
+             The ZIndex="-1000" on the WebView below is someone else having hit the same wall. Do not retry
+             an overlay here without first changing how the browser is hosted.
+
+             Docking shifts the book down ~44px when the bar opens. That does not reflow the text — only a
+             WIDTH change rewraps it (see OnViewResized) — so the reading position survives, which is the
+             property that actually governed this choice.
+
+             No options: no whole-word or regex (CEF's find offers neither), and no Match Case. That last
+             one is not a simplification but a consequence — Chromium's find is ICU string search where the
+             flag selects collation strength, so case-insensitive and diacritic-insensitive are the same
+             switch. A toggle would therefore trade one kind of wrong answer for another rather than
+             offering precision. See the call site in the code-behind for which way it is set and why.
+             Query, position, next/previous, close. -->
+        <Border x:Name="findBar"
+                DockPanel.Dock="Top"
+                IsVisible="False"
+                Padding="8,5"
+                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1">
+            <!-- Right-aligned so the controls sit near the scrollbar and the book's left margin stays
+                 clean, but the Border itself stretches so the strip reads as chrome rather than a
+                 floating island. -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBox x:Name="findQueryBox"
+                                 Width="200"
+                                 MinHeight="26"
+                                 Padding="6,2"
+                                 VerticalContentAlignment="Center"
+                                 Watermark="Find in page"
+                                 ToolTip.Tip="Find in this book. Enter for next, Shift+Enter for previous, Escape to close."/>
+
+                        <!-- Fixed width so the bar does not resize as the count changes from "" to
+                             "3 of 47" — a jittering overlay over settled text reads as a glitch. -->
+                        <TextBlock x:Name="findCountText"
+                                   Width="72"
+                                   Margin="8,0,4,0"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Right"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                        <Button x:Name="findPrevButton"
+                                Margin="2,0,0,0" Padding="6,2" MinWidth="0"
+                                ToolTip.Tip="Previous match (Shift+Enter)">
+                            <TextBlock Text="&#x2227;"/>
+                        </Button>
+                        <Button x:Name="findNextButton"
+                                Margin="2,0,0,0" Padding="6,2" MinWidth="0"
+                                ToolTip.Tip="Next match (Enter)">
+                            <TextBlock Text="&#x2228;"/>
+                        </Button>
+                        <Button x:Name="findCloseButton"
+                                Margin="6,0,0,0" Padding="6,2" MinWidth="0"
+                                ToolTip.Tip="Close (Escape)">
+                            <TextBlock Text="&#x2715;"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
         <!-- Main Browser Control -->
         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
             <Panel>
@@ -237,6 +302,7 @@
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                     </StackPanel>
                 </ScrollViewer>
+
             </Panel>
         </Border>
     </DockPanel>

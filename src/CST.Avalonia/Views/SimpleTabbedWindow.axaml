@@ -58,7 +58,8 @@
                 <NativeMenu>
                     <NativeMenuItem Header="Go To..." Click="OnGoToMenuItemClick" Gesture="{input:CommandGesture g}" />
                     <NativeMenuItem Header="Look Up in Dictionary" Click="OnLookUpInDictionaryClick" Gesture="{input:CommandGesture d}" />
-                    <NativeMenuItem Header="Search for Selection" Click="OnSearchForSelectionClick" Gesture="{input:CommandGesture f}" />
+                    <NativeMenuItem Header="Find in Page…" Click="OnFindInPageClick" Gesture="{input:CommandGesture f}" />
+                    <NativeMenuItem Header="Search for Selection" Click="OnSearchForSelectionClick" Gesture="{input:CommandGesture shift+f}" />
                     <NativeMenuItem Header="View Source (1957 ed.)" Click="OnViewSource1957Click" Gesture="{input:CommandGesture e}" />
                     <NativeMenuItem Header="View Source (2010 ed.)" Click="OnViewSource2010Click" Gesture="{input:CommandGesture shift+e}" />
                 </NativeMenu>

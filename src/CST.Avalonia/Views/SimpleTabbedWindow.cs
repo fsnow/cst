@@ -769,7 +769,10 @@ public partial class SimpleTabbedWindow : Window
             (PlatformGesture.Parse("w"),       () => OnCloseTabClick(this, EventArgs.Empty)),
             (PlatformGesture.Parse("g"),       () => OnGoToMenuItemClick(this, EventArgs.Empty)),
             (PlatformGesture.Parse("d"),       () => OnLookUpInDictionaryClick(this, EventArgs.Empty)),
-            (PlatformGesture.Parse("f"),       () => OnSearchForSelectionClick(this, EventArgs.Empty)),
+            // #570: F is now Find in Page (browser-universal, and what CST4 used it for). Search for
+            // Selection, which held F, moves to Shift+F.
+            (PlatformGesture.Parse("f"),       () => OnFindInPageClick(this, EventArgs.Empty)),
+            (PlatformGesture.Parse("shift+f"), () => OnSearchForSelectionClick(this, EventArgs.Empty)),
             (PlatformGesture.Parse("e"),       () => OnViewSource1957Click(this, EventArgs.Empty)),
             (PlatformGesture.Parse("shift+e"), () => OnViewSource2010Click(this, EventArgs.Empty)),
             // #572 book zoom is NOT in this list — it is matched separately below, by physical key as well
@@ -924,6 +927,20 @@ public partial class SimpleTabbedWindow : Window
     private void OnZoomOutClick(object? sender, EventArgs e) => InvokeZoom(b => b.ZoomOut(), "Zoom Out");
 
     private void OnZoomResetClick(object? sender, EventArgs e) => InvokeZoom(b => b.ResetZoom(), "Actual Size");
+
+    // #570: open Find in Page on the active book. No active book means nothing to search, and doing
+    // nothing is the honest answer — find has no meaning without a document.
+    private void OnFindInPageClick(object? sender, EventArgs e)
+    {
+        var book = FindActiveBookInThisWindow();
+        if (book?.BookDisplayControl == null)
+        {
+            _logger.Debug("Find in Page: no active book in window {WindowTitle}", this.Title);
+            return;
+        }
+        _logger.Information("Find in Page (Cmd+F) from window: {WindowTitle}", this.Title);
+        book.BookDisplayControl.ShowFindBar();
+    }
 
     private void InvokeZoom(Action<BookDisplayView> action, string what)
     {

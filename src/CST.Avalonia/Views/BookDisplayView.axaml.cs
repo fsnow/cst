@@ -129,6 +129,9 @@ public partial class BookDisplayView : UserControl
         // Zoom is stored per script and applies to book text only, so every book view listens. (#572)
         SubscribeToZoomChanges();
 
+        // #570: wire the find bar's controls. The bar itself stays hidden until Cmd/Ctrl+F.
+        SetupFindBar();
+
         // Try to create WebView browser
         TryCreateWebView();
     }
@@ -320,6 +323,9 @@ public partial class BookDisplayView : UserControl
         // describes for the browser itself. Detach is the recycled tab-switch/float path and must NOT
         // unsubscribe, or a re-attached tab would stop following zoom changes. (#572)
         UnsubscribeFromZoomChanges();
+        // #570: drop the find handler's reference back into this view before the browser goes away.
+        _findHandler = null;
+        _findHandlerAttached = false;
         DisposeWebView();
     }
 
@@ -956,6 +962,241 @@ public partial class BookDisplayView : UserControl
 
     #endregion
 
+    #region Find in Page (#570)
+
+    // Chromium's own find, reached through CefBrowserAccess. Highlighting of every match with the active
+    // one distinct, auto-scroll, wrap-around and match counts all come free.
+    //
+    // Matching is a literal substring, case-insensitive, with no folding and no script conversion. That is
+    // deliberate: the corpus capitalises programmatically at sentence starts rather than semantically, so
+    // case carries nothing searchable; and a reader working across scripts copies text out of the book
+    // rather than typing it, so the query already arrives in the right form. Converting it would risk
+    // corrupting a query that was correct.
+    private Border? _findBar;
+    private TextBox? _findQueryBox;
+    private TextBlock? _findCountText;
+    private CstFindHandler? _findHandler;
+    private bool _findHandlerAttached;
+    // Folding Chromium's multi-reply result stream into one counter. Extracted so it can be unit tested:
+    // it is the part of this feature that has already been wrong once. (fable review)
+    private readonly FindResultAccumulator _findResults = new();
+    // Identifies a ShowFindBar call across its await, so an orphaned one cannot clobber a newer one.
+    private int _findOpenGeneration;
+
+    private void SetupFindBar()
+    {
+        _findBar = this.FindControl<Border>("findBar");
+        _findQueryBox = this.FindControl<TextBox>("findQueryBox");
+        _findCountText = this.FindControl<TextBlock>("findCountText");
+
+        if (_findQueryBox != null)
+        {
+            // Incremental: each keystroke restarts the search (findNext: false), which is how Chromium
+            // narrows as you type and keeps the count live.
+            _findQueryBox.TextChanged += (_, _) => RunFind(forward: true, findNext: false);
+            _findQueryBox.KeyDown += OnFindQueryKeyDown;
+        }
+
+        var prev = this.FindControl<Button>("findPrevButton");
+        var next = this.FindControl<Button>("findNextButton");
+        var close = this.FindControl<Button>("findCloseButton");
+        if (prev != null) prev.Click += (_, _) => RunFind(forward: false, findNext: true);
+        if (next != null) next.Click += (_, _) => RunFind(forward: true, findNext: true);
+        if (close != null) close.Click += (_, _) => HideFindBar();
+    }
+
+    private void OnFindQueryKeyDown(object? sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Enter:
+                // Shift+Enter reverses — the standard find-bar idiom. findNext: true advances within the
+                // existing search rather than restarting it.
+                RunFind(forward: !e.KeyModifiers.HasFlag(KeyModifiers.Shift), findNext: true);
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                HideFindBar();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Opens the find bar and focuses it. Prefills from the book's current selection, which makes ⌘F and
+    /// ⌘⇧F symmetrical — the same selection, searched here or across the corpus.
+    /// </summary>
+    public async void ShowFindBar()
+    {
+        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(ShowFindBar); return; }
+        if (_isShutDown || _findBar == null || _findQueryBox == null) return;
+
+        if (!CefBrowserAccess.IsAvailable)
+        {
+            // The reflection chain broke on a package upgrade. Opening a bar that cannot search would be
+            // worse than not opening one; Probe has already said so in the startup log.
+            _logger.Warning("Find in Page unavailable - CEF browser access did not resolve");
+            return;
+        }
+
+        AttachFindHandler();
+
+        // The selection round-trip can take up to 700ms, and _lookupSelectionTcs is a SHARED field (⌘D
+        // uses it too). A second ⌘F — or a ⌘D — replaces it, so this call's TCS never completes and it
+        // sleeps out the full timeout before resuming. By then the user may have typed a query, which the
+        // tail below would then select-all and the next keystroke would wipe. Stamp the call and let the
+        // orphan recognise itself. (fable review)
+        var generation = ++_findOpenGeneration;
+
+        var selection = await GetWebViewSelectionAsync();
+
+        // Re-check everything that could have changed across the await: a newer open superseded this one,
+        // or the tab was closed while it was outstanding.
+        if (generation != _findOpenGeneration || _isShutDown || _findBar == null || _findQueryBox == null)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(selection))
+        {
+            // First line only: a multi-line selection as a query matches nothing and reads as broken.
+            var firstLine = selection.Split('\n')[0].Trim();
+            if (firstLine.Length > 0) _findQueryBox.Text = firstLine;
+        }
+
+        _findBar.IsVisible = true;
+        _findQueryBox.Focus();
+        _findQueryBox.SelectAll();
+        // Re-run whatever is in the box: reopening on a remembered query should light its matches again,
+        // rather than showing an empty count beside text that looks searched.
+        RunFind(forward: true, findNext: false);
+    }
+
+    /// <summary>Closes the bar, clears Chromium's highlighting, and returns focus to the book.</summary>
+    public void HideFindBar()
+    {
+        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(HideFindBar); return; }
+        if (_findBar == null || !_findBar.IsVisible) return;
+
+        _findBar.IsVisible = false;
+        if (_findCountText != null) _findCountText.Text = "";
+
+        // clearSelection: FALSE — keep the match selected as the bar closes. Chromium's own find bar does
+        // the same, and it matters more here than in a browser: the motivating request for this feature was
+        // finding your way back to a place in the text, so discarding the selection at the moment the user
+        // closes the bar would throw away the answer they just asked for. (fable review)
+        StopFinding(clearSelection: false);
+
+        // The query is deliberately left in the box: reopening find in this tab continues where it left
+        // off, per tab, which is what every shipped find bar does.
+        _webView?.Focus();
+    }
+
+    /// <summary>
+    /// Clears the active search and its highlighting. Safe when nothing is searching.
+    ///
+    /// <para>
+    /// <paramref name="clearSelection"/> false keeps the found text selected. Closing the bar passes false,
+    /// so the match stays visible as your place in the text; clearing the query passes true, because the
+    /// selection then belongs to a search the user has explicitly abandoned.
+    /// </para>
+    /// </summary>
+    private void StopFinding(bool clearSelection)
+    {
+        var host = CefBrowserAccess.TryGetBrowserHost(_webView, _logger);
+        if (host == null) return;
+        try { host.StopFinding(clearSelection); }
+        catch (Exception ex) { _logger.Error("StopFinding failed | {Details}", ex.Message); }
+    }
+
+    private void RunFind(bool forward, bool findNext)
+    {
+        if (_isShutDown || _findBar == null || !_findBar.IsVisible) return;
+
+        var query = _findQueryBox?.Text ?? "";
+        if (string.IsNullOrEmpty(query))
+        {
+            // Emptying the box must clear the highlighting too, or the previous search's matches stay lit
+            // with no query on screen to explain them.
+            _findResults.Reset();
+            if (_findCountText != null) _findCountText.Text = "";
+            // true here: the query was deliberately cleared, so the old match is not the user's place any
+            // more — leaving it selected would be leftover state from a search they abandoned.
+            StopFinding(clearSelection: true);
+            return;
+        }
+
+        var host = CefBrowserAccess.TryGetBrowserHost(_webView, _logger);
+        if (host == null) return;
+
+        // findNext false means a NEW search rather than a step within the current one, so any accumulated
+        // position is stale.
+        if (!findNext) _findResults.Reset();
+
+        try
+        {
+            // matchCase: false — case-insensitive, with a known and accepted cost.
+            //
+            // This flag is not really about case. Chromium's find is ICU string search and it selects the
+            // collation STRENGTH: false is PRIMARY, which folds case AND combining marks together; true is
+            // TERTIARY, which respects both. There is no case-insensitive-but-diacritic-sensitive setting —
+            // it is one knob, so the two properties cannot be chosen independently.
+            //
+            // Choosing false therefore accepts diacritic folding: "ekaṃ" also matches "ekam" in Latin, and
+            // in Myanmar the niggahita is ignored so the search widens to "eka" (294 hits in DN3 rather
+            // than 94). Choosing true instead would miss sentence-initial capitals — measured at ~8% of
+            // "ekaṃ" occurrences across the 217 books, since the corpus capitalises programmatically at
+            // sentence starts rather than semantically.
+            //
+            // Case-insensitive was judged the better trade for shipping: the missed capitals are invisible
+            // to the user, whereas an over-wide match is at least visible and still contains what was
+            // sought. Getting BOTH requires matching in JavaScript over the DOM (CSS Custom Highlight API,
+            // no DOM mutation) — understood, deliberately deferred, and worth revisiting if the folding
+            // proves to matter in use.
+            host.Find(query, forward, matchCase: false, findNext: findNext);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Find failed | {Details}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Attaches the result handler to this browser. Cleared on navigation and re-attached on demand:
+    /// float/unfloat disposes and rebuilds the WebView, so a one-shot attach would silently stop reporting
+    /// counts after the first float.
+    /// </summary>
+    private void AttachFindHandler()
+    {
+        if (_findHandlerAttached || _isShutDown) return;
+
+        var browser = CefBrowserAccess.TryGetChromiumBrowser(_webView, _logger);
+        if (browser == null) return;
+
+        _findHandler ??= new CstFindHandler(OnFindResult);
+        browser.FindHandler = _findHandler;   // public setter on a public type - no reflection here
+        _findHandlerAttached = true;
+        _logger.Debug("Find handler attached");
+    }
+
+    private void OnFindResult(FindResultEventArgs e)
+    {
+        if (_isShutDown || _findBar == null || !_findBar.IsVisible) return;
+
+        // A reply for a query that no longer exists must not paint a count. StopFinding self-posts to the
+        // CEF UI thread, so the previous search's final reply can still arrive AFTER the box was emptied
+        // and the highlighting cleared — leaving "1/94" beside an empty box with nothing highlighted, and
+        // nothing further to correct it. (fable review)
+        if (string.IsNullOrEmpty(_findQueryBox?.Text)) return;
+
+        // Accept returns false only for a reply belonging to a superseded search. Whether there is yet
+        // anything worth showing is Format's business — it returns "" until an authoritative total exists.
+        if (!_findResults.Accept(e.Identifier, e.Count, e.ActiveMatchOrdinal, e.FinalUpdate)) return;
+
+        var text = _findResults.Format();
+        if (_findCountText != null && text.Length > 0) _findCountText.Text = text;
+    }
+
+    #endregion
+
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -1128,19 +1369,19 @@ public partial class BookDisplayView : UserControl
             // It happens BEFORE the lock is acquired, so it does not block other UI operations.
             await Task.Delay(200);
 
-            _logger.Debug("OnScrollPositionCheck attempting to acquire JS lock");
+            // No lock-lifecycle logging here, unlike the other JS callers: this runs on the ~200ms status
+            // tick, per book view, so six Debug lines per tick was 89% of an entire Debug-level log — about
+            // 60 lines a second with two books open, which buried everything else. The failure branch below
+            // is kept, because a lock that cannot be acquired is the only outcome worth knowing about.
             if (await _jsExecutionLock.WaitAsync(0))
             {
-                _logger.Debug("OnScrollPositionCheck acquired JS lock successfully");
                 try
                 {
                     UpdateScrollBasedStatus();
                 }
                 finally
                 {
-                    _logger.Debug("OnScrollPositionCheck releasing JS lock");
                     _jsExecutionLock.Release();
-                    _logger.Debug("OnScrollPositionCheck released JS lock");
                 }
             }
             else
@@ -1154,8 +1395,6 @@ public partial class BookDisplayView : UserControl
     {
         try
         {
-            _logger.Debug("UpdateScrollBasedStatus called - anchorCacheBuilt: {AnchorCacheBuilt}", _anchorCacheBuilt);
-
             if (!_anchorCacheBuilt || _webView == null)
             {
                 _logger.Debug("UpdateScrollBasedStatus skipped - anchorCacheBuilt: {AnchorCacheBuilt}, browser: {HasBrowser}", _anchorCacheBuilt, _webView != null);
@@ -1163,7 +1402,6 @@ public partial class BookDisplayView : UserControl
             }
 
             // Try to get scroll position and status in a single JavaScript call
-            _logger.Debug("Executing JavaScript for status update");
             var script = $@"
                 (function() {{
                 try {{
@@ -1949,6 +2187,13 @@ public partial class BookDisplayView : UserControl
                 // #572: a new document supersedes any deferred scroll restoration armed by the previous one.
                 Interlocked.Increment(ref _navGeneration);
 
+                // #570: this is a different document, so any search in flight is meaningless and the
+                // handler must be re-attached (a script change reloads; float/unfloat rebuilds the browser
+                // entirely). Hiding rather than re-running is deliberate — after a script change the query
+                // is in the previous script and would silently match nothing.
+                _findHandlerAttached = false;
+                HideFindBar();
+
                 // Signal the ViewModel that initialization is complete and navigation can be enabled
                 _viewModel.CompleteInitialization();
 
@@ -2663,6 +2908,24 @@ public partial class BookDisplayView : UserControl
             }
         }
         // #28: Search for Selection requested from JavaScript (⌘/Ctrl+F while this book's WebView has focus).
+        // #570: Cmd/Ctrl+F from inside the book WebView.
+        else if (title != null && title.StartsWith("CST_FIND_IN_PAGE:"))
+        {
+            try
+            {
+                var parts = title.Split('|');
+                var messageTabId = parts.Length > 1 && parts[1].StartsWith("TAB:") ? parts[1].Substring(4) : "";
+                if (messageTabId == _tabId)
+                {
+                    _logger.Debug("*** FIND IN PAGE REQUESTED FROM JAVASCRIPT ***");
+                    Dispatcher.UIThread.Post(ShowFindBar);   // runs on the CEF thread (BOOK-2)
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Error processing find-in-page request from JavaScript | {Details}", ex.Message);
+            }
+        }
         else if (title != null && title.StartsWith("CST_SEARCH_SELECTION_REQUESTED:"))
         {
             try
@@ -2901,12 +3164,28 @@ public partial class BookDisplayView : UserControl
 
                                 // #28: Cmd+F / Ctrl+F (Search for Selection). preventDefault also suppresses
                                 // Chromium's own find bar, which would otherwise open over the book.
-                                if ((event.key === 'f' || event.key === 'F') && !event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                // #570: Cmd/Ctrl+SHIFT+F is now Search for Selection (corpus-wide). Plain
+                                // Cmd/Ctrl+F was rebound to Find in Page below — the browser-universal
+                                // meaning, what CST4 used it for, and what the request asked for.
+                                if ((event.key === 'f' || event.key === 'F') && event.shiftKey && (event.metaKey || event.ctrlKey)) {
                                     event.preventDefault();
                                     event.stopPropagation();
                                     if (event.repeat) return false;
                                     window.cstLogger.log('DEBUG', 'Search for Selection shortcut detected in JavaScript');
                                     document.title = 'CST_SEARCH_SELECTION_REQUESTED:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                                    return false;
+                                }
+
+                                // #570: Cmd/Ctrl+F -> Find in Page for THIS book. Must be captured here:
+                                // while CEF holds focus Avalonia never sees the keystroke, and Chromium
+                                // would otherwise open its own find bar, which we do not control and which
+                                // would sit outside the app's chrome entirely.
+                                if ((event.key === 'f' || event.key === 'F') && !event.shiftKey && (event.metaKey || event.ctrlKey)) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.repeat) return false;
+                                    window.cstLogger.log('DEBUG', 'Find in Page shortcut detected in JavaScript');
+                                    document.title = 'CST_FIND_IN_PAGE:|TAB:{_tabId}|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
                                     return false;
                                 }
 
