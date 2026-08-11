@@ -1461,7 +1461,9 @@ public partial class App : Application
                 (PlatformGesture.Parse("e"),        () => OnViewSourceFromFloatingWindow(window, source2010: false)),
                 (PlatformGesture.Parse("shift+e"),  () => OnViewSourceFromFloatingWindow(window, source2010: true)),
                 (PlatformGesture.Parse("d"),        () => _ = SimpleTabbedWindow.LookUpInDictionaryAsync(FindActiveBookInFloatingWindow(window))),
-                (PlatformGesture.Parse("f"),        () => _ = SimpleTabbedWindow.SearchForSelectionAsync(FindActiveBookInFloatingWindow(window))),
+                // #570: F is Find in Page; Search for Selection moves to Shift+F.
+                (PlatformGesture.Parse("f"),        () => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.ShowFindBar()),
+                (PlatformGesture.Parse("shift+f"),  () => _ = SimpleTabbedWindow.SearchForSelectionAsync(FindActiveBookInFloatingWindow(window))),
                 (PlatformGesture.Parse("w"),        () => OnCloseTabFromFloatingWindow(window)),
                 (PlatformGesture.Parse("o"),        () => SimpleTabbedWindow.RevealSelectBookPanel()),
                 (PlatformGesture.Parse("p"),        () => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.Print()),
@@ -1590,13 +1592,18 @@ public partial class App : Application
             var lookUpItem = new NativeMenuItem { Header = "Look Up in Dictionary", Gesture = PlatformGesture.Parse("D") };
             lookUpItem.Click += async (s, e) =>
                 await SimpleTabbedWindow.LookUpInDictionaryAsync(FindActiveBookInFloatingWindow(window));
-            var searchSelectionItem = new NativeMenuItem { Header = "Search for Selection", Gesture = PlatformGesture.Parse("F") };
+            // #570: Find in Page on the floated book. macOS shows the ACTIVE window's menu bar, so without
+            // this the key would be dead in a floating window — the hole #448 found for Cmd+D/Cmd+F.
+            var findInPageItem = new NativeMenuItem { Header = "Find in Page…", Gesture = PlatformGesture.Parse("F") };
+            findInPageItem.Click += (s2, e2) => FindActiveBookInFloatingWindow(window)?.BookDisplayControl?.ShowFindBar();
+            var searchSelectionItem = new NativeMenuItem { Header = "Search for Selection", Gesture = PlatformGesture.Parse("Shift+F") };
             searchSelectionItem.Click += async (s, e) =>
                 await SimpleTabbedWindow.SearchForSelectionAsync(FindActiveBookInFloatingWindow(window));
 
             var toolsMenu = new NativeMenu();
             toolsMenu.Add(goToItem);
             toolsMenu.Add(lookUpItem);
+            toolsMenu.Add(findInPageItem);
             toolsMenu.Add(searchSelectionItem);
             toolsMenu.Add(viewSource1957Item);
             toolsMenu.Add(viewSource2010Item);

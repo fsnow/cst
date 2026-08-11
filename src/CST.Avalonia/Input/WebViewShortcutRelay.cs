@@ -32,9 +32,19 @@ public static class WebViewShortcutRelay
     /// JavaScript to inject once the page has loaded. <paramref name="viewId"/> identifies the view in the
     /// messages it pushes back.
     ///
-    /// <paramref name="includeFind"/> controls Ctrl/Cmd+F. The PDF viewer passes false: Chromium's
-    /// find-in-page is the one shortcut users genuinely want there, and intercepting it would trade that
-    /// away for "Search for Selection" with no selection - a straight downgrade. (fable review)
+    /// <paramref name="includeFind"/> controls Ctrl/Cmd+SHIFT+F (Search for Selection), and also whether
+    /// plain Ctrl/Cmd+F is swallowed. The PDF viewer passes false, so neither is claimed there and the
+    /// keystroke reaches Chromium's own PDF find.
+    ///
+    /// Note that find finds nothing in practice: the source PDFs are page SCANS with no text layer. Leaving
+    /// the key unclaimed is still the right default — it is the standard behaviour for a PDF, and it would
+    /// start working for free if those documents ever gained OCR text — but do not read this as protecting
+    /// a capability that currently exists. (Confirmed by the maintainer, 2026-08-11.)
+    ///
+    /// #570 moved Search for Selection from Cmd+F to Cmd+Shift+F, because Cmd+F is now Find in Page. Plain
+    /// Cmd+F is deliberately NOT relayed from these views: find-in-page applies to book text, and none of
+    /// the relaying views (Welcome, the dictionary meaning pane, the PDF viewer) is a book. Leaving it
+    /// unclaimed means Chromium's own find still works in the PDF viewer, where it is genuinely useful.
     /// </summary>
     public static string BuildScript(string viewId, bool includeFind = true) => @"
         (function() {
@@ -54,9 +64,20 @@ public static class WebViewShortcutRelay
 
                 // Deliberately NOT forwarded: e/g/p and shift variants are book commands, and w is
                 // handled per-view where a closable tab exists.
+                // #570: plain Cmd/Ctrl+F. These views have no book, so find-in-page has nothing to act
+                // on — but on macOS an unconsumed key equivalent bubbles to AppKit, where the native menu's
+                // Find in Page item would fire and open the find bar on whichever book happens to be active
+                // BEHIND this view. Swallowing it here is the honest no-op. The PDF viewer opts out
+                // (includeFind false) because Chromium's own find genuinely works there and is wanted.
+                if (k === 'f' && !event.shiftKey && " + (includeFind ? "true" : "false") + @") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+
                 if (k === 'o' && !event.shiftKey) { name = 'SELECT_BOOK'; }
                 else if (k === 'd' && !event.shiftKey) { name = 'DICTIONARY'; }
-                else if (k === 'f' && !event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = 'SEARCH'; }
+                else if (k === 'f' && event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = 'SEARCH'; }
                 else if (k === ',') { name = 'SETTINGS'; }
 
                 if (name === null) { return; }

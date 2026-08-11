@@ -86,23 +86,45 @@ public static class CefBrowserAccess
     }
 
     /// <summary>
-    /// Returns the browser host for <paramref name="webView"/>, or null when the chain is unavailable or the
-    /// browser is not yet created. Never throws.
+    /// Hop 1 only: the <see cref="BaseCefBrowser"/> behind a <see cref="WebView"/>.
+    ///
+    /// <para>
+    /// Needed on its own because some CEF features are configured on the browser rather than the host —
+    /// notably <c>BaseCefBrowser.FindHandler</c>, which find-in-page (#570) must set to receive match
+    /// counts. That property is a public setter on a public type, so only this first hop is reflection.
+    /// </para>
     /// </summary>
-    public static CefBrowserHost? TryGetBrowserHost(WebView? webView, ILogger logger)
+    public static BaseCefBrowser? TryGetChromiumBrowser(WebView? webView, ILogger logger)
     {
         if (webView == null || !IsAvailable) return null;
 
         try
         {
             // Not just an optimisation: before initialization UnderlyingBrowser is null, and asking a
-            // half-built browser for its host is exactly the sort of thing that crashes CEF rather than
+            // half-built browser for anything is the sort of thing that crashes CEF rather than
             // returning null.
             if (!webView.IsBrowserInitialized) return null;
 
-            if (WebViewUnderlyingBrowser!.GetValue(webView) is not BaseCefBrowser chromium)
-                return null;
+            return WebViewUnderlyingBrowser!.GetValue(webView) as BaseCefBrowser;
+        }
+        catch (Exception ex)
+        {
+            logger.Error("Failed to reach the Chromium browser | {Details}", ex.Message);
+            return null;
+        }
+    }
 
+    /// <summary>
+    /// Returns the browser host for <paramref name="webView"/>, or null when the chain is unavailable or the
+    /// browser is not yet created. Never throws.
+    /// </summary>
+    public static CefBrowserHost? TryGetBrowserHost(WebView? webView, ILogger logger)
+    {
+        var chromium = TryGetChromiumBrowser(webView, logger);
+        if (chromium == null) return null;
+
+        try
+        {
             if (BaseBrowserUnderlyingBrowser!.GetValue(chromium) is not CefBrowser browser)
                 return null;
 

@@ -1,3 +1,4 @@
+using System.Linq;
 using CST.Avalonia.Services;
 using Xunit;
 
@@ -68,6 +69,87 @@ public class CefBrowserAccessTests
         Assert.NotNull(getHost);
         Assert.True(getHost!.IsPublic);
         Assert.Equal(typeof(Xilium.CefGlue.CefBrowserHost), getHost.ReturnType);
+    }
+
+    // ---- Find in Page (#570) -------------------------------------------------------------------
+    // Find reaches CEF through the same chain, plus three API surfaces of its own. All three are ordinary
+    // public API rather than reflection, so a rename is a compile error — but the FindHandler PROPERTY is
+    // the extension point the whole feature hangs on, and a change to its accessibility or type would be a
+    // silent behaviour loss rather than a build break.
+
+    [Fact]
+    public void BaseCefBrowser_StillExposesASettableFindHandler()
+    {
+        var prop = typeof(Xilium.CefGlue.Common.BaseCefBrowser)
+            .GetProperty("FindHandler", System.Reflection.BindingFlags.Instance |
+                                        System.Reflection.BindingFlags.Public |
+                                        System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(prop);
+        Assert.True(prop!.SetMethod?.IsPublic == true,
+            "BaseCefBrowser.FindHandler no longer has a public setter. Find in Page attaches its result " +
+            "handler through it; without that, searches still run but no match counts ever arrive.");
+        Assert.True(typeof(Xilium.CefGlue.Common.Handlers.FindHandler).IsAssignableFrom(prop.PropertyType),
+            $"BaseCefBrowser.FindHandler is now '{prop.PropertyType}'.");
+    }
+
+    [Fact]
+    public void FindHandler_IsStillSubclassable()
+    {
+        // CstFindHandler derives from it and overrides OnFindResult. A sealed class or a non-virtual
+        // callback would break find with no compile error at the call sites.
+        var t = typeof(Xilium.CefGlue.Common.Handlers.FindHandler);
+        Assert.True(t.IsPublic);
+        Assert.False(t.IsSealed);
+
+        // It is ABSTRACT with a PROTECTED parameterless constructor — subclassable, which is the whole
+        // requirement, but not directly instantiable. (GetConstructor's default overload only returns
+        // public ones, which is why the accessibility has to be asked for explicitly.)
+        var ctor = t.GetConstructor(
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.NonPublic,
+            binder: null, System.Type.EmptyTypes, modifiers: null);
+        Assert.NotNull(ctor);
+        Assert.True(ctor!.IsPublic || ctor.IsFamily,
+            "Handlers.FindHandler's parameterless constructor is no longer reachable from a subclass, " +
+            "so CstFindHandler cannot derive from it.");
+
+        // OnFindResult is declared on the BASE, Xilium.CefGlue.CefFindHandler, and reflection does not
+        // return non-public members of base classes — so it has to be looked up where it lives.
+        Assert.True(typeof(Xilium.CefGlue.CefFindHandler).IsAssignableFrom(t),
+            $"Handlers.FindHandler no longer derives from CefFindHandler (base is '{t.BaseType}').");
+
+        var onFindResult = typeof(Xilium.CefGlue.CefFindHandler)
+            .GetMethod("OnFindResult", System.Reflection.BindingFlags.Instance |
+                                       System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(onFindResult);
+        Assert.True(onFindResult!.IsVirtual, "CefFindHandler.OnFindResult is no longer overridable.");
+
+        // The callback's shape, which CstFindHandler overrides literally.
+        Assert.Equal(
+            new[] { "CefBrowser", "Int32", "Int32", "CefRectangle", "Int32", "Boolean" },
+            onFindResult.GetParameters().Select(p => p.ParameterType.Name).ToArray());
+    }
+
+    [Fact]
+    public void CefBrowserHost_StillExposesFindAndStopFinding_WithTheExpectedShape()
+    {
+        // Pinned because the shape HAS changed before: CEF 120 dropped the leading `identifier` argument
+        // that older versions' Find took. A future bump doing something similar would otherwise surface as
+        // a confusing compile error far from here.
+        var find = typeof(Xilium.CefGlue.CefBrowserHost).GetMethod("Find",
+            new[] { typeof(string), typeof(bool), typeof(bool), typeof(bool) });
+        Assert.NotNull(find);
+        Assert.True(find!.IsPublic);
+
+        var stop = typeof(Xilium.CefGlue.CefBrowserHost).GetMethod("StopFinding", new[] { typeof(bool) });
+        Assert.NotNull(stop);
+        Assert.True(stop!.IsPublic);
+    }
+
+    [Fact]
+    public void TryGetChromiumBrowser_ReturnsNull_ForNullWebView()
+    {
+        Assert.Null(CefBrowserAccess.TryGetChromiumBrowser(null, Serilog.Log.Logger));
     }
 
     [Fact]
