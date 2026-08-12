@@ -168,10 +168,23 @@ public class PromptBuilderTests : IDisposable
     public void A_selection_the_window_does_not_contain_warns_the_model_and_the_user()
     {
         var prompt = _builder.Build(Bundle(
-            selection: new SelectionContext("dhammā manopubbaṅgamā", FoundInWindow: false)));
+            selection: new SelectionContext("dhammā manopubbaṅgamā", SelectionState.NotFoundInWindow)));
 
         Assert.Contains("was not found in the passage above", prompt.UserContent);
         Assert.Contains(prompt.Notices, n => n.Contains("not found in the passage window"));
+    }
+
+    [Fact]
+    public void A_selection_that_could_not_be_read_is_distinguished_from_none()
+    {
+        // The two were the same null before #581. The difference is an answer about the whole passage
+        // (correct) versus one that quietly dropped the words the user highlighted.
+        var prompt = _builder.Build(Bundle(
+            selection: new SelectionContext(null, SelectionState.Unavailable)));
+
+        Assert.Contains("could not be read", prompt.UserContent);
+        Assert.DoesNotContain("has not selected anything", prompt.UserContent);
+        Assert.Contains(prompt.Notices, n => n.Contains("could not be read"));
     }
 
     [Fact]

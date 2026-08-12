@@ -1,7 +1,8 @@
 # Surface B — the in-app model, v1 by context injection (Planned)
 
-**Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B4 (#582, presets and
-the grounding contract), B5 (#583, orchestrator), plus the reader-state read path and
+**Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B3a (#581, selection
+pipeline), B4 (#582, presets and the grounding contract), B5 (#583, orchestrator), plus the reader-state read
+path and
 `POST /v1/ai/context-preview` (#593). **The chain now runs end to end** — a live Translate turn against the real
 corpus and a real model works — but nothing is user-visible until the Settings UI (B7, #585) and the panel
 (B8, #586) exist.
@@ -595,3 +596,21 @@ still covers 25 paragraphs — the citation and the notice are now honest about 
 options in #602 (clamp the window to the cited reference; budget in paragraphs rather than characters) change
 what "translate this" *means*, and trade surrounding context against focus differently per preset. That is
 fsnow's call, not something to settle in an implementation commit.
+
+**2026-08-11 (#581, the selection pipeline)** — the selection is the one bundler input scraped from the DOM, and
+it now gets handling to match.
+
+- **Conversion moved into a pure, testable pipeline.** The display script is known only to the reader, so
+  `ReaderStateService` still supplies it, but the rules live in one place. Splitting them would let the two
+  sides of the window comparison drift, which is precisely how a locator starts reporting false misses.
+- **Three selection states, not two.** "Nothing selected" and "we could not read the selection" were the same
+  null. They are different: the first means the whole passage is legitimately in view; the second means the
+  words the user highlighted were dropped. Only the second is worth telling them about — and it is exactly the
+  state that otherwise reaches the user as *"the AI ignored my selection"*. The channel already distinguished
+  them (`GetWebViewSelectionAsync` returns `""` for nothing and `null` for a failed or timed-out round trip);
+  the pipeline stops throwing that away.
+- **Composition (NFC) is cheap insurance behind a measured risk.** A corpus survey found the Devanagari source
+  already NFC, and `ScriptConverter` emits composed Latin, so in the ordinary path both sides of the comparison
+  agree. But a decomposed selection is *ordinally* unequal (`a`+U+0304 ≠ U+0101), and the symptom would be a
+  bundle reporting "selection not found in the passage window" — a false diagnostic from the component whose
+  whole job is faithful diagnostics.

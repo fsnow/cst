@@ -567,7 +567,10 @@ namespace CST.Avalonia.Services.LocalApi
                                 req.OutputLanguage ?? "English",
                                 new NavigationReference.Paragraph(reader.Paragraph),
                                 reader.SelectionText,
-                                req.UserQuestion),
+                                req.UserQuestion,
+                                // Carried, not collapsed: a selection the reader could not read is a different
+                                // state from no selection, and the preview exists to show the real input. (#581)
+                                reader.SelectionUnavailable),
                             ct);
 
                         return Results.Json(bundle);

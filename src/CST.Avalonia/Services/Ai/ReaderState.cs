@@ -34,12 +34,17 @@ public enum ReaderStateProblem
 /// <summary>What the user is looking at: the book, where in it, and what (if anything) they have selected.</summary>
 /// <param name="BookId">The open book's file name — what the bundler and the passage tool key on.</param>
 /// <param name="Paragraph">The paragraph the viewport is on.</param>
-/// <param name="SelectionText">The user's selection, if any, <b>already converted to Latin</b> — see
-/// <see cref="ReaderStateService"/>.</param>
+/// <param name="SelectionText">The user's selection, already through <c>SelectionPipeline.Normalize</c> —
+/// Latin, composed, whitespace-collapsed. Null means <i>nothing was selected</i>.</param>
+/// <param name="SelectionUnavailable">The selection could not be read at all — the WebView was not ready, or
+/// the <c>document.title</c> round trip timed out. <b>Not the same as a null
+/// <paramref name="SelectionText"/></b>: conflating them is what makes a dropped selection look to the user
+/// like "the AI ignored my selection". (#581)</param>
 public sealed record ReaderState(
     string BookId,
     int Paragraph,
-    string? SelectionText);
+    string? SelectionText,
+    bool SelectionUnavailable = false);
 
 /// <summary>Success or a named refusal. Never a partial answer.</summary>
 public readonly record struct ReaderStateResult(ReaderState? State, ReaderStateProblem? Problem)
@@ -101,8 +106,9 @@ public sealed class ReaderStateService : IReaderStateService
 
         ct.ThrowIfCancellationRequested();
 
-        var selection = await ReadSelectionAsync(document);
-        return ReaderStateResult.Ok(result.State with { SelectionText = selection });
+        var (selection, unavailable) = await ReadSelectionAsync(document);
+        return ReaderStateResult.Ok(
+            result.State with { SelectionText = selection, SelectionUnavailable = unavailable });
     }
 
     private (ReaderStateResult Result, BookDisplayViewModel? Document) ReadActiveBook()
@@ -152,18 +158,23 @@ public sealed class ReaderStateService : IReaderStateService
     }
 
     /// <summary>
-    /// Ask the WebView for the selection and convert it to Latin.
+    /// Ask the WebView for the selection and put it through <see cref="SelectionPipeline"/>.
     ///
-    /// <para><b>The conversion happens here because the display script is only known here.</b> The bundler's
-    /// <c>SelectionContext</c> documents its input as Latin and matches the selection against a Latin passage
-    /// window — hand it Devanagari and every bundle reports "selection not found", a false diagnostic from a
-    /// tool whose whole purpose is faithful diagnostics. (Richer normalization remains #581's job.)</para>
+    /// <para><b>The channel distinguishes two failures and so does this.</b>
+    /// <c>GetWebViewSelectionAsync</c> returns an empty string when the user genuinely selected nothing, and
+    /// <c>null</c> when it could not find out — the browser was not initialised, the script threw, or the
+    /// <c>document.title</c> round trip exceeded its 700 ms budget. Collapsing both to "no selection" is what
+    /// produces the report "the AI ignored my selection", so the distinction is carried upward. (#581)</para>
+    ///
+    /// <para><b>Conversion happens here because the display script is only known here</b>, and it is not a
+    /// refinement: hand the bundler Devanagari and every lookup misses and every window match fails, which makes
+    /// the two grammatical presets Latin-readers-only — the opposite of the user who prompted surface B.</para>
     ///
     /// <para>Run entirely on the UI thread: every other caller of the selection channel is a UI-thread command
     /// handler, it drives CEF, and it writes a single-slot completion source a concurrent Cmd+D would
     /// otherwise clobber.</para>
     /// </summary>
-    private static async Task<string?> ReadSelectionAsync(BookDisplayViewModel document)
+    private static async Task<(string? Text, bool Unavailable)> ReadSelectionAsync(BookDisplayViewModel document)
     {
         var raw = await Dispatcher.UIThread.InvokeAsync(async () =>
         {
@@ -171,9 +182,9 @@ public sealed class ReaderStateService : IReaderStateService
             return control is null ? null : await control.GetWebViewSelectionAsync();
         });
 
-        if (string.IsNullOrWhiteSpace(raw)) return null;
+        // null = could not read it; "" = read it, and there was nothing to read.
+        if (raw is null) return (null, true);
 
-        var script = document.BookScript;
-        return script == Script.Latin ? raw : ScriptConverter.Convert(raw, script, Script.Latin);
+        return (SelectionPipeline.Normalize(raw, document.BookScript), false);
     }
 }

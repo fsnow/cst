@@ -144,7 +144,7 @@ public sealed class AiContextBundler : IAiContextBundler
             passage.NoteCount > 0 ? BundlePartState.Included : BundlePartState.Empty,
             passage.NoteCount > 0 ? $"{passage.NoteCount} print note(s)" : "no apparatus in this window"));
 
-        var selection = BuildSelection(request.SelectionText, passage.Text, parts);
+        var selection = BuildSelection(request, passage.Text, parts);
         var lemmas = GatherLemmas(request.Task, selection?.Text ?? passage.Text, parts);
 
         var bookName = ScriptConverter.Convert(book.LongNavPath, Script.Devanagari, Script.Latin);
@@ -176,23 +176,42 @@ public sealed class AiContextBundler : IAiContextBundler
     }
 
     /// <summary>
-    /// Normalize the selection and locate it in the window. A selection the window does not contain is still
-    /// passed to the model — it is what the user pointed at — but the mismatch is recorded rather than hidden,
-    /// because it means the surrounding passage may not support what is being asked about.
+    /// Locate the selection in the window, and record what became of it.
+    ///
+    /// <para>A selection the window does not contain is still passed to the model — it is what the user pointed
+    /// at — but the mismatch is recorded rather than hidden, because it means the surrounding passage may not
+    /// support what is being asked about.</para>
+    ///
+    /// <para><b>Three outcomes, not two.</b> "Nothing selected" and "we could not tell what was selected" were
+    /// the same null before #581. They are not the same thing: the first means the whole passage is legitimately
+    /// in view, the second means the words the user highlighted were dropped on the floor. Only the second is
+    /// something to tell them about. (§3.1)</para>
     /// </summary>
-    private static SelectionContext? BuildSelection(string? raw, string windowText, List<BundlePart> parts)
+    private static SelectionContext? BuildSelection(
+        AiContextRequest request, string windowText, List<BundlePart> parts)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
+        if (request.SelectionUnavailable)
+        {
+            parts.Add(new BundlePart(
+                BundlePartNames.Selection,
+                BundlePartState.Unavailable,
+                "the reader could not read the selection (the page was not ready, or the request timed out)"));
+            return new SelectionContext(null, SelectionState.Unavailable);
+        }
 
-        var text = Whitespace.Replace(raw.Trim(), " ");
-        var found = Whitespace.Replace(windowText, " ").Contains(text, StringComparison.OrdinalIgnoreCase);
+        // Already Latin, composed and whitespace-collapsed by SelectionPipeline.Normalize; run it again rather
+        // than trust the caller, since it is idempotent and the alternative is a silent locator miss.
+        var text = SelectionPipeline.Normalize(request.SelectionText, Script.Latin);
+        if (text is null) return null;
+
+        var found = SelectionPipeline.IsWithin(text, windowText);
 
         parts.Add(new BundlePart(
             BundlePartNames.Selection,
             BundlePartState.Included,
             found ? null : "selection not found in the passage window"));
 
-        return new SelectionContext(text, found);
+        return new SelectionContext(text, found ? SelectionState.Located : SelectionState.NotFoundInWindow);
     }
 
     /// <summary>

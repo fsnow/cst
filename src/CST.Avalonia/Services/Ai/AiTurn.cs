@@ -8,12 +8,17 @@ namespace CST.Avalonia.Services.Ai;
 /// </summary>
 /// <param name="Reference">Where in the book. Null reads from the START of the book, so a caller that does not
 /// know the reading position must refuse rather than pass null (see <see cref="ReaderStateService"/>).</param>
+/// <param name="SelectionText">Already through <c>SelectionPipeline.Normalize</c>. Null means nothing was
+/// selected.</param>
+/// <param name="SelectionUnavailable">The reader could not read the selection — see
+/// <see cref="SelectionState.Unavailable"/>. Distinct from a null <paramref name="SelectionText"/>.</param>
 public sealed record AiTurnRequest(
     AiTask Task,
     string BookId,
     NavigationReference? Reference = null,
     string? SelectionText = null,
-    string? UserQuestion = null);
+    string? UserQuestion = null,
+    bool SelectionUnavailable = false);
 
 /// <summary>What kind of thing a <see cref="AiTurnEvent"/> carries.</summary>
 public enum AiTurnEventKind
