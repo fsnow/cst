@@ -179,9 +179,14 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 <!--doc:reading-->
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeFootnotes? }`.
-  Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, noteCount, ... }` - `noteCount` is how
+  Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, noteCount, paragraphNumber,
+  endParagraphNumber, ... }` - `noteCount` is how
   many `{...}` apparatus notes fall in the window (counted regardless of `includeFootnotes`; `>0` = apparatus
-  present here). Page by passing back the
+  present here). `normalizedReference` names a RANGE ("paragraphs 21-49 (kn2)") whenever the window spans more
+  than one paragraph, and `endParagraphNumber` is the paragraph in effect where it ended - CHECK IT BEFORE
+  CITING. `maxChars` is a character budget and is structurally blind, so on a verse text a modest budget covers
+  many paragraphs: 2400 characters of Dhammapada is roughly thirty verses across several chapters. Citing only
+  the opening paragraph of such a window misrepresents what you actually read. Page by passing back the
   integer `prevCursor` / `nextCursor` as `cursor` (see the cursor note above). A `cursor` (from occurrences or
   passage) reads the ENCLOSING SENTENCE: the window start is snapped back so you get the governing clause, not a
   mid-sentence fragment. `maxChars` is a SOFT budget - the window OVERSHOOTS to the next sentence boundary, so

@@ -44,7 +44,12 @@ namespace CST.Tools
     /// A reading window: the text, the citation refs at its start, and cursors to page through. Pass a cursor
     /// back as <see cref="PassageRequest.Cursor"/> to continue; a null cursor means the book start/end.
     /// </summary>
-    /// <param name="NormalizedReference">Short human-readable reference at the window start (e.g. "paragraph 123 (an5)").</param>
+    /// <param name="NormalizedReference">Short human-readable reference for the window. Names a RANGE when the
+    /// window spans more than one paragraph (e.g. "paragraphs 21-49 (kn2)") — the character budget is
+    /// structurally blind, and on verse texts a modest budget covers many paragraphs, so a start-only reference
+    /// understates the extent of what was returned. (#602)</param>
+    /// <param name="EndParagraphNumber">The paragraph in effect at the window's END. Equal to
+    /// <see cref="PassageResult.ParagraphNumber"/> when the window stayed within one paragraph.</param>
     /// <param name="Text">The passage text in the requested script.</param>
     /// <param name="Pages">The per-edition page(s) at the window start, for citation.</param>
     /// <param name="NoteCount">How many print-edition apparatus notes (<c>{…}</c>) fall in this window. Counted
@@ -62,5 +67,7 @@ namespace CST.Tools
         int? PrevCursor,
         int? NextCursor,
         int NoteCount,
-        IReadOnlyList<ApparatusNote> Notes);
+        IReadOnlyList<ApparatusNote> Notes,
+        int? EndParagraphNumber = null,
+        string? EndParagraphBookCode = null);
 }

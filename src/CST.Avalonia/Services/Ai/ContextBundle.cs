@@ -107,20 +107,30 @@ public enum BundlePartState
 public sealed record BundlePart(string Name, BundlePartState State, string? Detail = null);
 
 /// <summary>
-/// What was included, what was cut, and what was missing.
+/// What was included, what was cut, and how far the window actually reached.
 ///
 /// <para><b>There is deliberately no "the passage was truncated" flag.</b> An earlier version derived one from
-/// <c>PassageResult.NextCursor</c>, which was wrong: that cursor is non-null whenever the window ends before
-/// the end of the BOOK FILE, not before the end of the requested paragraph. On the real corpus it is set for
-/// almost every request, so the badge it drove would have fired always — and a fidelity signal that always
-/// fires is one users learn to ignore, which is worse than not having it. Reporting a genuine paragraph-scoped
-/// trim needs the passage reader to say whether the window covered the reference; until it can,
-/// <see cref="WindowMayExtendPastReference"/> states only what is actually known.</para>
+/// <c>PassageResult.NextCursor</c>, which was wrong: that cursor is non-null whenever the window ends before the
+/// end of the BOOK FILE, not before the end of the requested paragraph. On the real corpus it is set for almost
+/// every request, so the badge it drove would have fired always — and a fidelity signal that always fires is one
+/// users learn to ignore.</para>
+///
+/// <para><see cref="ParagraphsCovered"/> replaced it, and unlike its predecessor it is <b>measured</b>: the
+/// passage reader now reports the paragraph in effect where the window ended, so this says how many paragraphs
+/// the returned text actually spans rather than guessing. That is what makes §6's partial-passage badge
+/// implementable at last, and what caught #602 — a Translate window budgeted at 2,400 characters covering
+/// roughly thirty Dhammapada verses beside a citation naming one.</para>
 /// </summary>
+/// <param name="ParagraphsCovered">How many numbered paragraphs the window spans; 1 when it stayed within the
+/// one asked for. Null when the book has no paragraph numbering at that point.</param>
 public sealed record BudgetReport(
     IReadOnlyList<BundlePart> Parts,
     int ApproximateTokens,
-    bool WindowMayExtendPastReference);
+    int? ParagraphsCovered)
+{
+    /// <summary>True when the window ran past the paragraph the citation names.</summary>
+    public bool WindowExtendsPastReference => ParagraphsCovered > 1;
+}
 
 /// <summary>Stable part names, so consumers match on a constant rather than a string literal.</summary>
 public static class BundlePartNames

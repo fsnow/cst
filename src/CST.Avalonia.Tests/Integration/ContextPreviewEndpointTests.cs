@@ -60,7 +60,7 @@ public class ContextPreviewEndpointTests
                 Citation: new CitationRef(request.BookId, "D\u012Bghanik\u0101ya", "paragraph 5 (dn1)",
                     Array.Empty<CST.Search.SnippetPageRef>()),
                 Provenance: new Provenance("test", null),
-                Budget: new BudgetReport(Array.Empty<BundlePart>(), 42, WindowMayExtendPastReference: true)));
+                Budget: new BudgetReport(Array.Empty<BundlePart>(), 42, ParagraphsCovered: 3)));
         }
     }
 
@@ -191,7 +191,7 @@ public class ContextPreviewEndpointTests
         Assert.Equal("s0101m.mul.xml", root.GetProperty("citation").GetProperty("bookId").GetString());
         Assert.Equal("paragraph 5 (dn1)", root.GetProperty("citation").GetProperty("normalizedReference").GetString());
         Assert.Equal("what is this about?", root.GetProperty("userQuestion").GetString());
-        Assert.True(root.GetProperty("budget").GetProperty("windowMayExtendPastReference").GetBoolean());
+        Assert.Equal(3, root.GetProperty("budget").GetProperty("paragraphsCovered").GetInt32());
     }
 
     [Fact]
