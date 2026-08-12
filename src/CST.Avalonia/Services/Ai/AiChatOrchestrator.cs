@@ -154,7 +154,7 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             bundle = await _bundler.BuildAsync(
                 new AiContextRequest(
                     request.Task, request.BookId, language, request.Reference,
-                    request.SelectionText, request.UserQuestion),
+                    request.SelectionText, request.UserQuestion, request.SelectionUnavailable),
                 token).ConfigureAwait(false);
 
             prompt = _prompts.Build(bundle);

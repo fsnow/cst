@@ -151,6 +151,20 @@ public class AiContextBundlerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_selection_the_reader_could_not_read_is_recorded_as_unavailable()
+    {
+        // Not the same as no selection: this is the state that otherwise reaches the user as "the AI ignored
+        // my selection". (#581)
+        var bundle = await Bundler().BuildAsync(
+            new AiContextRequest(AiTask.Explain, BookId, "English",
+                new NavigationReference.Paragraph(5), SelectionUnavailable: true));
+
+        Assert.Equal(SelectionState.Unavailable, bundle.Selection!.State);
+        Assert.Null(bundle.Selection.Text);
+        Assert.Equal(BundlePartState.Unavailable, Part(bundle, BundlePartNames.Selection).State);
+    }
+
+    [Fact]
     public async Task A_missing_lemma_asset_reads_as_unavailable_not_as_a_budget_problem()
     {
         // The distinction is the point: conflating them sends whoever is debugging a thin grammar answer to

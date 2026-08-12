@@ -250,10 +250,18 @@ public sealed class PromptBuilder : IPromptBuilder
         if (selection is null)
             return "The reader has not selected anything. Treat the whole passage as being in view.";
 
-        // A selection the window does not contain means the surrounding text may not support what is being asked
-        // about — worth telling the model, since it is the difference between "explain this in context" and
-        // "explain this, and be aware the context you have may be the wrong context".
-        var note = selection.FoundInWindow
+        // Distinct from "nothing selected": the user may well have highlighted something we failed to read, so
+        // the model is told the difference rather than being allowed to assume the passage is all there was.
+        if (selection.State == SelectionState.Unavailable)
+        {
+            return "The reader may have selected something, but it could not be read. Answer about the passage "
+                 + "as a whole, and say that you were not able to see a selection.";
+        }
+
+        // A selection the window does not contain means the surrounding text may not support what is being
+        // asked about — the difference between "explain this in context" and "explain this, and be aware the
+        // context you have may be the wrong context".
+        var note = selection.State == SelectionState.Located
             ? string.Empty
             : "\n\n(This selection was not found in the passage above. The reader may have scrolled, or the "
               + "selection may lie outside the window. Treat the surrounding text with corresponding caution.)";
@@ -422,8 +430,16 @@ public sealed class PromptBuilder : IPromptBuilder
                 notices.Add($"The {PartLabel(part.Name)} was cut to fit the request budget.");
         }
 
-        if (bundle.Selection is { FoundInWindow: false })
-            notices.Add("The selected text was not found in the passage window the model was given.");
+        switch (bundle.Selection?.State)
+        {
+            case SelectionState.NotFoundInWindow:
+                notices.Add("The selected text was not found in the passage window the model was given.");
+                break;
+            case SelectionState.Unavailable:
+                // The one the user most needs: otherwise this reads as "the AI ignored my selection".
+                notices.Add("Your selection could not be read, so the answer covers the whole passage.");
+                break;
+        }
 
         // Says the number. "May extend past the reference" was true of almost every request and read like a
         // rounding caveat; "covers 29 paragraphs" is a fact the reader can act on. (#602)

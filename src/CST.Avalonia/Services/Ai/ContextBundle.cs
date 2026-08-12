@@ -21,9 +21,13 @@ public enum AiTask
 /// </summary>
 /// <param name="BookId">The open book's file name, as <c>Book.FileName</c> spells it.</param>
 /// <param name="Reference">Where in the book. Null reads from the start.</param>
-/// <param name="SelectionText">The user's selection, ALREADY normalized to Latin script by the selection
-/// pipeline (#581). This type does not convert: a raw display-script selection passed here would silently fail
-/// every dictionary and lemma lookup, which is the failure #581 exists to prevent.</param>
+/// <param name="SelectionText">The user's selection, ALREADY put through <c>SelectionPipeline.Normalize</c> —
+/// Latin script, composed, whitespace-collapsed. This type does not convert: a raw display-script selection
+/// passed here would silently fail every dictionary and lemma lookup, which is the failure #581 exists to
+/// prevent. Null means nothing was selected.</param>
+/// <param name="SelectionUnavailable">The reader could not determine the selection at all. Distinct from a null
+/// <paramref name="SelectionText"/>, which means the user genuinely selected nothing — see
+/// <see cref="SelectionState.Unavailable"/>.</param>
 /// <param name="OutputLanguage">Language the ANSWER should be in — a separate axis from the script of quoted
 /// Pāli. Not optional: translate into what?</param>
 /// <param name="UserQuestion">Free-form question, where the preset allows one.</param>
@@ -33,14 +37,39 @@ public sealed record AiContextRequest(
     string OutputLanguage,
     CST.Navigation.NavigationReference? Reference = null,
     string? SelectionText = null,
-    string? UserQuestion = null);
+    string? UserQuestion = null,
+    bool SelectionUnavailable = false);
 
-/// <summary>The user's selection, once the selection pipeline has normalized it.</summary>
-/// <param name="Text">Latin-script, whitespace-normalized.</param>
-/// <param name="FoundInWindow">Whether the selection was located within the fetched passage window. False
-/// means the model is being shown a selection the surrounding passage may not contain — worth knowing, and
-/// recorded in the budget report rather than silently ignored.</param>
-public sealed record SelectionContext(string Text, bool FoundInWindow);
+/// <summary>What became of the user's selection.</summary>
+public enum SelectionState
+{
+    /// <summary>Converted, normalized, and found in the passage window.</summary>
+    Located,
+
+    /// <summary>
+    /// Converted and normalized, but not present in the window. The model is still shown it — it is what the
+    /// user pointed at — but the surrounding passage may not support what is being asked about.
+    /// </summary>
+    NotFoundInWindow,
+
+    /// <summary>
+    /// The reader could not say what was selected — the WebView was not ready, or the round trip through the
+    /// <c>document.title</c> channel timed out. <b>Deliberately distinct from "nothing was selected"</b>: those
+    /// two were the same null before #581, and the difference is the difference between an answer about the
+    /// whole passage (correct) and an answer that quietly ignored the words the user highlighted (which the
+    /// user experiences as "the AI ignored my selection").
+    /// </summary>
+    Unavailable,
+}
+
+/// <summary>The user's selection, once the selection pipeline has been through it.</summary>
+/// <param name="Text">Latin-script, composed, whitespace-collapsed. Null when <see cref="State"/> is
+/// <see cref="SelectionState.Unavailable"/> — there is no text to carry.</param>
+public sealed record SelectionContext(string? Text, SelectionState State)
+{
+    /// <summary>Whether the selection was located within the fetched passage window.</summary>
+    public bool FoundInWindow => State == SelectionState.Located;
+}
 
 /// <summary>A word's stem and grammatical analysis, from the optional DPD-lemma asset.</summary>
 public sealed record LemmaEntry(
