@@ -16,6 +16,19 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 /// and undocumented in principle. Loading the real symbols costs a few lines and removes a dependency on
 /// something Apple never promised.</para>
 ///
+/// <para><b>This targets the FILE-BASED (login) keychain, deliberately.</b> <c>SecItem</c> routes to the
+/// data-protection keychain only when the query carries <c>kSecUseDataProtectionKeychain</c> or
+/// <c>kSecAttrSynchronizable</c>; with neither, it talks to the file-based one
+/// (Apple, TN3137 / DTS "On Mac Keychains"). That is the right target here because the data-protection keychain
+/// "is only available to code that can carry an entitlement", and its access groups are determined by code
+/// signing — so a plain <c>dotnet run</c> development build could not reach a key the signed <c>.app</c> stored,
+/// or the reverse. Apple does say the file-based implementation is on the road to deprecation; revisiting is
+/// tracked separately.</para>
+///
+/// <para><b>Hence no <c>kSecAttrAccessible</c>.</b> Accessibility classes are the data-protection keychain's
+/// access model; the file-based keychain uses ACLs instead, and the attribute is accepted and ignored there.
+/// Passing it would read like a protection this code does not actually provide.</para>
+///
 /// <para><b>Nothing here logs.</b> Not the value, not a prefix, not a length — the caller reports outcomes.</para>
 /// </summary>
 internal static class MacOsKeychain
@@ -86,7 +99,7 @@ internal static class MacOsKeychain
     private sealed record Constants(
         IntPtr Class, IntPtr GenericPassword, IntPtr Service, IntPtr Account,
         IntPtr ValueData, IntPtr ReturnData, IntPtr MatchLimit, IntPtr MatchLimitOne,
-        IntPtr Accessible, IntPtr AfterFirstUnlock, IntPtr True);
+        IntPtr True);
 
     private static Constants? LoadConstants()
     {
@@ -113,11 +126,6 @@ internal static class MacOsKeychain
             Deref(security, "kSecReturnData"),
             Deref(security, "kSecMatchLimit"),
             Deref(security, "kSecMatchLimitOne"),
-            Deref(security, "kSecAttrAccessible"),
-            // Not ...WhenUnlocked: surface B can be invoked from a session that is unlocked but whose keychain
-            // state we do not control, and AfterFirstUnlock is the weakest accessibility that still keeps the
-            // key off a locked, powered-down machine.
-            Deref(security, "kSecAttrAccessibleAfterFirstUnlock"),
             Deref(cf, "kCFBooleanTrue"));
 
         // Any missing symbol means the assumptions here no longer hold; report unavailable rather than build a
@@ -126,7 +134,7 @@ internal static class MacOsKeychain
                  {
                      constants.Class, constants.GenericPassword, constants.Service, constants.Account,
                      constants.ValueData, constants.ReturnData, constants.MatchLimit, constants.MatchLimitOne,
-                     constants.Accessible, constants.AfterFirstUnlock, constants.True,
+                     constants.True,
                  })
         {
             if (value == IntPtr.Zero) return null;
@@ -199,8 +207,8 @@ internal static class MacOsKeychain
             var accountRef = strings.Add(account);
 
             attributes = CreateDictionary(
-                new[] { k.Class, k.Service, k.Account, k.ValueData, k.Accessible },
-                new[] { k.GenericPassword, serviceRef, accountRef, data, k.AfterFirstUnlock });
+                new[] { k.Class, k.Service, k.Account, k.ValueData },
+                new[] { k.GenericPassword, serviceRef, accountRef, data });
             if (attributes == IntPtr.Zero) return false;
 
             var status = SecItemAdd(attributes, IntPtr.Zero);

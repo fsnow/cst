@@ -664,6 +664,18 @@ shipping an untested credential store would be worse than reporting the truth.
 - **The modern `SecItem*` API, not the far simpler `SecKeychain*` one.** The legacy calls would be a third of
   the code, but they have been deprecated since 10.10 — and a credential store is precisely the component that
   must not stop working on an OS release.
+- **It targets the file-based (login) keychain, checked against Apple's docs rather than assumed.** `SecItem`
+  routes to the data-protection keychain only when the query carries `kSecUseDataProtectionKeychain` or
+  `kSecAttrSynchronizable` ([TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains));
+  with neither, it talks to the file-based one. That is the right target while development is `dotnet run`,
+  because the data-protection keychain is only available to code carrying an entitlement and its access groups
+  come from code signing — an unsigned development build and the signed `.app` would not share a key. Revisiting
+  is **#609**.
+- **No `kSecAttrAccessible`, and that is a correction.** The first cut passed
+  `kSecAttrAccessibleAfterFirstUnlock` with a comment claiming it kept the key off a powered-down machine. It
+  does not: accessibility classes are the data-protection keychain's access model, the file-based keychain uses
+  ACLs, and the attribute was accepted and silently ignored. Inert code that *looks* like a security control is
+  worse than none, because it stops anyone asking the question again.
 - **The `kSec*` keys are read with `dlsym`.** Their underlying string values are stable in practice and
   undocumented in principle; loading the real symbols costs a few lines and removes a dependency on something
   Apple never promised. Any missing symbol reports the store unavailable rather than building a half-populated
