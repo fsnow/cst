@@ -121,7 +121,7 @@ public class AiChatOrchestratorTests
                 Provenance: new Provenance("test", null),
                 Budget: new BudgetReport(
                     new[] { new BundlePart(BundlePartNames.Passage, BundlePartState.Included, "a window") },
-                    100, WindowMayExtendPastReference: false)));
+                    100, ParagraphsCovered: 1)));
         }
     }
 

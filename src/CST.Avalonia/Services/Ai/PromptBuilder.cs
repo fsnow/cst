@@ -178,16 +178,20 @@ public sealed class PromptBuilder : IPromptBuilder
     {
         var where = $"{bundle.Citation.BookName}, at {bundle.Citation.NormalizedReference}";
 
-        // NextCursor being set means the window stopped before the end of the book FILE — not before the end of
-        // the paragraph — so all that can honestly be said is that it may carry text past the reference. See
-        // BudgetReport for why there is no truncation flag to report instead.
-        var extent = bundle.Budget.WindowMayExtendPastReference
-            ? "It is a reading window starting there — not the whole text, and it may run on past the end of the "
-              + "cited reference into what follows it."
-            // Not "not the whole text": a short book read from the start IS wholly in the window, and telling
-            // the model otherwise buys hedging on an answer that did not need it.
-            : "It is a reading window starting there and running to the end of the book file, which may be less "
-              + "than the whole text.";
+        // How far the window ACTUALLY reached, measured rather than guessed (#602). Saying the number matters:
+        // the budget is in characters and structurally blind, so on a verse text a modest budget covers dozens
+        // of paragraphs, and a model told only "this may run on a little" will answer about all of them as
+        // though that were what was asked.
+        var extent = bundle.Budget.ParagraphsCovered switch
+        {
+            > 1 and int covered =>
+                $"It is a reading window covering {covered} numbered paragraphs — the whole of what follows is "
+                + "in view, so say which part of it you are answering about.",
+            1 => "It is exactly the paragraph named, and nothing after it.",
+            // Null means the book carries no paragraph numbering here — which is not the same as "one
+            // paragraph", and must not be reported as though it were.
+            _ => "It is a reading window starting there, not the whole text.",
+        };
 
         return $"an excerpt from {where}. {extent}";
     }
@@ -421,8 +425,14 @@ public sealed class PromptBuilder : IPromptBuilder
         if (bundle.Selection is { FoundInWindow: false })
             notices.Add("The selected text was not found in the passage window the model was given.");
 
-        if (bundle.Budget.WindowMayExtendPastReference)
-            notices.Add("The passage window may extend past the end of the cited reference.");
+        // Says the number. "May extend past the reference" was true of almost every request and read like a
+        // rounding caveat; "covers 29 paragraphs" is a fact the reader can act on. (#602)
+        if (bundle.Budget.ParagraphsCovered is > 1 and int covered)
+        {
+            notices.Add(
+                $"The passage window covers {covered} paragraphs, not just the one cited — the answer may range "
+                + "wider than you asked.");
+        }
 
         return notices;
     }

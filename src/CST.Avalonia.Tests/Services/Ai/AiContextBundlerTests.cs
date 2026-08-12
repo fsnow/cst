@@ -118,7 +118,9 @@ public class AiContextBundlerTests : IDisposable
         var bundle = await Bundler().BuildAsync(Request());
 
         Assert.Equal(BookId, bundle.Citation.BookId);
-        Assert.Equal("paragraph 5 (dn1)", bundle.Citation.NormalizedReference);
+        // A RANGE, because the 1600-character Explain window genuinely runs from paragraph 5 into 6. Naming
+        // only the first would understate what the answer beside it was actually written from. (#602)
+        Assert.Equal("paragraphs 5-6 (dn1)", bundle.Citation.NormalizedReference);
         Assert.Contains(bundle.Citation.Pages, p => p.Edition == PageEdition.Vri && p.Number == 1);
     }
 
@@ -272,14 +274,28 @@ public class AiContextBundlerTests : IDisposable
     }
 
     [Fact]
-    public async Task The_window_reports_that_it_may_extend_past_the_cited_reference()
+    public async Task The_window_reports_how_many_paragraphs_it_actually_covers()
     {
-        // The reader takes a character budget from the reference and flows on into what follows, so the text can
-        // carry more than the citation names. That is what is actually known — there is deliberately no
-        // "was truncated" flag, since NextCursor means end-of-FILE, not end-of-paragraph.
+        // Measured, not guessed: Explain's 1600-character budget overflows paragraph 5's verse into 6. It is the
+        // NUMBER, not a "may extend" hedge, that lets a caller tell "the paragraph you asked for" from "thirty
+        // verses across three chapters" — which is the failure that prompted this. (#602)
+        var bundle = await Bundler().BuildAsync(Request(AiTask.Explain));
+
+        Assert.Equal(2, bundle.Budget.ParagraphsCovered);
+        Assert.True(bundle.Budget.WindowExtendsPastReference);
+    }
+
+    [Fact]
+    public async Task A_window_contained_in_one_paragraph_says_so_rather_than_hedging()
+    {
+        // The other side of the boundary: word-by-word's 600-character budget stays inside paragraph 5's verse.
+        // Reporting 1 here is what makes AI_SURFACE_B.md §6's partial-passage badge implementable at all — its
+        // predecessor was derived from NextCursor and so was set on essentially every request.
         var bundle = await Bundler().BuildAsync(Request(AiTask.WordByWord));
 
-        Assert.True(bundle.Budget.WindowMayExtendPastReference);
+        Assert.Equal(1, bundle.Budget.ParagraphsCovered);
+        Assert.False(bundle.Budget.WindowExtendsPastReference);
+        Assert.Equal("paragraph 5 (dn1)", bundle.Citation.NormalizedReference);
     }
 
     [Fact]

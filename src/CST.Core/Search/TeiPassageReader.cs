@@ -73,7 +73,17 @@ namespace CST.Search
             int paraStart = EnclosingParagraphStart(readStart, markers);
             int noteCount = TeiText.CountNotesIntersecting(xml, paraStart, readStart, end);
             var (num, code, pages) = markers.RefsAt(readStart);
-            return new PassageWindow(text, prev, next, num, code, pages, noteCount, notes);
+
+            // The reference in effect at the window's END. Without this a caller can only say where the window
+            // STARTED, so a character budget that runs on through many paragraphs is indistinguishable from one
+            // that covered exactly the paragraph asked for — and any citation built from the start alone
+            // understates the window's real extent. (#602)
+            //
+            // `end` is exclusive, so probe the last character actually included: at a paragraph boundary, `end`
+            // itself already sits in the NEXT paragraph and would overstate the span by one.
+            var (endNum, endCode, _) = markers.RefsAt(Math.Max(readStart, end - 1));
+
+            return new PassageWindow(text, prev, next, num, code, pages, noteCount, notes, endNum, endCode);
         }
 
         // Strip the {reading (sigla)} apparatus spans out of already-rendered text into structured notes
@@ -196,7 +206,9 @@ namespace CST.Search
         string? ParagraphBookCode,
         IReadOnlyList<SnippetPageRef> Pages,
         int NoteCount,
-        IReadOnlyList<ApparatusNote> Notes);
+        IReadOnlyList<ApparatusNote> Notes,
+        int? EndParagraphNumber = null,
+        string? EndParagraphBookCode = null);
 
     /// <summary>One apparatus note (a digitized print footnote — usually a variant reading) as structured data:
     /// its character <paramref name="Offset"/> into the returned brace-free <c>Text</c>, its full converted

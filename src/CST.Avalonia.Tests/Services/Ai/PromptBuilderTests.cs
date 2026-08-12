@@ -48,7 +48,7 @@ public class PromptBuilderTests : IDisposable
         IReadOnlyList<LemmaEntry>? lemmas = null,
         IReadOnlyList<BundlePart>? parts = null,
         IReadOnlyList<ApparatusNote>? notes = null,
-        bool windowMayExtendPastReference = true,
+        int? paragraphsCovered = 3,
         string? userQuestion = null,
         string outputLanguage = "English",
         CommentaryLevel level = CommentaryLevel.Mula)
@@ -56,7 +56,7 @@ public class PromptBuilderTests : IDisposable
         var pages = new[] { new SnippetPageRef(PageEdition.Vri, 1, 17) };
         var result = new PassageResult(
             "s0502m.mul.xml", "paragraph 21 (dhp)", passage, pages, 21, "dhp", null,
-            windowMayExtendPastReference ? 4200 : null,
+            paragraphsCovered > 1 ? 4200 : null,
             notes?.Count ?? 0, notes ?? Array.Empty<ApparatusNote>());
 
         return new AiContextBundle(
@@ -67,7 +67,7 @@ public class PromptBuilderTests : IDisposable
             new Provenance("6.0.0-test", null),
             new BudgetReport(
                 parts ?? new[] { new BundlePart(BundlePartNames.Passage, BundlePartState.Included, "a window") },
-                500, windowMayExtendPastReference));
+                500, paragraphsCovered));
     }
 
     [Fact]
@@ -79,16 +79,16 @@ public class PromptBuilderTests : IDisposable
 
         Assert.Contains("Dhammapadapāḷi", prompt.System);
         Assert.Contains("paragraph 21 (dhp)", prompt.System);
-        Assert.Contains("may run on past the end of the cited reference", prompt.System);
+        Assert.Contains("covering 3 numbered paragraphs", prompt.System);
     }
 
     [Fact]
     public void A_window_that_reached_the_end_of_the_file_says_so_instead()
     {
-        var prompt = _builder.Build(Bundle(windowMayExtendPastReference: false));
+        var prompt = _builder.Build(Bundle(paragraphsCovered: 1));
 
-        Assert.Contains("running to the end of the book file", prompt.System);
-        Assert.DoesNotContain("may run on past", prompt.System);
+        Assert.Contains("exactly the paragraph named", prompt.System);
+        Assert.DoesNotContain("numbered paragraphs", prompt.System);
     }
 
     [Fact]
@@ -334,7 +334,7 @@ public class PromptBuilderTests : IDisposable
                 new BundlePart(BundlePartNames.Passage, BundlePartState.Included, "a window"),
                 new BundlePart(BundlePartNames.Lemmas, BundlePartState.Unavailable, "asset not installed"),
             },
-            windowMayExtendPastReference: false));
+            paragraphsCovered: 1));
 
         Assert.Empty(prompt.Notices);
     }
@@ -346,7 +346,7 @@ public class PromptBuilderTests : IDisposable
         // nag about a missing download on a perfectly good bundle.
         var prompt = _builder.Build(Bundle(
             parts: new[] { new BundlePart(BundlePartNames.Apparatus, BundlePartState.Empty, "none") },
-            windowMayExtendPastReference: false));
+            paragraphsCovered: 1));
 
         Assert.Empty(prompt.Notices);
     }
@@ -371,7 +371,7 @@ public class PromptBuilderTests : IDisposable
     {
         _store.Save(PromptTemplateNames.Explain, "MY TEMPLATE\n" + Minimal);
 
-        var prompt = _builder.Build(Bundle(windowMayExtendPastReference: false));
+        var prompt = _builder.Build(Bundle(paragraphsCovered: 1));
 
         Assert.StartsWith("MY TEMPLATE", prompt.UserContent);
         Assert.Empty(prompt.Notices);

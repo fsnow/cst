@@ -122,7 +122,7 @@ Design rules, each load-bearing:
   `PassageResult.NextCursor`, which is wrong: that cursor means the window ended before the end of the BOOK
   FILE, not before the end of the requested paragraph, so on the real corpus it is set for nearly every request
   and the badge would always fire. A fidelity signal that always fires is one users learn to ignore. The bundle
-  reports only what is known — `WindowMayExtendPastReference` — and a true paragraph-scoped trim signal needs
+  reports `ParagraphsCovered`, measured from where the window actually ended (#602), and a trim signal needs
   support from the passage reader.
 - **A failed fetch is loud.** The passage tool reports "book not available", "reference not found" and
   unsupported reference kinds all as empty text with the reason in `NormalizedReference` — the field the app
@@ -277,14 +277,17 @@ answer about three paragraphs. Three fences:
 4. **A trimmed passage gets a visible "partial passage" badge**, driven by `BudgetReport`. A *translation*
    labelled as of a passage that was silently truncated is a fidelity failure specific to this corpus.
 
-> **Fence 4 was not delivered as written — 2026-08-11 (#580/#582).** There is **no truncation flag** to drive
-> the badge. The obvious candidate, `PassageResult.NextCursor`, is non-null whenever the window ends before the
-> end of the *book file* rather than before the end of the requested reference, so on the real corpus it is set
-> for almost every request — a badge driven by it would fire always, and a fidelity signal that always fires is
-> one users learn to ignore. What ships instead is the weaker true statement, `WindowMayExtendPastReference`,
-> told to the model in the scope declaration (fence 1) and to the user as a notice. **A genuine
-> paragraph-scoped trim badge needs the passage reader to report whether the window covered the reference** —
-> unbuilt work, not an oversight in #582.
+> **Fence 4, and how it was finally driveable — 2026-08-11 (#580 → #602).** #580 could not implement this. The
+> obvious signal, `PassageResult.NextCursor`, is non-null whenever the window ends before the end of the *book
+> file* rather than the requested paragraph, so on the real corpus it is set for almost every request — a badge
+> driven by it would have fired always, and a fidelity signal that always fires is one users learn to ignore.
+> What shipped instead was the weaker true statement `WindowMayExtendPastReference`.
+>
+> That understatement then hid a real bug (#602): a Translate window on Dhp 21 covered **25 paragraphs** while
+> the citation read "paragraph 21", and the notice said only that the window "may extend past" it. The passage
+> reader now reports the paragraph in effect where the window **ended**, so `BudgetReport.ParagraphsCovered` is
+> measured rather than guessed — the citation names a range, the notice states the count, and the badge this
+> fence asks for is at last driveable from a signal that means something.
 
 Free-form follow-up on the Explain preset is the leak in the dam — keep it, but these are its seatbelts.
 
@@ -579,3 +582,16 @@ and #582 surfaced its notice, which is true and reads like a rounding caveat rat
 answer covers twenty-nine paragraphs nobody asked about. §6 names truthful output over a *narrower* scope than
 assumed as the characteristic failure; this is that failure mirrored, and the app-rendered citation makes it
 worse rather than better. Fixing it also unblocks §6's fence 4, since the missing capability is the same one.
+
+**2026-08-11 (#602, the window's real extent)** — the passage reader now reports the paragraph in effect where
+the window **ended**, not only where it began. Three consequences: `normalizedReference` names a range
+("paragraphs 21-45 (kn2)") whenever the window spans more than one paragraph; `BudgetReport.ParagraphsCovered`
+replaces the always-true `WindowMayExtendPastReference` with a measured count; and §6's fence 4 becomes
+implementable.
+
+**Reporting the extent is not the same as fixing it, and the rest is a product decision.** The Dhp 21 window
+still covers 25 paragraphs — the citation and the notice are now honest about it, which stops the app
+*misrepresenting* the answer, but a reader who asks to translate one verse still gets twenty-five. The remaining
+options in #602 (clamp the window to the cited reference; budget in paragraphs rather than characters) change
+what "translate this" *means*, and trade surrounding context against focus differently per preset. That is
+fsnow's call, not something to settle in an implementation commit.

@@ -62,7 +62,8 @@ namespace CST.Avalonia.Services.Tools
 
             return new PassageResult(
                 BookId: request.BookId,
-                NormalizedReference: Describe(w.ParagraphNumber, w.ParagraphBookCode),
+                NormalizedReference: Describe(
+                    w.ParagraphNumber, w.ParagraphBookCode, w.EndParagraphNumber),
                 Text: w.Text,
                 Pages: w.Pages,
                 ParagraphNumber: w.ParagraphNumber,
@@ -70,7 +71,9 @@ namespace CST.Avalonia.Services.Tools
                 PrevCursor: w.PrevCursor,
                 NextCursor: w.NextCursor,
                 NoteCount: w.NoteCount,
-                Notes: w.Notes);
+                Notes: w.Notes,
+                EndParagraphNumber: w.EndParagraphNumber,
+                EndParagraphBookCode: w.EndParagraphBookCode);
         }
 
         private static int ResolveStart(NavigationReference? reference, BookMarkers markers) => reference switch
@@ -81,10 +84,24 @@ namespace CST.Avalonia.Services.Tools
             _ => -1   // Page / Chapter / RawAnchor: not resolved in the first cut
         };
 
-        private static string Describe(int? number, string? bookCode) =>
-            number is null ? "start of book"
-            : bookCode is null ? $"paragraph {number}"
-            : $"paragraph {number} ({bookCode})";
+        /// <summary>
+        /// A human-readable reference for the window — a RANGE when it spans more than one paragraph.
+        ///
+        /// <para>The window is budgeted in rendered characters and is structurally blind, so on a verse text a
+        /// modest budget covers many paragraphs: 2,400 characters of Dhammapada is ~30 verses across several
+        /// chapters. Naming only the first would understate that badly, and this string is what surface B
+        /// renders beside a generated answer as the app's own attestation of scope. (#602)</para>
+        /// </summary>
+        private static string Describe(int? number, string? bookCode, int? endNumber = null)
+        {
+            if (number is null) return "start of book";
+
+            var where = endNumber is int last && last != number
+                ? $"paragraphs {number}-{last}"
+                : $"paragraph {number}";
+
+            return bookCode is null ? where : $"{where} ({bookCode})";
+        }
 
         private static PassageResult Empty(PassageRequest request, string note) =>
             new(request.BookId, note, "", Array.Empty<SnippetPageRef>(), null, null, null, null, 0,

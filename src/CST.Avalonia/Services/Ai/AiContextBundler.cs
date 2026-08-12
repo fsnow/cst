@@ -163,11 +163,10 @@ public sealed class AiContextBundler : IAiContextBundler
             Budget: new BudgetReport(
                 parts,
                 ApproximateTokens(passage.Text, lemmas),
-                // The window takes a character budget from the reference and flows on through whatever follows
-                // it, so unless it reached the end of the file it may carry text past the reference the citation
-                // names. That is a scope mismatch #582's prompt has to disclose, and it is all this layer can
-                // honestly say — see BudgetReport for why there is no "was truncated" flag.
-                WindowMayExtendPastReference: passage.NextCursor is not null));
+                // Measured, not guessed: the reader reports the paragraph in effect where the window ended, so
+                // this is the window's real span. The predecessor derived it from NextCursor and was therefore
+                // set on almost every request — see BudgetReport. (#602)
+                ParagraphsCovered: ParagraphsCovered(passage)));
 
         _logger.LogDebug(
             "Built {Task} bundle for {BookId}: {Lemmas} lemma(s), ~{Tokens} tokens",
@@ -237,6 +236,22 @@ public sealed class AiContextBundler : IAiContextBundler
             $"{lemmas.Count} candidate lemma(s) for {words.Count} word(s)"));
 
         return lemmas;
+    }
+
+    /// <summary>
+    /// How many numbered paragraphs the window spans. Null when the book carries no paragraph numbering at that
+    /// point, which is not the same as 1 — "unknown" must not be reported as "stayed put".
+    /// </summary>
+    private static int? ParagraphsCovered(PassageResult passage)
+    {
+        if (passage.ParagraphNumber is not int first) return null;
+        if (passage.EndParagraphNumber is not int last) return 1;
+
+        // Numbering restarts per sub-book in a Multi volume, so a raw subtraction across a sub-book boundary is
+        // meaningless — and can go negative. Refuse rather than report a number that looks measured and isn't.
+        if (passage.EndParagraphBookCode != passage.ParagraphBookCode) return null;
+
+        return last >= first ? last - first + 1 : null;
     }
 
     /// <summary>Distinct words worth resolving, longest first so the budget buys the substantial ones.</summary>
