@@ -2,7 +2,7 @@
 
 **Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B3a (#581, selection
 pipeline), B4 (#582, presets and the grounding contract), B5 (#583, orchestrator), B6 (#584, model registry),
-B9 (#587, evaluation harness), plus the reader-state read path and
+B9 (#587, evaluation harness), B2 (#579, key storage — **macOS only**), plus the reader-state read path and
 `POST /v1/ai/context-preview` (#593). **The chain now runs end to end** — a live Translate turn against the real
 corpus and a real model works — but nothing is user-visible until the Settings UI (B7, #585) and the panel
 (B8, #586) exist.
@@ -656,3 +656,28 @@ prompt, but the term the scorer would COUNT is one CLAUDE.md forbids appearing a
 Committing it to make the check fire would break that rule in order to test a convention — not a trade an
 implementation gets to make. The list is data (`cases.json` → `terminology.discouraged`), so populating it
 locally arms the gate with no code change.
+
+**2026-08-12 (#579, key storage — macOS half)** — Keychain via Security.framework, plus the common seam. The
+DPAPI half is deliberately not attempted from here: it cannot be exercised under `dotnet test` on a Mac, and
+shipping an untested credential store would be worse than reporting the truth.
+
+- **The modern `SecItem*` API, not the far simpler `SecKeychain*` one.** The legacy calls would be a third of
+  the code, but they have been deprecated since 10.10 — and a credential store is precisely the component that
+  must not stop working on an OS release.
+- **The `kSec*` keys are read with `dlsym`.** Their underlying string values are stable in practice and
+  undocumented in principle; loading the real symbols costs a few lines and removes a dependency on something
+  Apple never promised. Any missing symbol reports the store unavailable rather than building a half-populated
+  query that fails obscurely at every call site.
+- **Nothing is cached.** A cache goes stale the moment the user changes the key in Settings, and the lookup
+  costs microseconds — the wrong side of that trade is the one where the app keeps using a credential the user
+  has already replaced.
+- **"No key entered" and "nowhere to store one" are different problems with different fixes**, so the resolver
+  says which. Sending a Windows user to Settings to add a key would send them to a screen that cannot help.
+- **Platform behaviour is defined, not left to accident.** Windows and Linux report unavailable with a reason,
+  and both say that *an endpoint needing no API key still works* — the local-runner configuration is unaffected,
+  which keeps the privacy-first path open on every platform.
+
+The acceptance test asserts the key never appears in log output at any level — across store, read and delete,
+and against the **structured** log values as well as the formatted message, since a leak through a log property
+is just as public and the easier one to introduce by accident. Every test uses a unique service name, so
+running the suite can never read, overwrite or delete a developer's own stored key.

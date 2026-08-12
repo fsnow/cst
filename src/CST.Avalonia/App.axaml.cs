@@ -1235,6 +1235,11 @@ public partial class App : Application
             sp.GetRequiredService<ILoggerFactory>()));
         services.AddSingleton<Services.Ai.IAiChatOrchestrator, Services.Ai.AiChatOrchestrator>();
 
+        // Key storage (#579). Registered unconditionally: the store itself reports whether the platform has
+        // anywhere safe to put a key, which is what lets the resolver explain the difference between "no key
+        // entered" and "this build cannot store one".
+        services.AddSingleton<Services.Ai.IAiCredentialStore, Services.Ai.Credentials.AiCredentialStore>();
+
         // The fidelity advisory (#584). Data only — Settings (#585) and the panel (#586) surface it.
         services.AddSingleton<Services.Ai.IModelRegistry, Services.Ai.ModelRegistry>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();

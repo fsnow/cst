@@ -25,8 +25,20 @@ public enum ChatProviderKind
 /// </summary>
 public interface IAiCredentialStore
 {
+    /// <summary>Whether this platform has somewhere safe to put a key at all.</summary>
+    bool IsAvailable { get; }
+
+    /// <summary>Why not, phrased for the user to read. Null when storage is available.</summary>
+    string? Unavailable { get; }
+
     /// <summary>The stored key for a provider, or null when none is stored.</summary>
     string? GetApiKey(ChatProviderKind provider);
+
+    /// <summary>Store or replace a provider's key. False when the platform cannot.</summary>
+    bool SetApiKey(ChatProviderKind provider, string apiKey);
+
+    /// <summary>Forget a provider's key. Forgetting one never stored counts as success.</summary>
+    bool DeleteApiKey(ChatProviderKind provider);
 }
 
 /// <summary>
@@ -128,7 +140,11 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         switch (kind)
         {
             case ChatProviderKind.Anthropic when string.IsNullOrWhiteSpace(apiKey):
-                problem = "No API key is stored for Claude. Add one in Settings.";
+                // Two different problems with two different fixes: "you have not entered a key" is solved in
+                // Settings; "this build cannot store one" is not solved there at all, and telling the user to
+                // go and add one would send them somewhere that cannot help. (#579)
+                problem = _credentials?.Unavailable
+                          ?? "No API key is stored for Claude. Add one in Settings.";
                 return null;
 
             case ChatProviderKind.Anthropic:

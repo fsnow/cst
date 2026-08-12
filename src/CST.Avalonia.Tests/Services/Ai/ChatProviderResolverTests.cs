@@ -21,13 +21,22 @@ public class ChatProviderResolverTests
     {
         private readonly string? _key;
 
-        internal FixedKey(string? key) => _key = key;
+        internal FixedKey(string? key, string? unavailable = null)
+        {
+            _key = key;
+            Unavailable = unavailable;
+        }
 
+        public bool IsAvailable => Unavailable is null;
+        public string? Unavailable { get; }
         public string? GetApiKey(ChatProviderKind provider) => _key;
+        public bool SetApiKey(ChatProviderKind provider, string apiKey) => throw new NotSupportedException();
+        public bool DeleteApiKey(ChatProviderKind provider) => throw new NotSupportedException();
     }
 
     private static ChatProviderResolver Resolver(
-        Action<ChatSettings> configure, string? apiKey = null, bool aiEnabled = true)
+        Action<ChatSettings> configure, string? apiKey = null, bool aiEnabled = true,
+        string? storageUnavailable = null)
     {
         var settings = new Settings();
         settings.Ai.Enabled = aiEnabled;
@@ -39,7 +48,7 @@ public class ChatProviderResolverTests
 
         return new ChatProviderResolver(
             service.Object,
-            apiKey is null ? null : new FixedKey(apiKey),
+            apiKey is null && storageUnavailable is null ? null : new FixedKey(apiKey, storageUnavailable),
             NullLoggerFactory.Instance,
             new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan });
     }
@@ -63,6 +72,21 @@ public class ChatProviderResolverTests
 
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("API key", problem);
+    }
+
+    [Fact]
+    public void A_platform_with_nowhere_to_store_a_key_says_that_rather_than_send_the_user_to_settings()
+    {
+        // Two different problems with two different fixes. "You have not entered a key" is solved in Settings;
+        // "this build cannot store one" is not solved there at all, and sending the user there to fix it wastes
+        // their time on a screen that cannot help. (#579)
+        var resolver = Resolver(
+            c => { c.Provider = "anthropic"; c.Model = "claude-opus-5"; },
+            storageUnavailable: "Secure key storage is not available in this build on Windows yet.");
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.Contains("not available in this build", problem);
+        Assert.DoesNotContain("Add one in Settings", problem);
     }
 
     [Fact]
