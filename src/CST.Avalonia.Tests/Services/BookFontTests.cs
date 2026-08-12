@@ -243,6 +243,29 @@ public class BookFontTests
             BookFontResolver.Resolve(settings.Object, Script.Devanagari));
     }
 
+    [Fact]
+    public void AValueThatSurvivesTheBlankGuardButSanitisesToNothingStillFallsBack()
+    {
+        // The gap a pre-quote length check cannot see. None of these is whitespace, so the blank guard
+        // passes them, and each family is non-empty going INTO the quoter and empty coming out — the quoter
+        // drops control characters and unpaired surrogates. Filtering only before quoting left a stack of
+        // `""`, whose length is 2, so the degenerate-value fallback above never fired and the book got
+        // `font-family: "";` — valid CSS matching no family at all, i.e. the browser default, in a
+        // Devanagari book. Built in code rather than in InlineData so the escapes cannot be mistaken for
+        // literal text. (fable review, second pass)
+        var control = ((char)1).ToString();          // one control character, nothing else
+        var loneSurrogate = ((char)0xD800).ToString();     // one unpaired surrogate, nothing else
+
+        foreach (var stored in new[] { control, loneSurrogate, control + "," + loneSurrogate })
+        {
+            var settings = SettingsMock();
+            settings.Object.Settings.FontSettings.ScriptFonts["Devanagari"].BookFontFamily = stored;
+
+            Assert.Equal(BookFontDefaults.For(Script.Devanagari),
+                BookFontResolver.Resolve(settings.Object, Script.Devanagari));
+        }
+    }
+
     [Theory]
     [InlineData("Bad\u0000Font")]
     [InlineData("Bad\u0001Font")]

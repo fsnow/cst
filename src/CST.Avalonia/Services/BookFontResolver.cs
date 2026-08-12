@@ -64,7 +64,14 @@ public static class BookFontResolver
             .Split(',')
             .Select(f => f.Trim().Trim('"', '\''))
             .Where(f => f.Length > 0)
-            .Select(QuoteFamily);
+            .Select(QuoteFamily)
+            // Filtered AFTER quoting as well as before it. QuoteFamily DROPS control characters and
+            // unpaired surrogates, so a family that was non-empty going in can come back as `""` — and a
+            // stored value of "" is not whitespace, survives the pre-quote check, and would otherwise
+            // produce `font-family: "";`. That is valid CSS matching no family at all, so the book renders
+            // in the browser default: the exact outcome the fallback below exists to prevent, arrived at by
+            // a route that skipped it. (fable review, second pass)
+            .Where(f => f.Length > 2);
 
         // A stored value of "," or "''" is not whitespace, so it reaches here and reduces to nothing.
         // Fall back to THIS script's stack rather than Latin's — the Latin stack in a Devanagari book is

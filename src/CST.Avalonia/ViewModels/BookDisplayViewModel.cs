@@ -939,6 +939,7 @@ namespace CST.Avalonia.ViewModels
                     var booksDir = GetBooksDirectory();
                     if (booksDir == null)
                     {
+                        _requestedBookFontFamily = null;   // same reasoning as the catch below
                         _logger.Error("Cannot load book - no valid XML directory configured");
                         return "<html><body><h3>Error: No XML directory configured</h3><p>Please configure a valid XML directory in Settings.</p></body></html>";
                     }
@@ -949,6 +950,7 @@ namespace CST.Avalonia.ViewModels
                     
                     if (!File.Exists(xmlPath))
                     {
+                        _requestedBookFontFamily = null;   // same reasoning as the catch below
                         _logger.Warning("XML file not found: {XmlPath}", xmlPath);
                         return "<html><body><h1>Book file not found</h1><p>File: " + xmlPath + "</p></body></html>";
                     }
