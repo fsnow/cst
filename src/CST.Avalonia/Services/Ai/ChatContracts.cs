@@ -120,6 +120,21 @@ public enum AiErrorKind
     /// <summary>The request exceeded the model's context window. Actionable: the caller can trim and retry.</summary>
     ContextTooLong,
 
+    /// <summary>
+    /// The app could not assemble what the model needs — no passage at the reference, a book whose XML never
+    /// downloaded. Distinct from every kind above because <b>nothing left the machine</b>: it is not the
+    /// provider's fault, no tokens were spent, and the fix is in the reader rather than in Settings. (#583)
+    /// </summary>
+    ContextUnavailable,
+
+    /// <summary>
+    /// The turn completed successfully and produced no answer. Usually the whole output budget went to
+    /// reasoning (#601). Named rather than folded into <see cref="Provider"/> because it is the one failure a
+    /// correct provider layer makes INVISIBLE — segregating reasoning from answer, exactly as it should, leaves
+    /// the caller a well-formed blank turn. (#583)
+    /// </summary>
+    EmptyAnswer,
+
     /// <summary>Anything else the provider rejected or failed on.</summary>
     Provider,
 }

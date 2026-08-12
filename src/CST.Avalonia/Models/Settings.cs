@@ -42,6 +42,9 @@ namespace CST.Avalonia.Models
 
         public LocalApiSettings LocalApi { get; set; } = new();
 
+        /// <summary>Surface B — the assistant inside the reader. Off until configured.</summary>
+        public ChatSettings Chat { get; set; } = new();
+
         /// <summary>The REST (/v1) surface runs only when the master and the local-API permission are both on.</summary>
         [JsonIgnore]
         public bool LocalApiEnabled => Enabled && LocalApi.Enabled;
@@ -63,6 +66,35 @@ namespace CST.Avalonia.Models
         /// already ticked. Unreachable through today's Settings UI, but #280 gives MCP its own toggle. (fable LOW-5)</summary>
         [JsonIgnore]
         public bool RemoteControlAllowed => ServerShouldRun && LocalApi.AllowRemoteControl;
+    }
+
+    /// <summary>
+    /// The in-app assistant (surface B). Everything here is user-visible configuration EXCEPT the API key,
+    /// which is deliberately absent: keys belong in the OS credential store (#579), never in a settings file
+    /// that gets pasted into bug reports. The UI that edits these is #585; until it exists they are hand-edited.
+    /// </summary>
+    public class ChatSettings
+    {
+        /// <summary>Effective only under the AI master switch, like every other surface-B/C permission.</summary>
+        public bool Enabled { get; set; } = false;
+
+        /// <summary><c>anthropic</c> or <c>openai-compatible</c>. Claude-first is the standing default.</summary>
+        public string Provider { get; set; } = "anthropic";
+
+        /// <summary>
+        /// Endpoint base URL. Optional for Anthropic (it has a real default); <b>required</b> for
+        /// OpenAI-compatible, where the base URL is what selects the provider.
+        /// </summary>
+        public string? BaseUrl { get; set; }
+
+        /// <summary>Model id, verbatim. Never validated against a list — see <c>ChatProviderResolution</c>.</summary>
+        public string? Model { get; set; }
+
+        /// <summary>
+        /// Language the ANSWER is written in — a separate axis from the script quoted Pāli is rendered in
+        /// (AI_SURFACE_B.md §9). Not optional in the bundle: "translate" has to mean translate into something.
+        /// </summary>
+        public string AnswerLanguage { get; set; } = "English";
     }
 
     /// <summary>Permissions for the loopback API server that exposes the corpus tools to agents (surface C).</summary>

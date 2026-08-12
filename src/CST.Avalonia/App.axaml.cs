@@ -1225,6 +1225,15 @@ public partial class App : Application
         // the app takes effect on the next invocation without a restart.
         services.AddSingleton<Services.Ai.IPromptTemplateStore, Services.Ai.PromptTemplateStore>();
         services.AddSingleton<Services.Ai.IPromptBuilder, Services.Ai.PromptBuilder>();
+
+        // The orchestrator (#583). IAiCredentialStore is resolved with GetService because #579 has not landed:
+        // its absence is a supported configuration — a local runner on loopback needs no key — which the
+        // resolver reports rather than treating as a wiring error.
+        services.AddSingleton<Services.Ai.IChatProviderResolver>(sp => new Services.Ai.ChatProviderResolver(
+            sp.GetRequiredService<ISettingsService>(),
+            sp.GetService<Services.Ai.IAiCredentialStore>(),
+            sp.GetRequiredService<ILoggerFactory>()));
+        services.AddSingleton<Services.Ai.IAiChatOrchestrator, Services.Ai.AiChatOrchestrator>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
         // Surface-C tool wrappers (exposed over the local API). (#186)
