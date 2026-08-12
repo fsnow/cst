@@ -132,17 +132,44 @@ src/CST.Lemma/             # Lemma / morphology support
 docs/                      # Architecture, features, research, release process
 ```
 
-`src/CST/` and `src/Cst4/` are the legacy CST4 sources, kept for reference and parity checking. They are not part of the CST 5 build.
+The legacy CST4 sources are no longer in the working tree — see [Legacy CST4 Development](#legacy-cst4-development).
 
 ## Text Data
 The application uses Pāli text data from the separate [tipitaka-xml](https://github.com/VipassanaTech/tipitaka-xml) repository, downloaded automatically on first run and updated as needed.
 
 ## Legacy CST4 Development
-- **CST 4.1** (released): `cst_4_1` branch — requires Visual Studio 2022, WiX Toolset v3
-- **CST 4.2** (unreleased): `cst_4_2` branch — Lucene 4.8 development work
-- **CST 4.0** (previous release): `cst_4_0` branch
 
-See individual branch READMEs for legacy build instructions.
+The WinForms CST4 sources, the Visual Studio solution, the WiX installer and its font payload were removed
+from `main` in August 2026. They were 40% of the tracked files in the repository and no part of the CST 5
+build, so every search and review had to step around them. Nothing is lost — they remain in history, and are
+tagged for direct access:
+
+| Tag | What it holds |
+|---|---|
+| **`cst4-final`** | **The final CST4** — tip of `cst_4_1` (2022-04-08). Use this one. |
+| `cst4-2-final` | The 4.2 line — a partial Lucene.NET 4.8 port and single-word highlighting. **The only CST4 code not reachable from `main`'s history.** |
+| `cst4-main-final` | The exact files removed from `main`. Provenance for the removal commit, *not* authoritative — see below. |
+| `cst-maui-final` | The MAUI/Blazor proof of concept (`src/CST.MAUI`) |
+
+Read a file without checking anything out:
+
+```bash
+git show cst4-final:src/Cst4/FormBookDisplay.cs
+git show cst4-final:src/Cst4/Reference/en/pali-english-dictionary.txt > dict.txt
+git checkout cst4-final -- src/Cst4          # restore into the working tree if you need to build it
+```
+
+**Why `cst4-final` and not the copy that was on `main`.** No work on CST4 was intended after 4.1. The copy
+carried on `main` nevertheless picked up three files of drift during CST5 work — including a *functional* edit
+to two transliteration-table keys in `src/CST/Conversion/Latn2Deva.cs` — so it is not the shipped source.
+`cst4-main-final` records what was deleted; `cst4-final` records what CST4 is.
+
+CST4 documentation stays in the tree — [docs/reference/cst4/](docs/reference/cst4/), the
+[parity checklist](docs/testing/CST4_PARITY_CHECKLIST.md), and the feature specs that cite CST4 behaviour. The
+`src/Cst4/...` paths they reference resolve through the tags above.
+
+Branch history: **CST 4.1** (released) `cst_4_1`, **CST 4.2** (unreleased) `cst_4_2`, **CST 4.0** `cst_4_0`.
+Building CST4 requires Visual Studio 2022 and WiX Toolset v3; see individual branch READMEs.
 
 ## Documentation & Roadmap
 

@@ -87,8 +87,8 @@ dotnet --list-sdks   # expect a 10.0.x entry
 ```
 
 If missing, install via the official `.pkg` from https://dotnet.microsoft.com/download/dotnet/10.0
-(Apple-Silicon installer on Kestrel, Intel installer on Caracara). The CST.MAUI POC additionally needs
-`sudo dotnet workload install maui`, but it is not part of the shipping macOS app.
+(Apple-Silicon installer on Kestrel, Intel installer on Caracara). No workloads are required — the MAUI POC
+that once needed `dotnet workload install maui` was removed from the tree (tag `cst-maui-final`).
 
 **Windows build machines** additionally need:
 

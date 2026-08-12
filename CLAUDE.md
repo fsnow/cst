@@ -6,6 +6,7 @@ CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform P
 - **Roadmap / planned work:** [GitHub issues](https://github.com/fsnow/cst/issues) (`feature`/`enhancement` labels) + specs in [docs/features/planned/](docs/features/planned/). Issues are the canonical tracker.
 - **Doc index:** [docs/README.md](docs/README.md).
 - **Working dir:** `src/CST.Avalonia`. **XML books:** `~/Library/Application Support/CSTReader/xml` (217 TEI XML files, **UTF-16-LE**).
+- **CST4 is not in the tree.** `src/CST`, `src/Cst4`, `CST.sln`, `CST4.wxs`, `src/Fonts` and the MAUI POC were removed in August 2026 — they were 40% of the tracked files and no part of the build. Docs still cite `src/Cst4/...` paths on purpose; read them with `git show cst4-final:<path>`. **Never restore them into the working tree to "fix" something** — CST4 was final at 4.1, and the copy that sat on main had already drifted from the shipped source through exactly that kind of well-meant edit. Tags: `cst4-final` (authoritative), `cst4-2-final`, `cst4-main-final`, `cst-maui-final`.
 
 ## Hard rules — do not violate
 - **Never use the word "Buddhist"** anywhere — app UI or documentation. Use "Pāli", "Tipiṭaka", "VRI texts", etc.
