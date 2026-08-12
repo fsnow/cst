@@ -939,6 +939,7 @@ namespace CST.Avalonia.ViewModels
                     var booksDir = GetBooksDirectory();
                     if (booksDir == null)
                     {
+                        _requestedBookFontFamily = null;   // same reasoning as the catch below
                         _logger.Error("Cannot load book - no valid XML directory configured");
                         return "<html><body><h3>Error: No XML directory configured</h3><p>Please configure a valid XML directory in Settings.</p></body></html>";
                     }
@@ -949,6 +950,7 @@ namespace CST.Avalonia.ViewModels
                     
                     if (!File.Exists(xmlPath))
                     {
+                        _requestedBookFontFamily = null;   // same reasoning as the catch below
                         _logger.Warning("XML file not found: {XmlPath}", xmlPath);
                         return "<html><body><h1>Book file not found</h1><p>File: " + xmlPath + "</p></body></html>";
                     }
@@ -991,20 +993,36 @@ namespace CST.Avalonia.ViewModels
                     });
 
                     // Apply XSL transformation
-                    var xslPath = GetXslPath(_bookScript);
+                    var xslPath = GetXslPath();
                     _logger.Debug("Using XSL file: {XslPath}", xslPath);
-                    
-                    if (!File.Exists(xslPath))
+
+                    if (xslPath == null || !File.Exists(xslPath))
                     {
-                        _logger.Warning("XSL file not found: {XslPath}", xslPath);
-                        return "<html><body><h1>XSL file not found</h1><p>File: " + xslPath + "</p></body></html>";
+                        _requestedBookFontFamily = null;   // same reasoning as the catch below
+                        _logger.Error("Book stylesheet not found: {XslPath}", xslPath ?? "(unresolved)");
+                        return "<html><body><h1>Stylesheet not found</h1><p>The book stylesheet could not be " +
+                               "located in the application bundle.</p></body></html>";
                     }
 
                     var xslTransform = new XslCompiledTransform();
                     xslTransform.Load(xslPath);
 
+                    // #42: the face is injected rather than baked into a per-script stylesheet. One
+                    // stylesheet now serves all fourteen scripts — they differed only in this one line.
+                    var bookFont = BookFontResolver.Resolve(_settingsService, _bookScript);
+                    var xslArgs = new XsltArgumentList();
+                    xslArgs.AddParam("bookFontFamily", "", bookFont);
+                    _logger.Debug("Book font for {Script}: {Font}", _bookScript, bookFont);
+
                     using var stringWriter = new StringWriter();
-                    xslTransform.Transform(xmlDoc, null, stringWriter);
+                    xslTransform.Transform(xmlDoc, xslArgs, stringWriter);
+
+                    // Recorded only once the transform has SUCCEEDED, so a failed render does not leave the
+                    // view believing it already shows this face — which would stop the next font event from
+                    // retrying it. Also covers a book opened after a face change: it starts out in sync
+                    // rather than regenerating on its first font event. (fable review)
+                    _appliedBookFontFamily = bookFont;
+                    _requestedBookFontFamily = null;
                     
                     var htmlContent = stringWriter.ToString();
                     _logger.Debug("Generated HTML content - length: {Length}", htmlContent.Length);
@@ -1013,6 +1031,9 @@ namespace CST.Avalonia.ViewModels
                 }
                 catch (Exception ex)
                 {
+                    // Nothing rendered, so release the in-flight claim: the next font-settings event must be
+                    // free to retry this face rather than seeing it as already handled.
+                    _requestedBookFontFamily = null;
                     _logger.Error(ex, "Error generating HTML content");
                                         return $"<html><body><h1>Error loading book</h1><p>{ex.Message}</p><pre>{ex.StackTrace}</pre></body></html>";
                 }
@@ -1208,123 +1229,32 @@ namespace CST.Avalonia.ViewModels
             return null;
         }
 
-        private string GetXslPath(Script script)
+        /// <summary>
+        /// The book stylesheet, read straight from the application bundle. (#42)
+        ///
+        /// <para>
+        /// There is now ONE stylesheet rather than fourteen: they differed only in the font-family line,
+        /// which is injected as a transform parameter instead.
+        /// </para>
+        ///
+        /// <para>
+        /// It is also no longer copied to a user-editable directory. That was CST4 heritage, and the two
+        /// things people edited it for — the font face and the text size — are now a setting (#42) and
+        /// per-script zoom (#572). Worse, the copy was written once on first run and never refreshed, so
+        /// every existing install was still rendering with whatever stylesheets shipped the day it was
+        /// first launched: #574's changes had reached nobody. The stale directory is removed by the beta 6
+        /// data migration.
+        /// </para>
+        /// </summary>
+        private string? GetXslPath()
         {
-            var scriptName = script switch
+            var xslDir = BundledResourceLocator.Resolve("xsl");
+            if (xslDir == null)
             {
-                Script.Latin => "latn",
-                Script.Devanagari => "deva",
-                Script.Thai => "thai",
-                Script.Myanmar => "mymr",
-                Script.Sinhala => "sinh",
-                Script.Khmer => "khmr",
-                Script.Bengali => "beng",
-                Script.Gujarati => "gujr",
-                Script.Gurmukhi => "guru",
-                Script.Kannada => "knda",
-                Script.Malayalam => "mlym",
-                Script.Telugu => "telu",
-                Script.Tibetan => "tibt",
-                _ => "latn"
-            };
-            
-            var xslFileName = $"tipitaka-{scriptName}.xsl";
-            
-            // Ensure XSL files are set up in user directory
-            EnsureXslFilesInUserDirectory();
-            
-            // Use user's Application Support directory (editable location)
-            var userXslPath = GetUserXslPath(xslFileName);
-            if (File.Exists(userXslPath))
-            {
-                _logger.Debug("Using user XSL file: {Path}", userXslPath);
-                return userXslPath;
+                _logger.Error("XSL directory not found in the bundle or development tree");
+                return null;
             }
-
-            // If XSL file doesn't exist, log error but return the expected path
-            // The application should have already copied the XSL files during initialization
-            _logger.Error("XSL file not found: {Path}", userXslPath);
-            return userXslPath;
-        }
-        
-        private string GetUserXslPath(string xslFileName)
-        {
-            var appSupportDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                AppConstants.AppDataDirectoryName,
-                "xsl");
-            return Path.Combine(appSupportDir, xslFileName);
-        }
-        
-        private void EnsureXslFilesInUserDirectory()
-        {
-            try
-            {
-                var userXslDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    AppConstants.AppDataDirectoryName,
-                    "xsl");
-                
-                // Create directory if it doesn't exist
-                if (!Directory.Exists(userXslDir))
-                {
-                    Directory.CreateDirectory(userXslDir);
-                    _logger.Information("Created user XSL directory: {Path}", userXslDir);
-                }
-                
-                // Check if we need to copy XSL files from app bundle
-                var existingFiles = Directory.GetFiles(userXslDir, "*.xsl");
-                if (existingFiles.Length == 0)
-                {
-                    // Try to copy from app bundle if running from .app
-                    CopyXslFilesFromBundle(userXslDir);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to ensure XSL files in user directory");
-            }
-        }
-        
-        private void CopyXslFilesFromBundle(string targetDir)
-        {
-            try
-            {
-                // Dev source tree, beside the executable, or the macOS .app Resources dir. The dev lookup
-                // deliberately walks ancestors instead of hopping a fixed number of levels - see
-                // BundledResourceLocator. (#28)
-                string? sourceXslDir = BundledResourceLocator.Resolve("xsl");
-                if (sourceXslDir != null)
-                {
-                    _logger.Information("Found XSL files at: {Path}", sourceXslDir);
-
-                    var xslFiles = Directory.GetFiles(sourceXslDir, "*.xsl");
-                    int copiedCount = 0;
-                    foreach (var xslFile in xslFiles)
-                    {
-                        var fileName = Path.GetFileName(xslFile);
-                        var targetPath = Path.Combine(targetDir, fileName);
-                        if (!File.Exists(targetPath))
-                        {
-                            File.Copy(xslFile, targetPath);
-                            copiedCount++;
-                            _logger.Debug("Copied XSL file to user directory: {FileName}", fileName);
-                        }
-                    }
-                    if (copiedCount > 0)
-                    {
-                        _logger.Information("Copied {Count} XSL files to user directory", copiedCount);
-                    }
-                }
-                else
-                {
-                    _logger.Warning("XSL directory not found in development or bundle locations");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to copy XSL files");
-            }
+            return Path.Combine(xslDir, "tipitaka.xsl");
         }
 
         // Returns the saved hit to restore, clamped to [1, totalHits]; falls back to 1
@@ -2024,9 +1954,39 @@ namespace CST.Avalonia.ViewModels
 
         private void OnFontSettingsChanged(object? sender, EventArgs e)
         {
+            // Chrome bindings: the hit counter, status bar and tab title.
             this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
             this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+
+            // #42: the BOOK face is baked into the HTML at transform time, so unlike a chrome font it
+            // cannot update in place — the document has to be regenerated. Only do so when THIS book's
+            // face actually changed, or every book would re-render whenever any script's chrome font was
+            // touched.
+            var face = BookFontResolver.Resolve(_settingsService, _bookScript);
+            // Compare against what is RENDERED, or what is already on its way — either means this event
+            // needs no action. Two separate fields, deliberately: recording the requested face as though it
+            // were rendered is what made the earlier fix half a fix. If the reload then failed, the view
+            // believed it already showed that face and no later event would retry, leaving the book stuck
+            // on the error page until the user picked a DIFFERENT face. (fable review)
+            if (face == _appliedBookFontFamily || face == _requestedBookFontFamily) return;
+
+            _logger.Information("Book font for {Script} changed to {Face} - regenerating", _bookScript, face);
+            _requestedBookFontFamily = face;
+
+            // Carry the reading position across the reflow. A font change moves every anchor, and without
+            // this the reader is thrown elsewhere in the book on each adjustment — the requirement #42
+            // records, reusing the machinery the resize and zoom paths already use.
+            _pendingPositionToken ??= _lastPositionToken;
+            Dispatcher.UIThread.Post(async () => await LoadBookContentAsync());
         }
+
+        // The face the currently rendered HTML was produced with — set only once a transform has succeeded.
+        // Null until the first successful render.
+        private string? _appliedBookFontFamily;
+        // The face a reload was requested for but which has not yet rendered. Exists purely to suppress
+        // duplicate reloads while one is in flight; cleared when the render finishes, either way, so a
+        // failure leaves nothing claiming to be current.
+        private string? _requestedBookFontFamily;
 
         /// <summary>
         /// Releases this VM's reactive subscriptions and the FontService event subscription.

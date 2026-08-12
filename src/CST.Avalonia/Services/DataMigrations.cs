@@ -72,6 +72,9 @@ public static class DataMigrations
         new("2026-08-retire-en-hi-dictionary-ids",
             "Remove the superseded en/hi dictionary directories left behind by the #522 rename",
             RetireEnHiDictionaryIds),
+        new("2026-08-retire-user-xsl-directory",
+            "Retire the user-editable XSL directory, superseded by the single bundled stylesheet (#42)",
+            RetireUserXslDirectory),
     };
 
     /// <summary>
@@ -277,5 +280,75 @@ public static class DataMigrations
         var fb = new FileInfo(b);
         if (!fa.Exists || !fb.Exists || fa.Length != fb.Length) return false;
         return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
+    }
+
+    /// <summary>
+    /// Retires the user-editable XSL directory. (#42)
+    ///
+    /// <para>
+    /// The app used to copy its stylesheets into the data directory and render from there, so a user could
+    /// edit them — CST4 heritage. Both reasons anyone did are now settings: the font face (#42) and the
+    /// text size, which per-script zoom covers (#572). The app now renders from the single stylesheet in
+    /// its own bundle.
+    /// </para>
+    ///
+    /// <para>
+    /// Leaving the directory behind would be worse than deleting it. The copy was written once on first
+    /// run and never refreshed — the copier only acted on an EMPTY directory — so every existing install
+    /// still held whatever shipped the day it was first launched. On the maintainer's own machine that was
+    /// 13 of 14 files predating #574, still carrying the old per-script sizes and the seven different
+    /// hangnum margins. Files that look authoritative, are readable, and no longer affect anything are a
+    /// trap for whoever next tries to explain a rendering difference.
+    /// </para>
+    /// </summary>
+    private static Outcome RetireUserXslDirectory(Context context, List<string> notes)
+    {
+        var xslDir = Path.Combine(context.DataDirectory, "xsl");
+        if (!Directory.Exists(xslDir))
+        {
+            // Fresh install, or already done. Idempotent by construction.
+            return Outcome.Done;
+        }
+
+        try
+        {
+            var count = Directory.GetFiles(xslDir, "*.xsl").Length;
+
+            // MOVED ASIDE, not deleted. This directory was documented as user-editable, and a CST4-style
+            // user may have customised colours or margins there. Those edits no longer do anything — the
+            // app renders from its own bundle now — but destroying the only copy of someone's work is a
+            // different act from making it inert. The neighbouring dictionary migration byte-compares
+            // before deleting for the same reason, and the Context doc above says a migration that removes
+            // user-visible content should not simply assume. (fable review)
+            // Never delete, even when a retired copy already exists — pick a free name instead. Both
+            // directories existing is not proof that the current one is the stale one: a still-installed
+            // Beta 5 recreates `xsl/` on launch, so after a state-file restore (which the framework doc
+            // above says to design for) the CURRENT directory can be the one holding the newer edits.
+            // Deleting it would destroy exactly the work this migration exists to preserve. (fable review)
+            var retired = Path.Combine(context.DataDirectory, "xsl-retired");
+            for (var n = 2; Directory.Exists(retired) && n < 100; n++)
+                retired = Path.Combine(context.DataDirectory, $"xsl-retired-{n}");
+
+            if (Directory.Exists(retired))
+            {
+                // 98 retired copies means something is wrong; stop rather than accumulating more.
+                notes.Add($"{FailureMarker}: too many retired XSL directories already present; " +
+                          "leaving the current one in place");
+                return Outcome.Done;
+            }
+
+            Directory.Move(xslDir, retired);
+            notes.Add($"Retired the user XSL directory ({count} stylesheet(s)) to '{Path.GetFileName(retired)}'; " +
+                      "book rendering now uses the single bundled stylesheet with the font face injected. " +
+                      "The folder is kept only so any hand edits are not lost - nothing reads it.");
+            return Outcome.Done;
+        }
+        catch (Exception ex)
+        {
+            // Not fatal: a stale directory is inert now that nothing reads it. Retry rather than record,
+            // so a transient lock does not leave it behind permanently.
+            notes.Add($"{FailureMarker}: could not retire the user XSL directory: {ex.Message}");
+            return Outcome.Retry;
+        }
     }
 }

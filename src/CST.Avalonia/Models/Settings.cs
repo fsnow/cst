@@ -183,6 +183,21 @@ namespace CST.Avalonia.Models
         public int FontSize { get; set; } = 12;
 
         /// <summary>
+        /// The book-text font FACE for this script, as a CSS font stack. Empty means "use the shipped
+        /// default" from <c>BookFontDefaults</c> — stored as empty rather than as a copy of the default, so
+        /// a user who never chose a face picks up any future change to the shipped stack. (#42)
+        ///
+        /// <para>
+        /// This is the third distinct font system in the app and must not be confused with
+        /// <see cref="FontFamily"/> above, which sizes and styles app CHROME for this script — the book
+        /// tree, search results, the dictionary pane. This one applies only to book content, and reaches it
+        /// by being injected into the stylesheet at transform time rather than through any CSS the app
+        /// writes.
+        /// </para>
+        /// </summary>
+        public string BookFontFamily { get; set; } = "";
+
+        /// <summary>
         /// Book-text zoom for this script, as a multiplier on the stylesheet's own sizes. 1.0 renders the
         /// shipped ladder exactly (body 12pt / chapter 18pt / book 21pt / nikaya 24pt). (#572)
         ///
