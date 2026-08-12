@@ -1234,6 +1234,9 @@ public partial class App : Application
             sp.GetService<Services.Ai.IAiCredentialStore>(),
             sp.GetRequiredService<ILoggerFactory>()));
         services.AddSingleton<Services.Ai.IAiChatOrchestrator, Services.Ai.AiChatOrchestrator>();
+
+        // The fidelity advisory (#584). Data only — Settings (#585) and the panel (#586) surface it.
+        services.AddSingleton<Services.Ai.IModelRegistry, Services.Ai.ModelRegistry>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
         // Surface-C tool wrappers (exposed over the local API). (#186)

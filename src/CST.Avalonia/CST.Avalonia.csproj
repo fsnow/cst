@@ -59,6 +59,9 @@
          edits live beside settings.json and override these at load. Wildcard so adding a preset needs no csproj
          edit — PromptTemplateNames.All is the list that matters, and a name there with no resource fails loudly. -->
     <EmbeddedResource Include="Resources\Ai\*.md" />
+    <!-- The fidelity advisory's data (#584). Embedded so it ships with the app and cannot be edited into
+         something that silently mis-rates a model. -->
+    <EmbeddedResource Include="Resources\Ai\model-registry.json" />
   </ItemGroup>
 
   <ItemGroup>

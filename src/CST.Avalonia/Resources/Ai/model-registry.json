@@ -1,0 +1,77 @@
+{
+  "_comment": [
+    "The fidelity advisory's data (#584). Policy is AI_INTEGRATION.md §11.1: CURATE, ADVISE, NEVER BLOCK.",
+    "A tier here is a claim about a model's fidelity on THIS corpus, so every non-recommended entry cites the",
+    "evidence for it in docs/testing/PALI_FIDELITY_CASES.md. An entry with no evidence is an opinion, and this",
+    "file is not for opinions.",
+    "Anything absent is 'unrated', which is NOT 'discouraged' — see ModelRegistry for why that distinction is",
+    "the whole design.",
+    "Where two models of the same family are both free to run and one is better, only the better one is",
+    "screened (fsnow, 2026-08-11) — a family's floor tells you little its ceiling does not. Entries already",
+    "measured stay: the rule governs what gets run next, not what has been learned.",
+    "Ids are matched after normalization (lowercase, vendor prefix and deployment suffix stripped) and may also",
+    "match as a dotted/dashed prefix, so a dated snapshot resolves to its family. Register FULL ids only: a",
+    "truncated one would swallow later releases it says nothing about."
+  ],
+  "updated": "2026-08-11",
+  "models": [
+    { "id": "claude-opus-5", "tier": "recommended" },
+    { "id": "claude-fable-5", "tier": "recommended" },
+    { "id": "claude-mythos-5", "tier": "recommended" },
+    { "id": "claude-opus-4-8", "tier": "recommended" },
+    { "id": "claude-opus-4-7", "tier": "recommended" },
+    { "id": "claude-opus-4-6", "tier": "recommended" },
+    { "id": "claude-sonnet-5", "tier": "recommended" },
+    { "id": "claude-sonnet-4-6", "tier": "recommended" },
+
+    {
+      "id": "claude-haiku-4-5",
+      "tier": "permitted",
+      "note": "Fast and cheap, and untested on the fidelity set. Fine for explaining; check translations."
+    },
+
+    {
+      "id": "nemotron-3-ultra",
+      "tier": "permitted",
+      "note": "Rendered all four lines of Dhp 21 correctly, including the deathless/death contrast.",
+      "evidence": "PALI_FIDELITY_CASES.md, screening run 2026-08-11"
+    },
+    {
+      "id": "nemotron-3-super",
+      "tier": "permitted",
+      "note": "Rendered Dhp 21 correctly, but emitted mojibake where the niggahita should be — a mangled diacritic inside the quote markers cannot be script-converted.",
+      "evidence": "PALI_FIDELITY_CASES.md, screening run 2026-08-11"
+    },
+    {
+      "id": "gemma4",
+      "tier": "permitted",
+      "note": "Matched the 550B model on Dhp 21 at 32.7B — the cheapest capable option screened.",
+      "evidence": "PALI_FIDELITY_CASES.md, screening run 2026-08-11"
+    },
+    {
+      "id": "minimax-m3",
+      "tier": "permitted",
+      "note": "Rendered Dhp 21 correctly. Reasons heavily — it spent 3,177 completion tokens on a two-line verse.",
+      "evidence": "PALI_FIDELITY_CASES.md, screening run 2026-08-11"
+    },
+
+    {
+      "id": "gpt-oss:120b",
+      "tier": "discouraged-for-translation",
+      "note": "Misread matā (dead) as if from maññati (think) in Dhp 21, across three separate runs.",
+      "evidence": "PALI_FIDELITY_CASES.md case 4"
+    },
+    {
+      "id": "nemotron-3-nano:30b",
+      "tier": "discouraged-for-translation",
+      "note": "Misread matā (dead) as mātā (mother) in Dhp 21 — and offered both wrong readings as an ambiguity note, which reads as care.",
+      "evidence": "PALI_FIDELITY_CASES.md case 4"
+    },
+    {
+      "id": "gpt-oss:20b",
+      "tier": "discouraged-for-translation",
+      "note": "Glossed appamāda as 'failing or stumbling… to make a mistake' — the most quoted word in the canon, inverted.",
+      "evidence": "PALI_FIDELITY_CASES.md cases 1 and 4"
+    }
+  ]
+}
