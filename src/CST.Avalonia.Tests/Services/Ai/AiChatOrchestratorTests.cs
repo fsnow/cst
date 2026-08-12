@@ -348,6 +348,83 @@ public class AiChatOrchestratorTests
         Assert.Equal(AiErrorKind.EmptyAnswer, events[^1].Error!.Kind);
     }
 
+    // ---- Truncation (#601) ---------------------------------------------------------------------------------
+
+    private static FakeProvider TruncatedAfter(params ChatDelta[] deltas) =>
+        new(deltas.Append(ChatDelta.ForError(new AiError(
+            AiErrorKind.Truncated, "The model reached its output limit and stopped before finishing.",
+            ProviderCode: "length"))));
+
+    [Fact]
+    public async Task A_truncated_answer_keeps_its_text_and_says_it_is_incomplete()
+    {
+        // THE case this exists for. Without it a half-finished translation renders under a citation exactly like
+        // a finished one — the stream ends the same way either way — and nothing on screen says otherwise.
+        var events = await CollectAsync(Orchestrator(TruncatedAfter(
+            ChatDelta.ForText("Heedfulness is the path to the deathless; heedlessness is"))));
+
+        var error = events[^1].Error!;
+        Assert.Equal(AiErrorKind.Truncated, error.Kind);
+        Assert.Contains("incomplete", error.Message);
+        Assert.Equal("Heedfulness is the path to the deathless; heedlessness is", TextOf(events));
+        Assert.DoesNotContain(events, e => e.Kind == AiTurnEventKind.Completed);
+    }
+
+    [Fact]
+    public async Task A_turn_truncated_before_any_answer_names_the_reasoning_as_the_cause()
+    {
+        // #601's original observation: minimax-m3 spent 3,177 completion tokens reasoning about a two-line verse
+        // and never wrote the translation. "Raise the limit" is the actionable advice; a retry is not.
+        var events = await CollectAsync(Orchestrator(TruncatedAfter(ChatDelta.ForReasoning("Thinking..."))));
+
+        var error = events[^1].Error!;
+        Assert.Equal(AiErrorKind.Truncated, error.Kind);
+        Assert.Contains("reasoning", error.Message);
+        Assert.Contains("higher output limit", error.Message);
+    }
+
+    [Fact]
+    public async Task A_turn_truncated_before_anything_at_all_says_so_plainly()
+    {
+        var error = (await CollectAsync(Orchestrator(TruncatedAfter())))[^1].Error!;
+
+        Assert.Equal(AiErrorKind.Truncated, error.Kind);
+        Assert.DoesNotContain("reasoning", error.Message);
+    }
+
+    [Fact]
+    public async Task Truncation_does_not_report_itself_as_an_empty_answer()
+    {
+        // Both describe a blank panel, but only one of them KNOWS why. Measured beats inferred: EmptyAnswer must
+        // not shadow a truncation the provider actually observed.
+        var events = await CollectAsync(Orchestrator(TruncatedAfter(ChatDelta.ForReasoning("Thinking..."))));
+
+        Assert.DoesNotContain(
+            events, e => e.Kind == AiTurnEventKind.Error && e.Error!.Kind == AiErrorKind.EmptyAnswer);
+    }
+
+    [Fact]
+    public async Task A_truncated_turn_still_reports_what_it_spent()
+    {
+        // The whole point of a cap being hit is that the user paid for the tokens. Reporting the failure without
+        // the number would hide the one fact that explains it.
+        var events = await CollectAsync(Orchestrator(TruncatedAfter(
+            ChatDelta.ForText("Heedfulness"),
+            ChatDelta.ForUsage(new ChatUsage(412, 3177)))));
+
+        Assert.Equal(3177, events.Single(e => e.Kind == AiTurnEventKind.Usage).Usage!.OutputTokens);
+        Assert.Equal(AiErrorKind.Truncated, events[^1].Error!.Kind);
+    }
+
+    [Fact]
+    public async Task The_provider_code_survives_onto_the_reported_error()
+    {
+        // The message is rewritten here; the machine-readable token from the provider must not be lost with it.
+        var error = (await CollectAsync(Orchestrator(TruncatedAfter(ChatDelta.ForText("x")))))[^1].Error!;
+
+        Assert.Equal("length", error.ProviderCode);
+    }
+
     // ---- Cancellation and cancel-and-replace --------------------------------------------------------------
 
     [Fact]

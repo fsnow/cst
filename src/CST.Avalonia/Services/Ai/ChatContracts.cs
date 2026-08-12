@@ -135,6 +135,21 @@ public enum AiErrorKind
     /// </summary>
     EmptyAnswer,
 
+    /// <summary>
+    /// The model hit its output limit and stopped before finishing — <c>finish_reason: "length"</c> on the
+    /// OpenAI-compatible shape, <c>stop_reason: "max_tokens"</c> on Anthropic's. (#601)
+    ///
+    /// <para><b>Distinct from <see cref="EmptyAnswer"/> because it is measured rather than inferred, and because
+    /// it catches the case that would otherwise be SILENT.</b> A turn cut off after writing half a translation
+    /// ends its stream in exactly the same way a complete one does: the app would render a partial answer under
+    /// a citation, indistinguishable from a finished one. An answer that stops mid-verse and says so is a much
+    /// smaller problem than one that stops mid-verse and does not.</para>
+    ///
+    /// <para>Both are kept because not every OpenAI-compatible gateway reports a finish reason. Where one is
+    /// reported this is what fires; where none is, <see cref="EmptyAnswer"/> still catches the total case.</para>
+    /// </summary>
+    Truncated,
+
     /// <summary>Anything else the provider rejected or failed on.</summary>
     Provider,
 }

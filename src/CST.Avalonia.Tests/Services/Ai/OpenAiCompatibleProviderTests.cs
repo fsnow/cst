@@ -90,6 +90,163 @@ public class OpenAiCompatibleProviderTests
         Assert.Equal(37, usage.OutputTokens);
     }
 
+    // ---- Truncation (#601) ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The real shape of a capped turn: content, then a chunk whose delta is empty and whose finish_reason says
+    /// why, then the usage chunk, then the terminator. Note the order — the reason is NOT last.
+    /// </summary>
+    private const string TruncatedStream = """
+        data: {"choices":[{"delta":{"content":"Heedfulness is the path to the"}}]}
+
+        data: {"choices":[{"delta":{},"finish_reason":"length"}]}
+
+        data: {"usage":{"prompt_tokens":412,"completion_tokens":3177},"choices":[]}
+
+        data: [DONE]
+
+        """;
+
+    [Fact]
+    public async Task A_turn_cut_off_at_the_output_limit_is_reported_as_truncated()
+    {
+        // Otherwise this is SILENT: a stream that stops mid-sentence at the cap ends exactly as a complete one
+        // does, so the app would render half a translation under a citation and call it an answer. (#601)
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(TruncatedStream)));
+
+        Assert.Equal(AiErrorKind.Truncated, deltas[^1].Error!.Kind);
+        Assert.Equal("Heedfulness is the path to the", Text(deltas));
+    }
+
+    [Fact]
+    public async Task The_truncation_error_arrives_after_the_usage_it_explains()
+    {
+        // An Error delta is terminal by contract, and the token counts arrive in a chunk BEHIND the one carrying
+        // finish_reason. Reporting on the spot would discard the number that explains the truncation — which is
+        // also the number the user paid.
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(TruncatedStream)));
+
+        var usage = deltas.FindIndex(d => d.Kind == ChatDeltaKind.Usage);
+        var error = deltas.FindIndex(d => d.Kind == ChatDeltaKind.Error);
+
+        Assert.True(usage >= 0, "usage was dropped");
+        Assert.True(usage < error, "the terminal error preceded the usage it explains");
+        Assert.Equal(3177, deltas[usage].Usage!.OutputTokens);
+    }
+
+    [Fact]
+    public async Task A_normal_ending_is_not_reported_as_truncation()
+    {
+        // finish_reason is present on the last chunk of EVERY turn. Firing on anything but the cap would put an
+        // error under every well-formed answer.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"Heedfulness."},"finish_reason":"stop"}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.DoesNotContain(deltas, d => d.Kind == ChatDeltaKind.Error);
+        Assert.Equal("Heedfulness.", Text(deltas));
+    }
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("content_filter")]
+    [InlineData("tool_calls")]
+    [InlineData("")]
+    public async Task Only_a_length_ending_counts_as_truncation(string finishReason)
+    {
+        var stream = $$"""
+            data: {"choices":[{"delta":{"content":"x"},"finish_reason":"{{finishReason}}"}]}
+
+            data: [DONE]
+
+            """;
+
+        Assert.DoesNotContain(
+            await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream))), d => d.Kind == ChatDeltaKind.Error);
+    }
+
+    [Fact]
+    public async Task A_gateway_reporting_the_anthropic_spelling_is_understood()
+    {
+        // "OpenAI-compatible" is an arbitrary user-pasted endpoint, and a gateway fronting Anthropic passes its
+        // max_tokens through unchanged. It can only mean the one thing.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"x"},"finish_reason":"max_tokens"}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal(AiErrorKind.Truncated, deltas[^1].Error!.Kind);
+        Assert.Equal("max_tokens", deltas[^1].Error!.ProviderCode);
+    }
+
+    [Fact]
+    public async Task Content_on_the_same_chunk_as_the_finish_reason_is_not_dropped()
+    {
+        // Not every provider sends the reason on a chunk of its own — some attach it to the final content delta.
+        // Losing that delta would truncate the answer further than the model did.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"the deathless"},"finish_reason":"length"}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("the deathless", Text(deltas));
+        Assert.Equal(AiErrorKind.Truncated, deltas[^1].Error!.Kind);
+    }
+
+    [Fact]
+    public async Task Held_back_think_tag_text_is_flushed_before_the_truncation_is_reported()
+    {
+        // An Error delta is terminal, so anything the think-tag filter is still holding has to come out first or
+        // it is lost — the same ordering rule the mid-stream error path follows.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"<think>weighing it up"}}]}
+
+            data: {"choices":[{"delta":{},"finish_reason":"length"}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal("weighing it up", Reasoning(deltas));
+        Assert.Equal(ChatDeltaKind.Error, deltas[^1].Kind);
+    }
+
+    [Fact]
+    public async Task A_mid_stream_provider_error_still_wins_over_a_later_truncation()
+    {
+        // The error delta is terminal where it occurs; the truncation check must not append a second terminal
+        // event behind it.
+        const string stream = """
+            data: {"choices":[{"delta":{"content":"Heedful"}}]}
+
+            data: {"error":{"code":"server_error"}}
+
+            data: {"choices":[{"delta":{},"finish_reason":"length"}]}
+
+            data: [DONE]
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal(AiErrorKind.Provider, Assert.Single(deltas, d => d.Kind == ChatDeltaKind.Error).Error!.Kind);
+    }
+
     [Fact]
     public async Task Structured_reasoning_never_reaches_the_answer_channel()
     {

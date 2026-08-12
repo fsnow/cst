@@ -285,6 +285,11 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
         if (failure is not null)
         {
+            // The provider knows THAT the output limit was hit; only this loop knows what the user got for it.
+            // Those are three different problems with three different fixes, so they get three messages. (#601)
+            if (failure.Kind == AiErrorKind.Truncated)
+                failure = failure with { Message = TruncationMessage(sawText, sawReasoning) };
+
             _logger.LogInformation("AI turn failed: {Kind} ({Code})", failure.Kind, failure.ProviderCode ?? "-");
             yield return AiTurnEvent.ForError(failure);
             yield break;
@@ -311,6 +316,26 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         yield return AiTurnEvent.ForCompleted(
             new PaliMarkerReport(markers.Quotes, markers.UnbalancedMarkers));
     }
+
+    /// <summary>
+    /// What to tell the user when the model stopped at its output limit (#601). The three cases are genuinely
+    /// different situations, and the difference is invisible to the provider that detected the truncation:
+    ///
+    /// <list type="bullet">
+    /// <item>Text was written — <b>the dangerous one</b>. Without this message a half-finished translation
+    /// renders under a citation exactly like a finished one, and nothing on screen says otherwise.</item>
+    /// <item>Reasoning but no answer — #601's original case. The work was done and never written down; the fix
+    /// is a bigger budget or a lighter-reasoning model, not a retry.</item>
+    /// <item>Neither — the cap is small enough that nothing could be produced at all.</item>
+    /// </list>
+    /// </summary>
+    private static string TruncationMessage(bool sawText, bool sawReasoning) =>
+        sawText
+            ? "This answer is incomplete: the model reached its output limit and stopped part-way through."
+            : sawReasoning
+                ? "The model spent its whole output limit on reasoning and never wrote an answer. "
+                  + "Try a higher output limit, or a model that reasons less."
+                : "The model reached its output limit before writing anything.";
 
     /// <summary>Cancelling a source another turn already disposed is a benign race, not an error.</summary>
     private static void TryCancel(CancellationTokenSource source)

@@ -94,6 +94,7 @@ public sealed class AnthropicMessagesProvider : IChatProvider
                 throw new AiException(await ClassifyAsync(response, ct).ConfigureAwait(false));
 
             var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            var finish = new FinishState();
             var produced = false;
 
             await foreach (var sse in SseReader.ReadAsync(stream, _idleTimeout, _firstEventTimeout, ct)
@@ -108,7 +109,7 @@ public sealed class AnthropicMessagesProvider : IChatProvider
 
                 produced = true;
 
-                foreach (var delta in Interpret(sse))
+                foreach (var delta in Interpret(sse, finish))
                 {
                     yield return delta;
                     if (delta.Kind == ChatDeltaKind.Error)
@@ -124,7 +125,24 @@ public sealed class AnthropicMessagesProvider : IChatProvider
                 _logger.LogWarning("Anthropic returned a 200 with no stream events");
                 yield return ChatDelta.ForError(AiHttp.EmptyResponse());
             }
+            else if (finish.Truncated)
+            {
+                // Emitted after the loop, not from the `message_delta` that reported it. That event carries the
+                // final output-token count in the same payload, and an Error delta is terminal by contract — so
+                // reporting on the spot would cost the user the one number that explains the truncation.
+                _logger.LogInformation("Anthropic turn ended at max_tokens");
+                yield return ChatDelta.ForError(AiHttp.Truncated("max_tokens"));
+            }
         }
+    }
+
+    /// <summary>
+    /// How the turn ended, carried out of <see cref="Interpret"/>. Mutable because <c>stop_reason</c> arrives
+    /// mid-stream and is acted on after it.
+    /// </summary>
+    private sealed class FinishState
+    {
+        internal bool Truncated;
     }
 
     private static string BuildBody(ChatRequest request)
@@ -163,7 +181,7 @@ public sealed class AnthropicMessagesProvider : IChatProvider
     /// a provider payload is untrusted input, and a raw <c>GetString()</c> on an unexpected kind throws out of
     /// this iterator as an unclassified crash mid-answer.
     /// </summary>
-    private static IEnumerable<ChatDelta> Interpret(SseEvent sse)
+    private static IEnumerable<ChatDelta> Interpret(SseEvent sse, FinishState finish)
     {
         JsonElement root;
         try
@@ -206,6 +224,14 @@ public sealed class AnthropicMessagesProvider : IChatProvider
                 break;
 
             case "message_delta":
+                // `stop_reason` and the final output-token count arrive together in this one event. Recorded
+                // rather than reported here — see the emission site in StreamAsync. (#601)
+                if (AiJson.Object(root, "delta") is { } end &&
+                    string.Equals(AiJson.String(end, "stop_reason"), "max_tokens", StringComparison.Ordinal))
+                {
+                    finish.Truncated = true;
+                }
+
                 if (AiJson.Object(root, "usage") is { } endUsage)
                     yield return UsageDelta(endUsage);
                 break;

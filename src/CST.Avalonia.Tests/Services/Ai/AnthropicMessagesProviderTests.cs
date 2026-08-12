@@ -84,6 +84,84 @@ public class AnthropicMessagesProviderTests
         Assert.Contains(usage, u => u.OutputTokens == 37);
     }
 
+    // ---- Truncation (#601) ---------------------------------------------------------------------------------
+
+    private const string TruncatedStream = """
+        event: content_block_delta
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Heedfulness is the"}}
+
+        event: message_delta
+        data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":1024}}
+
+        event: message_stop
+        data: {"type":"message_stop"}
+
+        """;
+
+    [Fact]
+    public async Task A_turn_that_hit_max_tokens_is_reported_as_truncated()
+    {
+        // max_tokens is REQUIRED here, so unlike the OpenAI-compatible shape this adapter always sends a cap —
+        // which makes a capped ending a permanent possibility rather than an endpoint-dependent one. (#601)
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(TruncatedStream)));
+
+        Assert.Equal(AiErrorKind.Truncated, deltas[^1].Error!.Kind);
+        Assert.Equal("Heedfulness is the", Text(deltas));
+    }
+
+    [Fact]
+    public async Task The_output_count_in_the_same_event_is_not_lost_to_the_error()
+    {
+        // stop_reason and the final output_tokens share one message_delta payload, and an Error delta is
+        // terminal — so reporting from inside that event would drop the count it arrived with.
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(TruncatedStream)));
+
+        var usage = deltas.FindIndex(d => d.Kind == ChatDeltaKind.Usage);
+        var error = deltas.FindIndex(d => d.Kind == ChatDeltaKind.Error);
+
+        Assert.True(usage >= 0, "usage was dropped");
+        Assert.True(usage < error, "the terminal error preceded the usage it explains");
+        Assert.Equal(1024, deltas[usage].Usage!.OutputTokens);
+    }
+
+    [Fact]
+    public async Task An_ordinary_end_turn_is_not_truncation()
+    {
+        // HappyStream ends with stop_reason "end_turn" — the common case, which must stay clean.
+        Assert.DoesNotContain(
+            await CollectAsync(Provider(StubHttpMessageHandler.Sse(HappyStream))),
+            d => d.Kind == ChatDeltaKind.Error);
+    }
+
+    [Fact]
+    public async Task A_stop_sequence_ending_is_not_truncation()
+    {
+        var stream = TruncatedStream.Replace("max_tokens", "stop_sequence");
+
+        Assert.DoesNotContain(
+            await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream))), d => d.Kind == ChatDeltaKind.Error);
+    }
+
+    [Fact]
+    public async Task A_mid_stream_api_error_still_wins_over_a_later_truncation()
+    {
+        const string stream = """
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Heedful"}}
+
+            event: error
+            data: {"type":"error","error":{"type":"overloaded_error"}}
+
+            event: message_delta
+            data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":9}}
+
+            """;
+
+        var deltas = await CollectAsync(Provider(StubHttpMessageHandler.Sse(stream)));
+
+        Assert.Equal(AiErrorKind.Provider, Assert.Single(deltas, d => d.Kind == ChatDeltaKind.Error).Error!.Kind);
+    }
+
     [Fact]
     public async Task Thinking_deltas_are_segregated_from_the_answer()
     {
