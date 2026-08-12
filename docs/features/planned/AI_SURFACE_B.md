@@ -2,7 +2,7 @@
 
 **Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B3a (#581, selection
 pipeline), B4 (#582, presets and the grounding contract), B5 (#583, orchestrator), B6 (#584, model registry),
-plus the reader-state read path and
+B9 (#587, evaluation harness), plus the reader-state read path and
 `POST /v1/ai/context-preview` (#593). **The chain now runs end to end** — a live Translate turn against the real
 corpus and a real model works — but nothing is user-visible until the Settings UI (B7, #585) and the panel
 (B8, #586) exist.
@@ -632,3 +632,27 @@ rated differently.
   attached to everything is one nobody reads.
 - **Nothing is ever blocked** (AI_INTEGRATION.md §11.1). The interface returns a rating or advice; there is no
   member that can refuse a model, and a test asserts there is no boolean verdict on it.
+
+**2026-08-11 (#587, the evaluation harness)** — mechanical scorers plus a paid, opt-in runner.
+
+- **The scorers are unit-tested without a model or a network.** The live runs cost money, so what they spend it
+  on must be measurement whose behaviour is already pinned down; a scorer debugged against live output is
+  debugged at several dollars a mistake.
+- **The runner is silent unless `CST_AI_EVAL=1`.** A live call on every `dotnet test` would bill for a full
+  matrix whenever anyone touched an unrelated file.
+- **It scores the RAW answer**, so it calls the provider directly — the orchestrator strips quote markers by
+  design, and the markers are the measurement. Everything upstream (bundler, templates, prompt builder) is the
+  real thing, so what is scored is what the app would send.
+- **It reports; it never decides.** Tier changes are recorded by a person. A harness trusted to promote and
+  demote models would quietly become the definition of fidelity.
+
+The first run reproduced Case 4 mechanically and found a **new** failure: `gpt-oss:120b` answers the
+cross-corpus question with invented sutta references instead of declining — the hazard §6 is written against,
+observed rather than theorised. It also turned marker discipline into a number that says two models cannot
+share a script-conversion setting (`gemma4` 1 unmarked term across a 164-quote answer; `gpt-oss:120b` 16–37).
+
+**The terminology gate ships disarmed, deliberately.** The convention is stated positively in the system
+prompt, but the term the scorer would COUNT is one CLAUDE.md forbids appearing anywhere in this repo.
+Committing it to make the check fire would break that rule in order to test a convention — not a trade an
+implementation gets to make. The list is data (`cases.json` → `terminology.discouraged`), so populating it
+locally arms the gate with no code change.

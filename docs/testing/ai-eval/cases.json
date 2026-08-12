@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "The surface-B evaluation set (#587). The B-side analog of LOCAL_API_COLD_TESTS.md's cold-agent loop.",
+    "These are the ONLY surface-B tests that spend money, so the runner is opt-in: it does nothing unless",
+    "CST_AI_EVAL=1 is set. See AiEvalHarness.",
+    "Cases mirror docs/testing/PALI_FIDELITY_CASES.md. That file is the prose of record — the authoritative",
+    "answer, why a case discriminates, and the dated per-model observations. This file is only what a machine",
+    "needs to re-run them.",
+    "Model list follows the one-per-family rule (fsnow, 2026-08-11): where two models of the same family are",
+    "both free and one is better, only the better one is run."
+  ],
+  "updated": "2026-08-11",
+
+  "terminology": {
+    "_comment": [
+      "DELIBERATELY EMPTY, and not an oversight. The house convention this scores is stated positively in the",
+      "system prompt ('call them Pali texts, the Tipitaka, the canon, VRI texts'); the term it exists to COUNT",
+      "is one CLAUDE.md forbids appearing anywhere in this repo. Committing it here to make the check fire",
+      "would break that rule to test a convention, which is not a trade an implementation gets to make.",
+      "Populate locally to run the terminology gate; the scorer is fully data-driven and needs no code change.",
+      "Counted, never rewritten: AI_SURFACE_B.md section 10 is explicit that string surgery on model prose",
+      "produces worse artifacts than the term it removes."
+    ],
+    "discouraged": []
+  },
+
+  "models": [
+    "nemotron-3-ultra:cloud",
+    "minimax-m3:cloud",
+    "gemma4:cloud",
+    "gpt-oss:120b-cloud"
+  ],
+
+  "cases": [
+    {
+      "id": "dhp21-translate",
+      "task": "translate",
+      "bookId": "s0502m.mul.xml",
+      "paragraph": 21,
+      "case": "PALI_FIDELITY_CASES.md case 2 and case 4",
+      "note": "Dhp 21 turns on one root appearing four times (amata, maccu, miyanti, mata). A model that loses the root loses the verse — with the text in front of it, so this is a reading failure, not a recall one.",
+      "failureSignatures": [
+        "as (a|the) mother",
+        "as mothers",
+        "like (a|the) mother",
+        "as they think",
+        "world of becoming",
+        "samsaric",
+        "do not (fall away|decline|go astray)",
+        "never (fall away|decline)"
+      ]
+    },
+    {
+      "id": "dhp21-explain-cross-corpus",
+      "task": "explain",
+      "bookId": "s0502m.mul.xml",
+      "paragraph": 21,
+      "userQuestion": "does this passage say where else appamada is discussed?",
+      "case": "AI_SURFACE_B.md section 6, cross-corpus refusal",
+      "note": "The passage cannot answer this. A correct response says so and points at the reader's own search; improvising from training data is the invented-citation hazard.",
+      "failureSignatures": [
+        "\\b(?:Dhp|Dhammapada)\\s+\\d+",
+        "\\b(?:MN|DN|SN|AN)\\s*\\d+"
+      ]
+    },
+    {
+      "id": "dhp21-wordbyword",
+      "task": "word-by-word",
+      "bookId": "s0502m.mul.xml",
+      "paragraph": 21,
+      "case": "PALI_FIDELITY_CASES.md case 3, marker discipline",
+      "note": "The densest inline-Pali task there is: every word is quoted. If a model marks inline Pali anywhere it will be here, and if it does not, v1.1 script conversion would leave its whole answer in Latin.",
+      "failureSignatures": [
+        "as (a|the) mother",
+        "as they think"
+      ]
+    }
+  ]
+}

@@ -244,6 +244,57 @@ per model, since this is one data point.
 
 ---
 
+## The harness (#587)
+
+The scorers and the machine-readable case set live beside this file:
+
+- `docs/testing/ai-eval/cases.json` — the cases a machine re-runs. **This file stays the prose of record**: the
+  authoritative answer, why a case discriminates, and the dated per-model observations.
+- `AnswerScorer` — mechanical scoring for marker discipline, unmarked Pāli, ungrounded quotes, unsupported
+  references, terminology counts, and per-case failure signatures. Unit-tested without a model or a network,
+  because a scorer debugged against live output is debugged at several dollars a mistake.
+- `AiEvalHarness` — the paid runner. **Opt-in and silent by default**: nothing happens unless `CST_AI_EVAL=1`.
+
+```sh
+CST_AI_EVAL=1 CST_AI_EVAL_BASE_URL=http://localhost:11434/v1 \
+  dotnet test --filter "FullyQualifiedName~AiEvalHarness"
+```
+
+**The harness reports; it never decides.** Tier changes are a judgement recorded by a person, here and in
+`model-registry.json`. A harness trusted to promote and demote models would quietly become the definition of
+fidelity — the failure this file's organizing principle exists to avoid.
+
+### First harness run — 2026-08-11
+
+Two models, three cases. It reproduced Case 4 mechanically and found something new.
+
+| Model | Case | Result |
+|---|---|---|
+| `gemma4:cloud` | translate | 68 marked quotes, 0 unbalanced, 1 unmarked (*Nibbāna*) |
+| `gemma4:cloud` | cross-corpus refusal | **clean** |
+| `gemma4:cloud` | word-by-word | 164 marked quotes, 0 unbalanced, 1 unmarked (*Nibbāna*) |
+| `gpt-oss:120b-cloud` | translate | 9 quotes, **16 unmarked**, failure signature *"as they think"* matched |
+| `gpt-oss:120b-cloud` | cross-corpus refusal | **18 unmarked**, and it cited **MN/DN/SN/AN references** |
+| `gpt-oss:120b-cloud` | word-by-word | 71 quotes, **37 unmarked** |
+
+Two findings worth keeping:
+
+- **The marker-discipline gap is now a number.** `gemma4` leaves 1 term unmarked across a 164-quote answer;
+  `gpt-oss:120b` leaves 16–37. That is the measurement §9 needs to decide the v1.1 script-conversion rollout
+  per model, and it says these two models cannot share a setting.
+- **`gpt-oss:120b` fails the cross-corpus refusal** — asked where else *appamāda* is discussed, it answered with
+  sutta references rather than declining. That is the invented-citation hazard §6 is written against, observed
+  rather than theorised. It is a **new** case, not a re-run of an existing one.
+
+*Nibbāna* being flagged on `gemma4` is the scorer erring the way it was built to: an English-naturalized term
+carrying a diacritic. A small unmarked count of such terms is expected and is not a defect.
+
+One false positive was fixed by this run rather than by review: the scorer called *amataṃ padaṃ* an ungrounded
+quote, when it is the sī/syā **variant reading from the print apparatus** — which the Translate preset
+explicitly asks the model to cite. The apparatus is now part of the quotable corpus.
+
+---
+
 ## Related
 
 - **#587** — the evaluation harness that runs this set.
