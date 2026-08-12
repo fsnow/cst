@@ -102,6 +102,11 @@ Exploratory research and investigations:
 ### 📚 **reference/** - Reference Materials
 External resources and CST4 feature references:
 
+> **The CST4 sources are no longer in the working tree** (removed August 2026 — see
+> [Legacy CST4 Development](../README.md#legacy-cst4-development)). These documents still cite `src/Cst4/...`
+> paths deliberately; read any of them with `git show cst4-final:<path>`. `cst4-final` is the authoritative
+> CST4, not the copy that used to sit on `main`.
+
 - **cst4/** - CST4 feature reference documentation
   - [Lucene Indexing](reference/cst4/LUCENE_INDEXING.md)
   - [Search System](reference/cst4/SEARCH.md)
