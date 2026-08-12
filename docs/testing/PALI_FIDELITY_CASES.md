@@ -61,9 +61,26 @@ are the models that actually answer on a free account, largest first:
 > **`gpt-oss:120b` is not the best available and should stop being the default probe.** It is fourth of seven by
 > size, and it is only the one appearing in the observations below because it was the model at hand
 > (fsnow: *"you are testing with that one only because I am familiar with it… not because it is the best
-> available"*). **`nemotron-3-ultra:cloud` is 550B and free.** Re-running the case set across the tiers above is
-> the standing next step for #587 — a single-model column is not a matrix, and a failure observed on one
-> mid-tier model tells you about that model, not about the tier.
+> available"*). **`nemotron-3-ultra:cloud` is 550B and free.**
+
+### One model per family — the run matrix
+
+**Rule (fsnow, 2026-08-11): where two models of the same family are both free here and one is better, only the
+better one is run.** Testing `nemotron-3-super` and `nemotron-3-nano` alongside `nemotron-3-ultra` spends quota
+re-measuring the same lineage's weaker members, and a family's floor tells you little that its ceiling does not.
+
+That reduces seven models to **four**:
+
+| Model | Family | Why this one |
+|---|---|---|
+| `nemotron-3-ultra:cloud` | nemotron-3 | Best of three free variants (550B vs 120B vs 30B) |
+| `minimax-m3:cloud` | minimax | Only free variant |
+| `gemma4:cloud` | gemma | Only free variant |
+| `gpt-oss:120b-cloud` | gpt-oss | Better of two free variants — and the matrix's deliberately weak cell |
+
+The observations below **keep** their `nemotron-3-super`, `nemotron-3-nano` and `gpt-oss:20b` rows: those were
+measured, the findings are real, and Case 4 rests on two of them independently. The rule governs what gets run
+*next*, not what has already been learned.
 
 ### Screening run — 2026-08-11
 

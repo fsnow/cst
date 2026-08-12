@@ -1,8 +1,8 @@
 # Surface B — the in-app model, v1 by context injection (Planned)
 
 **Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B3a (#581, selection
-pipeline), B4 (#582, presets and the grounding contract), B5 (#583, orchestrator), plus the reader-state read
-path and
+pipeline), B4 (#582, presets and the grounding contract), B5 (#583, orchestrator), B6 (#584, model registry),
+plus the reader-state read path and
 `POST /v1/ai/context-preview` (#593). **The chain now runs end to end** — a live Translate turn against the real
 corpus and a real model works — but nothing is user-visible until the Settings UI (B7, #585) and the panel
 (B8, #586) exist.
@@ -614,3 +614,21 @@ it now gets handling to match.
   agree. But a decomposed selection is *ordinally* unequal (`a`+U+0304 ≠ U+0101), and the symptom would be a
   bundle reporting "selection not found in the passage window" — a false diagnostic from the component whose
   whole job is faithful diagnostics.
+
+**2026-08-11 (#584, the model registry)** — the fidelity advisory's data, shipped as an embedded JSON resource
+with a lookup that normalizes the several spellings one model arrives in (vendor prefix, deployment suffix,
+dated snapshot) while never folding away **size**, since `gpt-oss:20b` and `gpt-oss:120b` are different models
+rated differently.
+
+- **`unrated` is not `discouraged`, and that distinction is the design.** Frontier models appear constantly; a
+  registry treating anything it had not heard of as suspect would have flagged half of today's good models a
+  year ago and would decay into noise the moment it stopped being updated — at which point users dismiss it,
+  including on the entries that matter. Unknown models get a mild "not evaluated"; the strong warning is
+  reserved for models with **evidence against them on this corpus**.
+- **Every non-recommended entry cites its evidence**, and a test enforces it. A registry that says a model is
+  not recommended for translating canonical text has to answer *why*, or it is an opinion with a version number.
+- **The advisory is scoped to translation.** Explaining or parsing a passage the model can see is a far smaller
+  fidelity surface than producing English a reader will take as the meaning of the Pāli — and an advisory
+  attached to everything is one nobody reads.
+- **Nothing is ever blocked** (AI_INTEGRATION.md §11.1). The interface returns a rating or advice; there is no
+  member that can refuse a model, and a test asserts there is no boolean verdict on it.
