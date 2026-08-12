@@ -14,7 +14,9 @@ namespace CST.Avalonia.Services;
 /// stay free of DI and of app services so they remain directly unit-testable against a temp directory.
 ///
 /// Applied migrations are recorded by id in <see cref="ApplicationState.AppliedDataMigrations"/>, so each
-/// runs exactly once. Ids are permanent: renaming one re-runs it on every existing install.
+/// runs exactly once - unless it is marked <see cref="Migration.Recurring"/>, which re-runs it every launch
+/// for the case where an older build can recreate the condition it fixes (#616). Ids are permanent:
+/// renaming one re-runs it on every existing install.
 ///
 /// <b>Write every migration to be idempotent anyway.</b> The recorded id is the primary guard, but a
 /// migration can also meet a half-finished state from an interrupted run, or a data directory restored
@@ -64,7 +66,17 @@ public static class DataMigrations
     /// </summary>
     public const string FailureMarker = "FAILED";
 
-    public sealed record Migration(string Id, string Description, Func<Context, List<string>, Outcome> Apply);
+    /// <param name="Recurring">
+    /// Run on EVERY launch rather than once. For a migration whose condition an older build can recreate:
+    /// recording it as done would then be a promise the app cannot keep. Only for migrations whose no-op
+    /// path is cheap and whose effect is idempotent — they still get recorded the first time, so the log
+    /// shows when they first ran, and they stay silent on the launches where they find nothing. (#616)
+    /// </param>
+    public sealed record Migration(
+        string Id,
+        string Description,
+        Func<Context, List<string>, Outcome> Apply,
+        bool Recurring = false);
 
     /// <summary>Ordered. Append new migrations; never renumber or rename existing ids.</summary>
     public static readonly IReadOnlyList<Migration> All = new List<Migration>
@@ -72,9 +84,13 @@ public static class DataMigrations
         new("2026-08-retire-en-hi-dictionary-ids",
             "Remove the superseded en/hi dictionary directories left behind by the #522 rename",
             RetireEnHiDictionaryIds),
+        // Recurring: a still-installed Beta 5 recreates xsl/ on its next launch, and a once-only migration
+        // would then skip it forever - leaving behind exactly the authoritative-looking, inert directory
+        // this exists to remove. Its no-op path is one Directory.Exists. (#616)
         new("2026-08-retire-user-xsl-directory",
             "Retire the user-editable XSL directory, superseded by the single bundled stylesheet (#42)",
-            RetireUserXslDirectory),
+            RetireUserXslDirectory,
+            Recurring: true),
     };
 
     /// <summary>
@@ -98,7 +114,11 @@ public static class DataMigrations
 
         foreach (var migration in migrations)
         {
-            if (applied.Contains(migration.Id, StringComparer.Ordinal))
+            // A recurring migration runs again even once recorded - see Migration.Recurring. Everything
+            // below keys off `recorded` rather than re-testing the list, so a recurring re-run stays silent
+            // unless it actually does something. (#616)
+            var recorded = applied.Contains(migration.Id, StringComparer.Ordinal);
+            if (recorded && !migration.Recurring)
                 continue;
 
             try
@@ -108,19 +128,22 @@ public static class DataMigrations
 
                 if (outcome == Outcome.Retry)
                 {
-                    if (notes.Count == before)
+                    if (notes.Count == before && !recorded)
                         notes.Add($"migration {migration.Id}: deferred, will retry next launch");
                     continue;
                 }
 
-                applied.Add(migration.Id);
+                if (!recorded)
+                {
+                    applied.Add(migration.Id);
 
-                // Only announce migrations that actually did something; a no-op on a clean install is the
-                // common case and does not deserve a line in everyone's log. This note is also what makes
-                // notes.Count > 0 on a clean install, which is what gets the record persisted at all - do
-                // not make it conditional.
-                if (notes.Count == before)
-                    notes.Add($"migration {migration.Id}: nothing to do");
+                    // Only announce migrations that actually did something; a no-op on a clean install is
+                    // the common case and does not deserve a line in everyone's log. This note is also what
+                    // makes notes.Count > 0 on a clean install, which is what gets the record persisted at
+                    // all - do not make it conditional on anything but the first run.
+                    if (notes.Count == before)
+                        notes.Add($"migration {migration.Id}: nothing to do");
+                }
             }
             catch (Exception ex)
             {

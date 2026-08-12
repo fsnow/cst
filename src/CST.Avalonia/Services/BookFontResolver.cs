@@ -84,8 +84,9 @@ public static class BookFontResolver
     {
         var sb = new System.Text.StringBuilder(family.Length + 8);
         sb.Append('"');
-        foreach (var c in family)
+        for (var i = 0; i < family.Length; i++)
         {
+            var c = family[i];
             switch (c)
             {
                 // CSS string escapes.
@@ -107,7 +108,23 @@ public static class BookFontResolver
                     // fails the whole transform and the book renders as the error page. Dropped rather
                     // than escaped: no font family legitimately contains them. (fable review)
                     if (c < 0x20 && c != '\t') break;
-                    if (char.IsSurrogate(c)) break;
+
+                    // UNPAIRED surrogates only. char.IsSurrogate is true for both halves of a well-formed
+                    // pair, which is legal XML and legal CSS and is not what the XmlWriter objects to — the
+                    // wider test silently renamed any astral-plane family (U+1D400 "FONT" became "Font").
+                    // A well-formed pair is copied through as a unit; a half without its partner is dropped,
+                    // which is the only case that would fail the transform. (#615)
+                    if (char.IsHighSurrogate(c))
+                    {
+                        if (i + 1 < family.Length && char.IsLowSurrogate(family[i + 1]))
+                        {
+                            sb.Append(c).Append(family[i + 1]);
+                            i++;
+                        }
+                        break;   // a high surrogate with nothing after it, or followed by a non-low unit
+                    }
+                    if (char.IsLowSurrogate(c)) break;   // a low surrogate never preceded by its high half
+
                     sb.Append(c);
                     break;
             }
