@@ -57,7 +57,8 @@ public sealed class DictionaryService : IDictionaryService
             EnsureBundledDictionaries();
     }
 
-    // First-run copy of the bundled dictionaries into app-support, mirroring EnsureXslFilesInUserDirectory.
+    // First-run copy of the bundled dictionaries into app-support. (The XSL copy this once mirrored was
+    // retired in #42 - the app now renders straight from the bundled stylesheet.)
     private void EnsureBundledDictionaries()
     {
         try

@@ -117,7 +117,13 @@ namespace CST.Conversion
         public static string ConvertBook(string devStr)
         {
             // change name of stylesheet for Khmer
-            devStr = devStr.Replace("tipitaka-deva.xsl", "tipitaka-khmr.xsl");
+            // #42: one stylesheet now serves every script - the fourteen per-script files differed only
+            // in their font-family line, which is injected at transform time instead. The app does not
+            // resolve this PI (it transforms in code), but a document should not name a file that no
+            // longer exists. Cst4's copy of these converters kept the per-script rewrite, correctly:
+            // it shipped its own tipitaka-*.xsl set. That code has been removed from main (it lives on in
+            // the cst_4_x branches), so if you consult it there, the difference is deliberate.
+            devStr = devStr.Replace("tipitaka-deva.xsl", "tipitaka.xsl");
 
             string str = Convert(devStr);
 

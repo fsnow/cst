@@ -20,13 +20,19 @@ using Serilog;
 
 namespace CST.Avalonia.ViewModels
 {
-    public class SettingsViewModel : ViewModelBase
+    public class SettingsViewModel : ViewModelBase, IDisposable
     {
         private readonly ISettingsService _settingsService;
         private readonly Services.Dictionaries.DictionarySourcePreferenceService _sourcePrefs;
         private readonly ILogger _logger;
         private SettingsCategoryViewModel? _selectedCategory;
         private bool _hasUnsavedChanges;
+
+        // Held only so it can be disposed with the window; it also lives in Categories.
+        private readonly AppearanceSettingsViewModel? _appearanceSettings;
+
+        /// <summary>Releases child subscriptions. Called from the window's Closed handler.</summary>
+        public void Dispose() => _appearanceSettings?.Dispose();
 
         public SettingsViewModel(ISettingsService settingsService, Services.Dictionaries.DictionarySourcePreferenceService sourcePrefs)
         {
@@ -39,6 +45,7 @@ namespace CST.Avalonia.ViewModels
             // generic groupings (General/Appearance/Advanced/Developer).
             var directoriesSettings = new GeneralSettingsViewModel(_settingsService) { Parent = this };
             var fontSettings = new AppearanceSettingsViewModel(_settingsService);
+            _appearanceSettings = fontSettings;
             var configurationSettings = new ConfigurationSettingsViewModel(_settingsService);
             var xmlUpdateSettings = new XmlUpdateSettingsViewModel(_settingsService);
             var dpdUpdateSettings = new DpdUpdateSettingsViewModel(_settingsService);
@@ -189,10 +196,27 @@ namespace CST.Avalonia.ViewModels
         public ReactiveCommand<Unit, Unit> BrowseIndexCommand { get; }
     }
 
-    public class AppearanceSettingsViewModel : ViewModelBase
+    public class AppearanceSettingsViewModel : ViewModelBase, IDisposable
     {
         private readonly ISettingsService _settingsService;
         private readonly IFontService _fontService;
+        // #42/#572: kept so the per-script size line can follow zoom changes made in a book window while
+        // Settings is open, and so the subscription can be released when this panel goes away.
+        private IBookZoomService? _bookZoomService;
+        private EventHandler<BookZoomChangedEventArgs>? _bookZoomChangedHandler;
+
+        /// <summary>
+        /// Releases the zoom subscription. Without this the panel would be rooted by the BookZoomService
+        /// singleton and leak one instance per Settings open.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_bookZoomService != null && _bookZoomChangedHandler != null)
+                _bookZoomService.ZoomChanged -= _bookZoomChangedHandler;
+            _bookZoomChangedHandler = null;
+            _bookZoomService = null;
+        }
+
         private readonly Func<Action, Task> _uiInvoke;   // dispatcher hop, injectable for tests
         private ScriptFontSettingViewModel? _selectedScript;
         private CancellationTokenSource? _fontLoadCts;    // cancels the previous script's in-flight load (#67)
@@ -210,7 +234,10 @@ namespace CST.Avalonia.ViewModels
             ScriptFontSettings = new ObservableCollection<ScriptFontSettingViewModel>();
             var fontSettings = _settingsService.Settings.FontSettings;
             
-            foreach (var kvp in fontSettings.ScriptFonts)
+            // Alphabetical. The dictionary's insertion order put Latin first and the rest in a sequence
+            // nobody could predict, which was tolerable in a 4-row box and is not in a list showing all
+            // fourteen — with more names visible, a findable order matters more than a privileged one.
+            foreach (var kvp in fontSettings.ScriptFonts.OrderBy(k => k.Key, StringComparer.CurrentCulture))
             {
                 var vm = new ScriptFontSettingViewModel
                 {
@@ -219,6 +246,10 @@ namespace CST.Avalonia.ViewModels
                     FontSize = kvp.Value.FontSize,
                     Parent = this
                 };
+                // #42: seed the book face WITHOUT going through the property, which would treat it as a
+                // user pick and write it straight back — turning "riding the shipped default" into an
+                // explicit choice for every script just by opening Settings.
+                vm.SeedBookFontFamily(kvp.Value.BookFontFamily);
                 // Initialize the preview text and font display name after setting all properties
                 vm.UpdatePreviewText();
                 vm.UpdateFontDisplayName();
@@ -226,10 +257,31 @@ namespace CST.Avalonia.ViewModels
                 ScriptFontSettings.Add(vm);
             }
             
-            // Select Latin (Roman) by default as it's the most commonly used script
-            SelectedScript = ScriptFontSettings.FirstOrDefault(s => s.ScriptName == "Roman") 
-                           ?? ScriptFontSettings.FirstOrDefault(s => s.ScriptName == "Latin")
-                           ?? ScriptFontSettings.FirstOrDefault();
+            // #42/#572: the size line shows the live zoom for the selected script, and zoom is changed in a
+            // BOOK window while Settings can be open beside it. Without this the only place in the app that
+            // reveals zoom is per-script would sit there showing a stale number. (fable review)
+            if (App.ServiceProvider?.GetService(typeof(IBookZoomService)) is IBookZoomService zoomSvc)
+            {
+                _bookZoomService = zoomSvc;
+                _bookZoomChangedHandler = (_, _) => Dispatcher.UIThread.Post(() =>
+                {
+                    foreach (var vm in ScriptFontSettings) vm.RaiseBookSizeDescriptionChanged();
+                });
+                zoomSvc.ZoomChanged += _bookZoomChangedHandler;
+            }
+
+            // Open on the script the app is CURRENTLY displaying, not a hardcoded Latin. Someone reading in
+            // Devanagari who opens Settings is almost certainly there to adjust Devanagari; making them
+            // find it in a fourteen-item list first is friction with no upside. Falls back to Latin, then
+            // to whatever exists, so an unknown or missing script cannot leave nothing selected.
+            var currentScript = (App.ServiceProvider?.GetService(typeof(IScriptService)) as IScriptService)?.CurrentScript;
+            var currentScriptName = currentScript.HasValue ? ScriptKeys.Of(currentScript.Value) : null;
+
+            SelectedScript = (currentScriptName != null
+                                 ? ScriptFontSettings.FirstOrDefault(s => s.ScriptName == currentScriptName)
+                                 : null)
+                             ?? ScriptFontSettings.FirstOrDefault(s => s.ScriptName == "Latin")
+                             ?? ScriptFontSettings.FirstOrDefault();
                            
             // Initialize localization font settings
             LocalizationFontFamily = fontSettings.LocalizationFontFamily;
@@ -297,6 +349,28 @@ namespace CST.Avalonia.ViewModels
             }
         }
         
+        /// <summary>
+        /// Persists the BOOK font face for a script and makes open books pick it up. (#42)
+        ///
+        /// Distinct from <see cref="UpdateScriptFont"/> above, which sets the app CHROME font for the same
+        /// script — the two are separate systems and this one reaches book content only, by being injected
+        /// into the stylesheet at transform time.
+        /// </summary>
+        public void UpdateScriptBookFont(string scriptName, string? bookFontFamily)
+        {
+            if (!_settingsService.Settings.FontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
+                return;
+
+            // Empty means "ride the shipped default" — see BookFontResolver. Storing a copy of the default
+            // instead would freeze this script against whatever the default happened to be today.
+            setting.BookFontFamily = bookFontFamily ?? string.Empty;
+
+            // Re-render open books: the face is baked in at transform time, so unlike a chrome font change
+            // nothing updates until the HTML is regenerated.
+            var fontService = App.ServiceProvider?.GetService(typeof(IFontService)) as IFontService;
+            fontService?.UpdateFontSettings(_settingsService.Settings.FontSettings);
+        }
+
         public void UpdateScriptFont(string scriptName, string? fontFamily, int fontSize)
         {
             if (_settingsService.Settings.FontSettings.ScriptFonts.TryGetValue(scriptName, out var setting))
@@ -368,6 +442,32 @@ namespace CST.Avalonia.ViewModels
             return match ?? "System Default";
         }
 
+        /// <summary>
+        /// The book-list equivalent of <see cref="ResolveFontSelection"/>.
+        ///
+        /// <para>
+        /// A ComboBox only displays a SelectedItem that is equal to an item in its ItemsSource, so the
+        /// saved name has to be resolved to the actual list entry — matching case-insensitively and
+        /// trimmed, exactly as the chrome path does. Assigning the raw saved string instead leaves the
+        /// control blank whenever it differs by so much as case, and always when the font is no longer
+        /// installed. (fable review, then reproduced)
+        /// </para>
+        ///
+        /// <para>
+        /// Falls back to the "Default" LABEL for display only. The saved value is untouched, so a font
+        /// that is temporarily missing comes back by itself once reinstalled — the #67 rule.
+        /// </para>
+        /// </summary>
+        internal static string ResolveBookFontSelection(IReadOnlyList<string> bookFonts, string? savedFont)
+        {
+            if (string.IsNullOrWhiteSpace(savedFont))
+                return ScriptFontSettingViewModel.BookFontDefaultLabel;
+
+            var match = bookFonts.FirstOrDefault(f =>
+                string.Equals(f?.Trim(), savedFont.Trim(), StringComparison.OrdinalIgnoreCase));
+            return match ?? ScriptFontSettingViewModel.BookFontDefaultLabel;
+        }
+
         private async Task LoadSystemDefaultSafe(ScriptFontSettingViewModel scriptVm)
         {
             try { await scriptVm.LoadSystemDefaultFontAsync(); }
@@ -391,6 +491,9 @@ namespace CST.Avalonia.ViewModels
         private ObservableCollection<string> _availableFonts = new();
         private string? _systemDefaultFontName;
         private string _selectedFontFamily = "System Default";   // ComboBox display, decoupled from _fontFamily (#67)
+        private string? _bookFontFamily = null;                   // #42: the BOOK face, empty = shipped default
+        private string _selectedBookFontFamily = "Default";       // its ComboBox display, decoupled the same way
+        private ObservableCollection<string> _availableBookFonts = new();
         private bool _applyingLoadResult;                         // true while a load applies its result (#67 Bug B)
         private int _loadVersion;                                 // latest-wins guard for concurrent loads (#67)
         
@@ -462,6 +565,93 @@ namespace CST.Avalonia.ViewModels
             private set => this.RaiseAndSetIfChanged(ref _fontDisplayName, value);
         }
         
+        /// <summary>
+        /// The BOOK font face for this script, or null to use the shipped default. (#42)
+        ///
+        /// Not to be confused with <see cref="FontFamily"/> below, which is the app CHROME font. This one
+        /// affects only rendered book content.
+        /// </summary>
+        public string? BookFontFamily
+        {
+            get => _bookFontFamily;
+            set
+            {
+                var valueToSet = (value == BookFontDefaultLabel) ? null : value;
+                if (_bookFontFamily == valueToSet) return;
+
+                this.RaiseAndSetIfChanged(ref _bookFontFamily, valueToSet);
+                Parent?.UpdateScriptBookFont(ScriptName, valueToSet);
+                _ = Parent?.SaveSettingsAsync();
+            }
+        }
+
+        /// <summary>Re-reads <see cref="BookSizeDescription"/>, which is computed rather than stored.</summary>
+        internal void RaiseBookSizeDescriptionChanged() =>
+            this.RaisePropertyChanged(nameof(BookSizeDescription));
+
+        /// <summary>The label standing for "no choice made, use what the app ships".</summary>
+        public const string BookFontDefaultLabel = "Default";
+
+        /// <summary>
+        /// Loads the saved book face without treating it as a user pick — no persist, no re-render.
+        /// Assigning the property would write the value straight back, converting every script from
+        /// "no choice made" into an explicit choice the first time Settings opened. (#42)
+        /// </summary>
+        internal void SeedBookFontFamily(string? saved)
+        {
+            _bookFontFamily = string.IsNullOrWhiteSpace(saved) ? null : saved;
+            _selectedBookFontFamily = _bookFontFamily ?? BookFontDefaultLabel;
+        }
+
+        /// <summary>
+        /// The book-font ComboBox's selection. Decoupled from <see cref="BookFontFamily"/> for the same
+        /// reason as the chrome one (#67): swapping the ItemsSource pushes a null selection, and a load
+        /// showing the default for a temporarily-uninstalled font must not erase the saved choice.
+        /// </summary>
+        public string SelectedBookFontFamily
+        {
+            get => _selectedBookFontFamily;
+            set
+            {
+                if (_applyingLoadResult || value is null || value == _selectedBookFontFamily) return;
+                this.RaiseAndSetIfChanged(ref _selectedBookFontFamily, value);
+                BookFontFamily = value;
+            }
+        }
+
+        /// <summary>
+        /// The same installed faces the chrome picker offers, but headed by "Default" rather than "System
+        /// Default" — for books, not choosing means the face the APP ships for this script, which is a
+        /// specific Pāli font stack rather than whatever the OS would pick. (#42)
+        /// </summary>
+        public ObservableCollection<string> AvailableBookFonts
+        {
+            get => _availableBookFonts;
+            set => this.RaiseAndSetIfChanged(ref _availableBookFonts, value);
+        }
+
+        /// <summary>
+        /// Explains where book text size comes from, and shows this script's current zoom. (#42/#572)
+        ///
+        /// There is deliberately no size control here: #574 gave every script the same stylesheet ladder,
+        /// so zoom is the only per-script size, and it is adjusted against live text rather than typed into
+        /// a dialog. Without this line nothing in Settings would reveal that zoom is per script, and the
+        /// panel would read as though the size control had been forgotten.
+        /// </summary>
+        public string BookSizeDescription
+        {
+            get
+            {
+                var zoomService = App.ServiceProvider?.GetService(typeof(IBookZoomService)) as IBookZoomService;
+                if (zoomService == null || !ScriptKeys.TryParse(ScriptName, out var script))
+                    return "Text size is set by zoom in the book window, per script.";
+
+                var mod = OperatingSystem.IsMacOS() ? "\u2318" : "Ctrl";
+                return $"Text size is set by zoom, currently {zoomService.FormatZoom(script)} for {ScriptName}. " +
+                       $"Use {mod}+ and {mod}- in a book to change it, or {mod}0 to return to 100%.";
+            }
+        }
+
         public string? FontFamily
         {
             get => _fontFamily;
@@ -509,8 +699,21 @@ namespace CST.Avalonia.ViewModels
             try
             {
                 AvailableFonts = new ObservableCollection<string>(fonts);
+
+                // The book list is the same faces under a different first entry: "Default" here means the
+                // app's shipped stack for this script, not the OS default.
+                var bookFonts = new List<string> { BookFontDefaultLabel };
+                bookFonts.AddRange(fonts.Where(f => f != "System Default"));
+                AvailableBookFonts = new ObservableCollection<string>(bookFonts);
+
+                // Resolve against the list rather than assigning the saved string: a SelectedItem that is
+                // not an item of the ItemsSource simply renders blank.
+                _selectedBookFontFamily =
+                    AppearanceSettingsViewModel.ResolveBookFontSelection(bookFonts, _bookFontFamily);
+
                 _selectedFontFamily = selected;
                 this.RaisePropertyChanged(nameof(SelectedFontFamily));   // force re-select after the ItemsSource swap
+                this.RaisePropertyChanged(nameof(SelectedBookFontFamily));
             }
             finally { _applyingLoadResult = false; }
         }

@@ -6,7 +6,8 @@ namespace CST.Avalonia.Services;
 
 /// <summary>
 /// Locates a bundled resource directory (<c>xsl</c>, <c>dictionaries</c>) that ships with the app and is
-/// seeded into the per-user data directory on first run.
+/// seeded into the per-user data directory on first run, or read straight from the bundle (the book
+/// stylesheet, since #42).
 ///
 /// The same folder lives in three different places depending on how the app was started, so both callers
 /// need the identical precedence - and, more importantly, the identical handling of build-output depth.

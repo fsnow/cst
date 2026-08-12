@@ -1,6 +1,19 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet xmlns:xsl = "http://www.w3.org/1999/XSL/Transform" version = "1.0" >
 
+<!-- #42: the book's font face, supplied by the app at transform time.
+
+     This stylesheet replaces the fourteen per-script copies that differed ONLY in the font-family line
+     (#574 made that true and verified it: every other byte was identical). The face is now a setting
+     rather than something a user edits here, and the size is covered by per-script zoom (#572) - which
+     between them were the two reasons anyone ever edited these files.
+
+     The default is deliberately a visible marker rather than a real font stack: the app always supplies a
+     value, so seeing this in rendered output means the parameter was not passed and the resolution path
+     in BookFontResolver needs looking at. Falling back to a plausible font would hide that. -->
+<xsl:param name="bookFontFamily">MISSING-BOOK-FONT-PARAMETER, serif</xsl:param>
+
+
 <xsl:template match = "/" > 
 <html>
 <head>
@@ -54,7 +67,7 @@ function getStyleClass (className) {
 </script>
 <style>
 body { 
-  font-family: "Khmer Mondulkiri U OT ls", KhmerOS;
+  font-family: <xsl:value-of select="$bookFontFamily"/>;
   background: white;
 }
 

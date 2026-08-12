@@ -4,7 +4,7 @@
         x:Class="CST.Avalonia.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
-        Width="900" Height="600"
+        Width="900" Height="700"   
         MinWidth="700" MinHeight="400"
         WindowStartupLocation="CenterOwner">
     
@@ -69,8 +69,19 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                     <ListBox.Styles>
+                        <!-- The selected category used SubtleFillColorSecondaryBrush, which is faint enough
+                             to be invisible in light mode - the panel gave no indication of which category
+                             was showing. Re-pointed at the SAME fixed Dock accent the book/tool tabs and the
+                             Highlight/Footnotes toggles use, so "selected" reads identically everywhere
+                             whatever the OS accent colour is. (#270 established this convention.) -->
                         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-                            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                            <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+                        </Style>
+                        <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+                            <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushMed}"/>
+                        </Style>
+                        <Style Selector="ListBoxItem:selected TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
                         </Style>
                     </ListBox.Styles>
                 </ListBox>
@@ -140,7 +151,10 @@
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Pali Script Fonts" Classes="SettingLabel"/>
-                                        <TextBlock Text="Configure fonts for each Pali script used in books and search results" 
+                                        <!-- #42: the old description claimed this section covered books. It never
+                                             did - these are app CHROME fonts. Book text was rendered from the
+                                             stylesheets and could not be configured at all until #42. -->
+                                        <TextBlock Text="Configure fonts for each Pali script. UI fonts apply to the book tree, search results and the dictionary; book fonts apply to the text of the books themselves."
                                                   Classes="SettingDescription"/>
                                         
                                         <Grid Margin="0,10,0,0">
@@ -150,21 +164,40 @@
                                             </Grid.ColumnDefinitions>
                                             
                                             <!-- Script List -->
+                                            <!-- No fixed Height: the Grid row sizes to the settings panel on
+                                                 the right, so the picker stretches to match it and shows as
+                                                 many of the 14 scripts as the panel is tall, instead of
+                                                 four in a 200px box with empty space beneath. MinHeight
+                                                 keeps it usable if the right-hand panel ever shrinks. -->
                                             <ListBox Grid.Column="0"
                                                     ItemsSource="{Binding ScriptFontSettings}"
                                                     SelectedItem="{Binding SelectedScript}"
-                                                    Height="200">
+                                                    MinHeight="200"
+                                                    VerticalAlignment="Stretch">
                                                 <ListBox.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ScriptFontSettingViewModel">
-                                                        <TextBlock Text="{Binding ScriptName}" Padding="5"/>
+                                                        <TextBlock Text="{Binding ScriptName}"/>
                                                     </DataTemplate>
                                                 </ListBox.ItemTemplate>
+                                                <!-- Compact rows: the template's own padding stacked on top
+                                                     of the Fluent ListBoxItem default, making each script
+                                                     ~3 lines tall. Trimmed so all fourteen fit without
+                                                     scrolling at the default dialog size. -->
+                                                <ListBox.Styles>
+                                                    <Style Selector="ListBoxItem">
+                                                        <Setter Property="Padding" Value="10,4"/>
+                                                        <Setter Property="MinHeight" Value="0"/>
+                                                    </Style>
+                                                </ListBox.Styles>
                                             </ListBox>
 
                                             <!-- Font Settings for Selected Script -->
                                             <StackPanel Grid.Column="1" Margin="15,0,0,0">
-                                                <TextBlock Text="{Binding SelectedScript.ScriptName, StringFormat='Font settings for {0}'}"
-                                                          FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                                <!-- No "Font settings for {script}" heading: with every script
+                                                     visible and highlighted in the list beside it, naming the
+                                                     selection again in the panel was redundant. -->
+                                                <TextBlock Text="Pali Fonts (UI)" FontWeight="SemiBold"
+                                                          Margin="0,0,0,6"/>
                                                 
                                                 <Grid>
                                                     <Grid.RowDefinitions>
@@ -181,6 +214,9 @@
                                                     
                                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
                                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                    <!-- The two font pickers must line up: this one sized to
+                                                         its selected item while the book one stretched, so
+                                                         they read as unrelated controls. Both stretch now. -->
                                                     <DockPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,10">
                                                         <ProgressBar IsIndeterminate="True"
                                                                      IsVisible="{Binding SelectedScript.IsLoadingFonts}"
@@ -189,7 +225,8 @@
                                                                      DockPanel.Dock="Right"/>
                                                         <ComboBox ItemsSource="{Binding SelectedScript.AvailableFonts}"
                                                                   SelectedItem="{Binding SelectedScript.SelectedFontFamily}"
-                                                                  IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"/>
+                                                                  IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
+                                                                  HorizontalAlignment="Stretch"/>
                                                     </DockPanel>
 
                                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:"
@@ -219,6 +256,40 @@
                                                         <Run Text="System Default font is "/>
                                                         <Run Text="{Binding SelectedScript.SystemDefaultFontName}" FontWeight="Medium"/>
                                                     </TextBlock>
+                                                </Grid>
+
+                                                <!-- #42: the BOOK face. Deliberately no size control - #574 gave
+                                                     every script the same stylesheet ladder, so per-script zoom
+                                                     (#572) is the only size, and it is judged against live text
+                                                     rather than typed here. The description carries the current
+                                                     zoom, which is also the only place in the app that reveals
+                                                     zoom is stored per script. -->
+                                                <TextBlock Text="Pali Fonts (Books)" FontWeight="SemiBold"
+                                                          Margin="0,18,0,6"/>
+
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="80"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:"
+                                                              VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                    <ComboBox Grid.Row="0" Grid.Column="1"
+                                                              ItemsSource="{Binding SelectedScript.AvailableBookFonts}"
+                                                              SelectedItem="{Binding SelectedScript.SelectedBookFontFamily}"
+                                                              IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
+                                                              HorizontalAlignment="Stretch"
+                                                              Margin="0,0,0,8"/>
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                                              Text="{Binding SelectedScript.BookSizeDescription}"
+                                                              Classes="SettingDescription"
+                                                              TextWrapping="Wrap"/>
                                                 </Grid>
                                             </StackPanel>
                                         </Grid>

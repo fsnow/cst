@@ -6,6 +6,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using CST.Avalonia.Models;
+using CST.Avalonia.Services;
 using CST.Avalonia.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -19,6 +21,90 @@ namespace CST.Avalonia.Views
         public SettingsWindow()
         {
             InitializeComponent();
+        }
+
+        /// <summary>
+        /// Applies the saved size. (#42)
+        ///
+        /// <para>
+        /// Called from the CONSTRUCTOR, not OnOpened. WindowStartupLocation is CenterOwner, which centres
+        /// the window using whatever size it has when shown — so resizing afterwards left it off-centre by
+        /// half the difference, with a visible jump, on every single open. (fable review)
+        /// </para>
+        ///
+        /// <para>
+        /// Size only, no position. The main window persists X/Y and needs bounds validation against the
+        /// current screens so a disconnected monitor cannot strand it off-screen; a dialog centred on its
+        /// owner cannot have that failure. The size is still clamped to the owner's screen, because a
+        /// window saved on a large display and reopened on a small one would otherwise extend past the
+        /// edges — the validator only rejects NaN, infinity and non-positive values.
+        /// </para>
+        /// </summary>
+        internal void ApplySavedSizeBeforeShowing(Window? owner)
+        {
+            try
+            {
+                var saved = (App.ServiceProvider?.GetService(typeof(IApplicationStateService))
+                            as IApplicationStateService)?.Current?.SettingsWindow;
+                if (saved == null) return;
+
+                var width = saved.Width;
+                var height = saved.Height;
+
+                var work = (owner?.Screens?.ScreenFromWindow(owner) ?? owner?.Screens?.Primary)?.WorkingArea;
+                if (work.HasValue)
+                {
+                    var scale = owner?.RenderScaling ?? 1.0;
+                    width = Math.Min(width, work.Value.Width / scale);
+                    height = Math.Min(height, work.Value.Height / scale);
+                }
+
+                Width = Math.Max(width, MinWidth);
+                Height = Math.Max(height, MinHeight);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("Could not restore the Settings dialog size | {Details}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Captures the dialog's size on close.
+        ///
+        /// Read in Closing rather than Closed: Width/Height are styled properties that survive teardown,
+        /// but reading geometry after the native window is destroyed is the trap #535 documents for the
+        /// main window, and there is no reason to court it here.
+        /// </summary>
+        protected override void OnClosing(global::Avalonia.Controls.WindowClosingEventArgs e)
+        {
+            base.OnClosing(e);
+            try
+            {
+                var stateService = App.ServiceProvider?.GetService(typeof(IApplicationStateService))
+                                   as IApplicationStateService;
+                var state = stateService?.Current;
+                if (state == null) return;
+
+                state.SettingsWindow ??= new SettingsWindowState();
+                state.SettingsWindow.Width = Width;
+                state.SettingsWindow.Height = Height;
+                stateService!.MarkDirty();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("Could not save the Settings dialog size | {Details}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Releases the view model's subscriptions. The Appearance panel listens for zoom changes so its
+        /// per-script size readout stays live (#42/#572), and that subscription is on a singleton — without
+        /// this the panel would leak one instance per Settings open.
+        /// </summary>
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            (DataContext as SettingsViewModel)?.Dispose();
         }
 
         protected override void OnDataContextChanged(EventArgs e)

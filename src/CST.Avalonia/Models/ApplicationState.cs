@@ -22,6 +22,7 @@ public class ApplicationState
 
     // Main Window State
     public MainWindowState MainWindow { get; set; } = new();
+    public SettingsWindowState SettingsWindow { get; set; } = new();
 
     /// <summary>Which left-tool tab was active at last close — "OpenBookTool" / "SearchTool" / "DictionaryTool"
     /// (a dockable Id). Restored on startup so the tool dock reopens on the tab the user left it on. Empty until
@@ -55,6 +56,19 @@ public class ApplicationState
 /// <summary>
 /// Main window state (position, size, etc.)
 /// </summary>
+/// <summary>
+/// Size of the Settings dialog. (#42)
+///
+/// SIZE ONLY, deliberately — no position. The main window persists X/Y and needs bounds validation against
+/// the current screens to avoid reopening off-screen when a monitor goes away; a dialog that always opens
+/// centered on its owner cannot have that problem, so the simpler thing is also the safer one.
+/// </summary>
+public class SettingsWindowState
+{
+    public double Width { get; set; } = 900;
+    public double Height { get; set; } = 700;
+}
+
 public class MainWindowState
 {
     public WindowState WindowState { get; set; } = WindowState.Normal;

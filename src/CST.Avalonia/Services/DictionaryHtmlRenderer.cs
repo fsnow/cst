@@ -44,7 +44,7 @@ public static class DictionaryHtmlRenderer
         // through is both correct for HTML sources and visually right for flat-file. (#466, Fable)
         var body = string.IsNullOrEmpty(meaningHtml) ? "" : TransformSeeTags(meaningHtml, linkDisplay);
         var family = WebUtility.HtmlEncode(fontFamily);
-        // POINTS, not px, to match the book pages (tipitaka-*.xsl size body text in pt). The WebView renders
+        // POINTS, not px, to match the book pages (tipitaka.xsl sizes body text in pt). The WebView renders
         // px smaller than the app's font setting implies; pt keeps the meaning in scale with the reader,
         // without a zoom hack (the book pipeline uses none either). (#466)
         var size = fontSizePt.ToString(System.Globalization.CultureInfo.InvariantCulture);

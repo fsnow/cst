@@ -19,6 +19,8 @@ public static class ApplicationStateValidator
 
     // Model defaults, kept here so sanitization restores the same values the constructors use.
     private const double MainW = 1400, MainH = 900;
+    private const double SettingsW = 900;
+    private const double SettingsH = 700;
     private const double OpenBookW = 900, OpenBookH = 700;
     private const double DictW = 500, DictH = 400;
     private const double BookW = 800, BookH = 600;
@@ -72,6 +74,11 @@ public static class ApplicationStateValidator
         if (IsBadSize(mw.Height)) { mw.Height = MainH; fixes.Add($"main window height -> {MainH}"); }
         if (IsBadCoord(mw.X)) { mw.X = null; fixes.Add("main window X cleared (NaN/Infinity)"); }
         if (IsBadCoord(mw.Y)) { mw.Y = null; fixes.Add("main window Y cleared (NaN/Infinity)"); }
+
+        // Settings dialog (#42) — size only, so there are no coordinates to repair.
+        var sw = state.SettingsWindow ??= new SettingsWindowState();
+        if (IsBadSize(sw.Width)) { sw.Width = SettingsW; fixes.Add($"settings dialog width -> {SettingsW}"); }
+        if (IsBadSize(sw.Height)) { sw.Height = SettingsH; fixes.Add($"settings dialog height -> {SettingsH}"); }
 
         // Open Book dialog
         var ob = state.OpenBookDialog ??= new OpenBookDialogState();

@@ -1955,6 +1955,9 @@ public partial class App : Application
                 {
                     DataContext = settingsViewModel
                 };
+                // Before ShowDialog: CenterOwner positions using the size the window has when shown, so a
+                // size applied afterwards leaves it off-centre. (#42, fable review)
+                settingsWindow.ApplySavedSizeBeforeShowing(MainWindow);
 
                 await settingsWindow.ShowDialog(MainWindow);
             }
