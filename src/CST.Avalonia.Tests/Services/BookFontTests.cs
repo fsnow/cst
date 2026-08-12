@@ -279,7 +279,39 @@ public class BookFontTests
 
         var resolved = BookFontResolver.Resolve(settings.Object, Script.Latin);
         Assert.All(resolved, c => Assert.True(c >= 0x20 || c == '\t'));
+        // True for THESE inputs, which are all unpaired. A well-formed pair must survive — see below.
         Assert.DoesNotContain(resolved, char.IsSurrogate);
+    }
+
+    [Fact]
+    public void AWellFormedSurrogatePairIsKept_OnlyUnpairedHalvesAreDropped()
+    {
+        // char.IsSurrogate is true for BOTH halves of a valid pair, so testing it per-character dropped
+        // legitimate astral-plane names: U+1D400 MATHEMATICAL BOLD CAPITAL A + "Font" silently became
+        // "Font". A well-formed pair is legal XML and legal CSS; only an UNPAIRED half trips the XmlWriter
+        // behind XslCompiledTransform, which is the whole justification for dropping anything here. (#615)
+        var pair = char.ConvertFromUtf32(0x1D400);          // a valid pair, as two UTF-16 code units
+        var settings = SettingsMock();
+        settings.Object.Settings.FontSettings.ScriptFonts["Latin"].BookFontFamily = pair + "Font";
+
+        Assert.Contains(pair, BookFontResolver.Resolve(settings.Object, Script.Latin));
+    }
+
+    [Fact]
+    public void AHalfPairAdjacentToRealTextIsStillDropped()
+    {
+        // The cases the narrowed check must NOT start letting through: a high surrogate followed by an
+        // ordinary character rather than its low half, and a low surrogate with no high half before it.
+        var high = ((char)0xD835).ToString();
+        var low = ((char)0xDC00).ToString();
+
+        foreach (var stored in new[] { high + "Font", "Font" + low, high + "x" + low })
+        {
+            var settings = SettingsMock();
+            settings.Object.Settings.FontSettings.ScriptFonts["Latin"].BookFontFamily = stored;
+
+            Assert.DoesNotContain(BookFontResolver.Resolve(settings.Object, Script.Latin), char.IsSurrogate);
+        }
     }
 
     [Fact]
@@ -337,10 +369,61 @@ public class BookFontTests
     [Fact]
     public void AnUninstalledFontShowsTheDefaultLabel_WithoutErasingTheSavedValue()
     {
-        // Display-only fallback. The saved setting is untouched so the choice returns by itself once the
-        // font is reinstalled — the #67 rule, and the hook #573 will report through.
+        // The last-resort fallback, reached only if the caller hands over a list the saved face is not in.
+        // ApplyLoadedFonts no longer does that — see the missing-entry tests below — but a SelectedItem that
+        // is not an item of the ItemsSource renders BLANK, so this must never return the saved name blindly.
         var list = new List<string> { "Default", "Kohinoor Devanagari" };
         Assert.Equal("Default",
+            AppearanceSettingsViewModel.ResolveBookFontSelection(list, "A Font That Was Uninstalled"));
+    }
+
+    // ---- A saved face that is not installed (#614) ------------------------------------------------
+
+    [Fact]
+    public void ASavedFaceThatIsNotInstalledIsOfferedSoThePickerCanShowIt()
+    {
+        // The list used to hold installed faces only, so an uninstalled choice fell back to displaying
+        // "Default" while the renderer went on using the missing name — the picker and the book disagreed
+        // about what was configured, and nothing on screen said so.
+        var list = new List<string> { "Default", "Kohinoor Devanagari" };
+
+        Assert.Equal("A Font That Was Uninstalled",
+            AppearanceSettingsViewModel.SavedFaceMissingFrom(list, "A Font That Was Uninstalled"));
+    }
+
+    [Fact]
+    public void AnInstalledFaceIsNotOfferedTwice()
+    {
+        var list = new List<string> { "Default", "Kohinoor Devanagari" };
+
+        Assert.Null(AppearanceSettingsViewModel.SavedFaceMissingFrom(list, "Kohinoor Devanagari"));
+        // Same tolerance as the selection match: case and surrounding space are not a different font.
+        Assert.Null(AppearanceSettingsViewModel.SavedFaceMissingFrom(list, "  kohinoor devanagari "));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void NoSavedFaceAddsNothingToTheList(string? saved)
+    {
+        var list = new List<string> { "Default", "Kohinoor Devanagari" };
+
+        Assert.Null(AppearanceSettingsViewModel.SavedFaceMissingFrom(list, saved));
+    }
+
+    [Fact]
+    public void OnceOfferedTheSavedFaceIsWhatTheSelectionResolvesTo()
+    {
+        // The point of adding it: the selection now lands on the saved face instead of on "Default", which
+        // is what makes choosing "Default" an actual change rather than a no-op the setter discards.
+        var list = new List<string> { "Default", "Kohinoor Devanagari" };
+        var missing = AppearanceSettingsViewModel.SavedFaceMissingFrom(list, "A Font That Was Uninstalled")!;
+        list.Insert(1, missing);
+
+        Assert.Equal("A Font That Was Uninstalled",
+            AppearanceSettingsViewModel.ResolveBookFontSelection(list, "A Font That Was Uninstalled"));
+        Assert.NotEqual("Default",
             AppearanceSettingsViewModel.ResolveBookFontSelection(list, "A Font That Was Uninstalled"));
     }
 

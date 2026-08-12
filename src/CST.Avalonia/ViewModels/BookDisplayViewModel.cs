@@ -911,7 +911,14 @@ namespace CST.Avalonia.ViewModels
         private async Task LoadBookContentAsync()
         {
             await Dispatcher.UIThread.InvokeAsync(() => IsLoading = true);
-            
+
+            // #613: the face this render is ATTEMPTING, recorded before it starts and left alone however it
+            // ends. The completion check below compares against this rather than against what the render
+            // managed to apply — a render that failed must not read as a stale one, or it would re-post
+            // itself forever against a book that cannot render at all.
+            _attemptedBookFontFamily = BookFontResolver.Resolve(_settingsService, _bookScript);
+            _bookFontRenderInFlight = true;
+
             try
             {
                 var htmlContent = await GenerateHtmlContentAsync();
@@ -925,9 +932,64 @@ namespace CST.Avalonia.ViewModels
             }
             finally
             {
+                // Cleared in the finally, so EVERY exit releases it — the previous design cleared an
+                // equivalent flag at each return site and missed two of them. (#613, #612 review)
+                _bookFontRenderInFlight = false;
                 await Dispatcher.UIThread.InvokeAsync(() => IsLoading = false);
+                RerenderIfTheFaceMovedUnderneathThisRender();
             }
         }
+
+        /// <summary>
+        /// The correction that makes a face change safe to miss. (#613)
+        ///
+        /// <para>
+        /// A font event that arrives while a render is in flight is deliberately ignored — it cannot tell
+        /// whether the render already covers it. This runs when that render finishes and asks the only
+        /// question that settles it: is what we just rendered still what the settings say? Because it is
+        /// asked after the fact it needs no knowledge of how many changes happened in between, which is
+        /// exactly what comparing two point-in-time strings could not do. The book that was reverted to its
+        /// original face mid-render — the reported bug — is simply a render whose answer is "no".
+        /// </para>
+        ///
+        /// <para>
+        /// It converges: the re-render records its own attempt, so a settled face makes the next answer
+        /// "yes" and the chain stops. A failing render also answers "yes", since attempted is what it tried.
+        /// </para>
+        /// </summary>
+        private void RerenderIfTheFaceMovedUnderneathThisRender()
+        {
+            var current = BookFontResolver.Resolve(_settingsService, _bookScript);
+            if (!CompletedRenderIsStale(current, _attemptedBookFontFamily)) return;
+
+            _logger.Information(
+                "Book face for {Script} moved during the render ({Attempted} -> {Current}) - regenerating",
+                _bookScript, _attemptedBookFontFamily ?? "(none)", current);
+
+            _pendingPositionToken ??= _lastPositionToken;
+            Dispatcher.UIThread.Post(async () => await LoadBookContentAsync());
+        }
+
+        /// <summary>
+        /// Whether a font-settings event should start a render. Pure so it can be tested without a view
+        /// model; the ordering problem it used to get wrong is handled by
+        /// <see cref="RerenderIfTheFaceMovedUnderneathThisRender"/>, not here. (#613)
+        /// </summary>
+        /// <param name="renderInFlight">
+        /// When true this returns false and the event is dropped ON PURPOSE — the in-flight render's
+        /// completion check is what will notice, and it can compare against a settled value where this
+        /// cannot.
+        /// </param>
+        internal static bool FaceChangeNeedsRender(string currentFace, string? renderedFace, bool renderInFlight) =>
+            !renderInFlight && !string.Equals(currentFace, renderedFace, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Whether a finished render is out of date: the face it ATTEMPTED is no longer the face the
+        /// settings resolve to. Compared against the attempt rather than the result so that a failed render
+        /// is not perpetually stale. (#613)
+        /// </summary>
+        internal static bool CompletedRenderIsStale(string currentFace, string? attemptedFace) =>
+            !string.Equals(currentFace, attemptedFace, StringComparison.Ordinal);
 
         private async Task<string> GenerateHtmlContentAsync()
         {
@@ -939,7 +1001,6 @@ namespace CST.Avalonia.ViewModels
                     var booksDir = GetBooksDirectory();
                     if (booksDir == null)
                     {
-                        _requestedBookFontFamily = null;   // same reasoning as the catch below
                         _logger.Error("Cannot load book - no valid XML directory configured");
                         return "<html><body><h3>Error: No XML directory configured</h3><p>Please configure a valid XML directory in Settings.</p></body></html>";
                     }
@@ -950,7 +1011,6 @@ namespace CST.Avalonia.ViewModels
                     
                     if (!File.Exists(xmlPath))
                     {
-                        _requestedBookFontFamily = null;   // same reasoning as the catch below
                         _logger.Warning("XML file not found: {XmlPath}", xmlPath);
                         return "<html><body><h1>Book file not found</h1><p>File: " + xmlPath + "</p></body></html>";
                     }
@@ -998,7 +1058,6 @@ namespace CST.Avalonia.ViewModels
 
                     if (xslPath == null || !File.Exists(xslPath))
                     {
-                        _requestedBookFontFamily = null;   // same reasoning as the catch below
                         _logger.Error("Book stylesheet not found: {XslPath}", xslPath ?? "(unresolved)");
                         return "<html><body><h1>Stylesheet not found</h1><p>The book stylesheet could not be " +
                                "located in the application bundle.</p></body></html>";
@@ -1009,7 +1068,14 @@ namespace CST.Avalonia.ViewModels
 
                     // #42: the face is injected rather than baked into a per-script stylesheet. One
                     // stylesheet now serves all fourteen scripts — they differed only in this one line.
-                    var bookFont = BookFontResolver.Resolve(_settingsService, _bookScript);
+                    //
+                    // Taken from the value the caller recorded rather than resolved again here, so what was
+                    // ATTEMPTED and what was APPLIED cannot disagree — resolving twice would let a settings
+                    // change land between them and render a face the completion check then believes is
+                    // current. The fallback is unreachable in practice: LoadBookContentAsync sets this
+                    // immediately before calling, and it is the only caller. (#613)
+                    var bookFont = _attemptedBookFontFamily
+                                   ?? BookFontResolver.Resolve(_settingsService, _bookScript);
                     var xslArgs = new XsltArgumentList();
                     xslArgs.AddParam("bookFontFamily", "", bookFont);
                     _logger.Debug("Book font for {Script}: {Font}", _bookScript, bookFont);
@@ -1022,7 +1088,6 @@ namespace CST.Avalonia.ViewModels
                     // retrying it. Also covers a book opened after a face change: it starts out in sync
                     // rather than regenerating on its first font event. (fable review)
                     _appliedBookFontFamily = bookFont;
-                    _requestedBookFontFamily = null;
                     
                     var htmlContent = stringWriter.ToString();
                     _logger.Debug("Generated HTML content - length: {Length}", htmlContent.Length);
@@ -1031,9 +1096,6 @@ namespace CST.Avalonia.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    // Nothing rendered, so release the in-flight claim: the next font-settings event must be
-                    // free to retry this face rather than seeing it as already handled.
-                    _requestedBookFontFamily = null;
                     _logger.Error(ex, "Error generating HTML content");
                                         return $"<html><body><h1>Error loading book</h1><p>{ex.Message}</p><pre>{ex.StackTrace}</pre></body></html>";
                 }
@@ -1963,15 +2025,9 @@ namespace CST.Avalonia.ViewModels
             // face actually changed, or every book would re-render whenever any script's chrome font was
             // touched.
             var face = BookFontResolver.Resolve(_settingsService, _bookScript);
-            // Compare against what is RENDERED, or what is already on its way — either means this event
-            // needs no action. Two separate fields, deliberately: recording the requested face as though it
-            // were rendered is what made the earlier fix half a fix. If the reload then failed, the view
-            // believed it already showed that face and no later event would retry, leaving the book stuck
-            // on the error page until the user picked a DIFFERENT face. (fable review)
-            if (face == _appliedBookFontFamily || face == _requestedBookFontFamily) return;
+            if (!FaceChangeNeedsRender(face, _appliedBookFontFamily, _bookFontRenderInFlight)) return;
 
             _logger.Information("Book font for {Script} changed to {Face} - regenerating", _bookScript, face);
-            _requestedBookFontFamily = face;
 
             // Carry the reading position across the reflow. A font change moves every anchor, and without
             // this the reader is thrown elsewhere in the book on each adjustment — the requirement #42
@@ -1981,12 +2037,17 @@ namespace CST.Avalonia.ViewModels
         }
 
         // The face the currently rendered HTML was produced with — set only once a transform has succeeded.
-        // Null until the first successful render.
-        private string? _appliedBookFontFamily;
-        // The face a reload was requested for but which has not yet rendered. Exists purely to suppress
-        // duplicate reloads while one is in flight; cleared when the render finishes, either way, so a
-        // failure leaves nothing claiming to be current.
-        private string? _requestedBookFontFamily;
+        // Null until the first successful render. Read by the settings event to skip a render that would
+        // change nothing; NOT used to decide staleness, which is what _attemptedBookFontFamily is for.
+        private volatile string? _appliedBookFontFamily;
+
+        // The face the in-flight (or most recent) render set out to produce, whatever became of it. (#613)
+        private volatile string? _attemptedBookFontFamily;
+
+        // Whether a render is running. Volatile because it is written from the render task and read by the
+        // settings event on the UI thread; the same is true of the two faces above, which were plain fields
+        // being handed between threads. (#613)
+        private volatile bool _bookFontRenderInFlight;
 
         /// <summary>
         /// Releases this VM's reactive subscriptions and the FontService event subscription.

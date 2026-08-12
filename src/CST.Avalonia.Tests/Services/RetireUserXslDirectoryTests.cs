@@ -143,13 +143,75 @@ public class RetireUserXslDirectoryTests : IDisposable
     }
 
     [Fact]
-    public void ItRecordsItselfSoItDoesNotRunAgain()
+    public void ItRecordsItselfExactlyOnce_EvenThoughItKeepsRunning()
     {
+        // Recorded on the first run so the log shows when it happened, and never duplicated afterwards.
+        // The record is history here, not a skip condition - see the re-appearance test below. (#616)
+        MakeXslDir();
+        var state = FreshState();
+        RunOnlyThisMigration(state, Context());
+        RunOnlyThisMigration(state, Context());
+
+        Assert.Single(state.AppliedDataMigrations!.Where(id => id == "2026-08-retire-user-xsl-directory"));
+    }
+
+    [Fact]
+    public void ADirectoryThatREAPPEARSAfterRetirementIsRetiredAgain()
+    {
+        // The defect: Beta 6 retires xsl/ and records the migration; a still-installed Beta 5 launched
+        // against the same data directory recreates it; a once-only migration then skips forever and the
+        // stale directory is back permanently - the exact thing this migration exists to remove. A tester
+        // running both betas is not an exotic case, it is the normal one. (#616)
+        MakeXslDir(3);
+        var state = FreshState();
+        RunOnlyThisMigration(state, Context());
+        Assert.False(Directory.Exists(Path.Combine(_data, "xsl")));
+
+        MakeXslDir(14);   // Beta 5 launches and writes its own copy back
+
+        var notes = RunOnlyThisMigration(state, Context());
+
+        Assert.False(Directory.Exists(Path.Combine(_data, "xsl")));
+        Assert.DoesNotContain(notes, n => n.Contains(DataMigrations.FailureMarker));
+        // Retired alongside the first, never over it - the earlier copy may hold the user's hand edits.
+        Assert.True(Directory.Exists(Path.Combine(_data, "xsl-retired")));
+        Assert.True(Directory.Exists(Path.Combine(_data, "xsl-retired-2")));
+        Assert.Equal(3, Directory.GetFiles(Path.Combine(_data, "xsl-retired")).Length);
+        Assert.Equal(14, Directory.GetFiles(Path.Combine(_data, "xsl-retired-2")).Length);
+    }
+
+    [Fact]
+    public void ARerunWithNothingToDoSaysNothing()
+    {
+        // A recurring migration must not add a line to every launch's log, or it stops being a log of
+        // things that happened. Only the first run is announced; later quiet runs are silent. (#616)
         MakeXslDir();
         var state = FreshState();
         RunOnlyThisMigration(state, Context());
 
-        Assert.Single(state.AppliedDataMigrations!.Where(id => id == "2026-08-retire-user-xsl-directory"));
+        Assert.Empty(RunOnlyThisMigration(state, Context()));
+    }
+
+    [Fact]
+    public void ItIsRegisteredAsRecurring()
+    {
+        // The flag is the whole fix; wiring the implementation without it restores the defect silently.
+        Assert.True(DataMigrations.All.Single(m => m.Id == "2026-08-retire-user-xsl-directory").Recurring);
+    }
+
+    [Fact]
+    public void AOnceOnlyMigrationStillRunsOnlyOnce()
+    {
+        // The flag must not have made every migration recurring.
+        var runs = 0;
+        var once = new DataMigrations.Migration(
+            "test-once-only", "counts its runs", (_, _) => { runs++; return DataMigrations.Outcome.Done; });
+        var state = FreshState();
+
+        DataMigrations.Run(state, Context(), new[] { once });
+        DataMigrations.Run(state, Context(), new[] { once });
+
+        Assert.Equal(1, runs);
     }
 
     [Fact]

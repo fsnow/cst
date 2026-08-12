@@ -468,6 +468,30 @@ namespace CST.Avalonia.ViewModels
             return match ?? ScriptFontSettingViewModel.BookFontDefaultLabel;
         }
 
+        /// <summary>
+        /// The saved face, when it is not among the installed ones — the entry the book list has to carry so
+        /// the picker can show what is actually configured. Null when there is no saved face, or when it is
+        /// installed and therefore already in the list. (#614)
+        ///
+        /// <para>
+        /// The face is listed under its own name, with no "(missing)" decoration. Two reasons: the entry has
+        /// to round-trip through <see cref="ScriptFontSettingViewModel.BookFontFamily"/>, where a decorated
+        /// label would be stored verbatim as the face name; and telling the user a chosen font is not
+        /// installed is #573's job, which can say it once, in one place, for chrome and book alike.
+        /// </para>
+        /// </summary>
+        internal static string? SavedFaceMissingFrom(IReadOnlyList<string> bookFonts, string? savedFont)
+        {
+            if (string.IsNullOrWhiteSpace(savedFont))
+                return null;
+
+            var saved = savedFont.Trim();
+            var installed = bookFonts.Any(f =>
+                string.Equals(f?.Trim(), saved, StringComparison.OrdinalIgnoreCase));
+
+            return installed ? null : saved;
+        }
+
         private async Task LoadSystemDefaultSafe(ScriptFontSettingViewModel scriptVm)
         {
             try { await scriptVm.LoadSystemDefaultFontAsync(); }
@@ -704,6 +728,19 @@ namespace CST.Avalonia.ViewModels
                 // app's shipped stack for this script, not the OS default.
                 var bookFonts = new List<string> { BookFontDefaultLabel };
                 bookFonts.AddRange(fonts.Where(f => f != "System Default"));
+
+                // A SAVED FACE THAT IS NOT INSTALLED JOINS THE LIST. Without this the picker fell back to
+                // showing "Default" while the renderer went on using the missing name, so the two disagreed
+                // about what was configured - and the obvious correction, choosing "Default", did nothing at
+                // all: the ComboBox raises no change for the entry already displayed, and the setter's
+                // equality guard would have swallowed it regardless. The only way out was the undiscoverable
+                // pick-another-font-then-Default. Listing the saved face makes the picker tell the truth and
+                // makes clearing it a real selection change. #67's rule is untouched - the stored value is
+                // still never erased by a load, so reinstalling the font restores it as an ordinary match.
+                // Saying that it is missing is #573's job, not the list's. (#614)
+                if (AppearanceSettingsViewModel.SavedFaceMissingFrom(bookFonts, _bookFontFamily) is { } missing)
+                    bookFonts.Insert(1, missing);
+
                 AvailableBookFonts = new ObservableCollection<string>(bookFonts);
 
                 // Resolve against the list rather than assigning the saved string: a SelectedItem that is
