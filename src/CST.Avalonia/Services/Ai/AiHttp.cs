@@ -246,4 +246,14 @@ internal static class AiHttp
     internal static AiError EmptyResponse() => new(
         AiErrorKind.Provider,
         "The provider accepted the request but returned no response. Check the endpoint URL and the model name.");
+
+    /// <summary>
+    /// The error for a turn the model ended at its output limit (#601). The wording here is the generic one:
+    /// the orchestrator replaces it once it knows whether any answer text was written, because "cut off
+    /// mid-answer" and "spent the whole budget reasoning" want different advice.
+    /// </summary>
+    internal static AiError Truncated(string providerCode) => new(
+        AiErrorKind.Truncated,
+        "The model reached its output limit and stopped before finishing.",
+        ProviderCode: providerCode);
 }

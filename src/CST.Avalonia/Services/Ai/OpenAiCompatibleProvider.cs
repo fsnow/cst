@@ -94,6 +94,7 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
 
             var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             var think = new ThinkTagFilter();
+            var finish = new FinishState();
             var produced = false;
 
             await foreach (var sse in SseReader.ReadAsync(stream, _idleTimeout, _firstEventTimeout, ct)
@@ -112,7 +113,7 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
                 if (sse.Data == "[DONE]")
                     break;
 
-                foreach (var delta in Interpret(sse, think))
+                foreach (var delta in Interpret(sse, think, finish))
                 {
                     // An Error delta is terminal by contract (see ChatDeltaKind.Error) — a gateway that keeps
                     // streaming after reporting a failure must not have that content appended to the answer.
@@ -138,7 +139,26 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
                 _logger.LogWarning("OpenAI-compatible endpoint returned a 200 with no stream events");
                 yield return ChatDelta.ForError(AiHttp.EmptyResponse());
             }
+            else if (finish.Truncated)
+            {
+                // Deliberately AFTER the loop rather than at the chunk that reported it. The finish-reason chunk
+                // is not the last one: with `include_usage` the token counts arrive in a further chunk behind it,
+                // and an Error delta is terminal by contract — emitting it on the spot would discard exactly the
+                // number the user needs, which is what this turn cost them for a half-written answer.
+                _logger.LogInformation("OpenAI-compatible turn ended at the output limit ({Reason})", finish.Reason);
+                yield return ChatDelta.ForError(AiHttp.Truncated(finish.Reason!));
+            }
         }
+    }
+
+    /// <summary>
+    /// How the turn ended, carried out of <see cref="Interpret"/>. Mutable because the finish reason arrives
+    /// mid-stream and is acted on after it.
+    /// </summary>
+    private sealed class FinishState
+    {
+        internal bool Truncated;
+        internal string? Reason;
     }
 
     private static IEnumerable<ChatDelta> FlushThink(ThinkTagFilter think)
@@ -194,7 +214,7 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
     /// this iterator as an unclassified crash mid-answer. OpenRouter reporting a NUMERIC <c>error.code</c> is a
     /// real instance of exactly that.
     /// </summary>
-    private static IEnumerable<ChatDelta> Interpret(SseEvent sse, ThinkTagFilter think)
+    private static IEnumerable<ChatDelta> Interpret(SseEvent sse, ThinkTagFilter think, FinishState finish)
     {
         JsonElement root;
         try
@@ -221,26 +241,41 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
             yield break;
         }
 
-        if (AiJson.Array(root, "choices") is { } choices &&
-            choices.GetArrayLength() > 0 &&
-            AiJson.Object(choices[0], "delta") is { } delta)
+        // Not an early return: the final chunk carries `choices: []` alongside the usage read at the end of this
+        // method, so bailing out here would drop the token counts.
+        if (AiJson.Array(root, "choices") is { } choices && choices.GetArrayLength() > 0)
         {
-            // Structured reasoning — never merged into the answer. The field name is NOT standardised: DeepSeek
-            // documents `reasoning_content`, while Ollama's OpenAI-compat surface (and OpenRouter) use plain
-            // `reasoning`. Verified against a live Ollama serving gpt-oss: 73 of its deltas carried `reasoning`
-            // and none carried `reasoning_content`, so parsing only the documented name dropped the model's
-            // entire reasoning stream — leaving usage that says 80 output tokens next to a one-line answer.
-            if (AiJson.String(delta, "reasoning_content") is { Length: > 0 } reasoningContent)
-                yield return ChatDelta.ForReasoning(reasoningContent);
-            else if (AiJson.String(delta, "reasoning") is { Length: > 0 } reasoning)
-                yield return ChatDelta.ForReasoning(reasoning);
+            var choice = choices[0];
 
-            if (AiJson.String(delta, "content") is { Length: > 0 } content)
+            // finish_reason is a sibling of `delta`, not a member of it, and is null on every chunk but the last.
+            // Read outside the delta check because a provider may report it on a chunk carrying no delta at all —
+            // and inside the same chunk it can accompany the final content, which must still be yielded. (#601)
+            if (TruncationReason(AiJson.String(choice, "finish_reason")) is { } stopped)
             {
-                // Inline <think> tags are the other reasoning convention; strip them across chunk boundaries.
-                var (visible, inlineReasoning) = think.Feed(content);
-                if (inlineReasoning.Length > 0) yield return ChatDelta.ForReasoning(inlineReasoning);
-                if (visible.Length > 0) yield return ChatDelta.ForText(visible);
+                finish.Truncated = true;
+                finish.Reason = stopped;
+            }
+
+            if (AiJson.Object(choice, "delta") is { } delta)
+            {
+                // Structured reasoning — never merged into the answer. The field name is NOT standardised:
+                // DeepSeek documents `reasoning_content`, while Ollama's OpenAI-compat surface (and OpenRouter)
+                // use plain `reasoning`. Verified against a live Ollama serving gpt-oss: 73 of its deltas
+                // carried `reasoning` and none carried `reasoning_content`, so parsing only the documented name
+                // dropped the model's entire reasoning stream — leaving usage that says 80 output tokens next to
+                // a one-line answer.
+                if (AiJson.String(delta, "reasoning_content") is { Length: > 0 } reasoningContent)
+                    yield return ChatDelta.ForReasoning(reasoningContent);
+                else if (AiJson.String(delta, "reasoning") is { Length: > 0 } reasoning)
+                    yield return ChatDelta.ForReasoning(reasoning);
+
+                if (AiJson.String(delta, "content") is { Length: > 0 } content)
+                {
+                    // Inline <think> tags are the other reasoning convention; strip across chunk boundaries.
+                    var (visible, inlineReasoning) = think.Feed(content);
+                    if (inlineReasoning.Length > 0) yield return ChatDelta.ForReasoning(inlineReasoning);
+                    if (visible.Length > 0) yield return ChatDelta.ForText(visible);
+                }
             }
         }
 
@@ -251,6 +286,22 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
                 OutputTokens: AiJson.Int(usage, "completion_tokens")));
         }
     }
+
+    /// <summary>
+    /// The canonical finish reason when the model stopped at its output limit, or null for every other ending.
+    ///
+    /// <para>OpenAI spells it <c>length</c>; gateways fronting Anthropic pass its <c>max_tokens</c> through
+    /// unchanged, and both can only mean the one thing. Every other value — <c>stop</c>, <c>tool_calls</c>,
+    /// <c>content_filter</c> — is not this failure and must not be reported as one.</para>
+    ///
+    /// <para>The MATCHED CONSTANT is returned rather than the provider's own string, which is what makes it safe
+    /// to put in <see cref="AiError.ProviderCode"/> and thence into the log: the field is provider-controlled on
+    /// a user-pasted endpoint, and this narrows it to one of two literals we wrote.</para>
+    /// </summary>
+    private static string? TruncationReason(string? finishReason) =>
+        string.Equals(finishReason, "length", StringComparison.OrdinalIgnoreCase) ? "length"
+        : string.Equals(finishReason, "max_tokens", StringComparison.OrdinalIgnoreCase) ? "max_tokens"
+        : null;
 
     /// <summary>
     /// Classify a non-2xx response. As with the Anthropic adapter the body is read for classification only, and

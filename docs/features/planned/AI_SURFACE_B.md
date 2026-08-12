@@ -243,6 +243,13 @@ public interface IChatProvider
   Opus 5, Sonnet 5 and the Opus 4.x family all allow 128K, but **Haiku 4.5 caps at 64K**, and the model id is
   whatever the user typed into Settings. Cost is controlled by reporting what each call spent (§10), not by a
   truncation the user never sees.
+- **A cap we do not set can still be hit, so truncation is detected rather than assumed away** (`length` on the
+  OpenAI-compatible shape, `max_tokens` on Anthropic's → `AiErrorKind.Truncated`). Omitting the field hands the
+  ceiling to the endpoint, not to nobody; and the Anthropic adapter always sends one because the API requires
+  it. The dangerous case is not the blank panel but the **half-written answer**: a stream cut off mid-verse ends
+  exactly as a complete one does, so without this the app renders a partial translation under a citation and
+  nothing distinguishes it from a finished one. Reported *after* the usage it explains — an `Error` delta is
+  terminal, and on both wire formats the token counts arrive with or behind the finish reason.
 - **`HttpClient`'s 100 s default timeout will kill long generations.** Use `Timeout.InfiniteTimeSpan` with
   per-request cancellation, plus an adapter-level *idle* timeout.
 - **Mid-stream network drop is distinct from cancellation** — partial text is already on screen. Keep the
@@ -571,6 +578,10 @@ the requirement had not worked. The mistranslation was not fixable by prompting 
 - **An empty answer is a named failure** (`AiErrorKind.EmptyAnswer`). A model can end a turn having produced
   only reasoning (#601), and #578 is *right* to segregate reasoning from answer — which is exactly what makes
   this failure invisible, leaving the caller a well-formed, successful, blank turn.
+- **Truncation is measured where the provider reports it, and worded here.** `AiErrorKind.Truncated` says *that*
+  the output limit was hit; only the orchestrator knows what the user got for it, so it composes one of three
+  messages — cut off mid-answer, all budget spent reasoning, or nothing produced at all. Three situations, three
+  fixes. `EmptyAnswer` remains the fallback for endpoints that report no finish reason at all.
 - **`ChatSettings` and `IChatProviderResolver` are the seam** for B2/B7. The key is deliberately absent from
   settings.json — it belongs in the OS credential store (#579) — and a key is required for Anthropic but *not*
   for OpenAI-compatible, because the motivating deployment is a local runner on loopback with no credential.
