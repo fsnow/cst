@@ -16,6 +16,11 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 /// and undocumented in principle. Loading the real symbols costs a few lines and removes a dependency on
 /// something Apple never promised.</para>
 ///
+/// <para><b>Minimum macOS, from the SDK headers rather than memory.</b> The four functions are
+/// <c>API_AVAILABLE(macos(10.6))</c>, but the binding constraint is <c>kSecClassGenericPassword</c> at
+/// <b>10.7</b> — so this code needs 10.7, comfortably under the app's 10.15 floor. Worth stating because the
+/// gap is one release wide and easy to mis-remember as 10.6 throughout.</para>
+///
 /// <para><b>This targets the FILE-BASED (login) keychain, deliberately.</b> <c>SecItem</c> routes to the
 /// data-protection keychain only when the query carries <c>kSecUseDataProtectionKeychain</c> or
 /// <c>kSecAttrSynchronizable</c>; with neither, it talks to the file-based one
