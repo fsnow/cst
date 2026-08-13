@@ -30,6 +30,26 @@ public interface IBookZoomService
     /// <summary>Returns to 1.0 — the shipped stylesheet sizes exactly.</summary>
     double ResetZoom(Script script);
 
+    /// <summary>
+    /// Sets an arbitrary zoom, clamped to the supported range. Returns the value actually stored.
+    ///
+    /// <para>
+    /// The one thing the keyboard structurally cannot do: <b>arrive at a value instead of traversing to
+    /// it</b>. <see cref="ZoomIn"/> and <see cref="ZoomOut"/> walk the ladder a rung per press, which is
+    /// right for a key you hold down and wrong for "make it 115%". A toolbar percentage is the surface that
+    /// needs this; the ladder stays what it should be — the preset list and the step targets, not the set of
+    /// legal values.
+    /// </para>
+    ///
+    /// <para>
+    /// A value between rungs is stored as given, not snapped. Chrome's PDF viewer is the model: land on 97%
+    /// and the next <c>+</c> takes you to 100%, then on up the sequence. <see cref="ZoomIn"/> already
+    /// behaves that way for any starting value, so nothing downstream has to care whether a zoom came from
+    /// a key or a field.
+    /// </para>
+    /// </summary>
+    double SetZoom(Script script, double zoom);
+
     /// <summary>True when this script is not at 100%, i.e. the readout should show something.</summary>
     bool IsZoomed(Script script);
 
@@ -117,6 +137,17 @@ public class BookZoomService : IBookZoomService
     /// page scale, so this is also the only thing that undoes a pinch. (fable review)
     /// </summary>
     public double ResetZoom(Script script) => SetZoom(script, DefaultZoom, alwaysNotify: true);
+
+    /// <summary>
+    /// Arbitrary zoom, for a percentage control. See the interface for why this is not a ladder operation.
+    ///
+    /// <para>
+    /// Everything a typed value needs already existed behind the private overload — clamping, the
+    /// already-there early return, the debounced save, and the per-script notification that re-zooms every
+    /// open book in that script. This adds no mechanism; it opens the door to it.
+    /// </para>
+    /// </summary>
+    public double SetZoom(Script script, double zoom) => SetZoom(script, zoom, alwaysNotify: false);
 
     public bool IsZoomed(Script script) => Math.Abs(GetZoom(script) - DefaultZoom) > Epsilon;
 
