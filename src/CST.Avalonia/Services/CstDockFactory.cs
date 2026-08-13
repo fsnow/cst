@@ -681,10 +681,62 @@ namespace CST.Avalonia.Services
                         tabIndex++;
                     }
                 }
+
+                PruneStateForVanishedBooks();
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to save all book window states");
+            }
+        }
+
+        /// <summary>
+        /// Drops persisted entries whose book is in no dock, making the saved set DERIVED from what exists
+        /// rather than maintained by removal events. (#624)
+        ///
+        /// <para>
+        /// <b>Deliberately re-walks the docks instead of reusing the set the save loop just built.</b> That
+        /// loop is interleaved with <c>await</c>s — a JS round-trip into CEF per book — so a book being
+        /// dragged between docks can be transiently absent from every dock while it runs. Pruning against
+        /// what that loop happened to see would delete precisely the book the user is moving, which is #623
+        /// again in a new place and far harder to reproduce.
+        /// </para>
+        ///
+        /// <para>
+        /// <b>The re-walk and the removals are synchronous, with no <c>await</c> between them.</b> That is
+        /// what makes this atomic with respect to dock mutations rather than merely likely to be right:
+        /// Dock's moves run on the UI thread, so a walk that never yields cannot observe one half-finished.
+        /// The thread check below is therefore a correctness guard, not defensive habit — off the UI thread
+        /// the whole argument collapses, and skipping is the safe answer.
+        /// </para>
+        /// </summary>
+        private void PruneStateForVanishedBooks()
+        {
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                // Cannot establish the atomicity this depends on. CloseDockable still deletes on close, so
+                // skipping costs nothing but a delayed cleanup.
+                Log.Debug("*** Skipping book-state prune - not on the UI thread ***");
+                return;
+            }
+
+            var stateService = App.ServiceProvider?.GetService<IApplicationStateService>();
+            if (stateService == null) return;
+
+            var live = CollectAllBookDocks()
+                .SelectMany(d => d.VisibleDockables ?? Enumerable.Empty<IDockable>())
+                .OfType<BookDisplayViewModel>()
+                .Select(vm => vm.Id)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToList();
+
+            var vanished = BookStatePrune.Vanished(stateService.Current.BookWindows, live);
+            if (vanished.Count == 0) return;
+
+            foreach (var windowId in vanished)
+            {
+                Log.Information("*** Pruning book state for {WindowId} - no longer in any dock ***", windowId);
+                stateService.RemoveBookWindowStateByWindowId(windowId);
             }
         }
 
