@@ -132,6 +132,9 @@ public partial class BookDisplayView : UserControl
         // #570: wire the find bar's controls. The bar itself stays hidden until Cmd/Ctrl+F.
         SetupFindBar();
 
+        // #618: wire the toolbar's zoom control (step buttons and the percentage box).
+        SetupZoomControl();
+
         // Try to create WebView browser
         TryCreateWebView();
     }
@@ -944,6 +947,85 @@ public partial class BookDisplayView : UserControl
 
     /// <summary>Back to 100% — the shipped stylesheet sizes exactly.</summary>
     public void ResetZoom() => StepZoom(s => s.ResetZoom(_viewModel!.BookScript), "reset");
+
+    /// <summary>
+    /// Set an arbitrary zoom. Public so the toolbar percentage box can drive it. (#618)
+    ///
+    /// Goes through <see cref="StepZoom"/> like the other three rather than calling CEF: the service raises
+    /// ZoomChanged, every view showing this script applies it, and that is what keeps a second tab from
+    /// disagreeing with this one about what it is displaying.
+    /// </summary>
+    public void SetZoom(double zoom) => StepZoom(s => s.SetZoom(_viewModel!.BookScript, zoom), "set");
+
+    // The toolbar percentage box. The step buttons need no state — they call the same ZoomIn/ZoomOut the
+    // keyboard does — but the box has to be put back to the stored value after every commit, so it is held.
+    private TextBox? _zoomEntryBox;
+
+    private void SetupZoomControl()
+    {
+        _zoomEntryBox = this.FindControl<TextBox>("zoomEntryBox");
+        if (_zoomEntryBox != null)
+        {
+            _zoomEntryBox.KeyDown += OnZoomEntryKeyDown;
+            // Committing on focus loss costs nothing: SetZoom no-ops when the value is unchanged, which is
+            // what leaving the box untouched produces.
+            _zoomEntryBox.LostFocus += (_, _) => CommitZoomEntry();
+            // Select on focus so typing replaces the percentage instead of appending to it. Posted, not
+            // immediate: on a pointer-initiated focus the TextBox positions the caret from the click AFTER
+            // raising GotFocus, which would undo a selection made here and leave typing inserting into
+            // "100%" — the very thing this exists to prevent. (fable review)
+            _zoomEntryBox.GotFocus += (_, _) => Dispatcher.UIThread.Post(() => _zoomEntryBox?.SelectAll());
+        }
+
+        var zoomOut = this.FindControl<Button>("zoomOutButton");
+        var zoomIn = this.FindControl<Button>("zoomInButton");
+        if (zoomOut != null) zoomOut.Click += (_, _) => ZoomOut();
+        if (zoomIn != null) zoomIn.Click += (_, _) => ZoomIn();
+    }
+
+    private void OnZoomEntryKeyDown(object? sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Enter:
+                CommitZoomEntry();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                // Abandon the edit. Handled so it stays in the box rather than reaching the find bar's
+                // close-on-Escape.
+                RevertZoomEntryText();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Applies what is in the box, then puts the box back to what is actually stored.
+    ///
+    /// The second half is not redundant. A rejected entry must not sit there looking applied, and an
+    /// accepted one has been clamped and rounded on the way through the service — so the box showing "500"
+    /// while the book renders at 300% would be the control lying about the state it exists to report.
+    /// </summary>
+    private void CommitZoomEntry()
+    {
+        if (_isShutDown || _zoomEntryBox == null) return;
+
+        if (BookZoomReadout.TryParseEntry(_zoomEntryBox.Text, out var zoom))
+            SetZoom(zoom);
+
+        RevertZoomEntryText();
+    }
+
+    private void RevertZoomEntryText()
+    {
+        // StepZoom is synchronous on the UI thread, so by now the service holds the new value and the VM
+        // reads it straight through; the binding's own update arrives later and sets the same text.
+        // SetCurrentValue rather than the CLR setter: the box's Text carries a binding to ZoomDisplay, and
+        // this must not displace it — the binding is how a change made in another tab reaches this box.
+        if (_zoomEntryBox != null && _viewModel != null)
+            _zoomEntryBox.SetCurrentValue(TextBox.TextProperty, _viewModel.ZoomDisplay);
+    }
 
     private void StepZoom(Func<IBookZoomService, double> step, string what)
     {
