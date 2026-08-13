@@ -14,9 +14,10 @@ This repository contains multiple branches representing different stages of CST 
 - **`cst_4_2`**: CST 4.2 development branch featuring Lucene.NET 4.8 upgrade work (never released, but provided the foundation for the current search system)
 - **`cst_4_1`**: CST 4.1 — the released Windows version (tagged `v4.1.0.3-2022-04-05`), .NET Framework with WinForms
 - **`cst_4_0`**: CST 4.0 — previous stable Windows release (tagged `v4.0.0.15-2020-05-07`), also .NET Framework and WinForms
-- **`cst_avalonia`**: previous name for the current main branch (now obsolete)
 
-The legacy CST4 branches were Windows-only applications requiring Visual Studio 2022, WiX Toolset v3 for installer creation, and the separate tipitaka-xml repository for text data.
+The legacy CST4 branches were Windows-only applications requiring Visual Studio 2022, WiX Toolset v3 for installer creation, and the separate tipitaka-xml repository for text data. Their sources are no longer on `main`; see [Legacy CST4 Development](#legacy-cst4-development) for how to read them.
+
+One further branch, `experimental/cef-controlrecycling-workarounds`, is a 2025 spike rather than a stage of development. It is contained in `main`'s history and needs no attention.
 
 ## Features
 
@@ -63,7 +64,7 @@ An optional loopback HTTP API and **MCP server** let an AI assistant search the 
 ### Technical Architecture
 - **Stack**: .NET 10, Avalonia UI 11.3, ReactiveUI, Dock.Avalonia, dependency injection
 - **WebView Rendering**: WebViewControl-Avalonia (CEF) for book content and search highlighting
-- **Testing**: 1,000+ tests covering unit, integration, and performance scenarios
+- **Testing**: 1,400+ tests covering unit, integration, and performance scenarios
 - **Logging**: structured Serilog logging across all components
 
 ## Known Gaps
@@ -129,8 +130,16 @@ src/CST.Core/              # Book catalog, source-PDF mappings, shared contracts
 src/CST.Lucene/            # Search engine library
 src/CST.Lexicon/           # Dictionary asset format
 src/CST.Lemma/             # Lemma / morphology support
+src/CST.ScriptValidation/  # Round-trip validation harness for the 14 script converters
+src/CST.CharacterAnalysis/ # Finds characters in the corpus outside the standard Pāli set
 docs/                      # Architecture, features, research, release process
 ```
+
+The last two are standalone command-line tools, run by hand rather than referenced by the app.
+`CST.ScriptValidation` converts Devanagari → IPE → target script → IPE and requires the two IPE forms to
+match, which is the evidence behind the round-trip claim above; it has its own
+[README](src/CST.ScriptValidation/README.md). `CST.CharacterAnalysis` scans the XML for characters outside
+the expected Pāli inventory.
 
 The legacy CST4 sources are no longer in the working tree — see [Legacy CST4 Development](#legacy-cst4-development).
 
@@ -168,8 +177,8 @@ CST4 documentation stays in the tree — [docs/reference/cst4/](docs/reference/c
 [parity checklist](docs/testing/CST4_PARITY_CHECKLIST.md), and the feature specs that cite CST4 behaviour. The
 `src/Cst4/...` paths they reference resolve through the tags above.
 
-Branch history: **CST 4.1** (released) `cst_4_1`, **CST 4.2** (unreleased) `cst_4_2`, **CST 4.0** `cst_4_0`.
-Building CST4 requires Visual Studio 2022 and WiX Toolset v3; see individual branch READMEs.
+The branches those tags sit on are listed under [Branch Overview](#branch-overview); `cst4-final` is the tip of
+`cst_4_1`. Building CST4 needs Visual Studio 2022 and WiX Toolset v3 — see the README on the branch itself.
 
 ## Documentation & Roadmap
 
