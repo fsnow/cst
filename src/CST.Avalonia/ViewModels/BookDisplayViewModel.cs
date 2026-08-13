@@ -43,6 +43,9 @@ namespace CST.Avalonia.ViewModels
         // service locator (this VM is constructed directly, not via DI); handler unsubscribed in Dispose.
         private readonly IScriptService? _scriptService;
         private Action<Script>? _globalScriptChangedHandler;
+        // #618: the toolbar zoom control's state. Resolved from the service locator like _scriptService
+        // above, and disposed in Dispose — it holds a subscription on the singleton zoom service.
+        private readonly BookZoomReadout? _zoomReadout;
         private readonly Book _book;
         private readonly List<string>? _searchTerms;
         private readonly List<TermPosition>? _searchPositions;  // NEW: Store positions with IsFirstTerm flags
@@ -320,6 +323,28 @@ namespace CST.Avalonia.ViewModels
                     Dispatcher.UIThread.Post(() => BookScript = newScript);
                 _scriptService.ScriptChanged += _globalScriptChangedHandler;
             }
+
+            // #618: the toolbar zoom readout. Subscribing here rather than reusing the View's subscription
+            // because the toolbar is data-bound XAML whose DataContext is this VM, and a change made in
+            // ANOTHER tab of the same script has to update this one's readout too.
+            var zoomService = App.ServiceProvider?.GetService<IBookZoomService>();
+            if (zoomService != null)
+            {
+                _zoomReadout = new BookZoomReadout(
+                    zoomService,
+                    () => BookScript,
+                    // The service raises on whichever thread made the change — a keystroke is already on the
+                    // UI thread, but the Settings dialog and a future agent call need not be.
+                    () => Dispatcher.UIThread.Post(RaiseZoomReadoutChanged));
+            }
+
+            // A book can change script at runtime, and the readout must follow it to the NEW script's zoom.
+            // Separate from the reload subscription above so a failure there cannot leave the readout
+            // describing the script the book is no longer showing.
+            this.WhenAnyValue(x => x.BookScript)
+                .Skip(1)
+                .Subscribe(_ => _zoomReadout?.ScriptChanged())
+                .DisposeWith(_disposables);
 
             this.WhenAnyValue(x => x.SelectedChapter)
                 .Where(chapter => chapter != null && !_isInitializing)
@@ -659,6 +684,30 @@ namespace CST.Avalonia.ViewModels
         // Font properties for tab title, chapter dropdown, and status bar
         public string CurrentScriptFontFamily => _fontService?.GetScriptFontFamily(BookScript) ?? "Helvetica";
         public int CurrentScriptFontSize => _fontService?.GetScriptFontSize(BookScript) ?? 12;
+
+        #region Book text zoom readout (#618)
+
+        // The state itself lives in BookZoomReadout, where it can be tested without a Book or a browser.
+        // These are the bindable face of it.
+
+        /// <summary>"125%" — the entry box's text when it is not being typed into.</summary>
+        public string ZoomDisplay => _zoomReadout?.Display ?? "100%";
+
+        public bool CanZoomIn => _zoomReadout?.CanZoomIn ?? true;
+        public bool CanZoomOut => _zoomReadout?.CanZoomOut ?? true;
+
+        /// <summary>
+        /// Re-reads everything the zoom control shows. Raised for a zoom change in THIS book's script
+        /// (including one made in another tab) and when the book's own script changes.
+        /// </summary>
+        private void RaiseZoomReadoutChanged()
+        {
+            this.RaisePropertyChanged(nameof(ZoomDisplay));
+            this.RaisePropertyChanged(nameof(CanZoomIn));
+            this.RaisePropertyChanged(nameof(CanZoomOut));
+        }
+
+        #endregion
 
         private string GetBookDisplayName(Book book)
         {
@@ -2066,6 +2115,9 @@ namespace CST.Avalonia.ViewModels
 
             if (_scriptService != null && _globalScriptChangedHandler != null)
                 _scriptService.ScriptChanged -= _globalScriptChangedHandler;
+
+            // Releases the ZoomChanged subscription on the singleton zoom service (#618).
+            _zoomReadout?.Dispose();
 
             _disposables.Dispose();
         }

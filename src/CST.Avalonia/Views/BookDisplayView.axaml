@@ -175,6 +175,45 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- #618: book text zoom — Chrome's PDF-viewer control: step down, the value, step up.
+                     No reset button; typing 100 is the reset, and Cmd/Ctrl+0 remains the keyboard route.
+
+                     The value box is the only surface that can ARRIVE at a percentage instead of walking
+                     to it, and the only thing anywhere in the reader that says a book is zoomed at all —
+                     before this the sole disclosure was a line in the Settings dialog, so a book zoomed
+                     weeks ago just looked wrong.
+
+                     Zoom is stored per SCRIPT, so a change here moves every open book in that script. That
+                     is not new with this control — it is how Cmd/Ctrl +/- has always behaved — so it is
+                     stated in the value box's own tooltip rather than spent on toolbar width. It goes on
+                     the BOX, not on this panel: a tip on the group would be shadowed by every child's own
+                     tip, leaving it reachable only in the few pixels between the controls. (fable review) -->
+                <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
+                    <Button x:Name="zoomOutButton"
+                            IsEnabled="{Binding CanZoomOut}"
+                            Margin="2" Padding="8,2" MinWidth="0"
+                            ToolTip.Tip="Zoom out">
+                        <TextBlock Text="&#x2212;"/>
+                    </Button>
+                    <!-- Fixed width: the box holds "50%" through "300%", and letting it size to content
+                         would reflow the WrapPanel on every step. -->
+                    <TextBox x:Name="zoomEntryBox"
+                             Text="{Binding ZoomDisplay, Mode=OneWay}"
+                             Width="58"
+                             MinHeight="26"
+                             Padding="4,2"
+                             Margin="2"
+                             VerticalContentAlignment="Center"
+                             TextAlignment="Center"
+                             ToolTip.Tip="Book text zoom, stored per script — it applies to every open book in this script. Type a percentage, e.g. 115. Enter to apply, Escape to cancel."/>
+                    <Button x:Name="zoomInButton"
+                            IsEnabled="{Binding CanZoomIn}"
+                            Margin="2" Padding="8,2" MinWidth="0"
+                            ToolTip.Tip="Zoom in">
+                        <TextBlock Text="+"/>
+                    </Button>
+                </StackPanel>
+
             </WrapPanel>
         </DockPanel>
 

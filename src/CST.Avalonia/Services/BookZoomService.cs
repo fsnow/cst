@@ -96,9 +96,16 @@ public class BookZoomService : IBookZoomService
     public static double MaxZoom => Ladder[^1];
     public const double DefaultZoom = 1.0;
 
-    // Two ladder rungs can sit 0.05 apart, so the tolerance for "already on this rung" has to be well below
-    // that. Also absorbs the float error from a JSON round-trip of 0.67.
-    private const double Epsilon = 0.001;
+    /// <summary>
+    /// The tolerance for "already at this zoom". Two ladder rungs can sit 0.05 apart, so it has to be well
+    /// below that; it also absorbs the float error from a JSON round-trip of 0.67.
+    ///
+    /// Public because anything deciding whether a zoom command would DO something has to use the same
+    /// number this type uses to decide whether to act. A caller with a tighter tolerance concludes a step
+    /// is available, this type concludes it changes nothing and returns early, and the caller is left
+    /// offering a control that does nothing when pressed. (fable review)
+    /// </summary>
+    public const double Epsilon = 0.001;
 
     private readonly ISettingsService _settingsService;
     private readonly ILogger _logger;
