@@ -117,6 +117,97 @@ public class BookZoomServiceTests
         Assert.True(svc.ZoomOut(Script.Latin) < 1.13);
     }
 
+    // ---- Arbitrary zoom, for a percentage control -------------------------------------------------
+
+    [Fact]
+    public void SetZoom_StoresAValueBetweenRungsRatherThanSnappingIt()
+    {
+        // The whole point of a percentage field: arriving at a value the ladder does not contain. Snapping
+        // on entry would make the control silently disagree with what the user typed.
+        var (svc, _) = Create();
+
+        Assert.Equal(1.15, svc.SetZoom(Script.Latin, 1.15), precision: 3);
+        Assert.Equal(1.15, svc.GetZoom(Script.Latin), precision: 3);
+    }
+
+    [Theory]
+    [InlineData(0.97, 1.00)]    // Chrome's PDF viewer, exactly: 97% + lands on 100%...
+    [InlineData(1.00, 1.10)]    // ...and thereafter follows the sequence
+    [InlineData(1.13, 1.25)]
+    [InlineData(1.26, 1.50)]
+    public void FromAnyValue_ZoomIn_LandsOnTheNextDefinedPercentage(double from, double expected)
+    {
+        // The behaviour that lets a typed value and the keyboard coexist: after landing anywhere, + goes to
+        // the next DEFINED percentage rather than adding a fixed increment. Previously only asserted as a
+        // direction, so the destination itself was unpinned - and a percentage control is what finally makes
+        // off-rung starting values reachable by ordinary use rather than by hand-editing settings.
+        var (svc, _) = Create();
+        svc.SetZoom(Script.Latin, from);
+
+        Assert.Equal(expected, svc.ZoomIn(Script.Latin), precision: 3);
+    }
+
+    [Theory]
+    [InlineData(1.03, 1.00)]
+    [InlineData(1.00, 0.90)]
+    [InlineData(1.13, 1.10)]
+    public void FromAnyValue_ZoomOut_LandsOnThePreviousDefinedPercentage(double from, double expected)
+    {
+        var (svc, _) = Create();
+        svc.SetZoom(Script.Latin, from);
+
+        Assert.Equal(expected, svc.ZoomOut(Script.Latin), precision: 3);
+    }
+
+    [Theory]
+    [InlineData(9.0)]
+    [InlineData(0.01)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void SetZoom_ClampsWhatAControlCouldSend(double requested)
+    {
+        // A percentage field is free text: someone will type 900, or 0, or paste something that parses to
+        // NaN. The stored value has to stay inside the range the renderer can honour whatever arrives.
+        var (svc, _) = Create();
+
+        var stored = svc.SetZoom(Script.Latin, requested);
+
+        Assert.InRange(stored, BookZoomService.MinZoom, BookZoomService.MaxZoom);
+        Assert.InRange(svc.GetZoom(Script.Latin), BookZoomService.MinZoom, BookZoomService.MaxZoom);
+    }
+
+    [Fact]
+    public void SetZoom_NotifiesThatScriptOnly_SoEveryOpenBookInItRefreshes()
+    {
+        // A change made in one book applies to every open book of the same script - Frank's call, and the
+        // mechanism the keyboard path already relies on. A typed value must take the same route.
+        var (svc, _) = Create();
+        var seen = new List<(Script Script, double Zoom)>();
+        svc.ZoomChanged += (_, e) => seen.Add((e.Script, e.Zoom));
+
+        svc.SetZoom(Script.Devanagari, 1.15);
+
+        var raised = Assert.Single(seen);
+        Assert.Equal(Script.Devanagari, raised.Script);
+        Assert.Equal(1.15, raised.Zoom, precision: 3);
+        Assert.Equal(1.0, svc.GetZoom(Script.Latin), precision: 3);
+    }
+
+    [Fact]
+    public void SetZoom_ToTheValueAlreadyStored_DoesNothing()
+    {
+        // A control that re-sends its current value on focus loss must not wake every open book or schedule
+        // a save. ResetZoom is the deliberate exception, and stays one.
+        var (svc, _) = Create();
+        svc.SetZoom(Script.Latin, 1.15);
+
+        var raised = 0;
+        svc.ZoomChanged += (_, _) => raised++;
+        svc.SetZoom(Script.Latin, 1.15);
+
+        Assert.Equal(0, raised);
+    }
+
     [Fact]
     public void ResetZoom_ReturnsToOne_FromEitherDirection()
     {
