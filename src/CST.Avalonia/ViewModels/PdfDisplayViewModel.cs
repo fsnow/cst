@@ -216,8 +216,22 @@ namespace CST.Avalonia.ViewModels
         // Build the browser URL for a local PDF at a given page: a properly-escaped file:// URI plus the
         // PDFium #page=N fragment. Uri.AbsoluteUri escapes spaces / '#' and emits file:///C:/... on Windows;
         // the old $"file://{path}#page=N" produced malformed, unescaped URLs. (NET-5)
+        //
+        // navpanes=0 collapses the thumbnail sidebar (#630). It is not cosmetic sugar on top of page=: it is
+        // the only lever available, because Chromium renders a PDF in an internal plugin frame that
+        // ExecuteScript cannot reach (#518, measured), so there is no scripting route to the viewer's UI.
+        //
+        // It also changes the DEFAULT rather than just the initial state. Chromium's parser reads:
+        //
+        //     if (navpanes === null && toolbar === null) return !sidenavCollapsed;
+        //     return navpanes === '1';
+        //
+        // so with no parameter the sidebar follows viewer state this app never set, and an explicit
+        // navpanes short-circuits that and answers the same way every time. The toolbar survives, since
+        // shouldShowToolbar is `navpanes === '1' || toolbar !== '0'` and we pass no toolbar parameter — and
+        // the reader can still open the sidebar by hand; this only decides where it starts.
         internal static string BuildPdfUrl(string localPath, int page)
-            => new Uri(localPath).AbsoluteUri + $"#page={page}";
+            => new Uri(localPath).AbsoluteUri + $"#page={page}&navpanes=0";
 
         private static string GetSourceTypeName(Sources.SourceType sourceType)
         {
