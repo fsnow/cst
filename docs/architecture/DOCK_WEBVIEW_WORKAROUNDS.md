@@ -71,9 +71,35 @@ candidate to *replace* (not re-add) in the overhaul.
 | `RemoveToolFromLayout` finds owning floating window + closes it when empty; `IsLayoutEmpty` recursion | LayoutViewModel ~301–367, 475–501 | Need to find which window owns a now-empty dock and close it. (This is what removes `LeftToolDock` → panel-restore no-op bug.) |
 | Unfloat cleans up **only the source** floating window, NOT all ("DO NOT check all — was causing other floating windows to disappear") | CstDockFactory ~1508–1528 | Global empty-check closed windows whose document refs were transiently null. |
 | Float wrapped in try-catch; on failure re-add to main dock | CstDockFactory ~1245–1285 | Partial float (removed from source, window-create failed) would orphan the document. |
-| Remove book-window **state before** removing the dockable; capture source window **before** removal | CstDockFactory ~1330–1332, 1455–1466 | Removal fires collection-changed handlers; ordering avoids double-cleanup / lost references. |
+| ~~Remove book-window **state before** removing the dockable~~ — **REVERSED, see below.** Capture source window **before** removal still applies | CstDockFactory (state: `CloseDockable`; window capture ~1455–1466) | Capturing the source window before removal still avoids lost references. The state half was wrong and caused #623. |
 | `CreateWindowFrom` try-catch → basic `CreateCstHostWindow` fallback | CstDockFactory ~1769–1801 | Host-window customization can fail; a basic window beats a crash. |
 | Deferred empty floating-window auto-close via collection-changed handler | CstDockFactory ~1848–1854 | Can't close a window synchronously during collection modification. |
+
+### E.1 Book-window state is deleted in exactly ONE place (#623)
+
+**`CloseDockable` is the only place that may delete a `BookWindowState`, and it must do so AFTER
+`base.CloseDockable` and only if the dockable actually left.** Do not add state cleanup to a
+collection-changed handler, to `RemoveDockable`, or to any other removal path, however reasonable it looks
+there.
+
+The reason is a property of Dock rather than of this app: **a move and a close are the same removal.**
+Floating a book, or dragging it to another split, calls `RemoveDockable` and raises collection-changed on the
+source dock — indistinguishable from closing it. Cleanup wired to those events therefore destroys the saved
+state of a book the user merely moved, and the book silently fails to reopen on the next launch. That was
+#623, and it had accumulated across **four** call sites, three of them wrong.
+
+`CloseDockable` is reached by every genuine close: the tab close button, ⌘W in the main window and in a
+floating window, `CloseBook(id)`, Close Others/All, and closing a floating window that still holds books
+(which closes its tabs individually first). The only Dock path that bypasses it, `HideDockable`, is
+unreachable here — `HideDocumentsOnClose` / `HideToolsOnClose` are never set.
+
+The ordering matters too: `base.CloseDockable` can **decline** (`CanClose` false, `CanCloseLastDockable`, a
+closing-event veto). Deleting first left an open book with no state, and since this is now the only deletion
+site, nothing would heal it.
+
+**Companion rule:** `SaveAllBookWindowStatesAsync` must walk **every** document dock — main-window splits and
+every floating window — not `FindDocumentDock()`, which returns only the first one it finds in the main tree.
+With a main-only walk, a moved book's entry survives but never updates, so it reopens at a stale position.
 
 ## F. Async / render timing
 
