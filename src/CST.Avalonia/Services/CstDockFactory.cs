@@ -136,12 +136,15 @@ namespace CST.Avalonia.Services
                         {
                             Log.Information("*** REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
 
-                            // Clean up application state when documents are removed
-                            if (item is BookDisplayViewModel removedBookViewModel)
-                            {
-                                Log.Debug("*** Document removed from UI - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
-                                RemoveBookWindowState(removedBookViewModel.Id);
-                            }
+                            // NO STATE CLEANUP HERE, deliberately. A removal from this collection does not mean
+                            // the book was closed: floating it, or dragging it to another split, removes it from
+                            // this dock and adds it to another. Dock reuses the same removal for both, so this
+                            // event cannot tell them apart — and deleting the saved state on a MOVE is why a
+                            // floated or re-split book never came back on the next launch.
+                            //
+                            // CloseDockable is the only place that knows a close is a close, and it is reached
+                            // by every genuine close path: the tab button, Cmd+W in either window kind,
+                            // CloseBook(id), and closing a floating window that still holds books. (#623)
                         }
                     }
                     if (e.NewItems != null)
@@ -593,26 +596,61 @@ namespace CST.Avalonia.Services
             _logger.Debug("PDF document created: {DocumentId} with title: {Title}", pdfViewModel.Id, pdfViewModel.Title);
         }
 
+        /// <summary>
+        /// Every document dock that can hold a book, in the order the persisted tab order depends on: the
+        /// main window's docks in tree-traversal order, then each floating window's, in HostWindows order.
+        ///
+        /// <para>
+        /// The walk used to be <see cref="FindDocumentDock"/>, which returns the FIRST document dock in the
+        /// main tree and nothing else — so a book that had been floated or dragged into a second split was
+        /// never re-saved. Its entry survived (once the move-path deletes were removed) but froze at whatever
+        /// was true when it left the original dock, which would have reopened it at a stale reading position
+        /// and left its tab index permanently at zero. (#623)
+        /// </para>
+        /// </summary>
+        internal List<DocumentDock> CollectAllBookDocks()
+        {
+            var docks = FindAllDocumentDocksInLayout(_context as IDock);
+            foreach (var layout in GetFloatingLayouts())
+                docks.AddRange(FindAllDocumentDocksInLayout(layout));
+            return docks;
+        }
+
         public async Task SaveAllBookWindowStatesAsync()
         {
             try
             {
-                var documentDock = FindDocumentDock();
-                if (documentDock?.VisibleDockables == null) return;
+                var docks = CollectAllBookDocks();
+                if (docks.Count == 0) return;
 
-                var activeDocument = documentDock.ActiveDockable;
-                Log.Debug("*** Saving all book states - Active document: {ActiveId} ***", activeDocument?.Id ?? "none");
+                // Exactly ONE book may carry IsSelected: restore flattens every book into the main dock and
+                // takes the LAST entry flagged true, so two of them would make the restored selection depend
+                // on list order. The main dock's active document is the rule — it is the tab the user was
+                // looking at in the window they were working in. (#623)
+                var mainActive = FindDocumentDock()?.ActiveDockable;
+                Log.Debug("*** Saving all book states across {DockCount} dock(s) - Active document: {ActiveId} ***",
+                    docks.Count, mainActive?.Id ?? "none");
 
-                // Snapshot before iterating: there is an await inside the loop, and a concurrent dock
-                // drag/cleanup can modify VisibleDockables during it, throwing "Collection was modified".
-                foreach (var dockable in documentDock.VisibleDockables.ToList())
+                // One flat counter across the whole walk. Per-dock indices plus a dock ordinal would buy
+                // nothing while restore flattens everything, and when layout restoration does arrive it will
+                // need dock IDENTITY rather than an ordinal — so half-building it now would be wasted.
+                var tabIndex = 0;
+
+                foreach (var dock in docks)
                 {
-                    if (dockable is BookDisplayViewModel bookDisplayViewModel &&
-                        bookDisplayViewModel.Book != null)
+                    if (dock.VisibleDockables == null) continue;
+
+                    // Snapshot before iterating: there is an await inside the loop, and a concurrent dock
+                    // drag/cleanup can modify VisibleDockables during it, throwing "Collection was modified".
+                    foreach (var dockable in dock.VisibleDockables.ToList())
                     {
+                        if (dockable is not BookDisplayViewModel bookDisplayViewModel ||
+                            bookDisplayViewModel.Book == null)
+                            continue;
+
                         // The snapshot can contain books closed since we started; don't touch their
                         // (possibly disposed) WebView state. (DOCK-3)
-                        if (!documentDock.VisibleDockables.Contains(dockable))
+                        if (!dock.VisibleDockables.Contains(dockable))
                         {
                             Log.Debug("*** Skipping state save for {BookFileName} - closed before capture ***",
                                 bookDisplayViewModel.Book.FileName);
@@ -626,18 +664,21 @@ namespace CST.Avalonia.Services
                         // already run for that book, and saving now would re-ADD the removed state
                         // (UpdateBookWindowState is add-if-missing) — a ghost tab on next launch.
                         // Re-check against the LIVE collection, not the snapshot. (DOCK-3)
-                        if (!documentDock.VisibleDockables.Contains(dockable))
+                        //
+                        // Still required after #622, and arguably more so: CloseDockable is now the only
+                        // thing that deletes book state, so a re-add here would never be corrected.
+                        if (!dock.VisibleDockables.Contains(dockable))
                         {
                             Log.Debug("*** Skipping state save for {BookFileName} - closed during save loop ***",
                                 bookDisplayViewModel.Book.FileName);
                             continue;
                         }
 
-                        // Only the active document gets IsSelected = true
-                        var isSelected = dockable == activeDocument;
-                        SaveBookWindowState(bookDisplayViewModel.Book, bookDisplayViewModel, isSelected);
-                        Log.Debug("*** Saved state for {BookFileName} - IsSelected: {IsSelected} ***",
-                            bookDisplayViewModel.Book.FileName, isSelected);
+                        var isSelected = ReferenceEquals(dockable, mainActive);
+                        SaveBookWindowState(bookDisplayViewModel.Book, bookDisplayViewModel, isSelected, tabIndex);
+                        Log.Debug("*** Saved state for {BookFileName} - Tab: {TabIndex}, IsSelected: {IsSelected} ***",
+                            bookDisplayViewModel.Book.FileName, tabIndex, isSelected);
+                        tabIndex++;
                     }
                 }
             }
@@ -647,7 +688,14 @@ namespace CST.Avalonia.Services
             }
         }
 
-        private void SaveBookWindowState(CST.Book book, BookDisplayViewModel bookDisplayViewModel, bool? isSelected = null)
+        /// <param name="tabIndex">
+        /// Position in the flat walk order, or null to derive it from the book's OWN owner dock. Null is for
+        /// callers outside <see cref="SaveAllBookWindowStatesAsync"/>, which have no walk to count against —
+        /// deriving it from <see cref="FindDocumentDock"/> instead would give every floated book the index it
+        /// would have had in the main dock, which is nonsense. (#623)
+        /// </param>
+        private void SaveBookWindowState(CST.Book book, BookDisplayViewModel bookDisplayViewModel,
+            bool? isSelected = null, int? tabIndex = null)
         {
             try
             {
@@ -672,6 +720,15 @@ namespace CST.Avalonia.Services
                 // Use provided isSelected value or determine it dynamically
                 var isSelectedValue = isSelected ?? (bookDisplayViewModel == FindDocumentDock()?.ActiveDockable);
 
+                // From the book's OWN dock, not the main one — a book opened straight into a floating window
+                // or a second split still gets a meaningful position among its siblings. Only relative order
+                // survives to restore, so a raw IndexOf is enough; Welcome and PDF tabs occupying slots is
+                // harmless for the same reason. (#623)
+                var tabIndexValue = tabIndex
+                    ?? (bookDisplayViewModel.Owner as IDock)?.VisibleDockables?.IndexOf(bookDisplayViewModel)
+                    ?? 0;
+                if (tabIndexValue < 0) tabIndexValue = 0;
+
                 // Get the cached scroll position anchor for restoration on next startup
                 // The anchor is updated every 200ms by the scroll timer and persists in the ViewModel
                 string? currentAnchor = bookDisplayViewModel.LastCapturedAnchor;
@@ -692,7 +749,7 @@ namespace CST.Avalonia.Services
                     ReadingPosition = bookDisplayViewModel.LastPositionToken, // #434 exact reading position (preferred)
                     CurrentHitIndex = bookDisplayViewModel.CurrentHitIndex, // Save which search hit was active
                     TotalHits = bookDisplayViewModel.TotalHits,
-                    TabIndex = 0, // TODO: Get actual tab index from dock
+                    TabIndex = tabIndexValue,
                     IsSelected = isSelectedValue,
                     ShowFootnotes = bookDisplayViewModel.ShowFootnotes,
                     ShowSearchTerms = bookDisplayViewModel.ShowSearchTerms
@@ -1579,14 +1636,22 @@ namespace CST.Avalonia.Services
 
             if (dockable != null)
             {
-                // Remove from application state if it's a BookDisplayViewModel
-                if (dockable is BookDisplayViewModel)
+                base.CloseDockable(dockable);
+
+                // AFTER the base call, and only if the dockable actually left. base.CloseDockable can DECLINE
+                // (CanClose false, CanCloseLastDockable, a closing-event veto), and deleting first meant a
+                // declined close left an open book with no saved state — invisible until it failed to reappear
+                // next launch. This is now the ONLY place book state is deleted, so nothing else would heal it.
+                // Same tripwire idiom as CloseBook(id). (#623)
+                if (dockable is BookDisplayViewModel && FindDockable(dockable.Id) == null)
                 {
                     RemoveBookWindowState(dockable.Id);
                     Log.Debug("*** Removed book window state for {DockableId} ***", dockable.Id);
                 }
-
-                base.CloseDockable(dockable);
+                else if (dockable is BookDisplayViewModel)
+                {
+                    Log.Debug("*** Close declined for {DockableId} - book window state kept ***", dockable.Id);
+                }
 
                 // Tab permanently closed: release the VM's subscriptions and drop its GoTo id so
                 // neither leaks for the rest of the session. (Safe here — CloseDockable is the real
@@ -1812,13 +1877,10 @@ namespace CST.Avalonia.Services
             Log.Debug("*** RemoveDockable called - Dockable: {DockableId}, Collapse: {Collapse} ***", dockable?.Id, collapse);
             if (dockable != null)
             {
-                // Remove from application state if it's a BookDisplayViewModel
-                if (dockable is BookDisplayViewModel)
-                {
-                    RemoveBookWindowState(dockable.Id);
-                    Log.Debug("*** Removed book window state for {DockableId} ***", dockable.Id);
-                }
-
+                // NO STATE CLEANUP HERE. This is Dock's generic removal and it is what runs during a REPARENT:
+                // SplitToWindow calls RemoveDockable before re-adding to the new window, and a cross-dock
+                // MoveDockable does the same. Deleting the saved state here meant every float and every drag
+                // between splits destroyed it. A real close arrives via CloseDockable instead. (#623)
                 base.RemoveDockable(dockable, collapse);
             }
             else
@@ -1937,12 +1999,10 @@ namespace CST.Avalonia.Services
                             {
                                 Log.Debug("*** FLOATING WINDOW REMOVED ITEM: {ItemType} {ItemId} ***", item?.GetType().Name, (item as IDockable)?.Id);
 
-                                // Clean up application state when documents are removed from floating windows
-                                if (item is BookDisplayViewModel removedBookViewModel)
-                                {
-                                    Log.Debug("*** Document removed from floating window - cleaning up application state: {DocumentId} ***", removedBookViewModel.Id);
-                                    RemoveBookWindowState(removedBookViewModel.Id);
-                                }
+                                // NO STATE CLEANUP HERE — same reasoning as the main-dock monitor in
+                                // CreateLayout, and the twin this fix would have missed. Removing it from the
+                                // main monitor alone would have fixed float-OUT while leaving float-BACK and
+                                // float-to-float still deleting the state on the way past. (#623)
                             }
                         }
                         if (e.NewItems != null)

@@ -839,7 +839,9 @@ public partial class App : Application
                 // First pass: open all books (on the UI thread) and note which one should be selected
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    var bookWindowsCopy = bookWindows.ToList();
+                    // Restored in TAB ORDER, not in list order — see BookRestoreOrder for why the distinction
+                    // exists and why the sort has to be a stable one. (#623)
+                    var bookWindowsCopy = BookRestoreOrder.Apply(bookWindows);
                     foreach (var bookWindowState in bookWindowsCopy)
                     {
                         try
