@@ -2,6 +2,43 @@
 
 This document details the localization mechanism used in the CST4 WinForms application, which allows for dynamic, runtime language switching.
 
+> **Where these files are now.** The CST4 sources were removed from `main` in August 2026 (#611). Everything
+> described below is preserved and reachable, but not in the working tree — see
+> [Legacy CST4 Development](../../../README.md#legacy-cst4-development). **Section 4's Visual Studio
+> walkthrough requires a checkout first**; the rest of this document is read-only reference and needs nothing.
+
+## 0. What is preserved, and how much of it is reusable
+
+Verified against the `cst4-final` tag: **254 `.resx` files across 24 locales** — `bn cs de es fa fi fr gu hi
+id it mi-NZ ml no pa pl pt ru sv ta te th zh-CHS zh-CHT`. That is the source the CST 5 localization work is
+expected to mine, and the count independently confirms the "24 interface languages" figure quoted in the
+top-level README.
+
+They are **two different kinds of resource, and only one of them ports cleanly:**
+
+| | Path | Portability |
+|---|---|---|
+| **General string table** | `src/Cst4/Properties/Resources.<locale>.resx` | Plain key → string. Ports close to as-is. |
+| **Form resources** (14 forms) | `src/Cst4/Form*.<locale>.resx`, `AboutBox`, `SplashScreen` | Designer output. **Extract and remap, do not import.** |
+
+The form files interleave translated strings with control geometry, and their keys are WinForms *control
+names*. A sample: `FormSearch.fr.resx` holds 14 `.Text` entries against 12 `.Size`/`.Location` ones, plus
+`Color1`/`Bitmap1`/`Icon1` boilerplate. So roughly half of each form file is layout that means nothing in
+Avalonia, and the half that matters is keyed to control names (`btnSearch.Text`, `lblSearchFor.Text`) that
+will not match the Avalonia view's. The translations are the valuable part; the keys and the geometry are not.
+
+Two implementation files worth reading before designing the Avalonia equivalent, both preserved alongside:
+`src/Cst4/LanguageCollector.cs` (how CST4 discovers which languages are available) and
+`src/Cst4/FormLanguageSwitch.cs` (the switcher described in section 2).
+
+Extracting needs no checkout:
+
+```bash
+git show cst4-final:src/Cst4/Properties/Resources.fr.resx > Resources.fr.resx
+git archive cst4-final -- src/Cst4/Properties | tar -x     # the whole general string table
+git checkout cst4-final -- src/Cst4                        # only if you need to BUILD it (section 4)
+```
+
 ## 1. Core Technology
 
 The localization system is built entirely on the standard .NET Framework infrastructure for WinForms applications.
