@@ -204,6 +204,98 @@ public class DocumentTargetResolverTests
         Assert.True(new Tool() is Dock.Model.Controls.IDocument);
     }
 
+    // ---- #621: the interaction-history tier ------------------------------------------------------
+    //
+    // Every test above passes no history at all, which is also the "tracker unavailable" production path —
+    // so they double as the guarantee that this tier changed nothing about resolution when focus IS visible.
+
+    [Fact]
+    public void ResolveActiveDocument_FocusInvisible_UsesTheMostRecentDocument()
+    {
+        var (root, _, _, docA1, _, docB1) = BuildSplitLayout();
+
+        // The reported bug, as the app produces it: the user clicked into the second split's browser, so
+        // Avalonia has no focus to offer (preferred is null) and Dock's own record was never written.
+        Assert.Same(docA1, DocumentTargetResolver.ResolveActiveDocument(root));
+        Assert.Same(docB1, DocumentTargetResolver.ResolveActiveDocument(root, null, new[] { (IDockable)docB1 }));
+    }
+
+    [Fact]
+    public void ResolveActiveDocument_LiveFocusBeatsHistory()
+    {
+        var (root, _, _, docA1, _, docB1) = BuildSplitLayout();
+
+        // History describes the recent past; focus describes this instant. Where they disagree, focus has
+        // moved somewhere the history has not caught up with, and the present wins. This is also what
+        // guarantees #443's fix cannot regress.
+        Assert.Same(docA1, DocumentTargetResolver.ResolveActiveDocument(root, docA1, new[] { (IDockable)docB1 }));
+    }
+
+    [Fact]
+    public void ResolveActiveDocument_HistoryBeatsDockFocusAndFirstDock()
+    {
+        var (root, _, _, _, docA2, docB1) = BuildSplitLayout();
+
+        root.FocusedDockable = docA2;
+
+        // Dock's own record is written by the ActiveDockable setter on the NEAREST root, which in this
+        // app is not the root any caller holds — so it is stale-at-best and the history is the better
+        // answer. (The layout here is flat, so this test constructs the disagreement directly.)
+        Assert.Same(docB1, DocumentTargetResolver.ResolveActiveDocument(root, null, new[] { (IDockable)docB1 }));
+    }
+
+    [Fact]
+    public void ResolveActiveDocument_HistoryWalksPastEntriesThisLayoutDoesNotContain()
+    {
+        var (root, _, _, _, _, docB1) = BuildSplitLayout();
+        var (otherRoot, _, _, foreignDoc, _, _) = BuildSplitLayout();
+        Assert.NotNull(otherRoot);
+
+        var tool = new Tool { Id = "SearchTool", Title = "Search" };
+
+        // Three things at once, and all three are why the history is unfiltered at the point of writing:
+        // a tool activation, a document from ANOTHER window's layout, and finally this window's own.
+        // Containment is the only filter, and it rejects the first two without the tracker knowing what a
+        // tool or a window is.
+        var recents = new IDockable[] { tool, foreignDoc, docB1 };
+
+        Assert.Same(docB1, DocumentTargetResolver.ResolveActiveDocument(root, null, recents));
+    }
+
+    [Fact]
+    public void ResolveActiveDocument_HistoryEntryAlreadyClosed_FallsThroughToTheNextOne()
+    {
+        var (root, _, dockB, _, docA2, docB1) = BuildSplitLayout();
+
+        dockB.VisibleDockables!.Remove(docB1);
+        dockB.ActiveDockable = null;
+
+        // A closed tab is evicted at the close, but the history must degrade correctly regardless — a
+        // stale entry names a document that no longer exists, and acting on it would be worse than the
+        // first-dock guess this replaced.
+        Assert.Same(docA2, DocumentTargetResolver.ResolveActiveDocument(root, null, new IDockable[] { docB1, docA2 }));
+    }
+
+    [Fact]
+    public void ResolveActiveDocument_HistoryEntryIsADock_ReturnsItsActiveTab()
+    {
+        var (root, _, dockB, _, _, docB1) = BuildSplitLayout();
+
+        // Feed C walks up from the focused element, so it can land on the pane rather than on a tab.
+        Assert.Same(docB1, DocumentTargetResolver.ResolveActiveDocument(root, null, new IDockable[] { dockB }));
+    }
+
+    [Fact]
+    public void ResolveActiveDocument_NoUsableHistory_StillFallsBackToFirstDock()
+    {
+        var (root, _, _, docA1, _, _) = BuildSplitLayout();
+        var tool = new Tool { Id = "SearchTool", Title = "Search" };
+
+        // A session that has only ever touched tools resolves exactly as it did before #621.
+        Assert.Same(docA1, DocumentTargetResolver.ResolveActiveDocument(root, null, new IDockable[] { tool }));
+        Assert.Same(docA1, DocumentTargetResolver.ResolveActiveDocument(root, null, System.Array.Empty<IDockable>()));
+    }
+
     [Fact]
     public void ResolveActiveDocument_NullLayout_ReturnsNull()
     {

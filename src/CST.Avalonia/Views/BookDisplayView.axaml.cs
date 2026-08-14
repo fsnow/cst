@@ -17,11 +17,12 @@ using WebViewControl;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
 namespace CST.Avalonia.Views;
 
-public partial class BookDisplayView : UserControl
+public partial class BookDisplayView : UserControl, Services.IBrowserDocumentView
 {
     // Shared lock to serialize JavaScript execution across all instances
     private static readonly SemaphoreSlim _jsExecutionLock = new SemaphoreSlim(1, 1);
@@ -219,6 +220,21 @@ public partial class BookDisplayView : UserControl
                 _webView.Navigated += OnNavigationCompleted;
                 _webView.TitleChanged += OnTitleChanged;
 
+                // #621: a click into the book's TEXT is invisible to Avalonia — CEF owns that surface — so
+                // without this the next window-level command would target whichever pane happens to be
+                // first in tree order. Subscribed here rather than once in the constructor because
+                // TryCreateWebView runs again after every float/unfloat dispose-and-recreate, so the
+                // subscription follows the browser's lifecycle for free. Reads _viewModel at event time:
+                // ControlRecycling can rebind this View to a different book.
+                if (_webView is Controls.CstWebView focusReporter)
+                {
+                    // A NAMED handler, not a lambda, so DisposeWebView can take it off again. FindControl
+                    // returns the same CstWebView on every recreate and Dispose does not clear an event's
+                    // handler list, so a lambda stacked one more copy per window change. (fable review)
+                    focusReporter.BrowserGotFocus -= OnBrowserGotFocus;
+                    focusReporter.BrowserGotFocus += OnBrowserGotFocus;
+                }
+
                 // Add diagnostic logging for focus on the WebView itself
                 _webView.GotFocus += (s, e) => _logger.Debug("FOCUS: WebView GotFocus. Source: {Source}", e.Source?.GetType().Name);
                 _webView.LostFocus += (s, e) => _logger.Debug("FOCUS: WebView LostFocus. Source: {Source}", e.Source?.GetType().Name);
@@ -279,6 +295,13 @@ public partial class BookDisplayView : UserControl
         }
     }
 
+    // Reads _viewModel at event time: ControlRecycling can rebind this View to a different book.
+
+    private void OnBrowserGotFocus() =>
+
+        App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Note(_viewModel, "browser-focus:book");
+
+
     private void DisposeWebView()
     {
         if (_webView != null)
@@ -290,6 +313,8 @@ public partial class BookDisplayView : UserControl
                 // Unsubscribe from events
                 _webView.Navigated -= OnNavigationCompleted;
                 _webView.TitleChanged -= OnTitleChanged;
+                if (_webView is Controls.CstWebView focusReporter)
+                    focusReporter.BrowserGotFocus -= OnBrowserGotFocus;   // (fable review)
 
                 // Dispose the WebView to release native resources
                 _webView.Dispose();

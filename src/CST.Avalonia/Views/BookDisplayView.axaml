@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:CST.Avalonia.ViewModels"
              xmlns:wv="using:WebViewControl"
+             xmlns:ctl="using:CST.Avalonia.Controls"
              xmlns:converters="using:CST.Avalonia.Converters"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="CST.Avalonia.Views.BookDisplayView"
@@ -371,7 +372,7 @@
         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
             <Panel>
                 <!-- WebView Browser -->
-                <wv:WebView x:Name="webView" 
+                <ctl:CstWebView x:Name="webView" 
                            IsVisible="{Binding IsWebViewAvailable}"
                            Focusable="True"
                            IsTabStop="True"

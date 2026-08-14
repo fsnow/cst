@@ -1192,6 +1192,10 @@ public partial class App : Application
         // owns book content size, and #574 made zoom the only per-script size control there is.
         services.AddSingleton<IBookZoomService>(sp =>
             new BookZoomService(sp.GetRequiredService<ISettingsService>()));
+        // Which documents the user has recently worked in (#621). A singleton because it is one history
+        // across every window: each window selects its own entries by asking whether its layout contains
+        // them, which is also what keeps tool activations out of the answer.
+        services.AddSingleton<ActiveDocumentTracker>();
         services.AddSingleton<IApplicationStateService, ApplicationStateService>();
         services.AddSingleton<ChapterListsService>();
         // Recently-opened-books (MRU) list backing the File → Open Recent menu (#44).
@@ -2006,7 +2010,8 @@ public partial class App : Application
             return null;
 
         return DocumentTargetResolver.ResolveActiveDocument(
-            hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow)) as BookDisplayViewModel;
+            hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow),
+            ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent) as BookDisplayViewModel;
     }
 
     private void OnCloseTabFromFloatingWindow(Window floatingWindow)
@@ -2016,7 +2021,8 @@ public partial class App : Application
             if (floatingWindow is CstHostWindow hostWindow && hostWindow.Layout != null)
             {
                 SimpleTabbedWindow.CloseDockableIfClosable(DocumentTargetResolver.ResolveActiveDocument(
-                    hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow)));
+                    hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow),
+                    ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent));
             }
         }
         catch (Exception ex)
@@ -2032,7 +2038,8 @@ public partial class App : Application
             if (floatingWindow is CstHostWindow hostWindow && hostWindow.Layout != null)
             {
                 if (DocumentTargetResolver.ResolveActiveDocument(
-                        hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow)) is BookDisplayViewModel bookViewModel)
+                        hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow),
+                        ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent) is BookDisplayViewModel bookViewModel)
                 {
                     Log.Information("View Source ({Edition}) via floating-window menu for book: {BookFile}",
                         source2010 ? "2010" : "1957", bookViewModel.Book.FileName);

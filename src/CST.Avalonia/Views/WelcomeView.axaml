@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:wv="using:WebViewControl"
+             xmlns:ctl="using:CST.Avalonia.Controls"
              xmlns:vm="using:CST.Avalonia.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="CST.Avalonia.Views.WelcomeView"
@@ -30,7 +31,7 @@
             </Border>
 
             <!-- Welcome content -->
-            <wv:WebView Grid.Row="1"
+            <ctl:CstWebView Grid.Row="1"
                         x:Name="WelcomeWebView"
                         Focusable="True"
                         IsTabStop="True" />

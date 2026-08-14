@@ -47,6 +47,30 @@ namespace CST.Avalonia.Services
         public CstDockFactory()
         {
             _logger = Log.ForContext<CstDockFactory>();
+
+            // #621 Feed A: the dock model's own activation signal. Dock raises this from the ActiveDockable
+            // SETTER (via InitActiveDockable), so one subscription here covers every dock in every window —
+            // including docks created later by a split and by floating windows — without per-dock wiring.
+            // It fires for user tab clicks, programmatic opens, layout restore, and the neighbour promotion
+            // inside CloseDockable, which is what makes the next command after a close land in the same pane.
+            //
+            // Everything is recorded, tools included; the tracker's contract is that filtering happens on
+            // read. A new document's Owner may not be set yet at its first activation, so a containment or
+            // type test HERE would silently drop exactly the tab the user just opened.
+            ActiveDockableChanged += (_, e) => DocumentTracker?.Note(e.Dockable, "dock-activation");
+        }
+
+        private ActiveDocumentTracker? _documentTracker;
+
+        /// <summary>
+        /// Interaction history for window-level command targeting (#621). Resolved from the service locator
+        /// rather than injected because this factory is constructed directly, in several places; settable so
+        /// a test can observe the activation feed without an App.
+        /// </summary>
+        internal ActiveDocumentTracker? DocumentTracker
+        {
+            get => _documentTracker ??= App.ServiceProvider?.GetService<ActiveDocumentTracker>();
+            set => _documentTracker = value;
         }
 
         public override RootDock CreateLayout()
@@ -1695,7 +1719,18 @@ namespace CST.Avalonia.Services
                 // declined close left an open book with no saved state — invisible until it failed to reappear
                 // next launch. This is now the ONLY place book state is deleted, so nothing else would heal it.
                 // Same tripwire idiom as CloseBook(id). (#623)
-                if (dockable is BookDisplayViewModel && FindDockable(dockable.Id) == null)
+                // Under the SAME guard, for the same reason. #621's eviction was placed above it, which put
+                // it back on the wrong side of the very rule the comment above states: a DECLINED close
+                // would drop the still-open document from the interaction history, and the next command
+                // resolved with focus in a browser would then pick an older entry or fall through to the
+                // first dock. Narrow in practice today — the reachable close paths pre-check CanClose — but
+                // this is the guard-placement mistake §E.1 exists to prevent, and the next decline path
+                // added would not heal it. (fable review)
+                var actuallyLeft = FindDockable(dockable.Id) == null;
+                if (actuallyLeft)
+                    DocumentTracker?.Forget(dockable);
+
+                if (dockable is BookDisplayViewModel && actuallyLeft)
                 {
                     RemoveBookWindowState(dockable.Id);
                     Log.Debug("*** Removed book window state for {DockableId} ***", dockable.Id);
