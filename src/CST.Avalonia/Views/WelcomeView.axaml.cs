@@ -7,11 +7,12 @@ using Avalonia.Threading;
 using WebViewControl;
 using CST.Avalonia.Input;
 using CST.Avalonia.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
 namespace CST.Avalonia.Views
 {
-    public partial class WelcomeView : UserControl
+    public partial class WelcomeView : UserControl, Services.IBrowserDocumentView
     {
         private WebView? _webView;
         private WelcomeViewModel? _viewModel;
@@ -34,6 +35,14 @@ namespace CST.Avalonia.Views
                 _webView.WebViewInitialized += OnWebViewInitialized;
                 _webView.Navigated += OnNavigated;
                 _webView.TitleChanged += OnShortcutTitleChanged;   // #518
+
+                // #621: Welcome is a document too, and clicking into it is as invisible to Avalonia as
+                // clicking into a book. Recording it matters mainly in the negative — it stops a command
+                // pressed here from acting on a book the user has not touched in a while.
+                if (_webView is Controls.CstWebView focusReporter)
+                    focusReporter.BrowserGotFocus += () =>
+                        App.ServiceProvider?.GetService<Services.ActiveDocumentTracker>()
+                            ?.Note(DataContext as ViewModels.WelcomeViewModel, "browser-focus:welcome");
 
                 // Log WebView state
                 Log.Information("WelcomeView: WebView control found and event handlers attached");

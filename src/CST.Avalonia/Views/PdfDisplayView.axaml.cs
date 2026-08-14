@@ -6,11 +6,12 @@ using ReactiveUI;
 using WebViewControl;
 using CST.Avalonia.Input;
 using CST.Avalonia.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
 namespace CST.Avalonia.Views;
 
-public partial class PdfDisplayView : UserControl
+public partial class PdfDisplayView : UserControl, Services.IBrowserDocumentView
 {
     private readonly ILogger _logger;
     private PdfDisplayViewModel? _viewModel;
@@ -37,6 +38,14 @@ public partial class PdfDisplayView : UserControl
             {
                 _webView.Navigated += OnNavigationCompleted;
                 _webView.TitleChanged += OnShortcutTitleChanged;   // #518
+
+                // #621: the PDF body is the case that motivated this — clicking into it left the keyboard
+                // acting on whatever book was in the first dock. Verified to fire even though Chromium
+                // renders the page in an internal plugin frame, which is where the #518 relay dies.
+                if (_webView is Controls.CstWebView focusReporter)
+                    focusReporter.BrowserGotFocus += () =>
+                        App.ServiceProvider?.GetService<Services.ActiveDocumentTracker>()
+                            ?.Note(DataContext as ViewModels.PdfDisplayViewModel, "browser-focus:pdf");
                 _logger.Debug("PDF WebView control found and events attached");
             }
             else

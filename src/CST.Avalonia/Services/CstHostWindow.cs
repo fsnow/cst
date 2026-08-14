@@ -69,6 +69,12 @@ namespace CST.Avalonia.Services
             // Set up event handlers
             Closing += OnClosing;
             PositionChanged += OnPositionChanged;
+
+            // #621 Feed C, same as the main window: a floating window's commands resolve against its own
+            // layout, so its interactions have to reach the shared history too — otherwise a command here
+            // would fall through to this window's first dock.
+            AddHandler(GotFocusEvent, (_, e) => DocumentFocusReporter.NoteFocus(e.Source),
+                global::Avalonia.Interactivity.RoutingStrategies.Bubble);
         }
 
         private void OnPositionChanged(object? sender, PixelPointEventArgs e)

@@ -66,6 +66,12 @@ public partial class SimpleTabbedWindow : Window
         // #28: and Settings has no entry point off macOS until we add one.
         AddSettingsMenuItemOffMacOS();
 
+        // #621 Feed C: record which document owns whatever just took focus, so a command pressed after a
+        // detour through a tool still targets the pane the user was working in. Bubbling and passive — it
+        // only reads the event.
+        AddHandler(GotFocusEvent, (_, e) => Services.DocumentFocusReporter.NoteFocus(e.Source),
+            RoutingStrategies.Bubble);
+
         // Add diagnostic logging for focus and keyboard events
         GotFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow GotFocus. Source: {Source}", e.Source?.GetType().Name);
         LostFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow LostFocus. Source: {Source}", e.Source?.GetType().Name);
@@ -885,7 +891,7 @@ public partial class SimpleTabbedWindow : Window
             // the pane they are actually in rather than always the first one. (#443)
             if (layoutViewModel.Layout is RootDock rootDock)
             {
-                var active = DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this));
+                var active = DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this), RecentDocuments());
                 if (active is BookDisplayViewModel bookViewModel)
                 {
                     _logger.Information("Triggering Go To dialog for active book: {BookFile}", bookViewModel.Book.FileName);
@@ -950,7 +956,11 @@ public partial class SimpleTabbedWindow : Window
             _logger.Debug("{What}: no active book in window {WindowTitle}", what, this.Title);
             return;
         }
-        _logger.Information("{What} from window: {WindowTitle}", what, this.Title);
+        // Naming the resolved book is what makes a wrong-target report diagnosable from a log rather than
+        // from a description: "it zoomed the other one" and "it zoomed this one" produce identical lines
+        // without it. (#621)
+        _logger.Information("{What} from window {WindowTitle} - target: {Book}", what, this.Title,
+            book.Book?.FileName ?? "(unknown)");
         action(book.BookDisplayControl);
     }
 
@@ -1123,7 +1133,7 @@ public partial class SimpleTabbedWindow : Window
             layoutViewModel.Layout is not RootDock rootDock)
             return null;
 
-        return DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this)) as BookDisplayViewModel;
+        return DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this), RecentDocuments()) as BookDisplayViewModel;
     }
 
     // Reduce a selection to a single lookup word: first whitespace-delimited token, minus surrounding
@@ -1161,7 +1171,7 @@ public partial class SimpleTabbedWindow : Window
                 layoutViewModel.Layout is not RootDock rootDock)
                 return;
 
-            CloseDockableIfClosable(DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this)));
+            CloseDockableIfClosable(DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this), RecentDocuments()));
         }
         catch (Exception ex)
         {
@@ -1180,6 +1190,13 @@ public partial class SimpleTabbedWindow : Window
     // safe is the containment check in DocumentTargetResolver: a dockable outside this window's layout is
     // contained by none of its document docks, so resolution falls back instead of reaching across windows.
     // A test covers this; do not drop the containment check.
+    /// <summary>
+    /// Interaction history for <see cref="DocumentTargetResolver.ResolveActiveDocument"/> (#621), most
+    /// recent first. Null when the tracker is unavailable, which resolves exactly as before this existed.
+    /// </summary>
+    private static IEnumerable<IDockable>? RecentDocuments() =>
+        App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent;
+
     internal static IDockable? ResolveFocusedDockable(Window? window)
     {
         var element = window?.FocusManager?.GetFocusedElement() as Visual;
@@ -1235,7 +1252,7 @@ public partial class SimpleTabbedWindow : Window
                 layoutViewModel.Layout is not RootDock rootDock)
                 return;
 
-            if (DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this)) is not BookDisplayViewModel bookViewModel)
+            if (DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this), RecentDocuments()) is not BookDisplayViewModel bookViewModel)
                 return;
 
             _logger.Information("View Source ({Edition}) via menu/shortcut for book: {BookFile}",

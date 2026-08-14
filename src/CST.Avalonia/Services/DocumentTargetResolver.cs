@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Dock.Model.Controls;
 using Dock.Model.Core;
@@ -14,26 +15,59 @@ namespace CST.Avalonia.Services;
 ///
 /// Resolution now follows focus, which is what the user means by "this book", and falls back to the old
 /// first-dock behaviour when nothing usable is focused (a fresh layout, or focus sitting on a tool).
+///
+/// #621 added a tier between the two. Following focus is only as good as focus is visible, and inside a CEF
+/// WebView it is not visible at all - the browser owns a native surface, so a click into a book, a PDF or
+/// the Welcome page leaves Avalonia with nothing to report and resolution fell straight through to the
+/// first-dock guess. Since those three ARE most of the reader's surface, the #443 bug was reachable again
+/// the moment anyone clicked into a document rather than onto its tab. <see cref="ActiveDocumentTracker"/>
+/// supplies the missing signal.
 /// </summary>
 public static class DocumentTargetResolver
 {
     /// <summary>
-    /// The document the user is working in: the focused document, else the active document of the dock
-    /// that holds focus, else the active document of the first document dock in the layout.
+    /// The document the user is working in, in descending order of confidence: the focused document (or
+    /// the active document of the dock that holds focus), else the most recently interacted-with document
+    /// this layout contains, else Dock's own focus record, else the active document of the first document
+    /// dock in the layout.
     /// </summary>
     /// <param name="preferred">
     /// A dockable the caller believes the user is working in - normally derived from real Avalonia keyboard
     /// focus (see SimpleTabbedWindow.ResolveFocusedDockable). Used when it sits inside a document dock.
-    /// Dock's own <c>RootDock.FocusedDockable</c> is never populated in this app - it is null even right
-    /// after clicking a tab - so it cannot be the source of truth on its own.
     /// </param>
-    public static IDockable? ResolveActiveDocument(IDock? layout, IDockable? preferred = null)
+    /// <param name="recentDocuments">
+    /// Interaction history, most recent first, from <see cref="ActiveDocumentTracker"/> (#621). The tier
+    /// that exists because Avalonia focus goes BLIND inside a CEF WebView: a click into a book, a PDF or
+    /// the Welcome page reaches a native surface, <paramref name="preferred"/> comes back null, and without
+    /// this the answer would be the first-dock guess - the wrong pane in any split.
+    ///
+    /// <para>
+    /// Deliberately unfiltered by the caller: the first entry this layout CONTAINS wins, which is what
+    /// scopes a single app-wide history per window and what skips tool activations without the tracker
+    /// having to know what a tool is.
+    /// </para>
+    /// </param>
+    public static IDockable? ResolveActiveDocument(IDock? layout, IDockable? preferred = null,
+        IEnumerable<IDockable>? recentDocuments = null)
     {
         if (layout == null)
             return null;
 
         if (preferred != null && FindDocumentDockContaining(layout, preferred) is { } preferredDock)
             return preferred is IDock ? preferredDock.ActiveDockable : preferred;
+
+        // Live focus first, history second: when Avalonia CAN see focus it is describing this instant,
+        // while history describes the recent past. They agree except when focus has moved somewhere the
+        // history has not caught up with, and there the present is right.
+        if (recentDocuments != null)
+        {
+            foreach (var recent in recentDocuments)
+            {
+                if (recent == null) continue;
+                if (FindDocumentDockContaining(layout, recent) is not { } recentDock) continue;
+                return recent is IDock ? recentDock.ActiveDockable : recent;
+            }
+        }
 
         var focused = layout.FocusedDockable;
 

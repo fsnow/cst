@@ -47,6 +47,30 @@ namespace CST.Avalonia.Services
         public CstDockFactory()
         {
             _logger = Log.ForContext<CstDockFactory>();
+
+            // #621 Feed A: the dock model's own activation signal. Dock raises this from the ActiveDockable
+            // SETTER (via InitActiveDockable), so one subscription here covers every dock in every window —
+            // including docks created later by a split and by floating windows — without per-dock wiring.
+            // It fires for user tab clicks, programmatic opens, layout restore, and the neighbour promotion
+            // inside CloseDockable, which is what makes the next command after a close land in the same pane.
+            //
+            // Everything is recorded, tools included; the tracker's contract is that filtering happens on
+            // read. A new document's Owner may not be set yet at its first activation, so a containment or
+            // type test HERE would silently drop exactly the tab the user just opened.
+            ActiveDockableChanged += (_, e) => DocumentTracker?.Note(e.Dockable, "dock-activation");
+        }
+
+        private ActiveDocumentTracker? _documentTracker;
+
+        /// <summary>
+        /// Interaction history for window-level command targeting (#621). Resolved from the service locator
+        /// rather than injected because this factory is constructed directly, in several places; settable so
+        /// a test can observe the activation feed without an App.
+        /// </summary>
+        internal ActiveDocumentTracker? DocumentTracker
+        {
+            get => _documentTracker ??= App.ServiceProvider?.GetService<ActiveDocumentTracker>();
+            set => _documentTracker = value;
         }
 
         public override RootDock CreateLayout()
@@ -1689,6 +1713,11 @@ namespace CST.Avalonia.Services
             if (dockable != null)
             {
                 base.CloseDockable(dockable);
+
+                // #621: drop it from the interaction history. The resolver's containment check would reject
+                // a closed dockable anyway and the weak reference would eventually clear, but evicting here
+                // keeps the history matching reality at the moment reality changes.
+                DocumentTracker?.Forget(dockable);
 
                 // AFTER the base call, and only if the dockable actually left. base.CloseDockable can DECLINE
                 // (CanClose false, CanCloseLastDockable, a closing-event veto), and deleting first meant a

@@ -17,11 +17,12 @@ using WebViewControl;
 using CST.Avalonia.ViewModels;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
 namespace CST.Avalonia.Views;
 
-public partial class BookDisplayView : UserControl
+public partial class BookDisplayView : UserControl, Services.IBrowserDocumentView
 {
     // Shared lock to serialize JavaScript execution across all instances
     private static readonly SemaphoreSlim _jsExecutionLock = new SemaphoreSlim(1, 1);
@@ -218,6 +219,16 @@ public partial class BookDisplayView : UserControl
                 // Set up event handlers
                 _webView.Navigated += OnNavigationCompleted;
                 _webView.TitleChanged += OnTitleChanged;
+
+                // #621: a click into the book's TEXT is invisible to Avalonia — CEF owns that surface — so
+                // without this the next window-level command would target whichever pane happens to be
+                // first in tree order. Subscribed here rather than once in the constructor because
+                // TryCreateWebView runs again after every float/unfloat dispose-and-recreate, so the
+                // subscription follows the browser's lifecycle for free. Reads _viewModel at event time:
+                // ControlRecycling can rebind this View to a different book.
+                if (_webView is Controls.CstWebView focusReporter)
+                    focusReporter.BrowserGotFocus += () =>
+                        App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Note(_viewModel, "browser-focus:book");
 
                 // Add diagnostic logging for focus on the WebView itself
                 _webView.GotFocus += (s, e) => _logger.Debug("FOCUS: WebView GotFocus. Source: {Source}", e.Source?.GetType().Name);
