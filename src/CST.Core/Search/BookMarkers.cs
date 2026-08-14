@@ -15,8 +15,9 @@ namespace CST.Search
         private static readonly Regex TagRx = new(@"<[^>]*>", RegexOptions.Compiled);
         private static readonly Regex AttrRx = new("(\\w+)\\s*=\\s*\"([^\"]*)\"", RegexOptions.Compiled);
 
-        // Ascending-by-position lists.
-        private readonly List<(int Pos, int Number, string? BookCode)> _paras = new();
+        // Ascending-by-position lists. A paragraph spans First..Last inclusive; the two are equal for the
+        // ordinary single-numbered case, which is 97% of the corpus. (#446)
+        private readonly List<(int Pos, int First, int Last, string? BookCode)> _paras = new();
         // Raw is the VERBATIM @n ("1.0023"). The HTML anchor is ed + that exact string and the reader looks it
         // up case/character-exactly, so the raw spelling — not the parsed ints — is what can be navigated to.
         private readonly Dictionary<PageEdition, List<(int Pos, int Volume, int Number, string Raw)>> _pages = new();
@@ -52,20 +53,39 @@ namespace CST.Search
                         break;
 
                     case "p":
-                        if (!closing && attrs.TryGetValue("n", out var nStr) && int.TryParse(nStr, out int pnum))
-                            m._paras.Add((tag.Index, pnum, CurrentBook(divStack)));
+                        if (!closing && attrs.TryGetValue("n", out var nStr)
+                            && TryParseParagraphSpan(nStr, out int first, out int last))
+                            m._paras.Add((tag.Index, first, last, CurrentBook(divStack)));
                         break;
                 }
             }
             return m;
         }
 
-        /// <summary>The character position of a numbered paragraph (optionally within a Multi sub-book), or -1.</summary>
+        /// <summary>
+        /// The character position of a numbered paragraph (optionally within a Multi sub-book), or -1.
+        ///
+        /// <para>Matches a number ANYWHERE in a paragraph's span, not just its label. Paragraph 20 of
+        /// <c>vin02t.tik.xml</c> is inside the block labelled <c>16-26</c>; before #446 this returned -1 for
+        /// every such N, so addressing into the 3,618 ranged paragraphs failed outright rather than landing
+        /// slightly off.</para>
+        /// </summary>
         public int PositionOfParagraph(int number, string? bookCode = null)
         {
+            // AN EXACTLY-NUMBERED PARAGRAPH WINS OVER A RANGE THAT MERELY COVERS THE NUMBER, and the two do
+            // collide: in 36 corpus files a ranged paragraph spans numbers that also exist in their own
+            // right — abh03a.att.xml has 1,445 such overlaps, where "7-10" precedes standalone 7, 8, 9 and
+            // 10. Taking the first positional match would hand every one of them to the range, which is a
+            // worse answer than the -1 this used to return, because it is confidently wrong rather than
+            // absent. The range is the fallback, for numbers that exist ONLY inside one. (#446)
             foreach (var p in _paras)
-                if (p.Number == number && (bookCode == null || p.BookCode == bookCode))
+                if (p.First == number && p.Last == number && (bookCode == null || p.BookCode == bookCode))
                     return p.Pos;
+
+            foreach (var p in _paras)
+                if (number >= p.First && number <= p.Last && (bookCode == null || p.BookCode == bookCode))
+                    return p.Pos;
+
             return -1;
         }
 
@@ -74,7 +94,11 @@ namespace CST.Search
         {
             int? number = null; string? code = null;
             var pi = UpperBound(_paras.Count, i => _paras[i].Pos <= pos) - 1;
-            if (pi >= 0) { number = _paras[pi].Number; code = _paras[pi].BookCode; }
+            // The span's FIRST number is what a ranged paragraph is cited by. Reporting the range itself is
+            // a change to this method's contract and belongs with the model work in #444; what #446 fixes is
+            // that a ranged paragraph used to be skipped entirely, so this answered with the last paragraph
+            // BEFORE it — a different paragraph, reported with no hint of approximation.
+            if (pi >= 0) { number = _paras[pi].First; code = _paras[pi].BookCode; }
 
             var pages = new List<SnippetPageRef>();
             foreach (var (edition, list) in _pages)
@@ -122,6 +146,78 @@ namespace CST.Search
                 if (p.BookCode is { } code && !codes.Contains(code)) codes.Add(code);
             return codes;
         }
+
+        /// <summary>
+        /// The inclusive paragraph span a <c>&lt;p&gt;</c>'s <c>@n</c> denotes. (#446)
+        ///
+        /// <para><b>Why this is not <c>int.TryParse</c>.</b> 3,618 paragraphs across 87 of the 217 corpus
+        /// files carry a non-integer <c>@n</c>. They used to fail the parse and be dropped from the index
+        /// silently, which did not produce a missing citation — it produced a WRONG one, because the lookup
+        /// then answered with the last paragraph it had indexed, the one before the block.</para>
+        ///
+        /// <para><b>One rule covers every form found in the corpus.</b> Split on the hyphen, expand each part
+        /// against the one before it, then take first-to-last as the span:</para>
+        ///
+        /// <list type="table">
+        /// <item><term><c>21</c></term><description>21..21 — the ordinary case, 97% of paragraphs</description></item>
+        /// <item><term><c>16-26</c></term><description>16..26 — a full range (2,094 of them)</description></item>
+        /// <item><term><c>196-7</c></term><description>196..197 — the tail is ABBREVIATED, sharing the leading
+        /// digits of its predecessor, so this is not 196..7 (1,518 of them)</description></item>
+        /// <item><term><c>266-7-8</c></term><description>266..268 — the same abbreviation applied twice; the
+        /// next numbered paragraph in vin11t is 269, which is what confirms the reading</description></item>
+        /// <item><term><c>292-3-6</c></term><description>292..296 — likewise, followed by 297 in s0105t</description></item>
+        /// </list>
+        ///
+        /// <para><b>The corpus also holds two genuine typos</b> — <c>179-</c> in e0812n and a bare <c>-</c> in
+        /// e1207n. The trailing-hyphen form keeps its leading number, since 179 is a real paragraph and
+        /// discarding it would reintroduce exactly the bug this fixes. A value with no digits at all has
+        /// nothing to report and is skipped, as before.</para>
+        /// </summary>
+        internal static bool TryParseParagraphSpan(string? n, out int first, out int last)
+        {
+            first = last = 0;
+            if (string.IsNullOrWhiteSpace(n)) return false;
+
+            string? previous = null;
+            bool any = false;
+
+            foreach (var raw in n.Split('-'))
+            {
+                var part = raw.Trim();
+                if (part.Length == 0) continue;              // "179-" and the bare "-"
+
+                // Non-numeric anywhere means this is not a paragraph number we understand. Stop rather than
+                // guess: a half-read value is indistinguishable from a correct one downstream.
+                bool digits = true;
+                foreach (var c in part) if (c < '0' || c > '9') { digits = false; break; }
+                if (!digits) break;
+
+                var expanded = Expand(previous, part);
+                if (!int.TryParse(expanded, out var value)) break;
+
+                if (!any) { first = value; any = true; }
+                last = value;                                // the span runs from the FIRST written number
+                previous = expanded;                         // to the LAST, not min to max
+            }
+
+            // A span that runs BACKWARDS is a typo, not a range. abh05t.nrf.xml has n="706-608" sitting
+            // between 703-705 and 709-710, so the intent is plainly 706-708 and the 6 is a slip. Swapping
+            // the ends would manufacture a 99-paragraph block out of a digit error, and that block would
+            // then shadow every real paragraph from 608 to 705. Keeping only the opening number cites the
+            // paragraph correctly and claims nothing about an extent we cannot know. (#446)
+            if (any && last < first) last = first;
+            return any;
+        }
+
+        /// <summary>
+        /// Expand an abbreviated continuation against the part before it: <c>292</c> then <c>3</c> is 293,
+        /// not 3. A part at least as long as its predecessor is already complete and stands as written, which
+        /// is what keeps <c>16-26</c> a range from 16 to 26 rather than 16 to 16.
+        /// </summary>
+        private static string Expand(string? previous, string part) =>
+            previous is null || part.Length >= previous.Length
+                ? part
+                : previous.Substring(0, previous.Length - part.Length) + part;
 
         // Largest index+1 whose predicate holds over an ascending-sorted list (i.e. count of leading trues).
         private static int UpperBound(int count, System.Func<int, bool> leadingTrue)
