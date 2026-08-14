@@ -583,17 +583,17 @@ public class Sources
 		addSource("e0906n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/6. Abhidhammapiṭaka (Pu-Vi).pdf");
 
 		// Leḍī Sayāḍo. e0301 (Paramatthadīpanī) has no PDF.
-		addSource("e0201n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaLedi}/1. Niruttidīpanī.pdf");
-		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf");
+		addSource("e0201n.nrf.xml", SourceType.BurmeseAnya, 112, $"{BurmeseAnyaLedi}/1. Niruttidīpanī.pdf");
+		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf");
 		addSource("e0501n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaLedi}/4. Paṭṭhānuddesa dīpanīpāṭha_printed.pdf");
 
 		// Buddha-vandanā. e0603–e0608 have no PDF.
-		addSource("e0601n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaBuddhaVandana}/1. Namakkāraṭīkā.pdf");
-		addSource("e0602n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaBuddhaVandana}/2. Mahāpaṇāmapāṭha.pdf");
+		addSource("e0601n.nrf.xml", SourceType.BurmeseAnya, 14, $"{BurmeseAnyaBuddhaVandana}/1. Namakkāraṭīkā.pdf");
+		addSource("e0602n.nrf.xml", SourceType.BurmeseAnya, 4, $"{BurmeseAnyaBuddhaVandana}/2. Mahāpaṇāmapāṭha.pdf");
 
 		// Vaṃsa. e0701 (Cūḷagandhavaṃsa) has no PDF. e0703 (Mahāvaṃsa) is multi-vol → Vol 1.
-		addSource("e0702n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaVamsa}/3. Sāsanavaṃsappadīpikā.pdf");
-		addSource("e0703n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaVamsa}/2. Mahāvaṃsa (Vol-1).pdf");
+		addSource("e0702n.nrf.xml", SourceType.BurmeseAnya, 16, $"{BurmeseAnyaVamsa}/3. Sāsanavaṃsappadīpikā.pdf");
+		addSource("e0703n.nrf.xml", SourceType.BurmeseAnya, 7, $"{BurmeseAnyaVamsa}/2. Mahāvaṃsa (Vol-1).pdf");
 
 		// Byākaraṇa (grammar). e0808/e0809/e0811 share one combined PDF (offsets to distinguish → deferred).
 		// e0812 (Subodhālaṅkāraṭīkā) has no PDF.
