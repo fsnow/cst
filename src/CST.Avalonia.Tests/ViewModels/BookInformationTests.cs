@@ -27,13 +27,20 @@ public class BookInformationTests
     // ---- The file name ---------------------------------------------------------------------------
 
     [Fact]
-    public void The_file_name_is_shown_exactly_as_it_is_on_disk()
+    public void Putting_a_file_name_through_the_panels_conversion_would_corrupt_it()
     {
-        // It names a file. Converting it — as every other string in this panel is converted — would
-        // produce something that looks like an answer and matches nothing on the filesystem, in the
-        // repository, or in an issue report.
-        var book = new Book { FileName = "s0203m.mul.xml", LongNavPath = DevaNavPath };
-        Assert.Equal("s0203m.mul.xml", book.FileName);
+        // Why XmlFileName must never be converted, demonstrated rather than asserted. Every other string in
+        // this panel goes through FormatNavPath; a file name put through the same call comes back altered,
+        // and an altered file name is worse than none — it looks like an answer while matching nothing on
+        // disk, in the repository, or in an issue report.
+        //
+        // The invariant itself lives at the property (BookDisplayViewModel.XmlFileName returns
+        // Book.FileName untouched) and CANNOT be reached from here: constructing a BookDisplayViewModel
+        // needs ReactiveUI initialized, which the headless test host does not provide. So this pins the
+        // STAKES, not the rule. The rule rests on the property's own doc comment and on review.
+        var converted = BookDisplayViewModel.FormatNavPath("s0203m.mul.xml", Script.Latin);
+
+        Assert.NotEqual("s0203m.mul.xml", converted);
     }
 
     // ---- The nav path ----------------------------------------------------------------------------

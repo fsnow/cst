@@ -235,6 +235,14 @@ namespace CST.Avalonia.ViewModels
                         this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
                         this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
 
+                        // The information panel's nav path is script-converted too (#628), and is raised
+                        // HERE rather than after the reload: it reads only _bookScript, which is already
+                        // updated by the time this subscription runs, so it has no reason to wait on the
+                        // WebView. Below the await it would be stranded whenever the JS round-trip is slow
+                        // — and permanently if it throws, since the whole body shares one catch — leaving an
+                        // open flyout showing the OLD script's text in the NEW script's font. (fable review)
+                        this.RaisePropertyChanged(nameof(BookNavPath));
+
                         // Capture the exact reading position (#434 token) BEFORE the reload, while the current
                         // script's DOM is still rendered. The token interpolates between the anchors bracketing
                         // the viewport top, so restore lands on the same reading position rather than a page
@@ -256,8 +264,6 @@ namespace CST.Avalonia.ViewModels
                             BookInfoText = GetBookInfoDisplayName(_book);
                             // Notify that DisplayTitle has changed (for tab updates)
                             this.RaisePropertyChanged(nameof(DisplayTitle));
-                            // The information panel's nav path is script-converted too (#628).
-                            this.RaisePropertyChanged(nameof(BookNavPath));
 
                             // Preserve the current selected chapter
                             var currentSelectedChapter = SelectedChapter;
