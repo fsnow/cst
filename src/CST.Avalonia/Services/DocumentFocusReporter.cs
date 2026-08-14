@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.VisualTree;
 using Dock.Model.Core;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,54 +27,109 @@ namespace CST.Avalonia.Services;
 internal static class DocumentFocusReporter
 {
     /// <summary>
-    /// Records the dockable owning whatever just took focus. The same DataContext walk
+    /// Records the dockable owning whatever just took focus, if the focus change was one the USER made.
+    /// </summary>
+    public static void NoteFocus(object? source, NavigationMethod method)
+    {
+        if (!ShouldReport(method)) return;
+
+        var dockable = ResolveDockable(source);
+        if (dockable == null) return;
+
+        // Everything the user focuses is recorded, tools included — the tracker filters on read, by asking
+        // each window's layout what it contains.
+        App.TryGetService<ActiveDocumentTracker>()?.Note(dockable, "avalonia-focus");
+    }
+
+    /// <summary>
+    /// Whether a focus change represents an interaction, judged by <b>what caused it</b>. (#635)
+    ///
+    /// <para>
+    /// Activating a window makes Avalonia restore focus to whichever element held it last — a stale answer
+    /// that arrives looking exactly like a fresh one, milliseconds from CEF's report of the browser the
+    /// user actually clicked, and wins whenever it lands second. #634 suppressed those by the TYPE of
+    /// element the focus landed on, which was the wrong key: the echo is defined by its cause, and an
+    /// activation restore onto a tab item slipped straight through, reproducing the bug it was meant to
+    /// fix in a layout where a tab had focus last.
+    /// </para>
+    ///
+    /// <para>
+    /// Avalonia already carries the cause. <c>FocusManager.SetFocusScope</c> — the activation restore —
+    /// calls <c>Focus(focused)</c> with no navigation method, i.e. <see cref="NavigationMethod.Unspecified"/>,
+    /// while a pointer press focuses with <see cref="NavigationMethod.Pointer"/> and keyboard navigation
+    /// with <see cref="NavigationMethod.Tab"/> or <see cref="NavigationMethod.Directional"/>. Reading that
+    /// distinguishes the restore from a click with no timer and no flag, on any landing element.
+    /// </para>
+    ///
+    /// <para>
+    /// Programmatic focus the app performs itself is also <c>Unspecified</c> and is also ignored, which is
+    /// correct: opening a document raises the dock model's own activation, and that feed is the one that
+    /// should speak for it.
+    /// </para>
+    /// </summary>
+    internal static bool ShouldReport(NavigationMethod method) =>
+        method is NavigationMethod.Pointer or NavigationMethod.Tab or NavigationMethod.Directional;
+
+    /// <summary>
+    /// Keeps Avalonia's idea of focus in step with the browser's, when CEF reports that one took it. (#633)
+    ///
+    /// <para>
+    /// Avalonia cannot see a click that lands on a browser's native surface, so its focus record stays on
+    /// whatever was focused before — and on window activation it RESTORES that record. Two things then go
+    /// wrong: the resolver's first and most trusted tier, live Avalonia focus, names a document the user is
+    /// not in; and the restore keeps resurrecting it, so the staleness is self-renewing. Measured: the same
+    /// book was released at deactivation three times in a row while the user was reading two others.
+    /// </para>
+    ///
+    /// <para>
+    /// Clearing focus instead was tried first and CANNOT work: <c>IFocusManager.ClearFocus()</c> is
+    /// <c>Focus(null)</c>, which clears the current focus but not the per-scope element the restore reads —
+    /// that lives in a private attached property only a successful focus overwrites. Aligning is the
+    /// operation the framework actually offers.
+    /// </para>
+    ///
+    /// <para>
+    /// Safe against the CEF focus hazard, and measured rather than assumed: focus on the document VIEW and
+    /// keyboard focus in its browser coexist. In the same run, Avalonia focused a BookDisplayView and the
+    /// in-page relay went on delivering keystrokes from the browser — so this records where focus is
+    /// without taking it from anywhere.
+    /// </para>
+    /// </summary>
+    public static void AlignFocusWithBrowser(IInputElement? documentView)
+    {
+        if (documentView is not { } element) return;
+
+        var focusManager = (element as Visual)?.FindAncestorOfType<TopLevel>()?.FocusManager;
+        if (focusManager != null && ReferenceEquals(focusManager.GetFocusedElement(), element)) return;
+
+        // Through the element, because IFocusManager exposes only ClearFocus and GetFocusedElement.
+        // NavigationMethod.Unspecified on purpose: this is not the user moving focus, and Feed C must not
+        // record it as one.
+        element.Focus(NavigationMethod.Unspecified);
+    }
+
+    /// <summary>
+    /// The dockable owning <paramref name="source"/>: the same DataContext walk
     /// <c>SimpleTabbedWindow.ResolveFocusedDockable</c> performs, run from the focus event's source rather
     /// than by asking the FocusManager afterwards.
+    ///
+    /// <para>
+    /// Separated from <see cref="NoteFocus"/> so a test can drive the walk itself — which element the
+    /// predicate ends up seeing is exactly what #635 turned on, and it had no coverage.
+    /// </para>
     /// </summary>
-    public static void NoteFocus(object? source)
+    internal static IDockable? ResolveDockable(object? source)
     {
-        if (source is not Visual element) return;
+        if (source is not Visual element) return null;
 
         while (element != null)
         {
             if (element is StyledElement { DataContext: IDockable dockable })
-            {
-                // A browser-hosting view speaks for itself through CEF, not through Avalonia — see
-                // ShouldReport.
-                if (!ShouldReport(element))
-                {
-                    Serilog.Log.ForContext(typeof(DocumentFocusReporter))
-                        .Debug("Avalonia focus ignored (browser view owns its focus): {Element} -> {Dockable}",
-                            element.GetType().Name, dockable.Id);
-                    return;
-                }
-
-                // Everything else is recorded, tools included — the tracker filters on read, by asking
-                // each window's layout what it contains.
-                App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Note(dockable, "avalonia-focus");
-                return;
-            }
+                return dockable;
 
             element = element.GetVisualParent();
         }
-    }
 
-    /// <summary>
-    /// Whether an Avalonia focus landing counts as an interaction.
-    ///
-    /// <para>
-    /// It does not when it lands on a browser-hosting document view. Those views are focusable and are what
-    /// Avalonia focuses when a window is activated or a layout rebuilt, so they emit a focus event naming
-    /// whichever document held focus LAST — a stale answer that arrives looking exactly like a fresh one,
-    /// within milliseconds of the correct CEF report, and wins whenever it happens to land second.
-    /// </para>
-    ///
-    /// <para>
-    /// Nothing is lost by ignoring them, because those are precisely the documents whose real focus CEF
-    /// reports directly (<c>CstWebView.BrowserGotFocus</c>). What Avalonia still speaks for — and what this
-    /// feed exists for — is everything else: a tab-strip click, which raises no activation when the tab is
-    /// already active in its own split, and the toolbar controls and tool panes.
-    /// </para>
-    /// </summary>
-    internal static bool ShouldReport(object? focusedElement) => focusedElement is not IBrowserDocumentView;
+        return null;
+    }
 }

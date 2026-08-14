@@ -22,7 +22,7 @@ using Serilog;
 
 namespace CST.Avalonia.Views;
 
-public partial class BookDisplayView : UserControl, Services.IBrowserDocumentView
+public partial class BookDisplayView : UserControl
 {
     // Shared lock to serialize JavaScript execution across all instances
     private static readonly SemaphoreSlim _jsExecutionLock = new SemaphoreSlim(1, 1);
@@ -117,7 +117,10 @@ public partial class BookDisplayView : UserControl, Services.IBrowserDocumentVie
         this.Focusable = true;
 
         // Add focus and keyboard event handlers at UserControl level
-        this.GotFocus += (s, e) => _logger.Debug("FOCUS: BookDisplayView GotFocus. Source: {Source}", e.Source?.GetType().Name);
+        // #633: the book and the CAUSE, not just "a view got focus" — a user click and an activation
+        // restore are indistinguishable without them, and they call for opposite fixes.
+        this.GotFocus += (s, e) => _logger.Debug("FOCUS: BookDisplayView GotFocus. Source: {Source}, Method: {Method}, Book: {Book}",
+            e.Source?.GetType().Name, e.NavigationMethod, _viewModel?.Book?.FileName ?? "?");
         this.LostFocus += (s, e) => _logger.Debug("FOCUS: BookDisplayView LostFocus. Source: {Source}", e.Source?.GetType().Name);
         
         // Add keyboard event handler with highest priority to intercept before WebView
@@ -236,7 +239,8 @@ public partial class BookDisplayView : UserControl, Services.IBrowserDocumentVie
                 }
 
                 // Add diagnostic logging for focus on the WebView itself
-                _webView.GotFocus += (s, e) => _logger.Debug("FOCUS: WebView GotFocus. Source: {Source}", e.Source?.GetType().Name);
+                _webView.GotFocus += (s, e) => _logger.Debug("FOCUS: WebView GotFocus. Source: {Source}, Method: {Method}, Book: {Book}",
+                    e.Source?.GetType().Name, e.NavigationMethod, _viewModel?.Book?.FileName ?? "?");
                 _webView.LostFocus += (s, e) => _logger.Debug("FOCUS: WebView LostFocus. Source: {Source}", e.Source?.GetType().Name);
 
                 _logger.Debug("WebView control found and events attached successfully");
@@ -297,9 +301,13 @@ public partial class BookDisplayView : UserControl, Services.IBrowserDocumentVie
 
     // Reads _viewModel at event time: ControlRecycling can rebind this View to a different book.
 
-    private void OnBrowserGotFocus() =>
-
-        App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Note(_viewModel, "browser-focus:book");
+    private void OnBrowserGotFocus()
+    {
+        App.TryGetService<ActiveDocumentTracker>()?.Note(_viewModel, "browser-focus:book");
+        // #633: and tell Avalonia where focus actually is, so its own record stops naming the book the
+        // reader left behind — which is what the resolver's most trusted tier reads.
+        Services.DocumentFocusReporter.AlignFocusWithBrowser(this);
+    }
 
 
     private void DisposeWebView()

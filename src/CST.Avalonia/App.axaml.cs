@@ -58,6 +58,34 @@ public partial class App : Application
     /// must be skipped. (DOCK-2)
     /// </summary>
     public static bool IsShuttingDown { get; private set; }
+
+    /// <summary>
+    /// Resolves a service, or returns null once the provider has been disposed.
+    ///
+    /// <para>
+    /// <c>ServiceProvider?.GetService&lt;T&gt;()</c> guards null but NOT disposal, and shutdown disposes the
+    /// provider while work is still draining: a queued dispatcher callback, a CEF notification arriving as
+    /// browsers tear down. Such a call throws <see cref="ObjectDisposedException"/> from a context with no
+    /// handler, which aborts the process — observed as a crash on quit, from a focus callback that ran one
+    /// dispatcher turn too late.
+    /// </para>
+    ///
+    /// <para>
+    /// Anything that can run during teardown should resolve through this. It returns null rather than
+    /// throwing, which every such caller already handles, because by then there is nothing useful left to do.
+    /// </para>
+    /// </summary>
+    public static T? TryGetService<T>() where T : class
+    {
+        try
+        {
+            return ServiceProvider?.GetService<T>();
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+    }
     // Guards the ShutdownRequested handler against re-entrancy: desktop.Shutdown() re-raises ShutdownRequested,
     // so without this the handler would cancel the very shutdown it just initiated (leaving the app alive with
     // its menu bar) and re-run the save against a disposed ServiceProvider. 0 = not started, 1 = cleanup
@@ -2011,7 +2039,7 @@ public partial class App : Application
 
         return DocumentTargetResolver.ResolveActiveDocument(
             hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow),
-            ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent) as BookDisplayViewModel;
+            TryGetService<ActiveDocumentTracker>()?.Recent) as BookDisplayViewModel;
     }
 
     private void OnCloseTabFromFloatingWindow(Window floatingWindow)
@@ -2022,7 +2050,7 @@ public partial class App : Application
             {
                 SimpleTabbedWindow.CloseDockableIfClosable(DocumentTargetResolver.ResolveActiveDocument(
                     hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow),
-                    ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent));
+                    TryGetService<ActiveDocumentTracker>()?.Recent));
             }
         }
         catch (Exception ex)
@@ -2039,7 +2067,7 @@ public partial class App : Application
             {
                 if (DocumentTargetResolver.ResolveActiveDocument(
                         hostWindow.Layout, SimpleTabbedWindow.ResolveFocusedDockable(hostWindow),
-                        ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent) is BookDisplayViewModel bookViewModel)
+                        TryGetService<ActiveDocumentTracker>()?.Recent) is BookDisplayViewModel bookViewModel)
                 {
                     Log.Information("View Source ({Edition}) via floating-window menu for book: {BookFile}",
                         source2010 ? "2010" : "1957", bookViewModel.Book.FileName);

@@ -116,6 +116,14 @@ public static class DocumentTargetResolver
         return null;
     }
 
+    /// <summary>
+    /// Whether <paramref name="target"/> is a document of this layout (as opposed to a tool, or something
+    /// from another window). The same containment question resolution asks, exposed for #633's
+    /// deactivation handling.
+    /// </summary>
+    internal static bool IsDocumentOf(IDock? layout, IDockable? target) =>
+        layout != null && target != null && FindDocumentDockContaining(layout, target) != null;
+
     // The document dock whose subtree contains the target (the target may be the dock itself).
     private static IDock? FindDocumentDockContaining(IDock dock, IDockable target)
     {

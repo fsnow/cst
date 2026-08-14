@@ -73,8 +73,9 @@ namespace CST.Avalonia.Services
             // #621 Feed C, same as the main window: a floating window's commands resolve against its own
             // layout, so its interactions have to reach the shared history too — otherwise a command here
             // would fall through to this window's first dock.
-            AddHandler(GotFocusEvent, (_, e) => DocumentFocusReporter.NoteFocus(e.Source),
+            AddHandler(GotFocusEvent, (_, e) => DocumentFocusReporter.NoteFocus(e.Source, e.NavigationMethod),
                 global::Avalonia.Interactivity.RoutingStrategies.Bubble);
+
         }
 
         private void OnPositionChanged(object? sender, PixelPointEventArgs e)

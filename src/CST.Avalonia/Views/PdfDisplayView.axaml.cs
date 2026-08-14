@@ -11,7 +11,7 @@ using Serilog;
 
 namespace CST.Avalonia.Views;
 
-public partial class PdfDisplayView : UserControl, Services.IBrowserDocumentView
+public partial class PdfDisplayView : UserControl
 {
     private readonly ILogger _logger;
     private PdfDisplayViewModel? _viewModel;
@@ -103,11 +103,13 @@ public partial class PdfDisplayView : UserControl, Services.IBrowserDocumentView
 
     // Reads DataContext at event time, as the original lambda did.
 
-    private void OnBrowserGotFocus() =>
-
-        App.ServiceProvider?.GetService<Services.ActiveDocumentTracker>()
-
+    private void OnBrowserGotFocus()
+    {
+        App.TryGetService<Services.ActiveDocumentTracker>()
             ?.Note(DataContext as ViewModels.PdfDisplayViewModel, "browser-focus:pdf");
+        // #633: keep Avalonia's focus record on this document rather than the one the user left.
+        Services.DocumentFocusReporter.AlignFocusWithBrowser(this);
+    }
 
 
     private void DisposeWebView()
