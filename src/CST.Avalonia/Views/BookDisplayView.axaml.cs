@@ -227,8 +227,13 @@ public partial class BookDisplayView : UserControl, Services.IBrowserDocumentVie
                 // subscription follows the browser's lifecycle for free. Reads _viewModel at event time:
                 // ControlRecycling can rebind this View to a different book.
                 if (_webView is Controls.CstWebView focusReporter)
-                    focusReporter.BrowserGotFocus += () =>
-                        App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Note(_viewModel, "browser-focus:book");
+                {
+                    // A NAMED handler, not a lambda, so DisposeWebView can take it off again. FindControl
+                    // returns the same CstWebView on every recreate and Dispose does not clear an event's
+                    // handler list, so a lambda stacked one more copy per window change. (fable review)
+                    focusReporter.BrowserGotFocus -= OnBrowserGotFocus;
+                    focusReporter.BrowserGotFocus += OnBrowserGotFocus;
+                }
 
                 // Add diagnostic logging for focus on the WebView itself
                 _webView.GotFocus += (s, e) => _logger.Debug("FOCUS: WebView GotFocus. Source: {Source}", e.Source?.GetType().Name);
@@ -290,6 +295,13 @@ public partial class BookDisplayView : UserControl, Services.IBrowserDocumentVie
         }
     }
 
+    // Reads _viewModel at event time: ControlRecycling can rebind this View to a different book.
+
+    private void OnBrowserGotFocus() =>
+
+        App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Note(_viewModel, "browser-focus:book");
+
+
     private void DisposeWebView()
     {
         if (_webView != null)
@@ -301,6 +313,8 @@ public partial class BookDisplayView : UserControl, Services.IBrowserDocumentVie
                 // Unsubscribe from events
                 _webView.Navigated -= OnNavigationCompleted;
                 _webView.TitleChanged -= OnTitleChanged;
+                if (_webView is Controls.CstWebView focusReporter)
+                    focusReporter.BrowserGotFocus -= OnBrowserGotFocus;   // (fable review)
 
                 // Dispose the WebView to release native resources
                 _webView.Dispose();

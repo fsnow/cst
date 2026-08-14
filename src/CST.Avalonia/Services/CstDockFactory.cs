@@ -1714,17 +1714,23 @@ namespace CST.Avalonia.Services
             {
                 base.CloseDockable(dockable);
 
-                // #621: drop it from the interaction history. The resolver's containment check would reject
-                // a closed dockable anyway and the weak reference would eventually clear, but evicting here
-                // keeps the history matching reality at the moment reality changes.
-                DocumentTracker?.Forget(dockable);
-
                 // AFTER the base call, and only if the dockable actually left. base.CloseDockable can DECLINE
                 // (CanClose false, CanCloseLastDockable, a closing-event veto), and deleting first meant a
                 // declined close left an open book with no saved state — invisible until it failed to reappear
                 // next launch. This is now the ONLY place book state is deleted, so nothing else would heal it.
                 // Same tripwire idiom as CloseBook(id). (#623)
-                if (dockable is BookDisplayViewModel && FindDockable(dockable.Id) == null)
+                // Under the SAME guard, for the same reason. #621's eviction was placed above it, which put
+                // it back on the wrong side of the very rule the comment above states: a DECLINED close
+                // would drop the still-open document from the interaction history, and the next command
+                // resolved with focus in a browser would then pick an older entry or fall through to the
+                // first dock. Narrow in practice today — the reachable close paths pre-check CanClose — but
+                // this is the guard-placement mistake §E.1 exists to prevent, and the next decline path
+                // added would not heal it. (fable review)
+                var actuallyLeft = FindDockable(dockable.Id) == null;
+                if (actuallyLeft)
+                    DocumentTracker?.Forget(dockable);
+
+                if (dockable is BookDisplayViewModel && actuallyLeft)
                 {
                     RemoveBookWindowState(dockable.Id);
                     Log.Debug("*** Removed book window state for {DockableId} ***", dockable.Id);

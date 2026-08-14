@@ -43,9 +43,11 @@ public partial class PdfDisplayView : UserControl, Services.IBrowserDocumentView
                 // acting on whatever book was in the first dock. Verified to fire even though Chromium
                 // renders the page in an internal plugin frame, which is where the #518 relay dies.
                 if (_webView is Controls.CstWebView focusReporter)
-                    focusReporter.BrowserGotFocus += () =>
-                        App.ServiceProvider?.GetService<Services.ActiveDocumentTracker>()
-                            ?.Note(DataContext as ViewModels.PdfDisplayViewModel, "browser-focus:pdf");
+                {
+                    // Named, so the dispose path can detach it — see BookDisplayView. (fable review)
+                    focusReporter.BrowserGotFocus -= OnBrowserGotFocus;
+                    focusReporter.BrowserGotFocus += OnBrowserGotFocus;
+                }
                 _logger.Debug("PDF WebView control found and events attached");
             }
             else
@@ -99,6 +101,15 @@ public partial class PdfDisplayView : UserControl, Services.IBrowserDocumentView
         WebViewShortcutRelay.TryHandle(_webView?.Title, _shortcutViewId, _logger);
     }
 
+    // Reads DataContext at event time, as the original lambda did.
+
+    private void OnBrowserGotFocus() =>
+
+        App.ServiceProvider?.GetService<Services.ActiveDocumentTracker>()
+
+            ?.Note(DataContext as ViewModels.PdfDisplayViewModel, "browser-focus:pdf");
+
+
     private void DisposeWebView()
     {
         if (_webView != null)
@@ -108,6 +119,8 @@ public partial class PdfDisplayView : UserControl, Services.IBrowserDocumentView
                 _logger.Information("Disposing PDF WebView");
                 _webView.Navigated -= OnNavigationCompleted;
                 _webView.TitleChanged -= OnShortcutTitleChanged;   // #518
+                if (_webView is Controls.CstWebView focusReporter)
+                    focusReporter.BrowserGotFocus -= OnBrowserGotFocus;   // (fable review)
                 _webView.Dispose();
                 _webView = null;
                 _hasPdfLoaded = false;  // Reset so PDF reloads after recreate
