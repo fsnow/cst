@@ -175,6 +175,66 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- #628: book information. Requested for text-correction work — an error found while
+                     reading has to be reported against the SOURCE FILE, and the reader was the one tool in
+                     that workflow that never showed which file it was displaying.
+
+                     A flyout rather than another status-bar field: the file name is the ask, but it is not
+                     the only thing that identifies a book to someone filing a report, and the status bar
+                     already carries five page-numbering systems (#541).
+
+                     Every value is a SelectableTextBlock, because the point of showing them is to paste
+                     them somewhere else. The file name additionally gets a one-click copy, since it is the
+                     one field that gets pasted every time. -->
+                <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
+                    <Button x:Name="bookInfoButton"
+                            Margin="2" Padding="9,2" MinWidth="0"
+                            ToolTip.Tip="Book information (source file, collection, type)">
+                        <TextBlock Text="i" FontWeight="Bold"/>
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*"
+                                      MaxWidth="460">
+                                    <Grid.Styles>
+                                        <Style Selector="TextBlock.label">
+                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                            <Setter Property="Margin" Value="0,3,12,3"/>
+                                            <Setter Property="VerticalAlignment" Value="Center"/>
+                                        </Style>
+                                        <Style Selector="SelectableTextBlock">
+                                            <Setter Property="Margin" Value="0,3"/>
+                                            <Setter Property="VerticalAlignment" Value="Center"/>
+                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                        </Style>
+                                    </Grid.Styles>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="XML file"/>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                                        <SelectableTextBlock Text="{Binding XmlFileName}" FontFamily="{DynamicResource ContentControlThemeFontFamily}"/>
+                                        <Button x:Name="copyXmlFileNameButton"
+                                                Margin="10,0,0,0" Padding="6,1" MinWidth="0"
+                                                ToolTip.Tip="Copy the file name">
+                                            <TextBlock Text="Copy"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="label" Text="Book"/>
+                                    <SelectableTextBlock Grid.Row="1" Grid.Column="1"
+                                                         Text="{Binding BookNavPath}"
+                                                         converters:FontHelper.DynamicFontFamily="{Binding CurrentScriptFontFamily}"
+                                                         converters:FontHelper.DynamicFontSize="{Binding CurrentScriptFontSize}"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" Text="Piṭaka"/>
+                                    <SelectableTextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PitakaName}"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="label" Text="Level"/>
+                                    <SelectableTextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TextTypeName}"/>
+                                </Grid>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+
                 <!-- #618: book text zoom — Chrome's PDF-viewer control: step down, the value, step up.
                      No reset button; typing 100 is the reset, and Cmd/Ctrl+0 remains the keyboard route.
 

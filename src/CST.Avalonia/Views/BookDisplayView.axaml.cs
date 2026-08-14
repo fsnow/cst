@@ -135,6 +135,9 @@ public partial class BookDisplayView : UserControl
         // #618: wire the toolbar's zoom control (step buttons and the percentage box).
         SetupZoomControl();
 
+        // #628: wire the book-information flyout's copy button.
+        SetupBookInfoPanel();
+
         // Try to create WebView browser
         TryCreateWebView();
     }
@@ -496,6 +499,7 @@ public partial class BookDisplayView : UserControl
         if (_viewModel != null)
         {
             _viewModel.BookDisplayControl = this;
+
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             _viewModel.NavigateToHighlightRequested += NavigateToHighlight;
             _viewModel.NavigateToChapterRequested += NavigateToAnchor;
@@ -1040,6 +1044,46 @@ public partial class BookDisplayView : UserControl
         // other, so a second tab showing the same script updates by exactly the same route.
         var zoom = step(_bookZoomService);
         _logger.Debug("Zoom {What} requested for {Script} - now {Zoom:P0}", what, _viewModel.BookScript, zoom);
+    }
+
+    #endregion
+
+    #region Book information (#628)
+
+    private void SetupBookInfoPanel()
+    {
+        var copy = this.FindControl<Button>("copyXmlFileNameButton");
+        if (copy != null) copy.Click += (_, _) => CopyXmlFileName();
+    }
+
+    /// <summary>
+    /// Puts the source file name on the clipboard — the field that gets pasted into a correction report
+    /// every time, so it is worth a click rather than a select-and-copy.
+    /// </summary>
+    private async void CopyXmlFileName()
+    {
+        try
+        {
+            var fileName = _viewModel?.XmlFileName;
+            if (string.IsNullOrEmpty(fileName)) return;
+
+            // GetTopLevel rather than a cached window: this View is recycled across float/unfloat, so the
+            // window it belongs to is not the one it was created in.
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null)
+            {
+                _logger.Warning("Copy file name: no clipboard available");
+                return;
+            }
+
+            await clipboard.SetTextAsync(fileName);
+            _logger.Information("Copied XML file name to clipboard: {FileName}", fileName);
+        }
+        catch (Exception ex)
+        {
+            // async void: an escaping exception here would be an unhandled crash, not a failed copy.
+            _logger.Error(ex, "Failed to copy the XML file name to the clipboard");
+        }
     }
 
     #endregion

@@ -235,6 +235,14 @@ namespace CST.Avalonia.ViewModels
                         this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
                         this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
 
+                        // The information panel's nav path is script-converted too (#628), and is raised
+                        // HERE rather than after the reload: it reads only _bookScript, which is already
+                        // updated by the time this subscription runs, so it has no reason to wait on the
+                        // WebView. Below the await it would be stranded whenever the JS round-trip is slow
+                        // — and permanently if it throws, since the whole body shares one catch — leaving an
+                        // open flyout showing the OLD script's text in the NEW script's font. (fable review)
+                        this.RaisePropertyChanged(nameof(BookNavPath));
+
                         // Capture the exact reading position (#434 token) BEFORE the reload, while the current
                         // script's DOM is still rendered. The token interpolates between the anchors bracketing
                         // the viewport top, so restore lands on the same reading position rather than a page
@@ -432,6 +440,73 @@ namespace CST.Avalonia.ViewModels
             get => _bookInfoText;
             set => this.RaiseAndSetIfChanged(ref _bookInfoText, value);
         }
+
+        #region Book information panel (#628)
+
+        // Requested for text-correction work: an error found while reading has to be reported against the
+        // SOURCE FILE, and the reader was the one tool in that workflow that never showed which file it was
+        // displaying — so the file name had to be looked up in another program every time.
+        //
+        // A panel rather than another status-bar field: the file name is the ask, but it is not the only
+        // thing that identifies a book to someone filing a report, and the status bar is already carrying
+        // five page-numbering systems (#541).
+
+        /// <summary>
+        /// The source XML file, e.g. <c>s0203m.mul.xml</c>. The one value in this panel that is not
+        /// script-dependent — it names a file on disk, so it is deliberately never converted or localized.
+        /// </summary>
+        public string XmlFileName => _book.FileName;
+
+        /// <summary>
+        /// The book's place in the collection, converted to the script the book is being read in, with the
+        /// separators spaced so a long path stays readable at panel width.
+        /// </summary>
+        public string BookNavPath => FormatNavPath(_book.LongNavPath, _bookScript);
+
+        /// <summary>Vinaya, Sutta or Abhidhamma — the division the book belongs to.</summary>
+        public string PitakaName => DescribePitaka(_book.Pitaka);
+
+        /// <summary>Whether this is a root text, a commentary, or a sub-commentary.</summary>
+        public string TextTypeName => DescribeCommentaryLevel(_book.Matn);
+
+        /// <summary>
+        /// The nav path in <paramref name="script"/>. Static and pure so the conversion and the spacing can
+        /// be tested without a Book, a dock factory or a WebView.
+        /// </summary>
+        public static string FormatNavPath(string? longNavPath, Script script)
+        {
+            if (string.IsNullOrWhiteSpace(longNavPath)) return "";
+
+            // The corpus stores nav paths in Devanagari whatever the reading script, exactly as the book
+            // titles are stored.
+            var path = script == Script.Devanagari
+                ? longNavPath
+                : ScriptConverter.Convert(longNavPath, Script.Devanagari, script, true);
+
+            return path.Replace("/", " / ");
+        }
+
+        /// <summary>
+        /// Pāli names rather than the English ones: these are the terms the texts and the people reporting
+        /// errors in them use, and the reader has no English gloss for them anywhere else either.
+        /// </summary>
+        public static string DescribePitaka(Pitaka pitaka) => pitaka switch
+        {
+            Pitaka.Vinaya => "Vinaya",
+            Pitaka.Sutta => "Sutta",
+            Pitaka.Abhidhamma => "Abhidhamma",
+            _ => "Other"
+        };
+
+        public static string DescribeCommentaryLevel(CommentaryLevel level) => level switch
+        {
+            CommentaryLevel.Mula => "Mūla (root text)",
+            CommentaryLevel.Atthakatha => "Aṭṭhakathā (commentary)",
+            CommentaryLevel.Tika => "Ṭīkā (sub-commentary)",
+            _ => "Other"
+        };
+
+        #endregion
 
         public string HitStatusText
         {
