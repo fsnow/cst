@@ -115,6 +115,12 @@ namespace CST.Search
             var start = 0;
             var end = _length;
 
+            // A position AT the end of the document is inside the last div, not outside every div. Without
+            // this the containment test below (pos < divEnd) fails for every span, the whole document comes
+            // back as the section, and an expansion from there crosses every boundary in the book.
+            if (pos >= _length) pos = _length - 1;
+            if (pos < 0) return (0, end);
+
             // Innermost wins: later-starting divs are nested inside earlier ones, so the last container found
             // scanning forward is the tightest.
             foreach (var (divStart, divEnd) in _divs)

@@ -174,23 +174,80 @@ namespace CST.Search
                 // Snapped OUTWARDS, to the start of the sentence the budget landed inside — not forwards to
                 // the next one. WalkBackward snaps forward, which is right for a paging cursor and wrong
                 // here: it discards the partial sentence, so a half-budget reliably bought one sentence less
-                // than it paid for and the window came out lopsided towards what follows the selection. This
-                // is also what makes the two directions symmetric, since the forward walk likewise extends
-                // past its budget to finish the sentence it is in.
+                // than it paid for and the window came out lopsided towards what follows the selection.
+                //
+                // The two directions are NOT symmetric and it is worth not pretending otherwise: forward
+                // extends past its budget only once the budget is spent, backward always snaps — so a
+                // selection one character under budget gets a preceding sentence and one exactly at budget
+                // gets none. A discontinuity at the edge, accepted because the alternative is cutting the
+                // sentence the selection sits in.
+                // The snap gets the SAME hard cap the forward walk has (1.5x its budget), and for the same
+                // reason. Unbounded, it walks to the previous danda however far away that is: a selection in
+                // the danda-free front matter of a book with no div markup snapped to position 0, and a
+                // 40-character budget produced a 2,000-character window. Bounding the floor rather than
+                // rejecting the snap keeps the behaviour it was added for — finishing the sentence the budget
+                // landed inside — while making the total window actually bounded.
+                int floor = RawBackward(xml, selectionStart, half + half / 2, sectionStart);
                 int rough = RawBackward(xml, selectionStart, half, sectionStart);
-                var boundaryNotes = TeiText.NoteRegions(xml, sectionStart, selectionStart);
-                start = SnapBackToSentenceStart(xml, rough, sectionStart, boundaryNotes);
+                var boundaryNotes = TeiText.NoteRegions(xml, floor, selectionStart);
+                start = SnapBackToSentenceStart(xml, rough, floor, boundaryNotes);
 
                 int spentBack = RenderedLength(xml, start, selectionStart, includeNotes);
 
-                // Clamped at zero: snapping outwards can spend more than half, and a negative budget would
-                // make WalkForward stop at the first boundary as though the budget were exhausted — which it
-                // then does anyway, finishing the selection's own sentence and no more.
+                // Clamped at zero: snapping outwards can spend more than half.
                 int forwardBudget = Math.Max(0, shortfall - spentBack);
                 end = WalkForward(xml, selectionEnd, forwardBudget, includeNotes, sectionEnd);
             }
 
+            // Finish the sentence the window ends inside, whatever the budget had left.
+            //
+            // WalkForward's hard cap is 1.5x ITS budget, so a budget of zero caps at zero and it returns after
+            // a single character — cutting mid-sentence, which is the one thing this class promises never to
+            // do. That is reachable whenever the backward snap spends the whole shortfall, and it is exactly
+            // the case where the reader most needs the sentence intact, because the selection is the subject.
+            end = ExtendToSentenceEnd(xml, end, sectionEnd, includeNotes);
+
+            {
+            }
+
             return Materialize(xml, start, end, maxChars, includeVariants, outputScript, markers, structuredNotes);
+        }
+
+        /// <summary>
+        /// Walk on to the end of the sentence in progress, ignoring any budget. Bounded by the section and by
+        /// a generous cap, so a text with no sentence punctuation ahead cannot run to the end of the book.
+        /// </summary>
+        private static int ExtendToSentenceEnd(string xml, int from, int limit, bool includeNotes)
+        {
+            const int Cap = 4000;
+
+            var notes = TeiText.NoteRegions(xml, from, Math.Min(limit, from + Cap));
+
+            int i = from, seen = 0;
+            while (i < limit && seen < Cap)
+            {
+                char c = xml[i];
+                if (c == '<')
+                {
+                    int gt = xml.IndexOf('>', i);
+                    if (gt < 0) break;
+                    string tag = xml.Substring(i, gt - i + 1);
+                    string name = TeiText.TagName(tag);
+                    if (name == "note" && !includeNotes && !tag.EndsWith("/>", StringComparison.Ordinal))
+                        i = tag.StartsWith("</", StringComparison.Ordinal)
+                            ? gt + 1
+                            : TeiText.SkipSubtree(xml, gt + 1, "note", limit);
+                    else i = gt + 1;
+                    continue;
+                }
+
+                // A danda inside a note is apparatus punctuation, not a base-text sentence end. (#310 A4-2)
+                if (TeiText.IsBoundary(c) && !TeiText.InNote(i, notes)) return i + 1;
+                i++;
+                seen++;
+            }
+
+            return Math.Min(i, limit);
         }
 
         /// <summary>

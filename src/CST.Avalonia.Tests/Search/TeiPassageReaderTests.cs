@@ -375,11 +375,118 @@ namespace CST.Avalonia.Tests.Search
 
             Assert.Contains("zzz", window.Text);
             Assert.Contains("yyy", window.Text);
-            Assert.Contains("xxx", window.Text);   // reached only because the backward half was redirected
 
             // And it was redirected rather than spent: what lies behind is the previous section, which is not
             // this passage's context. The bound holds in BOTH directions.
             Assert.DoesNotContain("hhh", window.Text);
+        }
+
+        [Fact]
+        public void The_redirected_budget_reaches_text_that_half_a_budget_could_not()
+        {
+            // The version of the test above that actually distinguishes redistribution from its absence. The
+            // first fixture's tail section was short enough that WalkForward's post-budget sentence-finish
+            // reached the asserted word anyway, so the assertion held with or without the fix it named — a
+            // test that was true for a reason unrelated to its own comment.
+            const string longTail =
+                "<body><div id=\"b\" type=\"book\">" +
+                "<div id=\"s1\" type=\"sutta\"><p rend=\"bodytext\" n=\"1\">aaa। bbb।</p></div>" +
+                "<div id=\"s2\" type=\"sutta\"><p rend=\"bodytext\" n=\"2\">" +
+                "ccc। ddd। eee। fff। ggg। hhh। iii। jjj। kkk।" +
+                "</p></div></div></body>";
+            var markers = BookMarkers.Build(longTail);
+            var (from, to) = Span(longTail, "ccc");
+
+            // Half of this budget spent backwards would buy nothing (the selection opens its section), so
+            // everything after "ddd" is reached only because the unspendable half went forward.
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                longTail, from, to, maxChars: 40, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("ccc", window.Text);
+            Assert.Contains("hhh", window.Text);
+            Assert.DoesNotContain("bbb", window.Text);   // still never backwards across the boundary
+        }
+
+        [Fact]
+        public void The_backward_snap_cannot_run_away_from_the_budget()
+        {
+            // Found by Fable, not by the tests: the outward snap walks to the previous sentence end, and with
+            // no cap that is however far away the previous danda happens to be. Front matter — a title, a
+            // nikaya heading — carries no danda, so a selection in the first sentence of a book with no div
+            // markup snapped all the way to position 0. A 40-character budget produced a 2,000-character
+            // window, and every fixture here had a danda every few characters, so nothing noticed.
+            var filler = new string('x', 2000);
+            var xml = $"<body><p rend=\"bodytext\" n=\"1\">{filler} target। tail।</p></body>";
+            var markers = BookMarkers.Build(xml);
+            var (from, to) = Span(xml, "target");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                xml, from, to, maxChars: 40, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("target", window.Text);
+            // Bounded rather than exact: both ends may overshoot to finish a sentence. What must not happen
+            // is a window two orders of magnitude over budget.
+            Assert.True(window.Text.Length < 400, $"window ran away: {window.Text.Length} chars");
+        }
+
+        [Fact]
+        public void The_sentence_the_selection_sits_in_is_finished_even_with_no_budget_left()
+        {
+            // Also Fable's: WalkForward's hard cap is 1.5x ITS budget, so once the backward snap has spent
+            // the whole shortfall the forward cap is zero and it returned after a single character — cutting
+            // mid-sentence, which is the one thing this class promises never to do, in the case where the
+            // reader most needs the sentence whole because it is the subject of the request.
+            const string xml =
+                "<body><p rend=\"bodytext\" n=\"1\">aaaa bbbb cccc dddd। ee ff gg hh ii jj kk।</p></body>";
+            var markers = BookMarkers.Build(xml);
+            var (from, to) = Span(xml, "ee");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                xml, from, to, maxChars: 5, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("ee", window.Text);
+            Assert.Contains("kk", window.Text);   // the sentence runs to its end
+        }
+
+        [Fact]
+        public void A_selection_at_the_very_end_of_a_section_still_respects_its_boundary()
+        {
+            // The boundary case that does occur: the last words of a section, where the forward walk runs
+            // straight into the closing tags and the backward one has the whole section behind it.
+            var markers = BookMarkers.Build(TwoSections);
+            var (from, to) = Span(TwoSections, "www");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                TwoSections, from, to, maxChars: 400, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("www", window.Text);
+            Assert.Contains("zzz", window.Text);        // its own section, behind it
+            Assert.DoesNotContain("hhh", window.Text);  // never back into the previous one
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        public void Degenerate_spans_do_not_throw(int maxChars)
+        {
+            // A public method has to survive its own degenerate inputs: an empty selection, one at position
+            // zero, one past the end, and a budget of nothing. None of these is reachable from the panel; all
+            // of them are reachable from a caller reading the signature.
+            var markers = BookMarkers.Build(TwoSections);
+
+            foreach (var (from, to) in new[] { (0, 0), (0, 1), (TwoSections.Length, TwoSections.Length),
+                                               (TwoSections.Length + 50, TwoSections.Length + 90) })
+            {
+                var window = TeiPassageReader.ReadWindowAroundSelection(
+                    TwoSections, from, to, maxChars, includeVariants: false,
+                    outputScript: Script.Devanagari, markers);
+
+                Assert.NotNull(window.Text);
+            }
         }
 
         [Fact]
