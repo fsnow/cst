@@ -205,7 +205,13 @@ public sealed class PromptBuilder : IPromptBuilder
         return $"**Reference:** {citation.BookName}, {citation.NormalizedReference}{pages}";
     }
 
-    private static string PageRef(SnippetPageRef page)
+    /// <summary>
+    /// One printed page reference, as both the model and the reader see it. Internal rather than private so
+    /// the assistant panel renders pages identically (#586): if the two formatters drifted, a reader
+    /// checking the citation on screen against what the model was told would find a discrepancy that does
+    /// not exist.
+    /// </summary>
+    internal static string PageRef(SnippetPageRef page)
     {
         var edition = page.Edition switch
         {

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Services.Ai;
 using CST.Avalonia.ViewModels;
+using CST.Navigation;
 using CST.Search;
 using Xunit;
 
@@ -274,6 +275,39 @@ public class AiAssistantViewModelTests
         // leave the panel permanently unusable with no error to explain it.
         Assert.False(vm.IsBusy);
         Assert.True(vm.CanAsk);
+    }
+
+    [Fact]
+    public void The_citation_renders_printed_pages_readably_and_not_as_a_record()
+    {
+        // SnippetPageRef is a record: ToString() would have put "SnippetPageRef { Edition = Vri, Volume = 1,
+        // Number = 6 }" on screen — and since #561 a passage window can cover SEVERAL pages, so it would
+        // have been a line of them. Formatted by the prompt builder's own helper so the pages the reader
+        // sees and the pages the model was told are the same string.
+        var citation = new CitationRef(
+            "s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", "para 12",
+            new[]
+            {
+                new SnippetPageRef(PageEdition.Vri, 1, 6),
+                new SnippetPageRef(PageEdition.Vri, 1, 7),
+            });
+
+        var text = AiAssistantViewModel.Describe(citation);
+
+        Assert.DoesNotContain("SnippetPageRef", text);
+        Assert.DoesNotContain("Edition =", text);
+        Assert.Contains("VRI", text);
+        Assert.Contains("6", text);
+        Assert.Contains("7", text);
+    }
+
+    [Fact]
+    public void A_citation_with_no_pages_says_nothing_about_pages()
+    {
+        var text = AiAssistantViewModel.Describe(Citation());
+
+        Assert.Contains("Sīlakkhandhavaggapāḷi", text);
+        Assert.DoesNotContain("·", text);
     }
 
     // ---- Usage -----------------------------------------------------------------------------------

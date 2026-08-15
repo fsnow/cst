@@ -373,10 +373,14 @@ public class AiAssistantViewModel : ReactiveTool
     {
         if (citation is null) return "";
 
-        // Book name and reference, plus the printed pages the passage covers where the bundle knows them —
-        // a VRI page number is what lets a reader put a finger on the printed text and check the claim.
+        // The printed pages the passage covers — a VRI page number is what lets a reader put a finger on the
+        // text and check the claim. Formatted by the PROMPT BUILDER's own helper, deliberately: the pages
+        // named on screen and the pages named to the model must be the same string, or a reader comparing
+        // them finds a discrepancy that does not exist. SnippetPageRef is a record, so its ToString would
+        // also have rendered "SnippetPageRef { Edition = Vri, … }" straight into the panel — and since #561
+        // a window can cover several pages, that would have been a line of them.
         var pages = citation.Pages is { Count: > 0 }
-            ? " · " + string.Join(", ", citation.Pages.Select(p => p.ToString()))
+            ? " · " + string.Join(", ", citation.Pages.Select(PromptBuilder.PageRef))
             : "";
 
         return string.IsNullOrWhiteSpace(citation.NormalizedReference)
