@@ -25,16 +25,53 @@ public static class PromptTemplateNames
     public const string Grammar = "grammar";
     public const string WordByWord = "word-by-word";
 
-    public static IReadOnlyList<string> All { get; } =
-        new[] { System, Explain, Translate, Grammar, WordByWord };
+    /// <summary>
+    /// The same four presets, for when the reader has selected something. <b>Separate documents rather than a
+    /// conditional inside one.</b>
+    ///
+    /// <para>The single-template version put the passage first and large, opened its instructions with
+    /// "Translate this passage", and appended "If a selection is given, translate the selection" as the last
+    /// line. Models resolve that by mass, and the mass was the passage — so a reader who selected a sentence
+    /// and pressed Translate got the surrounding paragraphs translated instead. The reported defect.</para>
+    ///
+    /// <para>Because <see cref="PromptPlaceholders"/> has no conditionals — deliberately, since these are
+    /// user-editable and control flow is a language a user can break — a selection could only ever be an
+    /// appended paragraph, never a restructuring. Two documents restore the restructuring while keeping the
+    /// ceiling: every sentence in what the model receives is unconditional and true.</para>
+    /// </summary>
+    public const string ExplainSelection = "explain-selection";
+    public const string TranslateSelection = "translate-selection";
+    public const string GrammarSelection = "grammar-selection";
+    public const string WordByWordSelection = "word-by-word-selection";
 
-    /// <summary>The instruction template for a preset.</summary>
-    public static string ForTask(AiTask task) => task switch
+    public static IReadOnlyList<string> All { get; } =
+        new[]
+        {
+            System,
+            Explain, Translate, Grammar, WordByWord,
+            ExplainSelection, TranslateSelection, GrammarSelection, WordByWordSelection,
+        };
+
+    /// <summary>
+    /// The instruction template for a preset, given whether the reader supplied usable selection text.
+    /// </summary>
+    /// <param name="hasSelectionText">
+    /// True only when there is selection text to put in front of the model. <b>Not the same as "a selection
+    /// exists"</b>: a selection the reader made but the app could not read (<c>SelectionState.Unavailable</c>)
+    /// routes HERE, to the base variant, because there is nothing to make the subject — while the base
+    /// template still tells the model a selection was dropped. Collapsing the two would quietly undo #581's
+    /// three-outcomes work.
+    /// </param>
+    public static string ForTask(AiTask task, bool hasSelectionText) => (task, hasSelectionText) switch
     {
-        AiTask.Explain => Explain,
-        AiTask.Translate => Translate,
-        AiTask.Grammar => Grammar,
-        AiTask.WordByWord => WordByWord,
+        (AiTask.Explain, false) => Explain,
+        (AiTask.Translate, false) => Translate,
+        (AiTask.Grammar, false) => Grammar,
+        (AiTask.WordByWord, false) => WordByWord,
+        (AiTask.Explain, true) => ExplainSelection,
+        (AiTask.Translate, true) => TranslateSelection,
+        (AiTask.Grammar, true) => GrammarSelection,
+        (AiTask.WordByWord, true) => WordByWordSelection,
         _ => throw new ArgumentOutOfRangeException(nameof(task), task, "No prompt template for this task."),
     };
 }
@@ -90,10 +127,23 @@ public static class PromptPlaceholders
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
             [PromptTemplateNames.System] = new[] { OutputLanguage, Scope, PaliOpen, PaliClose },
+
+            // The base variants keep {{selection}} required even though nothing is selected on their ordinary
+            // path: they also serve the "a selection was made and could not be read" case, and that sentence
+            // is the one #581 exists to deliver.
             [PromptTemplateNames.Explain] = new[] { Passage, Citation, Selection, UserQuestion },
             [PromptTemplateNames.Translate] = new[] { Passage, Citation, Selection, UserQuestion },
             [PromptTemplateNames.Grammar] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
             [PromptTemplateNames.WordByWord] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
+
+            // The selection variants need BOTH: {{selection}} is the subject, and {{passage}} is the context
+            // that makes the subject readable. An override that deletes the context validates cleanly and then
+            // silently degrades every answer, which is why it is required rather than merely recommended.
+            [PromptTemplateNames.ExplainSelection] = new[] { Passage, Citation, Selection, UserQuestion },
+            [PromptTemplateNames.TranslateSelection] = new[] { Passage, Citation, Selection, UserQuestion },
+            [PromptTemplateNames.GrammarSelection] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
+            [PromptTemplateNames.WordByWordSelection] =
+                new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
         };
 }
 

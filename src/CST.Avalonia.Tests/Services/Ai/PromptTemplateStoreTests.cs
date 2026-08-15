@@ -39,6 +39,10 @@ public class PromptTemplateStoreTests : IDisposable
     [InlineData(PromptTemplateNames.Translate)]
     [InlineData(PromptTemplateNames.Grammar)]
     [InlineData(PromptTemplateNames.WordByWord)]
+    [InlineData(PromptTemplateNames.ExplainSelection)]
+    [InlineData(PromptTemplateNames.TranslateSelection)]
+    [InlineData(PromptTemplateNames.GrammarSelection)]
+    [InlineData(PromptTemplateNames.WordByWordSelection)]
     public void Every_shipped_template_passes_the_validation_it_imposes_on_the_user(string name)
     {
         // If a built-in cannot meet the bar we hold user edits to, either the template or the bar is wrong.
@@ -48,9 +52,12 @@ public class PromptTemplateStoreTests : IDisposable
     [Fact]
     public void Every_task_has_a_template_and_every_template_a_default()
     {
+        // Both variants of every preset, because a task with no selection template is a task that throws the
+        // first time a reader highlights something.
         foreach (var task in Enum.GetValues<AiTask>())
+        foreach (var hasSelection in new[] { false, true })
         {
-            var name = PromptTemplateNames.ForTask(task);
+            var name = PromptTemplateNames.ForTask(task, hasSelection);
             Assert.Contains(name, PromptTemplateNames.All);
             Assert.False(string.IsNullOrWhiteSpace(_store.GetDefault(name)));
         }

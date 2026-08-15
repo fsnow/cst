@@ -170,8 +170,86 @@ public class PromptBuilderTests : IDisposable
         var prompt = _builder.Build(Bundle(
             selection: new SelectionContext("dhammā manopubbaṅgamā", SelectionState.NotFoundInWindow)));
 
-        Assert.Contains("was not found in the passage above", prompt.UserContent);
+        // The caution points at the CONTEXT, not at the selection. The selection is the one thing here we are
+        // certain of — the reader pointed at it and we have its exact characters; what failed is our attempt
+        // to supply its surroundings. The earlier wording told the model to distrust the selection, which,
+        // now that the selection is the subject, would be telling it to distrust the question.
+        Assert.Contains("does not contain this selection", prompt.UserContent);
+        Assert.Contains("Work from the selection itself", prompt.UserContent);
         Assert.Contains(prompt.Notices, n => n.Contains("not found in the passage window"));
+    }
+
+    // ---- The selection is the subject of the request -----------------------------------------------
+
+    [Fact]
+    public void A_selection_makes_the_instruction_about_the_selection_and_not_the_passage()
+    {
+        // The reported defect, at its source. "If I select text and click Translate, I expect that that is
+        // what is translated." The old single template opened its instructions with "Translate this passage",
+        // spent five rules elaborating the passage, and appended the selection as a trailing conditional --
+        // so the model translated the passage. Nothing about the wording was wrong in isolation; the DOCUMENT
+        // was about the passage.
+        var prompt = _builder.Build(Bundle(
+            task: AiTask.Translate,
+            selection: new SelectionContext("appamādo amatapadaṃ", SelectionState.Located)));
+
+        Assert.Contains("Translate the selected text.", prompt.UserContent);
+        Assert.DoesNotContain("Translate this passage.", prompt.UserContent);
+
+        // And no conditional survives for a weak model to mis-weight: every instruction it receives is
+        // unconditional and true of this request.
+        Assert.DoesNotContain("If a selection is given", prompt.UserContent);
+    }
+
+    [Theory]
+    [InlineData(AiTask.Explain)]
+    [InlineData(AiTask.Translate)]
+    [InlineData(AiTask.Grammar)]
+    [InlineData(AiTask.WordByWord)]
+    public void Every_preset_demotes_the_passage_to_context_when_something_is_selected(AiTask task)
+    {
+        // Pins the whole set rather than the one preset that was reported. All four had the same shape, so
+        // all four had the same defect, and a fix applied to Translate alone would have looked complete.
+        var prompt = _builder.Build(Bundle(
+            task: task,
+            selection: new SelectionContext("appamādo amatapadaṃ", SelectionState.Located)));
+
+        Assert.Contains("for context only", prompt.UserContent);
+        Assert.Contains("It is not what you were asked to", prompt.UserContent);
+
+        // The selection has to be present in full, above the context, or the heading is a lie.
+        var subject = prompt.UserContent.IndexOf("appamādo amatapadaṃ", StringComparison.Ordinal);
+        var context = prompt.UserContent.IndexOf("for context only", StringComparison.Ordinal);
+        Assert.True(subject >= 0 && subject < context, "the selection must come before the context section");
+    }
+
+    [Fact]
+    public void The_system_prompt_agrees_with_the_preset_about_what_is_being_asked()
+    {
+        // The half that is easy to miss: {{scope}} is rendered by the builder, not by the preset template, so
+        // splitting the presets alone would leave the system prompt still saying "the whole of what follows is
+        // in view, say which part you are answering about" -- the passage-as-subject argument, one layer up,
+        // contradicting the preset directly beneath it.
+        var withSelection = _builder.Build(Bundle(
+            selection: new SelectionContext("appamādo amatapadaṃ", SelectionState.Located)));
+        var without = _builder.Build(Bundle());
+
+        Assert.Contains("The selection is the subject of this request", withSelection.System);
+        Assert.DoesNotContain("The selection is the subject", without.System);
+    }
+
+    [Fact]
+    public void A_selection_that_could_not_be_read_keeps_the_passage_as_the_subject()
+    {
+        // Three outcomes, not two (#581). "The reader selected something we could not read" has no text to
+        // make the subject, so it routes to the base preset -- but the model must still be told a selection
+        // was dropped, or the answer silently ignores what the user watched themselves supply.
+        var prompt = _builder.Build(Bundle(
+            task: AiTask.Translate,
+            selection: new SelectionContext(null, SelectionState.Unavailable)));
+
+        Assert.Contains("Translate this passage.", prompt.UserContent);
+        Assert.Contains("could not be read", prompt.UserContent);
     }
 
     [Fact]
