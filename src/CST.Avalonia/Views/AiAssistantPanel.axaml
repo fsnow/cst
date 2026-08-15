@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:CST.Avalonia.ViewModels"
              xmlns:views="using:CST.Avalonia.Views"
+             xmlns:ai="using:CST.Avalonia.Services.Ai"
              mc:Ignorable="d" d:DesignWidth="380" d:DesignHeight="700"
              x:Class="CST.Avalonia.Views.AiAssistantPanel"
              x:DataType="vm:AiAssistantViewModel">
@@ -152,12 +153,45 @@
                                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 </Expander>
 
-                                <!-- The answer. One selectable control with styled runs, so a reader can drag
-                                     across the whole thing and copy it as clean prose. -->
-                                <SelectableTextBlock views:AnswerInlines.Spans="{Binding Spans}"
-                                                     IsVisible="{Binding HasAnswer}"
-                                                     TextWrapping="Wrap"
-                                                     Margin="0,4,0,0"/>
+                                <!-- The answer, as blocks: prose in one selectable control per run, tables
+                                     as real grids. Tables are here because we hand the model a Markdown
+                                     word-analysis table and it answers in kind; monospace pipes stopped
+                                     lining up at exactly this panel's width. The cost is that a drag cannot
+                                     cross a table, which is why Copy below is an explicit control. -->
+                                <ItemsControl ItemsSource="{Binding Blocks}"
+                                              IsVisible="{Binding HasAnswer}"
+                                              Margin="0,4,0,0">
+                                    <ItemsControl.DataTemplates>
+                                        <DataTemplate DataType="ai:AnswerParagraph">
+                                            <SelectableTextBlock views:AnswerInlines.Spans="{Binding Spans}"
+                                                                 TextWrapping="Wrap"/>
+                                        </DataTemplate>
+                                        <DataTemplate DataType="ai:AnswerTable">
+                                            <!-- Horizontal scroll rather than squeeze: a four-column word
+                                                 analysis in a narrow panel is worth scrolling to read, and
+                                                 the page body must never scroll sideways on its account. -->
+                                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                                          VerticalScrollBarVisibility="Disabled"
+                                                          Margin="0,6,0,6">
+                                                <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                                        BorderThickness="1" CornerRadius="4"
+                                                        Padding="2">
+                                                    <Grid views:AnswerTableView.Table="{Binding}"/>
+                                                </Border>
+                                            </ScrollViewer>
+                                        </DataTemplate>
+                                    </ItemsControl.DataTemplates>
+                                </ItemsControl>
+
+                                <!-- Copy is owned, not inherited. Drag-select covered the whole answer while
+                                     it was one control; a table's cells are separate controls, so the
+                                     reader who came here to lift a translation out needs a button. -->
+                                <Button Content="Copy"
+                                        Command="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).CopyCommand}"
+                                        CommandParameter="{Binding}"
+                                        IsVisible="{Binding HasAnswer}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,6,0,0"/>
 
                                 <!-- Facts about how the request was assembled, not failures. Collapsed,
                                      because at full weight beside the answer they read as a list of errors. -->

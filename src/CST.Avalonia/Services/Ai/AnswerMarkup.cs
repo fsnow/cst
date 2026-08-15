@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace CST.Avalonia.Services.Ai;
@@ -15,97 +16,198 @@ public enum AnswerStyle
     /// <summary>A heading line. Drawn as emphasis, not as a new font size — this is a side panel.</summary>
     Heading = 4,
 
-    /// <summary>Fixed-pitch: inline code, and the fallback for table-shaped lines.</summary>
+    /// <summary>Fixed-pitch: inline code.</summary>
     Monospace = 8,
+}
+
+/// <summary>Column alignment, as the table's delimiter row declared it.</summary>
+public enum AnswerAlign
+{
+    Left,
+    Center,
+    Right,
 }
 
 /// <summary>One run of answer text and how to draw it.</summary>
 public sealed record AnswerSpan(string Text, AnswerStyle Style);
 
+/// <summary>A piece of a rendered answer: a run of prose, or a table.</summary>
+public abstract record AnswerBlock;
+
+/// <summary>Prose — possibly many lines, with headings and bullets already resolved into spans.</summary>
+public sealed record AnswerParagraph(IReadOnlyList<AnswerSpan> Spans) : AnswerBlock;
+
+/// <summary>One table cell: its styled content and the column's alignment.</summary>
+public sealed record AnswerCell(IReadOnlyList<AnswerSpan> Spans, AnswerAlign Align);
+
+/// <summary>A pipe table. <paramref name="Header"/> may be empty if the table had no header text.</summary>
+public sealed record AnswerTable(
+    IReadOnlyList<AnswerCell> Header,
+    IReadOnlyList<IReadOnlyList<AnswerCell>> Rows) : AnswerBlock;
+
 /// <summary>
-/// The light Markdown the models actually emit, turned into styled spans. (#586)
+/// The light Markdown the models actually emit, turned into blocks the panel can draw. (#586)
 ///
 /// <para><b>Why this exists.</b> The answer was rendered as plain text, so a model writing
-/// <c>**appamāda**</c> — which they all do — put literal asterisks on screen. We are not innocent bystanders
-/// here either: the prompts are themselves Markdown, headings and bold and bullet lists, and
-/// <see cref="PromptBuilder"/> hands the model a word-analysis TABLE. A model shown a table answers in
-/// tables.</para>
+/// <c>**appamāda**</c> — which they all do — put literal asterisks on screen. We are not bystanders: the
+/// prompts are themselves Markdown, and <see cref="PromptBuilder"/> hands the model a word-analysis table.
+/// A model shown a table answers in tables.</para>
 ///
-/// <para><b>Why hand-rolled rather than a Markdown library.</b> Two reasons, and the second is the deciding
-/// one. A library renders into a tree of separate controls, and a reader cannot drag-select across separate
-/// controls — copying the translation out is the thing this panel exists for. And v1.1 has to render
-/// <see cref="PaliQuoteMarkers"/> spans in the reader's own script, which means styled runs inside one
-/// selectable control anyway; no Markdown library can host that. This is the same streaming transform
-/// <see cref="PaliQuoteFilter"/> already performs, extended to carry style.</para>
+/// <para><b>Tables are parsed, not merely aligned.</b> The first version set table-shaped lines in fixed
+/// pitch and the system prompt asked the model not to emit tables at all — on the reasoning that a real table
+/// needs one control per cell and a drag-selection cannot cross separate controls. That traded a capability
+/// for a copy path, and it was the wrong trade twice over: instruction-following on "no formatting" is
+/// unreliable on exactly the weak models this app must support, so the tables arrived anyway; and copy is
+/// better served by an explicit control than by drag-select, which no longer has to carry the whole burden.
+/// See <see cref="PlainText"/> — copying is now a first-class operation over the parsed blocks.</para>
 ///
-/// <para><b>The ambition is capped on purpose:</b> bold, italic, inline code, headings, bullet lists, and a
-/// fixed-pitch fallback for table-shaped lines. Everything else is left as written. Blockquotes, links and
-/// nested emphasis are deliberately absent — the moment they are wanted, a library is the better answer.
-/// Anything unparsed renders as itself, which is exactly what a reader would have seen before.</para>
+/// <para><b>Streaming safety.</b> A table is only recognised once its delimiter row has arrived, so a header
+/// row alone renders as ordinary text and becomes a table on the next flush rather than flickering between
+/// two layouts. Anything unrecognised renders as itself, which is what a reader would have seen before.</para>
 /// </summary>
 public static class AnswerMarkup
 {
-    /// <summary>
-    /// Parse an answer into styled spans. Line breaks are carried as <c>\n</c> inside span text, so the whole
-    /// answer can be one selectable control and a copy comes out as clean prose.
-    /// </summary>
-    public static IReadOnlyList<AnswerSpan> Parse(string? text)
+    /// <summary>Parse an answer into blocks.</summary>
+    public static IReadOnlyList<AnswerBlock> Parse(string? text)
     {
-        var spans = new List<AnswerSpan>();
-        if (string.IsNullOrEmpty(text)) return spans;
+        var blocks = new List<AnswerBlock>();
+        if (string.IsNullOrEmpty(text)) return blocks;
 
         var lines = text.Replace("\r\n", "\n").Split('\n');
+        var prose = new List<AnswerSpan>();
+
         for (var i = 0; i < lines.Length; i++)
         {
-            var line = lines[i];
-            var newline = i < lines.Length - 1 ? "\n" : string.Empty;
-
-            var trimmed = line.TrimStart();
-            var indent = line[..(line.Length - trimmed.Length)];
-
-            // Table-shaped: leave the pipes alone and set them in fixed pitch so the columns at least line
-            // up. Parsing tables into a grid would break the single-control selection this panel needs.
-            if (IsTableRow(trimmed))
+            // A table needs its delimiter row before it is a table. Until then the header row is just a line
+            // of text — which is what it looks like mid-stream, one flush before the delimiter arrives.
+            if (i + 1 < lines.Length && IsPipeRow(lines[i]) && IsDelimiterRow(lines[i + 1]))
             {
-                Add(spans, line + newline, AnswerStyle.Monospace);
+                FlushProse(blocks, prose);
+
+                var aligns = Alignments(lines[i + 1]);
+                var header = Cells(lines[i], aligns);
+                var rows = new List<IReadOnlyList<AnswerCell>>();
+
+                var row = i + 2;
+                while (row < lines.Length && IsPipeRow(lines[row]))
+                {
+                    rows.Add(Cells(lines[row], aligns));
+                    row++;
+                }
+
+                blocks.Add(new AnswerTable(header, rows));
+                i = row - 1;
                 continue;
             }
 
-            if (HeadingBody(trimmed) is { } heading)
-            {
-                AddInline(spans, heading, AnswerStyle.Heading | AnswerStyle.Bold);
-                if (newline.Length > 0) Add(spans, newline, AnswerStyle.None);
-                continue;
-            }
-
-            if (BulletBody(trimmed) is { } bullet)
-            {
-                // A literal bullet glyph rather than a list control, so a copied answer reads as a list
-                // instead of as run-together sentences.
-                Add(spans, indent + "• ", AnswerStyle.None);
-                AddInline(spans, bullet, AnswerStyle.None);
-                if (newline.Length > 0) Add(spans, newline, AnswerStyle.None);
-                continue;
-            }
-
-            AddInline(spans, line, AnswerStyle.None);
-            if (newline.Length > 0) Add(spans, newline, AnswerStyle.None);
+            AppendLine(prose, lines[i], last: i == lines.Length - 1);
         }
 
-        return Merge(spans);
+        FlushProse(blocks, prose);
+        return blocks;
     }
 
-    /// <summary>The plain text of a parsed answer — what a copy should produce. Also the test seam that
-    /// proves parsing never loses or invents a character of the reader's text.</summary>
-    public static string PlainText(IReadOnlyList<AnswerSpan> spans)
+    /// <summary>
+    /// The plain text of a parsed answer — what Copy hands over, and the test seam that proves parsing never
+    /// loses or invents a character of the reader's text. Tables come back as aligned pipe rows, which is
+    /// what pastes usefully into a document or a message.
+    /// </summary>
+    public static string PlainText(IReadOnlyList<AnswerBlock> blocks)
     {
         var text = new StringBuilder();
-        foreach (var span in spans) text.Append(span.Text);
+
+        foreach (var block in blocks)
+        {
+            switch (block)
+            {
+                case AnswerParagraph paragraph:
+                    foreach (var span in paragraph.Spans) text.Append(span.Text);
+                    break;
+
+                case AnswerTable table:
+                    AppendTable(text, table);
+                    break;
+            }
+        }
+
         return text.ToString();
     }
 
-    private static bool IsTableRow(string trimmed) =>
-        trimmed.StartsWith('|') && trimmed.TrimEnd().EndsWith('|') && trimmed.Length > 1;
+    private static void AppendTable(StringBuilder text, AnswerTable table)
+    {
+        var rows = new List<IReadOnlyList<AnswerCell>>();
+        if (table.Header.Count > 0) rows.Add(table.Header);
+        rows.AddRange(table.Rows);
+        if (rows.Count == 0) return;
+
+        var columns = rows.Max(r => r.Count);
+        var widths = new int[columns];
+        for (var c = 0; c < columns; c++)
+            widths[c] = rows.Max(r => c < r.Count ? Text(r[c]).Length : 0);
+
+        for (var r = 0; r < rows.Count; r++)
+        {
+            text.Append('|');
+            for (var c = 0; c < columns; c++)
+            {
+                var cell = c < rows[r].Count ? Text(rows[r][c]) : string.Empty;
+                text.Append(' ').Append(cell.PadRight(widths[c])).Append(" |");
+            }
+            text.Append('\n');
+
+            // The separator goes back in under the header, so a pasted table is still a Markdown table.
+            if (r == 0 && table.Header.Count > 0)
+            {
+                text.Append('|');
+                for (var c = 0; c < columns; c++) text.Append(' ').Append(new string('-', widths[c])).Append(" |");
+                text.Append('\n');
+            }
+        }
+    }
+
+    private static string Text(AnswerCell cell) =>
+        string.Concat(cell.Spans.Select(s => s.Text));
+
+    // ---- Prose ---------------------------------------------------------------------------------------
+
+    private static void FlushProse(List<AnswerBlock> blocks, List<AnswerSpan> prose)
+    {
+        if (prose.Count == 0) return;
+
+        // A paragraph ending immediately before a table would otherwise carry a dangling newline into a block
+        // that is about to be followed by one anyway.
+        var merged = Merge(prose);
+        blocks.Add(new AnswerParagraph(merged));
+        prose.Clear();
+    }
+
+    private static void AppendLine(List<AnswerSpan> spans, string line, bool last)
+    {
+        var newline = last ? string.Empty : "\n";
+
+        var trimmed = line.TrimStart();
+        var indent = line[..(line.Length - trimmed.Length)];
+
+        if (HeadingBody(trimmed) is { } heading)
+        {
+            AddInline(spans, heading, AnswerStyle.Heading | AnswerStyle.Bold);
+            Add(spans, newline, AnswerStyle.None);
+            return;
+        }
+
+        if (BulletBody(trimmed) is { } bullet)
+        {
+            // A literal bullet glyph rather than a list control, so a copied answer reads as a list instead
+            // of as run-together sentences.
+            Add(spans, indent + "• ", AnswerStyle.None);
+            AddInline(spans, bullet, AnswerStyle.None);
+            Add(spans, newline, AnswerStyle.None);
+            return;
+        }
+
+        AddInline(spans, line, AnswerStyle.None);
+        Add(spans, newline, AnswerStyle.None);
+    }
 
     /// <summary>The text of an ATX heading line, or null.</summary>
     private static string? HeadingBody(string trimmed)
@@ -126,6 +228,61 @@ public static class AnswerMarkup
         if (trimmed[1] != ' ') return null;
         return trimmed[2..];
     }
+
+    // ---- Tables --------------------------------------------------------------------------------------
+
+    private static bool IsPipeRow(string line)
+    {
+        var trimmed = line.Trim();
+        return trimmed.Length > 1 && trimmed.StartsWith('|') && trimmed.EndsWith('|');
+    }
+
+    /// <summary>A row of nothing but dashes, colons, pipes and spaces — the thing that makes a table a table.</summary>
+    private static bool IsDelimiterRow(string line)
+    {
+        if (!IsPipeRow(line)) return false;
+
+        var seenDash = false;
+        foreach (var c in line.Trim())
+        {
+            if (c == '-') seenDash = true;
+            else if (c is not ('|' or ':' or ' ')) return false;
+        }
+        return seenDash;
+    }
+
+    private static IReadOnlyList<AnswerAlign> Alignments(string delimiter) =>
+        SplitRow(delimiter)
+            .Select(cell => cell.Trim())
+            .Select(cell => (cell.StartsWith(':'), cell.EndsWith(':')) switch
+            {
+                (true, true) => AnswerAlign.Center,
+                (false, true) => AnswerAlign.Right,
+                _ => AnswerAlign.Left,
+            })
+            .ToList();
+
+    private static IReadOnlyList<AnswerCell> Cells(string line, IReadOnlyList<AnswerAlign> aligns) =>
+        SplitRow(line)
+            .Select((cell, index) =>
+            {
+                var spans = new List<AnswerSpan>();
+                AddInline(spans, cell.Trim(), AnswerStyle.None);
+                return new AnswerCell(
+                    Merge(spans),
+                    index < aligns.Count ? aligns[index] : AnswerAlign.Left);
+            })
+            .ToList();
+
+    /// <summary>Split a pipe row into cells, dropping the leading and trailing pipes.</summary>
+    private static IReadOnlyList<string> SplitRow(string line)
+    {
+        var trimmed = line.Trim();
+        var inner = trimmed[1..^1];
+        return inner.Split('|');
+    }
+
+    // ---- Inline emphasis -----------------------------------------------------------------------------
 
     /// <summary>
     /// Emphasis within one line: <c>**bold**</c>, <c>*italic*</c>, <c>`code`</c>. Scanned longest-marker
