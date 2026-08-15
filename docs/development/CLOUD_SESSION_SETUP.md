@@ -109,7 +109,7 @@ Until one of those is in place, do build/test verification on a local machine (K
 
 ```bash
 export CST_XML_DIR="$HOME/cst-corpus/deva"
-cd src/CST.Avalonia
+cd src/CST.Avalonia.Tests   # not src/CST.Avalonia: dotnet test there runs nothing and exits 0
 dotnet test --filter "FullyQualifiedName~ConverterEquivalenceTests"        # byte-identical oracle
 dotnet test --filter "FullyQualifiedName~ScriptConverterPerformanceTests"  # before/after timings
 ```

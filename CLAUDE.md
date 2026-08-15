@@ -21,12 +21,15 @@ CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform P
 
 ## Build / run / test
 ```bash
-cd src/CST.Avalonia
-dotnet build
-dotnet run
-dotnet test                                                   # full suite
-dotnet test --filter "FullyQualifiedName~CstDockFactoryTests" # one class
+# from the repo root
+dotnet build src/CST.Avalonia
+dotnet run --project src/CST.Avalonia
+
+dotnet test src/CST.Avalonia.Tests                                     # full suite (~3 min)
+dotnet test src/CST.Avalonia.Tests --filter "FullyQualifiedName~CstDockFactoryTests"   # one class
 ```
+**Always name the test project.** There is no solution file, so a bare `dotnet test` acts on the project in the current directory — and in `src/CST.Avalonia` that is the app, which is not a test project: it restores, runs nothing, and **exits 0**. A silent green indistinguishable from a passing suite. `CST.Avalonia.Tests` is the only test project in the tree.
+
 macOS packaging/signing/notarization: `src/CST.Avalonia/package-macos.sh {arm64|x64}` then `notarize-macos.sh`. Full steps + the pre-release version-string checklist: [docs/development/RELEASE_PROCESS.md](docs/development/RELEASE_PROCESS.md).
 
 ## macOS code signing & entitlements

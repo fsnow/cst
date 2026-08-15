@@ -117,8 +117,9 @@ Before starting the release process, verify on Kestrel:
 - [ ] All version strings updated and consistent — see **Version strings: two timing buckets** below.
       By release time, bucket A should already be done (it is bumped at the *start* of the cycle);
       verify it rather than discovering it here. These all drifted before Beta 4.
-- [ ] Build succeeds: `dotnet build`
-- [ ] Tests pass: `dotnet test` (or acceptable skip rate documented)
+- [ ] Build succeeds: `dotnet build src/CST.Avalonia`
+- [ ] Tests pass: `dotnet test src/CST.Avalonia.Tests` (or acceptable skip rate documented) — pass the
+      project path or run from that directory; `dotnet test` in `src/CST.Avalonia` runs nothing and exits 0
 - [ ] All changes committed and pushed to `main` branch
 - [ ] No critical bugs or blockers
 
