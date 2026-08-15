@@ -68,10 +68,12 @@ public class AiAssistantViewModelTests
     private static CitationRef Citation() =>
         new("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", "para 12", Array.Empty<SnippetPageRef>());
 
-    private static AiTurnContext Context(params string[] notices) =>
+    private static AiTurnContext Context(params string[] notices) => Context(false, notices);
+
+    private static AiTurnContext Context(bool passageTrimmed, params string[] notices) =>
         new(AiTask.Explain, "English", Citation(),
             new BookContext("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", CST.Pitaka.Sutta, CST.CommentaryLevel.Mula),
-            notices);
+            notices, passageTrimmed);
 
     // ---- Not configured, and other ordinary refusals ---------------------------------------------
 
@@ -234,7 +236,8 @@ public class AiAssistantViewModelTests
     public async Task Notices_are_surfaced_and_a_trimmed_passage_raises_the_badge()
     {
         var orchestrator = new StubOrchestrator();
-        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context("The passage was trimmed to fit the budget.")));
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(
+            Context(passageTrimmed: true, "The passage was cut to fit the request budget.")));
         orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
 
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
@@ -244,6 +247,34 @@ public class AiAssistantViewModelTests
         // the model did not see all of the passage it is being asked about.
         Assert.Single(vm.Notices);
         Assert.True(vm.IsPartialPassage);
+    }
+
+    [Fact]
+    public async Task The_badge_follows_the_bundle_and_not_the_wording_of_a_notice()
+    {
+        // The defect this replaces: the badge matched the notice text for "trim" or "shorten", and the notice
+        // PromptBuilder actually emits says "was cut to fit the request budget" — so the badge could never
+        // fire. The old test passed only because it fed a notice string the app never produces.
+        //
+        // Both halves are asserted, because either alone would have let that bug through: a notice that says
+        // nothing about trimming still raises the badge when the bundle was trimmed, and prose that sounds
+        // like trimming does not raise it when the bundle was not.
+        var trimmed = new StubOrchestrator();
+        trimmed.Events.Add(AiTurnEvent.ForStarted(Context(passageTrimmed: true, "Your selection could not be read.")));
+        trimmed.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(trimmed, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        Assert.True(vm.IsPartialPassage);
+
+        var whole = new StubOrchestrator();
+        whole.Events.Add(AiTurnEvent.ForStarted(
+            Context(passageTrimmed: false, "The word analysis was cut to fit the request budget.")));
+        whole.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm2 = new AiAssistantViewModel(whole, new StubReaderState(), null, null);
+        await vm2.AskAsync(AiTask.Explain);
+        Assert.False(vm2.IsPartialPassage);
     }
 
     [Fact]

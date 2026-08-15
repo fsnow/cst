@@ -284,9 +284,7 @@ public class AiAssistantViewModel : ReactiveTool
                 foreach (var notice in context.Notices) Notices.Add(notice);
                 this.RaisePropertyChanged(nameof(HasNotices));
                 this.RaisePropertyChanged(nameof(NoticesHeader));
-                IsPartialPassage = context.Notices.Count > 0 &&
-                                   context.Notices.Any(n => n.Contains("trim", StringComparison.OrdinalIgnoreCase)
-                                                            || n.Contains("shorten", StringComparison.OrdinalIgnoreCase));
+                IsPartialPassage = context.PassageTrimmed;
                 Status = "Thinking…";
                 _awaitingFirstToken = true;
                 break;

@@ -55,12 +55,23 @@ public enum AiTurnEventKind
 /// what makes it impossible for a garbled answer to produce a false citation on screen.</param>
 /// <param name="Notices">Degradations worth showing: a missing asset, a trimmed part, a selection the window
 /// does not contain, a prompt edit that was rejected. Empty on a clean turn.</param>
+/// <param name="PassageTrimmed">
+/// Whether the passage itself was cut to fit the budget — the one degradation that changes how far the answer
+/// can be trusted, because the model did not see all of what it is answering about.
+///
+/// <para><b>A field rather than a phrase in <paramref name="Notices"/>.</b> The panel's partial-passage badge
+/// read this off the notice text, matching "trim" or "shorten" — words the notice has never contained; it
+/// says "was cut to fit the request budget", so the badge could not fire at all. Deriving a structural fact
+/// by keyword-matching prose also fails the rule the rest of this contract keeps: what the user sees beside an
+/// answer is built from bundle data, never parsed out of text. Notices are for reading; this is for deciding.</para>
+/// </param>
 public sealed record AiTurnContext(
     AiTask Task,
     string OutputLanguage,
     CitationRef Citation,
     BookContext Book,
-    IReadOnlyList<string> Notices);
+    IReadOnlyList<string> Notices,
+    bool PassageTrimmed);
 
 /// <summary>
 /// How the model quoted Pāli, counted rather than merely repaired. (#587)
