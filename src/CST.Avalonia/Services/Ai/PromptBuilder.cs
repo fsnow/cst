@@ -461,14 +461,11 @@ public sealed class PromptBuilder : IPromptBuilder
                 break;
         }
 
-        // Says the number. "May extend past the reference" was true of almost every request and read like a
-        // rounding caveat; "covers 29 paragraphs" is a fact the reader can act on. (#602)
-        if (bundle.Budget.ParagraphsCovered is > 1 and int covered)
-        {
-            notices.Add(
-                $"The passage window covers {covered} paragraphs, not just the one cited — the answer may range "
-                + "wider than you asked.");
-        }
+        // No notice for a window spanning several paragraphs. It fired on almost every request, which made
+        // the notice list look like a list of problems on requests that had none — and since #649 the window
+        // is built around the reader's own selection rather than from a scroll position, so its extent is a
+        // consequence of what they asked about rather than something that happened to them. The model is
+        // still told the span, through {{scope}}, because it changes how the answer should be qualified.
 
         return notices;
     }
