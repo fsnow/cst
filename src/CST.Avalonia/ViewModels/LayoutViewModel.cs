@@ -191,7 +191,7 @@ namespace CST.Avalonia.ViewModels
 
         public void ShowSelectBookPanel() =>
             ShowToolPanel("OpenBookTool", () => App.ServiceProvider?.GetRequiredService<OpenBookDialogViewModel>(),
-                () => IsSelectBookPanelVisible = true, "Select a Book");
+                () => IsSelectBookPanelVisible = true, "Open a Book");
 
         public void ToggleSearchPanel()
         {
@@ -242,7 +242,7 @@ namespace CST.Avalonia.ViewModels
         }
 
         public void HideSelectBookPanel() =>
-            HideToolPanel("OpenBookTool", () => IsSelectBookPanelVisible = false, "Select a Book");
+            HideToolPanel("OpenBookTool", () => IsSelectBookPanelVisible = false, "Open a Book");
 
         // Recreate-on-demand so the View menu toggle and Cmd+D (Look Up in Dictionary) can reopen a closed
         // pane — LookUpInDictionaryAsync calls this then immediately proceeds, so it must stay synchronous. (#466)

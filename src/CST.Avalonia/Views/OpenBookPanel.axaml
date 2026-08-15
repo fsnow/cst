@@ -20,9 +20,27 @@
             <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <DockPanel>
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <!-- AutoScrollToSelectedItem off: startup restores the last selected book into
+                             SelectedNode, and Avalonia then posts BringIntoView as that node's container is
+                             prepared. Minimal-scroll leaves the node at the BOTTOM edge, so the tree opened
+                             at an apparently arbitrary branch — and since the styles below make selection
+                             invisible, nothing on screen explained why. The tree now opens at the top; ⌘O
+                             (FocusBookTree) still brings the remembered book into view deliberately.
+
+                             What this property actually governs, since "off" is broader than the startup
+                             case it was turned off for. Avalonia 11.3.6 consults it in TWO places
+                             (TreeView.cs:369 and :551), so turning it off drops two behaviours:
+                               - the scroll on any selection CHANGE — no loss here, because clicks are
+                                 already in view and arrow keys are carried by a different mechanism
+                                 (ScrollViewer.BringIntoViewOnFocusChange, still on by default);
+                               - the scroll when a container is first PREPARED, which includes expanding a
+                                 collapsed branch that contains the selection for the first time. That one
+                                 is a real behaviour change, and it is the same bottom-edge jump this is
+                                 turned off to stop, so it goes deliberately rather than by accident. -->
                         <TreeView x:Name="BookTreeView"
                                   ItemsSource="{Binding BookTree}"
                                   SelectedItem="{Binding SelectedNode}"
+                                  AutoScrollToSelectedItem="False"
                                   Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
                                   DoubleTapped="TreeView_DoubleTapped"
                                   KeyDown="TreeView_KeyDown">
