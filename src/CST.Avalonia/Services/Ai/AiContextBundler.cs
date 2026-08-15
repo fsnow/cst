@@ -120,7 +120,10 @@ public sealed class AiContextBundler : IAiContextBundler
                 MaxChars: budget,
                 OutputScript: Script.Latin,
                 IncludeFootnotes: false,
-                StructuredNotes: true),
+                StructuredNotes: true,
+                // The window is built AROUND this, so the selection is inside the context by construction
+                // rather than by luck. (#649)
+                SelectionText: request.SelectionUnavailable ? null : request.SelectionText),
             ct).ConfigureAwait(false);
 
         // The passage tool signals every failure the same way — empty text, with the reason left in
@@ -144,7 +147,7 @@ public sealed class AiContextBundler : IAiContextBundler
             passage.NoteCount > 0 ? BundlePartState.Included : BundlePartState.Empty,
             passage.NoteCount > 0 ? $"{passage.NoteCount} print note(s)" : "no apparatus in this window"));
 
-        var selection = BuildSelection(request, passage.Text, parts);
+        var selection = BuildSelection(request, parts);
         var lemmas = GatherLemmas(request.Task, selection?.Text ?? passage.Text, parts);
 
         var bookName = ScriptConverter.Convert(book.LongNavPath, Script.Devanagari, Script.Latin);
@@ -176,19 +179,19 @@ public sealed class AiContextBundler : IAiContextBundler
     }
 
     /// <summary>
-    /// Locate the selection in the window, and record what became of it.
+    /// Record what the user selected.
     ///
-    /// <para>A selection the window does not contain is still passed to the model — it is what the user pointed
-    /// at — but the mismatch is recorded rather than hidden, because it means the surrounding passage may not
-    /// support what is being asked about.</para>
+    /// <para><b>There is no longer a "not found in the window" outcome, by construction.</b> The window is
+    /// built around the selection, so it contains it; the state, its notice and the caution it put in the
+    /// prompt are all gone. A context that could fail to contain the thing it was context for was not a
+    /// context. (#649)</para>
     ///
-    /// <para><b>Three outcomes, not two.</b> "Nothing selected" and "we could not tell what was selected" were
-    /// the same null before #581. They are not the same thing: the first means the whole passage is legitimately
-    /// in view, the second means the words the user highlighted were dropped on the floor. Only the second is
+    /// <para><b>Two outcomes remain, and they are not the same.</b> "Nothing selected" and "we could not tell
+    /// what was selected" were the same null before #581: the first means the whole passage is legitimately in
+    /// view, the second means the words the user highlighted were dropped on the floor. Only the second is
     /// something to tell them about. (§3.1)</para>
     /// </summary>
-    private static SelectionContext? BuildSelection(
-        AiContextRequest request, string windowText, List<BundlePart> parts)
+    private static SelectionContext? BuildSelection(AiContextRequest request, List<BundlePart> parts)
     {
         if (request.SelectionUnavailable)
         {
@@ -200,18 +203,13 @@ public sealed class AiContextBundler : IAiContextBundler
         }
 
         // Already Latin, composed and whitespace-collapsed by SelectionPipeline.Normalize; run it again rather
-        // than trust the caller, since it is idempotent and the alternative is a silent locator miss.
+        // than trust the caller, since it is idempotent.
         var text = SelectionPipeline.Normalize(request.SelectionText, Script.Latin);
         if (text is null) return null;
 
-        var found = SelectionPipeline.IsWithin(text, windowText);
+        parts.Add(new BundlePart(BundlePartNames.Selection, BundlePartState.Included, null));
 
-        parts.Add(new BundlePart(
-            BundlePartNames.Selection,
-            BundlePartState.Included,
-            found ? null : "selection not found in the passage window"));
-
-        return new SelectionContext(text, found ? SelectionState.Located : SelectionState.NotFoundInWindow);
+        return new SelectionContext(text, SelectionState.Located);
     }
 
     /// <summary>

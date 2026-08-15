@@ -526,6 +526,41 @@ public class AiAssistantViewModelTests
     }
 
     [Fact]
+    public async Task The_window_is_anchored_on_the_selection_rather_than_on_the_scroll_position()
+    {
+        // #649, at the seam where it is decided. The reading position and the selection's position are
+        // different numbers -- scroll puts the reader on 12 while the selection sits in 40 -- and building
+        // the window from the first is what let a selection near the bottom of the viewport fall outside the
+        // window meant to explain it.
+        var orchestrator = new StubOrchestrator();
+        var reader = new StubReaderState
+        {
+            Result = ReaderStateResult.Ok(new ReaderState(
+                "s0101m.mul.xml", Paragraph: 12, SelectionText: "appamādo", SelectionParagraph: 40)),
+        };
+
+        var vm = new AiAssistantViewModel(orchestrator, reader, null, null);
+        await vm.AskAsync(AiTask.Translate);
+
+        var reference = Assert.IsType<NavigationReference.Paragraph>(orchestrator.LastRequest!.Reference);
+        Assert.Equal(40, reference.Number);
+    }
+
+    [Fact]
+    public async Task With_nothing_selected_the_reading_position_is_still_what_anchors_the_window()
+    {
+        // The fallback has to keep working: the presets are usable with no selection at all, and then the
+        // viewport IS the best available statement of what the reader is looking at.
+        var orchestrator = new StubOrchestrator();
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+
+        await vm.AskAsync(AiTask.Explain);
+
+        var reference = Assert.IsType<NavigationReference.Paragraph>(orchestrator.LastRequest!.Reference);
+        Assert.Equal(12, reference.Number);
+    }
+
+    [Fact]
     public async Task The_selection_is_shown_as_the_subject_before_the_answer_arrives()
     {
         // The mitigation that makes selection-as-subject safe. A browser selection persists invisibly: select

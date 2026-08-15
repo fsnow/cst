@@ -35,6 +35,12 @@ public partial class BookDisplayView : UserControl
     private bool _isShutDown;   // set once the tab is really closed; prevents WebView resurrection (BOOK-1)
     // Completes when OnTitleChanged receives the CST_LOOKUP_SEL selection pushed for a Cmd+D lookup. (#25)
     private TaskCompletionSource<string?>? _lookupSelectionTcs;
+
+    // The assistant's selection round-trip (#649). A SEPARATE slot from the lookup one above, deliberately:
+    // that field is already documented as a shared single slot a concurrent Cmd+D clobbers, and the assistant
+    // reads the selection while the user is free to press Cmd+D. Two single-slot channels cannot race; one
+    // shared slot would silently hand one caller the other's answer.
+    private TaskCompletionSource<(string? Text, int? Paragraph)>? _aiSelectionTcs;
     private ScrollViewer? _fallbackBrowser;
     private IDisposable? _lifecycleSubscription; // Subscription to WebViewLifecycleOperation changes
     private int _lastScrollPosition = 0;
@@ -254,6 +260,71 @@ public partial class BookDisplayView : UserControl
         {
             _logger.Error(ex, "Failed to initialize WebView");
             _webView = null;
+        }
+    }
+
+    /// <summary>
+    /// The selection AND the paragraph it actually sits in. (#649)
+    ///
+    /// <para><b>Why this is not <see cref="GetWebViewSelectionAsync"/> plus the status readout.</b> The
+    /// status readout's paragraph is derived from SCROLL position, so the assistant built its passage window
+    /// around wherever the viewport happened to be rather than around the words the reader highlighted — and
+    /// a selection near the bottom of the viewport routinely fell outside the window meant to explain it.
+    /// The paragraph here is resolved from the selection's own position in the document.</para>
+    ///
+    /// <para>The anchor lookup is deliberately NOT <c>cstAnchorCache.getCurrentParagraph</c>: that adds a
+    /// +100px "just above the fold" offset, which is right for a scroll position and wrong for a selection —
+    /// it would attribute a selection in the first hundred pixels of a paragraph to the previous one.</para>
+    /// </summary>
+    /// <returns>
+    /// Text null means the selection could not be read at all (browser not ready, or the round trip timed
+    /// out) — distinct from an empty string, which means the reader genuinely selected nothing. Paragraph
+    /// null means the anchor cache could not place it, in which case the caller falls back to the reading
+    /// position, exactly as before this existed.
+    /// </returns>
+    public async Task<(string? Text, int? Paragraph)> GetWebViewSelectionWithParagraphAsync()
+    {
+        if (_webView == null || !_isBrowserInitialized)
+            return (null, null);
+        try
+        {
+            var tcs = new TaskCompletionSource<(string? Text, int? Paragraph)>();
+            _aiSelectionTcs = tcs;
+
+            var script = @"
+                (function() {
+                try {
+                    var sel = window.getSelection ? window.getSelection() : null;
+                    var text = sel ? sel.toString() : '';
+                    var para = '';
+                    if (sel && sel.rangeCount > 0 && text.length > 0) {
+                        var rect = sel.getRangeAt(0).getBoundingClientRect();
+                        var y = rect.top + window.pageYOffset;
+                        var cache = window.cstAnchorCache;
+                        if (cache && cache.isBuilt && cache.sortedParagraphAnchors) {
+                            var list = cache.sortedParagraphAnchors;
+                            for (var i = 0; i < list.length; i++) {
+                                if (list[i].position <= y) para = list[i].name.replace('para', '');
+                                else break;
+                            }
+                        }
+                    }
+                    document.title = 'CST_AI_SEL:' + encodeURIComponent(text) + '|PARA=' + para + '|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                } catch (e) {
+                    document.title = 'CST_AI_SEL:|PARA=|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                }
+                })();";
+            script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
+            _webView.ExecuteScript(script);
+
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(700));
+            _aiSelectionTcs = null;
+            return done == tcs.Task ? await tcs.Task : (null, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.Information(ex, "GetWebViewSelectionWithParagraph failed");
+            return (null, null);
         }
     }
 
@@ -2583,6 +2654,37 @@ public partial class BookDisplayView : UserControl
     {
         var title = _webView?.Title ?? "";
         _logger.Debug("Page title changed | {Details}", title);
+
+        // The assistant's selection round-trip: text plus the paragraph the selection itself sits in. (#649)
+        if (title != null && title.StartsWith("CST_AI_SEL:"))
+        {
+            try
+            {
+                var data = title.Substring("CST_AI_SEL:".Length);
+                var parts = data.Split('|');
+                string messageTabId = "";
+                foreach (var p in parts)
+                    if (p.StartsWith("TAB:")) { messageTabId = p.Substring(4); break; }
+                if (messageTabId != _tabId)
+                    return;   // not for this tab
+
+                var encoded = parts.Length > 0 ? parts[0] : "";
+                string sel;
+                try { sel = Uri.UnescapeDataString(encoded); } catch { sel = encoded; }
+
+                int? para = null;
+                foreach (var p in parts)
+                    if (p.StartsWith("PARA=") && int.TryParse(p.Substring(5), out var n)) { para = n; break; }
+
+                _aiSelectionTcs?.TrySetResult((sel, para));
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to parse CST_AI_SEL");
+                _aiSelectionTcs?.TrySetResult((null, null));
+            }
+            return;
+        }
 
         // Cmd+D lookup: the page pushed the current selection back to us through the title. (#25)
         if (title != null && title.StartsWith("CST_LOOKUP_SEL:"))

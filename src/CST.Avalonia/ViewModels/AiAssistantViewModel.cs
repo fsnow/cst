@@ -200,7 +200,11 @@ public class AiAssistantViewModel : ReactiveTool
             var request = new AiTurnRequest(
                 task,
                 state.BookId,
-                new NavigationReference.Paragraph(state.Paragraph),
+                // The SELECTION's paragraph when there is one, not the scroll's. Building the window around
+                // the viewport is what let a selection near the bottom of the screen fall outside the window
+                // meant to explain it. Falls back to the reading position when nothing is selected, or when
+                // the anchor cache could not place what was. (#649)
+                new NavigationReference.Paragraph(state.SelectionParagraph ?? state.Paragraph),
                 state.SelectionText,
                 question,
                 // Carried rather than collapsed into "no selection": a selection the reader could not read is

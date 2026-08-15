@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using CST.Conversion;
@@ -13,10 +12,11 @@ namespace CST.Avalonia.Services.Ai;
 /// from the tool layer, which owns its formats; this arrives in the user's display script, through a
 /// <c>document.title</c> round trip, with a timeout. So it gets the handling that deserves.</para>
 ///
-/// <para><b>Two phases, because they run in different places.</b> <see cref="Normalize"/> needs the display
-/// script, which only the reader knows; <see cref="IsWithin"/> needs the passage window, which only the bundler
-/// has. Keeping them one class keeps the normalization rules in one place — the two sides of a comparison
-/// drifting apart is exactly how a locator starts reporting false misses.</para>
+/// <para><b>Normalization only, since #649.</b> This class used to carry a second phase — asking whether the
+/// normalized selection appeared in the passage window — because the window was built from scroll position and
+/// might not contain it. The window is now built around the selection, so the question has no answer to give
+/// and both it and the punctuation folding it needed are gone. Locating a selection in the corpus is
+/// <see cref="CST.Search.TeiPassageReader.LocateSelection"/>'s job, against the raw XML.</para>
 /// </summary>
 public static class SelectionPipeline
 {
@@ -34,8 +34,8 @@ public static class SelectionPipeline
     /// composed Latin (ā is U+0101), and the passage text comes through the same converter, so in the ordinary
     /// path both sides already agree. But a decomposed selection — a different input path, an OS that
     /// normalizes on copy — is <i>ordinally unequal</i> to the composed form (a + U+0304 ≠ U+0101), and the
-    /// symptom would be a bundle reporting "selection not found in the passage window": a false diagnostic
-    /// from the one component whose job is faithful diagnostics.</para>
+    /// symptom would be a dictionary or lemma lookup silently missing on text the reader is looking straight
+    /// at — a false negative from the one component whose job is faithful handling of what they selected.</para>
     /// </summary>
     public static string? Normalize(string? raw, Script sourceScript)
     {
@@ -49,74 +49,5 @@ public static class SelectionPipeline
         latin = Whitespace.Replace(latin, " ").Trim();
 
         return latin.Length == 0 ? null : latin;
-    }
-
-    /// <summary>
-    /// Whether a normalized selection appears in a passage window.
-    ///
-    /// <para>The window is normalized the same way here rather than at its source, because the window is the
-    /// tool layer's output and must not be silently rewritten on its way to the model — only the copy used for
-    /// this comparison is.</para>
-    ///
-    /// <para><b>Ordinal, case-insensitively.</b> Case-insensitive because the corpus capitalises
-    /// programmatically at sentence starts, so a selection lifted from mid-sentence and the same words at a
-    /// sentence head differ only in case. Ordinal rather than culture-aware because a culture-aware comparison
-    /// would fold characters Pāli distinguishes.</para>
-    ///
-    /// <para><b>Punctuation is folded away on both sides.</b> See <see cref="Fold"/>. Without it a selection
-    /// spanning a single sentence break reports as absent. (#641)</para>
-    /// </summary>
-    public static bool IsWithin(string normalizedSelection, string windowText)
-    {
-        if (string.IsNullOrEmpty(normalizedSelection) || string.IsNullOrEmpty(windowText)) return false;
-
-        var selection = Fold(normalizedSelection);
-        if (selection.Length == 0) return false;   // punctuation only: nothing to locate
-
-        return Fold(windowText).Contains(selection, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// The comparison form: letters, digits and combining marks only, whitespace collapsed. Used on both sides
-    /// of <see cref="IsWithin"/> and nowhere else — what reaches the model is always the verbatim selection.
-    ///
-    /// <para><b>Why punctuation goes.</b> The two sides of this comparison reach it by different routes: the
-    /// window is rendered by the passage reader, the selection is scraped from the DOM and converted from the
-    /// user's display script. Those routes do not agree about sentence punctuation. A selection spanning one
-    /// sentence break carried an ASCII full stop while the window carried the danda (U+0964), so the
-    /// containment test failed and the user was told their selection was not in the passage — while looking
-    /// straight at it. (#641)</para>
-    ///
-    /// <para><b>Why the whole category rather than a table of marks.</b> The danda was one mark of many: the
-    /// scripts this app renders carry their own sentence and phrase marks (Myanmar U+104A and U+104B, Khmer
-    /// U+17D4, Tibetan U+0F0D, Thai U+0E5A), and Latin Pāli carries the elision apostrophe in both its ASCII
-    /// and typographic (U+2019) forms. A table would fix the mark that was
-    /// reported and leave the next one to be discovered the same way — by a reader being told their own
-    /// selection is not there. Dropping the category closes the class.</para>
-    ///
-    /// <para><b>The error this can introduce is the cheap one.</b> Folding admits a false match between two
-    /// spans differing only in punctuation (an elided form written with an apostrophe against the same letters
-    /// written without one). The cost of that is one
-    /// caution the user does not see; the cost of a false miss is the model being told to distrust the
-    /// surrounding text and the user being told they selected something absent. Not symmetric.</para>
-    /// </summary>
-    internal static string Fold(string text)
-    {
-        var composed = text.Normalize(NormalizationForm.FormC);
-
-        var kept = new StringBuilder(composed.Length);
-        foreach (var c in composed)
-        {
-            // Combining marks are kept explicitly: they are not letters, and a Latin form with no precomposed
-            // codepoint would otherwise lose its diacritic here and match a different word.
-            if (char.IsLetterOrDigit(c)
-                || char.IsWhiteSpace(c)
-                || CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
-            {
-                kept.Append(c);
-            }
-        }
-
-        return Whitespace.Replace(kept.ToString(), " ").Trim();
     }
 }

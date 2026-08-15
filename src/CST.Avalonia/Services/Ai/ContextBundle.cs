@@ -43,14 +43,9 @@ public sealed record AiContextRequest(
 /// <summary>What became of the user's selection.</summary>
 public enum SelectionState
 {
-    /// <summary>Converted, normalized, and found in the passage window.</summary>
+    /// <summary>The reader selected text and it reached the model. The window is built around it, so there
+    /// is no separate "and it was found" state to be in — see AiContextBundler.</summary>
     Located,
-
-    /// <summary>
-    /// Converted and normalized, but not present in the window. The model is still shown it — it is what the
-    /// user pointed at — but the surrounding passage may not support what is being asked about.
-    /// </summary>
-    NotFoundInWindow,
 
     /// <summary>
     /// The reader could not say what was selected — the WebView was not ready, or the round trip through the
@@ -65,11 +60,7 @@ public enum SelectionState
 /// <summary>The user's selection, once the selection pipeline has been through it.</summary>
 /// <param name="Text">Latin-script, composed, whitespace-collapsed. Null when <see cref="State"/> is
 /// <see cref="SelectionState.Unavailable"/> — there is no text to carry.</param>
-public sealed record SelectionContext(string? Text, SelectionState State)
-{
-    /// <summary>Whether the selection was located within the fetched passage window.</summary>
-    public bool FoundInWindow => State == SelectionState.Located;
-}
+public sealed record SelectionContext(string? Text, SelectionState State);
 
 /// <summary>A word's stem and grammatical analysis, from the optional DPD-lemma asset.</summary>
 public sealed record LemmaEntry(

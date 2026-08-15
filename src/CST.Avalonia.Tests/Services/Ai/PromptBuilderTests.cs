@@ -165,18 +165,19 @@ public class PromptBuilderTests : IDisposable
     }
 
     [Fact]
-    public void A_selection_the_window_does_not_contain_warns_the_model_and_the_user()
+    public void A_selection_carries_no_caveat_about_its_own_context()
     {
+        // There used to be a "this selection was not found in the passage above" branch here, because the
+        // window came from scroll position and might genuinely not contain the selection. The window is now
+        // built around the selection, so the caveat has nothing to warn about -- and a prompt that tells the
+        // model its own context might be the wrong context degrades every answer it touches. (#649)
         var prompt = _builder.Build(Bundle(
-            selection: new SelectionContext("dhammā manopubbaṅgamā", SelectionState.NotFoundInWindow)));
+            selection: new SelectionContext("appamādo amatapadaṃ", SelectionState.Located)));
 
-        // The caution points at the CONTEXT, not at the selection. The selection is the one thing here we are
-        // certain of — the reader pointed at it and we have its exact characters; what failed is our attempt
-        // to supply its surroundings. The earlier wording told the model to distrust the selection, which,
-        // now that the selection is the subject, would be telling it to distrust the question.
-        Assert.Contains("does not contain this selection", prompt.UserContent);
-        Assert.Contains("Work from the selection itself", prompt.UserContent);
-        Assert.Contains(prompt.Notices, n => n.Contains("not found in the passage window"));
+        Assert.Contains("appamādo amatapadaṃ", prompt.UserContent);
+        Assert.DoesNotContain("not found in the passage", prompt.UserContent);
+        Assert.DoesNotContain("may not be", prompt.UserContent);
+        Assert.DoesNotContain(prompt.Notices, n => n.Contains("not found in the passage window"));
     }
 
     // ---- The selection is the subject of the request -----------------------------------------------

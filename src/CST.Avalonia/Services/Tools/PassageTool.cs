@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CST;
+using CST.Conversion;
 using CST.Navigation;
 using CST.Search;
 using CST.Tools;
@@ -34,6 +35,38 @@ namespace CST.Avalonia.Services.Tools
             !string.IsNullOrEmpty(bookId) &&
             Books.Inst.Any(b => string.Equals(b.FileName, bookId, StringComparison.OrdinalIgnoreCase));
 
+        /// <summary>
+        /// Where the reader's selection sits in the raw XML, or null when there is none or it cannot be
+        /// placed. Bounded to the paragraph the reader's own anchor reports.
+        /// </summary>
+        /// <remarks>
+        /// Converted to the corpus script before matching. The selection arrives in Latin — every downstream
+        /// lookup wants it that way — but the XML is Devanagari, and script conversion is not
+        /// length-preserving, so there is no offset arithmetic that could relate the two. Converting the
+        /// short needle is exact and cheap; converting the haystack would be neither.
+        /// </remarks>
+        private static (int Start, int End)? LocateSelection(
+            string xml, int startPos, BookMarkers markers, string? selectionLatin)
+        {
+            if (string.IsNullOrWhiteSpace(selectionLatin)) return null;
+
+            string needle;
+            try
+            {
+                needle = ScriptConverter.Convert(selectionLatin, Script.Latin, Script.Devanagari);
+            }
+            catch (Exception)
+            {
+                // A selection that will not convert is not a reason to fail the whole request: fall back to
+                // the paragraph window, which is what every caller got before selections were considered.
+                return null;
+            }
+
+            // The paragraph the anchor named, bounded by its section so the search cannot wander.
+            var (_, sectionEnd) = markers.EnclosingDivRange(startPos);
+            return TeiPassageReader.LocateSelection(xml, startPos, sectionEnd, needle);
+        }
+
         public async Task<PassageResult> FetchPassageAsync(PassageRequest request, CancellationToken ct = default)
         {
             var dir = _settings.Settings?.XmlBooksDirectory;
@@ -52,13 +85,30 @@ namespace CST.Avalonia.Services.Tools
             if (startPos < 0) return Empty(request, "reference not found");
             startPos = Math.Clamp(startPos, 0, xml.Length);
 
-            // A cursor points AT a hit (mid-sentence); snap the window start back to the enclosing sentence so
-            // the hit is read with its governing clause. A paragraph reference already starts clean - no snap.
-            var w = TeiPassageReader.ReadWindow(
-                xml, startPos, Math.Clamp(request.MaxChars, 1, MaxPassageChars),
-                request.IncludeFootnotes, request.OutputScript, markers,
-                snapStartToSentence: request.Cursor.HasValue,
-                structuredNotes: request.StructuredNotes);
+            var budget = Math.Clamp(request.MaxChars, 1, MaxPassageChars);
+
+            // With a selection, the window is built AROUND it instead of from the paragraph's start, so the
+            // words the reader highlighted are always inside the context sent to explain them. (#649)
+            //
+            // The search is bounded to the referenced paragraph, which is where the reader's own anchor says
+            // the selection is. That bound is load-bearing rather than an optimisation: this canon is
+            // pericope-built and formulaic passages repeat verbatim across books, so an unbounded search
+            // could centre the window on a different occurrence entirely and caption it confidently.
+            var selectionSpan = LocateSelection(xml, startPos, markers, request.SelectionText);
+
+            var w = selectionSpan is { } span
+                ? TeiPassageReader.ReadWindowAroundSelection(
+                    xml, span.Start, span.End, budget,
+                    request.IncludeFootnotes, request.OutputScript, markers,
+                    structuredNotes: request.StructuredNotes)
+                // A cursor points AT a hit (mid-sentence); snap the window start back to the enclosing
+                // sentence so the hit is read with its governing clause. A paragraph reference already
+                // starts clean - no snap.
+                : TeiPassageReader.ReadWindow(
+                    xml, startPos, budget,
+                    request.IncludeFootnotes, request.OutputScript, markers,
+                    snapStartToSentence: request.Cursor.HasValue,
+                    structuredNotes: request.StructuredNotes);
 
             return new PassageResult(
                 BookId: request.BookId,

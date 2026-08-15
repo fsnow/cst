@@ -285,20 +285,11 @@ public sealed class PromptBuilder : IPromptBuilder
                  + "as a whole, and say that you were not able to see a selection.";
         }
 
-        // The selection is the subject, so when the containment check fails it is the CONTEXT that is in
-        // doubt, not the subject. The selection is the one thing here we are certain of — the reader
-        // physically pointed at it and we have its exact characters; what failed is our attempt to supply its
-        // surroundings. The old wording had this backwards ("treat the surrounding text with corresponding
-        // caution" was attached to a request whose subject WAS the surrounding text), and told the model to
-        // distrust the passage it was being asked about.
-        var note = selection.State == SelectionState.Located
-            ? string.Empty
-            : "\n\n(The surrounding text below was gathered from the reader's position in the book, and it "
-              + "does not contain this selection — the reader may have scrolled since selecting. It may not be "
-              + "this selection's context. Work from the selection itself, draw on the surrounding text only "
-              + "where it clearly connects, and say if you are answering without context.)";
-
-        return $"{selection.Text}{note}";
+        // No caveat, because there is no longer a case to caveat: the window is built around the selection,
+        // so the surrounding text IS this selection's context rather than whatever the viewport happened to
+        // be showing. The sentence that used to live here told the model its own context might be the wrong
+        // context, and it earned that only because the window was anchored on scroll position. (#649)
+        return selection.Text ?? string.Empty;
     }
 
     private static string Lemmas(AiContextBundle bundle)
@@ -464,9 +455,6 @@ public sealed class PromptBuilder : IPromptBuilder
 
         switch (bundle.Selection?.State)
         {
-            case SelectionState.NotFoundInWindow:
-                notices.Add("The selected text was not found in the passage window the model was given.");
-                break;
             case SelectionState.Unavailable:
                 // The one the user most needs: otherwise this reads as "the AI ignored my selection".
                 notices.Add("Your selection could not be read, so the answer covers the whole passage.");

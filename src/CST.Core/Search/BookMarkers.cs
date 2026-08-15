@@ -23,13 +23,30 @@ namespace CST.Search
         // up case/character-exactly, so the raw spelling — not the parsed ints — is what can be navigated to.
         private readonly Dictionary<PageEdition, List<(int Pos, int Volume, int Number, string Raw)>> _pages = new();
 
+        /// <summary>
+        /// Every <c>&lt;div&gt;</c>'s span, in document order, all nesting levels. A div is a structural
+        /// boundary, and so the limit a reading window must not expand past: context drawn from the next
+        /// section is not this passage's context, however close it sits in the file.
+        ///
+        /// <para><b>Assume nothing about the markup beyond this.</b> Divs may be absent, present, or nested
+        /// to any depth; their <c>type</c> may be any of a growing set; and coverage across the corpus is
+        /// partial and actively being extended. So nothing here reads a type, counts a level, or treats
+        /// either "there is a div" or "there is none" as the normal case. The only property relied on is the
+        /// one that will still hold when the markup is finished: <b>a div boundary separates one section from
+        /// another, so a reading window must not cross it.</b></para>
+        /// </summary>
+        private readonly List<(int Start, int End)> _divs = new();
+
+        private int _length;
+
         private BookMarkers() { }
 
         /// <summary>Scan a decoded book XML string and index its page/paragraph markers.</summary>
         public static BookMarkers Build(string xml)
         {
             var m = new BookMarkers();
-            var divStack = new List<(bool IsBook, string? Id)>();
+            m._length = xml.Length;
+            var divStack = new List<(bool IsBook, string? Id, int Start)>();
 
             foreach (Match tag in TagRx.Matches(xml))
             {
@@ -37,10 +54,19 @@ namespace CST.Search
                 switch (name)
                 {
                     case "div":
-                        if (closing) { if (divStack.Count > 0) divStack.RemoveAt(divStack.Count - 1); }
+                        if (closing)
+                        {
+                            if (divStack.Count > 0)
+                            {
+                                // Record the span as the div closes, so nesting needs no second pass.
+                                m._divs.Add((divStack[^1].Start, tag.Index + tag.Value.Length));
+                                divStack.RemoveAt(divStack.Count - 1);
+                            }
+                        }
                         else if (!tag.Value.EndsWith("/>"))
                             divStack.Add((attrs.TryGetValue("type", out var t) && t == "book",
-                                          attrs.TryGetValue("id", out var id) ? id : null));
+                                          attrs.TryGetValue("id", out var id) ? id : null,
+                                          tag.Index));
                         break;
 
                     case "pb":
@@ -60,7 +86,54 @@ namespace CST.Search
                         break;
                 }
             }
+
+            // An unclosed div (truncated or malformed file) still bounds everything after it, which is the
+            // safe direction: it can only make a window smaller, never let it cross into another section.
+            foreach (var open in divStack)
+                m._divs.Add((open.Start, xml.Length));
+
+            m._divs.Sort((a, b) => a.Start.CompareTo(b.Start));
             return m;
+        }
+
+        /// <summary>
+        /// The span of the INNERMOST <c>&lt;div&gt;</c> containing <paramref name="pos"/>, or the whole
+        /// document when there is none.
+        ///
+        /// <para><b>Innermost, because that is the tightest unit the reader is inside.</b> What that unit is
+        /// called varies by book and the rule does not care: whichever it is, stopping there stops at the edge
+        /// of the text the passage belongs to. Innermost can only make a window smaller, which is the safe
+        /// direction to be wrong in.</para>
+        ///
+        /// <para><b>The whole document is the right answer when there is no enclosing div</b>, not a refusal.
+        /// A book whose structure is not marked up yet must behave as one undivided section rather than lose
+        /// its context, and it must start behaving as a divided one the moment its markup lands — with no
+        /// change here.</para>
+        /// </summary>
+        public (int Start, int End) EnclosingDivRange(int pos)
+        {
+            var start = 0;
+            var end = _length;
+
+            // A position AT the end of the document is inside the last div, not outside every div. Without
+            // this the containment test below (pos < divEnd) fails for every span, the whole document comes
+            // back as the section, and an expansion from there crosses every boundary in the book.
+            if (pos >= _length) pos = _length - 1;
+            if (pos < 0) return (0, end);
+
+            // Innermost wins: later-starting divs are nested inside earlier ones, so the last container found
+            // scanning forward is the tightest.
+            foreach (var (divStart, divEnd) in _divs)
+            {
+                if (divStart > pos) break;
+                if (pos < divEnd && divStart >= start)
+                {
+                    start = divStart;
+                    end = divEnd;
+                }
+            }
+
+            return (start, end);
         }
 
         /// <summary>
@@ -282,7 +355,7 @@ namespace CST.Search
             return lo;
         }
 
-        private static string? CurrentBook(List<(bool IsBook, string? Id)> stack)
+        private static string? CurrentBook(List<(bool IsBook, string? Id, int Start)> stack)
         {
             foreach (var d in stack) if (d.IsBook && d.Id != null) return d.Id;  // outermost book div
             return null;

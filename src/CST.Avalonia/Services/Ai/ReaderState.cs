@@ -40,11 +40,22 @@ public enum ReaderStateProblem
 /// the <c>document.title</c> round trip timed out. <b>Not the same as a null
 /// <paramref name="SelectionText"/></b>: conflating them is what makes a dropped selection look to the user
 /// like "the AI ignored my selection". (#581)</param>
+/// <param name="SelectionParagraph">
+/// The paragraph the SELECTION sits in, resolved from its own position in the document — not from
+/// <paramref name="Paragraph"/>, which is derived from scroll.
+///
+/// <para>The distinction is the whole of #649. The passage window used to be built around the scroll
+/// position, so a selection near the bottom of the viewport landed outside the window meant to explain it,
+/// and the app reported that as a caveat instead of as the defect it was. Null when there is no selection,
+/// or when the anchor cache could not place it — the caller then falls back to
+/// <paramref name="Paragraph"/>.</para>
+/// </param>
 public sealed record ReaderState(
     string BookId,
     int Paragraph,
     string? SelectionText,
-    bool SelectionUnavailable = false);
+    bool SelectionUnavailable = false,
+    int? SelectionParagraph = null);
 
 /// <summary>Success or a named refusal. Never a partial answer.</summary>
 public readonly record struct ReaderStateResult(ReaderState? State, ReaderStateProblem? Problem)
@@ -106,9 +117,14 @@ public sealed class ReaderStateService : IReaderStateService
 
         ct.ThrowIfCancellationRequested();
 
-        var (selection, unavailable) = await ReadSelectionAsync(document);
+        var (selection, unavailable, selectionParagraph) = await ReadSelectionAsync(document);
         return ReaderStateResult.Ok(
-            result.State with { SelectionText = selection, SelectionUnavailable = unavailable });
+            result.State with
+            {
+                SelectionText = selection,
+                SelectionUnavailable = unavailable,
+                SelectionParagraph = selectionParagraph,
+            });
     }
 
     private (ReaderStateResult Result, BookDisplayViewModel? Document) ReadActiveBook()
@@ -174,17 +190,20 @@ public sealed class ReaderStateService : IReaderStateService
     /// handler, it drives CEF, and it writes a single-slot completion source a concurrent Cmd+D would
     /// otherwise clobber.</para>
     /// </summary>
-    private static async Task<(string? Text, bool Unavailable)> ReadSelectionAsync(BookDisplayViewModel document)
+    private static async Task<(string? Text, bool Unavailable, int? Paragraph)> ReadSelectionAsync(
+        BookDisplayViewModel document)
     {
-        var raw = await Dispatcher.UIThread.InvokeAsync(async () =>
+        var (raw, paragraph) = await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             var control = document.BookDisplayControl;
-            return control is null ? null : await control.GetWebViewSelectionAsync();
+            return control is null
+                ? ((string?)null, (int?)null)
+                : await control.GetWebViewSelectionWithParagraphAsync();
         });
 
         // null = could not read it; "" = read it, and there was nothing to read.
-        if (raw is null) return (null, true);
+        if (raw is null) return (null, true, null);
 
-        return (SelectionPipeline.Normalize(raw, document.BookScript), false);
+        return (SelectionPipeline.Normalize(raw, document.BookScript), false, paragraph);
     }
 }
