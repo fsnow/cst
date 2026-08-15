@@ -62,9 +62,15 @@ internal static class DocumentFocusReporter
     /// </para>
     ///
     /// <para>
-    /// Programmatic focus the app performs itself is also <c>Unspecified</c> and is also ignored, which is
-    /// correct: opening a document raises the dock model's own activation, and that feed is the one that
-    /// should speak for it.
+    /// Programmatic focus the app performs itself is <c>Unspecified</c> <i>by default</i> and is then also
+    /// ignored, which is correct: opening a document raises the dock model's own activation, and that feed
+    /// is the one that should speak for it. But this reads the METHOD, not the origin, so a programmatic
+    /// call that names a user-ish method is reported as one — <c>OpenBookPanel.axaml.cs:60</c> already does
+    /// this, focusing a list item with <see cref="NavigationMethod.Directional"/>. Harmless there, since
+    /// tools are filtered on read and the worst case is one of the eight history slots; but a future
+    /// programmatic <c>Focus(Tab)</c> or <c>Focus(Directional)</c> on a DOCUMENT would be a phantom
+    /// interaction this rule exists to exclude. Pass <see cref="NavigationMethod.Unspecified"/> from any
+    /// focus call the user did not make. (fable review)
     /// </para>
     /// </summary>
     internal static bool ShouldReport(NavigationMethod method) =>
@@ -99,13 +105,27 @@ internal static class DocumentFocusReporter
     {
         if (documentView is not { } element) return;
 
+        // No focus manager means no TopLevel, i.e. the view is detached — a late callback during float or
+        // unfloat teardown. Return rather than fall through: Focus() would be a no-op there anyway, but
+        // "skip when already focused" silently becoming "always call" is the kind of inversion that is
+        // invisible until it is not. (fable review)
         var focusManager = (element as Visual)?.FindAncestorOfType<TopLevel>()?.FocusManager;
-        if (focusManager != null && ReferenceEquals(focusManager.GetFocusedElement(), element)) return;
+        if (focusManager == null) return;
+        if (ReferenceEquals(focusManager.GetFocusedElement(), element)) return;
 
         // Through the element, because IFocusManager exposes only ClearFocus and GetFocusedElement.
         // NavigationMethod.Unspecified on purpose: this is not the user moving focus, and Feed C must not
         // record it as one.
-        element.Focus(NavigationMethod.Unspecified);
+        //
+        // The RESULT IS CHECKED. Focus() returns false for an element that is not Focusable, and the whole
+        // point of this method is a side effect on state nothing else reads back — so a silent false leaves
+        // the document's focus record permanently stale while the code reads as though it were maintained.
+        // WelcomeView shipped in exactly that state: Focusable sat on its inner web view rather than its
+        // root, so aligning the Welcome tab did nothing and ⌘W, resolving from live focus, acted on whatever
+        // book was open before it. (fable review)
+        if (!element.Focus(NavigationMethod.Unspecified))
+            Serilog.Log.ForContext(typeof(DocumentFocusReporter))
+                .Warning("Focus alignment did nothing for {Element} - is it Focusable?", element.GetType().Name);
     }
 
     /// <summary>

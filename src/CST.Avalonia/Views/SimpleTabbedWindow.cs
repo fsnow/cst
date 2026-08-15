@@ -1226,15 +1226,15 @@ public partial class SimpleTabbedWindow : Window
     // safe is the containment check in DocumentTargetResolver: a dockable outside this window's layout is
     // contained by none of its document docks, so resolution falls back instead of reaching across windows.
     // A test covers this; do not drop the containment check.
-    /// <summary>
-    /// Interaction history for <see cref="DocumentTargetResolver.ResolveActiveDocument"/> (#621), most
-    /// recent first. Null when the tracker is unavailable, which resolves exactly as before this existed.
-    /// </summary>
     /// <summary>This window's dock layout, or null before the DockControl exists.</summary>
     private IDock? CurrentLayout() =>
         this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>()?.DataContext
             is LayoutViewModel { Layout: { } layout } ? layout : null;
 
+    /// <summary>
+    /// Interaction history for <see cref="DocumentTargetResolver.ResolveActiveDocument"/> (#621), most
+    /// recent first. Null when the tracker is unavailable, which resolves exactly as before this existed.
+    /// </summary>
     private static IEnumerable<IDockable>? RecentDocuments() =>
         App.TryGetService<ActiveDocumentTracker>()?.Recent;
 

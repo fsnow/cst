@@ -124,4 +124,39 @@ public class DocumentFocusReporterTests
 
         Assert.Same(doc, DocumentFocusReporter.ResolveDockable(button));
     }
+
+    // ---- The alignment target must actually be focusable -------------------------------------------
+
+    [Theory]
+    [InlineData("BookDisplayView")]
+    [InlineData("PdfDisplayView")]
+    [InlineData("WelcomeView")]
+    public void Every_document_view_root_is_focusable(string view)
+    {
+        // AlignFocusWithBrowser focuses the view ROOT, and Avalonia's CanFocus requires Focusable — so a
+        // root without it makes the alignment a silent no-op and leaves that document's focus record
+        // permanently stale. WelcomeView shipped exactly so: Focusable sat on its inner web view instead,
+        // and the failure was invisible because Focus()'s return value was discarded. The consequence was
+        // real: click a book, click into Welcome, and Cmd+W closed the book, because the resolver's most
+        // trusted tier is live Avalonia focus. (fable review)
+        //
+        // Asserted against the XAML rather than a constructed control: instantiating these views needs CEF
+        // and a window, and the property is a static fact about the markup.
+        var root = System.IO.Path.Combine(RepoRoot(), "src", "CST.Avalonia", "Views", view + ".axaml");
+        var xaml = System.IO.File.ReadAllText(root);
+
+        // The root element is everything up to the first '>' that closes the opening UserControl tag.
+        var openTag = xaml.Substring(0, xaml.IndexOf('>') + 1);
+
+        Assert.Contains("Focusable=\"True\"", openTag);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "src")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        return dir!.FullName;
+    }
 }
