@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using CST.Navigation;
 
@@ -108,6 +109,48 @@ namespace CST.Search
             }
             pages.Sort((a, b) => a.Edition.CompareTo(b.Edition));
             return (number, code, pages);
+        }
+
+        /// <summary>
+        /// Every page a span covers, per edition, in reading order within each edition. (#561)
+        ///
+        /// <para><b>Why a span needs its own method.</b> <see cref="RefsAt"/> answers for a POINT, which is the
+        /// right shape for a search hit but not for a window: a window that crosses a page break sits on two
+        /// printed pages, and reporting only the one in effect at its start makes the citation disagree with
+        /// the citation <c>/v1/occurrences</c> gives for a hit inside the same window. Two endpoints, one
+        /// piece of text, two different pages, and nothing in either response saying so.</para>
+        ///
+        /// <para>The first entry per edition is the page in effect at <paramref name="start"/> — the same
+        /// answer <see cref="RefsAt"/> gives — so a caller that reads only the first page sees no change.
+        /// Any page break falling inside the span follows it.</para>
+        /// </summary>
+        /// <param name="start">Inclusive.</param>
+        /// <param name="end">Exclusive. A span of zero or negative length reports the start page only.</param>
+        public IReadOnlyList<SnippetPageRef> PagesAcross(int start, int end)
+        {
+            var pages = new List<SnippetPageRef>();
+
+            foreach (var (edition, list) in _pages)
+            {
+                // The page in effect at the start, exactly as RefsAt would report it.
+                var idx = UpperBound(list.Count, i => list[i].Pos <= start) - 1;
+                if (idx >= 0) pages.Add(new SnippetPageRef(edition, list[idx].Volume, list[idx].Number));
+
+                // Then every break that opens inside the span. Starting from idx+1 skips the one already
+                // added; a break exactly AT `end` belongs to the next window, since `end` is exclusive.
+                for (int i = System.Math.Max(idx, 0); i < list.Count; i++)
+                {
+                    if (list[i].Pos <= start) continue;
+                    if (list[i].Pos >= end) break;
+                    pages.Add(new SnippetPageRef(edition, list[i].Volume, list[i].Number));
+                }
+            }
+
+            // Grouped by edition, ascending, and each edition's pages in the order they appear. A stable sort
+            // keeps that within-edition order rather than re-sorting by page number, which would misreport a
+            // book whose numbering restarts (#546's twelve).
+            pages = pages.OrderBy(p => p.Edition).ToList();
+            return pages;
         }
 
         /// <summary>
