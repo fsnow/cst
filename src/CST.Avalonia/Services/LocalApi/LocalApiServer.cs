@@ -6,6 +6,7 @@ using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -179,6 +181,19 @@ namespace CST.Avalonia.Services.LocalApi
                 o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
                 o.SerializerOptions.Converters.Add(new ScriptJsonConverter()); // reject Ipe/Unknown outputScript (before the enum factory)
                 o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // "Latin" not 3, for other enums
+
+                // AN UNKNOWN BODY KEY IS AN ERROR, NOT SOMETHING TO SKIP PAST. System.Text.Json's default is to
+                // drop what it cannot map, which turned a caller's typo into a silent no-op: `navigate` with
+                // "highlight" instead of "terms" opened the book, highlighted nothing, and returned
+                // highlights:0 with no note — while the SAME response for the correct key explains itself. The
+                // agent's own mistake got the worse diagnostic of the two, and agents reason onward from it
+                // rather than retrying. (#558)
+                //
+                // Safe here in a way it would not be for a public API: this is loopback-only, and an agent
+                // reads its contract (llms.txt) from the SAME running instance it then calls, so a client
+                // cannot be newer than the server it is talking to. The MCP surface is unaffected — those
+                // tools bind to the tool interfaces through DI, never over HTTP.
+                o.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
             });
 
             // MCP surface (#191): expose the read tool set over the Streamable HTTP transport at /mcp — MCP is
@@ -287,6 +302,40 @@ namespace CST.Avalonia.Services.LocalApi
                 await next();
             });
 
+            // A REJECTED BODY MUST SAY WHY, so the body is checked HERE rather than left to model binding.
+            // With UnmappedMemberHandling.Disallow set above, an unknown key already makes binding fail — but
+            // minimal APIs answer that internally with a 400 carrying NO BODY, which is the second half of
+            // #558: the caller learns only that something was unacceptable. .NET 10 has no ThrowOnBadRequest
+            // switch to route it out to middleware, so this inspects the body first and answers in the same
+            // { error } shape every other failure on this surface uses, naming the offending key and the ones
+            // that would have worked. Binding's own rejection stays as the backstop for anything missed.
+            app.Use(async (context, next) =>
+            {
+                if (HttpMethods.IsPost(context.Request.Method) &&
+                    ContractFor(context.Request.Path) is { } contract)
+                {
+                    context.Request.EnableBuffering();
+                    string body;
+                    using (var reader = new StreamReader(
+                               context.Request.Body, Encoding.UTF8, leaveOpen: true))
+                        body = await reader.ReadToEndAsync();
+                    context.Request.Body.Position = 0;   // rewind for the real binder
+
+                    if (UnknownKeyIn(body, contract) is { } bad)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        await context.Response.WriteAsJsonAsync(new
+                        {
+                            error = $"Unknown key '{bad}' in the request body. "
+                                  + $"Valid keys: {ValidKeysFor(contract)}."
+                        });
+                        return;
+                    }
+                }
+
+                await next();
+            });
+
             // Apply the concurrency cap AFTER the security gate, so unauthorized requests never consume a permit.
             app.UseRateLimiter();
 
@@ -390,6 +439,68 @@ namespace CST.Avalonia.Services.LocalApi
         private static bool BookExists(string? bookId) =>
             !string.IsNullOrEmpty(bookId) &&
             Books.Inst.Any(b => string.Equals(b.FileName, bookId, StringComparison.OrdinalIgnoreCase));
+
+        // ---- Naming a rejected body key (#558) ----------------------------------------------------------
+
+        /// <summary>
+        /// The first body key the contract does not declare, or null when every key maps. Case-insensitive,
+        /// matching the binder's own camelCase-insensitive behaviour, so this cannot reject something binding
+        /// would have accepted.
+        /// </summary>
+        private static string? UnknownKeyIn(string body, Type contract)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return null;
+
+            JsonElement root;
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;   // not ours to judge
+                root = doc.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                return null;   // malformed JSON is binding's to report, not a naming problem
+            }
+
+            var known = KnownKeys(contract);
+            foreach (var prop in root.EnumerateObject())
+                if (!known.Contains(prop.Name)) return prop.Name;
+
+            return null;
+        }
+
+        /// <summary>
+        /// The body keys a route accepts, read from the request contract itself so this cannot drift out of
+        /// step with the endpoint the way a hand-maintained list would.
+        /// </summary>
+        private static string ValidKeysFor(Type contract) =>
+            string.Join(", ", KnownKeys(contract).OrderBy(n => n, StringComparer.Ordinal));
+
+        private static HashSet<string> KnownKeys(Type contract) =>
+            new(contract.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.CanWrite || p.CanRead)
+                    .Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)),
+                StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The request contract behind a POST route. Every /v1 POST endpoint is listed: the default that
+        /// caused #558 applied to the whole surface, so a partial map would leave the next endpoint silently
+        /// dropping keys exactly as before.
+        /// </summary>
+        private static Type? ContractFor(PathString path)
+        {
+            var p = path.HasValue ? path.Value! : "";
+            if (p.EndsWith("/search", StringComparison.Ordinal)) return typeof(SearchToolRequest);
+            if (p.EndsWith("/occurrences", StringComparison.Ordinal)) return typeof(OccurrenceRequest);
+            if (p.EndsWith("/dictionary/lookup", StringComparison.Ordinal)) return typeof(DictionaryRequest);
+            if (p.EndsWith("/passage", StringComparison.Ordinal)) return typeof(PassageHttpRequest);
+            if (p.EndsWith("/ai/context-preview", StringComparison.Ordinal)) return typeof(ContextPreviewRequest);
+            if (p.EndsWith("/convert", StringComparison.Ordinal)) return typeof(ConvertRequest);
+            if (p.EndsWith("/navigate", StringComparison.Ordinal)) return typeof(NavigateRequest);
+            if (p.EndsWith("/forms", StringComparison.Ordinal)) return typeof(LemmaFormsUnionRequest);
+            return null;
+        }
 
         private static bool IsDiscoveryPath(PathString path) =>
             !path.HasValue || path == "/"
