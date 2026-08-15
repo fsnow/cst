@@ -11,6 +11,7 @@ using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
 using CST.Avalonia.ViewModels.Dock;
 using CST.Navigation;
+using CST.Search;
 using ReactiveUI;
 using Serilog;
 
@@ -57,6 +58,12 @@ public class AiAssistantViewModel : ReactiveTool
     private const int FlushIntervalMs = 100;
 
     private CancellationTokenSource? _turn;
+    private readonly System.Diagnostics.Stopwatch _elapsed = new();
+    /// <summary>
+    /// True while the turn has produced nothing yet, so the tick may own <see cref="Status"/>. Cleared the
+    /// moment anything real arrives — an error message must never be overwritten by a progress counter.
+    /// </summary>
+    private bool _awaitingFirstToken;
     private string _answer = "";
     private string _question = "";
     private string _citation = "";
@@ -123,6 +130,14 @@ public class AiAssistantViewModel : ReactiveTool
         private set => this.RaiseAndSetIfChanged(ref _citation, value);
     }
 
+    /// <summary>The full citation — canon path and every printed page — for the headline's tooltip.</summary>
+    public string CitationDetail
+    {
+        get => _citationDetail;
+        private set => this.RaiseAndSetIfChanged(ref _citationDetail, value);
+    }
+    private string _citationDetail = "";
+
     /// <summary>Tokens in and out, once the provider reports them. The user is paying for these.</summary>
     public string Usage
     {
@@ -165,6 +180,16 @@ public class AiAssistantViewModel : ReactiveTool
     /// the answer is the model's.
     /// </summary>
     public ObservableCollection<string> Notices { get; } = new();
+
+    public bool HasNotices => Notices.Count > 0;
+
+    /// <summary>
+    /// The collapsed header. Says how the request was ASSEMBLED, not that something failed: every one of
+    /// these is a fact about the input, and at full weight beside the answer they read as a list of errors.
+    /// </summary>
+    public string NoticesHeader => Notices.Count == 1
+        ? "1 note about this request"
+        : $"{Notices.Count} notes about this request";
 
     /// <summary>
     /// Whether the passage was trimmed to fit the budget — #586's partial-passage badge. Distinct from a
@@ -254,17 +279,24 @@ public class AiAssistantViewModel : ReactiveTool
                 // Chrome first: the citation arrives before any text, so the panel can say what it is about
                 // while the model is still thinking.
                 Citation = Describe(context.Citation);
+                CitationDetail = DescribeCitationDetail(context.Citation);
                 Notices.Clear();
                 foreach (var notice in context.Notices) Notices.Add(notice);
+                this.RaisePropertyChanged(nameof(HasNotices));
+                this.RaisePropertyChanged(nameof(NoticesHeader));
                 IsPartialPassage = context.Notices.Count > 0 &&
                                    context.Notices.Any(n => n.Contains("trim", StringComparison.OrdinalIgnoreCase)
                                                             || n.Contains("shorten", StringComparison.OrdinalIgnoreCase));
                 Status = "Thinking…";
+                _awaitingFirstToken = true;
                 break;
 
             case AiTurnEventKind.Text when e.Text is { Length: > 0 }:
                 lock (_pendingGate) _pending.Append(e.Text);
                 HasAnswer = true;
+                // Text on screen IS the progress report; the counter has nothing left to say.
+                _awaitingFirstToken = false;
+                Status = "";
                 break;
 
             case AiTurnEventKind.Reasoning:
@@ -277,12 +309,14 @@ public class AiAssistantViewModel : ReactiveTool
                 break;
 
             case AiTurnEventKind.Error when e.Error is { } error:
+                _awaitingFirstToken = false;
                 Flush();
                 // Partial text stands — a mid-stream failure keeps what arrived.
                 Status = error.Message;
                 break;
 
             case AiTurnEventKind.Completed:
+                _awaitingFirstToken = false;
                 Flush();
                 Status = "";
                 break;
@@ -300,8 +334,11 @@ public class AiAssistantViewModel : ReactiveTool
     {
         Answer = "";
         Citation = "";
+        CitationDetail = "";
         Usage = "";
         Notices.Clear();
+        this.RaisePropertyChanged(nameof(HasNotices));
+        this.RaisePropertyChanged(nameof(NoticesHeader));
         IsPartialPassage = false;
         HasAnswer = false;
         Status = "Preparing…";
@@ -311,15 +348,42 @@ public class AiAssistantViewModel : ReactiveTool
         _turn = new CancellationTokenSource();
         IsBusy = true;
 
+        _elapsed.Restart();
         _flushTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FlushIntervalMs) };
-        _flushTimer.Tick += (_, _) => Flush();
+        _flushTimer.Tick += (_, _) =>
+        {
+            Flush();
+            if (_awaitingFirstToken) Status = WaitingMessage(_elapsed.Elapsed);
+        };
         _flushTimer.Start();
     }
+
+    /// <summary>
+    /// What to say while nothing has come back yet.
+    ///
+    /// <para>
+    /// A silent wait is the norm on a free or shared endpoint, not a fault: an observed turn against a 550B
+    /// model on a <c>:free</c> tier sat for two minutes and then returned a gateway timeout, while a
+    /// different request to the same model answered in thirty seconds. The app cannot shorten that — our
+    /// HTTP timeout is deliberately infinite, because a finite one truncates long streams and reports it as
+    /// a cancellation — so the least it can do is look like waiting rather than like nothing happening, and
+    /// name the likely reason before the user concludes the button is broken.
+    /// </para>
+    /// </summary>
+    internal static string WaitingMessage(TimeSpan elapsed) => elapsed.TotalSeconds switch
+    {
+        < 5 => "Thinking…",
+        < 30 => $"Thinking… {elapsed.TotalSeconds:0}s",
+        _ => $"Still waiting… {elapsed.TotalSeconds:0}s. Free and shared endpoints can queue behind other "
+             + "requests, and a large model can take minutes.",
+    };
 
     private void EndTurn()
     {
         _flushTimer?.Stop();
         _flushTimer = null;
+        _awaitingFirstToken = false;
+        _elapsed.Stop();
         Flush();
         IsBusy = false;
     }
@@ -366,25 +430,97 @@ public class AiAssistantViewModel : ReactiveTool
     };
 
     /// <summary>
-    /// The citation line, built from the bundle rather than from the answer. Deliberately plain: it names the
-    /// book and where in it, which is what a reader needs to check the claim against the text.
+    /// The citation as ONE quiet line, built from the bundle rather than parsed out of the answer: the
+    /// book's own name and where in it.
+    ///
+    /// <para>
+    /// Deliberately not the full nav path, and deliberately not every page. The bundle's book name is a
+    /// path — <c>tipiṭaka (mūla)/sutta piṭaka/dīgha nikāya/mahāvaggapāḷi</c> — and since #561 the pages
+    /// cover every edition the window touches, which for a four-paragraph window is eight references. Both
+    /// in full, in bold, ran to four lines and buried the answer they were supposed to caption. The full
+    /// version lives in <see cref="DescribeCitationDetail"/>, on the tooltip.
+    /// </para>
     /// </summary>
     internal static string Describe(CitationRef citation)
     {
         if (citation is null) return "";
 
-        // The printed pages the passage covers — a VRI page number is what lets a reader put a finger on the
-        // text and check the claim. Formatted by the PROMPT BUILDER's own helper, deliberately: the pages
-        // named on screen and the pages named to the model must be the same string, or a reader comparing
-        // them finds a discrepancy that does not exist. SnippetPageRef is a record, so its ToString would
-        // also have rendered "SnippetPageRef { Edition = Vri, … }" straight into the panel — and since #561
-        // a window can cover several pages, that would have been a line of them.
-        var pages = citation.Pages is { Count: > 0 }
-            ? " · " + string.Join(", ", citation.Pages.Select(PromptBuilder.PageRef))
-            : "";
-
+        var book = LeafBookName(citation.BookName);
         return string.IsNullOrWhiteSpace(citation.NormalizedReference)
-            ? citation.BookName + pages
-            : $"{citation.BookName} — {citation.NormalizedReference}{pages}";
+            ? book
+            : $"{book} — {citation.NormalizedReference}";
+    }
+
+    /// <summary>
+    /// Everything the headline leaves out: where the book sits in the canon, and every printed page the
+    /// window covers, one line per edition. On the tooltip because a reader checking a claim against print
+    /// wants it, and a reader reading the answer does not.
+    /// </summary>
+    internal static string DescribeCitationDetail(CitationRef citation)
+    {
+        if (citation is null) return "";
+
+        var lines = new List<string> { citation.BookName };
+        if (!string.IsNullOrWhiteSpace(citation.NormalizedReference))
+            lines.Add(citation.NormalizedReference);
+        lines.AddRange(DescribePagesByEdition(citation.Pages));
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Printed pages, one line per edition with consecutive numbers collapsed: "VRI vol. 2 pp. 1–2".
+    ///
+    /// <para>
+    /// Eight separate references for a window spanning two pages of four editions is the same fact stated
+    /// eight times. Grouping is what makes it readable; the ranges are what make it short.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyList<string> DescribePagesByEdition(IReadOnlyList<SnippetPageRef>? pages)
+    {
+        if (pages is not { Count: > 0 }) return Array.Empty<string>();
+
+        return pages
+            .GroupBy(p => (p.Edition, p.Volume))
+            .Select(g =>
+            {
+                var numbers = g.Select(p => p.Number).Distinct().OrderBy(n => n).ToList();
+                var volume = g.Key.Volume > 0 ? $"vol. {g.Key.Volume} " : "";
+                var label = EditionLabel(g.Key.Edition);
+                return numbers.Count == 1
+                    ? $"{label} {volume}p. {numbers[0]}"
+                    // En dash, and only when the run is unbroken — "pp. 1-5" for pages 1 and 5 would be a
+                    // claim about three pages nobody looked at.
+                    : IsUnbroken(numbers)
+                        ? $"{label} {volume}pp. {numbers[0]}\u2013{numbers[^1]}"
+                        : $"{label} {volume}pp. {string.Join(", ", numbers)}";
+            })
+            .ToList();
+    }
+
+    private static bool IsUnbroken(IReadOnlyList<int> numbers)
+    {
+        for (var i = 1; i < numbers.Count; i++)
+            if (numbers[i] != numbers[i - 1] + 1) return false;
+        return true;
+    }
+
+    private static string EditionLabel(PageEdition edition) => edition switch
+    {
+        PageEdition.Vri => "VRI",
+        PageEdition.Myanmar => "Myanmar",
+        PageEdition.Pts => "PTS",
+        PageEdition.Thai => "Thai",
+        _ => "Other",
+    };
+
+    /// <summary>
+    /// The book's own name from the bundle's path. The path is useful context and a poor caption: what a
+    /// reader needs beside an answer is which book, not the four levels of canon above it.
+    /// </summary>
+    internal static string LeafBookName(string? bookName)
+    {
+        if (string.IsNullOrWhiteSpace(bookName)) return "";
+        var segments = bookName.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return segments.Length == 0 ? bookName.Trim() : segments[^1];
     }
 }

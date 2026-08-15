@@ -278,6 +278,74 @@ public class AiAssistantViewModelTests
     }
 
     [Fact]
+    public void The_citation_headline_is_one_short_line()
+    {
+        // What the first build put on screen, from a real turn: the whole canon path plus eight page
+        // references — four editions × two pages — in bold, over four lines, above the answer it was
+        // supposed to caption. The headline is now the book and the reference; the rest is on the tooltip.
+        var citation = new CitationRef(
+            "s0102m.mul.xml", "tipiṭaka (mūla)/sutta piṭaka/dīgha nikāya/mahāvaggapāḷi", "paragraphs 1-4 (dn2)",
+            new[]
+            {
+                new SnippetPageRef(PageEdition.Vri, 2, 1), new SnippetPageRef(PageEdition.Vri, 2, 2),
+                new SnippetPageRef(PageEdition.Myanmar, 2, 1), new SnippetPageRef(PageEdition.Myanmar, 2, 2),
+                new SnippetPageRef(PageEdition.Pts, 2, 1), new SnippetPageRef(PageEdition.Pts, 2, 2),
+                new SnippetPageRef(PageEdition.Thai, 2, 1), new SnippetPageRef(PageEdition.Thai, 2, 2),
+            });
+
+        var headline = AiAssistantViewModel.Describe(citation);
+
+        Assert.DoesNotContain("VRI", headline);
+        Assert.DoesNotContain("/", headline);
+        Assert.Contains("paragraphs 1-4", headline);
+        Assert.True(headline.Length < 60, $"headline too long: {headline}");
+    }
+
+    [Fact]
+    public void The_full_reference_is_kept_for_the_tooltip()
+    {
+        var citation = new CitationRef(
+            "s0102m.mul.xml", "tipiṭaka (mūla)/sutta piṭaka/dīgha nikāya/mahāvaggapāḷi", "paragraphs 1-4",
+            new[] { new SnippetPageRef(PageEdition.Vri, 2, 1), new SnippetPageRef(PageEdition.Vri, 2, 2) });
+
+        var detail = AiAssistantViewModel.DescribeCitationDetail(citation);
+
+        // Nothing is lost by shortening the headline — a reader checking a claim against print still has
+        // the canon path and the pages.
+        Assert.Contains("dīgha nikāya", detail);
+        Assert.Contains("VRI", detail);
+    }
+
+    [Fact]
+    public void Pages_are_grouped_by_edition_and_consecutive_runs_collapse()
+    {
+        var lines = AiAssistantViewModel.DescribePagesByEdition(new[]
+        {
+            new SnippetPageRef(PageEdition.Vri, 2, 1),
+            new SnippetPageRef(PageEdition.Vri, 2, 2),
+            new SnippetPageRef(PageEdition.Myanmar, 2, 5),
+        });
+
+        // Eight references for a two-page window across four editions is the same fact stated eight times.
+        Assert.Equal(2, lines.Count);
+        Assert.Contains(lines, l => l.Contains("VRI") && l.Contains("1\u20132"));
+        Assert.Contains(lines, l => l.Contains("Myanmar") && l.Contains("p. 5"));
+    }
+
+    [Fact]
+    public void A_broken_run_of_pages_is_listed_rather_than_ranged()
+    {
+        var lines = AiAssistantViewModel.DescribePagesByEdition(new[]
+        {
+            new SnippetPageRef(PageEdition.Vri, 1, 1),
+            new SnippetPageRef(PageEdition.Vri, 1, 5),
+        });
+
+        // "pp. 1–5" would be a claim about three pages nobody looked at.
+        Assert.Contains("1, 5", Assert.Single(lines));
+    }
+
+    [Fact]
     public void The_citation_renders_printed_pages_readably_and_not_as_a_record()
     {
         // SnippetPageRef is a record: ToString() would have put "SnippetPageRef { Edition = Vri, Volume = 1,
@@ -292,7 +360,7 @@ public class AiAssistantViewModelTests
                 new SnippetPageRef(PageEdition.Vri, 1, 7),
             });
 
-        var text = AiAssistantViewModel.Describe(citation);
+        var text = AiAssistantViewModel.DescribeCitationDetail(citation);
 
         Assert.DoesNotContain("SnippetPageRef", text);
         Assert.DoesNotContain("Edition =", text);
@@ -307,7 +375,56 @@ public class AiAssistantViewModelTests
         var text = AiAssistantViewModel.Describe(Citation());
 
         Assert.Contains("Sīlakkhandhavaggapāḷi", text);
-        Assert.DoesNotContain("·", text);
+        Assert.Empty(AiAssistantViewModel.DescribePagesByEdition(Array.Empty<SnippetPageRef>()));
+    }
+
+    // ---- Waiting ---------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_long_wait_says_so_and_names_the_likely_reason()
+    {
+        // Measured against a real endpoint: a 550B model on a ":free" tier sat for two minutes and returned
+        // a gateway timeout, while another request to the same model answered in thirty seconds. Our HTTP
+        // timeout is deliberately infinite, so the panel cannot shorten the wait — it can only stop looking
+        // like nothing is happening.
+        Assert.Equal("Thinking…", AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(2)));
+        Assert.Contains("10s", AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(10)));
+
+        var long_ = AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(75));
+        Assert.Contains("Still waiting", long_);
+        Assert.Contains("queue", long_);
+    }
+
+    [Fact]
+    public async Task The_progress_counter_never_overwrites_an_error()
+    {
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForError(
+            new AiError(AiErrorKind.Provider, "The provider rejected the request (HTTP 504).", 504)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+
+        // The failure that prompted this feature took two minutes to arrive; a counter that kept ticking
+        // over the top of the explanation would hide the one thing the user needs to read.
+        Assert.Equal("The provider rejected the request (HTTP 504).", vm.Status);
+    }
+
+    [Fact]
+    public async Task Streaming_text_clears_the_waiting_message()
+    {
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForText("Bhikkhus,"));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+
+        // Once text is arriving, the text IS the progress report.
+        Assert.Equal("", vm.Status);
+        Assert.Equal("Bhikkhus,", vm.Answer);
     }
 
     // ---- Usage -----------------------------------------------------------------------------------

@@ -51,19 +51,24 @@
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                    Margin="0,8,0,0"/>
 
-        <!-- The answer and its chrome -->
+        <!-- The answer and its chrome.
+             Order and weight are deliberate: the ANSWER is what the reader came for, so it is the only
+             thing at full weight. The citation captions it in one quiet line, and the notices sit under a
+             collapsed header — at equal weight they read as a wall of errors, which is what the first
+             build of this panel actually looked like. -->
         <ScrollViewer Margin="0,10,0,0" VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
-                <!-- Citation: built by us from the bundle, never parsed out of the answer, which is what
-                     makes a garbled answer unable to produce a citation that looks authoritative. -->
+                <!-- Built by us from the bundle, never parsed out of the answer. One line; the canon path
+                     and every printed page live on the tooltip. -->
                 <TextBlock Text="{Binding Citation}"
+                           ToolTip.Tip="{Binding CitationDetail}"
                            IsVisible="{Binding Citation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           FontWeight="SemiBold"
-                           TextWrapping="Wrap"/>
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
-                <!-- The passage was trimmed to fit the budget: the model did not see all of it, which
-                     changes how far the answer can be trusted. -->
+                <!-- The model did not see all of the passage, which changes how far the answer can be
+                     trusted — the one caveat that is not merely informational. -->
                 <Border IsVisible="{Binding IsPartialPassage}"
                         Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
                         BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
@@ -73,22 +78,28 @@
                                TextWrapping="Wrap"/>
                 </Border>
 
-                <ItemsControl ItemsSource="{Binding Notices}" Margin="0,6,0,0">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                            <TextBlock Text="{Binding}"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Margin="0,0,0,2"/>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
                 <!-- Selectable: readers copy translations out of this panel. -->
                 <SelectableTextBlock Text="{Binding Answer}"
                                      IsVisible="{Binding HasAnswer}"
                                      TextWrapping="Wrap"
                                      Margin="0,10,0,0"/>
+
+                <!-- Collapsed by default and phrased as what it is: facts about how the request was
+                     assembled, not failures. Open it and they are still quiet. -->
+                <Expander Header="{Binding NoticesHeader}"
+                          IsVisible="{Binding HasNotices}"
+                          Margin="0,12,0,0">
+                    <ItemsControl ItemsSource="{Binding Notices}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Margin="0,0,0,4"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Expander>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
