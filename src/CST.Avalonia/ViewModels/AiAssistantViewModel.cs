@@ -96,6 +96,7 @@ public class AiAssistantViewModel : ReactiveTool
         WordByWordCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.WordByWord));
         StopCommand = ReactiveCommand.Create(Stop);
         RetryCommand = ReactiveCommand.CreateFromTask(RetryAsync);
+        CopyCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel>(CopyAsync);
         ClearCommand = ReactiveCommand.Create(Clear);
     }
 
@@ -105,6 +106,10 @@ public class AiAssistantViewModel : ReactiveTool
     public ReactiveCommand<Unit, Unit> WordByWordCommand { get; }
     public ReactiveCommand<Unit, Unit> StopCommand { get; }
     public ReactiveCommand<Unit, Unit> RetryCommand { get; }
+
+    /// <summary>Copies one turn's answer. Explicit rather than left to drag-select, which stopped covering
+    /// the whole answer once tables put each cell in its own control.</summary>
+    public ReactiveCommand<AiTurnViewModel, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
 
     /// <summary>Every turn this session, oldest first. The panel scrolls; this is what it scrolls.</summary>
@@ -233,6 +238,17 @@ public class AiAssistantViewModel : ReactiveTool
         if (LastTurn is not { } last) return;
         Question = last.Question ?? "";
         await AskAsync(last.Task);
+    }
+
+    private static async Task CopyAsync(AiTurnViewModel turn)
+    {
+        // global:: throughout: the app's own CST.Avalonia namespace shadows the framework's Avalonia one.
+        var clipboard = (global::Avalonia.Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
+            ?.MainWindow?.Clipboard;
+
+        if (clipboard is null || turn is null) return;
+        await clipboard.SetTextAsync(turn.CopyText);
     }
 
     private void Clear()

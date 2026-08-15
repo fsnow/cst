@@ -646,6 +646,7 @@ public class AiAssistantViewModelTests
         await vm.AskAsync(AiTask.Explain);
 
         Assert.Equal("The term **appamāda** matters.", vm.LastTurn!.Answer);
-        Assert.Equal("The term appamāda matters.", AnswerMarkup.PlainText(vm.LastTurn!.Spans));
+        Assert.Equal("The term appamāda matters.", AnswerMarkup.PlainText(vm.LastTurn!.Blocks));
+        Assert.Equal("The term appamāda matters.", vm.LastTurn!.CopyText);
     }
 }

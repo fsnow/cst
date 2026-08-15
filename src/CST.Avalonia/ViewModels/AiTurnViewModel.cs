@@ -49,17 +49,17 @@ public sealed class AiTurnViewModel : ReactiveObject
 
     // ---- The answer ------------------------------------------------------------------------------
 
-    private IReadOnlyList<AnswerSpan> _spans = Array.Empty<AnswerSpan>();
+    private IReadOnlyList<AnswerBlock> _blocks = Array.Empty<AnswerBlock>();
 
     /// <summary>
-    /// The answer as styled spans. Bound to a single selectable control: models emit light Markdown — and we
-    /// teach them to, since the prompts are Markdown — so rendering it as plain text put literal asterisks on
-    /// screen.
+    /// The answer as rendered blocks — prose and tables. Models emit light Markdown, and we teach them to,
+    /// since the prompts are Markdown and the word-analysis section is itself a table; rendering the answer
+    /// as plain text put literal asterisks and unaligned pipes on screen.
     /// </summary>
-    public IReadOnlyList<AnswerSpan> Spans
+    public IReadOnlyList<AnswerBlock> Blocks
     {
-        get => _spans;
-        private set => this.RaiseAndSetIfChanged(ref _spans, value);
+        get => _blocks;
+        private set => this.RaiseAndSetIfChanged(ref _blocks, value);
     }
 
     /// <summary>The raw answer, markup and all. What Copy hands over, and what a test asserts on.</summary>
@@ -83,9 +83,19 @@ public sealed class AiTurnViewModel : ReactiveObject
     /// <summary>Re-parse and publish. Called once per flush, not once per delta.</summary>
     internal void PublishAnswer()
     {
-        Spans = AnswerMarkup.Parse(_answer.ToString());
+        Blocks = AnswerMarkup.Parse(_answer.ToString());
         this.RaisePropertyChanged(nameof(Answer));
     }
+
+    /// <summary>
+    /// The answer as a reader would want it pasted: emphasis applied rather than spelled with asterisks,
+    /// bullets as glyphs, tables as aligned pipe rows.
+    ///
+    /// <para>An explicit operation rather than a consequence of drag-select. Tables put each cell in its own
+    /// control and a drag cannot cross controls, so once the panel renders tables, "select all of it and
+    /// copy" stops working — the copy path has to be owned rather than inherited.</para>
+    /// </summary>
+    public string CopyText => AnswerMarkup.PlainText(Blocks);
 
     // ---- Reasoning -------------------------------------------------------------------------------
 
