@@ -53,7 +53,15 @@ namespace CST.Avalonia.ViewModels
             // existing update settings — two groups under a single nav entry, not two "Dictionary…" entries.
             var dictionarySettings = new DictionaryCategoryViewModel(
                 new DictionarySourceSettingsViewModel(_sourcePrefs), dpdUpdateSettings);
-            var aiSettings = new AiSettingsViewModel(_settingsService);
+            // #585: the assistant half of the AI panel needs the credential store (keys never touch
+            // settings.json), the model registry (the fidelity advisory) and the resolver (so Settings
+            // reports readiness using the SAME code the assistant will run, rather than a second opinion
+            // that can drift from it). Resolved rather than injected because this VM is constructed here.
+            var aiSettings = new AiSettingsViewModel(
+                _settingsService,
+                App.TryGetService<Services.Ai.IAiCredentialStore>(),
+                App.TryGetService<Services.Ai.IModelRegistry>(),
+                App.TryGetService<Services.Ai.IChatProviderResolver>());
             var loggingSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
 
             // Order: most-adjusted settings first, informational ones last (#100).
@@ -1260,7 +1268,18 @@ namespace CST.Avalonia.ViewModels
     }
 
     // AI category (#186): the opt-in "Enable AI Features" master switch and the local-API sub-permissions.
-    public class AiSettingsViewModel : ViewModelBase
+    /// <summary>
+/// A provider the build knows how to talk to, with the name a user would recognise. (#585)
+///
+/// <para>
+/// Two, not a long list, because the second one is not really "OpenAI" — it is a SHAPE. The same adapter
+/// reaches DeepSeek, OpenRouter, Ollama and LM Studio, and what selects between them is the base URL, not
+/// this box. A list of brand names would go stale within a month and would imply the others are unsupported.
+/// </para>
+/// </summary>
+public sealed record AiProviderChoice(Services.Ai.ChatProviderKind Kind, string Display, string Stored);
+
+public class AiSettingsViewModel : ViewModelBase
     {
         private readonly ISettingsService _settingsService;
         private bool _aiEnabled;
@@ -1269,14 +1288,40 @@ namespace CST.Avalonia.ViewModels
         private bool _allowRemoteControl;
 
         public AiSettingsViewModel(ISettingsService settingsService)
+            : this(settingsService, null, null, null)
+        {
+        }
+
+        public AiSettingsViewModel(
+            ISettingsService settingsService,
+            Services.Ai.IAiCredentialStore? credentials,
+            Services.Ai.IModelRegistry? modelRegistry,
+            Services.Ai.IChatProviderResolver? providerResolver)
         {
             _settingsService = settingsService;
+            _credentials = credentials;
+            _modelRegistry = modelRegistry;
+            _providerResolver = providerResolver;
 
             var ai = _settingsService.Settings.Ai;
             _aiEnabled = ai.Enabled;
             _localApiEnabled = ai.LocalApi.Enabled;
             _mcpEnabled = ai.LocalApi.EnableMcpServer;
             _allowRemoteControl = ai.LocalApi.AllowRemoteControl;
+
+            var chat = ai.Chat;
+            _chatEnabled = chat.Enabled;
+            _providerChoice = Providers.FirstOrDefault(
+                c => Services.Ai.ChatProviderResolver.TryParseKind(chat.Provider, out var k)
+                     && k == c.Kind) ?? Providers[0];
+            _baseUrl = chat.BaseUrl ?? "";
+            _model = chat.Model ?? "";
+            _answerLanguage = string.IsNullOrWhiteSpace(chat.AnswerLanguage) ? "English" : chat.AnswerLanguage;
+
+            SaveApiKeyCommand = ReactiveCommand.Create(SaveApiKey);
+            RemoveApiKeyCommand = ReactiveCommand.Create(RemoveApiKey);
+
+            RefreshKeyStatus();
         }
 
         /// <summary>Master switch — "Enable AI Features". Everything AI-related is gated behind this (default OFF).</summary>
@@ -1349,6 +1394,247 @@ namespace CST.Avalonia.ViewModels
         /// MCP) is running — because navigate is offered over both. Keying it to the REST flag alone would grey
         /// it out for an MCP-only user whose navigate works fine, telling them to enable a box already ticked. (#440)</summary>
         public bool RemoteControlEnabled => AiEnabled && (LocalApiEnabled || McpEnabled);
+
+        #region The assistant — surface B (#585)
+
+        private readonly Services.Ai.IAiCredentialStore? _credentials;
+        private readonly Services.Ai.IModelRegistry? _modelRegistry;
+        private readonly Services.Ai.IChatProviderResolver? _providerResolver;
+
+        private bool _chatEnabled;
+        private AiProviderChoice _providerChoice = null!;
+        private string _baseUrl = "";
+        private string _model = "";
+        private string _answerLanguage = "English";
+        private string _apiKeyEntry = "";
+        private string _keyStatus = "";
+
+        private static readonly AiProviderChoice[] Providers =
+        {
+            new(Services.Ai.ChatProviderKind.Anthropic, "Claude (Anthropic)", "anthropic"),
+            new(Services.Ai.ChatProviderKind.OpenAiCompatible, "OpenAI-compatible endpoint", "openai-compatible"),
+        };
+
+        /// <summary>
+        /// Answer language suggestions. Editable rather than a closed list: the model decides what it can
+        /// write, not this app, and a reader whose language is missing would otherwise be told the feature is
+        /// not for them.
+        /// </summary>
+        private static readonly string[] AnswerLanguages =
+        {
+            "English", "Italian", "German", "French", "Spanish", "Portuguese",
+            "Hindi", "Burmese", "Sinhala", "Thai", "Vietnamese", "Chinese", "Japanese", "Russian",
+        };
+
+        /// <summary>Bindable views of the two lists above — an instance binding cannot reach a static member.</summary>
+        public AiProviderChoice[] ProviderChoices => Providers;
+        public string[] AnswerLanguageSuggestions => AnswerLanguages;
+
+        /// <summary>Turns the in-app assistant on. Effective only under the AI master switch, like every other surface.</summary>
+        public bool ChatEnabled
+        {
+            get => _chatEnabled;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _chatEnabled, value);
+                _settingsService.Settings.Ai.Chat.Enabled = value;
+                _settingsService.RequestSave();
+                RefreshReadiness();
+            }
+        }
+
+        public AiProviderChoice SelectedProvider
+        {
+            get => _providerChoice;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _providerChoice, value);
+                _settingsService.Settings.Ai.Chat.Provider = value?.Stored ?? "anthropic";
+                _settingsService.RequestSave();
+                this.RaisePropertyChanged(nameof(IsOpenAiCompatible));
+                this.RaisePropertyChanged(nameof(BaseUrlDescription));
+                this.RaisePropertyChanged(nameof(ApiKeyDescription));
+                RefreshKeyStatus();
+                RefreshReadiness();
+            }
+        }
+
+        /// <summary>Whether the endpoint field is the load-bearing one — it is what selects the provider.</summary>
+        public bool IsOpenAiCompatible =>
+            SelectedProvider?.Kind == Services.Ai.ChatProviderKind.OpenAiCompatible;
+
+        public string BaseUrlDescription => IsOpenAiCompatible
+            ? "Required. The endpoint's base URL — this is what points the app at DeepSeek, OpenRouter, "
+              + "Ollama, LM Studio or any other OpenAI-compatible server, e.g. http://localhost:11434/v1"
+            : "Optional. Leave empty unless you reach Claude through a proxy or gateway.";
+
+        public string BaseUrl
+        {
+            get => _baseUrl;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _baseUrl, value);
+                _settingsService.Settings.Ai.Chat.BaseUrl = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+                _settingsService.RequestSave();
+                RefreshReadiness();
+            }
+        }
+
+        /// <summary>
+        /// The model id, verbatim. Never validated against a list and never a dropdown: the OpenAI-compatible
+        /// shape serves arbitrary endpoints, and any list shipped here would be wrong within a month — it
+        /// would reject a model that works and imply the app had been abandoned.
+        /// </summary>
+        public string Model
+        {
+            get => _model;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _model, value);
+                _settingsService.Settings.Ai.Chat.Model = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+                _settingsService.RequestSave();
+                this.RaisePropertyChanged(nameof(FidelityAdvisory));
+                this.RaisePropertyChanged(nameof(HasFidelityAdvisory));
+                RefreshReadiness();
+            }
+        }
+
+        /// <summary>
+        /// The language the answer is written in — a different axis from the script quoted Pāli appears in.
+        /// The two were previously conflated; see <see cref="PaliScriptNote"/>.
+        /// </summary>
+        public string AnswerLanguage
+        {
+            get => _answerLanguage;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _answerLanguage, value);
+                _settingsService.Settings.Ai.Chat.AnswerLanguage =
+                    string.IsNullOrWhiteSpace(value) ? "English" : value.Trim();
+                _settingsService.RequestSave();
+            }
+        }
+
+        /// <summary>
+        /// The second axis, stated rather than offered. The system prompt already asks the model to mark
+        /// quoted Pāli, but this version renders those quotes in Latin and converts nothing — so a script
+        /// picker here would be a control that does nothing, which is worse than a sentence that is true.
+        /// </summary>
+        public string PaliScriptNote =>
+            "Pāli quoted in answers is shown in Latin script in this version, whatever script you read books "
+            + "in. The answer language above is a separate setting and takes effect now.";
+
+        /// <summary>
+        /// What the user is typing into the key box. Deliberately NOT persisted anywhere — it is handed to the
+        /// OS credential store on Save and cleared. Bound to a masked box.
+        /// </summary>
+        public string ApiKeyEntry
+        {
+            get => _apiKeyEntry;
+            set => this.RaiseAndSetIfChanged(ref _apiKeyEntry, value);
+        }
+
+        /// <summary>Whether a key is stored for the selected provider, or why one cannot be. Never the key.</summary>
+        public string KeyStatus
+        {
+            get => _keyStatus;
+            private set => this.RaiseAndSetIfChanged(ref _keyStatus, value);
+        }
+
+        public bool CanStoreKeys => _credentials?.IsAvailable == true;
+
+        public string ApiKeyDescription => IsOpenAiCompatible
+            ? "Optional. A local runner on your own machine usually needs none; a hosted endpoint will."
+            : "Required for Claude.";
+
+        public ReactiveCommand<Unit, Unit> SaveApiKeyCommand { get; }
+        public ReactiveCommand<Unit, Unit> RemoveApiKeyCommand { get; }
+
+        /// <summary>
+        /// The fidelity advisory for the configured model (#584). Advice, never a block: a reader who wants a
+        /// local model for privacy has a good reason this app does not get to override.
+        /// </summary>
+        public string? FidelityAdvisory =>
+            _modelRegistry?.Advisory(Services.Ai.AiTask.Translate, _model);
+
+        public bool HasFidelityAdvisory => !string.IsNullOrWhiteSpace(FidelityAdvisory);
+
+        /// <summary>
+        /// Whether the assistant would actually run, asked of the SAME resolver the assistant uses. A second
+        /// implementation of "is this configured" would drift from the first, and the version that lies is
+        /// always the one in Settings.
+        /// </summary>
+        public string ReadinessText
+        {
+            get
+            {
+                if (_providerResolver == null) return "";
+                var resolution = _providerResolver.Resolve(out var problem);
+                return resolution != null ? "Ready." : problem ?? "Not configured.";
+            }
+        }
+
+        public bool IsReady => _providerResolver?.Resolve(out _) != null;
+
+        /// <summary>
+        /// What leaves the machine, in plain language (AI_SURFACE_B.md §10). Stated here rather than buried in
+        /// documentation because this is the screen where the user decides.
+        /// </summary>
+        public string PrivacyNote =>
+            "When you ask the assistant something, these are sent to the provider configured above: the "
+            + "passage text from the book you are reading, your question, and the app's instructions to the "
+            + "model. Nothing else is sent, and nothing is sent until you ask. If you point this at a model "
+            + "running on your own machine, nothing leaves it at all.";
+
+        private void SaveApiKey()
+        {
+            if (_credentials == null || string.IsNullOrWhiteSpace(ApiKeyEntry)) return;
+
+            _credentials.SetApiKey(SelectedProvider.Kind, ApiKeyEntry);
+            // Cleared immediately: the box exists to hand the key over, not to hold it.
+            ApiKeyEntry = "";
+            RefreshKeyStatus();
+            RefreshReadiness();
+        }
+
+        private void RemoveApiKey()
+        {
+            _credentials?.DeleteApiKey(SelectedProvider.Kind);
+            ApiKeyEntry = "";
+            RefreshKeyStatus();
+            RefreshReadiness();
+        }
+
+        private void RefreshKeyStatus()
+        {
+            if (_credentials == null)
+            {
+                KeyStatus = "";
+            }
+            else if (!_credentials.IsAvailable)
+            {
+                // The honest message from the store itself, which knows WHY — a Windows build without DPAPI
+                // and a Linux build without libsecret are different sentences, and "add a key in Settings"
+                // is the wrong advice for both.
+                KeyStatus = _credentials.Unavailable ?? "Keys cannot be stored on this system.";
+            }
+            else
+            {
+                KeyStatus = _credentials.GetApiKey(SelectedProvider.Kind) is null
+                    ? "No key stored for this provider."
+                    : "A key is stored for this provider.";
+            }
+
+            this.RaisePropertyChanged(nameof(CanStoreKeys));
+        }
+
+        private void RefreshReadiness()
+        {
+            this.RaisePropertyChanged(nameof(ReadinessText));
+            this.RaisePropertyChanged(nameof(IsReady));
+        }
+
+        #endregion
     }
 
     public class DeveloperSettingsViewModel : ViewModelBase

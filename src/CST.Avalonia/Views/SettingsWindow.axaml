@@ -564,6 +564,100 @@
                                         </Expander>
                                     </StackPanel>
                                 </Border>
+
+                                <!-- The in-app assistant — surface B (#585).
+                                     Sits under the same master switch as the agent surfaces above: this is a
+                                     third way in, not a separate feature area. Deliberately NO temperature
+                                     control — current Claude models reject sampling parameters with a 400. -->
+                                <Border Classes="SettingGroup">
+                                    <StackPanel>
+                                        <TextBlock Text="Assistant" Classes="SettingLabel"/>
+                                        <TextBlock Text="Ask about the passage you are reading — an explanation, a translation, a grammatical breakdown — answered by a model you choose and pay for. Answers are generated text, shown separately from the canonical text, and can be wrong."
+                                                  Classes="SettingDescription"/>
+
+                                        <CheckBox IsChecked="{Binding ChatEnabled}"
+                                                 IsEnabled="{Binding SubPermissionsEnabled}"
+                                                 Content="Enable the assistant"
+                                                 Margin="0,10,0,0"/>
+
+                                        <TextBlock Text="Provider" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                        <ComboBox ItemsSource="{Binding ProviderChoices}"
+                                                 SelectedItem="{Binding SelectedProvider}"
+                                                 IsEnabled="{Binding SubPermissionsEnabled}"
+                                                 Width="320" HorizontalAlignment="Left">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:AiProviderChoice">
+                                                    <TextBlock Text="{Binding Display}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                        <TextBlock Text="Endpoint address" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                        <TextBox Text="{Binding BaseUrl}"
+                                                IsEnabled="{Binding SubPermissionsEnabled}"
+                                                Watermark="https://…"
+                                                Width="480" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="{Binding BaseUrlDescription}" Classes="SettingDescription"/>
+
+                                        <TextBlock Text="Model" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                        <TextBox Text="{Binding Model}"
+                                                IsEnabled="{Binding SubPermissionsEnabled}"
+                                                Watermark="e.g. claude-sonnet-4-5"
+                                                Width="480" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="Typed exactly as the provider spells it. Never checked against a list — the endpoint decides what exists, and a list shipped here would be wrong within a month."
+                                                  Classes="SettingDescription"/>
+
+                                        <!-- The fidelity advisory (#584): advice, never a block. A reader who
+                                             wants a local model for privacy has a reason we do not override. -->
+                                        <Border IsVisible="{Binding HasFidelityAdvisory}"
+                                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1" CornerRadius="4"
+                                                Padding="10,8" Margin="0,8,0,0" MaxWidth="560"
+                                                HorizontalAlignment="Left">
+                                            <TextBlock Text="{Binding FidelityAdvisory}" TextWrapping="Wrap"/>
+                                        </Border>
+
+                                        <TextBlock Text="API key" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBox Text="{Binding ApiKeyEntry}"
+                                                    PasswordChar="●"
+                                                    IsEnabled="{Binding CanStoreKeys}"
+                                                    Watermark="Paste a key to store it"
+                                                    Width="320"/>
+                                            <Button Content="Save key"
+                                                    Command="{Binding SaveApiKeyCommand}"
+                                                    IsEnabled="{Binding CanStoreKeys}"
+                                                    Margin="8,0,0,0"/>
+                                            <Button Content="Remove"
+                                                    Command="{Binding RemoveApiKeyCommand}"
+                                                    IsEnabled="{Binding CanStoreKeys}"
+                                                    Margin="6,0,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding KeyStatus}" Classes="SettingDescription"/>
+                                        <TextBlock Text="{Binding ApiKeyDescription}" Classes="SettingDescription"/>
+                                        <TextBlock Text="Stored in the operating system's credential store, never in the settings file — that file gets hand-edited, screenshotted and attached to bug reports."
+                                                  Classes="SettingDescription"/>
+
+                                        <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                        <AutoCompleteBox Text="{Binding AnswerLanguage}"
+                                                        ItemsSource="{Binding AnswerLanguageSuggestions}"
+                                                        IsEnabled="{Binding SubPermissionsEnabled}"
+                                                        FilterMode="StartsWith"
+                                                        Width="320" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="{Binding PaliScriptNote}" Classes="SettingDescription"/>
+
+                                        <!-- §10: state plainly what leaves the machine, on the screen where
+                                             the user decides — not only in the documentation. -->
+                                        <TextBlock Text="What is sent" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                        <TextBlock Text="{Binding PrivacyNote}" Classes="SettingDescription"/>
+
+                                        <TextBlock Text="{Binding ReadinessText}"
+                                                  Classes="SettingDescription"
+                                                  FontWeight="SemiBold"
+                                                  Margin="0,12,0,0"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </DataTemplate>
 

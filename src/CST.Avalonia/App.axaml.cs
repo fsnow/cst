@@ -1320,6 +1320,13 @@ public partial class App : Application
         services.AddSingleton<OpenBookDialogViewModel>();
         services.AddSingleton<SearchViewModel>();
         services.AddSingleton<DictionaryViewModel>();
+        // The assistant panel (#586). Singleton like the other tools: it is one dockable, and a turn in
+        // flight must survive the panel being hidden and shown again.
+        services.AddSingleton<AiAssistantViewModel>(sp => new AiAssistantViewModel(
+            sp.GetService<Services.Ai.IAiChatOrchestrator>(),
+            sp.GetService<Services.Ai.IReaderStateService>(),
+            sp.GetService<Services.Ai.IChatProviderResolver>(),
+            sp.GetService<ISettingsService>()));
         // services.AddTransient<MainWindowViewModel>();
     }
 

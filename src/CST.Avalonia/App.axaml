@@ -29,6 +29,11 @@
         </DataTemplate>
 
         <!-- DataTemplate for BookDisplayViewModel (ReactiveDocument) -> BookDisplayView -->
+        <!-- DataTemplate for AiAssistantViewModel (ReactiveTool) -> AiAssistantPanel (#586) -->
+        <DataTemplate DataType="{x:Type vm:AiAssistantViewModel}">
+            <views:AiAssistantPanel />
+        </DataTemplate>
+
         <DataTemplate DataType="{x:Type vm:BookDisplayViewModel}">
             <views:BookDisplayView />
         </DataTemplate>
