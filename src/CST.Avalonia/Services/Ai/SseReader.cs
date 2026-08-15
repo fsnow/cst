@@ -65,11 +65,18 @@ internal static class SseReader
         // arrived. It needs the stream to go quiet for the whole window and then deliver a line within
         // microseconds of expiry; the cost is one spurious "stopped responding" that a retry clears.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(firstEventTimeout);
 
         string? name = null;
         var data = new StringBuilder();
         var sawAnyData = false;
+
+        // The time-to-first-data allowance is measured from HERE, once, and never re-armed. It used to be
+        // re-armed before every read like the idle window, which made it not a ceiling at all: a proxy that
+        // sends keep-alive comments — OpenRouter's ": OPENROUTER PROCESSING" is the case this file already
+        // names — reset the full allowance with each comment, so a request behind a wedged backend waited
+        // FOREVER while looking healthy. The user clicked a preset, watched a counter climb, and gave up
+        // without ever being told anything was wrong.
+        var sinceRequest = System.Diagnostics.Stopwatch.StartNew();
 
         while (true)
         {
@@ -81,7 +88,12 @@ internal static class SseReader
                 // Armed BEFORE the read, so the window in force always matches the pivot. Arming afterwards
                 // left one read carrying the previous line's verdict — harmless (always the more lenient of the
                 // two) but it made the timeout message name a window that had not applied.
-                deadline.CancelAfter(sawAnyData ? idleTimeout : firstEventTimeout);
+                //
+                // Two different shapes of window, deliberately. AFTER the first data line the idle window
+                // slides: a stream that keeps producing is allowed to run for as long as it likes, and only a
+                // GAP is fatal. BEFORE it, what remains of the first-data allowance is what is left of a fixed
+                // budget from the request — anything else lets keep-alives hold the door open indefinitely.
+                deadline.CancelAfter(sawAnyData ? idleTimeout : Remaining(firstEventTimeout, sinceRequest));
                 line = await reader.ReadLineAsync(deadline.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -90,11 +102,16 @@ internal static class SseReader
             }
             catch (OperationCanceledException)
             {
-                var window = sawAnyData ? idleTimeout : firstEventTimeout;
                 line = null;
-                failure = new AiError(
-                    AiErrorKind.Network,
-                    $"The model stopped responding (no data for {window.TotalSeconds:0}s).");
+                // Two different facts, so two different sentences. Before any data the elapsed time IS the
+                // whole wait, and the user watched all of it; after it, only the gap is news.
+                failure = sawAnyData
+                    ? new AiError(
+                        AiErrorKind.Network,
+                        $"The model stopped responding (no data for {idleTimeout.TotalSeconds:0}s).")
+                    : new AiError(
+                        AiErrorKind.Network,
+                        $"The model sent nothing back after {firstEventTimeout.TotalSeconds:0}s.");
             }
             catch (Exception ex) when (ex is IOException or System.Net.Http.HttpRequestException)
             {
@@ -151,6 +168,8 @@ internal static class SseReader
                     name = value;
                     break;
                 case "data":
+                    // Still the pivot: the first DATA line, not merely the first line. What changed is only
+                    // that the pre-pivot window is now a fixed budget rather than a per-line one.
                     // The pivot from the first-event window to the ordinary idle window is the first DATA line,
                     // not merely the first line. A proxy that emits a preamble comment (OpenRouter sends
                     // ": OPENROUTER PROCESSING") and then waits on a slow backend would otherwise collapse the
@@ -163,5 +182,16 @@ internal static class SseReader
                 // id / retry are part of SSE reconnection, which neither provider uses. Ignore.
             }
         }
+    }
+
+    /// <summary>
+    /// What is left of a fixed budget. Zero once it is spent — <see cref="CancellationTokenSource.CancelAfter"/>
+    /// cancels immediately on zero, which is the right answer for a budget already gone rather than an
+    /// accidental renewal.
+    /// </summary>
+    private static TimeSpan Remaining(TimeSpan budget, System.Diagnostics.Stopwatch since)
+    {
+        var left = budget - since.Elapsed;
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
     }
 }
