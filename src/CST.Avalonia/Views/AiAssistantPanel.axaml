@@ -9,6 +9,22 @@
              x:Class="CST.Avalonia.Views.AiAssistantPanel"
              x:DataType="vm:AiAssistantViewModel">
 
+    <UserControl.Resources>
+        <!-- Compact expanders, for the collapsed chrome. Fluent sizes these for a settings page: a 48px
+             minimum height, a 32px chevron and 16px paddings, which is about 100px of furniture per turn once
+             Reasoning and Notes are both present — in a column a quarter of the window wide, holding a
+             transcript that grows all session. Retuned through the theme's own DynamicResource keys rather
+             than by overriding template parts, so nothing here breaks when the template changes.
+
+             Scoped to this panel: the same keys are used by expanders elsewhere in the app, which are not in
+             a narrow column and do not want this. -->
+        <x:Double x:Key="ExpanderMinHeight">26</x:Double>
+        <Thickness x:Key="ExpanderHeaderPadding">8,0,0,0</Thickness>
+        <Thickness x:Key="ExpanderChevronMargin">6,0,6,0</Thickness>
+        <x:Double x:Key="ExpanderChevronButtonSize">18</x:Double>
+        <Thickness x:Key="ExpanderContentPadding">8,4,8,6</Thickness>
+    </UserControl.Resources>
+
     <!-- #586: generated text renders HERE, in Avalonia controls, and never inside the book's CEF WebView.
          That makes "generated text is visually distinguishable from canonical text" a structural fact
          rather than a styling convention, and keeps live token streaming off the component that SIGSEGVs
@@ -146,11 +162,18 @@
                                      one, which is why it is no longer discarded. -->
                                 <Expander Header="{Binding ReasoningHeader}"
                                           IsVisible="{Binding HasReasoning}"
+                                          FontSize="11"
                                           Margin="0,2,0,0">
-                                    <SelectableTextBlock Text="{Binding Reasoning}"
-                                                         TextWrapping="Wrap"
-                                                         FontSize="11"
-                                                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <!-- Capped and scrolled. Reasoning runs to thousands of characters, and
+                                         un-capped it pushes the answer — the thing the reader came for —
+                                         below the fold on the very turns where they opened it to check
+                                         whether anything was happening at all. -->
+                                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                                        <SelectableTextBlock Text="{Binding Reasoning}"
+                                                             TextWrapping="Wrap"
+                                                             FontSize="11"
+                                                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </ScrollViewer>
                                 </Expander>
 
                                 <!-- The answer, as blocks: prose in one selectable control per run, tables
@@ -197,6 +220,7 @@
                                      because at full weight beside the answer they read as a list of errors. -->
                                 <Expander Header="{Binding NoticesHeader}"
                                           IsVisible="{Binding HasNotices}"
+                                          FontSize="11"
                                           Margin="0,4,0,0">
                                     <ItemsControl ItemsSource="{Binding Notices}">
                                         <ItemsControl.ItemTemplate>

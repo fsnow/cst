@@ -165,6 +165,20 @@ public class PromptBuilderTests : IDisposable
     }
 
     [Fact]
+    public void A_clean_request_produces_no_notices_however_many_paragraphs_it_covers()
+    {
+        // A window spanning several paragraphs used to raise "The passage window covers N paragraphs, not
+        // just the one cited". It fired on almost every request, so the notice list read as a list of
+        // problems on requests that had none -- and since #649 the window is built around the reader's own
+        // selection, making its extent a consequence of what they asked about rather than something that
+        // happened to them. Asserted as "no notices at all" rather than as the absence of one string, so a
+        // differently-worded reintroduction fails too.
+        var prompt = _builder.Build(Bundle(paragraphsCovered: 29));
+
+        Assert.Empty(prompt.Notices);
+    }
+
+    [Fact]
     public void A_selection_carries_no_caveat_about_its_own_context()
     {
         // There used to be a "this selection was not found in the passage above" branch here, because the
