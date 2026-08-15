@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using CST.Conversion;
 
 namespace CST.Search
@@ -211,6 +212,94 @@ namespace CST.Search
             }
 
             return Materialize(xml, start, end, maxChars, includeVariants, outputScript, markers, structuredNotes);
+        }
+
+        /// <summary>
+        /// Find a selection's raw span inside a bounded region of the XML, or null. (#649)
+        ///
+        /// <para><b>Matched against the RAW XML, not against rendered text.</b> The obvious approach — render
+        /// the region, find the selection's offset in it, map the offset back — cannot work: the renderer
+        /// converts script (one Devanagari character becomes several Latin ones), inserts a space for each
+        /// stripped tag, deletes a space before close punctuation, then collapses and trims. Rendered offsets
+        /// are not any function of raw offsets that counting can invert. Walking the raw text and skipping
+        /// what the renderer skips yields the raw span directly, with no arithmetic to get wrong.</para>
+        ///
+        /// <para><b>The needle must already be in the XML's own script.</b> Callers hold the selection in
+        /// Latin; converting it here would need a script this class does not know.</para>
+        ///
+        /// <para>Whitespace runs on either side compare equal to a single space, because the selection came
+        /// through the DOM and the XML is line-wrapped. Bounded to one region by the caller so a formulaic
+        /// phrase — this corpus repeats them verbatim across books — cannot match somewhere the reader has
+        /// never been.</para>
+        /// </summary>
+        public static (int Start, int End)? LocateSelection(string xml, int from, int to, string needle)
+        {
+            from = Math.Clamp(from, 0, xml.Length);
+            to = Math.Clamp(to, from, xml.Length);
+            if (string.IsNullOrWhiteSpace(needle)) return null;
+
+            // Collapse the needle the same way the comparison collapses the haystack.
+            var wanted = new StringBuilder(needle.Length);
+            foreach (var c in needle)
+            {
+                if (char.IsWhiteSpace(c))
+                {
+                    if (wanted.Length > 0 && wanted[^1] != ' ') wanted.Append(' ');
+                }
+                else wanted.Append(c);
+            }
+            var target = wanted.ToString().Trim();
+            if (target.Length == 0) return null;
+
+            for (int anchor = from; anchor < to; anchor++)
+            {
+                if (xml[anchor] == '<') continue;
+                if (char.IsWhiteSpace(xml[anchor])) continue;
+
+                int matched = 0, i = anchor, lastConsumed = anchor;
+                bool pendingSpace = false;
+
+                while (i < to && matched < target.Length)
+                {
+                    char c = xml[i];
+
+                    if (c == '<')
+                    {
+                        int gt = xml.IndexOf('>', i);
+                        if (gt < 0 || gt >= to) break;
+                        string tag = xml.Substring(i, gt - i + 1);
+                        string name = TeiText.TagName(tag);
+                        // Skip exactly what the renderer drops, so a note or a paragraph number sitting in the
+                        // middle of the reader's selection does not break the match.
+                        if ((name == "note" || (name == "hi" && TeiText.IsStructuralHi(tag)))
+                            && !tag.EndsWith("/>", StringComparison.Ordinal)
+                            && !tag.StartsWith("</", StringComparison.Ordinal))
+                            i = TeiText.SkipSubtree(xml, gt + 1, name, to);
+                        else
+                            i = gt + 1;
+                        continue;
+                    }
+
+                    if (char.IsWhiteSpace(c)) { pendingSpace = true; i++; continue; }
+
+                    if (pendingSpace)
+                    {
+                        pendingSpace = false;
+                        if (target[matched] == ' ') matched++;
+                        else break;
+                        if (matched == target.Length) { lastConsumed = i - 1; break; }
+                    }
+
+                    if (target[matched] != c) break;
+                    matched++;
+                    lastConsumed = i;
+                    i++;
+                }
+
+                if (matched == target.Length) return (anchor, lastConsumed + 1);
+            }
+
+            return null;
         }
 
         /// <summary>

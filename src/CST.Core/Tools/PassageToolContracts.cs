@@ -26,6 +26,15 @@ namespace CST.Tools
     /// long paragraph becomes page 1 of N rather than a wall.
     /// </summary>
     /// <param name="Cursor">A page cursor from a prior <see cref="PassageResult"/>; overrides <see cref="Reference"/> when set.</param>
+    /// <param name="SelectionText">
+    /// Text the reader has selected, in Latin. When it can be found inside the referenced paragraph, the
+    /// window is built AROUND it rather than from the paragraph's start — half the budget behind, the rest
+    /// ahead, neither crossing a section boundary. (#649)
+    ///
+    /// <para>Set only by the in-app assistant, which is the only caller that has a selection. It exists on
+    /// the request rather than as a separate method so that "which window" stays one decision made in one
+    /// place; every other caller leaves it null and gets exactly the behaviour it always had.</para>
+    /// </param>
     /// <param name="MaxChars">Rendered-character budget for the window.</param>
     /// <param name="StructuredNotes">Return the apparatus as DATA instead of embedded braces: the <c>Text</c>
     /// comes back brace-free (clean, quotable Pāli) and each note appears in <see cref="PassageResult.Notes"/>
@@ -38,7 +47,8 @@ namespace CST.Tools
         int MaxChars = 1200,
         Script OutputScript = Script.Latin,
         bool IncludeFootnotes = false,
-        bool StructuredNotes = false);
+        bool StructuredNotes = false,
+        string? SelectionText = null);
 
     /// <summary>
     /// A reading window: the text, the citation refs at its start, and cursors to page through. Pass a cursor

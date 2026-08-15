@@ -142,12 +142,16 @@ public class AiContextBundlerTests : IDisposable
     }
 
     [Fact]
-    public async Task A_selection_absent_from_the_window_is_flagged_rather_than_hidden()
+    public async Task A_selection_is_carried_without_being_asked_whether_it_is_in_the_window()
     {
+        // This replaces a test asserting the opposite -- that a selection the window did not contain was
+        // flagged. The window is now built around the selection, so there is nothing to flag and no
+        // FoundInWindow to report. The state, its notice and the caution it put in the prompt are gone. (#649)
         var bundle = await Bundler().BuildAsync(Request(selection: "nowhere in this book"));
 
-        Assert.False(bundle.Selection!.FoundInWindow);
-        Assert.Contains("not found", Part(bundle, BundlePartNames.Selection).Detail);
+        Assert.Equal(SelectionState.Located, bundle.Selection!.State);
+        Assert.Null(Part(bundle, BundlePartNames.Selection).Detail);
+        Assert.DoesNotContain(bundle.Budget.Parts, p => p.Detail?.Contains("not found") == true);
     }
 
     [Fact]

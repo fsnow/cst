@@ -468,6 +468,94 @@ namespace CST.Avalonia.Tests.Search
             Assert.DoesNotContain("hhh", window.Text);  // never back into the previous one
         }
 
+        // ---- Locating the selection in the raw XML -----------------------------------------------------
+
+        [Fact]
+        public void A_selection_is_located_in_the_raw_xml()
+        {
+            const string xml = "<body><p rend=\"bodytext\" n=\"1\">alpha bravo charlie delta।</p></body>";
+
+            var span = TeiPassageReader.LocateSelection(xml, 0, xml.Length, "bravo charlie");
+
+            Assert.NotNull(span);
+            Assert.Equal("bravo charlie", xml.Substring(span!.Value.Start, span.Value.End - span.Value.Start));
+        }
+
+        [Fact]
+        public void A_selection_matches_across_markup_the_renderer_drops()
+        {
+            // A paragraph number or a note sits in the middle of what the reader dragged across. The renderer
+            // drops both, so the selection text has no trace of them and a naive substring search fails on
+            // exactly the selections most likely to be made — the ones starting at the top of a paragraph.
+            const string xml =
+                "<body><p rend=\"bodytext\" n=\"1\">" +
+                "<hi rend=\"paranum\">12</hi><hi rend=\"dot\">.</hi>alpha <note>vl (si)</note>bravo charlie।" +
+                "</p></body>";
+
+            var span = TeiPassageReader.LocateSelection(xml, 0, xml.Length, "alpha bravo");
+
+            Assert.NotNull(span);
+            var raw = xml.Substring(span!.Value.Start, span.Value.End - span.Value.Start);
+            Assert.StartsWith("alpha", raw);
+            Assert.EndsWith("bravo", raw);
+        }
+
+        [Fact]
+        public void A_selection_matches_across_line_wrapping()
+        {
+            // The XML is wrapped; the DOM hands back a single space. Comparing raw whitespace would miss.
+            const string xml = "<body><p rend=\"bodytext\" n=\"1\">alpha\n    bravo charlie।</p></body>";
+
+            Assert.NotNull(TeiPassageReader.LocateSelection(xml, 0, xml.Length, "alpha bravo"));
+        }
+
+        [Fact]
+        public void A_selection_outside_the_searched_region_is_not_located()
+        {
+            // The bound is what keeps a formulaic phrase — this corpus repeats them verbatim — from matching
+            // somewhere the reader has never been.
+            const string xml =
+                "<body><p rend=\"bodytext\" n=\"1\">alpha bravo।</p>" +
+                "<p rend=\"bodytext\" n=\"2\">alpha bravo।</p></body>";
+            var second = xml.LastIndexOf("alpha", System.StringComparison.Ordinal);
+
+            // Searching only the second paragraph finds the second occurrence, not the first.
+            var span = TeiPassageReader.LocateSelection(xml, second - 5, xml.Length, "alpha bravo");
+
+            Assert.NotNull(span);
+            Assert.True(span!.Value.Start >= second - 5);
+        }
+
+        [Fact]
+        public void Text_that_is_not_there_is_not_located()
+        {
+            const string xml = "<body><p rend=\"bodytext\" n=\"1\">alpha bravo।</p></body>";
+
+            Assert.Null(TeiPassageReader.LocateSelection(xml, 0, xml.Length, "charlie delta"));
+            Assert.Null(TeiPassageReader.LocateSelection(xml, 0, xml.Length, "   "));
+            Assert.Null(TeiPassageReader.LocateSelection(xml, 0, xml.Length, ""));
+        }
+
+        [Fact]
+        public void A_located_selection_is_inside_the_window_built_around_it()
+        {
+            // The two halves joined: locate, then build. This is the shape the bundler uses.
+            const string xml =
+                "<body><div id=\"b\" type=\"book\"><div id=\"s\" type=\"sutta\">" +
+                "<p rend=\"bodytext\" n=\"1\">one। two। three। four। five। six।</p>" +
+                "</div></div></body>";
+            var markers = BookMarkers.Build(xml);
+
+            var span = TeiPassageReader.LocateSelection(xml, 0, xml.Length, "four");
+            Assert.NotNull(span);
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                xml, span!.Value.Start, span.Value.End, maxChars: 20, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("four", window.Text);
+        }
+
         [Theory]
         [InlineData(0)]
         [InlineData(1)]
