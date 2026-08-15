@@ -6,7 +6,6 @@ using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
@@ -16,7 +15,6 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -302,6 +300,14 @@ namespace CST.Avalonia.Services.LocalApi
                 await next();
             });
 
+            // Apply the concurrency cap AFTER the security gate, so unauthorized requests never consume a permit.
+            app.UseRateLimiter();
+
+            // AFTER the security gate and the concurrency cap, deliberately. This reads the whole body into
+            // memory, so it must not run for a request that is about to be rejected as unauthorized or
+            // queued behind the 1024-deep limiter - the cap exists because this Kestrel shares a process
+            // with the UI. (fable review)
+            //
             // A REJECTED BODY MUST SAY WHY, so the body is checked HERE rather than left to model binding.
             // With UnmappedMemberHandling.Disallow set above, an unknown key already makes binding fail — but
             // minimal APIs answer that internally with a 400 carrying NO BODY, which is the second half of
@@ -326,8 +332,8 @@ namespace CST.Avalonia.Services.LocalApi
                         context.Response.StatusCode = StatusCodes.Status400BadRequest;
                         await context.Response.WriteAsJsonAsync(new
                         {
-                            error = $"Unknown key '{bad}' in the request body. "
-                                  + $"Valid keys: {ValidKeysFor(contract)}."
+                            error = $"Unknown key '{bad.Path}' in the request body. "
+                                  + $"Valid keys: {ValidKeysFor(bad.Container)}."
                         });
                         return;
                     }
@@ -336,8 +342,6 @@ namespace CST.Avalonia.Services.LocalApi
                 await next();
             });
 
-            // Apply the concurrency cap AFTER the security gate, so unauthorized requests never consume a permit.
-            app.UseRateLimiter();
 
             // Unauthenticated root pointer, so an agent that connects via local-api.json isn't left staring at
             // an empty "/" — it names where the docs and status live. (Cold-agent test finding.)
@@ -443,31 +447,67 @@ namespace CST.Avalonia.Services.LocalApi
         // ---- Naming a rejected body key (#558) ----------------------------------------------------------
 
         /// <summary>
-        /// The first body key the contract does not declare, or null when every key maps. Case-insensitive,
-        /// matching the binder's own camelCase-insensitive behaviour, so this cannot reject something binding
-        /// would have accepted.
+        /// The first body key the contract does not declare, as a dotted path, or null when every key maps.
+        ///
+        /// <para><b>Nested objects are checked too</b>, because the issue's second reported case IS a nested
+        /// one: <c>{"query":"…","filter":{"nosuchkey":true}}</c>. <c>ToolBookFilter</c> already refuses
+        /// unknown members on its own, so binding rejected that body — with an EMPTY 400, which is precisely
+        /// the diagnostic this change exists to replace. Checking only the top level would have left half of
+        /// #558 unfixed while claiming otherwise in llms.txt. (fable review)</para>
+        ///
+        /// <para>Case-insensitive, matching the binder's own behaviour, so this can never reject something
+        /// binding would have accepted.</para>
         /// </summary>
-        private static string? UnknownKeyIn(string body, Type contract)
+        private static (string Path, Type Container)? UnknownKeyIn(string body, Type contract)
         {
             if (string.IsNullOrWhiteSpace(body)) return null;
 
-            JsonElement root;
             try
             {
                 using var doc = JsonDocument.Parse(body);
-                if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;   // not ours to judge
-                root = doc.RootElement.Clone();
+                return doc.RootElement.ValueKind != JsonValueKind.Object
+                    ? null                                   // not an object: binding's to judge, not ours
+                    : FirstUnknown(doc.RootElement, contract, prefix: "");
             }
             catch (JsonException)
             {
                 return null;   // malformed JSON is binding's to report, not a naming problem
             }
+        }
 
-            var known = KnownKeys(contract);
-            foreach (var prop in root.EnumerateObject())
-                if (!known.Contains(prop.Name)) return prop.Name;
+        // Returns the offending key's dotted path AND the contract that should have declared it, so the
+        // message lists the keys valid AT THAT LEVEL - naming the top-level ones for a bad filter sub-key
+        // would send the caller looking in the wrong place.
+        private static (string Path, Type Container)? FirstUnknown(JsonElement obj, Type contract, string prefix)
+        {
+            var properties = contract.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+            foreach (var prop in obj.EnumerateObject())
+            {
+                var match = properties.FirstOrDefault(p => string.Equals(
+                    JsonNamingPolicy.CamelCase.ConvertName(p.Name), prop.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (match == null) return (prefix + prop.Name, contract);
+
+                // Recurse into a nested contract object. Only into types of ours: a string, a number or a
+                // collection has no key set to check, and reflecting over a framework type would invent
+                // "valid keys" nobody can send.
+                if (prop.Value.ValueKind == JsonValueKind.Object && IsRequestContract(match.PropertyType))
+                {
+                    var nested = FirstUnknown(prop.Value, Nullable.GetUnderlyingType(match.PropertyType)
+                                                          ?? match.PropertyType,
+                                              prefix + prop.Name + ".");
+                    if (nested != null) return nested;
+                }
+            }
 
             return null;
+        }
+
+        private static bool IsRequestContract(Type type)
+        {
+            var t = Nullable.GetUnderlyingType(type) ?? type;
+            return t.IsClass && t != typeof(string) && t.Namespace?.StartsWith("CST", StringComparison.Ordinal) == true;
         }
 
         /// <summary>
@@ -475,31 +515,37 @@ namespace CST.Avalonia.Services.LocalApi
         /// step with the endpoint the way a hand-maintained list would.
         /// </summary>
         private static string ValidKeysFor(Type contract) =>
-            string.Join(", ", KnownKeys(contract).OrderBy(n => n, StringComparer.Ordinal));
-
-        private static HashSet<string> KnownKeys(Type contract) =>
-            new(contract.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(p => p.CanWrite || p.CanRead)
-                    .Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)),
-                StringComparer.OrdinalIgnoreCase);
+            string.Join(", ", contract.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name))
+                .OrderBy(n => n, StringComparer.Ordinal));
 
         /// <summary>
-        /// The request contract behind a POST route. Every /v1 POST endpoint is listed: the default that
-        /// caused #558 applied to the whole surface, so a partial map would leave the next endpoint silently
-        /// dropping keys exactly as before.
+        /// The request contract behind a POST route, matched on the FULL path.
+        ///
+        /// <para>Suffix matching was wrong twice over. <c>/docs</c> is deliberately unauthenticated so a cold
+        /// agent can orient itself, and <c>EndsWith("/search")</c> matched <c>POST /docs/search</c> — letting
+        /// an unauthenticated caller reach the body-buffering below. It also missed the real route whenever
+        /// the path varied harmlessly, <c>/v1/search/</c> or <c>/v1/Search</c>, silently dropping back to the
+        /// bodiless 400 this exists to remove. (fable review)</para>
+        ///
+        /// <para>Every /v1 POST endpoint is listed: the default that caused #558 applied to the whole
+        /// surface, so a partial map would leave the next endpoint dropping keys exactly as before.</para>
         /// </summary>
         private static Type? ContractFor(PathString path)
         {
-            var p = path.HasValue ? path.Value! : "";
-            if (p.EndsWith("/search", StringComparison.Ordinal)) return typeof(SearchToolRequest);
-            if (p.EndsWith("/occurrences", StringComparison.Ordinal)) return typeof(OccurrenceRequest);
-            if (p.EndsWith("/dictionary/lookup", StringComparison.Ordinal)) return typeof(DictionaryRequest);
-            if (p.EndsWith("/passage", StringComparison.Ordinal)) return typeof(PassageHttpRequest);
-            if (p.EndsWith("/ai/context-preview", StringComparison.Ordinal)) return typeof(ContextPreviewRequest);
-            if (p.EndsWith("/convert", StringComparison.Ordinal)) return typeof(ConvertRequest);
-            if (p.EndsWith("/navigate", StringComparison.Ordinal)) return typeof(NavigateRequest);
-            if (p.EndsWith("/forms", StringComparison.Ordinal)) return typeof(LemmaFormsUnionRequest);
-            return null;
+            if (!path.HasValue) return null;
+            var p = path.Value!.TrimEnd('/');
+            const string v = "/" + ApiVersion;
+
+            return p.Equals(v + "/search", StringComparison.OrdinalIgnoreCase) ? typeof(SearchToolRequest)
+                 : p.Equals(v + "/occurrences", StringComparison.OrdinalIgnoreCase) ? typeof(OccurrenceRequest)
+                 : p.Equals(v + "/dictionary/lookup", StringComparison.OrdinalIgnoreCase) ? typeof(DictionaryRequest)
+                 : p.Equals(v + "/passage", StringComparison.OrdinalIgnoreCase) ? typeof(PassageHttpRequest)
+                 : p.Equals(v + "/ai/context-preview", StringComparison.OrdinalIgnoreCase) ? typeof(ContextPreviewRequest)
+                 : p.Equals(v + "/convert", StringComparison.OrdinalIgnoreCase) ? typeof(ConvertRequest)
+                 : p.Equals(v + "/navigate", StringComparison.OrdinalIgnoreCase) ? typeof(NavigateRequest)
+                 : p.Equals(v + "/forms", StringComparison.OrdinalIgnoreCase) ? typeof(LemmaFormsUnionRequest)
+                 : null;
         }
 
         private static bool IsDiscoveryPath(PathString path) =>

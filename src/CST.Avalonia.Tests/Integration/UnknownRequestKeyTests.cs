@@ -102,5 +102,78 @@ namespace CST.Avalonia.Tests.Integration
 
             Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         }
+
+        [Fact]
+        public async Task A_bad_key_INSIDE_the_filter_is_named_too()
+        {
+            // The issue's SECOND reported case, and the one a top-level-only check silently leaves broken:
+            // ToolBookFilter refuses unknown members itself, so binding already rejected this - with an
+            // empty 400, which is the exact diagnostic this change exists to replace.
+            var (status, body) = await Post("/v1/search",
+                "{\"query\":\"dhamma\",\"filter\":{\"nosuchkey\":true}}");
+
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+
+            using var doc = JsonDocument.Parse(body);
+            var error = doc.RootElement.GetProperty("error").GetString()!;
+
+            Assert.Contains("filter.nosuchkey", error);
+            // The keys listed are the FILTER's, not the request's - naming top-level keys here would send
+            // the caller looking in the wrong place.
+            Assert.Contains("mula", error);
+            Assert.DoesNotContain("query", error);
+        }
+
+        [Fact]
+        public async Task A_valid_filter_still_works()
+        {
+            using var http = _api.Http();
+            var resp = await http.PostAsync("/v1/search",
+                Json("{\"query\":\"dhamma\",\"filter\":{\"mula\":true}}"));
+
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("/v1/convert", "{\"text\":\"dhamma\",\"outputScript\":\"Devanagari\",\"nosuchkey\":1}")]
+        [InlineData("/v1/dictionary/lookup", "{\"language\":\"en\",\"query\":\"dhamma\",\"nosuchkey\":1}")]
+        public async Task The_remaining_mapped_endpoints_name_the_key_too(string path, string body)
+        {
+            // The rejection is global (the Disallow backstop), but the NAMING depends on each entry in
+            // ContractFor. A typo'd entry regresses that endpoint to the bodiless 400 with every other test
+            // still green, so each mapped endpoint is asserted rather than assumed. (fable review)
+            var (status, text) = await Post(path, body);
+
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+            Assert.Contains("nosuchkey", text);
+        }
+
+        [Fact]
+        public async Task An_unauthenticated_docs_path_does_not_reach_the_body_check()
+        {
+            // /docs is deliberately unauthenticated so a cold agent can orient itself. Matching the contract
+            // by path SUFFIX made POST /docs/search select the search contract, so an unauthenticated caller
+            // could make the server buffer an arbitrary body. Matching the full path closes it. (fable review)
+            using var http = new HttpClient { BaseAddress = new System.Uri(_api.BaseUrl) };   // NO token
+
+            var resp = await http.PostAsync("/docs/search", Json("{\"nosuchkey\":1}"));
+
+            Assert.NotEqual(HttpStatusCode.BadRequest, resp.StatusCode);   // not our unknown-key answer
+            Assert.Empty(await resp.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task A_trailing_slash_or_odd_casing_still_gets_the_named_error()
+        {
+            // Route matching tolerates both; an Ordinal suffix match did not, so these fell through to the
+            // bodiless 400 this exists to remove. (fable review)
+            foreach (var path in new[] { "/v1/search/", "/v1/Search" })
+            {
+                var (status, body) = await Post(path, "{\"query\":\"dhamma\",\"nosuchkey\":1}");
+
+                Assert.Equal(HttpStatusCode.BadRequest, status);
+                Assert.Contains("nosuchkey", body);
+            }
+        }
     }
 }
