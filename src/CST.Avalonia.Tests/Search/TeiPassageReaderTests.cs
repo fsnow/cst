@@ -402,6 +402,41 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void A_selection_spanning_two_sections_is_kept_whole_and_each_side_expands_in_its_own()
+        {
+            // The reader dragged across the boundary, so both sides are what they are asking about and the
+            // window must carry all of it. What must not cross is the EXPANSION: the backward floor comes
+            // from the section holding the selection's start, the forward ceiling from the one holding its
+            // end, so neither side reaches into a section the selection never touched.
+            const string three =
+                "<body><div id=\"b\" type=\"book\">" +
+                "<div id=\"s1\" type=\"sutta\"><p rend=\"bodytext\" n=\"1\">aaa। bbb। ccc।</p></div>" +
+                "<div id=\"s2\" type=\"sutta\"><p rend=\"bodytext\" n=\"2\">ddd। eee। fff।</p></div>" +
+                "<div id=\"s3\" type=\"sutta\"><p rend=\"bodytext\" n=\"3\">ggg। hhh। iii।</p></div>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(three);
+
+            // Starts in section 1, ends in section 2.
+            var from = three.IndexOf("ccc", System.StringComparison.Ordinal);
+            var to = three.IndexOf("ddd", System.StringComparison.Ordinal) + 3;
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                three, from, to, maxChars: 400, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            // All of the selection, across the boundary.
+            Assert.Contains("ccc", window.Text);
+            Assert.Contains("ddd", window.Text);
+
+            // Expansion within each side's own section.
+            Assert.Contains("aaa", window.Text);   // backwards, inside section 1
+            Assert.Contains("fff", window.Text);   // forwards, inside section 2
+
+            // But never into a section the selection never touched.
+            Assert.DoesNotContain("ggg", window.Text);
+        }
+
+        [Fact]
         public void A_selection_larger_than_the_budget_is_never_trimmed_to_fit()
         {
             // The subject of the request must not be cut to make room for its own context. Trimming it would

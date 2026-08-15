@@ -141,10 +141,20 @@ namespace CST.Search
             selectionEnd = Math.Clamp(selectionEnd, selectionStart, xml.Length);
             if (maxChars < 1) maxChars = 1;
 
-            // The section the selection sits in. Both expansions are bounded by it, and it is measured from
-            // the selection's START: a selection that somehow straddled a boundary should be given the
-            // context of where it began rather than none at all.
-            var (sectionStart, sectionEnd) = markers.EnclosingDivRange(selectionStart);
+            // Each direction is bounded by the section at ITS OWN end of the selection, not by one section
+            // chosen for the whole window.
+            //
+            // A selection may legitimately cross a div boundary — the reader dragged across it, so both sides
+            // are what they are asking about, and the window must carry all of it. What must not cross is the
+            // EXPANSION: text beyond the selection on the far side of a boundary is a different section and
+            // is not this passage's context. So the backward floor comes from the div holding the selection's
+            // start, and the forward ceiling from the div holding its end. For a selection inside one section
+            // these are the same div and this is the ordinary case; for one that spans two, each side expands
+            // within the section it actually reaches into.
+            int sectionStart = markers.EnclosingDivRange(selectionStart).Start;
+            int sectionEnd = markers.EnclosingDivRange(Math.Max(selectionStart, selectionEnd - 1)).End;
+
+            // The selection itself is never bounded away, whatever it spans.
             sectionStart = Math.Min(sectionStart, selectionStart);
             sectionEnd = Math.Max(sectionEnd, selectionEnd);
 
