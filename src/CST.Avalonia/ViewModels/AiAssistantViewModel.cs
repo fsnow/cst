@@ -342,6 +342,16 @@ public class AiAssistantViewModel : ReactiveTool
         this.RaisePropertyChanged(nameof(HasTurns));
         this.RaisePropertyChanged(nameof(LastTurn));
 
+        // The question has moved into the transcript, so the box empties — the same way every chat box the
+        // reader has ever used behaves. Nothing is lost: the turn keeps the question and shows it above its
+        // own answer, and Retry puts it back in the box.
+        //
+        // Cleared HERE rather than on the click, because the refusals above this point never create a turn.
+        // Clearing on the click would throw away what the reader typed to tell them the assistant is not
+        // configured, or that no book is open — and then they would have to type it again to act on the
+        // advice.
+        Question = "";
+
         _current = turn;
         _sawText = false;
         _sawReasoning = false;
