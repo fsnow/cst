@@ -48,7 +48,7 @@ public class OpenBookDialogViewModel : ReactiveTool, IDisposable
 
         // Configure Dock properties
         Id = "OpenBookTool";
-        Title = "Select a Book";
+        Title = "Open a Book";
         CanPin = false;     // Prevent pinning (vertical text issues)
         CanClose = false;   // Keep book tree always available
         CanFloat = true;    // Allow floating to separate window

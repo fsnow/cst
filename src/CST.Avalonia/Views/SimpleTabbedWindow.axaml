@@ -21,7 +21,7 @@
                 <NativeMenu>
                     <!-- #111: ⌘/Ctrl+O reveals the book tree and focuses it; it never hides the panel
                          (the View menu checkbox does that). CST4's Ctrl+O opened the book dialog. -->
-                    <NativeMenuItem Header="Select a Book" Click="OnSelectBookClick" Gesture="{input:CommandGesture o}" />
+                    <NativeMenuItem Header="Open a Book" Click="OnSelectBookClick" Gesture="{input:CommandGesture o}" />
                     <!-- #44: populated at runtime from the recent-books MRU list by App.RebuildRecentMenus -->
                     <NativeMenuItem Header="Open Recent">
                         <NativeMenu />
@@ -38,7 +38,7 @@
             <!-- View Menu as top-level menu -->
             <NativeMenuItem Header="View">
                 <NativeMenu>
-                    <NativeMenuItem Header="Select a Book" />
+                    <NativeMenuItem Header="Open a Book" />
                     <NativeMenuItem Header="Search" />
                     <NativeMenuItem Header="Dictionary" />
                     <NativeMenuItemSeparator />
@@ -107,7 +107,7 @@
                           Margin="0,0,5,0"/>
                 <ComboBox MinWidth="120"
                           x:Name="PaliScriptCombo"
-                          ToolTip.Tip="Default script for Select a Book tree and new book windows">
+                          ToolTip.Tip="Default script for the Open a Book tree and new book windows">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}"/>

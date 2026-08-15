@@ -1370,7 +1370,9 @@ public partial class App : Application
                             {
                                 if (viewItem is NativeMenuItem viewSubItem)
                                 {
-                                    if (viewSubItem.Header?.ToString() == "Select a Book")
+                                    // Must stay in lockstep with the View-menu header in
+                                    // SimpleTabbedWindow.axaml: the toggle is wired by matching that string.
+                                    if (viewSubItem.Header?.ToString() == "Open a Book")
                                     {
                                         _selectBookMenuItems.Add(viewSubItem);
                                         viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
@@ -1578,7 +1580,7 @@ public partial class App : Application
             // View menu: Select a Book / Search (checkable, mirror the panels' visibility)
             var selectBookItem = new NativeMenuItem
             {
-                Header = "Select a Book",
+                Header = "Open a Book",
                 ToggleType = NativeMenuItemToggleType.CheckBox,
                 IsChecked = layoutViewModel?.IsSelectBookPanelVisible ?? false
             };
@@ -1677,7 +1679,7 @@ public partial class App : Application
             closeTabItem.Click += (s, e) => OnCloseTabFromFloatingWindow(window);
             // #111: Select a Book (Cmd+O) — the tree lives in the main window, so this reveals and focuses
             // it there, the same as the main window's File menu item.
-            var selectBookMenuItem = new NativeMenuItem { Header = "Select a Book", Gesture = PlatformGesture.Parse("O") };
+            var selectBookMenuItem = new NativeMenuItem { Header = "Open a Book", Gesture = PlatformGesture.Parse("O") };
             selectBookMenuItem.Click += (s, e) => SimpleTabbedWindow.RevealSelectBookPanel();
 
             // #112: Print (Cmd+P) and Print Selection (Shift+Cmd+P) the floated book — same native

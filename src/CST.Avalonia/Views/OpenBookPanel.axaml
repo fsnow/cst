@@ -20,9 +20,16 @@
             <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <DockPanel>
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <!-- AutoScrollToSelectedItem off: startup restores the last selected book into
+                             SelectedNode, and Avalonia then posts BringIntoView as that node's container is
+                             prepared. Minimal-scroll leaves the node at the BOTTOM edge, so the tree opened
+                             at an apparently arbitrary branch — and since the styles below make selection
+                             invisible, nothing on screen explained why. The tree now opens at the top; ⌘O
+                             (FocusBookTree) still brings the remembered book into view deliberately. -->
                         <TreeView x:Name="BookTreeView"
                                   ItemsSource="{Binding BookTree}"
                                   SelectedItem="{Binding SelectedNode}"
+                                  AutoScrollToSelectedItem="False"
                                   Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
                                   DoubleTapped="TreeView_DoubleTapped"
                                   KeyDown="TreeView_KeyDown">
