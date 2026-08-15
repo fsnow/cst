@@ -179,6 +179,19 @@ namespace CST.Avalonia.Services.LocalApi
                 o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
                 o.SerializerOptions.Converters.Add(new ScriptJsonConverter()); // reject Ipe/Unknown outputScript (before the enum factory)
                 o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // "Latin" not 3, for other enums
+
+                // AN UNKNOWN BODY KEY IS AN ERROR, NOT SOMETHING TO SKIP PAST. System.Text.Json's default is to
+                // drop what it cannot map, which turned a caller's typo into a silent no-op: `navigate` with
+                // "highlight" instead of "terms" opened the book, highlighted nothing, and returned
+                // highlights:0 with no note — while the SAME response for the correct key explains itself. The
+                // agent's own mistake got the worse diagnostic of the two, and agents reason onward from it
+                // rather than retrying. (#558)
+                //
+                // Safe here in a way it would not be for a public API: this is loopback-only, and an agent
+                // reads its contract (llms.txt) from the SAME running instance it then calls, so a client
+                // cannot be newer than the server it is talking to. The MCP surface is unaffected — those
+                // tools bind to the tool interfaces through DI, never over HTTP.
+                o.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
             });
 
             // MCP surface (#191): expose the read tool set over the Streamable HTTP transport at /mcp — MCP is
@@ -290,6 +303,46 @@ namespace CST.Avalonia.Services.LocalApi
             // Apply the concurrency cap AFTER the security gate, so unauthorized requests never consume a permit.
             app.UseRateLimiter();
 
+            // AFTER the security gate and the concurrency cap, deliberately. This reads the whole body into
+            // memory, so it must not run for a request that is about to be rejected as unauthorized or
+            // queued behind the 1024-deep limiter - the cap exists because this Kestrel shares a process
+            // with the UI. (fable review)
+            //
+            // A REJECTED BODY MUST SAY WHY, so the body is checked HERE rather than left to model binding.
+            // With UnmappedMemberHandling.Disallow set above, an unknown key already makes binding fail — but
+            // minimal APIs answer that internally with a 400 carrying NO BODY, which is the second half of
+            // #558: the caller learns only that something was unacceptable. .NET 10 has no ThrowOnBadRequest
+            // switch to route it out to middleware, so this inspects the body first and answers in the same
+            // { error } shape every other failure on this surface uses, naming the offending key and the ones
+            // that would have worked. Binding's own rejection stays as the backstop for anything missed.
+            app.Use(async (context, next) =>
+            {
+                if (HttpMethods.IsPost(context.Request.Method) &&
+                    ContractFor(context.Request.Path) is { } contract)
+                {
+                    context.Request.EnableBuffering();
+                    string body;
+                    using (var reader = new StreamReader(
+                               context.Request.Body, Encoding.UTF8, leaveOpen: true))
+                        body = await reader.ReadToEndAsync();
+                    context.Request.Body.Position = 0;   // rewind for the real binder
+
+                    if (UnknownKeyIn(body, contract) is { } bad)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        await context.Response.WriteAsJsonAsync(new
+                        {
+                            error = $"Unknown key '{bad.Path}' in the request body. "
+                                  + $"Valid keys: {ValidKeysFor(bad.Container)}."
+                        });
+                        return;
+                    }
+                }
+
+                await next();
+            });
+
+
             // Unauthenticated root pointer, so an agent that connects via local-api.json isn't left staring at
             // an empty "/" — it names where the docs and status live. (Cold-agent test finding.)
             app.MapGet("/", () => Results.Json(
@@ -390,6 +443,110 @@ namespace CST.Avalonia.Services.LocalApi
         private static bool BookExists(string? bookId) =>
             !string.IsNullOrEmpty(bookId) &&
             Books.Inst.Any(b => string.Equals(b.FileName, bookId, StringComparison.OrdinalIgnoreCase));
+
+        // ---- Naming a rejected body key (#558) ----------------------------------------------------------
+
+        /// <summary>
+        /// The first body key the contract does not declare, as a dotted path, or null when every key maps.
+        ///
+        /// <para><b>Nested objects are checked too</b>, because the issue's second reported case IS a nested
+        /// one: <c>{"query":"…","filter":{"nosuchkey":true}}</c>. <c>ToolBookFilter</c> already refuses
+        /// unknown members on its own, so binding rejected that body — with an EMPTY 400, which is precisely
+        /// the diagnostic this change exists to replace. Checking only the top level would have left half of
+        /// #558 unfixed while claiming otherwise in llms.txt. (fable review)</para>
+        ///
+        /// <para>Case-insensitive, matching the binder's own behaviour, so this can never reject something
+        /// binding would have accepted.</para>
+        /// </summary>
+        private static (string Path, Type Container)? UnknownKeyIn(string body, Type contract)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return null;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                return doc.RootElement.ValueKind != JsonValueKind.Object
+                    ? null                                   // not an object: binding's to judge, not ours
+                    : FirstUnknown(doc.RootElement, contract, prefix: "");
+            }
+            catch (JsonException)
+            {
+                return null;   // malformed JSON is binding's to report, not a naming problem
+            }
+        }
+
+        // Returns the offending key's dotted path AND the contract that should have declared it, so the
+        // message lists the keys valid AT THAT LEVEL - naming the top-level ones for a bad filter sub-key
+        // would send the caller looking in the wrong place.
+        private static (string Path, Type Container)? FirstUnknown(JsonElement obj, Type contract, string prefix)
+        {
+            var properties = contract.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+            foreach (var prop in obj.EnumerateObject())
+            {
+                var match = properties.FirstOrDefault(p => string.Equals(
+                    JsonNamingPolicy.CamelCase.ConvertName(p.Name), prop.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (match == null) return (prefix + prop.Name, contract);
+
+                // Recurse into a nested contract object. Only into types of ours: a string, a number or a
+                // collection has no key set to check, and reflecting over a framework type would invent
+                // "valid keys" nobody can send.
+                if (prop.Value.ValueKind == JsonValueKind.Object && IsRequestContract(match.PropertyType))
+                {
+                    var nested = FirstUnknown(prop.Value, Nullable.GetUnderlyingType(match.PropertyType)
+                                                          ?? match.PropertyType,
+                                              prefix + prop.Name + ".");
+                    if (nested != null) return nested;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsRequestContract(Type type)
+        {
+            var t = Nullable.GetUnderlyingType(type) ?? type;
+            return t.IsClass && t != typeof(string) && t.Namespace?.StartsWith("CST", StringComparison.Ordinal) == true;
+        }
+
+        /// <summary>
+        /// The body keys a route accepts, read from the request contract itself so this cannot drift out of
+        /// step with the endpoint the way a hand-maintained list would.
+        /// </summary>
+        private static string ValidKeysFor(Type contract) =>
+            string.Join(", ", contract.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name))
+                .OrderBy(n => n, StringComparer.Ordinal));
+
+        /// <summary>
+        /// The request contract behind a POST route, matched on the FULL path.
+        ///
+        /// <para>Suffix matching was wrong twice over. <c>/docs</c> is deliberately unauthenticated so a cold
+        /// agent can orient itself, and <c>EndsWith("/search")</c> matched <c>POST /docs/search</c> — letting
+        /// an unauthenticated caller reach the body-buffering below. It also missed the real route whenever
+        /// the path varied harmlessly, <c>/v1/search/</c> or <c>/v1/Search</c>, silently dropping back to the
+        /// bodiless 400 this exists to remove. (fable review)</para>
+        ///
+        /// <para>Every /v1 POST endpoint is listed: the default that caused #558 applied to the whole
+        /// surface, so a partial map would leave the next endpoint dropping keys exactly as before.</para>
+        /// </summary>
+        private static Type? ContractFor(PathString path)
+        {
+            if (!path.HasValue) return null;
+            var p = path.Value!.TrimEnd('/');
+            const string v = "/" + ApiVersion;
+
+            return p.Equals(v + "/search", StringComparison.OrdinalIgnoreCase) ? typeof(SearchToolRequest)
+                 : p.Equals(v + "/occurrences", StringComparison.OrdinalIgnoreCase) ? typeof(OccurrenceRequest)
+                 : p.Equals(v + "/dictionary/lookup", StringComparison.OrdinalIgnoreCase) ? typeof(DictionaryRequest)
+                 : p.Equals(v + "/passage", StringComparison.OrdinalIgnoreCase) ? typeof(PassageHttpRequest)
+                 : p.Equals(v + "/ai/context-preview", StringComparison.OrdinalIgnoreCase) ? typeof(ContextPreviewRequest)
+                 : p.Equals(v + "/convert", StringComparison.OrdinalIgnoreCase) ? typeof(ConvertRequest)
+                 : p.Equals(v + "/navigate", StringComparison.OrdinalIgnoreCase) ? typeof(NavigateRequest)
+                 : p.Equals(v + "/forms", StringComparison.OrdinalIgnoreCase) ? typeof(LemmaFormsUnionRequest)
+                 : null;
+        }
 
         private static bool IsDiscoveryPath(PathString path) =>
             !path.HasValue || path == "/"

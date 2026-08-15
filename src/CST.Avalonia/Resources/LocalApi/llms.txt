@@ -121,6 +121,13 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
   canonical result you must set `other:false`. Strictly-canonical commentaries-only is therefore
   `{ "mula": false, "atthakatha": true, "tika": true, "other": false }`. Unknown filter keys are REJECTED
   with 400 (so a misnamed key can't silently return the unfiltered corpus).
+  MISNAMED KEYS ARE ALWAYS AN ERROR, ON EVERY POST ENDPOINT, NOT JUST HERE. An unrecognised key in a
+  request body gets a 400 naming it and listing the ones valid at that level -
+  `{"error":"Unknown key 'highlight' in the request body. Valid keys: bookId, terms, ..."}`. Nested objects
+  are checked too, and reported by path: a bad key inside `filter` comes back as `filter.nosuchkey` with the
+  FILTER's keys listed, not the request's. Nothing is silently ignored, so if a call succeeded, every key you
+  sent was understood. If you get this, fix the key and retry rather than concluding the corpus lacks what
+  you asked for.
   Body: `{ query, mode?: "Exact"|"Wildcard"|"Regex", filter?, maxTerms?, skip?, includeBooks?,
   proximityDistance?, outputScript? }`.
   PAGING: `maxTerms` is the PAGE SIZE, `skip` (default 0) the offset. Page by re-requesting with
