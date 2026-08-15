@@ -27,7 +27,12 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             + "CAVEAT ON `paragraph`: paragraph numbers are NOT unique in this corpus — in 102 of 217 books the "
             + "same number occurs more than once (the printed numbering restarts per section), and ~3,600 "
             + "paragraphs are printed as ranges. Prefer a `cursor` when you have one, and prefer citing a PAGE "
-            + "when you report a location back to the user.")]
+            + "when you report a location back to the user. "
+            + "`pages` lists EVERY page this window covers, so a window crossing a page break reports both and "
+            + "an edition can appear twice; within an edition they are in READING order, not sorted by number. "
+            + "Do NOT read pages[0] as 'the page this passage starts on' — editions are grouped, so the first "
+            + "entry belongs to whichever edition sorts first. To cite one exact point, use the `refs` of an "
+            + "'occurrences' hit, which names the page containing that hit.")]
         public static async Task<PassageResult> PassageAsync(
             IPassageTool passage,
             [Description("The book's id (file name), e.g. from the 'books' tool or a search result.")]

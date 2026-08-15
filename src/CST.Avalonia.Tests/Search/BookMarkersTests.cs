@@ -254,5 +254,25 @@ namespace CST.Avalonia.Tests.Search
                          pages.Select(p => p.Edition));
             Assert.Equal(new[] { 9, 3 }, pages.Where(p => p.Edition == PageEdition.Myanmar).Select(p => p.Number));
         }
+
+        [Fact]
+        public void An_edition_first_appearing_inside_the_span_can_take_the_first_slot()
+        {
+            // The case that makes "[0] is the page the passage starts on" FALSE, and the reason the doc
+            // comment now says so. Myanmar has a break before the window; Vri does not, so Vri contributes
+            // only the break inside it — and edition order puts Vri first. The entry at [0] therefore names
+            // a page the window's opening text is not on. Callers must read the list, or filter to the
+            // edition they mean. (fable review)
+            var xml = "aaaa<pb ed=\"M\" n=\"1.1\"/>bbbb<pb ed=\"V\" n=\"2.7\"/>cccc";
+            var markers = BookMarkers.Build(xml);
+            var start = xml.IndexOf("bbbb");
+
+            var atStart = markers.RefsAt(start).Pages;
+            var across = markers.PagesAcross(start, xml.Length);
+
+            Assert.Equal(PageEdition.Myanmar, Assert.Single(atStart).Edition);
+            Assert.Equal(PageEdition.Vri, across.First().Edition);      // NOT the same as RefsAt's first
+            Assert.Contains(across, p => p.Edition == PageEdition.Myanmar && p.Number == 1);
+        }
     }
 }

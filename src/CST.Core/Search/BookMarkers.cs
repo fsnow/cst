@@ -120,9 +120,19 @@ namespace CST.Search
         /// the citation <c>/v1/occurrences</c> gives for a hit inside the same window. Two endpoints, one
         /// piece of text, two different pages, and nothing in either response saying so.</para>
         ///
-        /// <para>The first entry per edition is the page in effect at <paramref name="start"/> — the same
-        /// answer <see cref="RefsAt"/> gives — so a caller that reads only the first page sees no change.
-        /// Any page break falling inside the span follows it.</para>
+        /// <para><b>What a caller may rely on.</b> Within an edition, the pages are in reading order, and
+        /// where that edition has a page break at or before <paramref name="start"/> its first entry is the
+        /// page in effect there — the same answer <see cref="RefsAt"/> gives. Any break opening inside the
+        /// span follows it.</para>
+        ///
+        /// <para><b>What a caller may NOT rely on: that <c>[0]</c> is the page the passage starts on.</b> An
+        /// edition with no break at or before <paramref name="start"/> — because the window opens before that
+        /// edition's first page break, which happens at the head of a book — contributes only the breaks
+        /// falling inside the span, and edition order then decides which of them lands first. So in
+        /// <c>aaaa&lt;pb ed="M" n="1.1"/&gt;bbbb&lt;pb ed="V" n="2.7"/&gt;cccc</c>, a window from <c>bbbb</c>
+        /// reports <c>[Vri 2.7, Myanmar 1.1]</c> where <see cref="RefsAt"/> reported <c>[Myanmar 1.1]</c>:
+        /// the entry that moved to the front names a page the window's OPENING text is not on. Read the whole
+        /// list, or filter to the edition you mean. (fable review)</para>
         /// </summary>
         /// <param name="start">Inclusive.</param>
         /// <param name="end">Exclusive. A span of zero or negative length reports the start page only.</param>
@@ -136,8 +146,10 @@ namespace CST.Search
                 var idx = UpperBound(list.Count, i => list[i].Pos <= start) - 1;
                 if (idx >= 0) pages.Add(new SnippetPageRef(edition, list[idx].Volume, list[idx].Number));
 
-                // Then every break that opens inside the span. Starting from idx+1 skips the one already
-                // added; a break exactly AT `end` belongs to the next window, since `end` is exclusive.
+                // Then every break that opens inside the span. The scan starts at idx (0 when there was no
+                // preceding break) and the `continue` below drops anything at or before `start`, so the page
+                // added above is never added twice. A break exactly AT `end` belongs to the NEXT window,
+                // since `end` is exclusive — otherwise consecutive windows both claim it.
                 for (int i = System.Math.Max(idx, 0); i < list.Count; i++)
                 {
                     if (list[i].Pos <= start) continue;

@@ -72,7 +72,7 @@ namespace CST.Search
             // window (including one opened before readStart), not just those starting in it. (#310 A4-15)
             int paraStart = EnclosingParagraphStart(readStart, markers);
             int noteCount = TeiText.CountNotesIntersecting(xml, paraStart, readStart, end);
-            var (num, code, _) = markers.RefsAt(readStart);
+            var (num, code, _) = markers.RefsAt(readStart);   // pages come from PagesAcross below
 
             // EVERY page this window covers, not just the one it opens on. A window that crosses a page break
             // sits on two printed pages, and reporting only the first made /v1/passage disagree with

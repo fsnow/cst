@@ -1,3 +1,4 @@
+using System.Linq;
 using CST.Conversion;
 using CST.Navigation;
 using CST.Search;
@@ -221,6 +222,67 @@ namespace CST.Avalonia.Tests.Search
 
             Assert.Contains("hotel", w.Text);
             Assert.Null(w.NextCursor);                     // reached the end of the book
+        }
+
+        // ---- The window's pages are its own, not just its first (#561) --------------------------------
+
+        // A book whose text crosses a page break inside one paragraph, so a single window spans two pages.
+        private const string CrossingXml =
+            "<body><div id=\"dn1\" type=\"book\">" +
+            "<pb ed=\"V\" n=\"1.0001\"/>" +
+            "<p rend=\"bodytext\" n=\"5\">alpha bravo\u0964 charlie delta\u0964" +
+            "<pb ed=\"V\" n=\"1.0002\"/> echo foxtrot\u0964 golf hotel\u0964</p>" +
+            "</div></body>";
+
+        [Fact]
+        public void ReadWindow_reports_every_page_its_window_covers()
+        {
+            // THE #561 behaviour, asserted through the reader rather than through BookMarkers alone. Without
+            // this the wiring is unguarded: reverting TeiPassageReader to RefsAt(readStart).Pages leaves the
+            // whole suite green, because every other test of this behaviour calls PagesAcross directly and
+            // the existing page assertion here uses Contains, which a single-page result satisfies. So the
+            // agreement between /v1/occurrences and /v1/passage — the entire point of the fix — could
+            // regress in a refactor with nothing to show for it. (fable review)
+            var markers = BookMarkers.Build(CrossingXml);
+            int start = markers.PositionOfParagraph(5);
+
+            var window = TeiPassageReader.ReadWindow(CrossingXml, start, maxChars: 200, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("echo", window.Text);          // the window really does reach past the break
+            Assert.Equal(new[] { 1, 2 }, window.Pages.Select(p => p.Number));
+        }
+
+        [Fact]
+        public void ReadWindow_reports_one_page_when_it_crosses_no_break()
+        {
+            // The other half: a window inside a single page must not gain pages it does not cover.
+            var markers = BookMarkers.Build(CrossingXml);
+            int start = markers.PositionOfParagraph(5);
+
+            var window = TeiPassageReader.ReadWindow(CrossingXml, start, maxChars: 15, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.DoesNotContain("echo", window.Text);    // stops before the break
+            Assert.Equal(1, Assert.Single(window.Pages).Number);
+        }
+
+        [Fact]
+        public void The_page_at_a_hit_is_among_the_pages_of_the_window_that_contains_it()
+        {
+            // #561 stated as the invariant it actually is, at the level the two endpoints meet: whatever
+            // /v1/occurrences cites for a hit must appear in what /v1/passage cites for a window covering it.
+            var markers = BookMarkers.Build(CrossingXml);
+            int hit = CrossingXml.IndexOf("echo");         // sits AFTER the page break
+            int start = markers.PositionOfParagraph(5);
+
+            var atHit = markers.RefsAt(hit).Pages;
+            var window = TeiPassageReader.ReadWindow(CrossingXml, start, maxChars: 200, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Equal(2, Assert.Single(atHit).Number);  // the hit is on the SECOND page
+            Assert.All(atHit, h => Assert.Contains(window.Pages, p =>
+                p.Edition == h.Edition && p.Volume == h.Volume && p.Number == h.Number));
         }
     }
 }
