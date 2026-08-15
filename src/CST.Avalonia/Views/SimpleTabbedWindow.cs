@@ -69,11 +69,11 @@ public partial class SimpleTabbedWindow : Window
         // #621 Feed C: record which document owns whatever just took focus, so a command pressed after a
         // detour through a tool still targets the pane the user was working in. Bubbling and passive — it
         // only reads the event.
-        AddHandler(GotFocusEvent, (_, e) => Services.DocumentFocusReporter.NoteFocus(e.Source),
+        AddHandler(GotFocusEvent, (_, e) => Services.DocumentFocusReporter.NoteFocus(e.Source, e.NavigationMethod),
             RoutingStrategies.Bubble);
 
         // Add diagnostic logging for focus and keyboard events
-        GotFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow GotFocus. Source: {Source}", e.Source?.GetType().Name);
+        GotFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow GotFocus. Source: {Source}, Method: {Method}", e.Source?.GetType().Name, e.NavigationMethod);
         LostFocus += (s, e) => _logger.Debug("FOCUS: SimpleTabbedWindow LostFocus. Source: {Source}", e.Source?.GetType().Name);
         AddHandler(KeyDownEvent, (s, e) => {
             _logger.Debug("KEYBOARD: SimpleTabbedWindow KeyDown. Key: {Key}, Modifiers: {Modifiers}, Source: {Source}", e.Key, e.KeyModifiers, e.Source?.GetType().Name);
@@ -881,29 +881,23 @@ public partial class SimpleTabbedWindow : Window
         _logger.Information("Go To menu item clicked from window: {WindowTitle}", this.Title);
 
         // Check if THIS window (could be main or floating) has a LayoutViewModel in its dock content
-        // Look through the visual tree to find a DockControl with a LayoutViewModel
-        var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
-        if (dockControl?.DataContext is LayoutViewModel layoutViewModel)
+        // The ACTIVE window's layout, which on macOS is not necessarily this one: the application menu
+        // claims ⌘G, so a shortcut pressed in a floating window arrives at this handler. (#633)
+        var (targetWindow, targetLayout) = ActiveDocumentWindow();
+        if (targetLayout != null)
         {
-            _logger.Information("Found LayoutViewModel in current window's DockControl");
+            _logger.Information("Resolving Go To against window: {Window}", targetWindow?.Title ?? "(unknown)");
 
-            // Get the document the user is working in - follows focus, so a split layout resolves to
-            // the pane they are actually in rather than always the first one. (#443)
-            if (layoutViewModel.Layout is RootDock rootDock)
+            var active = DocumentTargetResolver.ResolveActiveDocument(
+                targetLayout, ResolveFocusedDockable(targetWindow), RecentDocuments());
+            if (active is BookDisplayViewModel bookViewModel)
             {
-                var active = DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this), RecentDocuments());
-                if (active is BookDisplayViewModel bookViewModel)
-                {
-                    _logger.Information("Triggering Go To dialog for active book: {BookFile}", bookViewModel.Book.FileName);
-                    bookViewModel.InvokeOpenGoToDialog();
-                    return;
-                }
-                else
-                {
-                    _logger.Warning("No active book in this window. Resolved dockable type: {Type}",
-                        active?.GetType().Name ?? "null");
-                }
+                _logger.Information("Triggering Go To dialog for active book: {BookFile}", bookViewModel.Book.FileName);
+                bookViewModel.InvokeOpenGoToDialog();
+                return;
             }
+
+            _logger.Warning("Go To: the active document is not a book ({Type})", active?.GetType().Name ?? "null");
         }
 
         _logger.Warning("Could not find active book document for Go To command");
@@ -1125,15 +1119,57 @@ public partial class SimpleTabbedWindow : Window
         return false;
     }
 
-    // The active book in THIS window, or null if the active tab isn't a book (a PDF, Welcome, or nothing).
+    /// <summary>
+    /// The active book in the window the user is working in, or null if that window's active document is
+    /// not a book.
+    ///
+    /// <para>
+    /// Not necessarily THIS window. On macOS a menu key equivalent is claimed by the application menu, so a
+    /// shortcut pressed while a floating window is frontmost can still arrive at the main window's handler —
+    /// which then resolved against the MAIN layout and answered with whatever it held. Measured: with every
+    /// book dragged out to a floating window, ⌘G resolved to the Welcome tab and did nothing at all, while
+    /// a double-click into a book made it work, because that hands focus to CEF and the in-page relay takes
+    /// over before Avalonia ever sees the key.
+    /// </para>
+    ///
+    /// <para>
+    /// Resolving against the ACTIVE window is the same principle as #621 one level up: act where the user is
+    /// working, not where the event happened to be delivered. When this window is the active one — the
+    /// normal case — nothing changes.
+    /// </para>
+    /// </summary>
     private BookDisplayViewModel? FindActiveBookInThisWindow()
     {
-        var dockControl = this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>();
-        if (dockControl?.DataContext is not LayoutViewModel layoutViewModel ||
-            layoutViewModel.Layout is not RootDock rootDock)
-            return null;
+        var (window, layout) = ActiveDocumentWindow();
+        if (layout == null) return null;
 
-        return DocumentTargetResolver.ResolveActiveDocument(rootDock, ResolveFocusedDockable(this), RecentDocuments()) as BookDisplayViewModel;
+        return DocumentTargetResolver.ResolveActiveDocument(layout, ResolveFocusedDockable(window), RecentDocuments())
+            as BookDisplayViewModel;
+    }
+
+    /// <summary>
+    /// The window the user is working in and its dock layout: the active window if it has one, else this
+    /// window. Falling back to this window keeps every previous behaviour intact when nothing is active —
+    /// during shutdown, or when a dialog holds activation.
+    /// </summary>
+    internal (Window? Window, IDock? Layout) ActiveDocumentWindow()
+    {
+        if (global::Avalonia.Application.Current?.ApplicationLifetime
+            is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            foreach (var window in desktop.Windows)
+            {
+                if (!window.IsActive) continue;
+
+                if (window is Services.CstHostWindow floating && floating.Layout != null)
+                    return (floating, floating.Layout);
+
+                if (window is SimpleTabbedWindow main && main.CurrentLayout() is { } mainLayout)
+                    return (main, mainLayout);
+            }
+        }
+
+        return (this, CurrentLayout());
     }
 
     // Reduce a selection to a single lookup word: first whitespace-delimited token, minus surrounding
@@ -1190,12 +1226,17 @@ public partial class SimpleTabbedWindow : Window
     // safe is the containment check in DocumentTargetResolver: a dockable outside this window's layout is
     // contained by none of its document docks, so resolution falls back instead of reaching across windows.
     // A test covers this; do not drop the containment check.
+    /// <summary>This window's dock layout, or null before the DockControl exists.</summary>
+    private IDock? CurrentLayout() =>
+        this.FindDescendantOfType<global::Dock.Avalonia.Controls.DockControl>()?.DataContext
+            is LayoutViewModel { Layout: { } layout } ? layout : null;
+
     /// <summary>
     /// Interaction history for <see cref="DocumentTargetResolver.ResolveActiveDocument"/> (#621), most
     /// recent first. Null when the tracker is unavailable, which resolves exactly as before this existed.
     /// </summary>
     private static IEnumerable<IDockable>? RecentDocuments() =>
-        App.ServiceProvider?.GetService<ActiveDocumentTracker>()?.Recent;
+        App.TryGetService<ActiveDocumentTracker>()?.Recent;
 
     internal static IDockable? ResolveFocusedDockable(Window? window)
     {

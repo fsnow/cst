@@ -69,7 +69,7 @@ namespace CST.Avalonia.Services
         /// </summary>
         internal ActiveDocumentTracker? DocumentTracker
         {
-            get => _documentTracker ??= App.ServiceProvider?.GetService<ActiveDocumentTracker>();
+            get => _documentTracker ??= App.TryGetService<ActiveDocumentTracker>();
             set => _documentTracker = value;
         }
 
@@ -3299,28 +3299,28 @@ namespace CST.Avalonia.Services
         {
             _logger.Debug("Searching for window containing book: {BookFile}", bookViewModel.Book.FileName);
 
-            // Check main window first
-            if (App.MainWindow != null)
+            // Every document dock in the layout, not just the first one. A split has several, so a book in
+            // the second pane used to be "not found in any window" and the dialog opened owned by the main
+            // window instead. (#633)
+            //
+            // The consequence was not cosmetic: an owner in another window takes ACTIVATION with it, and on
+            // macOS the click that returns activation to the book's own window is consumed by activating it
+            // — never reaching the browser. So the next single click did not focus the book, and the
+            // shortcut after it acted on whatever browser still held CEF focus. Reproduced with three books
+            // in a split: the first two worked, the one whose dialog had just closed did not.
+            if (App.MainWindow != null && DocumentTargetResolver.IsDocumentOf(_rootDock, bookViewModel))
             {
-                var mainDocDock = FindDocumentDock();
-                if (mainDocDock?.VisibleDockables?.Contains(bookViewModel) == true)
-                {
-                    _logger.Information("Book found in main window");
-                    return App.MainWindow;
-                }
+                _logger.Information("Book found in main window");
+                return App.MainWindow;
             }
 
-            // Check floating windows
             foreach (var hostWindow in HostWindows)
             {
-                if (hostWindow is CstHostWindow cstHostWindow && cstHostWindow.Layout != null)
+                if (hostWindow is CstHostWindow cstHostWindow &&
+                    DocumentTargetResolver.IsDocumentOf(cstHostWindow.Layout, bookViewModel))
                 {
-                    var docDock = FindDocumentDockInLayout(cstHostWindow.Layout) as DocumentDock;
-                    if (docDock?.VisibleDockables?.Contains(bookViewModel) == true)
-                    {
-                        _logger.Information("Book found in floating window: {WindowTitle}", cstHostWindow.Title);
-                        return cstHostWindow;
-                    }
+                    _logger.Information("Book found in floating window: {WindowTitle}", cstHostWindow.Title);
+                    return cstHostWindow;
                 }
             }
 

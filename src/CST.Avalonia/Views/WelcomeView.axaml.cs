@@ -12,7 +12,7 @@ using Serilog;
 
 namespace CST.Avalonia.Views
 {
-    public partial class WelcomeView : UserControl, Services.IBrowserDocumentView
+    public partial class WelcomeView : UserControl
     {
         private WebView? _webView;
         private WelcomeViewModel? _viewModel;
@@ -41,8 +41,12 @@ namespace CST.Avalonia.Views
                 // pressed here from acting on a book the user has not touched in a while.
                 if (_webView is Controls.CstWebView focusReporter)
                     focusReporter.BrowserGotFocus += () =>
-                        App.ServiceProvider?.GetService<Services.ActiveDocumentTracker>()
+                    {
+                        App.TryGetService<Services.ActiveDocumentTracker>()
                             ?.Note(DataContext as ViewModels.WelcomeViewModel, "browser-focus:welcome");
+                        // #633: keep Avalonia's focus record on this document.
+                        Services.DocumentFocusReporter.AlignFocusWithBrowser(this);
+                    };
 
                 // Log WebView state
                 Log.Information("WelcomeView: WebView control found and event handlers attached");

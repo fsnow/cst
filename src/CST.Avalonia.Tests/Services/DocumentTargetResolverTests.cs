@@ -296,6 +296,36 @@ public class DocumentTargetResolverTests
         Assert.Same(docA1, DocumentTargetResolver.ResolveActiveDocument(root, null, System.Array.Empty<IDockable>()));
     }
 
+    // ---- Containment, used for more than resolution ------------------------------------------------
+
+    [Fact]
+    public void IsDocumentOf_FindsADocumentInAnyPane_NotJustTheFirst()
+    {
+        var (root, _, _, docA1, _, docB1) = BuildSplitLayout();
+
+        // The question "which window holds this book" is asked when choosing a dialog's OWNER, and it used
+        // to be answered by looking in one document dock per window. A split has several, so a book in the
+        // second pane came back "not found in any window" and the dialog opened over the main window
+        // instead — taking activation with it, which on macOS costs the user's next click. (#633)
+        Assert.True(DocumentTargetResolver.IsDocumentOf(root, docA1));
+        Assert.True(DocumentTargetResolver.IsDocumentOf(root, docB1));
+    }
+
+    [Fact]
+    public void IsDocumentOf_RejectsWhatThisLayoutDoesNotHold()
+    {
+        var (root, _, _, _, _, _) = BuildSplitLayout();
+        var (otherRoot, _, _, foreignDoc, _, _) = BuildSplitLayout();
+        Assert.NotNull(otherRoot);
+
+        // Scoping per window depends on this being exact: a false positive would own a dialog to the wrong
+        // window, which is the failure it exists to prevent.
+        Assert.False(DocumentTargetResolver.IsDocumentOf(root, foreignDoc));
+        Assert.False(DocumentTargetResolver.IsDocumentOf(root, new Tool { Id = "SearchTool" }));
+        Assert.False(DocumentTargetResolver.IsDocumentOf(null, foreignDoc));
+        Assert.False(DocumentTargetResolver.IsDocumentOf(root, null));
+    }
+
     [Fact]
     public void ResolveActiveDocument_NullLayout_ReturnsNull()
     {
