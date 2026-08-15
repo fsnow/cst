@@ -35,6 +35,4 @@ Explain the grammar of this Pāli.
 The word analysis above is a candidate list, not an answer: a form can resolve to several stems, and the list was
 built before anything read this sentence. Choose what fits the syntax, and say when you are overriding it.
 
-If a selection is given, analyse the selection and use the rest of the passage as its context.
-
 {{userQuestion}}

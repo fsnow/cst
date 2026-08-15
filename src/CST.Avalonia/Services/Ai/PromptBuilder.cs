@@ -225,12 +225,14 @@ public sealed class PromptBuilder : IPromptBuilder
     }
 
     /// <summary>
-    /// One printed page reference, as both the model and the reader see it. Internal rather than private so
-    /// the assistant panel renders pages identically (#586): if the two formatters drifted, a reader
-    /// checking the citation on screen against what the model was told would find a discrepancy that does
-    /// not exist.
+    /// One printed page reference, as the MODEL sees it: every page listed, in the order the window met them.
+    ///
+    /// <para>The panel renders the same pages differently — grouped by edition with unbroken runs collapsed —
+    /// because the two readers want different things. The model is given the list because it must not infer a
+    /// range that was never checked; the reader is given "VRI vol. 2 pp. 1-2" because eight separate
+    /// references for a two-page window across four editions is the same fact stated eight times.</para>
     /// </summary>
-    internal static string PageRef(SnippetPageRef page)
+    private static string PageRef(SnippetPageRef page)
     {
         var edition = page.Edition switch
         {

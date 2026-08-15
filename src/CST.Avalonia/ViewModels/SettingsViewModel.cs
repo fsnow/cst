@@ -1336,6 +1336,11 @@ public class AiSettingsViewModel : ViewModelBase
                 // The two enable-gates below both depend on the master.
                 this.RaisePropertyChanged(nameof(SubPermissionsEnabled));
                 this.RaisePropertyChanged(nameof(RemoteControlEnabled));
+                this.RaisePropertyChanged(nameof(AssistantFieldsEnabled));
+                // Readiness is derived from the master too. Without this the line kept reporting "AI features
+                // are turned off." after the user had just turned them on, until some other field happened to
+                // be edited -- the one line on the screen whose entire job is not to be out of date.
+                RefreshReadiness();
             }
         }
 
@@ -1439,6 +1444,7 @@ public class AiSettingsViewModel : ViewModelBase
                 this.RaiseAndSetIfChanged(ref _chatEnabled, value);
                 _settingsService.Settings.Ai.Chat.Enabled = value;
                 _settingsService.RequestSave();
+                this.RaisePropertyChanged(nameof(AssistantFieldsEnabled));
                 RefreshReadiness();
             }
         }
@@ -1541,7 +1547,14 @@ public class AiSettingsViewModel : ViewModelBase
             private set => this.RaiseAndSetIfChanged(ref _keyStatus, value);
         }
 
-        public bool CanStoreKeys => _credentials?.IsAvailable == true;
+        /// <summary>
+        /// Whether the assistant's own fields are editable: the master switch AND the assistant's switch.
+        /// Keying them to the master alone left provider, endpoint, model and language fully editable with
+        /// "Enable the assistant" unticked, and readiness still reporting on a feature that was off.
+        /// </summary>
+        public bool AssistantFieldsEnabled => AiEnabled && ChatEnabled;
+
+        public bool CanStoreKeys => _credentials?.IsAvailable == true && AssistantFieldsEnabled;
 
         public string ApiKeyDescription => IsOpenAiCompatible
             ? "Optional. A local runner on your own machine usually needs none; a hosted endpoint will."

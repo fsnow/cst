@@ -45,6 +45,4 @@ Rules:
 The word analysis above is a candidate list, not an answer: it was built before anything read this sentence, and
 a word missing from it is a gap in the lookup, not a word without a meaning.
 
-If a selection is given, work through the selection and use the rest of the passage as its context.
-
 {{userQuestion}}
