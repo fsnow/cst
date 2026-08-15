@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using CST.Conversion;
@@ -61,12 +62,61 @@ public static class SelectionPipeline
     /// programmatically at sentence starts, so a selection lifted from mid-sentence and the same words at a
     /// sentence head differ only in case. Ordinal rather than culture-aware because a culture-aware comparison
     /// would fold characters Pāli distinguishes.</para>
+    ///
+    /// <para><b>Punctuation is folded away on both sides.</b> See <see cref="Fold"/>. Without it a selection
+    /// spanning a single sentence break reports as absent. (#641)</para>
     /// </summary>
     public static bool IsWithin(string normalizedSelection, string windowText)
     {
         if (string.IsNullOrEmpty(normalizedSelection) || string.IsNullOrEmpty(windowText)) return false;
 
-        var window = Whitespace.Replace(windowText.Normalize(NormalizationForm.FormC), " ");
-        return window.Contains(normalizedSelection, StringComparison.OrdinalIgnoreCase);
+        var selection = Fold(normalizedSelection);
+        if (selection.Length == 0) return false;   // punctuation only: nothing to locate
+
+        return Fold(windowText).Contains(selection, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The comparison form: letters, digits and combining marks only, whitespace collapsed. Used on both sides
+    /// of <see cref="IsWithin"/> and nowhere else — what reaches the model is always the verbatim selection.
+    ///
+    /// <para><b>Why punctuation goes.</b> The two sides of this comparison reach it by different routes: the
+    /// window is rendered by the passage reader, the selection is scraped from the DOM and converted from the
+    /// user's display script. Those routes do not agree about sentence punctuation. A selection spanning one
+    /// sentence break carried an ASCII full stop while the window carried the danda (U+0964), so the
+    /// containment test failed and the user was told their selection was not in the passage — while looking
+    /// straight at it. (#641)</para>
+    ///
+    /// <para><b>Why the whole category rather than a table of marks.</b> The danda was one mark of many: the
+    /// scripts this app renders carry their own sentence and phrase marks (Myanmar U+104A and U+104B, Khmer
+    /// U+17D4, Tibetan U+0F0D, Thai U+0E5A), and Latin Pāli carries the elision apostrophe in both its ASCII
+    /// and typographic (U+2019) forms. A table would fix the mark that was
+    /// reported and leave the next one to be discovered the same way — by a reader being told their own
+    /// selection is not there. Dropping the category closes the class.</para>
+    ///
+    /// <para><b>The error this can introduce is the cheap one.</b> Folding admits a false match between two
+    /// spans differing only in punctuation (an elided form written with an apostrophe against the same letters
+    /// written without one). The cost of that is one
+    /// caution the user does not see; the cost of a false miss is the model being told to distrust the
+    /// surrounding text and the user being told they selected something absent. Not symmetric.</para>
+    /// </summary>
+    internal static string Fold(string text)
+    {
+        var composed = text.Normalize(NormalizationForm.FormC);
+
+        var kept = new StringBuilder(composed.Length);
+        foreach (var c in composed)
+        {
+            // Combining marks are kept explicitly: they are not letters, and a Latin form with no precomposed
+            // codepoint would otherwise lose its diacritic here and match a different word.
+            if (char.IsLetterOrDigit(c)
+                || char.IsWhiteSpace(c)
+                || CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
+            {
+                kept.Append(c);
+            }
+        }
+
+        return Whitespace.Replace(kept.ToString(), " ").Trim();
     }
 }

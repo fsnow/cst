@@ -30,6 +30,6 @@ Translate this passage.
 - The print apparatus records variant readings from the printed editions. Where a variant would change the
   translation, say so and say which reading you followed.
 
-If a selection is given, translate the selection and use the rest of the passage only as context.
+Write the translation as plain prose. No headings, no bullets, no tables — this is text a reader will copy.
 
 {{userQuestion}}

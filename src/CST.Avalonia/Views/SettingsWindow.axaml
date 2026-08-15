@@ -583,7 +583,7 @@
                                         <TextBlock Text="Provider" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <ComboBox ItemsSource="{Binding ProviderChoices}"
                                                  SelectedItem="{Binding SelectedProvider}"
-                                                 IsEnabled="{Binding SubPermissionsEnabled}"
+                                                 IsEnabled="{Binding AssistantFieldsEnabled}"
                                                  Width="320" HorizontalAlignment="Left">
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:AiProviderChoice">
@@ -594,14 +594,14 @@
 
                                         <TextBlock Text="Endpoint address" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <TextBox Text="{Binding BaseUrl}"
-                                                IsEnabled="{Binding SubPermissionsEnabled}"
+                                                IsEnabled="{Binding AssistantFieldsEnabled}"
                                                 Watermark="https://…"
                                                 Width="480" HorizontalAlignment="Left"/>
                                         <TextBlock Text="{Binding BaseUrlDescription}" Classes="SettingDescription"/>
 
                                         <TextBlock Text="Model" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <TextBox Text="{Binding Model}"
-                                                IsEnabled="{Binding SubPermissionsEnabled}"
+                                                IsEnabled="{Binding AssistantFieldsEnabled}"
                                                 Watermark="e.g. claude-sonnet-4-5"
                                                 Width="480" HorizontalAlignment="Left"/>
                                         <TextBlock Text="Typed exactly as the provider spells it. Never checked against a list — the endpoint decides what exists, and a list shipped here would be wrong within a month."
@@ -642,7 +642,7 @@
                                         <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <AutoCompleteBox Text="{Binding AnswerLanguage}"
                                                         ItemsSource="{Binding AnswerLanguageSuggestions}"
-                                                        IsEnabled="{Binding SubPermissionsEnabled}"
+                                                        IsEnabled="{Binding AssistantFieldsEnabled}"
                                                         FilterMode="StartsWith"
                                                         Width="320" HorizontalAlignment="Left"/>
                                         <TextBlock Text="{Binding PaliScriptNote}" Classes="SettingDescription"/>

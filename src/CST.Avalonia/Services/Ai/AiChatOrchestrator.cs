@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -195,8 +196,14 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             request.Task, request.BookId, provider.Provider.Id, provider.Model,
             bundle.Budget.ApproximateTokens, prompt.Notices.Count);
 
+        // Read off the budget report rather than off the notice wording: the panel raises its partial-passage
+        // badge from this, and a badge that depends on how a sentence is phrased stops working the first time
+        // the sentence is rewritten — which is exactly what had happened.
+        var passageTrimmed = bundle.Budget.Parts.Any(
+            p => p.Name == BundlePartNames.Passage && p.State == BundlePartState.TrimmedForBudget);
+
         yield return AiTurnEvent.ForStarted(new AiTurnContext(
-            bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, prompt.Notices));
+            bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, prompt.Notices, passageTrimmed));
 
         // ---- Stream.
         var chat = new ChatRequest(

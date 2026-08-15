@@ -113,4 +113,83 @@ public class SelectionPipelineTests
     {
         Assert.False(SelectionPipeline.IsWithin("appamādo", string.Empty));
     }
+
+    // ---- Punctuation (#641) ----------------------------------------------------------------------
+
+    [Fact]
+    public void A_selection_spanning_a_sentence_break_is_found_across_the_danda()
+    {
+        // The reported case, and the one that made the panel unusable: the reader selected the first paragraph
+        // of a book, got a correct translation, AND a notice saying the selection was not found. The window
+        // carried the danda (U+0964) where the selection carried an ASCII full stop, so a selection covering
+        // one sentence boundary — which is most of them — reported as absent.
+        var window = "appamādo amatapadaṃ\u0964 pamādo maccuno padaṃ";
+        var selection = SelectionPipeline.Normalize("appamādo amatapadaṃ. pamādo maccuno", Script.Latin)!;
+
+        Assert.True(SelectionPipeline.IsWithin(selection, window));
+    }
+
+    [Theory]
+    // Every script this app renders brings its own sentence and phrase marks. A table of known marks would
+    // have fixed the danda and left each of these to be found the same way — by a reader being told that the
+    // text in front of them is not there.
+    // Escaped rather than pasted: these marks are visually near-identical to each other and to ASCII bars, so
+    // a literal here would be unreviewable — the house rule for script-facing code.
+    [InlineData("\u0964")]     // Devanagari danda
+    [InlineData("\u0965")]     // Devanagari double danda
+    [InlineData("\u104A")]     // Myanmar little section
+    [InlineData("\u104B")]     // Myanmar section
+    [InlineData("\u17D4")]     // Khmer khan
+    [InlineData("\u0F0D")]     // Tibetan shad
+    [InlineData("\u0E5A")]     // Thai angkhankhu
+    [InlineData(".")]
+    [InlineData(";")]
+    [InlineData(",")]
+    public void Sentence_marks_do_not_decide_whether_a_selection_is_present(string mark)
+    {
+        var window = $"appamādo amatapadaṃ{mark} pamādo maccuno padaṃ";
+        var selection = SelectionPipeline.Normalize("amatapadaṃ, pamādo", Script.Latin)!;
+
+        Assert.True(SelectionPipeline.IsWithin(selection, window));
+    }
+
+    [Fact]
+    public void The_elision_apostrophe_matches_in_either_of_its_forms()
+    {
+        // Latin Pāli writes elision with an apostrophe, and the DOM and the passage reader do not agree on
+        // which one — U+2019 from a copy, ASCII from the renderer, or neither.
+        var window = "so\u2019haṃ vadāmi";
+        var selection = SelectionPipeline.Normalize("so'haṃ vadāmi", Script.Latin)!;
+
+        Assert.True(SelectionPipeline.IsWithin(selection, window));
+    }
+
+    [Fact]
+    public void Folding_punctuation_does_not_make_an_absent_selection_present()
+    {
+        // The guard on the fix: dropping punctuation must not collapse the comparison into "close enough".
+        // Different words are still different words.
+        var selection = SelectionPipeline.Normalize("dhammā manopubbaṅgamā", Script.Latin)!;
+
+        Assert.False(SelectionPipeline.IsWithin(selection, Window));
+    }
+
+    [Fact]
+    public void A_selection_of_nothing_but_punctuation_is_not_found_everywhere()
+    {
+        // Folded, it is the empty string — which Contains reports as present in anything. A reader who
+        // fumbles a drag and catches one danda must not be told the model saw their selection.
+        var selection = SelectionPipeline.Normalize(".\u0964 ;", Script.Latin)!;
+
+        Assert.False(SelectionPipeline.IsWithin(selection, Window));
+    }
+
+    [Fact]
+    public void Diacritics_survive_the_fold()
+    {
+        // Folding keeps combining marks deliberately: a Latin form with no precomposed codepoint would
+        // otherwise lose its diacritic and match a different word. "pāda" and "pada" are different words.
+        Assert.False(SelectionPipeline.IsWithin(SelectionPipeline.Normalize("pādo", Script.Latin)!, "pado"));
+        Assert.False(SelectionPipeline.IsWithin(SelectionPipeline.Normalize("pado", Script.Latin)!, "pādo"));
+    }
 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -33,6 +32,13 @@ namespace CST.Avalonia.ViewModels;
 /// parsed out of model output, which is what makes it impossible for a garbled answer to produce a citation
 /// that looks authoritative and is wrong.
 /// </para>
+///
+/// <para>
+/// <b>It is a transcript.</b> Turns accumulate; the panel scrolls; the question box and its controls stay put
+/// at the bottom. The first build held exactly one answer and cleared it at the start of the next request, so
+/// asking a second question destroyed the first answer — for a reader working through a passage, which is the
+/// only kind of reader this has, that is the ordinary case rather than an edge one.
+/// </para>
 /// </summary>
 public class AiAssistantViewModel : ReactiveTool
 {
@@ -43,34 +49,24 @@ public class AiAssistantViewModel : ReactiveTool
     private readonly ILogger _logger = Log.ForContext<AiAssistantViewModel>();
 
     /// <summary>
-    /// Accumulates deltas between UI flushes. A stream can deliver dozens of tokens a second, and binding
-    /// every one of them repaints and re-measures the whole answer — the panel would fight the model for the
-    /// UI thread on exactly the machines least able to spare it.
-    /// </summary>
-    private readonly StringBuilder _pending = new();
-    private readonly object _pendingGate = new();
-    private DispatcherTimer? _flushTimer;
-
-    /// <summary>
-    /// How often streamed text reaches the screen. Fast enough to read as live, slow enough that a fast
-    /// stream cannot saturate the UI thread.
+    /// How often streamed text reaches the screen. Fast enough to read as live, slow enough that a fast stream
+    /// cannot saturate the UI thread: binding every delta re-parses and re-measures the whole answer.
     /// </summary>
     private const int FlushIntervalMs = 100;
 
-    private CancellationTokenSource? _turn;
+    private readonly object _pendingGate = new();
+    private bool _pendingAnswer;
+    private bool _pendingReasoning;
+
+    private DispatcherTimer? _flushTimer;
+    private CancellationTokenSource? _turnCancellation;
     private readonly System.Diagnostics.Stopwatch _elapsed = new();
-    /// <summary>
-    /// True while the turn has produced nothing yet, so the tick may own <see cref="Status"/>. Cleared the
-    /// moment anything real arrives — an error message must never be overwritten by a progress counter.
-    /// </summary>
-    private bool _awaitingFirstToken;
-    private string _answer = "";
+    private AiTurnViewModel? _current;
+    private bool _sawText;
+    private bool _sawReasoning;
+
     private string _question = "";
-    private string _citation = "";
-    private string _usage = "";
-    private string _status = "";
     private bool _isBusy;
-    private bool _hasAnswer;
 
     public AiAssistantViewModel()
         : this(null, null, null, null)
@@ -99,6 +95,8 @@ public class AiAssistantViewModel : ReactiveTool
         GrammarCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.Grammar));
         WordByWordCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.WordByWord));
         StopCommand = ReactiveCommand.Create(Stop);
+        RetryCommand = ReactiveCommand.CreateFromTask(RetryAsync);
+        ClearCommand = ReactiveCommand.Create(Clear);
     }
 
     public ReactiveCommand<Unit, Unit> ExplainCommand { get; }
@@ -106,6 +104,16 @@ public class AiAssistantViewModel : ReactiveTool
     public ReactiveCommand<Unit, Unit> GrammarCommand { get; }
     public ReactiveCommand<Unit, Unit> WordByWordCommand { get; }
     public ReactiveCommand<Unit, Unit> StopCommand { get; }
+    public ReactiveCommand<Unit, Unit> RetryCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+
+    /// <summary>Every turn this session, oldest first. The panel scrolls; this is what it scrolls.</summary>
+    public ObservableCollection<AiTurnViewModel> Turns { get; } = new();
+
+    public bool HasTurns => Turns.Count > 0;
+
+    /// <summary>The most recent turn — what a test asserts on, and what Retry repeats.</summary>
+    public AiTurnViewModel? LastTurn => Turns.Count > 0 ? Turns[^1] : null;
 
     /// <summary>The user's own question, optional. The presets work with it empty.</summary>
     public string Question
@@ -114,46 +122,23 @@ public class AiAssistantViewModel : ReactiveTool
         set => this.RaiseAndSetIfChanged(ref _question, value);
     }
 
-    /// <summary>The answer so far. Bound to a SELECTABLE control — readers copy translations.</summary>
-    public string Answer
-    {
-        get => _answer;
-        private set => this.RaiseAndSetIfChanged(ref _answer, value);
-    }
-
     /// <summary>
-    /// What the answer is about, rendered by us from the bundle's citation — never from model output.
+    /// Refusals that belong to the panel rather than to any turn — not configured, no book open. Kept off the
+    /// transcript because no request was made: a transcript entry for a request that never happened would be a
+    /// record of something the user did not do.
     /// </summary>
-    public string Citation
-    {
-        get => _citation;
-        private set => this.RaiseAndSetIfChanged(ref _citation, value);
-    }
-
-    /// <summary>The full citation — canon path and every printed page — for the headline's tooltip.</summary>
-    public string CitationDetail
-    {
-        get => _citationDetail;
-        private set => this.RaiseAndSetIfChanged(ref _citationDetail, value);
-    }
-    private string _citationDetail = "";
-
-    /// <summary>Tokens in and out, once the provider reports them. The user is paying for these.</summary>
-    public string Usage
-    {
-        get => _usage;
-        private set => this.RaiseAndSetIfChanged(ref _usage, value);
-    }
-
-    /// <summary>
-    /// The one line that says what is happening: not configured, thinking, offline, failed. Never an
-    /// exception message — §10 requires every failure to arrive as a sentence.
-    /// </summary>
+    private string _status = "";
     public string Status
     {
         get => _status;
-        private set => this.RaiseAndSetIfChanged(ref _status, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _status, value);
+            this.RaisePropertyChanged(nameof(HasStatus));
+        }
     }
+
+    public bool HasStatus => !string.IsNullOrEmpty(Status);
 
     public bool IsBusy
     {
@@ -165,50 +150,17 @@ public class AiAssistantViewModel : ReactiveTool
         }
     }
 
-    /// <summary>True once a turn has produced anything, so the answer area only appears when it has content.</summary>
-    public bool HasAnswer
-    {
-        get => _hasAnswer;
-        private set => this.RaiseAndSetIfChanged(ref _hasAnswer, value);
-    }
-
     public bool CanAsk => !IsBusy;
 
     /// <summary>
-    /// Degradations the user should see: a trimmed passage, a selection outside the window, a missing asset.
-    /// Rendered as a list rather than folded into the answer, because they are statements about the INPUT and
-    /// the answer is the model's.
-    /// </summary>
-    public ObservableCollection<string> Notices { get; } = new();
-
-    public bool HasNotices => Notices.Count > 0;
-
-    /// <summary>
-    /// The collapsed header. Says how the request was ASSEMBLED, not that something failed: every one of
-    /// these is a fact about the input, and at full weight beside the answer they read as a list of errors.
-    /// </summary>
-    public string NoticesHeader => Notices.Count == 1
-        ? "1 note about this request"
-        : $"{Notices.Count} notes about this request";
-
-    /// <summary>
-    /// Whether the passage was trimmed to fit the budget — #586's partial-passage badge. Distinct from a
-    /// notice because it changes how far the answer can be trusted: the model did not see all of it.
-    /// </summary>
-    public bool IsPartialPassage
-    {
-        get => _isPartialPassage;
-        private set => this.RaiseAndSetIfChanged(ref _isPartialPassage, value);
-    }
-    private bool _isPartialPassage;
-
-    /// <summary>
     /// Runs one turn. Every expected failure — not configured, no book, an unreadable position, a dead
-    /// network — arrives as <see cref="Status"/> text rather than an exception.
+    /// network — arrives as a sentence rather than an exception.
     /// </summary>
     internal async Task AskAsync(AiTask task)
     {
         if (IsBusy) return;
+
+        Status = "";
 
         if (_orchestrator == null || _readerState == null)
         {
@@ -223,7 +175,7 @@ public class AiAssistantViewModel : ReactiveTool
             _resolver.Resolve(out var problem);
             if (problem != null)
             {
-                Status = problem + " (Settings → AI)";
+                Status = problem;
                 return;
             }
         }
@@ -235,7 +187,8 @@ public class AiAssistantViewModel : ReactiveTool
             return;
         }
 
-        StartTurn();
+        var question = string.IsNullOrWhiteSpace(Question) ? null : Question.Trim();
+        var turn = StartTurn(task, question, state.SelectionText);
 
         try
         {
@@ -244,81 +197,106 @@ public class AiAssistantViewModel : ReactiveTool
                 state.BookId,
                 new NavigationReference.Paragraph(state.Paragraph),
                 state.SelectionText,
-                string.IsNullOrWhiteSpace(Question) ? null : Question.Trim(),
+                question,
                 // Carried rather than collapsed into "no selection": a selection the reader could not read is
                 // a different state, and conflating them is what makes a dropped selection look to the user
                 // like the assistant ignored it. (#581)
                 state.SelectionUnavailable);
 
-            await foreach (var e in _orchestrator.RunAsync(request, _turn!.Token))
-                Handle(e);
+            await foreach (var e in _orchestrator.RunAsync(request, _turnCancellation!.Token))
+                Handle(turn, e);
         }
         catch (OperationCanceledException)
         {
             // The user's own stop. Whatever streamed already stands.
-            Status = "Stopped.";
+            turn.Status = "Stopped.";
+            turn.Failed = false;
         }
         catch (Exception ex)
         {
             // The orchestrator promises not to throw for expected states, so anything here is a defect —
             // logged as one, and still shown as a sentence rather than a stack trace.
             _logger.Error(ex, "Assistant turn failed unexpectedly");
-            Status = "Something went wrong running that request.";
+            turn.Status = "Something went wrong running that request.";
+            turn.Failed = true;
         }
         finally
         {
-            EndTurn();
+            EndTurn(turn);
         }
     }
 
-    private void Handle(AiTurnEvent e)
+    /// <summary>Repeats the last turn. The evidence for offering this at all: an observed request returned a
+    /// gateway 504 after 120s while the identical request to the same model answered in 33s.</summary>
+    private async Task RetryAsync()
+    {
+        if (LastTurn is not { } last) return;
+        Question = last.Question ?? "";
+        await AskAsync(last.Task);
+    }
+
+    private void Clear()
+    {
+        if (IsBusy) return;
+        Turns.Clear();
+        this.RaisePropertyChanged(nameof(HasTurns));
+        Status = "";
+    }
+
+    private void Handle(AiTurnViewModel turn, AiTurnEvent e)
     {
         switch (e.Kind)
         {
             case AiTurnEventKind.Started when e.Context is { } context:
                 // Chrome first: the citation arrives before any text, so the panel can say what it is about
                 // while the model is still thinking.
-                Citation = Describe(context.Citation);
-                CitationDetail = DescribeCitationDetail(context.Citation);
-                Notices.Clear();
-                foreach (var notice in context.Notices) Notices.Add(notice);
-                this.RaisePropertyChanged(nameof(HasNotices));
-                this.RaisePropertyChanged(nameof(NoticesHeader));
-                IsPartialPassage = context.Notices.Count > 0 &&
-                                   context.Notices.Any(n => n.Contains("trim", StringComparison.OrdinalIgnoreCase)
-                                                            || n.Contains("shorten", StringComparison.OrdinalIgnoreCase));
-                Status = "Thinking…";
-                _awaitingFirstToken = true;
+                turn.Citation = Describe(context.Citation);
+                turn.CitationDetail = DescribeCitationDetail(context.Citation);
+                turn.Notices.Clear();
+                foreach (var notice in context.Notices) turn.Notices.Add(notice);
+                turn.RaiseNoticesChanged();
+                turn.IsPartialPassage = context.PassageTrimmed;
+                turn.Status = WaitingMessage(_elapsed.Elapsed, sawReasoning: false);
                 break;
 
             case AiTurnEventKind.Text when e.Text is { Length: > 0 }:
-                lock (_pendingGate) _pending.Append(e.Text);
-                HasAnswer = true;
+                lock (_pendingGate)
+                {
+                    turn.AppendAnswer(e.Text);
+                    _pendingAnswer = true;
+                }
                 // Text on screen IS the progress report; the counter has nothing left to say.
-                _awaitingFirstToken = false;
-                Status = "";
+                _sawText = true;
+                turn.Status = "";
                 break;
 
-            case AiTurnEventKind.Reasoning:
-                // Segregated by contract and dropped here. Never concatenated into the answer: it is the
-                // model thinking aloud, not what it is telling the reader.
+            case AiTurnEventKind.Reasoning when e.Text is { Length: > 0 }:
+                // Never concatenated into the answer — it is the model thinking aloud, not what it is telling
+                // the reader — but no longer discarded either. Its ARRIVAL is the difference between a slow
+                // request and a dead one, and the panel used to report both as "still waiting".
+                lock (_pendingGate)
+                {
+                    turn.AppendReasoning(e.Text);
+                    _pendingReasoning = true;
+                }
+                _sawReasoning = true;
                 break;
 
             case AiTurnEventKind.Usage when e.Usage is { } usage:
-                Usage = FormatUsage(usage);
+                turn.Usage = FormatUsage(usage);
                 break;
 
             case AiTurnEventKind.Error when e.Error is { } error:
-                _awaitingFirstToken = false;
-                Flush();
+                Flush(turn);
                 // Partial text stands — a mid-stream failure keeps what arrived.
-                Status = error.Message;
+                turn.Status = error.Message;
+                turn.Failed = true;
                 break;
 
             case AiTurnEventKind.Completed:
-                _awaitingFirstToken = false;
-                Flush();
-                Status = "";
+                Flush(turn);
+                turn.Status = "";
+                turn.Failed = false;
                 break;
         }
     }
@@ -327,79 +305,118 @@ public class AiAssistantViewModel : ReactiveTool
     private void Stop()
     {
         _orchestrator?.Stop();
-        _turn?.Cancel();
+        _turnCancellation?.Cancel();
     }
 
-    private void StartTurn()
+    private AiTurnViewModel StartTurn(AiTask task, string? question, string? selection)
     {
-        Answer = "";
-        Citation = "";
-        CitationDetail = "";
-        Usage = "";
-        Notices.Clear();
-        this.RaisePropertyChanged(nameof(HasNotices));
-        this.RaisePropertyChanged(nameof(NoticesHeader));
-        IsPartialPassage = false;
-        HasAnswer = false;
-        Status = "Preparing…";
-        lock (_pendingGate) _pending.Clear();
+        var turn = new AiTurnViewModel(task, question)
+        {
+            // On screen from the first second, so a stale selection — one made before scrolling away and
+            // forgotten — is visible immediately rather than discovered in the answer.
+            Subject = Summarize(selection),
+            Status = "Contacting the provider…",
+        };
 
-        _turn?.Dispose();
-        _turn = new CancellationTokenSource();
+        Turns.Add(turn);
+        this.RaisePropertyChanged(nameof(HasTurns));
+        this.RaisePropertyChanged(nameof(LastTurn));
+
+        _current = turn;
+        _sawText = false;
+        _sawReasoning = false;
+        lock (_pendingGate)
+        {
+            _pendingAnswer = false;
+            _pendingReasoning = false;
+        }
+
+        _turnCancellation?.Dispose();
+        _turnCancellation = new CancellationTokenSource();
         IsBusy = true;
 
         _elapsed.Restart();
         _flushTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FlushIntervalMs) };
-        _flushTimer.Tick += (_, _) =>
-        {
-            Flush();
-            if (_awaitingFirstToken) Status = WaitingMessage(_elapsed.Elapsed);
-        };
+        _flushTimer.Tick += (_, _) => Tick(turn);
         _flushTimer.Start();
+
+        return turn;
+    }
+
+    private void Tick(AiTurnViewModel turn)
+    {
+        Flush(turn);
+        turn.Elapsed = FormatElapsed(_elapsed.Elapsed);
+
+        // The tick owns the status line only while nothing real has arrived, and surrenders it the instant
+        // anything does — a progress counter must never overwrite an error message.
+        if (!_sawText && !turn.Failed)
+            turn.Status = WaitingMessage(_elapsed.Elapsed, _sawReasoning);
     }
 
     /// <summary>
-    /// What to say while nothing has come back yet.
+    /// What to say while nothing has come back yet — a ladder, because "slow" and "broken" look identical from
+    /// the outside and only the app can tell them apart.
     ///
     /// <para>
     /// A silent wait is the norm on a free or shared endpoint, not a fault: an observed turn against a 550B
-    /// model on a <c>:free</c> tier sat for two minutes and then returned a gateway timeout, while a
-    /// different request to the same model answered in thirty seconds. The app cannot shorten that — our
-    /// HTTP timeout is deliberately infinite, because a finite one truncates long streams and reports it as
-    /// a cancellation — so the least it can do is look like waiting rather than like nothing happening, and
-    /// name the likely reason before the user concludes the button is broken.
+    /// model on a <c>:free</c> tier sat for two minutes and then returned a gateway timeout, while a different
+    /// request to the same model answered in thirty seconds. The app cannot shorten that — the HTTP timeout is
+    /// deliberately infinite, because a finite one truncates long streams and reports it as a cancellation —
+    /// so the least it can do is look like waiting rather than like nothing happening, and name the likely
+    /// reason before the user concludes the button is broken.
+    /// </para>
+    ///
+    /// <para>
+    /// Reasoning outranks the clock: once reasoning is arriving the request is demonstrably alive, and saying
+    /// so is worth more than any elapsed figure.
     /// </para>
     /// </summary>
-    internal static string WaitingMessage(TimeSpan elapsed) => elapsed.TotalSeconds switch
+    internal static string WaitingMessage(TimeSpan elapsed, bool sawReasoning)
     {
-        < 5 => "Thinking…",
-        < 30 => $"Thinking… {elapsed.TotalSeconds:0}s",
-        _ => $"Still waiting… {elapsed.TotalSeconds:0}s. Free and shared endpoints can queue behind other "
-             + "requests, and a large model can take minutes.",
-    };
+        if (sawReasoning) return $"Reasoning… {FormatElapsed(elapsed)}";
 
-    private void EndTurn()
+        return elapsed.TotalSeconds switch
+        {
+            < 5 => "Waiting for the model…",
+            < 30 => $"Waiting for the model… {FormatElapsed(elapsed)}",
+            _ => $"Still waiting… {FormatElapsed(elapsed)}. Free and shared endpoints can queue behind other "
+                 + "requests, and a large model can take minutes.",
+        };
+    }
+
+    /// <summary>Elapsed time the way a transcript reports it: seconds until it is minutes.</summary>
+    internal static string FormatElapsed(TimeSpan elapsed) =>
+        elapsed.TotalMinutes >= 1
+            ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
+            : $"{elapsed.TotalSeconds:0.0}s";
+
+    private void EndTurn(AiTurnViewModel turn)
     {
         _flushTimer?.Stop();
         _flushTimer = null;
-        _awaitingFirstToken = false;
         _elapsed.Stop();
-        Flush();
+        Flush(turn);
+        turn.Elapsed = FormatElapsed(_elapsed.Elapsed);
+        turn.IsRunning = false;
+        _current = null;
         IsBusy = false;
     }
 
-    /// <summary>Moves whatever has accumulated into the bound property, in one property change.</summary>
-    private void Flush()
+    /// <summary>Moves whatever has accumulated onto the screen, in one property change per kind.</summary>
+    private void Flush(AiTurnViewModel turn)
     {
-        string chunk;
+        bool answer, reasoning;
         lock (_pendingGate)
         {
-            if (_pending.Length == 0) return;
-            chunk = _pending.ToString();
-            _pending.Clear();
+            answer = _pendingAnswer;
+            reasoning = _pendingReasoning;
+            _pendingAnswer = false;
+            _pendingReasoning = false;
         }
 
-        Answer += chunk;
+        if (answer) turn.PublishAnswer();
+        if (reasoning) turn.PublishReasoning();
     }
 
     internal static string FormatUsage(AiUsageReport usage) =>
@@ -410,6 +427,21 @@ public class AiAssistantViewModel : ReactiveTool
             (null, var o) => $"{o:N0} tokens out",
             var (i, o) => $"{i:N0} in · {o:N0} out",
         };
+
+    /// <summary>
+    /// The selected text, shortened for the subject line. Elided in the middle rather than at the end: the two
+    /// places a reader checks to recognise their own selection are where it starts and where it stops.
+    /// </summary>
+    internal static string Summarize(string? selection, int max = 90)
+    {
+        if (string.IsNullOrWhiteSpace(selection)) return "";
+
+        var text = System.Text.RegularExpressions.Regex.Replace(selection.Trim(), @"\s+", " ");
+        if (text.Length <= max) return text;
+
+        var half = (max - 1) / 2;
+        return $"{text[..half].TrimEnd()}…{text[^half..].TrimStart()}";
+    }
 
     /// <summary>
     /// The refusal, phrased for a reader. Each of these is an ordinary state of the app rather than an error:
@@ -430,15 +462,15 @@ public class AiAssistantViewModel : ReactiveTool
     };
 
     /// <summary>
-    /// The citation as ONE quiet line, built from the bundle rather than parsed out of the answer: the
-    /// book's own name and where in it.
+    /// The citation as ONE quiet line, built from the bundle rather than parsed out of the answer: the book's
+    /// own name and where in it.
     ///
     /// <para>
-    /// Deliberately not the full nav path, and deliberately not every page. The bundle's book name is a
-    /// path — <c>tipiṭaka (mūla)/sutta piṭaka/dīgha nikāya/mahāvaggapāḷi</c> — and since #561 the pages
-    /// cover every edition the window touches, which for a four-paragraph window is eight references. Both
-    /// in full, in bold, ran to four lines and buried the answer they were supposed to caption. The full
-    /// version lives in <see cref="DescribeCitationDetail"/>, on the tooltip.
+    /// Deliberately not the full nav path, and deliberately not every page. The bundle's book name is a path —
+    /// <c>tipiṭaka (mūla)/sutta piṭaka/dīgha nikāya/mahāvaggapāḷi</c> — and since #561 the pages cover every
+    /// edition the window touches, which for a four-paragraph window is eight references. Both in full, in
+    /// bold, ran to four lines and buried the answer they were supposed to caption. The full version lives in
+    /// <see cref="DescribeCitationDetail"/>, on the tooltip.
     /// </para>
     /// </summary>
     internal static string Describe(CitationRef citation)
@@ -452,9 +484,9 @@ public class AiAssistantViewModel : ReactiveTool
     }
 
     /// <summary>
-    /// Everything the headline leaves out: where the book sits in the canon, and every printed page the
-    /// window covers, one line per edition. On the tooltip because a reader checking a claim against print
-    /// wants it, and a reader reading the answer does not.
+    /// Everything the headline leaves out: where the book sits in the canon, and every printed page the window
+    /// covers, one line per edition. On the tooltip because a reader checking a claim against print wants it,
+    /// and a reader reading the answer does not.
     /// </summary>
     internal static string DescribeCitationDetail(CitationRef citation)
     {

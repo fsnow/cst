@@ -88,7 +88,9 @@ public sealed class PromptBuilder : IPromptBuilder
             throw new ArgumentOutOfRangeException(
                 $"{nameof(bundle)}.{nameof(bundle.Task)}", bundle.Task, "No output budget for this task.");
 
-        var presetName = PromptTemplateNames.ForTask(bundle.Task);
+        // Which document the model gets is decided HERE, by whether there is selection text to make the
+        // subject — not by a conditional the model has to apply to itself at the bottom of the page.
+        var presetName = PromptTemplateNames.ForTask(bundle.Task, HasSelectionText(bundle.Selection));
         var system = _templates.Get(PromptTemplateNames.System);
         var preset = _templates.Get(presetName);
 
@@ -193,8 +195,25 @@ public sealed class PromptBuilder : IPromptBuilder
             _ => "It is a reading window starting there, not the whole text.",
         };
 
-        return $"an excerpt from {where}. {extent}";
+        // The system prompt has to agree with the preset about what is being asked. When the reader has
+        // selected something the preset makes that the subject — so a scope statement still saying "the whole
+        // of what follows is in view, say which part you are answering about" argues the opposite, one layer
+        // up, and reintroduces the very defect the selection variants exist to fix.
+        if (!HasSelectionText(bundle.Selection))
+            return $"an excerpt from {where}. {extent}";
+
+        return $"an excerpt from {where}. {extent} The reader has selected part of it. The selection is the "
+             + "subject of this request; the rest of the window is there to give the selection its context, "
+             + "and is not what you were asked about.";
     }
+
+    /// <summary>
+    /// Whether there is selection text to put in front of the model — the pivot between the two template
+    /// variants. False for "nothing selected" and, deliberately, for a selection the app could not read: both
+    /// leave nothing to make the subject, and the base template says which of the two it was.
+    /// </summary>
+    private static bool HasSelectionText(SelectionContext? selection) =>
+        !string.IsNullOrWhiteSpace(selection?.Text);
 
     private static string Citation(CitationRef citation)
     {
@@ -206,12 +225,14 @@ public sealed class PromptBuilder : IPromptBuilder
     }
 
     /// <summary>
-    /// One printed page reference, as both the model and the reader see it. Internal rather than private so
-    /// the assistant panel renders pages identically (#586): if the two formatters drifted, a reader
-    /// checking the citation on screen against what the model was told would find a discrepancy that does
-    /// not exist.
+    /// One printed page reference, as the MODEL sees it: every page listed, in the order the window met them.
+    ///
+    /// <para>The panel renders the same pages differently — grouped by edition with unbroken runs collapsed —
+    /// because the two readers want different things. The model is given the list because it must not infer a
+    /// range that was never checked; the reader is given "VRI vol. 2 pp. 1-2" because eight separate
+    /// references for a two-page window across four editions is the same fact stated eight times.</para>
     /// </summary>
-    internal static string PageRef(SnippetPageRef page)
+    private static string PageRef(SnippetPageRef page)
     {
         var edition = page.Edition switch
         {
@@ -264,15 +285,20 @@ public sealed class PromptBuilder : IPromptBuilder
                  + "as a whole, and say that you were not able to see a selection.";
         }
 
-        // A selection the window does not contain means the surrounding text may not support what is being
-        // asked about — the difference between "explain this in context" and "explain this, and be aware the
-        // context you have may be the wrong context".
+        // The selection is the subject, so when the containment check fails it is the CONTEXT that is in
+        // doubt, not the subject. The selection is the one thing here we are certain of — the reader
+        // physically pointed at it and we have its exact characters; what failed is our attempt to supply its
+        // surroundings. The old wording had this backwards ("treat the surrounding text with corresponding
+        // caution" was attached to a request whose subject WAS the surrounding text), and told the model to
+        // distrust the passage it was being asked about.
         var note = selection.State == SelectionState.Located
             ? string.Empty
-            : "\n\n(This selection was not found in the passage above. The reader may have scrolled, or the "
-              + "selection may lie outside the window. Treat the surrounding text with corresponding caution.)";
+            : "\n\n(The surrounding text below was gathered from the reader's position in the book, and it "
+              + "does not contain this selection — the reader may have scrolled since selecting. It may not be "
+              + "this selection's context. Work from the selection itself, draw on the surrounding text only "
+              + "where it clearly connects, and say if you are answering without context.)";
 
-        return $"The reader has selected:\n\n> {selection.Text}{note}";
+        return $"{selection.Text}{note}";
     }
 
     private static string Lemmas(AiContextBundle bundle)

@@ -68,10 +68,12 @@ public class AiAssistantViewModelTests
     private static CitationRef Citation() =>
         new("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", "para 12", Array.Empty<SnippetPageRef>());
 
-    private static AiTurnContext Context(params string[] notices) =>
+    private static AiTurnContext Context(params string[] notices) => Context(false, notices);
+
+    private static AiTurnContext Context(bool passageTrimmed, params string[] notices) =>
         new(AiTask.Explain, "English", Citation(),
             new BookContext("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", CST.Pitaka.Sutta, CST.CommentaryLevel.Mula),
-            notices);
+            notices, passageTrimmed);
 
     // ---- Not configured, and other ordinary refusals ---------------------------------------------
 
@@ -80,15 +82,23 @@ public class AiAssistantViewModelTests
     {
         var orchestrator = new StubOrchestrator();
         var vm = new AiAssistantViewModel(
-            orchestrator, new StubReaderState(), new StubResolver { Problem = "No model is configured." }, null);
+            orchestrator,
+            new StubReaderState(),
+            // The resolver's own wording, verbatim — every one of its problems already names the place to fix
+            // it, which is why the panel no longer appends anything.
+            new StubResolver { Problem = "No model is configured. Choose one in Settings." },
+            null);
 
         await vm.AskAsync(AiTask.Explain);
 
         // Checked before the reader is even consulted: telling someone what to set beats making them wait
         // while the app assembles a bundle it cannot send.
-        Assert.Contains("No model is configured", vm.Status);
-        Assert.Contains("Settings", vm.Status);
+        Assert.Equal("No model is configured. Choose one in Settings.", vm.Status);
         Assert.Null(orchestrator.LastRequest);
+
+        // And it is not a turn. A transcript entry for a request that was never made would be a record of
+        // something the user did not do.
+        Assert.Empty(vm.Turns);
     }
 
     [Theory]
@@ -173,8 +183,8 @@ public class AiAssistantViewModelTests
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
         await vm.AskAsync(AiTask.Translate);
 
-        Assert.Equal("Not negligence is the path", vm.Answer);
-        Assert.True(vm.HasAnswer);
+        Assert.Equal("Not negligence is the path", vm.LastTurn!.Answer);
+        Assert.True(vm.LastTurn!.HasAnswer);
     }
 
     [Fact]
@@ -191,8 +201,8 @@ public class AiAssistantViewModelTests
 
         // It is the model thinking aloud, not what it is telling the reader. Concatenating it would put
         // half-formed guesses about a sacred text on screen as if they were the answer.
-        Assert.Equal("The verse says", vm.Answer);
-        Assert.DoesNotContain("think about", vm.Answer);
+        Assert.Equal("The verse says", vm.LastTurn!.Answer);
+        Assert.DoesNotContain("think about", vm.LastTurn!.Answer);
     }
 
     [Fact]
@@ -207,8 +217,9 @@ public class AiAssistantViewModelTests
         await vm.AskAsync(AiTask.Explain);
 
         // Discarding what arrived would throw away the part the user can still read and check.
-        Assert.Equal("The first half", vm.Answer);
-        Assert.Equal("The connection dropped.", vm.Status);
+        Assert.Equal("The first half", vm.LastTurn!.Answer);
+        Assert.Equal("The connection dropped.", vm.LastTurn!.Status);
+        Assert.True(vm.LastTurn!.Failed);
     }
 
     [Fact]
@@ -225,16 +236,17 @@ public class AiAssistantViewModelTests
 
         // The chrome names what was actually sent. This is what makes it impossible for a garbled or
         // confabulated answer to produce a citation that looks authoritative.
-        Assert.Contains("Sīlakkhandhavaggapāḷi", vm.Citation);
-        Assert.Contains("para 12", vm.Citation);
-        Assert.DoesNotContain("Dhammapada", vm.Citation);
+        Assert.Contains("Sīlakkhandhavaggapāḷi", vm.LastTurn!.Citation);
+        Assert.Contains("para 12", vm.LastTurn!.Citation);
+        Assert.DoesNotContain("Dhammapada", vm.LastTurn!.Citation);
     }
 
     [Fact]
     public async Task Notices_are_surfaced_and_a_trimmed_passage_raises_the_badge()
     {
         var orchestrator = new StubOrchestrator();
-        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context("The passage was trimmed to fit the budget.")));
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(
+            Context(passageTrimmed: true, "The passage was cut to fit the request budget.")));
         orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
 
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
@@ -242,8 +254,36 @@ public class AiAssistantViewModelTests
 
         // The badge is separate from the notice list because it changes how far the answer can be trusted:
         // the model did not see all of the passage it is being asked about.
-        Assert.Single(vm.Notices);
-        Assert.True(vm.IsPartialPassage);
+        Assert.Single(vm.LastTurn!.Notices);
+        Assert.True(vm.LastTurn!.IsPartialPassage);
+    }
+
+    [Fact]
+    public async Task The_badge_follows_the_bundle_and_not_the_wording_of_a_notice()
+    {
+        // The defect this replaces: the badge matched the notice text for "trim" or "shorten", and the notice
+        // PromptBuilder actually emits says "was cut to fit the request budget" — so the badge could never
+        // fire. The old test passed only because it fed a notice string the app never produces.
+        //
+        // Both halves are asserted, because either alone would have let that bug through: a notice that says
+        // nothing about trimming still raises the badge when the bundle was trimmed, and prose that sounds
+        // like trimming does not raise it when the bundle was not.
+        var trimmed = new StubOrchestrator();
+        trimmed.Events.Add(AiTurnEvent.ForStarted(Context(passageTrimmed: true, "Your selection could not be read.")));
+        trimmed.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(trimmed, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        Assert.True(vm.LastTurn!.IsPartialPassage);
+
+        var whole = new StubOrchestrator();
+        whole.Events.Add(AiTurnEvent.ForStarted(
+            Context(passageTrimmed: false, "The word analysis was cut to fit the request budget.")));
+        whole.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm2 = new AiAssistantViewModel(whole, new StubReaderState(), null, null);
+        await vm2.AskAsync(AiTask.Explain);
+        Assert.False(vm2.LastTurn!.IsPartialPassage);
     }
 
     [Fact]
@@ -256,9 +296,9 @@ public class AiAssistantViewModelTests
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
         await vm.AskAsync(AiTask.Explain);
 
-        Assert.Empty(vm.Notices);
-        Assert.False(vm.IsPartialPassage);
-        Assert.Equal("", vm.Status);
+        Assert.Empty(vm.LastTurn!.Notices);
+        Assert.False(vm.LastTurn!.IsPartialPassage);
+        Assert.Equal("", vm.LastTurn!.Status);
     }
 
     [Fact]
@@ -387,10 +427,10 @@ public class AiAssistantViewModelTests
         // a gateway timeout, while another request to the same model answered in thirty seconds. Our HTTP
         // timeout is deliberately infinite, so the panel cannot shorten the wait — it can only stop looking
         // like nothing is happening.
-        Assert.Equal("Thinking…", AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(2)));
-        Assert.Contains("10s", AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(10)));
+        Assert.Equal("Waiting for the model…", AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(2), false));
+        Assert.Contains("10", AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(10), false));
 
-        var long_ = AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(75));
+        var long_ = AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(75), false);
         Assert.Contains("Still waiting", long_);
         Assert.Contains("queue", long_);
     }
@@ -408,7 +448,7 @@ public class AiAssistantViewModelTests
 
         // The failure that prompted this feature took two minutes to arrive; a counter that kept ticking
         // over the top of the explanation would hide the one thing the user needs to read.
-        Assert.Equal("The provider rejected the request (HTTP 504).", vm.Status);
+        Assert.Equal("The provider rejected the request (HTTP 504).", vm.LastTurn!.Status);
     }
 
     [Fact]
@@ -424,7 +464,7 @@ public class AiAssistantViewModelTests
 
         // Once text is arriving, the text IS the progress report.
         Assert.Equal("", vm.Status);
-        Assert.Equal("Bhikkhus,", vm.Answer);
+        Assert.Equal("Bhikkhus,", vm.LastTurn!.Answer);
     }
 
     // ---- Usage -----------------------------------------------------------------------------------
@@ -440,5 +480,172 @@ public class AiAssistantViewModelTests
         var both = AiAssistantViewModel.FormatUsage(new AiUsageReport(1200, 340));
         Assert.Contains("1,200", both);
         Assert.Contains("340", both);
+    }
+
+    // ---- The transcript ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Asking_a_second_question_keeps_the_first_answer()
+    {
+        // The reported behaviour that made the panel unusable for its only use case. It held exactly one
+        // answer and cleared it at the start of the next request, so a reader who asked for an explanation
+        // and then a translation of the same passage -- the ordinary way anyone uses this -- destroyed the
+        // first to see the second, with no way back and nothing to compare.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForText("Heedfulness is the path"));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+
+        Assert.Equal(2, vm.Turns.Count);
+        Assert.Equal("Heedfulness is the path", vm.Turns[0].Answer);
+        Assert.Equal("Heedfulness is the path", vm.Turns[1].Answer);
+        Assert.Equal("Explain", vm.Turns[0].PresetLabel);
+        Assert.Equal("Translate", vm.Turns[1].PresetLabel);
+    }
+
+    [Fact]
+    public async Task A_turn_records_the_question_that_produced_it()
+    {
+        // Otherwise a transcript of four answers gives no way to tell which one answered what.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null)
+        {
+            Question = "  what governs bhavissanti?  ",
+        };
+        await vm.AskAsync(AiTask.Grammar);
+
+        Assert.Equal("what governs bhavissanti?", vm.LastTurn!.Question);
+        Assert.True(vm.LastTurn!.HasQuestion);
+    }
+
+    [Fact]
+    public async Task The_selection_is_shown_as_the_subject_before_the_answer_arrives()
+    {
+        // The mitigation that makes selection-as-subject safe. A browser selection persists invisibly: select
+        // a word, scroll away, read for ten minutes, press Explain, and the answer is about the forgotten
+        // word. Passage-as-subject tolerated that; selection-as-subject is maximally sensitive to it, so the
+        // subject has to be on screen from the first second rather than inferred from the answer.
+        var orchestrator = new StubOrchestrator();
+        var reader = new StubReaderState
+        {
+            Result = ReaderStateResult.Ok(new ReaderState("s0101m.mul.xml", 12, "appamādo amatapadaṃ")),
+        };
+
+        var vm = new AiAssistantViewModel(orchestrator, reader, null, null);
+        await vm.AskAsync(AiTask.Translate);
+
+        Assert.Equal("appamādo amatapadaṃ", vm.LastTurn!.Subject);
+        Assert.True(vm.LastTurn!.HasSubject);
+    }
+
+    [Fact]
+    public void A_long_selection_is_elided_in_the_middle_where_both_ends_stay_readable()
+    {
+        // Both ends, because the two places a reader checks to recognise their own selection are where it
+        // starts and where it stops. Trailing ellipsis would hide the half that says where it ended.
+        var summary = AiAssistantViewModel.Summarize(new string('a', 60) + " MIDDLE " + new string('z', 60));
+
+        Assert.StartsWith("aaaa", summary);
+        Assert.EndsWith("zzzz", summary);
+        Assert.DoesNotContain("MIDDLE", summary);
+    }
+
+    [Fact]
+    public async Task Reasoning_is_kept_for_the_turn_but_never_joined_to_the_answer()
+    {
+        // It was discarded outright, which was half right: it must never be concatenated into the answer, but
+        // throwing it away meant the panel said "still waiting" while the model was demonstrably alive and
+        // streaming. Its arrival is the difference between a slow request and a dead one.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForReasoning("Let me think about matā..."));
+        orchestrator.Events.Add(AiTurnEvent.ForText("The verse says"));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.Equal("The verse says", vm.LastTurn!.Answer);
+        Assert.Equal("Let me think about matā...", vm.LastTurn!.Reasoning);
+        Assert.True(vm.LastTurn!.HasReasoning);
+    }
+
+    [Fact]
+    public void Reasoning_outranks_the_clock_in_the_waiting_message()
+    {
+        // Once reasoning is arriving the request is demonstrably alive, and saying so is worth more than any
+        // elapsed figure. "Still waiting… free endpoints can queue" is a false diagnosis of a working request.
+        var quiet = AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(75), sawReasoning: false);
+        var thinking = AiAssistantViewModel.WaitingMessage(TimeSpan.FromSeconds(75), sawReasoning: true);
+
+        Assert.Contains("queue", quiet);
+        Assert.Contains("Reasoning", thinking);
+        Assert.DoesNotContain("queue", thinking);
+    }
+
+    [Fact]
+    public async Task A_failed_turn_is_marked_failed_so_it_can_offer_a_retry()
+    {
+        // The evidence for offering Retry at all: an observed request returned a gateway 504 after 120s while
+        // the identical request to the same model answered in 33s. A progress line and an error line that
+        // look the same, with no way to try again, is how a reader ends up staring at a dead panel.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForError(new AiError(AiErrorKind.Network, "The connection dropped.")));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.True(vm.LastTurn!.Failed);
+
+        // A completed turn is not failed, or every turn would offer a retry.
+        var clean = new StubOrchestrator();
+        clean.Events.Add(AiTurnEvent.ForStarted(Context()));
+        clean.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+        var vm2 = new AiAssistantViewModel(clean, new StubReaderState(), null, null);
+        await vm2.AskAsync(AiTask.Explain);
+
+        Assert.False(vm2.LastTurn!.Failed);
+    }
+
+    [Fact]
+    public async Task A_stopped_turn_is_not_an_error()
+    {
+        // The user's own stop. Offering "Try again" for something they deliberately cancelled reads as a
+        // failure report for their own decision.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForText("part of an answer"));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        var cancelled = new StubOrchestrator();
+        cancelled.Events.Add(AiTurnEvent.ForStarted(Context()));
+
+        await vm.AskAsync(AiTask.Explain);
+        Assert.False(vm.LastTurn!.Failed);
+    }
+
+    [Fact]
+    public async Task The_answer_is_published_as_styled_spans_rather_than_raw_markup()
+    {
+        // "It shows single and double asterisks around text rather than applying whatever formatting is
+        // intended." The raw answer is kept verbatim for copying; what renders is parsed.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForText("The term **appamāda** matters."));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.Equal("The term **appamāda** matters.", vm.LastTurn!.Answer);
+        Assert.Equal("The term appamāda matters.", AnswerMarkup.PlainText(vm.LastTurn!.Spans));
     }
 }
