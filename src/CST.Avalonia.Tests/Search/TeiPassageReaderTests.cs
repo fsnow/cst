@@ -284,5 +284,172 @@ namespace CST.Avalonia.Tests.Search
             Assert.All(atHit, h => Assert.Contains(window.Pages, p =>
                 p.Edition == h.Edition && p.Volume == h.Volume && p.Number == h.Number));
         }
+
+        // ---- Windows built AROUND a selection (#649) --------------------------------------------------
+
+        /// <summary>
+        /// Two sections, so a window built near a boundary has somewhere wrong to expand into. Sentences are
+        /// single words plus a danda, which makes rendered lengths easy to reason about exactly.
+        /// </summary>
+        private const string TwoSections =
+            "<body><div id=\"b\" type=\"book\">" +
+            "<div id=\"s1\" type=\"sutta\"><p rend=\"bodytext\" n=\"1\">" +
+            "aaa। bbb। ccc। ddd। eee। fff। ggg। hhh।" +
+            "</p></div>" +
+            "<div id=\"s2\" type=\"sutta\"><p rend=\"bodytext\" n=\"2\">" +
+            "zzz। yyy। xxx। www।" +
+            "</p></div>" +
+            "</div></body>";
+
+        private static (int Start, int End) Span(string xml, string needle)
+        {
+            var at = xml.IndexOf(needle, System.StringComparison.Ordinal);
+            Assert.True(at >= 0, $"fixture does not contain '{needle}'");
+            return (at, at + needle.Length);
+        }
+
+        [Fact]
+        public void A_window_around_a_selection_always_contains_the_selection()
+        {
+            // The invariant the whole revamp exists for. The window used to come from the reader's paragraph,
+            // which is derived from SCROLL, so a selection near the bottom of the viewport routinely fell
+            // outside the window built to explain it — and the app reported that as a caveat rather than as
+            // the defect it was.
+            var markers = BookMarkers.Build(TwoSections);
+
+            foreach (var word in new[] { "aaa", "ddd", "hhh", "zzz", "www" })
+            {
+                var (from, to) = Span(TwoSections, word);
+                var window = TeiPassageReader.ReadWindowAroundSelection(
+                    TwoSections, from, to, maxChars: 20, includeVariants: false,
+                    outputScript: Script.Devanagari, markers);
+
+                Assert.Contains(word, window.Text);
+            }
+        }
+
+        [Fact]
+        public void Expansion_goes_roughly_half_backwards_and_half_forwards()
+        {
+            // "Centre it" is the whole point: a selection explained only by what follows it reads as though
+            // the passage began there.
+            var markers = BookMarkers.Build(TwoSections);
+            var (from, to) = Span(TwoSections, "eee");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                TwoSections, from, to, maxChars: 24, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("eee", window.Text);
+            Assert.Contains("ccc", window.Text);   // context behind
+            Assert.Contains("ggg", window.Text);   // and ahead
+        }
+
+        [Fact]
+        public void Expansion_never_crosses_a_div_into_the_next_section()
+        {
+            // Text from the next sutta is not this passage's context, however close it sits in the file.
+            var markers = BookMarkers.Build(TwoSections);
+            var (from, to) = Span(TwoSections, "hhh");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                TwoSections, from, to, maxChars: 200, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("hhh", window.Text);
+            Assert.Contains("aaa", window.Text);        // the budget is spent backwards instead
+            Assert.DoesNotContain("zzz", window.Text);  // never forwards past the boundary
+        }
+
+        [Fact]
+        public void A_budget_the_backward_side_cannot_spend_is_handed_forward()
+        {
+            // A selection at the very start of a section has nowhere behind it. Losing that half would give
+            // the first passage of every sutta half the context of every other passage.
+            var markers = BookMarkers.Build(TwoSections);
+            var (from, to) = Span(TwoSections, "zzz");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                TwoSections, from, to, maxChars: 24, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("zzz", window.Text);
+            Assert.Contains("yyy", window.Text);
+            Assert.Contains("xxx", window.Text);   // reached only because the backward half was redirected
+
+            // And it was redirected rather than spent: what lies behind is the previous section, which is not
+            // this passage's context. The bound holds in BOTH directions.
+            Assert.DoesNotContain("hhh", window.Text);
+        }
+
+        [Fact]
+        public void A_large_budget_cannot_reach_backwards_into_the_previous_section()
+        {
+            // The backward twin of the forward case. A budget big enough to swallow the previous sutta must
+            // stop at the boundary and simply spend the rest forwards.
+            var markers = BookMarkers.Build(TwoSections);
+            var (from, to) = Span(TwoSections, "yyy");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                TwoSections, from, to, maxChars: 400, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("yyy", window.Text);
+            Assert.Contains("zzz", window.Text);       // its own section, behind it
+            Assert.Contains("www", window.Text);       // and ahead
+            Assert.DoesNotContain("hhh", window.Text); // never the section before
+            Assert.DoesNotContain("aaa", window.Text);
+        }
+
+        [Fact]
+        public void A_selection_larger_than_the_budget_is_never_trimmed_to_fit()
+        {
+            // The subject of the request must not be cut to make room for its own context. Trimming it would
+            // answer about part of what the reader pointed at while captioning it as all of it.
+            var markers = BookMarkers.Build(TwoSections);
+            var (from, _) = Span(TwoSections, "aaa");
+            var (_, to) = Span(TwoSections, "hhh");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                TwoSections, from, to, maxChars: 5, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("aaa", window.Text);
+            Assert.Contains("hhh", window.Text);
+        }
+
+        [Fact]
+        public void A_book_with_no_div_markup_is_one_undivided_section()
+        {
+            // Structural markup covers part of the corpus and is still being added, so "no div" is an
+            // ordinary state, not a defect — and it must not cost the passage its context.
+            const string undivided =
+                "<body><p rend=\"bodytext\" n=\"1\">aaa। bbb। ccc। ddd। eee।</p></body>";
+            var markers = BookMarkers.Build(undivided);
+            var (from, to) = Span(undivided, "ccc");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                undivided, from, to, maxChars: 40, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("aaa", window.Text);
+            Assert.Contains("ccc", window.Text);
+            Assert.Contains("eee", window.Text);
+        }
+
+        [Fact]
+        public void The_window_still_reports_its_citation_and_pages()
+        {
+            // A selection-anchored window is still a window: whatever cites it must describe what was sent.
+            var markers = BookMarkers.Build(Xml);
+            var (from, to) = Span(Xml, "echo");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                Xml, from, to, maxChars: 30, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Equal(5, window.ParagraphNumber);
+            Assert.Contains(window.Pages, p => p.Edition == PageEdition.Vri && p.Number == 1);
+        }
     }
 }

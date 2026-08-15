@@ -46,6 +46,19 @@ namespace CST.Search
             // (and thus nextCursor) can't land mid-note and leave an unmatched brace / apparatus in the clean
             // base text — even if includeFootnotes is also set. (#267 review, Defect 2)
             int end = WalkForward(xml, readStart, maxChars, includeNotes: includeVariants && !structuredNotes, xml.Length);
+
+            return Materialize(xml, readStart, end, maxChars, includeVariants, outputScript, markers, structuredNotes);
+        }
+
+        /// <summary>
+        /// Render a raw span into a <see cref="PassageWindow"/>: the text in the requested script, the paging
+        /// cursors, the citation refs and the apparatus. Shared by both entry points so a window built from a
+        /// paragraph and one built around a selection cannot describe themselves differently.
+        /// </summary>
+        private static PassageWindow Materialize(
+            string xml, int readStart, int end, int maxChars, bool includeVariants, Script outputScript,
+            BookMarkers markers, bool structuredNotes)
+        {
             IReadOnlyList<ApparatusNote> notes = System.Array.Empty<ApparatusNote>();
             string text;
             if (structuredNotes)
@@ -94,6 +107,117 @@ namespace CST.Search
             var (endNum, endCode, _) = markers.RefsAt(Math.Max(readStart, end - 1));
 
             return new PassageWindow(text, prev, next, num, code, pages, noteCount, notes, endNum, endCode);
+        }
+
+        /// <summary>
+        /// A reading window built AROUND a selection, so the selection is always inside it. (#649)
+        ///
+        /// <para><b>Why this exists at all.</b> The window used to be fetched from the reader's paragraph,
+        /// which is derived from SCROLL position — so a selection near the bottom of the viewport routinely
+        /// fell outside the window built to explain it, and the app went on to report that as a caveat. A
+        /// context that can fail to contain the thing it is context FOR is not a context; it is a coincidence
+        /// that usually holds. There is deliberately no longer any way to express "the selection was not
+        /// found in the window", because with the window built from the selection there is no such state.</para>
+        ///
+        /// <para><b>The rule.</b> If the selection is already at or over budget, it IS the window — never
+        /// trimmed, because the subject of the request must not be cut to make room for its own context.
+        /// Otherwise the shortfall is split: roughly half is spent expanding backwards, the rest forwards.
+        /// Whatever the backward side cannot spend — because it hit the start of the section — is handed to
+        /// the forward side rather than lost, so a selection at the top of a sutta still gets a full budget's
+        /// worth of context, all of it below.</para>
+        ///
+        /// <para><b>Neither direction crosses a <c>&lt;div&gt;</c>.</b> A div boundary separates one section
+        /// from the next, and text from the next section is not this passage's context however close it sits
+        /// in the file. Where a book carries no div markup the whole document is the bound — see
+        /// <see cref="BookMarkers.EnclosingDivRange"/>.</para>
+        /// </summary>
+        /// <param name="selectionStart">Start of the selection, as a character position in the raw XML.</param>
+        /// <param name="selectionEnd">End of the selection, exclusive.</param>
+        public static PassageWindow ReadWindowAroundSelection(
+            string xml, int selectionStart, int selectionEnd, int maxChars, bool includeVariants,
+            Script outputScript, BookMarkers markers, bool structuredNotes = false)
+        {
+            selectionStart = Math.Clamp(selectionStart, 0, xml.Length);
+            selectionEnd = Math.Clamp(selectionEnd, selectionStart, xml.Length);
+            if (maxChars < 1) maxChars = 1;
+
+            // The section the selection sits in. Both expansions are bounded by it, and it is measured from
+            // the selection's START: a selection that somehow straddled a boundary should be given the
+            // context of where it began rather than none at all.
+            var (sectionStart, sectionEnd) = markers.EnclosingDivRange(selectionStart);
+            sectionStart = Math.Min(sectionStart, selectionStart);
+            sectionEnd = Math.Max(sectionEnd, selectionEnd);
+
+            bool includeNotes = includeVariants && !structuredNotes;
+
+            int start = selectionStart;
+            int end = selectionEnd;
+
+            int selectionLength = RenderedLength(xml, selectionStart, selectionEnd, includeNotes);
+            if (selectionLength < maxChars)
+            {
+                int shortfall = maxChars - selectionLength;
+                int half = shortfall / 2;
+
+                // Backwards first, so what it cannot spend is known before the forward budget is set.
+                //
+                // Snapped OUTWARDS, to the start of the sentence the budget landed inside — not forwards to
+                // the next one. WalkBackward snaps forward, which is right for a paging cursor and wrong
+                // here: it discards the partial sentence, so a half-budget reliably bought one sentence less
+                // than it paid for and the window came out lopsided towards what follows the selection. This
+                // is also what makes the two directions symmetric, since the forward walk likewise extends
+                // past its budget to finish the sentence it is in.
+                int rough = RawBackward(xml, selectionStart, half, sectionStart);
+                var boundaryNotes = TeiText.NoteRegions(xml, sectionStart, selectionStart);
+                start = SnapBackToSentenceStart(xml, rough, sectionStart, boundaryNotes);
+
+                int spentBack = RenderedLength(xml, start, selectionStart, includeNotes);
+
+                // Clamped at zero: snapping outwards can spend more than half, and a negative budget would
+                // make WalkForward stop at the first boundary as though the budget were exhausted — which it
+                // then does anyway, finishing the selection's own sentence and no more.
+                int forwardBudget = Math.Max(0, shortfall - spentBack);
+                end = WalkForward(xml, selectionEnd, forwardBudget, includeNotes, sectionEnd);
+            }
+
+            return Materialize(xml, start, end, maxChars, includeVariants, outputScript, markers, structuredNotes);
+        }
+
+        /// <summary>
+        /// Rendered characters between two raw positions — tags free, stripped subtrees free. The same
+        /// accounting <see cref="WalkForward"/> spends its budget in, so "half the shortfall" means the same
+        /// thing to the measurement and to the walk.
+        /// </summary>
+        private static int RenderedLength(string xml, int from, int to, bool includeNotes)
+        {
+            if (to <= from) return 0;
+
+            int i = from, rendered = 0;
+            while (i < to)
+            {
+                char c = xml[i];
+                if (c == '<')
+                {
+                    int gt = xml.IndexOf('>', i);
+                    if (gt < 0 || gt >= to) break;
+                    string tag = xml.Substring(i, gt - i + 1);
+                    string name = TeiText.TagName(tag);
+                    if (name == "note" && !includeNotes && !tag.EndsWith("/>", StringComparison.Ordinal))
+                        i = tag.StartsWith("</", StringComparison.Ordinal)
+                            ? gt + 1
+                            : TeiText.SkipSubtree(xml, gt + 1, "note", to);
+                    else if (name == "hi" && TeiText.IsStructuralHi(tag) && !tag.EndsWith("/>", StringComparison.Ordinal))
+                        i = TeiText.SkipSubtree(xml, gt + 1, "hi", to);
+                    else i = gt + 1;
+                }
+                else
+                {
+                    rendered++;
+                    i++;
+                }
+            }
+
+            return rendered;
         }
 
         // Strip the {reading (sigla)} apparatus spans out of already-rendered text into structured notes
@@ -177,6 +301,26 @@ namespace CST.Search
                 }
             }
             return i;
+        }
+
+        /// <summary>
+        /// Raw position ~<paramref name="maxChars"/> rendered characters before <paramref name="start"/>,
+        /// with no sentence snapping — the caller decides which way to snap. Tags are treated as zero-width
+        /// backwards, which is approximate and good enough for choosing where to begin looking.
+        /// </summary>
+        private static int RawBackward(string xml, int start, int maxChars, int limit)
+        {
+            int i = start - 1, rendered = 0;
+            while (i >= limit && rendered < maxChars)
+            {
+                if (xml[i] == '>')
+                {
+                    int lt = xml.LastIndexOf('<', i);
+                    i = lt >= limit ? lt - 1 : limit - 1;
+                }
+                else { rendered++; i--; }
+            }
+            return Math.Max(i + 1, limit);
         }
 
         // Start position ~maxChars rendered chars before <paramref name="start"/>, snapped forward to a
