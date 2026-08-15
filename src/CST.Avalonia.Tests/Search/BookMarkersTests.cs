@@ -1,3 +1,5 @@
+using System.Linq;
+using CST.Navigation;
 using CST.Search;
 using Xunit;
 
@@ -151,6 +153,126 @@ namespace CST.Avalonia.Tests.Search
 
             Assert.Equal(xml.IndexOf("<p n=\"8\""), markers.PositionOfParagraph(8));   // not the range
             Assert.Equal(xml.IndexOf("<p n=\"7-10\""), markers.PositionOfParagraph(9)); // only inside it
+        }
+
+        // ---- Pages across a span (#561) ---------------------------------------------------------------
+
+        // /v1/occurrences reports the page at the HIT; /v1/passage reported the page at its window START.
+        // For a window crossing a page break those are different pages, so the same text carried two
+        // citations and nothing in either response said so. Measured across the corpus before the fix:
+        // 1,881 of 12,508 sampled cursors disagreed.
+
+        private const string TwoPages =
+            "<pb ed=\"M\" n=\"1.10\"/>AAAA<p n=\"1\">first</p>" +
+            "<pb ed=\"M\" n=\"1.11\"/>BBBB<p n=\"2\">second</p>" +
+            "<pb ed=\"M\" n=\"1.12\"/>CCCC";
+
+        [Fact]
+        public void A_window_that_crosses_a_page_break_reports_both_pages()
+        {
+            var markers = BookMarkers.Build(TwoPages);
+
+            // Ends AT the third break's tag, not at its text: the <pb/> opens before the characters that
+            // follow it, so ending at "CCCC" would legitimately include page 12 as well.
+            var pages = markers.PagesAcross(0, TwoPages.IndexOf("<pb ed=\"M\" n=\"1.12\"/>"));
+
+            Assert.Equal(new[] { 10, 11 }, pages.Select(p => p.Number));
+        }
+
+        [Fact]
+        public void The_first_page_is_the_one_the_window_opens_on()
+        {
+            // A caller reading only pages[0] must see exactly what it saw before this change.
+            var markers = BookMarkers.Build(TwoPages);
+            var start = TwoPages.IndexOf("BBBB");
+
+            Assert.Equal(11, markers.PagesAcross(start, TwoPages.Length).First().Number);
+            Assert.Equal(markers.RefsAt(start).Pages.First().Number,
+                         markers.PagesAcross(start, TwoPages.Length).First().Number);
+        }
+
+        [Fact]
+        public void A_window_within_one_page_reports_exactly_that_page()
+        {
+            var markers = BookMarkers.Build(TwoPages);
+            var start = TwoPages.IndexOf("AAAA");
+
+            var pages = markers.PagesAcross(start, start + 2);
+
+            Assert.Equal(10, Assert.Single(pages).Number);
+        }
+
+        [Fact]
+        public void The_hit_page_is_always_among_the_pages_of_a_window_containing_it()
+        {
+            // #561's invariant, stated directly: whatever occurrences cites for a hit must appear in what
+            // passage cites for a window covering that hit. Verified across 12,508 corpus cursors; this
+            // pins it at the unit level so a regression fails here first.
+            var markers = BookMarkers.Build(TwoPages);
+            var hit = TwoPages.IndexOf("second");
+
+            var atHit = markers.RefsAt(hit).Pages;
+            var across = markers.PagesAcross(0, TwoPages.Length);
+
+            Assert.All(atHit, h => Assert.Contains(across, a =>
+                a.Edition == h.Edition && a.Volume == h.Volume && a.Number == h.Number));
+        }
+
+        [Fact]
+        public void A_break_exactly_at_the_exclusive_end_belongs_to_the_next_window()
+        {
+            // end is exclusive, so a page opening at it is the NEXT window's first page. Including it here
+            // would make consecutive windows both claim the same page and overstate each one's extent.
+            var markers = BookMarkers.Build(TwoPages);
+            var secondBreak = TwoPages.IndexOf("<pb ed=\"M\" n=\"1.11\"/>");
+
+            Assert.Equal(new[] { 10 }, markers.PagesAcross(0, secondBreak).Select(p => p.Number));
+        }
+
+        [Fact]
+        public void An_empty_or_backwards_span_still_reports_the_page_it_starts_on()
+        {
+            var markers = BookMarkers.Build(TwoPages);
+            var start = TwoPages.IndexOf("BBBB");
+
+            Assert.Equal(11, Assert.Single(markers.PagesAcross(start, start)).Number);
+            Assert.Equal(11, Assert.Single(markers.PagesAcross(start, start - 50)).Number);
+        }
+
+        [Fact]
+        public void Editions_are_grouped_and_each_keeps_its_reading_order()
+        {
+            // A book whose numbering RESTARTS mid-volume must not have its pages re-sorted numerically —
+            // that is #546's twelve, and re-ordering would report them out of reading sequence.
+            var xml = "<pb ed=\"V\" n=\"1.5\"/><pb ed=\"M\" n=\"1.9\"/>a" +
+                      "<pb ed=\"M\" n=\"1.3\"/>b<pb ed=\"V\" n=\"1.6\"/>c";
+            var markers = BookMarkers.Build(xml);
+
+            var pages = markers.PagesAcross(0, xml.Length);
+
+            Assert.Equal(new[] { PageEdition.Vri, PageEdition.Vri, PageEdition.Myanmar, PageEdition.Myanmar },
+                         pages.Select(p => p.Edition));
+            Assert.Equal(new[] { 9, 3 }, pages.Where(p => p.Edition == PageEdition.Myanmar).Select(p => p.Number));
+        }
+
+        [Fact]
+        public void An_edition_first_appearing_inside_the_span_can_take_the_first_slot()
+        {
+            // The case that makes "[0] is the page the passage starts on" FALSE, and the reason the doc
+            // comment now says so. Myanmar has a break before the window; Vri does not, so Vri contributes
+            // only the break inside it — and edition order puts Vri first. The entry at [0] therefore names
+            // a page the window's opening text is not on. Callers must read the list, or filter to the
+            // edition they mean. (fable review)
+            var xml = "aaaa<pb ed=\"M\" n=\"1.1\"/>bbbb<pb ed=\"V\" n=\"2.7\"/>cccc";
+            var markers = BookMarkers.Build(xml);
+            var start = xml.IndexOf("bbbb");
+
+            var atStart = markers.RefsAt(start).Pages;
+            var across = markers.PagesAcross(start, xml.Length);
+
+            Assert.Equal(PageEdition.Myanmar, Assert.Single(atStart).Edition);
+            Assert.Equal(PageEdition.Vri, across.First().Edition);      // NOT the same as RefsAt's first
+            Assert.Contains(across, p => p.Edition == PageEdition.Myanmar && p.Number == 1);
         }
     }
 }

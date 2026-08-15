@@ -180,7 +180,13 @@ This document is served WITHOUT authentication. Every other endpoint requires a 
 - `POST /v1/passage` - a bounded, paged reading window (more context than a snippet, never a whole wall).
   Body: `{ bookId, paragraph?, bookCode?, cursor?, maxChars?, outputScript?, includeFootnotes? }`.
   Returns `{ text, normalizedReference, pages, prevCursor, nextCursor, noteCount, paragraphNumber,
-  endParagraphNumber, ... }` - `noteCount` is how
+  endParagraphNumber, ... }` - `pages` lists EVERY page the window covers, so a window crossing a page
+  break reports both, and an edition can appear more than once. Within an edition they are in READING
+  order, not sorted by number - a book whose numbering restarts mid-volume genuinely reports e.g.
+  Myanmar 9 then Myanmar 3. Do NOT read `pages[0]` as "the page this passage starts on": editions are
+  grouped, so the first entry belongs to whichever edition sorts first, which need not be one whose page
+  began before the window. To cite a specific point, use the `refs` of an `occurrences` hit - that names
+  the page containing the hit itself. `noteCount` is how
   many `{...}` apparatus notes fall in the window (counted regardless of `includeFootnotes`; `>0` = apparatus
   present here). `normalizedReference` names a RANGE ("paragraphs 21-49 (kn2)") whenever the window spans more
   than one paragraph, and `endParagraphNumber` is the paragraph in effect where it ended - CHECK IT BEFORE
