@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -523,6 +524,136 @@ public class AiAssistantViewModelTests
 
         Assert.Equal("what governs bhavissanti?", vm.LastTurn!.Question);
         Assert.True(vm.LastTurn!.HasQuestion);
+    }
+
+    [Fact]
+    public async Task Asking_moves_the_question_out_of_the_box_and_into_the_turn()
+    {
+        // The box kept the question after the answer arrived, so the next preset silently re-sent it. It
+        // belongs to the turn now, and the turn shows it above its own answer.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null)
+        {
+            Question = "what governs bhavissanti?",
+        };
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.Equal("", vm.Question);
+        Assert.Equal("what governs bhavissanti?", vm.LastTurn!.Question);
+    }
+
+    [Fact]
+    public async Task A_refusal_leaves_the_question_where_the_reader_typed_it()
+    {
+        // The reason it is cleared when the turn STARTS rather than when the button is clicked. Not
+        // configured and no-book-open never create a turn, so clearing on the click would throw away what
+        // the reader typed in order to tell them to go and configure something -- and they would have to
+        // type it again to act on the advice.
+        var orchestrator = new StubOrchestrator();
+        var vm = new AiAssistantViewModel(
+            orchestrator,
+            new StubReaderState { Result = ReaderStateResult.Fail(ReaderStateProblem.NoBookOpen) },
+            null,
+            null)
+        {
+            Question = "what governs bhavissanti?",
+        };
+
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.Equal("what governs bhavissanti?", vm.Question);
+        Assert.Empty(vm.Turns);
+    }
+
+    [Fact]
+    public async Task Retry_puts_the_question_back_in_the_box()
+    {
+        // Retry re-runs the last turn, and its question has to come back with it -- the box was cleared when
+        // that turn started.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForError(new AiError(AiErrorKind.Network, "dropped")));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null)
+        {
+            Question = "why anicca?",
+        };
+        await vm.AskAsync(AiTask.Explain);
+        Assert.Equal("", vm.Question);
+
+        await vm.RetryCommand.Execute(vm.LastTurn).ToTask();
+
+        Assert.Equal(2, vm.Turns.Count);
+        Assert.Equal("why anicca?", vm.Turns[1].Question);
+    }
+
+    [Fact]
+    public async Task Retry_does_not_destroy_a_draft_the_reader_has_started_typing()
+    {
+        // Found by Fable. Retry used to write the turn's question INTO the box before re-asking, which was
+        // harmless while the box kept its text and became data loss the moment the box started holding only
+        // unsent drafts: a reader who typed a rephrase and then clicked Try again lost the rephrase and
+        // re-sent the old question.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForError(new AiError(AiErrorKind.Network, "dropped")));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null)
+        {
+            Question = "why anicca?",
+        };
+        await vm.AskAsync(AiTask.Explain);
+
+        vm.Question = "a rephrasing I am still writing";
+        await vm.RetryCommand.Execute(vm.LastTurn).ToTask();
+
+        Assert.Equal("a rephrasing I am still writing", vm.Question);   // the draft survives
+        Assert.Equal("why anicca?", vm.Turns[1].Question);              // and the retry repeats the turn
+    }
+
+    [Fact]
+    public async Task Retry_repeats_the_turn_whose_button_was_pressed()
+    {
+        // Old failed turns keep their Try again button, so the command has to be told which turn it is
+        // retrying. Using the newest turn meant pressing turn one's button re-sent turn two.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForError(new AiError(AiErrorKind.Network, "dropped")));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+
+        vm.Question = "first question";
+        await vm.AskAsync(AiTask.Explain);
+        vm.Question = "second question";
+        await vm.AskAsync(AiTask.Translate);
+
+        await vm.RetryCommand.Execute(vm.Turns[0]).ToTask();
+
+        Assert.Equal(3, vm.Turns.Count);
+        Assert.Equal("first question", vm.Turns[2].Question);
+        Assert.Equal(AiTask.Explain, vm.Turns[2].Task);
+    }
+
+    [Fact]
+    public void The_reasoning_panel_height_is_shared_and_cannot_be_dragged_to_nothing()
+    {
+        // The control this replaces could only SHRINK, with no floor and no way back: in Avalonia 11.3.6 a
+        // GridSplitter as the last row computes a maximum delta of exactly zero, so it could never grow the
+        // panel it existed to grow.
+        var vm = new AiAssistantViewModel(null, null, null, null);
+        var start = vm.ReasoningHeight;
+
+        vm.ResizeReasoning(120);
+        Assert.Equal(start + 120, vm.ReasoningHeight);
+
+        vm.ResizeReasoning(-100000);
+        Assert.True(vm.ReasoningHeight >= 60, $"dragged away to {vm.ReasoningHeight}");
+
+        vm.ResizeReasoning(100000);
+        Assert.True(vm.ReasoningHeight <= 1200);
     }
 
     [Fact]

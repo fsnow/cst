@@ -97,10 +97,14 @@
                                 <!-- What was asked -->
                                 <TextBlock Text="{Binding PresetLabel}" FontWeight="SemiBold"/>
 
-                                <TextBlock Text="{Binding Question}"
-                                           IsVisible="{Binding HasQuestion}"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <!-- Selectable, because the box is emptied when the turn starts and this
+                                     becomes the only copy of what the reader typed. A stopped turn offers no
+                                     Try again, so without this the question is unrecoverable except by
+                                     retyping it. -->
+                                <SelectableTextBlock Text="{Binding Question}"
+                                                     IsVisible="{Binding HasQuestion}"
+                                                     TextWrapping="Wrap"
+                                                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
                                 <!-- What it is about, on screen from the first second. A browser selection
                                      persists invisibly, so a stale one has to be visible BEFORE the answer
@@ -151,8 +155,12 @@
                                     </TextBlock.Styles>
                                 </TextBlock>
 
+                                <!-- Passes ITS OWN turn: old failed turns keep this button, and without a
+                                     parameter the command retried whichever turn happened to be newest. -->
                                 <Button Content="Try again"
                                         Command="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).RetryCommand}"
+                                        CommandParameter="{Binding}"
+                                        IsEnabled="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).CanAsk}"
                                         IsVisible="{Binding Failed}"
                                         HorizontalAlignment="Left"
                                         Margin="0,2,0,0"/>
@@ -164,16 +172,44 @@
                                           IsVisible="{Binding HasReasoning}"
                                           FontSize="11"
                                           Margin="0,2,0,0">
-                                    <!-- Capped and scrolled. Reasoning runs to thousands of characters, and
-                                         un-capped it pushes the answer — the thing the reader came for —
-                                         below the fold on the very turns where they opened it to check
-                                         whether anything was happening at all. -->
-                                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
-                                        <SelectableTextBlock Text="{Binding Reasoning}"
-                                                             TextWrapping="Wrap"
-                                                             FontSize="11"
-                                                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    </ScrollViewer>
+                                    <!-- Capped, scrolled, and draggable. Reasoning runs to thousands of
+                                         characters, and un-capped it pushes the answer — the thing the
+                                         reader came for — below the fold on the very turns where they
+                                         opened it to check whether anything was happening at all.
+
+                                         The height is SHARED across turns and bound: a reader who has
+                                         decided how much reasoning they want to see has decided it for the
+                                         session, not for one answer.
+
+                                         A Thumb rather than a GridSplitter, and not by preference. In
+                                         Avalonia 11.3.6 a GridSplitter placed as the last row raises its
+                                         neighbour's minimum to its own 6px length while that row IS 6px, so
+                                         GetDeltaConstraints computes maxDelta = 0: it cannot grow the row at
+                                         all, only shrink it, with no floor and no way back. Verified in the
+                                         framework source, not assumed. -->
+                                    <StackPanel>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                      Height="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).ReasoningHeight}">
+                                            <SelectableTextBlock Text="{Binding Reasoning}"
+                                                                 TextWrapping="Wrap"
+                                                                 FontSize="11"
+                                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        </ScrollViewer>
+                                        <Thumb Name="ReasoningResizer"
+                                               Height="7"
+                                               HorizontalAlignment="Stretch"
+                                               Cursor="SizeNorthSouth"
+                                               DragDelta="OnReasoningResize"
+                                               ToolTip.Tip="Drag to resize">
+                                            <Thumb.Template>
+                                                <ControlTemplate>
+                                                    <Border Background="{DynamicResource CardStrokeColorDefaultBrush}"
+                                                            CornerRadius="2"
+                                                            Margin="0,2,0,0"/>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </StackPanel>
                                 </Expander>
 
                                 <!-- The answer, as blocks: prose in one selectable control per run, tables
