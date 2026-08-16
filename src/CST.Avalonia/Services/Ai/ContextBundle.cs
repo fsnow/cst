@@ -13,6 +13,12 @@ public enum AiTask
     Translate,
     Grammar,
     WordByWord,
+
+    /// <summary>
+    /// The reader's own question, with the passage as its context. The only task that requires a question —
+    /// the other four are complete without one, and this one IS one.
+    /// </summary>
+    Ask,
 }
 
 /// <summary>

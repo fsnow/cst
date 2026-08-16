@@ -165,6 +165,40 @@ public class PromptBuilderTests : IDisposable
     }
 
     [Fact]
+    public void An_asked_question_leads_the_prompt_rather_than_riding_on_a_preset()
+    {
+        // Before this task existed, a reader with a question had to pick a preset to carry it -- Explain, in
+        // practice -- so the model was told to explain the passage AND answer a question, and the preset's
+        // instructions competed with the question for what the answer should be about.
+        var prompt = _builder.Build(Bundle(task: AiTask.Ask, userQuestion: "what governs bhavissanti?"));
+
+        Assert.Contains("what governs bhavissanti?", prompt.UserContent);
+        Assert.Contains("Answer the reader's question", prompt.UserContent);
+
+        // No preset instruction survives to compete with it.
+        Assert.DoesNotContain("Explain this passage", prompt.UserContent);
+        Assert.DoesNotContain("Translate this passage", prompt.UserContent);
+
+        // And the question comes before the passage it is asked about.
+        var question = prompt.UserContent.IndexOf("what governs bhavissanti?", StringComparison.Ordinal);
+        var passage = prompt.UserContent.IndexOf("appamādo", StringComparison.Ordinal);
+        Assert.True(question < passage, "the question must lead the prompt");
+    }
+
+    [Fact]
+    public void A_question_about_a_selection_makes_the_selection_the_subject()
+    {
+        var prompt = _builder.Build(Bundle(
+            task: AiTask.Ask,
+            userQuestion: "which word is the verb?",
+            selection: new SelectionContext("appamādo amatapadaṃ", SelectionState.Located)));
+
+        Assert.Contains("which word is the verb?", prompt.UserContent);
+        Assert.Contains("about the text they have selected", prompt.UserContent);
+        Assert.Contains("for context only", prompt.UserContent);
+    }
+
+    [Fact]
     public void A_clean_request_produces_no_notices_however_many_paragraphs_it_covers()
     {
         // A window spanning several paragraphs used to raise "The passage window covers N paragraphs, not
@@ -221,6 +255,7 @@ public class PromptBuilderTests : IDisposable
     [InlineData(AiTask.Translate)]
     [InlineData(AiTask.Grammar)]
     [InlineData(AiTask.WordByWord)]
+    [InlineData(AiTask.Ask)]
     public void Every_preset_demotes_the_passage_to_context_when_something_is_selected(AiTask task)
     {
         // Pins the whole set rather than the one preset that was reported. All four had the same shape, so
@@ -230,7 +265,9 @@ public class PromptBuilderTests : IDisposable
             selection: new SelectionContext("appamādo amatapadaṃ", SelectionState.Located)));
 
         Assert.Contains("for context only", prompt.UserContent);
-        Assert.Contains("It is not what you were asked to", prompt.UserContent);
+        // Each preset disclaims the passage in its own words -- "not what you were asked to translate", "not
+        // what the question is about" -- so the assertion is on the disclaimer, not on one phrasing of it.
+        Assert.Contains("It is not what", prompt.UserContent);
 
         // The selection has to be present in full, above the context, or the heading is a lie.
         var subject = prompt.UserContent.IndexOf("appamādo amatapadaṃ", StringComparison.Ordinal);

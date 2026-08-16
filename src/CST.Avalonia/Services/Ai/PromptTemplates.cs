@@ -26,6 +26,12 @@ public static class PromptTemplateNames
     public const string WordByWord = "word-by-word";
 
     /// <summary>
+    /// The reader's own question. Unlike the four presets it is meaningless without one, which is why the
+    /// button that sends it is disabled until something is typed.
+    /// </summary>
+    public const string Ask = "ask";
+
+    /// <summary>
     /// The same four presets, for when the reader has selected something. <b>Separate documents rather than a
     /// conditional inside one.</b>
     ///
@@ -43,13 +49,14 @@ public static class PromptTemplateNames
     public const string TranslateSelection = "translate-selection";
     public const string GrammarSelection = "grammar-selection";
     public const string WordByWordSelection = "word-by-word-selection";
+    public const string AskSelection = "ask-selection";
 
     public static IReadOnlyList<string> All { get; } =
         new[]
         {
             System,
-            Explain, Translate, Grammar, WordByWord,
-            ExplainSelection, TranslateSelection, GrammarSelection, WordByWordSelection,
+            Explain, Translate, Grammar, WordByWord, Ask,
+            ExplainSelection, TranslateSelection, GrammarSelection, WordByWordSelection, AskSelection,
         };
 
     /// <summary>
@@ -68,10 +75,12 @@ public static class PromptTemplateNames
         (AiTask.Translate, false) => Translate,
         (AiTask.Grammar, false) => Grammar,
         (AiTask.WordByWord, false) => WordByWord,
+        (AiTask.Ask, false) => Ask,
         (AiTask.Explain, true) => ExplainSelection,
         (AiTask.Translate, true) => TranslateSelection,
         (AiTask.Grammar, true) => GrammarSelection,
         (AiTask.WordByWord, true) => WordByWordSelection,
+        (AiTask.Ask, true) => AskSelection,
         _ => throw new ArgumentOutOfRangeException(nameof(task), task, "No prompt template for this task."),
     };
 }
@@ -135,6 +144,7 @@ public static class PromptPlaceholders
             [PromptTemplateNames.Translate] = new[] { Passage, Citation, Selection, UserQuestion },
             [PromptTemplateNames.Grammar] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
             [PromptTemplateNames.WordByWord] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
+            [PromptTemplateNames.Ask] = new[] { Passage, Citation, Selection, UserQuestion },
 
             // The selection variants need BOTH: {{selection}} is the subject, and {{passage}} is the context
             // that makes the subject readable. An override that deletes the context validates cleanly and then
@@ -144,6 +154,7 @@ public static class PromptPlaceholders
             [PromptTemplateNames.GrammarSelection] = new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
             [PromptTemplateNames.WordByWordSelection] =
                 new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
+            [PromptTemplateNames.AskSelection] = new[] { Passage, Citation, Selection, UserQuestion },
         };
 }
 

@@ -94,6 +94,7 @@ public class AiAssistantViewModel : ReactiveTool
         TranslateCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.Translate));
         GrammarCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.Grammar));
         WordByWordCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.WordByWord));
+        AskQuestionCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.Ask));
         StopCommand = ReactiveCommand.Create(Stop);
         // No canExecute observable: WhenAnyValue needs ReactiveUI's builder initialised, which a plain
         // unit-test host does not do. The button binds IsEnabled to CanAsk instead, and a click that slips
@@ -108,6 +109,15 @@ public class AiAssistantViewModel : ReactiveTool
     public ReactiveCommand<Unit, Unit> TranslateCommand { get; }
     public ReactiveCommand<Unit, Unit> GrammarCommand { get; }
     public ReactiveCommand<Unit, Unit> WordByWordCommand { get; }
+
+    /// <summary>
+    /// Sends the typed question as the request itself, rather than as a rider on a preset.
+    ///
+    /// <para>Until this existed a reader with a question had to pick a preset to carry it — in practice
+    /// Explain — so the model was told to explain the passage AND answer a question, and the preset's
+    /// instructions competed with the question for what the answer should be about.</para>
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> AskQuestionCommand { get; }
     public ReactiveCommand<Unit, Unit> StopCommand { get; }
     public ReactiveCommand<AiTurnViewModel?, Unit> RetryCommand { get; }
 
@@ -148,8 +158,18 @@ public class AiAssistantViewModel : ReactiveTool
     public string Question
     {
         get => _question;
-        set => this.RaiseAndSetIfChanged(ref _question, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _question, value);
+            this.RaisePropertyChanged(nameof(CanAskQuestion));
+        }
     }
+
+    /// <summary>
+    /// Whether there is a question to send. The four presets work with an empty box; this one is the
+    /// question, so an empty box means there is nothing to ask.
+    /// </summary>
+    public bool CanAskQuestion => CanAsk && !string.IsNullOrWhiteSpace(Question);
 
     /// <summary>
     /// Refusals that belong to the panel rather than to any turn — not configured, no book open. Kept off the
@@ -176,6 +196,7 @@ public class AiAssistantViewModel : ReactiveTool
         {
             this.RaiseAndSetIfChanged(ref _isBusy, value);
             this.RaisePropertyChanged(nameof(CanAsk));
+            this.RaisePropertyChanged(nameof(CanAskQuestion));
         }
     }
 

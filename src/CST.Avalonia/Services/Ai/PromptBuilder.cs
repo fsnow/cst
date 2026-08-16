@@ -76,6 +76,7 @@ public sealed class PromptBuilder : IPromptBuilder
         [AiTask.Translate] = null,
         [AiTask.Grammar] = null,
         [AiTask.WordByWord] = null,
+        [AiTask.Ask] = null,
     };
 
     private readonly IPromptTemplateStore _templates;

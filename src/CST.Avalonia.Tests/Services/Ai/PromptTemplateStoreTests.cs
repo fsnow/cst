@@ -43,6 +43,8 @@ public class PromptTemplateStoreTests : IDisposable
     [InlineData(PromptTemplateNames.TranslateSelection)]
     [InlineData(PromptTemplateNames.GrammarSelection)]
     [InlineData(PromptTemplateNames.WordByWordSelection)]
+    [InlineData(PromptTemplateNames.Ask)]
+    [InlineData(PromptTemplateNames.AskSelection)]
     public void Every_shipped_template_passes_the_validation_it_imposes_on_the_user(string name)
     {
         // If a built-in cannot meet the bar we hold user edits to, either the template or the bar is wrong.

@@ -60,6 +60,9 @@ public sealed class AiContextBundler : IAiContextBundler
         [AiTask.Translate] = 2400,
         [AiTask.Grammar] = 900,
         [AiTask.WordByWord] = 600,
+        // Generous, like Translate: a reader's own question is the one task whose scope the app cannot
+        // predict, so the passage it is answered from should be the fullest one on offer.
+        [AiTask.Ask] = 2400,
     };
 
     /// <summary>How many distinct words get a lemma resolution — the grammatical presets only.</summary>
