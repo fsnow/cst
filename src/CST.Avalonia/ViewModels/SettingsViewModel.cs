@@ -1337,6 +1337,8 @@ public class AiSettingsViewModel : ViewModelBase
                 this.RaisePropertyChanged(nameof(SubPermissionsEnabled));
                 this.RaisePropertyChanged(nameof(RemoteControlEnabled));
                 this.RaisePropertyChanged(nameof(AssistantFieldsEnabled));
+                // The assistant hangs off the master switch too, so turning AI off takes its panel with it.
+                ApplyAssistantVisibility();
                 // Readiness is derived from the master too. Without this the line kept reporting "AI features
                 // are turned off." after the user had just turned them on, until some other field happened to
                 // be edited -- the one line on the screen whose entire job is not to be out of date.
@@ -1446,6 +1448,9 @@ public class AiSettingsViewModel : ViewModelBase
                 _settingsService.RequestSave();
                 this.RaisePropertyChanged(nameof(AssistantFieldsEnabled));
                 RefreshReadiness();
+                // Ticking the box IS the gesture: the panel appears now rather than at the next launch, and
+                // unticking takes it away rather than leaving four buttons that decline every request. (#667)
+                ApplyAssistantVisibility();
             }
         }
 
@@ -1639,6 +1644,26 @@ public class AiSettingsViewModel : ViewModelBase
             }
 
             this.RaisePropertyChanged(nameof(CanStoreKeys));
+        }
+
+        /// <summary>
+        /// Show or hide the assistant panel to match the two switches. Settings is a separate window, so the
+        /// panel has no way to learn about a change on its own.
+        /// </summary>
+        private void ApplyAssistantVisibility()
+        {
+            try
+            {
+                if ((App.MainWindow?.DataContext as LayoutViewModel) is not { } layout) return;
+
+                var wanted = _settingsService.Settings.Ai.Enabled && _settingsService.Settings.Ai.Chat.Enabled;
+                if (wanted) layout.ShowAssistantPanel();
+                else layout.HideAssistantPanel();
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug(ex, "Could not apply the assistant panel's visibility");
+            }
         }
 
         private void RefreshReadiness()

@@ -1459,6 +1459,9 @@ public partial class App : Application
             foreach (var menuItem in _assistantMenuItems)
             {
                 menuItem.IsChecked = layoutViewModel.IsAssistantPanelVisible;
+                // Greyed out rather than silently inert when the feature is off, so the menu says which of
+                // the two states the reader is in. (#667)
+                menuItem.IsEnabled = CstDockFactory.AssistantEnabled();
             }
 
             foreach (var menuItem in _dictionaryMenuItems)

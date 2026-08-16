@@ -285,6 +285,18 @@ public class CstDockFactoryTests
     }
 
     [Fact]
+    public void The_assistant_is_off_when_neither_switch_is_on()
+    {
+        // Reported: "the panel shouldn't show unless that is checked". A panel for a feature the reader has
+        // not enabled is an advertisement, and this one is worse than most -- its buttons decline every
+        // request with an explanation, which reads as four broken buttons.
+        //
+        // No ServiceProvider in a unit-test host, so this asserts the safe direction: unknown means off. The
+        // two-switch logic itself is exercised through the settings view model.
+        Assert.False(CstDockFactory.AssistantEnabled());
+    }
+
+    [Fact]
     public void A_recreated_assistant_column_gets_a_real_share_of_the_window()
     {
         // Reported: reopening it from the View menu brought it back about a quarter of an inch wide -- worse

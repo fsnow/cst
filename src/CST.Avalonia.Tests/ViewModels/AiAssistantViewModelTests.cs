@@ -532,6 +532,48 @@ public class AiAssistantViewModelTests
     }
 
     [Fact]
+    public void An_unconfigured_assistant_says_so_before_anything_is_pressed()
+    {
+        // Reported as "the Assistant buttons are a no op". They were not: they set a status line and declined
+        // to send. But nothing said so until a button was pressed, so the commonest first-run state -- a
+        // settings file with no assistant configured -- presented as four buttons that did nothing.
+        var vm = new AiAssistantViewModel(
+            new StubOrchestrator(),
+            new StubReaderState(),
+            new StubResolver { Problem = "The assistant is turned off. Turn on \"Enable the assistant\" in Settings." },
+            null);
+
+        Assert.True(vm.IsNotReady);
+        Assert.Contains("Enable the assistant", vm.NotReady);
+    }
+
+    [Fact]
+    public void A_configured_assistant_says_nothing_at_all()
+    {
+        // The standing notice must be silent when there is nothing to say, or it becomes furniture.
+        var vm = new AiAssistantViewModel(
+            new StubOrchestrator(), new StubReaderState(), new StubResolver { Problem = null }, null);
+
+        Assert.False(vm.IsNotReady);
+        Assert.Equal("", vm.NotReady);
+    }
+
+    [Fact]
+    public void Fixing_the_configuration_clears_the_notice_on_request()
+    {
+        // Settings are edited in another window, and this panel has no way to learn about it -- hence a
+        // Check again button rather than a promise to notice.
+        var resolver = new StubResolver { Problem = "The assistant is turned off." };
+        var vm = new AiAssistantViewModel(new StubOrchestrator(), new StubReaderState(), resolver, null);
+        Assert.True(vm.IsNotReady);
+
+        resolver.Problem = null;
+        vm.RefreshReadiness();
+
+        Assert.False(vm.IsNotReady);
+    }
+
+    [Fact]
     public void Ask_is_offered_only_when_there_is_a_question_to_send()
     {
         // The four presets are complete without a question; this one IS the question, so an empty box means
