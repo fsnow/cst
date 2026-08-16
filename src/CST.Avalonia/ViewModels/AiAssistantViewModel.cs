@@ -96,6 +96,7 @@ public class AiAssistantViewModel : ReactiveTool
         WordByWordCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.WordByWord));
         AskQuestionCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.Ask));
         StopCommand = ReactiveCommand.Create(Stop);
+        RefreshReadinessCommand = ReactiveCommand.Create(RefreshReadiness);
         // No canExecute observable: WhenAnyValue needs ReactiveUI's builder initialised, which a plain
         // unit-test host does not do. The button binds IsEnabled to CanAsk instead, and a click that slips
         // through while a turn runs is harmless — AskAsync's guard returns without touching anything, now
@@ -103,6 +104,9 @@ public class AiAssistantViewModel : ReactiveTool
         RetryCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel?>(RetryAsync);
         CopyCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel>(CopyAsync);
         ClearCommand = ReactiveCommand.Create(Clear);
+
+        // Asked once at construction so the panel can say it is not configured before anything is pressed.
+        RefreshReadiness();
     }
 
     public ReactiveCommand<Unit, Unit> ExplainCommand { get; }
@@ -125,6 +129,40 @@ public class AiAssistantViewModel : ReactiveTool
     /// the whole answer once tables put each cell in its own control.</summary>
     public ReactiveCommand<AiTurnViewModel, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+
+    /// <summary>Re-ask the resolver whether the assistant is configured. Bound to the panel's own refresh, so
+    /// a reader who has just been sent to Settings can come back and see the answer change.</summary>
+    public ReactiveCommand<Unit, Unit> RefreshReadinessCommand { get; }
+
+    /// <summary>
+    /// Why the assistant cannot run, shown BEFORE anything is pressed. (#667)
+    ///
+    /// <para>It used to appear only after a button was clicked, so the commonest first-run state — a fresh
+    /// settings file with no assistant configured — presented as four buttons that did nothing. "The
+    /// Assistant buttons are a no op" is the correct reading of that, and the app had no business making a
+    /// reader guess.</para>
+    /// </summary>
+    private string _notReady = "";
+    public string NotReady
+    {
+        get => _notReady;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _notReady, value);
+            this.RaisePropertyChanged(nameof(IsNotReady));
+        }
+    }
+
+    public bool IsNotReady => !string.IsNullOrEmpty(NotReady);
+
+    /// <summary>Ask the same resolver the turn will ask, so the panel and the request cannot disagree.</summary>
+    public void RefreshReadiness()
+    {
+        if (_resolver is null) { NotReady = ""; return; }
+
+        _resolver.Resolve(out var problem);
+        NotReady = problem ?? "";
+    }
 
     private double _reasoningMaxHeight = 240;
 
@@ -228,6 +266,8 @@ public class AiAssistantViewModel : ReactiveTool
         finally
         {
             IsBusy = false;
+            // A turn just told us what the resolver thinks; keep the standing line in step with it.
+            RefreshReadiness();
         }
     }
 

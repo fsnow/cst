@@ -117,9 +117,18 @@ public sealed class ChatProviderResolver : IChatProviderResolver
     {
         var chat = _settings.Settings.Ai.Chat;
 
-        if (!_settings.Settings.Ai.Enabled || !chat.Enabled)
+        // Two switches, two messages. One message for both sent a reader whose master switch was already ON
+        // to look at a switch that was already on, with nothing to change — the exact failure this class is
+        // written to avoid everywhere else, committed in its own first sentence. (#667)
+        if (!_settings.Settings.Ai.Enabled)
         {
-            problem = "AI features are turned off. Turn them on in Settings to use the assistant.";
+            problem = "AI features are turned off. Turn on \"Enable AI Features\" in Settings \u2192 AI.";
+            return null;
+        }
+
+        if (!chat.Enabled)
+        {
+            problem = "The assistant is turned off. Turn on \"Enable the assistant\" in Settings \u2192 AI.";
             return null;
         }
 

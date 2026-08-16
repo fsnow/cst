@@ -259,8 +259,18 @@ namespace CST.Avalonia.ViewModels
 
         public void ToggleAssistantPanel()
         {
-            if (IsAssistantPanelVisible) HideAssistantPanel();
-            else ShowAssistantPanel();
+            if (IsAssistantPanelVisible) { HideAssistantPanel(); return; }
+
+            // The View menu can bring the panel back, but it cannot switch the feature on: showing a panel
+            // for a disabled assistant would put four buttons on screen that decline every request. Settings
+            // owns that decision. (#667)
+            if (!CstDockFactory.AssistantEnabled())
+            {
+                Log.Information("[Layout] Assistant panel requested but the assistant is turned off");
+                return;
+            }
+
+            ShowAssistantPanel();
         }
 
         /// <summary>

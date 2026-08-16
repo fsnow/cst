@@ -401,11 +401,47 @@ public partial class App : Application
             {
                 await settingsService.LoadSettingsAsync();
                 await StartLocalApiIfEnabledAsync(settingsService);
+
+                // The layout is built BEFORE this completes -- the window opened seven milliseconds ahead of
+                // the settings load in a measured run -- so anything in CreateLayout that reads a setting
+                // reads the constructor defaults. The assistant's panel is gated on a setting, so it was
+                // silently absent for a reader who HAD enabled it, and ticking an already-ticked box changed
+                // nothing and so brought nothing back. Reconciled once, here, where the values are real. (#667)
+                ReconcileAssistantPanel(settingsService);
             }
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to load settings");
+        }
+    }
+
+    /// <summary>
+    /// Put the assistant panel in step with the settings, once those have actually been read.
+    ///
+    /// <para>Only ever ADDS a panel that startup could not know about. Removing one is left to the Settings
+    /// toggle: a reader who closed the panel by hand this session has said something about what they want on
+    /// screen, and a reconciliation pass is not the place to overrule it.</para>
+    /// </summary>
+    private static void ReconcileAssistantPanel(ISettingsService settingsService)
+    {
+        try
+        {
+            var settings = settingsService.Settings;
+            if (!settings.Ai.Enabled || !settings.Ai.Chat.Enabled) return;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (MainWindow?.DataContext is LayoutViewModel layout && !layout.IsAssistantPanelVisible)
+                {
+                    Log.Information("Assistant is enabled but its panel was not built at startup; adding it now");
+                    layout.ShowAssistantPanel();
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not reconcile the assistant panel with the settings");
         }
     }
 
@@ -1459,6 +1495,9 @@ public partial class App : Application
             foreach (var menuItem in _assistantMenuItems)
             {
                 menuItem.IsChecked = layoutViewModel.IsAssistantPanelVisible;
+                // Greyed out rather than silently inert when the feature is off, so the menu says which of
+                // the two states the reader is in. (#667)
+                menuItem.IsEnabled = CstDockFactory.AssistantEnabled();
             }
 
             foreach (var menuItem in _dictionaryMenuItems)

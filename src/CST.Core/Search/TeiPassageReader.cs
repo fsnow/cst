@@ -238,7 +238,15 @@ namespace CST.Search
             to = Math.Clamp(to, from, xml.Length);
             if (string.IsNullOrWhiteSpace(needle)) return null;
 
-            // Collapse the needle the same way the comparison collapses the haystack.
+            // Collapse the needle the same way the comparison collapses the haystack: whitespace runs to one
+            // space, punctuation dropped entirely.
+            //
+            // Punctuation is dropped because the two sides reach this comparison by different routes and do
+            // not agree about it. The reader renders through a path that turns the danda into a period; the
+            // XML has the danda. Even with both paths fixed, a selection dragged across a note bracket or a
+            // typographic apostrophe would differ from the source by a character nobody typed. Matching on
+            // letters alone cannot be broken by punctuation at all, which is the only version of this that
+            // stays fixed. (#668)
             var wanted = new StringBuilder(needle.Length);
             foreach (var c in needle)
             {
@@ -246,15 +254,17 @@ namespace CST.Search
                 {
                     if (wanted.Length > 0 && wanted[^1] != ' ') wanted.Append(' ');
                 }
-                else wanted.Append(c);
+                else if (IsSignificant(c)) wanted.Append(c);
             }
             var target = wanted.ToString().Trim();
             if (target.Length == 0) return null;
 
             for (int anchor = from; anchor < to; anchor++)
             {
-                if (xml[anchor] == '<') continue;
-                if (char.IsWhiteSpace(xml[anchor])) continue;
+                // A match must BEGIN on a letter. Starting anywhere else lets the skip rules below consume
+                // markup and punctuation before the first real character, so the span comes back beginning
+                // at a tag bracket rather than at the reader's first word.
+                if (!IsSignificant(xml[anchor])) continue;
 
                 int matched = 0, i = anchor, lastConsumed = anchor;
                 bool pendingSpace = false;
@@ -282,6 +292,11 @@ namespace CST.Search
 
                     if (char.IsWhiteSpace(c)) { pendingSpace = true; i++; continue; }
 
+                    // Punctuation on the haystack side is skipped for the same reason it is dropped from the
+                    // needle, and skipped rather than treated as a separator so "so'haṃ" and "sohaṃ" match.
+                    // Not lastConsumed: trailing punctuation is not part of what the reader selected.
+                    if (!IsSignificant(c)) { i++; continue; }
+
                     if (pendingSpace)
                     {
                         pendingSpace = false;
@@ -301,6 +316,16 @@ namespace CST.Search
 
             return null;
         }
+
+        /// <summary>
+        /// Whether a character carries meaning for matching: letters, digits, and combining marks. Marks are
+        /// kept explicitly — they are not letters, and dropping them would let a form match a different word
+        /// that differs only by a diacritic.
+        /// </summary>
+        private static bool IsSignificant(char c) =>
+            char.IsLetterOrDigit(c)
+            || System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+               == System.Globalization.UnicodeCategory.NonSpacingMark;
 
         /// <summary>
         /// Walk on to the end of the sentence in progress, ignoring any budget. Bounded by the section and by

@@ -93,7 +93,14 @@ namespace CST.Avalonia.Services
             var openBookTool = App.ServiceProvider!.GetRequiredService<OpenBookDialogViewModel>();
             var searchTool = App.ServiceProvider!.GetRequiredService<SearchViewModel>();
             var dictionaryTool = App.ServiceProvider!.GetRequiredService<DictionaryViewModel>();
-            var assistantTool = App.ServiceProvider!.GetRequiredService<AiAssistantViewModel>();
+            // The assistant appears only when it is switched on. A panel for a feature the reader has not
+            // enabled is an advertisement, and this one is worse than most: its buttons decline every request
+            // with an explanation, which reads as four broken buttons. Settings shows and hides it live, so
+            // ticking the box is the whole gesture. (#667)
+            var assistantEnabled = AssistantEnabled();
+            var assistantTool = assistantEnabled
+                ? App.ServiceProvider!.GetRequiredService<AiAssistantViewModel>()
+                : null;
 
             _logger.Debug("Created tools - OpenBook: {OpenBookType}, Search: {SearchType}",
                 openBookTool.GetType().Name, searchTool.GetType().Name);
@@ -283,7 +290,9 @@ namespace CST.Avalonia.Services
                 Id = "RightToolDock",
                 Title = "Assistant",
                 ActiveDockable = assistantTool,
-                VisibleDockables = CreateList<IDockable>(assistantTool),
+                VisibleDockables = assistantTool is null
+                    ? CreateList<IDockable>()
+                    : CreateList<IDockable>(assistantTool),
                 Alignment = Alignment.Right,
                 GripMode = GripMode.Visible,
                 CanDrag = true,
@@ -314,8 +323,9 @@ namespace CST.Avalonia.Services
                 Orientation = Orientation.Horizontal,
                 IsCollapsable = false,  // Like Notepad sample
                 CanDrop = true,  // Allow dropping dockables here
-                VisibleDockables = CreateList<IDockable>(
-                    leftTools, splitter, documentDock, rightSplitter, rightTools)
+                VisibleDockables = assistantEnabled
+                    ? CreateList<IDockable>(leftTools, splitter, documentDock, rightSplitter, rightTools)
+                    : CreateList<IDockable>(leftTools, splitter, documentDock)
             };
 
             // Create inner root dock (window layout) with pinned dockables for edge drop indicators
@@ -1673,6 +1683,24 @@ namespace CST.Avalonia.Services
         /// entry, so a reader who floated it and closed the window lost it for the rest of the session — and
         /// since the panel holds the whole transcript, they lost that too.</para>
         /// </summary>
+        /// <summary>
+        /// Whether the assistant is switched on: the AI master switch AND the assistant's own. Read from
+        /// settings rather than cached, because Settings toggles it while the app runs. (#667)
+        /// </summary>
+        internal static bool AssistantEnabled()
+        {
+            try
+            {
+                var settings = App.ServiceProvider?.GetService<ISettingsService>()?.Settings;
+                return settings?.Ai.Enabled == true && settings.Ai.Chat.Enabled;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not read the assistant's enabled state; treating it as off");
+                return false;
+            }
+        }
+
         internal ToolDock? EnsureRightToolDock()
         {
             if (_rootDock != null && FindDockByIdRecursive(_rootDock, "RightToolDock") is ToolDock existing)

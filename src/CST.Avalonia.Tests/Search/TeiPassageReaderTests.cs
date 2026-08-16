@@ -527,6 +527,24 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void Punctuation_cannot_stop_a_selection_being_located()
+        {
+            // The reported failure, in miniature. The reader renders through a path that turns the danda into
+            // a period, and the XML has the danda -- so a 276-character selection spanning several sentences
+            // could not be found in the very paragraph it came from, and the window silently fell back to the
+            // scroll position.
+            const string xml = "<body><p rend=\"bodytext\" n=\"1\">alpha bravo\u0964 charlie delta\u0964</p></body>";
+
+            // As the reader would hand it back: periods, not dandas.
+            var span = TeiPassageReader.LocateSelection(xml, 0, xml.Length, "alpha bravo. charlie");
+
+            Assert.NotNull(span);
+            var raw = xml.Substring(span!.Value.Start, span.Value.End - span.Value.Start);
+            Assert.StartsWith("alpha", raw);
+            Assert.EndsWith("charlie", raw);
+        }
+
+        [Fact]
         public void Text_that_is_not_there_is_not_located()
         {
             const string xml = "<body><p rend=\"bodytext\" n=\"1\">alpha bravo।</p></body>";
