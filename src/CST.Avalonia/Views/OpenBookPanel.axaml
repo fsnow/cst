@@ -42,8 +42,7 @@
                                   SelectedItem="{Binding SelectedNode}"
                                   AutoScrollToSelectedItem="False"
                                   Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                                  DoubleTapped="TreeView_DoubleTapped"
-                                  KeyDown="TreeView_KeyDown">
+                                  DoubleTapped="TreeView_DoubleTapped">
                             <TreeView.Styles>
                                 <!-- Style for TreeViewItem -->
                                 <Style Selector="TreeViewItem" x:DataType="vm:BookTreeNode">
