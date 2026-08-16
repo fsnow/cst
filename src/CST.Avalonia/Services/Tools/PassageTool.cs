@@ -67,6 +67,18 @@ namespace CST.Avalonia.Services.Tools
             return TeiPassageReader.LocateSelection(xml, startPos, sectionEnd, needle);
         }
 
+        /// <summary>
+        /// The end of the paragraph starting at <paramref name="from"/> — its own closing tag, or the end of
+        /// its section. Used as the stand-in span when a selection could not be located, so the window is
+        /// still section-bounded rather than free-running.
+        /// </summary>
+        private static int ParagraphEnd(string xml, int from, BookMarkers markers)
+        {
+            var sectionEnd = markers.EnclosingDivRange(from).End;
+            var close = xml.IndexOf("</p>", from, StringComparison.Ordinal);
+            return close < 0 || close > sectionEnd ? sectionEnd : close;
+        }
+
         public async Task<PassageResult> FetchPassageAsync(PassageRequest request, CancellationToken ct = default)
         {
             var dir = _settings.Settings?.XmlBooksDirectory;
@@ -103,7 +115,17 @@ namespace CST.Avalonia.Services.Tools
                     startPos, selectionSpan is null ? "NOT located" : $"located at {selectionSpan.Value.Start}");
             }
 
-            var w = selectionSpan is { } span
+            // When a selection was supplied but could not be located, the window is still built the
+            // selection way -- around the referenced PARAGRAPH's own span. Falling back to ReadWindow was
+            // wrong in a way that only showed up on this path: it walks with no section bound at all, so a
+            // request whose selection opened a sutta grew backwards into the previous one. Not crossing a
+            // <div> is a property of the context, not a reward for having found the selection.
+            var fallbackSpan = selectionSpan
+                ?? (string.IsNullOrWhiteSpace(request.SelectionText)
+                    ? null
+                    : (startPos, ParagraphEnd(xml, startPos, markers)));
+
+            var w = fallbackSpan is { } span
                 ? TeiPassageReader.ReadWindowAroundSelection(
                     xml, span.Start, span.End, budget,
                     request.IncludeFootnotes, request.OutputScript, markers,

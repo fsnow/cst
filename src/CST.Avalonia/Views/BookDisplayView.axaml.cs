@@ -298,36 +298,41 @@ public partial class BookDisplayView : UserControl
                     var text = sel ? sel.toString() : '';
                     var para = '';
                     if (sel && sel.rangeCount > 0 && text.length > 0) {
-                        var rect = sel.getRangeAt(0).getBoundingClientRect();
-                        var y = rect.top + window.pageYOffset;
-                        var cache = window.cstAnchorCache;
-                        if (cache && cache.isBuilt && cache.sortedParagraphAnchors
-                            && cache.sortedParagraphAnchors.length > 0) {
-                            var list = cache.sortedParagraphAnchors;
-                            var best = null;
-                            for (var i = 0; i < list.length; i++) {
-                                if (list[i].position <= y) best = list[i];
-                                else break;
+                        // DOCUMENT ORDER, not geometry. Comparing the selection's pixel top against an
+                        // anchor's was a race between an empty inline <a> box and a text line, with the
+                        // anchor positions rounded when the cache was built -- so a selection at the very
+                        // start of a paragraph resolved to the PREVIOUS one. That is not a cosmetic
+                        // off-by-one: the previous paragraph can be in the previous sutta, and then the
+                        // search for the selection is walled off from it by that sutta's own boundary and
+                        // the window is built in the wrong section entirely.
+                        var startNode = sel.getRangeAt(0).startContainer;
+                        var anchors = document.querySelectorAll('a[name]');
+                        var best = null;
+                        for (var i = 0; i < anchors.length; i++) {
+                            var a = anchors[i];
+                            if (!a.name || a.name.indexOf('para') !== 0) continue;
+                            var rel = a.compareDocumentPosition(startNode);
+                            // The selection's node comes after this anchor, so the anchor precedes it.
+                            if (rel === 0 || (rel & Node.DOCUMENT_POSITION_FOLLOWING)) best = a;
+                            // querySelectorAll returns document order: once one stops preceding, so do the rest.
+                            else break;
+                        }
+                        if (!best && anchors.length > 0) {
+                            for (var j = 0; j < anchors.length; j++) {
+                                if (anchors[j].name && anchors[j].name.indexOf('para') === 0) { best = anchors[j]; break; }
                             }
-                            // Above the first marker (front matter, a heading): the first paragraph, not
-                            // nothing — the same gap getCurrentParagraph resolves this way.
-                            if (!best) best = list[0];
+                        }
 
-                            // Anchor names are not plain numbers. They carry a book-code suffix in Multi
-                            // volumes (para548_dn1) and the printed number can itself be a range
-                            // (para548-9). Stripping only the prefix produced '548_dn1', which is not an
-                            // integer, so the paragraph arrived empty on EVERY request and the window fell
-                            // back to the scroll position. Derived the same way getCurrentParagraph does,
-                            // then reduced to the opening number, which is the paragraph the selection is in.
-                            var name = best.name || '';
-                            if (name.indexOf('para') === 0) {
-                                var t = name.substring(4);
-                                var underscore = t.indexOf('_');
-                                if (underscore !== -1) t = t.substring(0, underscore);
-                                var dash = t.indexOf('-');
-                                if (dash !== -1) t = t.substring(0, dash);
-                                para = t;
-                            }
+                        // Anchor names are not plain numbers: a book-code suffix in Multi volumes
+                        // (para548_dn1) and the printed number can be a range (para548-9).
+                        var name = best ? (best.name || '') : '';
+                        if (name.indexOf('para') === 0) {
+                            var t = name.substring(4);
+                            var underscore = t.indexOf('_');
+                            if (underscore !== -1) t = t.substring(0, underscore);
+                            var dash = t.indexOf('-');
+                            if (dash !== -1) t = t.substring(0, dash);
+                            para = t;
                         }
                     }
                     document.title = 'CST_AI_SEL:' + encodeURIComponent(text) + '|PARA=' + para + '|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);

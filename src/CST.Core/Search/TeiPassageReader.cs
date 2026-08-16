@@ -261,9 +261,22 @@ namespace CST.Search
 
             for (int anchor = from; anchor < to; anchor++)
             {
-                // A match must BEGIN on a letter. Starting anywhere else lets the skip rules below consume
-                // markup and punctuation before the first real character, so the span comes back beginning
-                // at a tag bracket rather than at the reader's first word.
+                // Tags are jumped WHOLE when looking for somewhere to start. Testing only the character
+                // meant an anchor could land inside a tag and match its attribute text: a selection opening
+                // "331." matched the n="331" of the paragraph's own <p> element, reporting a span that began
+                // inside markup. Attribute values are not text the reader can select and must never be
+                // matchable.
+                if (xml[anchor] == '<')
+                {
+                    int close = xml.IndexOf('>', anchor);
+                    if (close < 0 || close >= to) break;
+                    anchor = close;
+                    continue;
+                }
+
+                // A match must BEGIN on a letter, digit or mark. Starting anywhere else lets the skip rules
+                // below consume punctuation before the first real character, so the span comes back opening
+                // on something the reader did not select.
                 if (!IsSignificant(xml[anchor])) continue;
 
                 int matched = 0, i = anchor, lastConsumed = anchor;
