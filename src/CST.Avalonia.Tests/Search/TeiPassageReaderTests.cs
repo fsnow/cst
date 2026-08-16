@@ -527,6 +527,48 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
+        public void A_selection_opening_a_section_never_draws_context_from_the_one_before()
+        {
+            // The reported case. The selection was the first sentence of the first paragraph of a sutta, and
+            // the context reached back into the previous sutta -- rule 4, "do not cross a div boundary,
+            // because that gets into a different section/sutta/book".
+            const string twoSuttas =
+                "<body><div id=\"b\" type=\"book\">" +
+                "<div id=\"s1\" type=\"sutta\"><p rend=\"bodytext\" n=\"330\">" +
+                "old one\u0964 old two\u0964 old three\u0964 old four\u0964</p></div>" +
+                "<div id=\"s2\" type=\"sutta\"><p rend=\"bodytext\" n=\"331\">" +
+                "opening line\u0964 second line\u0964 third line\u0964</p></div>" +
+                "</div></body>";
+            var markers = BookMarkers.Build(twoSuttas);
+            var (from, to) = Span(twoSuttas, "opening line");
+
+            var window = TeiPassageReader.ReadWindowAroundSelection(
+                twoSuttas, from, to, maxChars: 400, includeVariants: false,
+                outputScript: Script.Devanagari, markers);
+
+            Assert.Contains("opening line", window.Text);
+            Assert.Contains("third line", window.Text);      // the unspendable backward half goes forward
+            Assert.DoesNotContain("old four", window.Text);  // and never back across the boundary
+            Assert.DoesNotContain("old one", window.Text);
+        }
+
+        [Fact]
+        public void Attribute_text_is_never_matchable()
+        {
+            // A selection opening "331." matched the n="331" of the paragraph's own <p> element and returned
+            // a span beginning inside markup. The needle here appears ONLY inside an attribute, so a match of
+            // any kind proves the scanner is reading markup as text.
+            const string xml =
+                "<body><p rend=\"bodytext\" n=\"331\">alpha bravo\u0964</p></body>";
+
+            Assert.Null(TeiPassageReader.LocateSelection(xml, 0, xml.Length, "bodytext"));
+            Assert.Null(TeiPassageReader.LocateSelection(xml, 0, xml.Length, "331"));
+
+            // And real text is still found.
+            Assert.NotNull(TeiPassageReader.LocateSelection(xml, 0, xml.Length, "alpha bravo"));
+        }
+
+        [Fact]
         public void Punctuation_cannot_stop_a_selection_being_located()
         {
             // The reported failure, in miniature. The reader renders through a path that turns the danda into
