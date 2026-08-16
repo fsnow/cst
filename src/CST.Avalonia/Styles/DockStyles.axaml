@@ -51,7 +51,7 @@
         <Setter Property="Margin" Value="0"/>
     </Style>
 
-    <!-- #270: unify the tool-pane tabs (Search / Select a Book) with the book (document) tabs.
+    <!-- #270: unify the tool-pane tabs (Search / Open a Book) with the book (document) tabs.
          The stock ToolTabStripItem theme signals "selected" with a NEUTRAL fill and merely tints
          the tab TEXT accent-colored, whereas DocumentTabStripItem signals it with an accent-FILLED
          tab (accent background + accent-contrast text), dimming to grey only when the tab's dock

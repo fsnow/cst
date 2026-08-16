@@ -715,6 +715,18 @@ public class BookTreeNode : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Expands every ancestor of this node, so its TreeViewItem container can be realised. Fluent binds
+    /// <c>PART_ItemsPresenter</c> to <c>IsExpanded</c>, so a node inside a collapsed branch has no container
+    /// at all — nothing to focus, scroll to, or highlight. Ancestors only: expanding the node itself would
+    /// open a category the user had deliberately closed. (#646)
+    /// </summary>
+    public void ExpandAncestors()
+    {
+        for (var ancestor = Parent; ancestor != null; ancestor = ancestor.Parent)
+            ancestor.IsExpanded = true;
+    }
+
     // Computed properties
     public bool HasChildren => Children.Count > 0;
     public bool IsCategory => NodeType == BookTreeNodeType.Category;
