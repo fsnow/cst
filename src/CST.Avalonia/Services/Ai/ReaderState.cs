@@ -118,6 +118,17 @@ public sealed class ReaderStateService : IReaderStateService
         ct.ThrowIfCancellationRequested();
 
         var (selection, unavailable, selectionParagraph) = await ReadSelectionAsync(document);
+
+        // Logged at Information because the difference between these two numbers is the whole of #649: the
+        // scroll paragraph is where the viewport is, the selection paragraph is where the reader pointed, and
+        // a context built from the first is the defect. If they differ and the window still follows the
+        // scroll, the anchor is not arriving.
+        _logger.LogInformation(
+            "Reader state: scroll paragraph {ScrollPara}, selection paragraph {SelectionPara}, " +
+            "selection {Length} char(s), unavailable {Unavailable}",
+            result.State.Paragraph, selectionParagraph?.ToString() ?? "(none)",
+            selection?.Length ?? 0, unavailable);
+
         return ReaderStateResult.Ok(
             result.State with
             {

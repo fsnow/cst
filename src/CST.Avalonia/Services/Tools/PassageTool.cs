@@ -96,6 +96,13 @@ namespace CST.Avalonia.Services.Tools
             // could centre the window on a different occurrence entirely and caption it confidently.
             var selectionSpan = LocateSelection(xml, startPos, markers, request.SelectionText);
 
+            if (!string.IsNullOrWhiteSpace(request.SelectionText))
+            {
+                Serilog.Log.Information(
+                    "Passage: reference resolved to {StartPos}; selection {Located} in the XML",
+                    startPos, selectionSpan is null ? "NOT located" : $"located at {selectionSpan.Value.Start}");
+            }
+
             var w = selectionSpan is { } span
                 ? TeiPassageReader.ReadWindowAroundSelection(
                     xml, span.Start, span.End, budget,

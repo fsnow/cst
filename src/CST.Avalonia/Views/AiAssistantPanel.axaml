@@ -199,6 +199,56 @@
                                         HorizontalAlignment="Left"
                                         Margin="0,2,0,0"/>
 
+                                <!-- Everything that was sent. Collapsed, like the notices, because it is
+                                     reference material rather than part of the answer — but where the
+                                     notices say what was DEGRADED, this says what was SENT, which is the
+                                     question a reader actually has when an answer surprises them. It was
+                                     previously visible only at Debug level in a log file.
+
+                                     Selectable throughout: the point of showing it is to be able to take it
+                                     somewhere else and compare. -->
+                                <Expander Header="{Binding SentHeader}"
+                                          IsVisible="{Binding HasSent}"
+                                          FontSize="11"
+                                          Margin="0,4,0,0">
+                                    <StackPanel Spacing="8">
+                                        <ItemsControl ItemsSource="{Binding Sent.Fields}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="ai:SentField">
+                                                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,2">
+                                                        <SelectableTextBlock Grid.Column="0"
+                                                                             Text="{Binding Name}"
+                                                                             FontSize="11"
+                                                                             FontWeight="SemiBold"
+                                                                             MinWidth="120"
+                                                                             Margin="0,0,8,0"/>
+                                                        <SelectableTextBlock Grid.Column="1"
+                                                                             Text="{Binding Value}"
+                                                                             FontSize="11"
+                                                                             TextWrapping="Wrap"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- No inner scrollers. The transcript already scrolls, and a
+                                             scroller inside a scroller means the reader fights one to reach
+                                             the other; the point of this block is to read the whole context,
+                                             so it is simply as long as it is. -->
+                                        <TextBlock Text="System prompt" FontSize="11" FontWeight="SemiBold"/>
+                                        <SelectableTextBlock Text="{Binding Sent.SystemPrompt}"
+                                                             TextWrapping="Wrap"
+                                                             FontSize="11"
+                                                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                                        <TextBlock Text="Message sent" FontSize="11" FontWeight="SemiBold"/>
+                                        <SelectableTextBlock Text="{Binding Sent.UserContent}"
+                                                             TextWrapping="Wrap"
+                                                             FontSize="11"
+                                                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </Expander>
+
                                 <!-- The model thinking aloud: offered, collapsed, and never part of the
                                      answer. Its ARRIVAL is what distinguishes a slow request from a dead
                                      one, which is why it is no longer discarded. -->
@@ -313,59 +363,6 @@
                                     </ItemsControl>
                                 </Expander>
 
-                                <!-- Everything that was sent. Collapsed, like the notices, because it is
-                                     reference material rather than part of the answer — but where the
-                                     notices say what was DEGRADED, this says what was SENT, which is the
-                                     question a reader actually has when an answer surprises them. It was
-                                     previously visible only at Debug level in a log file.
-
-                                     Selectable throughout: the point of showing it is to be able to take it
-                                     somewhere else and compare. -->
-                                <Expander Header="{Binding SentHeader}"
-                                          IsVisible="{Binding HasSent}"
-                                          FontSize="11"
-                                          Margin="0,4,0,0">
-                                    <StackPanel Spacing="8">
-                                        <ItemsControl ItemsSource="{Binding Sent.Fields}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="ai:SentField">
-                                                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,2">
-                                                        <SelectableTextBlock Grid.Column="0"
-                                                                             Text="{Binding Name}"
-                                                                             FontSize="11"
-                                                                             FontWeight="SemiBold"
-                                                                             MinWidth="120"
-                                                                             Margin="0,0,8,0"/>
-                                                        <SelectableTextBlock Grid.Column="1"
-                                                                             Text="{Binding Value}"
-                                                                             FontSize="11"
-                                                                             TextWrapping="Wrap"/>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-
-                                        <TextBlock Text="System prompt" FontSize="11" FontWeight="SemiBold"/>
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                      MaxHeight="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).ReasoningMaxHeight}">
-                                            <SelectableTextBlock Text="{Binding Sent.SystemPrompt}"
-                                                                 TextWrapping="Wrap"
-                                                                 FontSize="11"
-                                                                 Margin="0,0,10,0"
-                                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                        </ScrollViewer>
-
-                                        <TextBlock Text="Message sent" FontSize="11" FontWeight="SemiBold"/>
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                      MaxHeight="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).ReasoningMaxHeight}">
-                                            <SelectableTextBlock Text="{Binding Sent.UserContent}"
-                                                                 TextWrapping="Wrap"
-                                                                 FontSize="11"
-                                                                 Margin="0,0,10,0"
-                                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                        </ScrollViewer>
-                                    </StackPanel>
-                                </Expander>
 
                                 <!-- What the turn cost, in time and tokens. The user is paying for both. -->
                                 <TextBlock Text="{Binding Footer}"
