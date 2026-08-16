@@ -51,25 +51,50 @@
                                     <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
                                     <Setter Property="Background" Value="Transparent"/>
                                 </Style>
-                                <!-- Remove selection highlighting -->
-                                <Style Selector="TreeViewItem:selected">
-                                    <Setter Property="Background" Value="Transparent"/>
+                                <!-- #646: the selected book is visible again. It used to be painted away —
+                                     selection AND focus, at the item, its template ContentPresenter and its
+                                     template Border — which left the tree with no "you are here" at all.
+                                     Survivable only while the tree opened scrolled to the remembered book;
+                                     #644 stopped that, so ⌘O became the one route back and it landed on a
+                                     node the reader could not identify before pressing Enter on it.
+
+                                     Colours follow the convention #270 established: Dock's FIXED VS-Code
+                                     blue, not the OS accent, so "selected" reads the same here as on the
+                                     book/tool tabs and in the Settings category list whatever accent the OS
+                                     is set to. (The Settings list also records that
+                                     SubtleFillColorSecondaryBrush was too faint to see in light mode.)
+
+                                     Fluent paints TreeViewItem selection on Border#PART_LayoutRoot and
+                                     colours the text through ContentPresenter#PART_HeaderPresenter. What
+                                     keeps the accent off nested children is /template/ itself: it matches
+                                     only controls whose TemplatedParent is THIS item, so a child book's own
+                                     header is out of reach. (A plain "TreeViewItem:selected TextBlock" would
+                                     not be — a child TreeViewItem is a visual descendant of its parent, so
+                                     that would recolour every book under a selected category.)
+
+                                     Do NOT write "Border#PART_LayoutRoot > ContentPresenter#PART_Header-
+                                     Presenter", however tidy it reads: Avalonia's > matches on LOGICAL
+                                     parent, and the header presenter's logical parent is Grid#PART_Header,
+                                     not the border. That selector matches nothing and fails silently.
+                                     Fluent's own foreground rules are written that way and are dead
+                                     upstream for the same reason, which is exactly how it gets copied. -->
+                                <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+                                    <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
                                 </Style>
-                                <Style Selector="TreeViewItem:selected /template/ ContentPresenter">
-                                    <Setter Property="Background" Value="Transparent"/>
+                                <!-- :pointerover goes on the BORDER, as Fluent scopes it, not on the item.
+                                     IsPointerOver is containment-based, so an item is "hovered" whenever the
+                                     pointer is anywhere in its subtree — on the item, hovering a book would
+                                     light up its selected parent category two rows away. -->
+                                <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot:pointerover">
+                                    <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushMed}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource DockApplicationAccentBrushMed}"/>
                                 </Style>
-                                <Style Selector="TreeViewItem:selected /template/ Border">
-                                    <Setter Property="Background" Value="Transparent"/>
-                                </Style>
-                                <!-- Also handle focused states -->
-                                <Style Selector="TreeViewItem:focused">
-                                    <Setter Property="Background" Value="Transparent"/>
-                                </Style>
-                                <Style Selector="TreeViewItem:focused /template/ ContentPresenter">
-                                    <Setter Property="Background" Value="Transparent"/>
-                                </Style>
-                                <Style Selector="TreeViewItem:focused /template/ Border">
-                                    <Setter Property="Background" Value="Transparent"/>
+                                <!-- Foreground is inherited, so this reaches the node's own label (and the
+                                     book count, which is dimmed with Opacity rather than a fixed brush so it
+                                     stays legible on the accent fill). -->
+                                <Style Selector="TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter">
+                                    <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
                                 </Style>
                             </TreeView.Styles>
                             <TreeView.DataTemplates>
@@ -110,11 +135,15 @@
                                                    converters:FontHelper.DynamicFontFamily="{Binding $parent[UserControl].DataContext.CurrentScriptFontFamily}"
                                                    converters:FontHelper.DynamicFontSize="{Binding $parent[UserControl].DataContext.CurrentScriptFontSize}"/>
                                         <!-- Book count for categories -->
+                                        <!-- Dimmed with Opacity rather than a fixed secondary brush: on a
+                                             selected node the row is accent-filled, and a fixed grey would
+                                             sit unreadably on it. Opacity rides whatever Foreground the
+                                             row inherits. (#646) -->
                                         <TextBlock Text="{Binding BookCount, StringFormat=(\{0\})}"
                                                    Margin="3,0,0,0"
                                                    VerticalAlignment="Center"
                                                    FontSize="9"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Opacity="0.7"
                                                    IsVisible="{Binding IsCategory}"/>
                                     </StackPanel>
                                 </TreeDataTemplate>

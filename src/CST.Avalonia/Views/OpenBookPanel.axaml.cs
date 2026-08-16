@@ -41,6 +41,13 @@ public partial class OpenBookPanel : UserControl
         if (tree.SelectedItem == null && DataContext is OpenBookDialogViewModel { BookTree.Count: > 0 } viewModel)
             tree.SelectedItem = viewModel.BookTree[0];
 
+        // Open the way to the selection before looking for its container. The remembered book can sit under
+        // a branch that was collapsed when state was saved, and Fluent realises no container inside a
+        // collapsed branch — so every retry below would miss and Cmd+O would fall back to focusing the
+        // TreeView: no scroll, no highlight, nothing visibly happening at all. (#646)
+        if (tree.SelectedItem is BookTreeNode selected)
+            selected.ExpandAncestors();
+
         FocusSelectedTreeItem(tree, attemptsLeft: 5);
     }
 

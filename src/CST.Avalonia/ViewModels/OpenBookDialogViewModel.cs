@@ -700,6 +700,13 @@ public class BookTreeNode : INotifyPropertyChanged
         get => _isExpanded;
         set
         {
+            // Guarded: every raise costs a full-tree CollectExpandedKeys walk plus a StateChanged broadcast
+            // (OpenBookDialogViewModel.OnNodeExpansionChanged). The TreeViewItem's TwoWay binding and
+            // ExpandAncestors both write the value they already hold, so an unguarded setter turns one
+            // Cmd+O into a save per ancestor. (#646)
+            if (_isExpanded == value)
+                return;
+
             _isExpanded = value;
             OnPropertyChanged();
         }
@@ -713,6 +720,18 @@ public class BookTreeNode : INotifyPropertyChanged
             _isSelected = value;
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>
+    /// Expands every ancestor of this node, so its TreeViewItem container can be realised. Fluent binds
+    /// <c>PART_ItemsPresenter</c> to <c>IsExpanded</c>, so a node inside a collapsed branch has no container
+    /// at all — nothing to focus, scroll to, or highlight. Ancestors only: expanding the node itself would
+    /// open a category the user had deliberately closed. (#646)
+    /// </summary>
+    public void ExpandAncestors()
+    {
+        for (var ancestor = Parent; ancestor != null; ancestor = ancestor.Parent)
+            ancestor.IsExpanded = true;
     }
 
     // Computed properties
