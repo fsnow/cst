@@ -19,8 +19,34 @@ namespace CST.Search
 
         internal static bool IsBoundary(char c) => c == Danda || c == DoubleDanda;
 
-        internal static string Convert(string deva, Script output) =>
-            deva.Length == 0 ? "" : ScriptConverter.Convert(deva, Script.Devanagari, output);
+        internal static string Convert(string deva, Script output)
+        {
+            if (deva.Length == 0) return "";
+
+            var converted = ScriptConverter.Convert(deva, Script.Devanagari, output);
+
+            // Latin output must not carry Devanagari sentence punctuation. (#668)
+            //
+            // There are two Latin paths and they disagreed. The READER renders through
+            // ScriptConverter.ConvertBook, which runs Deva2Latn.ConvertDandas and turns U+0964 into a period;
+            // everything here goes through ScriptConverter.Convert, which does not, because the danda rules
+            // are written against MARKUP (they distinguish gatha from prose, and strip the dandas around
+            // namo tassa) and this text has had its tags removed by the time it arrives.
+            //
+            // So a reader selected text containing "." and the passage sent to the model contained "।" — the
+            // same characters to a human, different ones to a comparison. That mismatch is why a selection
+            // could not be located in its own passage, and why dandas showed up in the context a reader was
+            // shown. #641 folded punctuation out of ONE comparison to work around it; this removes the
+            // divergence instead.
+            //
+            // The gatha nuance (a single danda becomes ";" mid-verse) is not recoverable here and is not
+            // pretended at: without the markup there is no way to know a line is verse. A period is what the
+            // reader sees for prose, which is the overwhelming majority of what is sent.
+            if (output == Script.Latin)
+                converted = converted.Replace("\u0964", ".").Replace("\u0965", ".");
+
+            return converted;
+        }
 
         internal static string Collapse(string s) => Whitespace.Replace(s, " ");
 
