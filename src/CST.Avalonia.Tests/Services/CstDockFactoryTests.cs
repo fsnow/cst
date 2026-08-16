@@ -285,6 +285,55 @@ public class CstDockFactoryTests
     }
 
     [Fact]
+    public void A_recreated_assistant_column_gets_a_real_share_of_the_window()
+    {
+        // Reported: reopening it from the View menu brought it back about a quarter of an inch wide -- worse
+        // than not coming back, since a reader who did not know to drag it would think the menu had failed.
+        //
+        // Closing empties the ToolDock, the cleanup pass collapses the wrapper and its splitter, and what is
+        // left no longer sums to one -- so the framework rebalances around it. Re-inserting a dock that says
+        // 0.18 into a row that has already been rebalanced gives it 18% of nothing in particular. The whole
+        // row has to be restated, which is what this asserts.
+        var f = new CstDockFactory();
+        // The drifted state a hide leaves behind: two columns sharing the whole window between them.
+        var doc = new DocumentDock { Id = "MainDocumentDock", Proportion = 0.75, VisibleDockables = List() };
+        var leftTools = new ProportionalDock { Id = "LeftTools", Proportion = 0.25, VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(leftTools, doc) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+
+        f.EnsureRightToolDock();
+
+        var assistant = mainDock.VisibleDockables!.First(d => d.Id == "RightTools");
+        Assert.True(assistant.Proportion > 0.1, $"came back at {assistant.Proportion}");
+
+        // And the row adds up, so nothing is left for the framework to guess about.
+        var total = leftTools.Proportion + doc.Proportion + assistant.Proportion;
+        Assert.Equal(1.0, total, 3);
+    }
+
+    [Fact]
+    public void Hiding_the_assistant_hands_its_width_to_the_documents()
+    {
+        var f = new CstDockFactory();
+        var doc = new DocumentDock { Id = "MainDocumentDock", Proportion = 0.57, VisibleDockables = List() };
+        var leftTools = new ProportionalDock { Id = "LeftTools", Proportion = 0.25, VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(leftTools, doc) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+
+        // The assistant is already gone, as it is by the time the hide path rebalances.
+        f.RebalanceMainDock();
+
+        Assert.Equal(0.75, doc.Proportion, 3);
+        Assert.Equal(1.0, leftTools.Proportion + doc.Proportion, 3);
+    }
+
+    [Fact]
     public void The_assistant_opens_narrower_than_the_documents()
     {
         // Reported: "the default width of the Assistant is too wide — often wider than the book area". Split

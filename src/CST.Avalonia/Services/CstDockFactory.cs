@@ -1721,6 +1721,20 @@ namespace CST.Avalonia.Services
             InitDockable(rightTools, _mainDock);
             InitDockable(rightToolDock, rightTools);
 
+            // A recreated column comes back a quarter of an inch wide without this, which is worse than not
+            // coming back at all: a reader who did not know to drag it would think the menu item had failed.
+            //
+            // Closing the panel empties its ToolDock, and the cleanup pass then collapses the wrapper and its
+            // splitter — so what is left in MainDock no longer sums to one, and the framework rebalances
+            // around it. Re-inserting a dock with a Proportion of 0.18 into a MainDock that has already been
+            // rebalanced does not give it 18% of anything. So the whole row is restated, not just the new
+            // member, and restated again after layout has run, because the framework recomputes proportions
+            // on its own schedule and the last writer wins.
+            _mainDockAssistantProportion = AssistantProportion;
+            ApplyMainDockProportions();
+            Dispatcher.UIThread.Post(ApplyMainDockProportions, DispatcherPriority.Render);
+            Dispatcher.UIThread.Post(ApplyMainDockProportions, DispatcherPriority.Loaded);
+
             return rightToolDock;
         }
         
@@ -3108,6 +3122,56 @@ namespace CST.Avalonia.Services
         /// Capture the current main dock proportions before adding documents
         /// This preserves any user adjustments to the splitter position
         /// </summary>
+        /// <summary>
+        /// State the whole MainDock row at once — tools, documents, assistant — so the three always sum to
+        /// one. Unconditional, unlike <see cref="RestoreMainDockProportionsImpl"/>, which only acts when it
+        /// sees drift: after a column has been removed and rebuilt there is nothing to compare against, and
+        /// the values that need writing are frequently the ones already stored.
+        /// </summary>
+        private void ApplyMainDockProportions()
+        {
+            try
+            {
+                if (_mainDock?.VisibleDockables == null) return;
+
+                var left = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
+                           ?? _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
+                var documents = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
+                var assistant = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightTools")
+                                ?? _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightToolDock");
+
+                // Only the columns actually present get a share, so hiding one hands its width to the
+                // documents rather than leaving a gap the framework has to guess about.
+                var leftShare = left != null ? _mainDockLeftProportion : 0;
+                var assistantShare = assistant != null ? _mainDockAssistantProportion : 0;
+
+                if (left != null) left.Proportion = leftShare;
+                if (assistant != null) assistant.Proportion = assistantShare;
+                if (documents != null) documents.Proportion = 1.0 - leftShare - assistantShare;
+
+                _mainDockRightProportion = 1.0 - leftShare - assistantShare;
+
+                Log.Debug("*** ApplyMainDockProportions: left={Left:F3}, documents={Docs:F3}, assistant={Assistant:F3} ***",
+                    leftShare, 1.0 - leftShare - assistantShare, assistantShare);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "*** Error in ApplyMainDockProportions ***");
+            }
+        }
+
+        /// <summary>
+        /// Restate the column widths after a panel has been shown or hidden. The hide side matters as much as
+        /// the show side: without it the closed column's width is left unclaimed and the framework decides
+        /// what to do with it.
+        /// </summary>
+        internal void RebalanceMainDock()
+        {
+            ApplyMainDockProportions();
+            Dispatcher.UIThread.Post(ApplyMainDockProportions, DispatcherPriority.Render);
+            Dispatcher.UIThread.Post(ApplyMainDockProportions, DispatcherPriority.Loaded);
+        }
+
         private void CaptureMainDockProportions()
         {
             try
