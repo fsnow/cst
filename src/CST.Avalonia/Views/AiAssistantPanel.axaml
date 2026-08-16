@@ -51,14 +51,24 @@
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
 
+                <!-- Enter sends the question, which is what makes the box a question box rather than a
+                     modifier on whichever preset gets pressed next. -->
                 <TextBox Text="{Binding Question}"
-                         Watermark="Ask something about the passage (optional)"
+                         Watermark="Ask about the passage, or pick a preset below"
                          AcceptsReturn="False"
                          MaxHeight="90"
                          TextWrapping="Wrap"
-                         IsEnabled="{Binding CanAsk}"/>
+                         IsEnabled="{Binding CanAsk}">
+                    <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding AskQuestionCommand}"/>
+                    </TextBox.KeyBindings>
+                </TextBox>
 
                 <WrapPanel Orientation="Horizontal">
+                    <!-- First, and disabled until something is typed: the other four are complete without a
+                         question, and this one IS the question. -->
+                    <Button Content="Ask" Command="{Binding AskQuestionCommand}"
+                            IsEnabled="{Binding CanAskQuestion}" Margin="0,0,10,4"/>
                     <Button Content="Explain" Command="{Binding ExplainCommand}"
                             IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"/>
                     <Button Content="Translate" Command="{Binding TranslateCommand}"

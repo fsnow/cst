@@ -527,6 +527,40 @@ public class AiAssistantViewModelTests
     }
 
     [Fact]
+    public void Ask_is_offered_only_when_there_is_a_question_to_send()
+    {
+        // The four presets are complete without a question; this one IS the question, so an empty box means
+        // there is nothing to ask. Enter is bound to the same command, so the guard covers both.
+        var vm = new AiAssistantViewModel(new StubOrchestrator(), new StubReaderState(), null, null);
+
+        Assert.False(vm.CanAskQuestion);
+
+        vm.Question = "   ";
+        Assert.False(vm.CanAskQuestion);
+
+        vm.Question = "what governs bhavissanti?";
+        Assert.True(vm.CanAskQuestion);
+    }
+
+    [Fact]
+    public async Task An_asked_question_is_its_own_task_rather_than_a_rider_on_Explain()
+    {
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null)
+        {
+            Question = "what governs bhavissanti?",
+        };
+        await vm.AskAsync(AiTask.Ask);
+
+        Assert.Equal(AiTask.Ask, orchestrator.LastRequest!.Task);
+        Assert.Equal("what governs bhavissanti?", orchestrator.LastRequest!.UserQuestion);
+        Assert.Equal("Question", vm.LastTurn!.PresetLabel);
+    }
+
+    [Fact]
     public async Task Asking_moves_the_question_out_of_the_box_and_into_the_turn()
     {
         // The box kept the question after the answer arrived, so the next preset silently re-sent it. It

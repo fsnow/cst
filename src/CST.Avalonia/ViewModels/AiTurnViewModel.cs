@@ -44,6 +44,7 @@ public sealed class AiTurnViewModel : ReactiveObject
         AiTask.Translate => "Translate",
         AiTask.Grammar => "Grammar",
         AiTask.WordByWord => "Word by word",
+        AiTask.Ask => "Question",
         _ => task.ToString(),
     };
 
