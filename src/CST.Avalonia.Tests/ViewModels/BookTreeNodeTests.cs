@@ -94,4 +94,23 @@ public class BookTreeNodeTests
 
         Assert.Equal(1, raised);
     }
+
+    [Fact]
+    public void ExpandAncestors_OnAnAlreadyOpenBranchRaisesNothing()
+    {
+        // Cmd+O is pressed repeatedly, and every raise costs a full-tree key walk plus a state broadcast.
+        // Re-revealing a book that is already visible must be free.
+        var root = Node("Tika");
+        var nikaya = AddChild(root, Node("Anguttara"));
+        var book = AddChild(nikaya, Node("A book", BookTreeNodeType.Book));
+        book.ExpandAncestors();
+
+        var raised = 0;
+        root.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(BookTreeNode.IsExpanded)) raised++; };
+        nikaya.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(BookTreeNode.IsExpanded)) raised++; };
+
+        book.ExpandAncestors();
+
+        Assert.Equal(0, raised);
+    }
 }
