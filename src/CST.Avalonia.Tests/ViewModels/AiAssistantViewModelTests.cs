@@ -672,22 +672,22 @@ public class AiAssistantViewModelTests
     }
 
     [Fact]
-    public void The_reasoning_panel_height_is_shared_and_cannot_be_dragged_to_nothing()
+    public void The_reasoning_ceiling_is_shared_and_cannot_be_dragged_to_nothing()
     {
         // The control this replaces could only SHRINK, with no floor and no way back: in Avalonia 11.3.6 a
         // GridSplitter as the last row computes a maximum delta of exactly zero, so it could never grow the
         // panel it existed to grow.
         var vm = new AiAssistantViewModel(null, null, null, null);
-        var start = vm.ReasoningHeight;
+        var start = vm.ReasoningMaxHeight;
 
         vm.ResizeReasoning(120);
-        Assert.Equal(start + 120, vm.ReasoningHeight);
+        Assert.Equal(start + 120, vm.ReasoningMaxHeight);
 
         vm.ResizeReasoning(-100000);
-        Assert.True(vm.ReasoningHeight >= 60, $"dragged away to {vm.ReasoningHeight}");
+        Assert.True(vm.ReasoningMaxHeight >= 60, $"dragged away to {vm.ReasoningMaxHeight}");
 
         vm.ResizeReasoning(100000);
-        Assert.True(vm.ReasoningHeight <= 1200);
+        Assert.True(vm.ReasoningMaxHeight <= 1200);
     }
 
     [Fact]

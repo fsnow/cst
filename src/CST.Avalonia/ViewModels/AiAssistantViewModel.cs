@@ -126,10 +126,14 @@ public class AiAssistantViewModel : ReactiveTool
     public ReactiveCommand<AiTurnViewModel, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
 
-    private double _reasoningHeight = 240;
+    private double _reasoningMaxHeight = 240;
 
     /// <summary>
-    /// How tall the reasoning panel is, shared by every turn and dragged by the handle under it.
+    /// The MOST reasoning shown at once, shared by every turn and dragged by the handle under it.
+    ///
+    /// <para><b>A ceiling, not a height.</b> Bound as one, a short reasoning got a box twice its size and the
+    /// empty remainder pushed the answer down for nothing. As a maximum the box takes the height its text
+    /// needs and starts scrolling only once there is more than the reader asked to see.</para>
     ///
     /// <para>Shared rather than per-turn: a reader who has decided how much reasoning they want to see has
     /// decided it for the session, not for one answer. An earlier attempt used a GridSplitter per turn, on
@@ -137,14 +141,14 @@ public class AiAssistantViewModel : ReactiveTool
     /// because the ScrollViewer whose height actually matters is an ordinary control that binds like any
     /// other.</para>
     /// </summary>
-    public double ReasoningHeight
+    public double ReasoningMaxHeight
     {
-        get => _reasoningHeight;
-        set => this.RaiseAndSetIfChanged(ref _reasoningHeight, Math.Clamp(value, 60, 1200));
+        get => _reasoningMaxHeight;
+        set => this.RaiseAndSetIfChanged(ref _reasoningMaxHeight, Math.Clamp(value, 60, 1200));
     }
 
-    /// <summary>Drag the reasoning panel taller or shorter. Clamped, so it cannot be dragged to nothing.</summary>
-    public void ResizeReasoning(double delta) => ReasoningHeight += delta;
+    /// <summary>Drag the ceiling up or down. Clamped, so it cannot be dragged away to nothing.</summary>
+    public void ResizeReasoning(double delta) => ReasoningMaxHeight += delta;
 
     /// <summary>Every turn this session, oldest first. The panel scrolls; this is what it scrolls.</summary>
     public ObservableCollection<AiTurnViewModel> Turns { get; } = new();

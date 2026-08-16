@@ -203,8 +203,12 @@
                                          all, only shrink it, with no floor and no way back. Verified in the
                                          framework source, not assumed. -->
                                     <StackPanel>
+                                        <!-- MaxHeight, not Height: a short reasoning otherwise got a box
+                                             twice its size, and the empty remainder pushed the answer down
+                                             for nothing. As a ceiling the box takes the height its text
+                                             needs and scrolls only past what the reader asked to see. -->
                                         <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                      Height="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).ReasoningHeight}">
+                                                      MaxHeight="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).ReasoningMaxHeight}">
                                             <!-- Its own right inset: this scroller has an overlay scrollbar
                                                  too, and reasoning is the longest unbroken text in the
                                                  panel, so it is where clipping shows first. -->
