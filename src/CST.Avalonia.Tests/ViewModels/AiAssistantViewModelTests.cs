@@ -76,6 +76,11 @@ public class AiAssistantViewModelTests
             new BookContext("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", CST.Pitaka.Sutta, CST.CommentaryLevel.Mula),
             notices, passageTrimmed);
 
+    private static AiTurnContext ContextWithSent(SentContext sent) =>
+        new(AiTask.Explain, "English", Citation(),
+            new BookContext("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", CST.Pitaka.Sutta, CST.CommentaryLevel.Mula),
+            Array.Empty<string>(), false, sent);
+
     // ---- Not configured, and other ordinary refusals ---------------------------------------------
 
     [Fact]
@@ -558,6 +563,45 @@ public class AiAssistantViewModelTests
         Assert.Equal(AiTask.Ask, orchestrator.LastRequest!.Task);
         Assert.Equal("what governs bhavissanti?", orchestrator.LastRequest!.UserQuestion);
         Assert.Equal("Question", vm.LastTurn!.PresetLabel);
+    }
+
+    [Fact]
+    public async Task A_turn_keeps_what_it_sent_so_a_reader_can_read_it()
+    {
+        // Until this existed, the prompt was visible only at Debug level in a log file -- so the question a
+        // reader most wants answered about a surprising answer, "what did it actually see?", could not be
+        // answered from inside the app.
+        var sent = new SentContext(
+            new[] { new SentField("Model", "claude-sonnet-4-5"), new SentField("Part: passage", "Included") },
+            "You are a Pāli reading assistant.",
+            "## Passage\n\nappamādo amatapadaṃ");
+
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(ContextWithSent(sent)));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.True(vm.LastTurn!.HasSent);
+        Assert.Equal("You are a Pāli reading assistant.", vm.LastTurn!.Sent!.SystemPrompt);
+        Assert.Contains("appamādo", vm.LastTurn!.Sent!.UserContent);
+        Assert.Contains(vm.LastTurn!.Sent!.Fields, f => f.Name == "Model" && f.Value == "claude-sonnet-4-5");
+    }
+
+    [Fact]
+    public async Task A_turn_that_sent_nothing_offers_nothing_to_read()
+    {
+        // The block is hidden rather than empty when a turn failed before it assembled a request: an empty
+        // "Context sent" would read as "nothing was sent", which is true but arrives as a defect.
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.False(vm.LastTurn!.HasSent);
     }
 
     [Fact]

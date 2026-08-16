@@ -504,4 +504,30 @@ public class AiChatOrchestratorTests
     {
         Orchestrator(new FakeProvider()).Stop();
     }
+
+    [Fact]
+    public async Task The_started_event_carries_what_was_actually_sent()
+    {
+        // Assembled in the orchestrator because it is the only place holding the bundle, the rendered prompt
+        // and the resolved provider at once -- so it is also the only place that can be wrong about them
+        // without anything noticing.
+        var events = await CollectAsync(Orchestrator(new FakeProvider()));
+
+        var started = events.First(e => e.Kind == AiTurnEventKind.Started);
+        var sent = started.Context!.Sent;
+
+        Assert.NotNull(sent);
+        Assert.False(string.IsNullOrWhiteSpace(sent!.SystemPrompt));
+        Assert.False(string.IsNullOrWhiteSpace(sent.UserContent));
+
+        // The named fields a reader needs to tell one turn from another.
+        Assert.Contains(sent.Fields, f => f.Name == "Model");
+        Assert.Contains(sent.Fields, f => f.Name == "Provider");
+        Assert.Contains(sent.Fields, f => f.Name == "Book");
+        Assert.Contains(sent.Fields, f => f.Name == "Estimated context");
+
+        // Including every gathered part, present or absent: an absence is as much a part of what was sent as
+        // a presence, and much harder to notice.
+        Assert.Contains(sent.Fields, f => f.Name.StartsWith("Part: "));
+    }
 }
