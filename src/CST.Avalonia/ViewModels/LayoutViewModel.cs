@@ -275,8 +275,13 @@ namespace CST.Avalonia.ViewModels
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
                 () => IsAssistantPanelVisible = true, "Assistant", right: true);
 
-        public void HideAssistantPanel() =>
+        public void HideAssistantPanel()
+        {
             HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "Assistant");
+
+            // Hand the freed width to the documents rather than leaving it unclaimed. (#656)
+            if (_factory is CstDockFactory factory) factory.RebalanceMainDock();
+        }
 
         // Recreate-on-demand so the View menu toggle and Cmd+D (Look Up in Dictionary) can reopen a closed
         // pane — LookUpInDictionaryAsync calls this then immediately proceeds, so it must stay synchronous. (#466)
