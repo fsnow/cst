@@ -95,7 +95,11 @@ public class AiAssistantViewModel : ReactiveTool
         GrammarCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.Grammar));
         WordByWordCommand = ReactiveCommand.CreateFromTask(() => AskAsync(AiTask.WordByWord));
         StopCommand = ReactiveCommand.Create(Stop);
-        RetryCommand = ReactiveCommand.CreateFromTask(RetryAsync);
+        // No canExecute observable: WhenAnyValue needs ReactiveUI's builder initialised, which a plain
+        // unit-test host does not do. The button binds IsEnabled to CanAsk instead, and a click that slips
+        // through while a turn runs is harmless — AskAsync's guard returns without touching anything, now
+        // that Retry no longer writes to the question box.
+        RetryCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel?>(RetryAsync);
         CopyCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel>(CopyAsync);
         ClearCommand = ReactiveCommand.Create(Clear);
     }
@@ -105,12 +109,32 @@ public class AiAssistantViewModel : ReactiveTool
     public ReactiveCommand<Unit, Unit> GrammarCommand { get; }
     public ReactiveCommand<Unit, Unit> WordByWordCommand { get; }
     public ReactiveCommand<Unit, Unit> StopCommand { get; }
-    public ReactiveCommand<Unit, Unit> RetryCommand { get; }
+    public ReactiveCommand<AiTurnViewModel?, Unit> RetryCommand { get; }
 
     /// <summary>Copies one turn's answer. Explicit rather than left to drag-select, which stopped covering
     /// the whole answer once tables put each cell in its own control.</summary>
     public ReactiveCommand<AiTurnViewModel, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+
+    private double _reasoningHeight = 240;
+
+    /// <summary>
+    /// How tall the reasoning panel is, shared by every turn and dragged by the handle under it.
+    ///
+    /// <para>Shared rather than per-turn: a reader who has decided how much reasoning they want to see has
+    /// decided it for the session, not for one answer. An earlier attempt used a GridSplitter per turn, on
+    /// the reasoning that a RowDefinition cannot bind to an ancestor's property — true, and beside the point,
+    /// because the ScrollViewer whose height actually matters is an ordinary control that binds like any
+    /// other.</para>
+    /// </summary>
+    public double ReasoningHeight
+    {
+        get => _reasoningHeight;
+        set => this.RaiseAndSetIfChanged(ref _reasoningHeight, Math.Clamp(value, 60, 1200));
+    }
+
+    /// <summary>Drag the reasoning panel taller or shorter. Clamped, so it cannot be dragged to nothing.</summary>
+    public void ResizeReasoning(double delta) => ReasoningHeight += delta;
 
     /// <summary>Every turn this session, oldest first. The panel scrolls; this is what it scrolls.</summary>
     public ObservableCollection<AiTurnViewModel> Turns { get; } = new();
@@ -161,10 +185,29 @@ public class AiAssistantViewModel : ReactiveTool
     /// Runs one turn. Every expected failure — not configured, no book, an unreadable position, a dead
     /// network — arrives as a sentence rather than an exception.
     /// </summary>
-    internal async Task AskAsync(AiTask task)
+    internal async Task AskAsync(AiTask task, string? questionOverride = null)
     {
         if (IsBusy) return;
 
+        // Claimed HERE, not in StartTurn. StartTurn runs after an await on the reader, which in the app does
+        // real WebView work — and Explain and Translate are different commands, so ReactiveCommand's own
+        // serialization does not hold between them. Two presets clicked inside that window both passed the
+        // guard and started turns: the first turn's flush timer was overwritten without being stopped and
+        // ticked for the rest of the session, and its cancellation source was disposed while its stream was
+        // still using it.
+        IsBusy = true;
+        try
+        {
+            await RunAsync(task, questionOverride);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RunAsync(AiTask task, string? questionOverride)
+    {
         Status = "";
 
         if (_orchestrator == null || _readerState == null)
@@ -192,8 +235,11 @@ public class AiAssistantViewModel : ReactiveTool
             return;
         }
 
-        var question = string.IsNullOrWhiteSpace(Question) ? null : Question.Trim();
-        var turn = StartTurn(task, question, state.SelectionText);
+        // An override comes from Retry, which must repeat the turn's OWN question rather than whatever is in
+        // the box — the box now holds unsent drafts, and those are precious.
+        var typed = questionOverride ?? Question;
+        var question = string.IsNullOrWhiteSpace(typed) ? null : typed.Trim();
+        var turn = StartTurn(task, question, state.SelectionText, clearBox: questionOverride is null);
 
         try
         {
@@ -237,11 +283,17 @@ public class AiAssistantViewModel : ReactiveTool
 
     /// <summary>Repeats the last turn. The evidence for offering this at all: an observed request returned a
     /// gateway 504 after 120s while the identical request to the same model answered in 33s.</summary>
-    private async Task RetryAsync()
+    private async Task RetryAsync(AiTurnViewModel? turn)
     {
-        if (LastTurn is not { } last) return;
-        Question = last.Question ?? "";
-        await AskAsync(last.Task);
+        // The turn to repeat is the one whose button was pressed, not the newest. Old failed turns keep their
+        // Try again button, so retrying turn 1 after turn 2 has run used to re-send turn 2.
+        turn ??= LastTurn;
+        if (turn is null) return;
+
+        // Its own question, passed directly. Writing it into the box first destroyed any draft the reader had
+        // started typing there — and when a turn was already running, AskAsync's IsBusy guard then returned
+        // without sending anything, so the draft was gone and nothing had happened.
+        await AskAsync(turn.Task, turn.Question ?? string.Empty);
     }
 
     private static async Task CopyAsync(AiTurnViewModel turn)
@@ -328,7 +380,7 @@ public class AiAssistantViewModel : ReactiveTool
         _turnCancellation?.Cancel();
     }
 
-    private AiTurnViewModel StartTurn(AiTask task, string? question, string? selection)
+    private AiTurnViewModel StartTurn(AiTask task, string? question, string? selection, bool clearBox)
     {
         var turn = new AiTurnViewModel(task, question)
         {
@@ -350,7 +402,10 @@ public class AiAssistantViewModel : ReactiveTool
         // Clearing on the click would throw away what the reader typed to tell them the assistant is not
         // configured, or that no book is open — and then they would have to type it again to act on the
         // advice.
-        Question = "";
+        //
+        // Not cleared for a Retry, which never took the question from the box in the first place: doing so
+        // would wipe a draft the reader is part-way through writing.
+        if (clearBox) Question = "";
 
         _current = turn;
         _sawText = false;
@@ -363,7 +418,6 @@ public class AiAssistantViewModel : ReactiveTool
 
         _turnCancellation?.Dispose();
         _turnCancellation = new CancellationTokenSource();
-        IsBusy = true;
 
         _elapsed.Restart();
         _flushTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FlushIntervalMs) };
@@ -430,7 +484,6 @@ public class AiAssistantViewModel : ReactiveTool
         turn.Elapsed = FormatElapsed(_elapsed.Elapsed);
         turn.IsRunning = false;
         _current = null;
-        IsBusy = false;
     }
 
     /// <summary>Moves whatever has accumulated onto the screen, in one property change per kind.</summary>
