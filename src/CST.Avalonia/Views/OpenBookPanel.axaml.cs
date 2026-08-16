@@ -16,7 +16,13 @@ public partial class OpenBookPanel : UserControl
     public OpenBookPanel()
     {
         InitializeComponent();
-        
+
+        // Enter is claimed on the TUNNEL phase, and it has to be. See TreeView_KeyDown for why the bubble
+        // handler this replaces could never fire on a book. Wired through the x:Name field rather than
+        // FindControl so a rename is a compile error: a null-tolerant lookup here would silently detach
+        // Enter, which is the failure mode #658 was in the first place. (#658)
+        BookTreeView.AddHandler(InputElement.KeyDownEvent, TreeView_KeyDown, RoutingStrategies.Tunnel);
+
         // Debug: Check if DataContext is set
         this.DataContextChanged += (s, e) =>
         {
@@ -98,27 +104,28 @@ public partial class OpenBookPanel : UserControl
     }
 
     // Enter opens the selected book, as it did in CST4 — without it the tree can be reached and navigated
-    // by keyboard but not acted on, which is exactly the gap Cmd+O would otherwise leave. On a container
-    // node Enter expands/collapses instead, since there is nothing to open. (#111)
+    // by keyboard but not acted on, which is exactly the gap Cmd+O would otherwise leave. (#111)
+    //
+    // TUNNEL phase, deliberately (#658). This was a bubble handler on the TreeView, and it never once ran
+    // for a book: TreeViewItem's own class handler treats Return as expand/collapse, and on a leaf its
+    // ExpandItem finds nothing to expand and returns FALSE — leaving the event unhandled, so it bubbled on
+    // to the parent category, whose handler collapsed it and marked it handled. Pressing Enter on a book
+    // closed the category it was in. Tunnelling routes root -> source, so this sees the key before any item
+    // can claim it.
+    //
+    // Books only. Categories are left to the stock Return handling, which expands/collapses them and gives
+    // Ctrl+Return subtree expansion for free. (The branch that used to toggle IsExpanded here was dead for
+    // the same routing reason: on a category the item claims Return first, so it never ran either.)
     private void TreeView_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter)
             return;
 
-        if (DataContext is not OpenBookDialogViewModel viewModel || viewModel.SelectedNode is not { } node)
+        if (DataContext is not OpenBookDialogViewModel viewModel
+            || viewModel.SelectedNode is not { NodeType: BookTreeNodeType.Book })
             return;
 
-        if (node.NodeType == BookTreeNodeType.Book)
-        {
-            OpenSelectedBook("Enter");
-        }
-        else
-        {
-            node.IsExpanded = !node.IsExpanded;
-            Log.Debug("[OpenBookPanel] Enter toggled node {NodeName} to expanded={Expanded}",
-                node.DisplayName, node.IsExpanded);
-        }
-
+        OpenSelectedBook("Enter");
         e.Handled = true;
     }
 
