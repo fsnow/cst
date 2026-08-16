@@ -572,7 +572,7 @@
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Assistant" Classes="SettingLabel"/>
-                                        <TextBlock Text="Ask about the passage you are reading — an explanation, a translation, a grammatical breakdown — answered by a model you choose and pay for. Answers are generated text, shown separately from the canonical text, and can be wrong."
+                                        <TextBlock Text="Ask about the passage you are reading — an explanation, a translation, a grammatical breakdown — answered by a model you choose. Answers are generated text, shown separately from the canonical text, and can be wrong."
                                                   Classes="SettingDescription"/>
 
                                         <CheckBox IsChecked="{Binding ChatEnabled}"
@@ -604,7 +604,7 @@
                                                 IsEnabled="{Binding AssistantFieldsEnabled}"
                                                 Watermark="e.g. claude-sonnet-4-5"
                                                 Width="480" HorizontalAlignment="Left"/>
-                                        <TextBlock Text="Typed exactly as the provider spells it. Never checked against a list — the endpoint decides what exists, and a list shipped here would be wrong within a month."
+                                        <TextBlock Text="Typed exactly as the provider spells it."
                                                   Classes="SettingDescription"/>
 
                                         <!-- The fidelity advisory (#584): advice, never a block. A reader who
@@ -636,7 +636,7 @@
                                         </StackPanel>
                                         <TextBlock Text="{Binding KeyStatus}" Classes="SettingDescription"/>
                                         <TextBlock Text="{Binding ApiKeyDescription}" Classes="SettingDescription"/>
-                                        <TextBlock Text="Stored in the operating system's credential store, never in the settings file — that file gets hand-edited, screenshotted and attached to bug reports."
+                                        <TextBlock Text="Stored securely in the operating system's credential store."
                                                   Classes="SettingDescription"/>
 
                                         <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
