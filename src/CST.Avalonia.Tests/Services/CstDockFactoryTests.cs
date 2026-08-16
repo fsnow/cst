@@ -220,4 +220,93 @@ public class CstDockFactoryTests
         Assert.Same(existing, dock);                              // reused, not recreated
         Assert.Equal(before, mainDock.VisibleDockables!.Count);  // nothing inserted
     }
+
+    // ---- The assistant's own container (#656) ----
+
+    [Fact]
+    public void EnsureRightToolDock_RecreatesUnderMainDock_WhenMissing()
+    {
+        // The assistant can be floated into its own window and that window closed, which takes the panel out
+        // of the layout entirely. It is the only tool whose dock is on the right, so it needs its own
+        // recreate path — and since the panel holds the whole session's transcript, having no way back lost
+        // that too.
+        var f = new CstDockFactory();
+        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+
+        var dock = f.EnsureRightToolDock();
+
+        Assert.NotNull(dock);
+        Assert.Equal("RightToolDock", dock!.Id);
+        Assert.Contains(mainDock.VisibleDockables!, d => d.Id == "RightTools");
+    }
+
+    [Fact]
+    public void EnsureRightToolDock_AppendsAfterTheDocuments()
+    {
+        // Right of the books, not left of them: it is inserted by position, and getting the ends confused
+        // would put the assistant where the book tree lives.
+        var f = new CstDockFactory();
+        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+
+        f.EnsureRightToolDock();
+
+        var ids = mainDock.VisibleDockables!.Select(d => d.Id).ToList();
+        Assert.True(ids.IndexOf("RightTools") > ids.IndexOf("MainDocumentDock"));
+    }
+
+    [Fact]
+    public void EnsureRightToolDock_ReusesExisting_WhenPresent()
+    {
+        var f = new CstDockFactory();
+        var existing = new ToolDock { Id = "RightToolDock", VisibleDockables = List() };
+        var rightTools = new ProportionalDock { Id = "RightTools", VisibleDockables = List(existing) };
+        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc, rightTools) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+        var before = mainDock.VisibleDockables!.Count;
+
+        var dock = f.EnsureRightToolDock();
+
+        Assert.Same(existing, dock);
+        Assert.Equal(before, mainDock.VisibleDockables!.Count);
+    }
+
+    [Fact]
+    public void The_assistant_opens_narrower_than_the_documents()
+    {
+        // Reported: "the default width of the Assistant is too wide — often wider than the book area". Split
+        // the documents into two books side by side and each gets half the middle column, so a quarter-width
+        // assistant is exactly as wide as either book. The middle column has to stay wide enough that a split
+        // book is still the widest thing on screen.
+        var f = new CstDockFactory();
+        f.EnsureRightToolDock();   // no MainDock: just proves the constant is not the old 0.25
+
+        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
+        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc) };
+        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
+        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
+        f._rootDock = root;
+        f._mainDock = mainDock;
+
+        f.EnsureRightToolDock();
+        var assistant = mainDock.VisibleDockables!.First(d => d.Id == "RightTools");
+
+        Assert.True(assistant.Proportion < 0.25, $"assistant opens at {assistant.Proportion}");
+        // Half the middle column, which is what a side-by-side book gets, must still beat it.
+        var middle = 1.0 - 0.25 - assistant.Proportion;
+        Assert.True(middle / 2 > assistant.Proportion, "a split book would be narrower than the assistant");
+    }
 }

@@ -37,7 +37,15 @@ namespace CST.Avalonia.Services
         // Misnomer kept for the smaller diff: this is the DOCUMENT dock's proportion, which used to be the
         // rightmost thing in MainDock. Since #586 the assistant sits to its right and has its own field below.
         private double _mainDockRightProportion = 0.50;
-        private double _mainDockAssistantProportion = 0.25;
+        private double _mainDockAssistantProportion = AssistantProportion;
+
+        /// <summary>
+        /// How wide the assistant column opens. Narrower than the tool rail on the left: that one holds a
+        /// book tree whose entries are long canon paths, whereas this holds prose, which is easier to read in
+        /// a narrow measure than a wide one — and every pixel it takes comes off the book. A starting point,
+        /// not a verdict; the splitter beside it is the answer to disagreeing.
+        /// </summary>
+        private const double AssistantProportion = 0.18;
 
         // Typed references to two spine docks, set in CreateLayout, used to recreate the tool container
         // on demand (see EnsureLeftToolDock). Reference-stable: MainDock is protected and never removed.
@@ -140,7 +148,7 @@ namespace CST.Avalonia.Services
             {
                 Id = "MainDocumentDock",
                 Title = "Documents",
-                Proportion = 0.50, // the middle column: tools left, assistant right (#586)
+                Proportion = 1.0 - 0.25 - AssistantProportion,  // the middle column: tools left, assistant right (#586)
                 ActiveDockable = welcomeDocument,
                 VisibleDockables = CreateList<IDockable>(welcomeDocument),
                 CanCreateDocument = false, // Disable "+" button - books opened via "Select a Book" panel
@@ -285,7 +293,7 @@ namespace CST.Avalonia.Services
             var rightTools = new ProportionalDock
             {
                 Id = "RightTools",
-                Proportion = 0.25,
+                Proportion = AssistantProportion,
                 Orientation = Orientation.Vertical,
                 IsCollapsable = false,
                 CanDrop = true,
@@ -1654,6 +1662,66 @@ namespace CST.Avalonia.Services
             InitDockable(leftToolDock, leftTools);
 
             return leftToolDock;
+        }
+
+        /// <summary>
+        /// The RightToolDock that hosts the assistant, recreating it (and its RightTools wrapper) under the
+        /// protected MainDock if it has been removed. (#656)
+        ///
+        /// <para>The assistant can be floated into its own window, and closing that window takes the panel out
+        /// of the layout entirely. Without this there was no way back: it is the only tool with no View-menu
+        /// entry, so a reader who floated it and closed the window lost it for the rest of the session — and
+        /// since the panel holds the whole transcript, they lost that too.</para>
+        /// </summary>
+        internal ToolDock? EnsureRightToolDock()
+        {
+            if (_rootDock != null && FindDockByIdRecursive(_rootDock, "RightToolDock") is ToolDock existing)
+            {
+                return existing;
+            }
+
+            if (_mainDock?.VisibleDockables == null)
+            {
+                Log.Error("*** EnsureRightToolDock: MainDock unavailable - cannot recreate tool container ***");
+                return null;
+            }
+
+            Log.Information("*** EnsureRightToolDock: RightToolDock missing - recreating tool container under MainDock ***");
+
+            var rightToolDock = new ToolDock
+            {
+                Id = "RightToolDock",
+                Title = "Assistant",
+                Alignment = Alignment.Right,
+                GripMode = GripMode.Visible,
+                CanDrag = true,
+                CanDrop = true,
+                VisibleDockables = CreateList<IDockable>(),
+                Factory = this
+            };
+
+            var rightTools = new ProportionalDock
+            {
+                Id = "RightTools",
+                Proportion = AssistantProportion,
+                Orientation = Orientation.Vertical,
+                IsCollapsable = false,
+                CanDrop = true,
+                VisibleDockables = CreateList<IDockable>(rightToolDock),
+                Factory = this
+            };
+
+            // Appended at the right of MainDock (mirrors CreateLayout: [... documents, splitter, rightTools]).
+            var splitter = new ProportionalDockSplitter { Id = "RightSplitter", Title = "RightSplitter" };
+            _mainDock.VisibleDockables.Add(splitter);
+            _mainDock.VisibleDockables.Add(rightTools);
+
+            // Owner/Factory wiring, as EnsureLeftToolDock does: without a proper Owner, base.FloatDockable
+            // cannot detach these, so floating a recreated panel would silently no-op.
+            InitDockable(rightTools, _mainDock);
+            InitDockable(rightToolDock, rightTools);
+
+            return rightToolDock;
         }
         
         // Override to prevent accidental closes during drag operations
