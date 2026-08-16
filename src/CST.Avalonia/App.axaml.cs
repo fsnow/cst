@@ -97,6 +97,7 @@ public partial class App : Application
     private List<NativeMenuItem> _selectBookMenuItems = new List<NativeMenuItem>();
     private List<NativeMenuItem> _searchMenuItems = new List<NativeMenuItem>();
     private List<NativeMenuItem> _dictionaryMenuItems = new List<NativeMenuItem>();
+    private List<NativeMenuItem> _assistantMenuItems = new List<NativeMenuItem>();
 
     // #284: the per-window "Window" submenu (main + each floating window). Each is repopulated with the
     // live window list (Minimize + a "jump to window" entry per open window) whenever windows open, close,
@@ -1405,6 +1406,19 @@ public partial class App : Application
                                             ToggleDictionaryPanel();
                                         };
                                     }
+                                    // Must stay in lockstep with the View-menu header in
+                                    // SimpleTabbedWindow.axaml: the toggle is wired by matching that string.
+                                    else if (viewSubItem.Header?.ToString() == "Assistant")
+                                    {
+                                        _assistantMenuItems.Add(viewSubItem);
+                                        viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
+                                        viewSubItem.IsChecked = true;
+                                        viewSubItem.Click += (s, e) =>
+                                        {
+                                            Log.Information("Toggle Assistant panel clicked via View menu (main window)");
+                                            ToggleAssistantPanel();
+                                        };
+                                    }
                                 }
                             }
                         }
@@ -1440,6 +1454,11 @@ public partial class App : Application
             foreach (var menuItem in _searchMenuItems)
             {
                 menuItem.IsChecked = layoutViewModel.IsSearchPanelVisible;
+            }
+
+            foreach (var menuItem in _assistantMenuItems)
+            {
+                menuItem.IsChecked = layoutViewModel.IsAssistantPanelVisible;
             }
 
             foreach (var menuItem in _dictionaryMenuItems)
@@ -1616,6 +1635,21 @@ public partial class App : Application
                 ToggleDictionaryPanel();
             };
             _dictionaryMenuItems.Add(dictionaryItem);
+
+            // #656: the assistant can be floated and its window closed, which takes it out of the layout.
+            // Without an entry here a reader who did that from a floating window had no way back to it.
+            var assistantItem = new NativeMenuItem
+            {
+                Header = "Assistant",
+                ToggleType = NativeMenuItemToggleType.CheckBox,
+                IsChecked = layoutViewModel?.IsAssistantPanelVisible ?? false
+            };
+            assistantItem.Click += (s, e) =>
+            {
+                Log.Information("Toggle Assistant panel clicked via View menu (floating window)");
+                ToggleAssistantPanel();
+            };
+            _assistantMenuItems.Add(assistantItem);
 
             // #572: book zoom, mirroring the main window's View menu. macOS shows the menu bar of the
             // ACTIVE window, so without these three a floated book would have dead zoom keys — the same
@@ -2127,6 +2161,25 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to toggle Search panel");
+        }
+    }
+
+    private void ToggleAssistantPanel()
+    {
+        try
+        {
+            if (MainWindow?.DataContext is LayoutViewModel layoutViewModel)
+            {
+                layoutViewModel.ToggleAssistantPanel();
+            }
+            else
+            {
+                Log.Warning("Cannot toggle Assistant panel - LayoutViewModel not available");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to toggle Assistant panel");
         }
     }
 

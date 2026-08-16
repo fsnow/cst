@@ -81,6 +81,14 @@ namespace CST.Avalonia.ViewModels
             private set => this.RaiseAndSetIfChanged(ref _isDictionaryPanelVisible, value);
         }
 
+        private bool _isAssistantPanelVisible = true;
+
+        public bool IsAssistantPanelVisible
+        {
+            get => _isAssistantPanelVisible;
+            private set => this.RaiseAndSetIfChanged(ref _isAssistantPanelVisible, value);
+        }
+
         // Event for notifying when panel visibility changes (for menu updates)
         public event EventHandler? PanelVisibilityChanged;
 
@@ -152,6 +160,10 @@ namespace CST.Avalonia.ViewModels
         // CreateLayout does at startup; wrapping it in a generic Tool { Context } renders an empty panel
         // because the view locator resolves by dockable type. (#84)
         private void ShowToolPanel(string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName)
+            => ShowToolPanel(toolId, resolveVm, markVisible, panelName, right: false);
+
+        private void ShowToolPanel(
+            string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName, bool right)
         {
             Log.Information("[Layout] Show {Panel} panel requested", panelName);
 
@@ -171,19 +183,20 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
-            var leftToolDock = _factory.EnsureLeftToolDock();
-            if (leftToolDock == null)
+            // The assistant lives in its own dock on the right; the other three share the left rail.
+            var toolDock = right ? _factory.EnsureRightToolDock() : _factory.EnsureLeftToolDock();
+            if (toolDock == null)
             {
                 Log.Error("[Layout] Cannot add {Panel} panel - MainDock unavailable.", panelName);
                 return;
             }
 
             tool.Factory = _factory;
-            _factory.AddDockable(leftToolDock, tool);
+            _factory.AddDockable(toolDock, tool);
             _factory.SetActiveDockable(tool);
-            _factory.SetFocusedDockable(leftToolDock, tool);
+            _factory.SetFocusedDockable(toolDock, tool);
 
-            Log.Information("[Layout] {Panel} panel added to LeftToolDock", panelName);
+            Log.Information("[Layout] {Panel} panel added to {Dock}", panelName, toolDock.Id);
 
             markVisible();
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
@@ -243,6 +256,27 @@ namespace CST.Avalonia.ViewModels
 
         public void HideSelectBookPanel() =>
             HideToolPanel("OpenBookTool", () => IsSelectBookPanelVisible = false, "Open a Book");
+
+        public void ToggleAssistantPanel()
+        {
+            if (IsAssistantPanelVisible) HideAssistantPanel();
+            else ShowAssistantPanel();
+        }
+
+        /// <summary>
+        /// Bring the assistant back. (#656)
+        ///
+        /// <para>It could be floated into its own window and that window closed, which took it out of the
+        /// layout with no way to get it back — it was the one tool with no View-menu entry. Since the panel
+        /// holds the whole session's transcript, losing it lost that too. The view model is a singleton, so
+        /// what comes back is the same panel with its turns intact.</para>
+        /// </summary>
+        public void ShowAssistantPanel() =>
+            ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
+                () => IsAssistantPanelVisible = true, "Assistant", right: true);
+
+        public void HideAssistantPanel() =>
+            HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "Assistant");
 
         // Recreate-on-demand so the View menu toggle and Cmd+D (Look Up in Dictionary) can reopen a closed
         // pane — LookUpInDictionaryAsync calls this then immediately proceeds, so it must stay synchronous. (#466)
@@ -368,6 +402,7 @@ namespace CST.Avalonia.ViewModels
             IsSelectBookPanelVisible = present.Contains("OpenBookTool");
             IsSearchPanelVisible = present.Contains("SearchTool");
             IsDictionaryPanelVisible = present.Contains("DictionaryTool");
+            IsAssistantPanelVisible = present.Contains("AiAssistantTool");
 
             Log.Debug("[Layout] Panel visibility updated - SelectBook: {SelectBook}, Search: {Search}, Dictionary: {Dictionary}",
                 IsSelectBookPanelVisible, IsSearchPanelVisible, IsDictionaryPanelVisible);
