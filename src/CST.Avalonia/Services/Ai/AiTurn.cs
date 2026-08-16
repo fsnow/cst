@@ -71,7 +71,31 @@ public sealed record AiTurnContext(
     CitationRef Citation,
     BookContext Book,
     IReadOnlyList<string> Notices,
-    bool PassageTrimmed);
+    bool PassageTrimmed,
+    SentContext? Sent = null);
+
+/// <summary>
+/// Everything the turn actually sent, for the reader to look at. (#665)
+///
+/// <para><b>Why this is on the contract rather than in a log.</b> The prompt was visible only at Debug level
+/// in a file, so the one question a reader is most likely to have about a surprising answer — what did it
+/// actually see? — could not be answered from inside the app. The notices say what was DEGRADED; this says
+/// what was sent, which is a different and larger thing, and the two disagreeing is itself worth being able
+/// to notice.</para>
+///
+/// <para>It carries no secret: the API key is a header the provider adds, never part of a prompt. What is
+/// here is corpus text, the reader's own question, and the app's instructions — all three of which the reader
+/// is entitled to read, and the last of which they can edit.</para>
+/// </summary>
+/// <param name="Fields">Named values, in display order — provider, model, task, language, book, reference,
+/// pages, the estimated token count, and what each gathered part contributed.</param>
+public sealed record SentContext(
+    IReadOnlyList<SentField> Fields,
+    string SystemPrompt,
+    string UserContent);
+
+/// <summary>One named value in <see cref="SentContext.Fields"/>.</summary>
+public sealed record SentField(string Name, string Value);
 
 /// <summary>
 /// How the model quoted Pāli, counted rather than merely repaired. (#587)

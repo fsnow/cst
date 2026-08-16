@@ -5,6 +5,8 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
+using CST.Navigation;
+using CST.Search;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services.Ai;
@@ -203,7 +205,8 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             p => p.Name == BundlePartNames.Passage && p.State == BundlePartState.TrimmedForBudget);
 
         yield return AiTurnEvent.ForStarted(new AiTurnContext(
-            bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, prompt.Notices, passageTrimmed));
+            bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, prompt.Notices, passageTrimmed,
+            Describe(bundle, prompt, provider)));
 
         // ---- Stream.
         var chat = new ChatRequest(
@@ -336,6 +339,55 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     /// <item>Neither — the cap is small enough that nothing could be produced at all.</item>
     /// </list>
     /// </summary>
+    /// <summary>
+    /// What this turn sent, as named fields plus the two prompt halves. Assembled here because this is the
+    /// only place that holds the bundle, the rendered prompt and the resolved provider at once. (#665)
+    /// </summary>
+    private static SentContext Describe(
+        AiContextBundle bundle, RenderedPrompt prompt, ChatProviderResolution provider)
+    {
+        var fields = new List<SentField>
+        {
+            new("Provider", provider.Provider.Id),
+            new("Model", provider.Model),
+            new("Request", bundle.Task.ToString()),
+            new("Answer language", bundle.OutputLanguage),
+            new("Book", bundle.Book.Name),
+            new("Book id", bundle.Book.BookId),
+            new("Reference", bundle.Citation.NormalizedReference),
+            new("Estimated context", $"~{bundle.Budget.ApproximateTokens:N0} tokens"),
+        };
+
+        if (bundle.Budget.ParagraphsCovered is int covered)
+            fields.Add(new SentField("Paragraphs covered", covered.ToString()));
+
+        if (bundle.Citation.Pages.Count > 0)
+            fields.Add(new SentField("Pages", string.Join(", ", bundle.Citation.Pages.Select(PageRef))));
+
+        // What each gathered part contributed, including the ones that contributed nothing — an absence is
+        // as much a part of what was sent as a presence, and harder to notice.
+        foreach (var part in bundle.Budget.Parts)
+        {
+            var detail = string.IsNullOrWhiteSpace(part.Detail) ? part.State.ToString() : $"{part.State} — {part.Detail}";
+            fields.Add(new SentField($"Part: {part.Name}", detail));
+        }
+
+        return new SentContext(fields, prompt.System, prompt.UserContent);
+    }
+
+    private static string PageRef(SnippetPageRef page)
+    {
+        var edition = page.Edition switch
+        {
+            PageEdition.Vri => "VRI",
+            PageEdition.Myanmar => "Myanmar",
+            PageEdition.Pts => "PTS",
+            PageEdition.Thai => "Thai",
+            _ => "other",
+        };
+        return page.Volume > 0 ? $"{edition} {page.Volume}.{page.Number}" : $"{edition} {page.Number}";
+    }
+
     private static string TruncationMessage(bool sawText, bool sawReasoning) =>
         sawText
             ? "This answer is incomplete: the model reached its output limit and stopped part-way through."

@@ -353,6 +353,7 @@ public class AiAssistantViewModel : ReactiveTool
                 foreach (var notice in context.Notices) turn.Notices.Add(notice);
                 turn.RaiseNoticesChanged();
                 turn.IsPartialPassage = context.PassageTrimmed;
+                turn.Sent = context.Sent;
                 turn.Status = WaitingMessage(_elapsed.Elapsed, sawReasoning: false);
                 break;
 

@@ -196,6 +196,33 @@ public sealed class AiTurnViewModel : ReactiveObject
         internal set => this.RaiseAndSetIfChanged(ref _isPartialPassage, value);
     }
 
+    private SentContext? _sent;
+
+    /// <summary>
+    /// Everything this turn sent — named fields and both prompt halves. (#665)
+    ///
+    /// <para>Collapsed, like the notices, because it is reference material rather than part of the answer.
+    /// But unlike the notices, which say what was DEGRADED, this says what was SENT: the question a reader
+    /// most wants answered about a surprising answer is what the model actually saw, and until now that was
+    /// only visible at Debug level in a log file.</para>
+    /// </summary>
+    public SentContext? Sent
+    {
+        get => _sent;
+        internal set
+        {
+            this.RaiseAndSetIfChanged(ref _sent, value);
+            this.RaisePropertyChanged(nameof(HasSent));
+            this.RaisePropertyChanged(nameof(SentHeader));
+        }
+    }
+
+    public bool HasSent => _sent is not null;
+
+    public string SentHeader => _sent is null
+        ? "Context sent"
+        : $"Context sent ({_sent.Fields.Count} fields)";
+
     private string _usage = "";
     public string Usage
     {
