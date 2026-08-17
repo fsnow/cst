@@ -61,7 +61,6 @@
     <EmbeddedResource Include="Resources\Ai\*.md" />
     <!-- The fidelity advisory's data (#584). Embedded so it ships with the app and cannot be edited into
          something that silently mis-rates a model. -->
-    <EmbeddedResource Include="Resources\Ai\model-registry.json" />
   </ItemGroup>
 
   <ItemGroup>

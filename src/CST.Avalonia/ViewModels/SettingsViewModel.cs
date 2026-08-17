@@ -60,7 +60,6 @@ namespace CST.Avalonia.ViewModels
             var aiSettings = new AiSettingsViewModel(
                 _settingsService,
                 App.TryGetService<Services.Ai.IAiCredentialStore>(),
-                App.TryGetService<Services.Ai.IModelRegistry>(),
                 App.TryGetService<Services.Ai.IChatProviderResolver>());
             var loggingSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
 
@@ -1288,19 +1287,17 @@ public class AiSettingsViewModel : ViewModelBase
         private bool _allowRemoteControl;
 
         public AiSettingsViewModel(ISettingsService settingsService)
-            : this(settingsService, null, null, null)
+            : this(settingsService, null, null)
         {
         }
 
         public AiSettingsViewModel(
             ISettingsService settingsService,
             Services.Ai.IAiCredentialStore? credentials,
-            Services.Ai.IModelRegistry? modelRegistry,
             Services.Ai.IChatProviderResolver? providerResolver)
         {
             _settingsService = settingsService;
             _credentials = credentials;
-            _modelRegistry = modelRegistry;
             _providerResolver = providerResolver;
 
             var ai = _settingsService.Settings.Ai;
@@ -1405,7 +1402,6 @@ public class AiSettingsViewModel : ViewModelBase
         #region The assistant — surface B (#585)
 
         private readonly Services.Ai.IAiCredentialStore? _credentials;
-        private readonly Services.Ai.IModelRegistry? _modelRegistry;
         private readonly Services.Ai.IChatProviderResolver? _providerResolver;
 
         private bool _chatEnabled;
@@ -1416,10 +1412,13 @@ public class AiSettingsViewModel : ViewModelBase
         private string _apiKeyEntry = "";
         private string _keyStatus = "";
 
+        // Order is the dropdown's order, and the first entry is also the fallback when a stored value cannot
+        // be parsed — so it must agree with ChatSettings.Provider's default, or an unreadable setting would
+        // resolve to a different provider than a fresh install does.
         private static readonly AiProviderChoice[] Providers =
         {
-            new(Services.Ai.ChatProviderKind.Anthropic, "Claude (Anthropic)", "anthropic"),
             new(Services.Ai.ChatProviderKind.OpenAiCompatible, "OpenAI-compatible endpoint", "openai-compatible"),
+            new(Services.Ai.ChatProviderKind.Anthropic, "Claude (Anthropic)", "anthropic"),
         };
 
         /// <summary>
@@ -1504,8 +1503,6 @@ public class AiSettingsViewModel : ViewModelBase
                 this.RaiseAndSetIfChanged(ref _model, value);
                 _settingsService.Settings.Ai.Chat.Model = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
                 _settingsService.RequestSave();
-                this.RaisePropertyChanged(nameof(FidelityAdvisory));
-                this.RaisePropertyChanged(nameof(HasFidelityAdvisory));
                 RefreshReadiness();
             }
         }
@@ -1569,13 +1566,20 @@ public class AiSettingsViewModel : ViewModelBase
         public ReactiveCommand<Unit, Unit> RemoveApiKeyCommand { get; }
 
         /// <summary>
-        /// The fidelity advisory for the configured model (#584). Advice, never a block: a reader who wants a
-        /// local model for privacy has a good reason this app does not get to override.
+        /// What can honestly be said about a model's Pāli, which is not a rating. (#670)
+        ///
+        /// <para>This replaced a curated per-model fidelity tier. Pāli ability is emergent from pre-training —
+        /// there is no Pāli-specific training — so it is not predicted by published benchmarks, is not
+        /// monotonic with general capability or size, and can move between point releases of one model. A tier
+        /// could not be kept true by sampling; it would have to be re-measured for every release of every
+        /// model. So the app states the general fact, which is permanently true, instead of a verdict that
+        /// would be stale on arrival.</para>
         /// </summary>
-        public string? FidelityAdvisory =>
-            _modelRegistry?.Advisory(Services.Ai.AiTask.Translate, _model);
-
-        public bool HasFidelityAdvisory => !string.IsNullOrWhiteSpace(FidelityAdvisory);
+        public string PaliAbilityNote =>
+            "How well a model reads Pāli varies widely and is not predicted by its general benchmarks or its "
+            + "size — it is an ability that emerges from pre-training rather than one anybody trains for. This "
+            + "app cannot certify it for you. Check answers against the text in front of you, and treat a "
+            + "fluent translation as a claim to verify rather than a result.";
 
         /// <summary>
         /// Whether the assistant would actually run, asked of the SAME resolver the assistant uses. A second

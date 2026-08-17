@@ -78,8 +78,19 @@ namespace CST.Avalonia.Models
         /// <summary>Effective only under the AI master switch, like every other surface-B/C permission.</summary>
         public bool Enabled { get; set; } = false;
 
-        /// <summary><c>anthropic</c> or <c>openai-compatible</c>. Claude-first is the standing default.</summary>
-        public string Provider { get; set; } = "anthropic";
+        /// <summary>
+        /// <c>anthropic</c> or <c>openai-compatible</c>.
+        ///
+        /// <para>The OpenAI-compatible shape is the default because it is what most readers will actually
+        /// reach for: it serves OpenRouter, DeepSeek, Together, Google's endpoint, and every local runner,
+        /// whereas Anthropic requires API credits bought separately from any Claude subscription — a Max
+        /// subscription does not grant API access, so even a paying Anthropic customer cannot use that path
+        /// without a second purchase.</para>
+        ///
+        /// <para>This is only which entry the Settings dropdown opens on; nothing is configured until the
+        /// reader sets a model, and an endpoint is required for this shape.</para>
+        /// </summary>
+        public string Provider { get; set; } = "openai-compatible";
 
         /// <summary>
         /// Endpoint base URL. Optional for Anthropic (it has a real default); <b>required</b> for

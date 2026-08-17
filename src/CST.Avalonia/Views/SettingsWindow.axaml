@@ -607,16 +607,11 @@
                                         <TextBlock Text="Typed exactly as the provider spells it."
                                                   Classes="SettingDescription"/>
 
-                                        <!-- The fidelity advisory (#584): advice, never a block. A reader who
-                                             wants a local model for privacy has a reason we do not override. -->
-                                        <Border IsVisible="{Binding HasFidelityAdvisory}"
-                                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
-                                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                                BorderThickness="1" CornerRadius="4"
-                                                Padding="10,8" Margin="0,8,0,0" MaxWidth="560"
-                                                HorizontalAlignment="Left">
-                                            <TextBlock Text="{Binding FidelityAdvisory}" TextWrapping="Wrap"/>
-                                        </Border>
+                                        <!-- What can honestly be said about a model's Pāli, which is not a
+                                             rating. Replaced a curated per-model tier: Pāli ability is
+                                             emergent from pre-training, so it is not predicted by
+                                             benchmarks or size and cannot be certified by this app. (#670) -->
+                                        <TextBlock Text="{Binding PaliAbilityNote}" Classes="SettingDescription"/>
 
                                         <TextBlock Text="API key" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <StackPanel Orientation="Horizontal">

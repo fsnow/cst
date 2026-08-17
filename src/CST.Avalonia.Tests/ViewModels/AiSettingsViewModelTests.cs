@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
 using CST.Avalonia.ViewModels;
@@ -65,13 +66,19 @@ namespace CST.Avalonia.Tests.ViewModels
             }
         }
 
+        /// <summary>Pick a provider by KIND, not by position. Indexing the list made these tests depend on
+        /// the dropdown's order, so changing which provider a fresh install opens on would have inverted
+        /// their meaning silently rather than failing.</summary>
+        private static AiProviderChoice Choice(AiSettingsViewModel vm, CST.Avalonia.Services.Ai.ChatProviderKind kind) =>
+            vm.ProviderChoices.First(c => c.Kind == kind);
+
         private static (AiSettingsViewModel Vm, Settings Settings, FakeCredentialStore Keys) MakeWithAssistant()
         {
             var settings = new Settings();
             var svc = new Mock<ISettingsService>();
             svc.SetupGet(s => s.Settings).Returns(settings);
             var keys = new FakeCredentialStore();
-            return (new AiSettingsViewModel(svc.Object, keys, null, null), settings, keys);
+            return (new AiSettingsViewModel(svc.Object, keys, null), settings, keys);
         }
 
         // ---- The assistant (#585) ------------------------------------------------------------------
@@ -88,7 +95,10 @@ namespace CST.Avalonia.Tests.ViewModels
             // reports; a key that reaches it has reached all three. Serialized in full so no field is missed.
             var json = System.Text.Json.JsonSerializer.Serialize(settings);
             Assert.DoesNotContain("sk-ant-secret-value", json);
-            Assert.Equal("sk-ant-secret-value", keys.GetApiKey(CST.Avalonia.Services.Ai.ChatProviderKind.Anthropic));
+
+            // Stored under whichever provider is selected -- which provider that is belongs to the default
+            // test, not to this one.
+            Assert.Equal("sk-ant-secret-value", keys.GetApiKey(vm.SelectedProvider.Kind));
         }
 
         [Fact]
@@ -109,11 +119,11 @@ namespace CST.Avalonia.Tests.ViewModels
         {
             var (vm, _, keys) = MakeWithAssistant();
 
-            vm.SelectedProvider = vm.ProviderChoices[0];
+            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.Anthropic);
             vm.ApiKeyEntry = "claude-key";
             vm.SaveApiKeyCommand.Execute().Subscribe();
 
-            vm.SelectedProvider = vm.ProviderChoices[1];
+            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible);
             vm.ApiKeyEntry = "other-key";
             vm.SaveApiKeyCommand.Execute().Subscribe();
 
@@ -129,7 +139,7 @@ namespace CST.Avalonia.Tests.ViewModels
             var (vm, _, keys) = MakeWithAssistant();
             keys.Available = false;
 
-            vm.SelectedProvider = vm.ProviderChoices[0];
+            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.Anthropic);
 
             // "Add a key in Settings" is the wrong instruction when this build cannot store one — it sends
             // the user to the screen they are already on. The store knows why; the UI repeats it.
@@ -142,13 +152,29 @@ namespace CST.Avalonia.Tests.ViewModels
         {
             var (vm, settings, _) = MakeWithAssistant();
 
-            vm.SelectedProvider = vm.ProviderChoices[1];
+            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible);
 
             // The stored value has to be one ChatProviderResolver.TryParseKind accepts, or the UI would
             // configure a provider the app then reports as unknown.
             Assert.True(CST.Avalonia.Services.Ai.ChatProviderResolver.TryParseKind(
                 settings.Ai.Chat.Provider, out var kind));
             Assert.Equal(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible, kind);
+        }
+
+        [Fact]
+        public void A_fresh_install_opens_on_the_provider_most_readers_will_use()
+        {
+            // The OpenAI-compatible shape serves OpenRouter, DeepSeek, Together, Google's endpoint and every
+            // local runner. Anthropic needs API credits bought separately from any Claude subscription -- a
+            // Max subscription does not grant API access -- so opening there sent readers down the one path
+            // that cannot work without a second purchase.
+            var (vm, _, _) = MakeWithAssistant();
+
+            Assert.Equal(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible, vm.SelectedProvider.Kind);
+
+            // And the fallback for an unparseable stored value agrees with that, rather than resolving to a
+            // different provider than a fresh install does.
+            Assert.Equal(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible, vm.ProviderChoices[0].Kind);
         }
 
         [Fact]
