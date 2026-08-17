@@ -1312,7 +1312,6 @@ public partial class App : Application
         services.AddSingleton<Services.Ai.IAiCredentialStore, Services.Ai.Credentials.AiCredentialStore>();
 
         // The fidelity advisory (#584). Data only — Settings (#585) and the panel (#586) surface it.
-        services.AddSingleton<Services.Ai.IModelRegistry, Services.Ai.ModelRegistry>();
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
         // Surface-C tool wrappers (exposed over the local API). (#186)

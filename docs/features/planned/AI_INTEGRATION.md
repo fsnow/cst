@@ -312,13 +312,30 @@ Decided product values for any in-app model integration:
 - **Support common LLM API standards** for maximum reach and flexibility: **OpenAI-compatible Chat
   Completions** (covers most providers, aggregators, and local runners such as Ollama/LM Studio — the
   offline/private option) **plus the Anthropic Messages API** (Claude direct). **BYO key and BYO endpoint.**
-- **Model quality is a fidelity feature**, not merely a preference. Curate a **recommended-for-translation
-  frontier tier**; default **Claude-first**. Frontier models are genuinely strong at Pāli understanding and
-  translation — do not design as if the model were the weak link; the weak link is *ungrounded use of weak
-  models*.
-- **Discourage free/weak models for translating canonical text** — never a default, never in the recommended
-  list, and a **fidelity advisory** when one is selected for translation. Curation and advisory, not a hard
-  block (flexibility is preserved; the values are stated).
+- **Model quality is a fidelity feature**, not merely a preference. Frontier models are genuinely strong at
+  Pāli understanding and translation — do not design as if the model were the weak link; the weak link is
+  *ungrounded use of weak models*.
+- **Do not curate a model tier, and do not ship a fidelity advisory.** *(fsnow, 2026-08-17 — replacing an
+  earlier instruction to curate a recommended-for-translation frontier tier, which was implemented as
+  `ModelRegistry` and removed in #670.)* Pāli ability is **emergent from pre-training** — nobody trains for
+  it — so it is not predicted by published benchmarks, is not monotonic with capability or size, and can
+  move between point releases of one model. A tier cannot be kept true by sampling; it would have to be
+  re-measured for every release of every model. That is not a maintenance cost to accept, it is a claim the
+  project cannot make.
+- **Say the general thing instead, and show observed behaviour.** State once that Pāli ability varies widely,
+  is not predicted by benchmarks or size, and cannot be certified by this app — permanently true, and more
+  useful to a reader than an unrated badge. Then surface what is *measured* at runtime (`AnswerScorer`:
+  unmarked Pāli, invented references, ungrounded quotation), which is evidence about the reader's own model
+  on their own passage rather than an endorsement.
+- **Provider-published capability is fine; a table we maintain is not.** Ask the endpoint what a model
+  supports where it answers (OpenRouter publishes `supported_parameters`, context windows and health;
+  Hugging Face publishes latency and throughput but no capability list); otherwise attempt and report the
+  rejection. Never predict on the provider's behalf.
+- **No provider default beyond which entry the dropdown opens on.** *(fsnow, 2026-08-17 — replacing
+  "default Claude-first".)* The OpenAI-compatible shape opens first because it serves OpenRouter, DeepSeek,
+  Together, Google's endpoint and every local runner, whereas Anthropic requires API credits bought
+  separately from any Claude subscription — a Max subscription does not grant API access. Nothing is
+  configured until the reader sets a model.
 - **Grounded and cited is B's design goal** — B consumes the C/D tool layer (retrieve the real passage, look
   up dictionary entries, cite the reference) rather than free-running generation. Hallucination risk is
   inverse to *model quality × grounding*; B aims at the high end of both.
@@ -413,9 +430,9 @@ Three markdown layers, one format, **distinct purposes** — single-source only 
   self-identifying (app + API version).
 - §11: agent-facing text defaults to **romanized Pāli** (`script` override; IPE stays internal) — resolves
   a former open question. New **§11.1 model access policy** for surface B: OpenAI-compatible + Anthropic
-  Messages standards, BYO key/endpoint (incl. local runners), curated frontier tier with **Claude-first**
-  default, discourage free/weak models for canonical translation (advisory, not block), grounded-and-cited
-  as B's design goal, prompt presets, and visual distinction of generated vs canonical text.
+  Messages standards, BYO key/endpoint (incl. local runners), **no curated tier and no fidelity advisory**
+  (#670 — see §11.1 for why the claim is unmaintainable), grounded-and-cited as B's design goal, prompt
+  presets, and visual distinction of generated vs canonical text.
 - §14: open questions updated (API default-on vs default-off; disambiguation UX).
 - Post-review decisions (fsnow, same day): **local API defaults off** (opt-in from Settings); **romanized
   agent-facing default confirmed**, per-request `script` override first, possible preferred-script setting

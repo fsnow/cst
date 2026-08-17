@@ -33,7 +33,7 @@ namespace CST.Avalonia.Tests.Services.Ai;
 /// still uses the real bundler, the real templates and the real prompt builder, so what is scored is what the
 /// app would actually send.</para>
 ///
-/// <para><b>What it does not do is decide anything.</b> It reports counts and evidence; the tier a model
+/// <para><b>What it does not do is decide anything.</b> It reports counts and evidence; what a model
 /// belongs in is a judgement recorded by a person in <c>PALI_FIDELITY_CASES.md</c> and the model registry. A
 /// harness trusted to promote and demote models would quietly become the definition of fidelity, which is the
 /// failure that file is organized to avoid.</para>
@@ -106,7 +106,6 @@ public class AiEvalHarness
         var prompts = new PromptBuilder(new PromptTemplateStore(
             Path.Combine(Path.GetTempPath(), "cst-eval-" + Guid.NewGuid().ToString("N")),
             NullLogger<PromptTemplateStore>.Instance));
-        var registry = new ModelRegistry(NullLogger<ModelRegistry>.Instance);
 
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         var report = new StringBuilder();
@@ -114,8 +113,8 @@ public class AiEvalHarness
         report.AppendLine();
         report.AppendLine($"Case set updated {caseSet.Updated}. Endpoint `{baseUrl}`.");
         report.AppendLine();
-        report.AppendLine("| model | tier | case | quotes | unbalanced | unmarked Pāli | ungrounded quotes | bad refs | terminology | signatures |");
-        report.AppendLine("|---|---|---|---:|---:|---:|---:|---:|---|---|");
+        report.AppendLine("| model | case | quotes | unbalanced | unmarked Pāli | ungrounded quotes | bad refs | terminology | signatures |");
+        report.AppendLine("|---|---|---:|---:|---:|---:|---:|---|---|");
 
         foreach (var model in models)
         {
@@ -123,7 +122,6 @@ public class AiEvalHarness
                 http,
                 new OpenAiCompatibleOptions(baseUrl, apiKey),
                 NullLogger<OpenAiCompatibleProvider>.Instance);
-            var tier = registry.Rate(model).Tier;
 
             foreach (var evalCase in caseSet.Cases!)
             {
@@ -132,13 +130,13 @@ public class AiEvalHarness
 
                 if (score is null)
                 {
-                    report.AppendLine($"| `{model}` | {tier} | {evalCase.Id} | — | — | — | — | — | — | **{note}** |");
+                    report.AppendLine($"| `{model}` | {evalCase.Id} | — | — | — | — | — | — | **{note}** |");
                     _out.WriteLine($"{model} / {evalCase.Id}: {note}");
                     continue;
                 }
 
                 report.AppendLine(
-                    $"| `{model}` | {tier} | {evalCase.Id} | {score.Quotes} | {score.UnbalancedMarkers} | "
+                    $"| `{model}` | {evalCase.Id} | {score.Quotes} | {score.UnbalancedMarkers} | "
                     + $"{Cell(score.UnmarkedPali)} | {Cell(score.QuotesNotInPassage)} | "
                     + $"{Cell(score.UnsupportedReferences)} | {Cell(score.TerminologyLapses)} | "
                     + $"{Cell(score.FailureSignatures)} |");
@@ -149,7 +147,7 @@ public class AiEvalHarness
 
         report.AppendLine();
         report.AppendLine("Counts and evidence only. Tier changes are a judgement recorded by a person in");
-        report.AppendLine("`PALI_FIDELITY_CASES.md` and `model-registry.json` — not by this harness.");
+        report.AppendLine("`PALI_FIDELITY_CASES.md` — not by this harness.");
 
         var path = Environment.GetEnvironmentVariable("CST_AI_EVAL_REPORT")
                    ?? Path.Combine(Path.GetTempPath(), $"cst-ai-eval-{DateTime.Now:yyyyMMdd-HHmmss}.md");
