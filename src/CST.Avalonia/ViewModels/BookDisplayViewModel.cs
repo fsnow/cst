@@ -15,6 +15,8 @@ using Avalonia.Threading;
 using ReactiveUI;
 using CST;
 using CST.Conversion;
+using CST.Navigation;
+using CST.Search;
 using CST.Avalonia.Services;
 using CST.Avalonia.Models;
 using CST.Avalonia.Constants;
@@ -93,6 +95,12 @@ namespace CST.Avalonia.ViewModels
         private string _thaiPage = "*";
         private string _otherPage = "*";
         private string _currentParagraph = "*";
+
+        // Which page-numbering systems this book actually carries (#457, #541). Null until the book's XML
+        // has been read - deliberately distinct from an empty list, which means "read, and it carries none".
+        // See PageNumbering.Has for why unknown is treated as available rather than as absent.
+        private IReadOnlyList<PageEdition>? _editions;
+
         private int _currentHitIndex;
         private int _totalHits;
         private bool _hasSearchHighlights;
@@ -456,6 +464,12 @@ namespace CST.Avalonia.ViewModels
         /// script-dependent — it names a file on disk, so it is deliberately never converted or localized.
         /// </summary>
         public string XmlFileName => _book.FileName;
+
+        /// <summary>
+        /// The page-numbering systems this book carries, from its <c>&lt;pb&gt;</c> markers (#457, #541).
+        /// Null until the XML has been read; see <see cref="PageNumbering.Has"/> for how that is treated.
+        /// </summary>
+        public IReadOnlyList<PageEdition>? Editions => _editions;
 
         /// <summary>
         /// The book's place in the collection, converted to the script the book is being read in, with the
@@ -1144,7 +1158,14 @@ namespace CST.Avalonia.ViewModels
                     // override this anyway, but a BOM-less file must not decode as mojibake).
                     _logger.Debug("Reading raw XML content as string");
                     string xmlContent = File.ReadAllText(xmlPath, System.Text.Encoding.Unicode);
-                    
+
+                    // Which page-numbering systems this book carries (#457, #541). Built from the RAW xml,
+                    // before search highlighting rewrites it - markers are a fact about the book, and must
+                    // not vary with whether the reader arrived here from a search.
+                    _editions = BookMarkers.Build(xmlContent).Editions();
+                    _logger.Debug("Page editions for {FileName}: {Editions}",
+                        _book.FileName, string.Join(",", _editions));
+
                     // Apply search highlighting to raw XML string if needed
                     if (_searchTerms?.Any() == true)
                     {
@@ -1958,14 +1979,17 @@ namespace CST.Avalonia.ViewModels
         {
             _logger.Debug("UpdatePageReferencesText called: {DisplayTitle}", DisplayTitle);
             
-            // Port of CST4's SetPageStatusText method
-            // TODO: Use LocalizationService once it's fully implemented
-            // For now, use the same format as CST4's PageNumbersStatusFormat from Resources.resx
-            // string format = _localizationService.GetString("PageNumbersStatusFormat");
-            // PageReferencesText = string.Format(format, VriPage, MyanmarPage, PtsPage, ThaiPage, OtherPage);
-            
-            // Temporary hardcoded format until localization is implemented - now includes paragraph number for debugging
-            var newText = $"VRI: {VriPage}   Myanmar: {MyanmarPage}   PTS: {PtsPage}   Thai: {ThaiPage}   Other: {OtherPage}   Para: {CurrentParagraph}";
+            // Only the systems this book actually carries (#541). The labels live in PageNumbering, which is
+            // the seam localization (#26) replaces - not an interpolated string to go hunting for.
+            var newText = PageNumbering.ComposeStatus(_editions, edition => edition switch
+            {
+                PageEdition.Vri => VriPage,
+                PageEdition.Myanmar => MyanmarPage,
+                PageEdition.Pts => PtsPage,
+                PageEdition.Thai => ThaiPage,
+                PageEdition.Other => OtherPage,
+                _ => "*",
+            });
             var oldText = PageReferencesText;
             PageReferencesText = newText;
             

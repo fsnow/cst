@@ -4,6 +4,7 @@ using System.Reactive;
 using System.Text.RegularExpressions;
 using ReactiveUI;
 using CST;
+using CST.Navigation;
 using Serilog;
 
 namespace CST.Avalonia.ViewModels
@@ -39,15 +40,25 @@ namespace CST.Avalonia.ViewModels
             _thaiPage = bookViewModel.ThaiPage;
             _otherPage = bookViewModel.OtherPage;
 
-            // Set availability based on current book's page references
-            IsVriPageAvailable = bookViewModel.VriPage != "*";
-            IsMyanmarPageAvailable = bookViewModel.MyanmarPage != "*";
-            IsPtsPageAvailable = bookViewModel.PtsPage != "*";
-            IsThaiPageAvailable = bookViewModel.ThaiPage != "*";
-            IsOtherPageAvailable = bookViewModel.OtherPage != "*";
+            // Availability comes from what the BOOK CONTAINS, not from where the reader is sitting (#457).
+            // The previous test was `bookViewModel.VriPage != "*"`, reading the page in effect at the current
+            // scroll position: "*" means "no page of that edition is in effect HERE", never "this book has no
+            // such edition". So the dialog greyed out every system on every book when opened before the anchor
+            // cache resolved, and greyed out Myanmar on a Myanmar-paginated book whenever the reader was
+            // scrolled above its first page break.
+            var editions = bookViewModel.Editions;
+            IsVriPageAvailable = PageNumbering.Has(editions, PageEdition.Vri);
+            IsMyanmarPageAvailable = PageNumbering.Has(editions, PageEdition.Myanmar);
+            IsPtsPageAvailable = PageNumbering.Has(editions, PageEdition.Pts);
+            IsThaiPageAvailable = PageNumbering.Has(editions, PageEdition.Thai);
+            IsOtherPageAvailable = PageNumbering.Has(editions, PageEdition.Other);
 
-            _logger.Information("GoToDialog initialized for book: {Book}, Available pages: V={V}, M={M}, P={P}, T={T}, O={O}",
-                _book.FileName, IsVriPageAvailable, IsMyanmarPageAvailable, IsPtsPageAvailable, IsThaiPageAvailable, IsOtherPageAvailable);
+            // Open on a system the book actually has. Paragraph was hardcoded, and it is the weakest address
+            // available - ambiguous in 102 of 217 books because numbering restarts per sub-book (#447, #596).
+            SelectedType = PageNumbering.DefaultType(editions);
+
+            _logger.Information("GoToDialog initialized for book: {Book}, Available pages: V={V}, M={M}, P={P}, T={T}, O={O}, default={Default}",
+                _book.FileName, IsVriPageAvailable, IsMyanmarPageAvailable, IsPtsPageAvailable, IsThaiPageAvailable, IsOtherPageAvailable, SelectedType);
 
             // Commands
             var canNavigate = this.WhenAnyValue(
