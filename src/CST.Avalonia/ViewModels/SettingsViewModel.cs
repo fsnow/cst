@@ -731,6 +731,10 @@ namespace CST.Avalonia.ViewModels
             {
                 AvailableFonts = new ObservableCollection<string>(fonts);
 
+                // "System Default" is always present and is not a font, so the real question is whether
+                // anything else made it through the coverage filter. (#29)
+                NoFontSupportsScript = fonts.All(f => f == "System Default");
+
                 // The book list is the same faces under a different first entry: "Default" here means the
                 // app's shipped stack for this script, not the OS default.
                 var bookFonts = new List<string> { BookFontDefaultLabel };
@@ -783,6 +787,23 @@ namespace CST.Avalonia.ViewModels
         {
             get => _isLoadingFonts;
             set => this.RaiseAndSetIfChanged(ref _isLoadingFonts, value);
+        }
+
+        private bool _noFontSupportsScript;
+
+        /// <summary>
+        /// True when NOT ONE installed font can render this script. (#29)
+        ///
+        /// <para>Worth saying out loud in the window rather than only in the log. The picker still offers
+        /// "System Default" - that entry is the app's "do not override" token, not a font - so without this the
+        /// user sees a dropdown with a single unremarkable entry and no reason to suspect their system is
+        /// missing something. The old behaviour was worse still: every installed font was listed, so they would
+        /// pick one, get tofu, and reasonably conclude the application was broken.</para>
+        /// </summary>
+        public bool NoFontSupportsScript
+        {
+            get => _noFontSupportsScript;
+            private set => this.RaiseAndSetIfChanged(ref _noFontSupportsScript, value);
         }
 
         public ObservableCollection<string> AvailableFonts

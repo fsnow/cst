@@ -229,6 +229,16 @@
                                                                   HorizontalAlignment="Stretch"/>
                                                     </DockPanel>
 
+                                                    <!-- #29: no installed font can draw this script. Said
+                                                         here because the picker still lists "System Default",
+                                                         so an otherwise-bare dropdown would look ordinary. -->
+                                                    <TextBlock Grid.Row="0" Grid.Column="1"
+                                                              IsVisible="{Binding SelectedScript.NoFontSupportsScript}"
+                                                              Text="No installed font can display this script. Install one to read texts in it."
+                                                              TextWrapping="Wrap"
+                                                              Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                              VerticalAlignment="Bottom" Margin="0,36,0,4"/>
+
                                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Size:"
                                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <NumericUpDown Grid.Row="1" Grid.Column="1" 
