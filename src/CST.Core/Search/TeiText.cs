@@ -170,9 +170,12 @@ namespace CST.Search
 
             for (int i = scan; i > closed; i--)
             {
-                // "<p" alone is not enough: <paranum> and <pb> start the same way.
+                // "<p" alone is not enough: <paranum> and <pb> start the same way. Same whitespace set as
+                // TeiSnippetExtractor.FindLastPOpen, so the two scanners cannot disagree about what a
+                // paragraph tag is.
                 if (xml[i] != '<' || i + 2 >= xml.Length || xml[i + 1] != 'p') continue;
-                if (xml[i + 2] != ' ' && xml[i + 2] != '>') continue;
+                char after = xml[i + 2];
+                if (after != ' ' && after != '>' && after != '\t' && after != '\n' && after != '\r') continue;
 
                 int gt = xml.IndexOf('>', i);
                 return gt < 0 ? "" : Attr(xml.Substring(i, gt - i + 1), "rend");
