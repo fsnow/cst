@@ -1724,7 +1724,7 @@ public class AiSettingsViewModel : ViewModelBase
         {
             if (_credentials == null || string.IsNullOrWhiteSpace(ApiKeyEntry)) return;
 
-            _credentials.SetApiKey(SelectedProvider.Kind, ApiKeyEntry);
+            _credentials.SetApiKey(ActiveConnection().Id, ApiKeyEntry);
             // Cleared immediately: the box exists to hand the key over, not to hold it.
             ApiKeyEntry = "";
             RefreshKeyStatus();
@@ -1733,7 +1733,7 @@ public class AiSettingsViewModel : ViewModelBase
 
         private void RemoveApiKey()
         {
-            _credentials?.DeleteApiKey(SelectedProvider.Kind);
+            _credentials?.DeleteApiKey(ActiveConnection().Id);
             ApiKeyEntry = "";
             RefreshKeyStatus();
             RefreshReadiness();
@@ -1754,9 +1754,13 @@ public class AiSettingsViewModel : ViewModelBase
             }
             else
             {
-                KeyStatus = _credentials.GetApiKey(SelectedProvider.Kind) is null
-                    ? "No key stored for this provider."
-                    : "A key is stored for this provider.";
+                // Named, because the whole failure mode #678 fixes is a key that exists but belongs to a
+                // DIFFERENT endpoint. "No key stored" without saying which connection is the message that
+                // let the old collision hide.
+                var connection = ActiveConnection();
+                KeyStatus = _credentials.GetApiKey(connection.Id) is null
+                    ? $"No key stored for {connection.DisplayName}."
+                    : $"A key is stored for {connection.DisplayName}.";
             }
 
             this.RaisePropertyChanged(nameof(CanStoreKeys));

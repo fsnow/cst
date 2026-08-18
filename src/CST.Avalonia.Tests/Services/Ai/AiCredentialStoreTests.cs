@@ -49,9 +49,11 @@ public class AiCredentialStoreTests : IDisposable
 
     public void Dispose()
     {
+        // Connection ids now, not provider kinds (#678): keys are keyed per endpoint, so the cleanup list is
+        // whatever ids the tests in this class use rather than an enum's members.
         if (_store.IsAvailable)
-            foreach (var provider in Enum.GetValues<ChatProviderKind>())
-                _store.DeleteApiKey(provider);
+            foreach (var id in new[] { "anthropic", "openai-compatible", "openrouter-box", "local-ollama" })
+                _store.DeleteApiKey(id);
     }
 
     // ---- The acceptance test ------------------------------------------------------------------------------
@@ -64,9 +66,9 @@ public class AiCredentialStoreTests : IDisposable
         // is the easier one to introduce by accident.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey(ChatProviderKind.Anthropic, Secret);
-        _store.GetApiKey(ChatProviderKind.Anthropic);
-        _store.DeleteApiKey(ChatProviderKind.Anthropic);
+        _store.SetApiKey("anthropic", Secret);
+        _store.GetApiKey("anthropic");
+        _store.DeleteApiKey("anthropic");
 
         Assert.NotEmpty(_log.Lines);   // the logger really was wired, so absence means absence
         foreach (var line in _log.Lines)
@@ -85,8 +87,8 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        Assert.True(_store.SetApiKey(ChatProviderKind.Anthropic, Secret));
-        Assert.Equal(Secret, _store.GetApiKey(ChatProviderKind.Anthropic));
+        Assert.True(_store.SetApiKey("anthropic", Secret));
+        Assert.Equal(Secret, _store.GetApiKey("anthropic"));
     }
 
     [Fact]
@@ -96,10 +98,10 @@ public class AiCredentialStoreTests : IDisposable
         // a window with no key at all if the add failed.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey(ChatProviderKind.Anthropic, Secret);
-        Assert.True(_store.SetApiKey(ChatProviderKind.Anthropic, "sk-ant-second-value"));
+        _store.SetApiKey("anthropic", Secret);
+        Assert.True(_store.SetApiKey("anthropic", "sk-ant-second-value"));
 
-        Assert.Equal("sk-ant-second-value", _store.GetApiKey(ChatProviderKind.Anthropic));
+        Assert.Equal("sk-ant-second-value", _store.GetApiKey("anthropic"));
     }
 
     [Fact]
@@ -108,11 +110,11 @@ public class AiCredentialStoreTests : IDisposable
         // The ordinary case for someone comparing a hosted model against a local one.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey(ChatProviderKind.Anthropic, "sk-ant-aaa");
-        _store.SetApiKey(ChatProviderKind.OpenAiCompatible, "sk-oai-bbb");
+        _store.SetApiKey("anthropic", "sk-ant-aaa");
+        _store.SetApiKey("openai-compatible", "sk-oai-bbb");
 
-        Assert.Equal("sk-ant-aaa", _store.GetApiKey(ChatProviderKind.Anthropic));
-        Assert.Equal("sk-oai-bbb", _store.GetApiKey(ChatProviderKind.OpenAiCompatible));
+        Assert.Equal("sk-ant-aaa", _store.GetApiKey("anthropic"));
+        Assert.Equal("sk-oai-bbb", _store.GetApiKey("openai-compatible"));
     }
 
     [Fact]
@@ -120,7 +122,7 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        Assert.Null(_store.GetApiKey(ChatProviderKind.Anthropic));
+        Assert.Null(_store.GetApiKey("anthropic"));
     }
 
     [Fact]
@@ -129,7 +131,7 @@ public class AiCredentialStoreTests : IDisposable
         // Idempotent: Settings should be able to offer "forget this key" without first checking.
         if (!_store.IsAvailable) return;
 
-        Assert.True(_store.DeleteApiKey(ChatProviderKind.Anthropic));
+        Assert.True(_store.DeleteApiKey("anthropic"));
     }
 
     [Fact]
@@ -137,10 +139,10 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey(ChatProviderKind.Anthropic, Secret);
-        Assert.True(_store.DeleteApiKey(ChatProviderKind.Anthropic));
+        _store.SetApiKey("anthropic", Secret);
+        Assert.True(_store.DeleteApiKey("anthropic"));
 
-        Assert.Null(_store.GetApiKey(ChatProviderKind.Anthropic));
+        Assert.Null(_store.GetApiKey("anthropic"));
     }
 
     [Fact]
@@ -150,9 +152,9 @@ public class AiCredentialStoreTests : IDisposable
         // a trailing newline, and storing that verbatim produces a 401 nobody can explain.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey(ChatProviderKind.Anthropic, "  sk-ānt-ṃixed-42\n");
+        _store.SetApiKey("anthropic", "  sk-ānt-ṃixed-42\n");
 
-        Assert.Equal("sk-ānt-ṃixed-42", _store.GetApiKey(ChatProviderKind.Anthropic));
+        Assert.Equal("sk-ānt-ṃixed-42", _store.GetApiKey("anthropic"));
     }
 
     [Fact]
@@ -160,8 +162,8 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        Assert.False(_store.SetApiKey(ChatProviderKind.Anthropic, "   "));
-        Assert.Null(_store.GetApiKey(ChatProviderKind.Anthropic));
+        Assert.False(_store.SetApiKey("anthropic", "   "));
+        Assert.Null(_store.GetApiKey("anthropic"));
     }
 
     // ---- Platform behaviour -------------------------------------------------------------------------------
@@ -198,8 +200,8 @@ public class AiCredentialStoreTests : IDisposable
     public void Each_provider_gets_its_own_account_name()
     {
         Assert.NotEqual(
-            AiCredentialStore.AccountFor(ChatProviderKind.Anthropic),
-            AiCredentialStore.AccountFor(ChatProviderKind.OpenAiCompatible));
+            AiCredentialStore.AccountFor("anthropic"),
+            AiCredentialStore.AccountFor("openai-compatible"));
     }
 
     [Fact]

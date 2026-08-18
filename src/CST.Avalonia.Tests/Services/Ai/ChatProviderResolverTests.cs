@@ -30,9 +30,9 @@ public class ChatProviderResolverTests
 
         public bool IsAvailable => Unavailable is null;
         public string? Unavailable { get; }
-        public string? GetApiKey(ChatProviderKind provider) => _key;
-        public bool SetApiKey(ChatProviderKind provider, string apiKey) => throw new NotSupportedException();
-        public bool DeleteApiKey(ChatProviderKind provider) => throw new NotSupportedException();
+        public string? GetApiKey(string connectionId) => _key;
+        public bool SetApiKey(string connectionId, string apiKey) => throw new NotSupportedException();
+        public bool DeleteApiKey(string connectionId) => throw new NotSupportedException();
     }
 
     private static ChatProviderResolver Resolver(

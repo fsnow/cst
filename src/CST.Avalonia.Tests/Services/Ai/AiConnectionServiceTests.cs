@@ -250,4 +250,77 @@ public class AiConnectionServiceTests
         Assert.Equal("Renamed", result.Connection.DisplayName);
         Assert.Equal("http://b/v1", result.Connection.BaseUrl);
     }
+
+    /// <summary>An in-memory credential store, keyed by connection id exactly as the real one now is.</summary>
+    private sealed class Keys : IAiCredentialStore
+    {
+        private readonly Dictionary<string, string> _byConnection = new();
+        public bool IsAvailable => true;
+        public string? Unavailable => null;
+        public string? GetApiKey(string connectionId) =>
+            _byConnection.TryGetValue(connectionId, out var k) ? k : null;
+        public bool SetApiKey(string connectionId, string apiKey) { _byConnection[connectionId] = apiKey; return true; }
+        public bool DeleteApiKey(string connectionId) { _byConnection.Remove(connectionId); return true; }
+    }
+
+    private static (AiConnectionService Service, Settings Settings, Keys Keys) MakeWithKeys()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var keys = new Keys();
+        return (new AiConnectionService(svc.Object, keys), settings, keys);
+    }
+
+    // ---- credentials, keyed per connection (#678) --------------------------------------------------------
+
+    /// <summary>
+    /// The defect #678 exists for, stated as a test. Two OpenAI-compatible endpoints previously shared one
+    /// credential slot, because the store was keyed by a two-member provider-kind enum — so storing the second
+    /// key silently replaced the first, and the reader got a 401 naming neither cause.
+    /// </summary>
+    [Fact]
+    public void Two_openai_compatible_endpoints_keep_separate_keys()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("openrouter-box", Draft("OpenRouter", "https://openrouter.ai/api/v1"));
+        service.Add("local-ollama", Draft("Ollama", "http://localhost:11434/v1"));
+
+        keys.SetApiKey("openrouter-box", "or-key");
+        keys.SetApiKey("local-ollama", "ollama-key");
+
+        Assert.Equal("or-key", keys.GetApiKey("openrouter-box"));
+        Assert.Equal("ollama-key", keys.GetApiKey("local-ollama"));
+    }
+
+    /// <summary>A connection reports where its credential came from, so the UI can name the source and — for
+    /// an environment-sourced one — offer no remove action rather than a button that would lie.</summary>
+    [Fact]
+    public void A_connection_reports_whether_a_key_is_stored_for_it()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+
+        Assert.Equal(CredentialSource.None, service.Connections.Single().KeySource);
+
+        keys.SetApiKey("box", "k");
+
+        Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
+    }
+
+    /// <summary>
+    /// Removing a connection takes its credential with it. An orphaned key is unreachable and uncleanable —
+    /// and worse, would be silently re-adopted by a later connection that happened to take the same id.
+    /// </summary>
+    [Fact]
+    public void Removing_a_connection_removes_its_key()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.SetApiKey("box", "k");
+
+        service.Remove("box");
+
+        Assert.Null(keys.GetApiKey("box"));
+    }
 }
