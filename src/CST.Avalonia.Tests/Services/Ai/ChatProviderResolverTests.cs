@@ -5,6 +5,7 @@ using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using System.Linq;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services.Ai;
@@ -53,10 +54,26 @@ public class ChatProviderResolverTests
             new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan });
     }
 
+    /// <summary>
+    /// The active connection, created on demand. #689 replaced the scalar Provider/BaseUrl/Model on
+    /// ChatSettings with a list of connections plus an active id, so these tests configure a connection
+    /// rather than three loose fields.
+    /// </summary>
+    private static CST.Avalonia.Models.AiConnectionRecord Conn(CST.Avalonia.Models.ChatSettings chat)
+    {
+        var existing = chat.Connections.FirstOrDefault();
+        if (existing is not null) return existing;
+
+        var created = new CST.Avalonia.Models.AiConnectionRecord { Id = "test", DisplayName = "test" };
+        chat.Connections.Add(created);
+        chat.ActiveConnectionId = created.Id;
+        return created;
+    }
+
     [Fact]
     public void Anthropic_resolves_with_a_stored_key()
     {
-        var resolver = Resolver(c => { c.Provider = "anthropic"; c.Model = " claude-opus-5 "; }, apiKey: "sk-ant-x");
+        var resolver = Resolver(c => { Conn(c).Kind = "anthropic"; c.ActiveModelId = " claude-opus-5 "; }, apiKey: "sk-ant-x");
 
         var resolution = resolver.Resolve(out var problem);
 
@@ -68,7 +85,7 @@ public class ChatProviderResolverTests
     [Fact]
     public void Anthropic_without_a_key_says_so_rather_than_failing_at_the_wire()
     {
-        var resolver = Resolver(c => { c.Provider = "anthropic"; c.Model = "claude-opus-5"; });
+        var resolver = Resolver(c => { Conn(c).Kind = "anthropic"; c.ActiveModelId = "claude-opus-5"; });
 
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("API key", problem);
@@ -84,7 +101,7 @@ public class ChatProviderResolverTests
         // Windows', which stopped being true when DPAPI landed (#579) - a fixture that quotes a real message
         // should not outlive it.
         var resolver = Resolver(
-            c => { c.Provider = "anthropic"; c.Model = "claude-opus-5"; },
+            c => { Conn(c).Kind = "anthropic"; c.ActiveModelId = "claude-opus-5"; },
             storageUnavailable: "Secure key storage is not available on this platform.");
 
         Assert.Null(resolver.Resolve(out var problem));
@@ -99,9 +116,9 @@ public class ChatProviderResolverTests
         // one here would lock out the configuration surface B was built to serve.
         var resolver = Resolver(c =>
         {
-            c.Provider = "openai-compatible";
-            c.BaseUrl = "http://localhost:11434/v1";
-            c.Model = "gemma4:cloud";
+            Conn(c).Kind = "openai-compatible";
+            Conn(c).BaseUrl = "http://localhost:11434/v1";
+            c.ActiveModelId = "gemma4:cloud";
         });
 
         var resolution = resolver.Resolve(out var problem);
@@ -114,7 +131,7 @@ public class ChatProviderResolverTests
     public void An_openai_compatible_endpoint_without_a_base_url_is_refused()
     {
         // No default is possible: the base URL IS the provider.
-        var resolver = Resolver(c => { c.Provider = "openai-compatible"; c.Model = "deepseek-chat"; });
+        var resolver = Resolver(c => { Conn(c).Kind = "openai-compatible"; c.ActiveModelId = "deepseek-chat"; });
 
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("base URL", problem);
@@ -123,7 +140,7 @@ public class ChatProviderResolverTests
     [Fact]
     public void No_model_is_refused_before_anything_else_is_examined()
     {
-        var resolver = Resolver(c => { c.Provider = "anthropic"; c.Model = null; }, apiKey: "sk-ant-x");
+        var resolver = Resolver(c => { Conn(c).Kind = "anthropic"; c.ActiveModelId = null; }, apiKey: "sk-ant-x");
 
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("model", problem);
@@ -133,7 +150,7 @@ public class ChatProviderResolverTests
     public void The_master_switch_being_off_is_reported_as_a_setting_not_a_fault()
     {
         var resolver = Resolver(
-            c => { c.Provider = "anthropic"; c.Model = "claude-opus-5"; }, apiKey: "sk-ant-x", aiEnabled: false);
+            c => { Conn(c).Kind = "anthropic"; c.ActiveModelId = "claude-opus-5"; }, apiKey: "sk-ant-x", aiEnabled: false);
 
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("turned off", problem);
@@ -142,7 +159,7 @@ public class ChatProviderResolverTests
     [Fact]
     public void An_unknown_provider_name_names_itself_in_the_message()
     {
-        var resolver = Resolver(c => { c.Provider = "bedrock"; c.Model = "x"; }, apiKey: "k");
+        var resolver = Resolver(c => { Conn(c).Kind = "bedrock"; c.ActiveModelId = "x"; }, apiKey: "k");
 
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("bedrock", problem);

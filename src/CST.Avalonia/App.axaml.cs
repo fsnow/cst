@@ -1302,6 +1302,10 @@ public partial class App : Application
         // entered" and "this build cannot store one".
         services.AddSingleton<Services.Ai.IAiCredentialStore, Services.Ai.Credentials.AiCredentialStore>();
 
+        // Endpoints the reader has configured (#689). Singleton because the UI binds to its ConnectionsChanged
+        // event and every consumer must see the same list.
+        services.AddSingleton<Services.Ai.IAiConnectionService, Services.Ai.AiConnectionService>();
+
         // The fidelity advisory (#584). Data only — Settings (#585) and the panel (#586) surface it.
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 

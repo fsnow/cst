@@ -79,33 +79,76 @@ namespace CST.Avalonia.Models
         public bool Enabled { get; set; } = false;
 
         /// <summary>
-        /// <c>anthropic</c> or <c>openai-compatible</c>.
+        /// Every endpoint the reader has configured. (#689)
         ///
-        /// <para>The OpenAI-compatible shape is the default because it is what most readers will actually
-        /// reach for: it serves OpenRouter, DeepSeek, Together, Google's endpoint, and every local runner,
-        /// whereas Anthropic requires API credits bought separately from any Claude subscription — a Max
-        /// subscription does not grant API access, so even a paying Anthropic customer cannot use that path
-        /// without a second purchase.</para>
+        /// <para>Replaces the single scalar <c>Provider</c>/<c>BaseUrl</c>/<c>Model</c> this shipped with.
+        /// Those were deleted outright rather than deprecated: <c>ChatSettings</c> postdates the beta 5 tag
+        /// (<c>git grep -l ChatSettings v5.0.0-beta.5</c> returns nothing), so there is no persisted state in
+        /// the wild to migrate and no reader to break.</para>
         ///
-        /// <para>This is only which entry the Settings dropdown opens on; nothing is configured until the
-        /// reader sets a model, and an endpoint is required for this shape.</para>
+        /// <para>Plural because switching endpoints is the point — comparing two models on the same passage
+        /// is the task the assistant exists for, and it was impossible while one base URL and one credential
+        /// slot had to be overwritten each time.</para>
         /// </summary>
-        public string Provider { get; set; } = "openai-compatible";
+        public List<AiConnectionRecord> Connections { get; set; } = new();
 
-        /// <summary>
-        /// Endpoint base URL. Optional for Anthropic (it has a real default); <b>required</b> for
-        /// OpenAI-compatible, where the base URL is what selects the provider.
-        /// </summary>
-        public string? BaseUrl { get; set; }
+        /// <summary>The connection a request goes to, by <see cref="AiConnectionRecord.Id"/>. Null until one
+        /// is configured.</summary>
+        public string? ActiveConnectionId { get; set; }
 
-        /// <summary>Model id, verbatim. Never validated against a list — see <c>ChatProviderResolution</c>.</summary>
-        public string? Model { get; set; }
+        /// <summary>The model within that connection. Null until one is chosen.</summary>
+        public string? ActiveModelId { get; set; }
 
         /// <summary>
         /// Language the ANSWER is written in — a separate axis from the script quoted Pāli is rendered in
         /// (AI_SURFACE_B.md §9). Not optional in the bundle: "translate" has to mean translate into something.
         /// </summary>
         public string AnswerLanguage { get; set; } = "English";
+    }
+
+    /// <summary>
+    /// One configured endpoint, as persisted. (#689)
+    ///
+    /// <para>Deliberately a mutable class with plain collections rather than the
+    /// <c>CST.Avalonia.Models.Ai.AiConnection</c> record: this is what
+    /// <c>System.Text.Json</c> round-trips into <c>settings.json</c>, and it carries only what is actually
+    /// stored. The runtime record adds what is <i>derived</i> — where the credential came from, and whether
+    /// the endpoint has been reached — neither of which belongs in a settings file.</para>
+    /// </summary>
+    public class AiConnectionRecord
+    {
+        /// <summary>Stable slug, immutable once created, and the account the credential is filed under.</summary>
+        public string Id { get; set; } = "";
+
+        public string DisplayName { get; set; } = "";
+
+        /// <summary><c>anthropic</c> or <c>openai-compatible</c>. A string rather than the enum so a rename
+        /// on our side cannot silently invalidate a reader's settings file.</summary>
+        public string Kind { get; set; } = "openai-compatible";
+
+        /// <summary>May contain <c>{key}</c> placeholders filled from <see cref="Inputs"/> — Azure and
+        /// Cloudflare have a URL shape rather than a URL.</summary>
+        public string BaseUrl { get; set; } = "";
+
+        public List<AiModelRecord> Models { get; set; } = new();
+
+        /// <summary>Extra request headers. Never the credential, which lives in the OS credential store.</summary>
+        public Dictionary<string, string> Headers { get; set; } = new();
+
+        /// <summary>Answers to the preset's prompts — resource name, account id, region — substituted into
+        /// <see cref="BaseUrl"/> and <see cref="Headers"/>.</summary>
+        public Dictionary<string, string> Inputs { get; set; } = new();
+    }
+
+    /// <summary>One model a connection offers, as persisted.</summary>
+    public class AiModelRecord
+    {
+        public string Id { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+
+        /// <summary>Whether it appears in the per-turn picker. Defaults true: all-on is neutral, whereas a
+        /// pre-selected subset would be a quality verdict (#670/#681).</summary>
+        public bool Enabled { get; set; } = true;
     }
 
     /// <summary>Permissions for the loopback API server that exposes the corpus tools to agents (surface C).</summary>

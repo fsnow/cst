@@ -147,6 +147,12 @@ namespace CST.Avalonia.Tests.ViewModels
             Assert.Contains("No secure storage", vm.KeyStatus);
         }
 
+        /// <summary>The connection the single-provider fields edit. #689 made the model plural; these fields
+        /// now write to the active connection rather than to scalar settings.</summary>
+        private static CST.Avalonia.Models.AiConnectionRecord Active(CST.Avalonia.Models.Settings settings) =>
+            settings.Ai.Chat.Connections.FirstOrDefault(
+                c => c.Id == settings.Ai.Chat.ActiveConnectionId) ?? settings.Ai.Chat.Connections.First();
+
         [Fact]
         public void Choosing_a_provider_records_the_string_the_resolver_parses()
         {
@@ -157,7 +163,7 @@ namespace CST.Avalonia.Tests.ViewModels
             // The stored value has to be one ChatProviderResolver.TryParseKind accepts, or the UI would
             // configure a provider the app then reports as unknown.
             Assert.True(CST.Avalonia.Services.Ai.ChatProviderResolver.TryParseKind(
-                settings.Ai.Chat.Provider, out var kind));
+                Active(settings).Kind, out var kind));
             Assert.Equal(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible, kind);
         }
 
@@ -188,7 +194,7 @@ namespace CST.Avalonia.Tests.ViewModels
             {
                 vm.SelectedProvider = choice;
                 Assert.True(CST.Avalonia.Services.Ai.ChatProviderResolver.TryParseKind(
-                    settings.Ai.Chat.Provider, out var kind), $"unparseable: {settings.Ai.Chat.Provider}");
+                    Active(settings).Kind, out var kind), $"unparseable: {Active(settings).Kind}");
                 Assert.Equal(choice.Kind, kind);
             }
         }
@@ -199,12 +205,12 @@ namespace CST.Avalonia.Tests.ViewModels
             var (vm, settings, _) = MakeWithAssistant();
 
             vm.Model = "  claude-sonnet-4-5  ";
-            Assert.Equal("claude-sonnet-4-5", settings.Ai.Chat.Model);
+            Assert.Equal("claude-sonnet-4-5", settings.Ai.Chat.ActiveModelId);
 
             vm.Model = "   ";
             // Null rather than whitespace: the resolver tests IsNullOrWhiteSpace, but a stored "   " would
             // read as configured to anything that only checks for null.
-            Assert.Null(settings.Ai.Chat.Model);
+            Assert.Null(settings.Ai.Chat.ActiveModelId);
         }
 
         [Fact]

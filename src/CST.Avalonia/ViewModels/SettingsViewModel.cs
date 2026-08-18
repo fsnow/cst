@@ -1308,11 +1308,14 @@ public class AiSettingsViewModel : ViewModelBase
 
             var chat = ai.Chat;
             _chatEnabled = chat.Enabled;
+            // The existing single-provider fields now edit the ACTIVE connection (#689). Kept working, and
+            // deliberately not deleted, so the app stays configurable until the connections UI (#691) lands.
+            var active = ActiveConnection();
             _providerChoice = Providers.FirstOrDefault(
-                c => Services.Ai.ChatProviderResolver.TryParseKind(chat.Provider, out var k)
+                c => Services.Ai.ChatProviderResolver.TryParseKind(active.Kind, out var k)
                      && k == c.Kind) ?? Providers[0];
-            _baseUrl = chat.BaseUrl ?? "";
-            _model = chat.Model ?? "";
+            _baseUrl = active.BaseUrl;
+            _model = _settingsService.Settings.Ai.Chat.ActiveModelId ?? "";
             _answerLanguage = string.IsNullOrWhiteSpace(chat.AnswerLanguage) ? "English" : chat.AnswerLanguage;
 
             SaveApiKeyCommand = ReactiveCommand.Create(SaveApiKey);
@@ -1497,7 +1500,7 @@ public class AiSettingsViewModel : ViewModelBase
             set
             {
                 this.RaiseAndSetIfChanged(ref _providerChoice, value);
-                _settingsService.Settings.Ai.Chat.Provider = value?.Stored ?? "anthropic";
+                ActiveConnection().Kind = value?.Stored ?? "anthropic";
                 _settingsService.RequestSave();
                 this.RaisePropertyChanged(nameof(IsOpenAiCompatible));
                 this.RaisePropertyChanged(nameof(BaseUrlDescription));
@@ -1505,6 +1508,56 @@ public class AiSettingsViewModel : ViewModelBase
                 RefreshKeyStatus();
                 RefreshReadiness();
             }
+        }
+
+        /// <summary>
+        /// The connection the single-provider fields edit, creating it on first use. (#689)
+        ///
+        /// <para>Surface B shipped with one provider, one base URL and one model; the model is now plural.
+        /// Rather than delete the working UI before its replacement (#691) exists, these fields edit the
+        /// <i>active</i> connection — so the app remains configurable, and whatever a reader sets here is a
+        /// real connection record that the new UI will show rather than state that has to be migrated.</para>
+        /// </summary>
+        private CST.Avalonia.Models.AiConnectionRecord ActiveConnection()
+        {
+            var chat = _settingsService.Settings.Ai.Chat;
+
+            var existing = chat.Connections.FirstOrDefault(
+                c => string.Equals(c.Id, chat.ActiveConnectionId, System.StringComparison.Ordinal));
+            if (existing is not null) return existing;
+
+            existing = chat.Connections.FirstOrDefault();
+            if (existing is not null)
+            {
+                chat.ActiveConnectionId = existing.Id;
+                return existing;
+            }
+
+            var created = new CST.Avalonia.Models.AiConnectionRecord
+            {
+                Id = "default",
+                DisplayName = "My provider",
+                Kind = "openai-compatible",
+                BaseUrl = "",
+            };
+            chat.Connections.Add(created);
+            chat.ActiveConnectionId = created.Id;
+            return created;
+        }
+
+        /// <summary>Sets the active model, keeping the connection's own list in step so the model a reader
+        /// typed here appears in the per-turn picker (#693) rather than only in this box.</summary>
+        private void SetActiveModel(string? value)
+        {
+            var chat = _settingsService.Settings.Ai.Chat;
+            var id = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            chat.ActiveModelId = id;
+
+            if (id is null) return;
+
+            var connection = ActiveConnection();
+            if (!connection.Models.Any(m => string.Equals(m.Id, id, System.StringComparison.Ordinal)))
+                connection.Models.Add(new CST.Avalonia.Models.AiModelRecord { Id = id, DisplayName = id });
         }
 
         /// <summary>Whether the endpoint field is the load-bearing one — it is what selects the provider.</summary>
@@ -1522,7 +1575,7 @@ public class AiSettingsViewModel : ViewModelBase
             set
             {
                 this.RaiseAndSetIfChanged(ref _baseUrl, value);
-                _settingsService.Settings.Ai.Chat.BaseUrl = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+                ActiveConnection().BaseUrl = value?.Trim() ?? "";
                 _settingsService.RequestSave();
                 RefreshReadiness();
             }
@@ -1539,7 +1592,7 @@ public class AiSettingsViewModel : ViewModelBase
             set
             {
                 this.RaiseAndSetIfChanged(ref _model, value);
-                _settingsService.Settings.Ai.Chat.Model = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+                SetActiveModel(value);
                 _settingsService.RequestSave();
                 RefreshReadiness();
             }
