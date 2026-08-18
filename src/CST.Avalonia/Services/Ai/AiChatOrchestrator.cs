@@ -67,14 +67,23 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         IAiContextBundler bundler,
         IPromptBuilder prompts,
         ISettingsService settings,
-        ILogger<AiChatOrchestrator> logger)
+        ILogger<AiChatOrchestrator> logger,
+        IAiConnectionService? connections = null)
     {
         _resolver = resolver;
         _bundler = bundler;
         _prompts = prompts;
         _settings = settings;
         _logger = logger;
+        _connections = connections;
     }
+
+    /// <summary>
+    /// Optional so the orchestrator stays constructible in tests that care about nothing else. Its only job
+    /// here is the reachability write-back (#673): a turn is the app's best evidence about whether an endpoint
+    /// answers, and without this the knowledge dies in the panel while Settings goes on saying "Connected".
+    /// </summary>
+    private readonly IAiConnectionService? _connections;
 
     public void Stop()
     {
@@ -309,6 +318,10 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         if (inputTokens is not null || outputTokens is not null)
             yield return AiTurnEvent.ForUsage(new AiUsageReport(inputTokens, outputTokens));
 
+        // Anything that arrived at all proves the endpoint answered, whatever went wrong afterwards.
+        if (sawText || sawReasoning || inputTokens is not null || outputTokens is not null)
+            ReportReachability(true);
+
         if (failure is not null)
         {
             // The provider knows THAT the output limit was hit; only this loop knows what the user got for it.
@@ -317,6 +330,12 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                 failure = failure with { Message = TruncationMessage(sawText, sawReasoning) };
 
             _logger.LogInformation("AI turn failed: {Kind} ({Code})", failure.Kind, failure.ProviderCode ?? "-");
+
+            // Only a NETWORK failure says anything about the endpoint. A 401, a rate limit or an over-long
+            // context all prove the endpoint answered - marking those unreachable would be wrong, and would
+            // put a red mark on a perfectly good connection whose key simply needs fixing.
+            if (failure.Kind == AiErrorKind.Network)
+                ReportReachability(false);
             yield return AiTurnEvent.ForError(failure);
             yield break;
         }
@@ -402,6 +421,21 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             _ => "other",
         };
         return page.Volume > 0 ? $"{edition} {page.Volume}.{page.Number}" : $"{edition} {page.Number}";
+    }
+
+    /// <summary>Records what this turn learned about the active endpoint, so Settings and the assistant read
+    /// one fact rather than each guessing. Never throws: reporting is a courtesy, not part of the turn.</summary>
+    private void ReportReachability(bool reachable)
+    {
+        try
+        {
+            if (_connections?.Active is { } active)
+                _connections.ReportReachability(active.Id, reachable);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not record endpoint reachability (#673)");
+        }
     }
 
     private static string TruncationMessage(bool sawText, bool sawReasoning) =>

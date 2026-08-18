@@ -193,7 +193,8 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                     new AnthropicMessagesProvider(
                         _http,
                         new AnthropicOptions(apiKey, NullIfBlank(baseUrl)),
-                        _loggerFactory.CreateLogger<AnthropicMessagesProvider>()),
+                        _loggerFactory.CreateLogger<AnthropicMessagesProvider>(),
+                        firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());
 
             case ChatProviderKind.OpenAiCompatible when string.IsNullOrWhiteSpace(baseUrl):
@@ -209,7 +210,8 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                     new OpenAiCompatibleProvider(
                         _http,
                         new OpenAiCompatibleOptions(baseUrl.Trim(), NullIfBlank(apiKey)),
-                        _loggerFactory.CreateLogger<OpenAiCompatibleProvider>()),
+                        _loggerFactory.CreateLogger<OpenAiCompatibleProvider>(),
+                        firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());
 
             default:
