@@ -84,19 +84,19 @@ namespace CST.Search
 
             sb.Append(ellipsisStart ? "... " : "");
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, winStart, ms[0].Start, renderBraces), opts.OutputScript)).TrimStart());
+                TeiText.Clean(xml, winStart, ms[0].Start, renderBraces, opts.OutputScript), opts.OutputScript)).TrimStart());
 
             for (int i = 0; i < ms.Count; i++)
             {
                 string markText = TeiText.Convert(
-                    TeiText.Clean(xml, ms[i].Start, ms[i].End, renderBraces), opts.OutputScript).Trim();
+                    TeiText.Clean(xml, ms[i].Start, ms[i].End, renderBraces, opts.OutputScript), opts.OutputScript).Trim();
                 highlights.Add(new SnippetHighlight(sb.Length, markText.Length, ms[i].IsAnchor));
                 sb.Append(markText);
 
                 if (i < ms.Count - 1)
                 {
                     string gap = TeiText.Collapse(TeiText.Convert(
-                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, renderBraces), opts.OutputScript));
+                        TeiText.Clean(xml, ms[i].End, ms[i + 1].Start, renderBraces, opts.OutputScript), opts.OutputScript));
                     sb.Append(gap.Length == 0 ? " " : gap); // never fuse two distinct marked words
                 }
             }
@@ -112,7 +112,7 @@ namespace CST.Search
                 foreach (var (ns, ne) in winNotes)
                     if (suffixStart >= ns && suffixStart < ne) { suffixStart = Math.Min(ne, winEnd); break; }
             sb.Append(TeiText.Collapse(TeiText.Convert(
-                TeiText.Clean(xml, suffixStart, winEnd, renderBraces), opts.OutputScript)).TrimEnd());
+                TeiText.Clean(xml, suffixStart, winEnd, renderBraces, opts.OutputScript), opts.OutputScript)).TrimEnd());
             sb.Append(ellipsisEnd ? " ..." : "");
 
             var (num, code, pages) = markers.RefsAt(anchor.Start);

@@ -68,13 +68,13 @@ namespace CST.Search
                 // {reading (sigla)} spans out into structured notes and return brace-free text. The note text is
                 // therefore already in the output script and offsets index the returned brace-free text. (#267)
                 string braced = TeiText.Collapse(
-                    TeiText.Convert(TeiText.Clean(xml, readStart, end, includeNotes: true), outputScript)).Trim();
+                    TeiText.Convert(TeiText.Clean(xml, readStart, end, includeNotes: true, outputScript), outputScript)).Trim();
                 (text, notes) = SplitBracedNotes(braced);
             }
             else
             {
                 text = TeiText.Collapse(
-                    TeiText.Convert(TeiText.Clean(xml, readStart, end, includeVariants), outputScript)).Trim();
+                    TeiText.Convert(TeiText.Clean(xml, readStart, end, includeVariants, outputScript), outputScript)).Trim();
             }
 
             int? next = end < xml.Length ? end : (int?)null;
