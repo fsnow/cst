@@ -1,0 +1,176 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:CST.Avalonia.ViewModels"
+             xmlns:conv="using:CST.Avalonia.Converters"
+             x:Class="CST.Avalonia.Views.AiModelsView"
+             x:DataType="vm:AiModelsViewModel">
+
+    <!-- The Models tab (#692, #674).
+
+         One flat, virtualized list of group headers and model rows. Flat because a provider listing runs to
+         hundreds of entries and a nested items control would build a control for every one; a single
+         ListBox lets the virtualizing panel do its job.
+
+         Search filters ACROSS groups rather than within the expanded one, and expands what matches — at four
+         hundred models this is a search box with results, not a menu you scroll. -->
+
+    <UserControl.Styles>
+        <Style Selector="Border.Tile">
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+
+        <Style Selector="Border.Tile > TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style Selector="TextBlock.Secondary">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+
+        <Style Selector="Button.Link">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+
+        <!-- The list is a container for rows, not a thing you select from: every row's action is its own
+             toggle. Selection chrome here would suggest a row-level choice that does not exist. -->
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel>
+        <TextBlock Text="Choose the models you want to switch between. They are what the Assistant offers when you ask a question."
+                   Classes="SettingDescription"/>
+
+        <TextBlock IsVisible="{Binding HasNoConnections}"
+                   Text="No providers are configured yet. Add one on the Providers tab first."
+                   Classes="SettingDescription"/>
+
+        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10"
+              IsVisible="{Binding !HasNoConnections}">
+            <TextBox Grid.Column="0" Text="{Binding Search}"
+                     Watermark="Search models"/>
+            <!-- Mechanical and reversible: it drops models that cannot take text in and give text out, using
+                 the provider's own published modality, and says nothing about which of the rest is better. -->
+            <CheckBox Grid.Column="1" IsChecked="{Binding TextOnly}"
+                      Content="Text models only"
+                      Margin="10,0,0,0" VerticalAlignment="Center"
+                      ToolTip.Tip="Hides models the provider publishes as image, audio or video only. Nothing is judged — these cannot answer a question at all."/>
+        </Grid>
+
+        <Border Classes="SettingGroup" Padding="0"
+                IsVisible="{Binding !HasNoConnections}">
+            <ListBox ItemsSource="{Binding Rows}"
+                     MaxHeight="460"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     SelectionMode="Single">
+                <ListBox.DataTemplates>
+
+                    <!-- Group header: one connection -->
+                    <DataTemplate DataType="vm:AiModelGroupViewModel">
+                        <Border Padding="10,8"
+                                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,0,1">
+                            <StackPanel Spacing="4">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                                    <Button Grid.Column="0" Classes="Link"
+                                            Command="{Binding ToggleCommand}"
+                                            Padding="2,0" Margin="0,0,4,0">
+                                        <TextBlock Text="{Binding IsExpanded, Converter={x:Static conv:ChevronConverter.Instance}}"
+                                                   FontSize="10"/>
+                                    </Button>
+
+                                    <Border Grid.Column="1" Classes="Tile"
+                                            Background="{Binding MonogramTone,
+                                                Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                        <TextBlock Text="{Binding Monogram}"/>
+                                    </Border>
+
+                                    <TextBlock Grid.Column="2" Text="{Binding DisplayName}"
+                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                                    <TextBlock Grid.Column="3" Text="{Binding CountText}"
+                                               Classes="Secondary" VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+
+                                    <Button Grid.Column="4" Classes="Link"
+                                            Content="Refresh"
+                                            IsEnabled="{Binding CanFetch}"
+                                            Command="{Binding FetchCommand}"/>
+                                </Grid>
+
+                                <TextBlock Text="Asking the provider for its models…"
+                                           IsVisible="{Binding IsFetching}"
+                                           Classes="Secondary"/>
+
+                                <!-- Named endpoint, named reason. "Cannot connect" without saying to what is
+                                     the sentence that sends a reader looking in the wrong place. -->
+                                <TextBlock Text="{Binding FetchProblem}"
+                                           IsVisible="{Binding HasFetchProblem}"
+                                           Classes="Secondary"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+
+                    <!-- One model -->
+                    <DataTemplate DataType="vm:AiCatalogRowViewModel">
+                        <Border Padding="34,6,10,6"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid ColumnDefinitions="*,Auto,Auto">
+                                <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                    <!-- The provider's own facts, verbatim. Empty for an endpoint that
+                                         publishes none, and the row degrades to its id. -->
+                                    <TextBlock Text="{Binding Details}" Classes="Secondary"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <Border Grid.Column="1" IsVisible="{Binding IsTyped}"
+                                        Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="9" Padding="7,1"
+                                        VerticalAlignment="Center" Margin="8,0">
+                                    <TextBlock Text="Typed" FontSize="10"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Border>
+
+                                <!-- A switch, never a radio: several models under one connection must be
+                                     on at once, which is the entire point of a short list. -->
+                                <ToggleSwitch Grid.Column="2" IsChecked="{Binding Enabled}"
+                                              OnContent="" OffContent=""
+                                              VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+
+                </ListBox.DataTemplates>
+            </ListBox>
+        </Border>
+    </StackPanel>
+</UserControl>

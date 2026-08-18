@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:CST.Avalonia.ViewModels"
+        xmlns:views="using:CST.Avalonia.Views"
         x:Class="CST.Avalonia.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
@@ -496,9 +497,16 @@
                             </StackPanel>
                         </DataTemplate>
 
-                        <!-- AI Settings Template (#186) -->
+                        <!-- AI Settings Template (#186).
+
+                             Sub-tabs rather than one long scroll (#691): connections, a catalogue of ~25
+                             named providers, and per-connection model lists do not fit under the switches
+                             they belong to. The master switch stays on the first tab, adjacent to what it
+                             gates, rather than becoming a left-nav row of its own. -->
                         <DataTemplate DataType="vm:AiSettingsViewModel">
-                            <StackPanel>
+                            <TabControl>
+                              <TabItem Header="General">
+                                <StackPanel Margin="0,12,0,0">
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="AI Features" Classes="SettingLabel"/>
@@ -575,25 +583,9 @@
                                                  Content="Enable the assistant"
                                                  Margin="0,10,0,0"/>
 
-                                        <TextBlock Text="Provider" Classes="SettingLabel" Margin="0,14,0,0"/>
-                                        <ComboBox ItemsSource="{Binding ProviderChoices}"
-                                                 SelectedItem="{Binding SelectedProvider}"
-                                                 IsEnabled="{Binding AssistantFieldsEnabled}"
-                                                 Width="320" HorizontalAlignment="Left">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:AiProviderChoice">
-                                                    <TextBlock Text="{Binding Display}"/>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-
-                                        <TextBlock Text="Endpoint address" Classes="SettingLabel" Margin="0,14,0,0"/>
-                                        <TextBox Text="{Binding BaseUrl}"
-                                                IsEnabled="{Binding AssistantFieldsEnabled}"
-                                                Watermark="https://…"
-                                                Width="480" HorizontalAlignment="Left"/>
-                                        <TextBlock Text="{Binding BaseUrlDescription}" Classes="SettingDescription"/>
-
+                                        <!-- The protocol and the address moved to the Providers tab, where
+                                             they belong to a connection rather than to the app (#691). What
+                                             is left here is what is still genuinely one-per-app. -->
                                         <TextBlock Text="Model" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <TextBox Text="{Binding Model}"
                                                 IsEnabled="{Binding AssistantFieldsEnabled}"
@@ -648,7 +640,19 @@
                                                   Margin="0,12,0,0"/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
+                                </StackPanel>
+                              </TabItem>
+
+                              <TabItem Header="Providers">
+                                <views:AiProvidersView DataContext="{Binding Connections}"
+                                                       Margin="0,12,0,0"/>
+                              </TabItem>
+
+                              <TabItem Header="Models">
+                                <views:AiModelsView DataContext="{Binding Models}"
+                                                    Margin="0,12,0,0"/>
+                              </TabItem>
+                            </TabControl>
                         </DataTemplate>
 
                         <!-- Developer Settings Template -->

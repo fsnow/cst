@@ -1,0 +1,452 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using CST.Avalonia.Models;
+using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services;
+using CST.Avalonia.Services.Ai;
+using CST.Avalonia.ViewModels;
+using Moq;
+using Xunit;
+
+namespace CST.Avalonia.Tests.ViewModels;
+
+/// <summary>
+/// #692 and #674: the Models tab — the reader's short list, and the provider listing they build it from.
+/// </summary>
+public class AiModelsViewModelTests
+{
+    /// <summary>Returns a fixed listing without a network. Records how often it was asked, because "fetch
+    /// once, not on every keystroke" is a property worth pinning.</summary>
+    private sealed class FakeCatalog : IAiModelCatalog
+    {
+        private readonly AiCatalogResult _result;
+        public int Calls { get; private set; }
+
+        public FakeCatalog(params AiCatalogModel[] models)
+            : this(AiCatalogResult.Success(models)) { }
+
+        public FakeCatalog(AiCatalogResult result) => _result = result;
+
+        public Task<AiCatalogResult> FetchAsync(AiConnection connection, CancellationToken ct = default)
+        {
+            Calls++;
+            return Task.FromResult(_result);
+        }
+    }
+
+    private static (AiModelsViewModel Vm, AiConnectionService Service) Make(IAiModelCatalog? catalog = null)
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object);
+        return (new AiModelsViewModel(service, catalog), service);
+    }
+
+    private static AiConnectionDraft Draft(params AiModelEntry[] models) =>
+        new("My box", ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
+            models, new Dictionary<string, string>(), new Dictionary<string, string>());
+
+    private static AiModelGroupViewModel Group(AiModelsViewModel vm) => vm.Groups.Single();
+
+    private static IReadOnlyList<AiCatalogRowViewModel> Rows(AiModelsViewModel vm) =>
+        vm.Rows.OfType<AiCatalogRowViewModel>().ToList();
+
+    // ---- the hand-typed list (#692) --------------------------------------------------------------------
+
+    /// <summary>
+    /// A model the reader typed arrives on.
+    ///
+    /// <para>Typing an id <i>is</i> the act of choosing it — nobody types one they do not mean to use — so
+    /// all-off here would mean typing a model and then hunting for a switch on another tab before it appeared
+    /// anywhere.</para>
+    /// </summary>
+    [Fact]
+    public void A_typed_model_starts_enabled()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("llama3.1:8b", "Llama 3.1 8B")));
+
+        Group(vm).IsExpanded = true;
+
+        var row = Assert.Single(Rows(vm));
+        Assert.True(row.Enabled);
+        Assert.True(row.IsTyped);
+    }
+
+    /// <summary>Groups start collapsed with the count in the header — exactly the number a reader needs to
+    /// decide whether to expand, which OpenCode omits.</summary>
+    [Fact]
+    public void Groups_start_collapsed_and_carry_a_count()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(
+            new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
+
+        Assert.False(Group(vm).IsExpanded);
+        Assert.Empty(Rows(vm));
+        Assert.Equal("2 models", Group(vm).CountText);
+    }
+
+    /// <summary>Several models under one connection must be on at once — the whole point of a short list you
+    /// switch between. A radio would cap it at one and destroy the design silently.</summary>
+    [Fact]
+    public void Several_models_can_be_on_at_once()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(
+            new AiModelEntry("a", "A"), new AiModelEntry("b", "B"), new AiModelEntry("c", "C")));
+        Group(vm).IsExpanded = true;
+
+        Assert.All(Rows(vm), r => Assert.True(r.Enabled));
+        Assert.Equal(3, service.Connections.Single().Models.Count(m => m.Enabled));
+    }
+
+    /// <summary>Turning one off keeps the entry, so a display name the reader typed survives being switched
+    /// off and on again.</summary>
+    [Fact]
+    public void Turning_a_typed_model_off_keeps_it_in_the_list()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("a", "My name for it")));
+        Group(vm).IsExpanded = true;
+
+        Rows(vm).Single().Enabled = false;
+
+        var stored = Assert.Single(service.Connections.Single().Models);
+        Assert.False(stored.Enabled);
+        Assert.Equal("My name for it", stored.DisplayName);
+    }
+
+    // ---- the fetched catalogue (#674) ------------------------------------------------------------------
+
+    /// <summary>
+    /// A fetched model arrives OFF.
+    ///
+    /// <para>Four hundred entries turn up because a key was pasted, not because anyone asked for them. The
+    /// reader promotes the handful they will switch between — which is also the only way the per-turn picker
+    /// stays the single-digit list it needs to be.</para>
+    /// </summary>
+    [Fact]
+    public void A_fetched_model_starts_disabled()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("nvidia/nemotron-nano-9b-v2", "NVIDIA Nemotron Nano 9B V2")));
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        var row = Assert.Single(Rows(vm));
+        Assert.False(row.Enabled);
+        Assert.False(row.IsTyped);
+    }
+
+    /// <summary>Nothing reaches <c>settings.json</c> until the reader chooses it — storing four hundred
+    /// entries so each could carry a <c>false</c> would bloat the file to state what its emptiness already
+    /// says.</summary>
+    [Fact]
+    public void An_untouched_catalogue_is_not_persisted()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B")));
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Empty(service.Connections.Single().Models);
+    }
+
+    /// <summary>Promoting one adds it to the reader's stored list, with the provider's display name.</summary>
+    [Fact]
+    public void Promoting_a_fetched_model_stores_it()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("nvidia/nemotron", "NVIDIA Nemotron")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Rows(vm).Single().Enabled = true;
+
+        var stored = Assert.Single(service.Connections.Single().Models);
+        Assert.Equal("nvidia/nemotron", stored.Id);
+        Assert.Equal("NVIDIA Nemotron", stored.DisplayName);
+        Assert.True(stored.Enabled);
+    }
+
+    /// <summary>A typed model that also appears in the listing is one row, not two — the reader's entry wins,
+    /// keeping the name they chose.</summary>
+    [Fact]
+    public void A_typed_model_is_not_duplicated_by_the_listing()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("shared", "Provider's name"),
+            new AiCatalogModel("other", "Other")));
+        service.Add("mine", Draft(new AiModelEntry("shared", "My name")));
+
+        Group(vm).IsExpanded = true;
+
+        var rows = Rows(vm);
+        Assert.Equal(2, rows.Count);
+        Assert.Single(rows, r => r.ModelId == "shared");
+        Assert.Equal("My name", rows.Single(r => r.ModelId == "shared").DisplayName);
+    }
+
+    /// <summary>The header says how much of a listing has been promoted, which is the number that matters
+    /// once a catalogue arrives.</summary>
+    [Fact]
+    public void The_header_counts_what_is_on_against_what_is_available()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B"), new AiCatalogModel("c", "C")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Rows(vm).Single(r => r.ModelId == "a").Enabled = true;
+
+        Assert.Equal("1 of 3 models on", Group(vm).CountText);
+    }
+
+    /// <summary>Fetched once, on first expand — not on every expand, and not on every keystroke in the search
+    /// box.</summary>
+    [Fact]
+    public void The_listing_is_fetched_once()
+    {
+        var catalog = new FakeCatalog(new AiCatalogModel("a", "A"));
+        var (vm, service) = Make(catalog);
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+        Group(vm).IsExpanded = false;
+        Group(vm).IsExpanded = true;
+        vm.Search = "a";
+
+        Assert.Equal(1, catalog.Calls);
+    }
+
+    /// <summary>
+    /// A failed fetch is reported and nothing else. The typed list stays exactly as it was — the listing is
+    /// additive, and an endpoint that publishes none is the ordinary case for a local runner rather than a
+    /// broken one.
+    /// </summary>
+    [Fact]
+    public void A_failed_fetch_leaves_the_typed_list_alone_and_says_why()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            AiCatalogResult.Fail("No response from http://localhost:8000/v1/models — is the endpoint running?")));
+        service.Add("mine", Draft(new AiModelEntry("typed", "Typed")));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.True(Group(vm).HasFetchProblem);
+        Assert.Contains("localhost:8000", Group(vm).FetchProblem);
+        var row = Assert.Single(Rows(vm));
+        Assert.Equal("typed", row.ModelId);
+        Assert.True(row.Enabled);
+    }
+
+    /// <summary>
+    /// Toggling a model does not rebuild the list.
+    ///
+    /// <para>The rows are bound to an observable collection; clearing and refilling it sends the list box's
+    /// scroll position back to the top. At four hundred rows that means switching on a model near the bottom
+    /// throws the reader back to the first one — and they would then do it again, because the model they just
+    /// enabled is no longer on screen to confirm it worked.</para>
+    /// </summary>
+    [Fact]
+    public void Toggling_a_model_does_not_rebuild_the_list()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        var before = Rows(vm).ToList();
+        before.Single(r => r.ModelId == "a").Enabled = true;
+
+        Assert.Equal(before, Rows(vm));   // same row objects, same order, same collection contents
+    }
+
+    /// <summary>The header still keeps up, even though the list is not rebuilt.</summary>
+    [Fact]
+    public void Toggling_updates_the_count_without_a_rebuild()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Rows(vm).Single(r => r.ModelId == "a").Enabled = true;
+
+        Assert.Equal("1 of 2 models on", Group(vm).CountText);
+    }
+
+    /// <summary>
+    /// A toggle survives a later rebuild.
+    ///
+    /// <para>Suppressing the rebuild means the group is holding a connection snapshot taken before the write.
+    /// If it is not refreshed, the next genuine rebuild — another connection added, a search typed — restores
+    /// the old value and the reader watches their choice undo itself.</para>
+    /// </summary>
+    [Fact]
+    public void A_toggle_survives_the_next_rebuild()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+        Rows(vm).Single(r => r.ModelId == "a").Enabled = true;
+
+        vm.Search = "a";
+        vm.Search = "";
+
+        Assert.True(Rows(vm).Single(r => r.ModelId == "a").Enabled);
+    }
+
+    // ---- search and the capability filter ---------------------------------------------------------------
+
+    /// <summary>Search filters across every group, not within the expanded one, and shows what it finds
+    /// without the reader expanding anything.</summary>
+    [Fact]
+    public void Search_reaches_into_collapsed_groups()
+    {
+        var (vm, service) = Make();
+        service.Add("one", Draft(new AiModelEntry("llama3.1:8b", "Llama 3.1 8B")));
+        service.Add("two", Draft(new AiModelEntry("qwen2.5:14b", "Qwen 2.5 14B")));
+
+        Assert.Empty(Rows(vm));   // both collapsed
+
+        vm.Search = "qwen";
+
+        var row = Assert.Single(Rows(vm));
+        Assert.Equal("qwen2.5:14b", row.ModelId);
+    }
+
+    /// <summary>A group with no match disappears rather than sitting there as a header promising results it
+    /// does not have.</summary>
+    [Fact]
+    public void A_group_with_no_matches_is_hidden_while_searching()
+    {
+        var (vm, service) = Make();
+        service.Add("one", Draft(new AiModelEntry("llama3.1:8b", "Llama 3.1 8B")));
+        service.Add("two", Draft(new AiModelEntry("qwen2.5:14b", "Qwen 2.5 14B")));
+
+        vm.Search = "qwen";
+
+        Assert.Single(vm.Rows.OfType<AiModelGroupViewModel>());
+    }
+
+    /// <summary>Searching matches the wire id as readily as the label — a reader thinking of "nemotron" may
+    /// have either in mind.</summary>
+    [Fact]
+    public void Search_matches_the_id_as_well_as_the_name()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("nvidia/nemotron-nano-9b-v2", "Nano")));
+
+        vm.Search = "nemotron";
+
+        Assert.Single(Rows(vm));
+    }
+
+    /// <summary>The capability filter drops models the provider publishes as unable to answer in text. It is
+    /// mechanical and reversible, and it makes no claim about the models that remain.</summary>
+    [Fact]
+    public void The_capability_filter_drops_models_that_cannot_answer_in_text()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("chat", "Chat",
+                InputModalities: new[] { "text" }, OutputModalities: new[] { "text" }),
+            new AiCatalogModel("tts", "Speech",
+                InputModalities: new[] { "text" }, OutputModalities: new[] { "audio" })));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Assert.Equal(new[] { "chat" }, Rows(vm).Select(r => r.ModelId));
+
+        vm.TextOnly = false;
+
+        Assert.Equal(2, Rows(vm).Count);
+    }
+
+    /// <summary>
+    /// A model the reader typed is never filtered away.
+    ///
+    /// <para>They put it there; hiding it behind a filter would read as having lost it. The filter exists to
+    /// prune a listing nobody asked for, not to second-guess a choice already made.</para>
+    /// </summary>
+    [Fact]
+    public void A_typed_model_is_never_hidden_by_the_filter()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("odd", "Odd", InputModalities: new[] { "text" },
+                OutputModalities: new[] { "audio" })));
+        service.Add("mine", Draft(new AiModelEntry("odd", "Odd")));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Single(Rows(vm), r => r.ModelId == "odd");
+    }
+
+    // ---- what a row says ---------------------------------------------------------------------------------
+
+    /// <summary>The provider's own facts, verbatim and attributed — safe where a table we maintained would
+    /// not be.</summary>
+    [Fact]
+    public void A_row_shows_the_published_facts()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel(
+            "m", "M", ContextLength: 131072, PromptPricePerMillion: 0.4m,
+            CompletionPricePerMillion: 1.6m, SupportedParameters: new[] { "reasoning" })));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        var details = Rows(vm).Single().Details;
+        Assert.Contains("131K context", details);
+        Assert.Contains("$0.4/$1.6 per M", details);
+        Assert.Contains("reasoning", details);
+    }
+
+    /// <summary>An endpoint that publishes nothing degrades to the id rather than showing an empty
+    /// line.</summary>
+    [Fact]
+    public void A_row_with_no_published_facts_shows_its_id()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("gemma4:12b-mlx", "Gemma4 12B MLX")));
+        Group(vm).IsExpanded = true;
+
+        Assert.Equal("gemma4:12b-mlx", Rows(vm).Single().Details);
+    }
+
+    /// <summary>Zero is free and may be said so; unknown is not free and must never be rendered as it.</summary>
+    [Fact]
+    public void A_free_model_says_free_and_an_unpriced_one_says_nothing()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("free", "Free", PromptPricePerMillion: 0m, CompletionPricePerMillion: 0m),
+            new AiCatalogModel("quiet", "Quiet")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Assert.Contains("free", Rows(vm).Single(r => r.ModelId == "free").Details);
+        Assert.DoesNotContain("free", Rows(vm).Single(r => r.ModelId == "quiet").Details);
+    }
+
+    /// <summary>Alphabetical within a group. Nothing here may order by recency: that is what upstream does,
+    /// and it is an editorial claim however mechanically it is computed (#689).</summary>
+    [Fact]
+    public void Rows_are_alphabetical_within_a_group()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("c", "Zephyr"),
+            new AiCatalogModel("a", "Apollo"),
+            new AiCatalogModel("b", "mercury")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Assert.Equal(new[] { "Apollo", "mercury", "Zephyr" }, Rows(vm).Select(r => r.DisplayName));
+    }
+}

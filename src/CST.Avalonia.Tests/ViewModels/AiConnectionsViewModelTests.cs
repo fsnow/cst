@@ -1,0 +1,438 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using CST.Avalonia.Models;
+using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services;
+using CST.Avalonia.Services.Ai;
+using CST.Avalonia.ViewModels;
+using Moq;
+using Xunit;
+
+namespace CST.Avalonia.Tests.ViewModels;
+
+/// <summary>
+/// #691: the Providers tab — configured connections above, a catalogue of named ones below.
+///
+/// <para>Driven through the real <see cref="AiConnectionService"/> over in-memory settings rather than a
+/// hand-written fake, so these exercise the binding surface the UI actually gets rather than a second
+/// opinion about it. The two rows the service cannot yet produce — an environment-sourced credential and a
+/// probed reachability — are built as records directly, which is the only way to reach that presentation
+/// code before the credential and probe plumbing land.</para>
+/// </summary>
+public class AiConnectionsViewModelTests
+{
+    private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make() =>
+        Make(new FakeCredentialStore());
+
+    private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make(FakeCredentialStore keys)
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, keys);
+        return (new AiConnectionsViewModel(service, keys), service);
+    }
+
+    /// <summary>An in-memory keychain. The real one would need a Keychain prompt per test.</summary>
+    private sealed class FakeCredentialStore : IAiCredentialStore
+    {
+        public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
+        public bool IsAvailable => true;
+        public string? Unavailable => null;
+        public string? GetApiKey(string connectionId) => Keys.GetValueOrDefault(connectionId);
+        public bool SetApiKey(string connectionId, string apiKey) { Keys[connectionId] = apiKey; return true; }
+        public bool DeleteApiKey(string connectionId) => Keys.Remove(connectionId);
+    }
+
+    /// <summary>Adds a preset the way a reader does — open the sheet, fill it in, save. There is no
+    /// add-without-a-sheet path any more, which is the point of the first test below.</summary>
+    private static void AddThroughSheet(
+        AiConnectionsViewModel vm, string presetId, string? key = null,
+        params (string Key, string Value)[] inputs)
+    {
+        vm.AddPreset(presetId);
+        var editor = vm.Editor!;
+
+        foreach (var (k, v) in inputs) editor.Inputs.Single(i => i.Key == k).Value = v;
+        if (key is not null) editor.ApiKeyEntry = key;
+
+        editor.SaveCommand.Execute().Subscribe();
+    }
+
+    private static AiConnectionDraft Draft(string name = "My box", string url = "http://localhost:8000/v1") =>
+        new(name, ChatProviderKind.OpenAiCompatible, url,
+            new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+
+    // ---- the two sections ------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The whole point of the two-section layout: the catalogue reads as "what you could add next", so a
+    /// preset must leave it the moment a connection using it exists. A list where some rows are already
+    /// spoken for is the screen this replaces.
+    /// </summary>
+    [Fact]
+    public void An_added_preset_moves_from_the_catalogue_to_the_connections()
+    {
+        var (vm, _) = Make();
+        Assert.Contains(vm.AvailablePresets, p => p.Id == "openrouter");
+        Assert.Empty(vm.Connections);
+
+        AddThroughSheet(vm, "openrouter");
+
+        Assert.Contains(vm.Connections, c => c.Id == "openrouter");
+        Assert.DoesNotContain(vm.AvailablePresets, p => p.Id == "openrouter");
+    }
+
+    /// <summary>Deleting puts it back, so the reader can undo an add without knowing the URL by heart.</summary>
+    [Fact]
+    public void Deleting_a_connection_returns_its_preset_to_the_catalogue()
+    {
+        var (vm, _) = Make();
+        AddThroughSheet(vm, "openrouter");
+
+        vm.Delete("openrouter");
+
+        Assert.Empty(vm.Connections);
+        Assert.Contains(vm.AvailablePresets, p => p.Id == "openrouter");
+    }
+
+    /// <summary>The empty state is a real state, not an accident: on a fresh install the section below is
+    /// what the reader acts on, and the one above should say so rather than being blank.</summary>
+    [Fact]
+    public void The_empty_state_is_reported_until_something_is_configured()
+    {
+        var (vm, _) = Make();
+        Assert.True(vm.HasNoConnections);
+
+        AddThroughSheet(vm, "ollama");
+
+        Assert.False(vm.HasNoConnections);
+    }
+
+    // ---- keyed sync ------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Rows are updated in place, not rebuilt.
+    ///
+    /// <para><c>ConnectionsChanged</c> fires for state changes as well as add/remove — a reachability
+    /// write-back moves one connection's state — so rebuilding the collection would throw away scroll
+    /// position and focus every time a probe returned. Pinned because the cheap implementation (clear and
+    /// refill) passes every other test in this file.</para>
+    /// </summary>
+    [Fact]
+    public void An_unrelated_change_leaves_existing_rows_as_the_same_objects()
+    {
+        var (vm, service) = Make();
+        AddThroughSheet(vm, "ollama");
+        var original = vm.Connections.Single();
+
+        service.Add("second", Draft("Second"));
+
+        Assert.Same(original, vm.Connections.First(c => c.Id == "ollama"));
+        Assert.Equal(2, vm.Connections.Count);
+    }
+
+    /// <summary>An edit re-reads the row rather than replacing it, so a rename shows without the list
+    /// flickering.</summary>
+    [Fact]
+    public void Editing_a_connection_updates_the_row_in_place()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft("Old name"));
+        var row = vm.Connections.Single();
+
+        service.Update("mine", Draft("New name"));
+
+        Assert.Same(row, vm.Connections.Single());
+        Assert.Equal("New name", row.DisplayName);
+    }
+
+    /// <summary>Rows follow the service's order — the order the reader added them — which the in-place sync
+    /// has to maintain by moving rows rather than by luck.</summary>
+    [Fact]
+    public void Rows_follow_the_services_order_after_a_removal()
+    {
+        var (vm, service) = Make();
+        service.Add("a", Draft("A"));
+        service.Add("b", Draft("B"));
+        service.Add("c", Draft("C"));
+
+        service.Remove("a");
+
+        Assert.Equal(new[] { "b", "c" }, vm.Connections.Select(r => r.Id));
+    }
+
+    // ---- what a row says -------------------------------------------------------------------------------
+
+    private static AiConnectionRowViewModel Row(
+        CredentialSource source = CredentialSource.None,
+        Reachability state = Reachability.Configured,
+        string baseUrl = "http://localhost:11434/v1")
+    {
+        var connection = new AiConnection(
+            "local", "Local Ollama", ChatProviderKind.OpenAiCompatible, baseUrl,
+            new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>(),
+            source, state);
+        return new AiConnectionRowViewModel(new AiConnectionsViewModel(null, null), connection);
+    }
+
+    /// <summary>
+    /// Configured is not connected, and this is the sentence that must never drift.
+    ///
+    /// <para>A settings page that claims "Connected" while the assistant reports it cannot connect sends the
+    /// reader looking everywhere except the problem — observed in OpenCode, where the two surfaces contradict
+    /// each other and the one consulted to diagnose is the one that is wrong.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(Reachability.Configured, "Not checked yet")]
+    [InlineData(Reachability.Reachable, "Reachable")]
+    [InlineData(Reachability.Unreachable, "Not responding")]
+    public void Status_is_honest_about_what_has_actually_been_checked(Reachability state, string expected) =>
+        Assert.Equal(expected, Row(state: state).StatusText);
+
+    [Fact]
+    public void No_status_wording_ever_claims_a_connection()
+    {
+        foreach (var state in Enum.GetValues<Reachability>())
+            Assert.DoesNotContain("Connected", Row(state: state).StatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>One axis, applied to every row. OpenCode badges only the unusual row and overloads the slot
+    /// across two axes, which leaves the badge meaning nothing in particular.</summary>
+    [Theory]
+    [InlineData(CredentialSource.None, "No key")]
+    [InlineData(CredentialSource.Keychain, "Keychain")]
+    [InlineData(CredentialSource.Environment, "Environment")]
+    public void Every_row_names_where_its_credential_came_from(CredentialSource source, string expected) =>
+        Assert.Equal(expected, Row(source).KeySourceBadge);
+
+    /// <summary>
+    /// An environment-sourced row gets an empty action slot rather than a disabled button: the app cannot
+    /// delete a credential it never stored, and a control there would promise something it cannot do.
+    /// </summary>
+    [Fact]
+    public void Only_a_key_we_stored_ourselves_offers_to_be_removed()
+    {
+        Assert.False(Row(CredentialSource.Environment).CanRemoveKey);
+        Assert.False(Row(CredentialSource.None).CanRemoveKey);
+        Assert.True(Row(CredentialSource.Keychain).CanRemoveKey);
+    }
+
+    /// <summary>An unanswered <c>{placeholder}</c> is said on the row. Sent anyway it fails as a DNS error
+    /// naming nothing, which tells the reader neither what is wrong nor where to fix it.</summary>
+    [Fact]
+    public void A_connection_missing_an_input_says_what_it_still_needs()
+    {
+        var row = Row(baseUrl: "https://{resourceName}.openai.azure.com/openai/v1");
+
+        Assert.True(row.IsIncomplete);
+        Assert.Contains("resourceName", row.IncompleteText);
+    }
+
+    [Fact]
+    public void A_complete_connection_is_not_flagged() => Assert.False(Row().IsIncomplete);
+
+    // ---- the catalogue ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A catalogue row says what the preset knows and nothing more.
+    ///
+    /// <para>OpenCode's rows carry vendor blurbs — "GPT models for fast, capable general AI tasks" — which is
+    /// marketing presented as product information. Any line we wrote ourselves would be an opinion about a
+    /// provider, which is the registry removed in #670/#681 arriving as prose.</para>
+    /// </summary>
+    [Fact]
+    public void A_catalogue_row_says_only_whether_a_key_is_needed()
+    {
+        var (vm, _) = Make();
+
+        Assert.Equal("No key needed", vm.AvailablePresets.Single(p => p.Id == "ollama").RequirementText);
+        Assert.Equal("Needs an API key", vm.AvailablePresets.Single(p => p.Id == "openrouter").RequirementText);
+    }
+
+    /// <summary>
+    /// Every add opens the sheet, including a preset with nothing to ask.
+    ///
+    /// <para>Adding outright was tested and is wrong twice over: the new row lands at the top of a page the
+    /// reader has scrolled to the bottom of to reach the catalogue, so the click reads as having done
+    /// nothing — and a provider with neither a key nor a model id cannot answer a question, so the gap is
+    /// discovered later and has to be repaired through Edit.</para>
+    /// </summary>
+    [Fact]
+    public void Adding_a_provider_always_opens_the_sheet()
+    {
+        var (vm, _) = Make();
+
+        vm.AddPreset("openrouter");
+
+        Assert.NotNull(vm.Editor);
+        Assert.True(vm.Editor!.IsPreset);
+        Assert.Empty(vm.Connections);
+    }
+
+    /// <summary>Azure's address is a shape rather than a URL, so the sheet has a field for the part only the
+    /// reader knows.</summary>
+    [Fact]
+    public void A_preset_that_needs_an_answer_asks_for_it()
+    {
+        var (vm, _) = Make();
+
+        vm.AddPreset("azure");
+
+        Assert.Contains(vm.Editor!.Inputs, i => i.Key == "resourceName");
+    }
+
+    /// <summary>
+    /// The key is filed under the connection it was typed for.
+    ///
+    /// <para>The regression this pins is #678 arriving by a different route: a shared key box elsewhere in
+    /// Settings writes to whichever connection happens to be <i>active</i>, so a reader adding OpenRouter
+    /// second would file its key under the first endpoint and get a 401 naming neither.</para>
+    /// </summary>
+    [Fact]
+    public void A_key_typed_on_the_sheet_is_filed_under_that_connection()
+    {
+        var keys = new FakeCredentialStore();
+        var (vm, _) = Make(keys);
+
+        AddThroughSheet(vm, "ollama");
+        AddThroughSheet(vm, "openrouter", key: "sk-or-secret");
+
+        Assert.Equal("sk-or-secret", keys.GetApiKey("openrouter"));
+        Assert.Null(keys.GetApiKey("ollama"));
+    }
+
+    /// <summary>Where the credential came from is read off the store, so storing one moves the badge without
+    /// the row being rebuilt.</summary>
+    [Fact]
+    public void Storing_a_key_moves_the_rows_badge()
+    {
+        var keys = new FakeCredentialStore();
+        var (vm, _) = Make(keys);
+
+        AddThroughSheet(vm, "openrouter", key: "sk-or-secret");
+        var row = vm.Connections.Single();
+
+        Assert.Equal("Keychain", row.KeySourceBadge);
+        Assert.True(row.CanRemoveKey);
+
+        row.RemoveKeyCommand.Execute().Subscribe();
+
+        Assert.Equal("No key", vm.Connections.Single().KeySourceBadge);
+        Assert.Null(keys.GetApiKey("openrouter"));
+    }
+
+    /// <summary>Removing a key must not take the connection or its models with it — the whole reason the two
+    /// destructive actions are separate.</summary>
+    [Fact]
+    public void Removing_a_key_leaves_the_connection_and_its_models_alone()
+    {
+        var keys = new FakeCredentialStore();
+        var (vm, service) = Make(keys);
+        AddThroughSheet(vm, "openrouter", key: "sk-or-secret");
+
+        vm.Connections.Single().RemoveKeyCommand.Execute().Subscribe();
+
+        var still = service.Connections.Single();
+        Assert.Equal("openrouter", still.Id);
+    }
+
+    /// <summary>The generated form is the mechanism, so a preset added in a future upstream sync arrives with
+    /// its dialog already working rather than needing hand-written code.</summary>
+    [Fact]
+    public void The_sheet_for_a_preset_is_built_from_the_presets_own_prompts()
+    {
+        var (vm, _) = Make();
+
+        vm.AddPreset("cloudflare-workers-ai");
+        var input = Assert.Single(vm.Editor!.Inputs);
+
+        Assert.Equal("accountId", input.Key);
+        Assert.Equal("Cloudflare account ID", input.Message);
+        Assert.True(input.IsFreeText);
+    }
+
+    // ---- deleting asks first ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Delete destroys the hand-typed model list, which is real user-authored work — the same asymmetry that
+    /// makes "remove key" and "delete connection" two actions rather than one. So the first click asks.
+    /// </summary>
+    [Fact]
+    public void Deleting_asks_before_it_destroys_anything()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft());
+        var row = vm.Connections.Single();
+
+        row.DeleteCommand.Execute().Subscribe();
+
+        Assert.True(row.IsConfirmingDelete);
+        Assert.Single(vm.Connections);
+    }
+
+    [Fact]
+    public void Confirming_deletes_and_declining_does_not()
+    {
+        var (vm, service) = Make();
+        service.Add("keep", Draft());
+        service.Add("go", Draft());
+
+        var keep = vm.Connections.Single(r => r.Id == "keep");
+        keep.DeleteCommand.Execute().Subscribe();
+        keep.CancelDeleteCommand.Execute().Subscribe();
+
+        Assert.False(keep.IsConfirmingDelete);
+        Assert.Equal(2, vm.Connections.Count);
+
+        var go = vm.Connections.Single(r => r.Id == "go");
+        go.DeleteCommand.Execute().Subscribe();
+        go.ConfirmDeleteCommand.Execute().Subscribe();
+
+        Assert.Equal(new[] { "keep" }, vm.Connections.Select(r => r.Id));
+    }
+
+    /// <summary>The confirmation names the models, because that is the part a reader would not think to check
+    /// before clicking.</summary>
+    [Fact]
+    public void The_confirmation_says_what_goes_with_it()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft("My box") with
+        {
+            Models = new List<AiModelEntry> { new("a", "A"), new("b", "B") },
+        });
+
+        Assert.Equal("Delete My box and its 2 models?", vm.Connections.Single().DeleteConfirmText);
+    }
+
+    // ---- monograms -------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("OpenRouter", "O")]
+    [InlineData("xAI", "X")]
+    [InlineData("Z.ai", "Z")]
+    [InlineData("(unnamed)", "U")]
+    [InlineData("", "?")]
+    public void The_tile_shows_the_first_letter_there_is(string name, string expected) =>
+        Assert.Equal(expected, AiMonogram.For(name));
+
+    /// <summary>
+    /// The tone is a pure function of the id, not of this process.
+    ///
+    /// <para>.NET randomises string hashing per run, so <c>GetHashCode</c> here would repaint every row on
+    /// every launch — a list that looks different each time it is opened, for no reason the reader could
+    /// name.</para>
+    /// </summary>
+    [Fact]
+    public void A_tiles_tone_is_stable_and_within_range()
+    {
+        foreach (var id in new[] { "openrouter", "ollama", "my-box", "a" })
+        {
+            var tone = AiMonogram.ToneFor(id);
+            Assert.InRange(tone, 0, AiMonogram.ToneCount - 1);
+            Assert.Equal(tone, AiMonogram.ToneFor(id));
+        }
+    }
+}

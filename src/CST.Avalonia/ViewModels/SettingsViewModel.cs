@@ -1342,8 +1342,31 @@ public class AiSettingsViewModel : ViewModelBase
             SaveApiKeyCommand = ReactiveCommand.Create(SaveApiKey);
             RemoveApiKeyCommand = ReactiveCommand.Create(RemoveApiKey);
 
+            // The Providers tab (#691). Resolved rather than injected because this view model is constructed
+            // by hand; a null service leaves the tab inert rather than throwing, which is what the
+            // parameterless constructor used by the designer needs.
+            var connectionService = App.TryGetService<Services.Ai.IAiConnectionService>();
+            Connections = new AiConnectionsViewModel(connectionService, credentials);
+            Models = new AiModelsViewModel(
+                connectionService, App.TryGetService<Services.Ai.IAiModelCatalog>());
+
             RefreshKeyStatus();
         }
+
+        /// <summary>
+        /// The Providers tab: configured endpoints, and the catalogue of named ones to add. (#691)
+        ///
+        /// <para>Owns everything about connections, and reaches them only through
+        /// <see cref="Services.Ai.IAiConnectionService"/> — this class keeps the settings it always had, and
+        /// none of the connection state moved into it.</para>
+        /// </summary>
+        public AiConnectionsViewModel Connections { get; }
+
+        /// <summary>
+        /// The Models tab: each connection's models and the toggles that decide what the Assistant offers.
+        /// (#692, #674)
+        /// </summary>
+        public AiModelsViewModel Models { get; }
 
         /// <summary>Master switch — "Enable AI Features". Everything AI-related is gated behind this (default OFF).</summary>
         public bool AiEnabled
