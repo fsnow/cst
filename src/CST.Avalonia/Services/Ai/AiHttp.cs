@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -55,6 +56,51 @@ internal static class AiHttp
     /// </summary>
     internal static HttpClient CreateClient() =>
         new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+
+    /// <summary>
+    /// Attaches a connection's credential in whatever shape its endpoint expects, plus its extra headers.
+    /// (#689, #674)
+    ///
+    /// <para><b>Naming a non-standard auth header replaces <c>Authorization</c>; it does not add a second
+    /// one.</b> Azure rejects a request carrying both, which is why this cannot be expressed as an ordinary
+    /// extra header — an extra header is additive by definition, and the requirement there is an
+    /// absence.</para>
+    ///
+    /// <para>Extra headers are applied first so they can never overwrite the credential: a header named
+    /// <c>Authorization</c> mistyped into settings would otherwise silently replace the real key with whatever
+    /// the reader pasted.</para>
+    ///
+    /// <para><b>Shared deliberately.</b> Chat requests and model-listing requests go to the same endpoint with
+    /// the same credential, so they must authenticate identically — two implementations would eventually
+    /// disagree, and the symptom would be a provider whose model list loads while its answers 401, which is
+    /// exactly the sort of contradiction between two surfaces that #673 exists to prevent.</para>
+    /// </summary>
+    internal static void ApplyAuth(
+        HttpRequestMessage message,
+        string? apiKey,
+        string? authHeaderName,
+        string? authScheme,
+        IReadOnlyDictionary<string, string>? extraHeaders)
+    {
+        var header = string.IsNullOrWhiteSpace(authHeaderName) ? "Authorization" : authHeaderName;
+
+        if (extraHeaders is { Count: > 0 })
+        {
+            foreach (var extra in extraHeaders)
+            {
+                if (string.IsNullOrWhiteSpace(extra.Key)) continue;
+                if (extra.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)) continue;
+                if (extra.Key.Equals(header, StringComparison.OrdinalIgnoreCase)) continue;
+                message.Headers.TryAddWithoutValidation(extra.Key, extra.Value);
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey)) return;   // a local runner needs none
+
+        message.Headers.TryAddWithoutValidation(
+            header,
+            string.IsNullOrWhiteSpace(authScheme) ? apiKey! : $"{authScheme} {apiKey}");
+    }
 
     /// <summary>
     /// Guard the invariant above at construction, because a finite timeout does not fail loudly — it truncates a

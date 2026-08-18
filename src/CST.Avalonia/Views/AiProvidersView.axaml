@@ -1,0 +1,404 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:CST.Avalonia.ViewModels"
+             xmlns:conv="using:CST.Avalonia.Converters"
+             xmlns:ai="using:CST.Avalonia.Models.Ai"
+             x:Class="CST.Avalonia.Views.AiProvidersView"
+             x:DataType="vm:AiConnectionsViewModel">
+
+    <!-- The Providers tab of the AI settings (#691).
+
+         Two stacked sections: what is configured now, then a catalogue of what could be added. A preset
+         leaves the lower section once a connection using it exists, so the catalogue always reads as "what
+         you could add next" rather than a list where some rows are already spoken for.
+
+         The editor replaces the list rather than floating over it — a sheet, not an inline expansion, so
+         there is room for a second step later (validate, then fetch models) without a scrim or a z-order. -->
+
+    <UserControl.Styles>
+        <!-- The letter tile standing in for a provider mark until real vendor assets land. -->
+        <Style Selector="Border.Tile">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="0,1,12,0"/>
+        </Style>
+
+        <Style Selector="Border.Tile > TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- The credential-source badge. Every row carries one, on one axis. -->
+        <Style Selector="Border.Pill">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="8,1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style Selector="Border.Pill > TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+
+        <!-- Undoing is quieter than the invitation: bordered Add, plain-text Edit and Delete. -->
+        <Style Selector="Button.Link">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+
+        <Style Selector="Button.Link:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+        </Style>
+
+        <Style Selector="Border.Row">
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="12,10"/>
+        </Style>
+
+        <Style Selector="TextBlock.Secondary">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+
+        <!-- THE LIST -->
+        <StackPanel IsVisible="{Binding IsListing}">
+
+            <TextBlock Text="{Binding Problem}"
+                       IsVisible="{Binding HasProblem}"
+                       Classes="SettingDescription"
+                       Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+
+            <!-- Your connections -->
+            <TextBlock Text="Your connections" Classes="SettingLabel" FontWeight="SemiBold"/>
+
+            <TextBlock IsVisible="{Binding HasNoConnections}"
+                       Text="Nothing is configured yet. Add one from the list below, or add an endpoint of your own."
+                       Classes="SettingDescription"/>
+
+            <Border Classes="SettingGroup" Padding="0"
+                    IsVisible="{Binding !HasNoConnections}">
+                <ItemsControl ItemsSource="{Binding Connections}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AiConnectionRowViewModel">
+                            <Border Classes="Row">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+
+                                    <Border Grid.Column="0" Classes="Tile"
+                                            Background="{Binding MonogramTone,
+                                                Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                        <TextBlock Text="{Binding Monogram}"/>
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                        <!-- The address, which OpenCode omits. Two local endpoints are two
+                                             names the reader chose and nothing else to tell them apart. -->
+                                        <TextBlock Text="{Binding Endpoint}" Classes="Secondary"/>
+                                        <TextBlock Text="{Binding IncompleteText}"
+                                                   IsVisible="{Binding IsIncomplete}"
+                                                   Classes="Secondary"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center"
+                                                HorizontalAlignment="Right" Spacing="3" Margin="12,0">
+                                        <Border Classes="Pill" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding KeySourceBadge}"/>
+                                        </Border>
+                                        <!-- Never "Connected": configured is not reachable, and the screen a
+                                             reader consults to diagnose a failure must not be the one lying
+                                             about it. -->
+                                        <TextBlock Text="{Binding StatusText}" Classes="Secondary"
+                                                   HorizontalAlignment="Right"/>
+                                        <TextBlock Text="{Binding ModelSummary}" Classes="Secondary"
+                                                   HorizontalAlignment="Right"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                IsVisible="{Binding IsNotConfirmingDelete}">
+                                        <Button Content="Edit" Classes="Link"
+                                                Command="{Binding EditCommand}"/>
+                                        <!-- Two destructive actions, not one: stopping the billing and
+                                             throwing away a hand-typed model list are different intentions.
+                                             An environment-sourced row gets an EMPTY slot here rather than a
+                                             disabled button — the app cannot delete a key it never stored,
+                                             and a control there would lie about what it can do. -->
+                                        <Button Content="Remove key" Classes="Link"
+                                                IsVisible="{Binding CanRemoveKey}"
+                                                Command="{Binding RemoveKeyCommand}"/>
+                                        <Button Content="Delete" Classes="Link"
+                                                Command="{Binding DeleteCommand}"/>
+                                    </StackPanel>
+
+                                    <!-- Delete takes the hand-typed model list with it, so it asks. An inline
+                                         second click rather than a dialog: nothing to dismiss, and looking
+                                         away is a valid answer. -->
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4"
+                                                VerticalAlignment="Center"
+                                                IsVisible="{Binding IsConfirmingDelete}">
+                                        <TextBlock Text="{Binding DeleteConfirmText}"
+                                                   Classes="Secondary" VerticalAlignment="Center"/>
+                                        <Button Content="Delete" Classes="Link"
+                                                Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                                Command="{Binding ConfirmDeleteCommand}"/>
+                                        <Button Content="Keep" Classes="Link"
+                                                Command="{Binding CancelDeleteCommand}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <!-- Add a provider -->
+            <TextBlock Text="Add a provider" Classes="SettingLabel" FontWeight="SemiBold"/>
+            <TextBlock Text="A named provider fills in the address for you. Nothing here is a recommendation — every entry is the same mechanism as a custom endpoint, with its URL already known."
+                       Classes="SettingDescription"/>
+
+            <Border Classes="SettingGroup" Padding="0">
+                <StackPanel>
+                    <ItemsControl ItemsSource="{Binding AvailablePresets}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AiPresetRowViewModel">
+                                <Border Classes="Row">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+
+                                        <Border Grid.Column="0" Classes="Tile"
+                                                Background="{Binding MonogramTone,
+                                                    Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                            <TextBlock Text="{Binding Monogram}"/>
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding RequirementText}" Classes="Secondary"/>
+                                        </StackPanel>
+
+                                        <Button Grid.Column="2" Content="+ Add"
+                                                Command="{Binding AddCommand}"
+                                                VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Custom last, as OpenCode has it, and always present. The named rows above are this
+                         same row with the address filled in; a preset must never be required to reach a
+                         provider that never appears in anyone's catalogue. -->
+                    <Border Classes="Row" BorderThickness="0">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Grid.Column="0" Classes="Tile"
+                                    Background="{DynamicResource DockApplicationAccentBrushLow}">
+                                <TextBlock Text="+"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                <TextBlock Text="Custom endpoint" FontWeight="SemiBold"/>
+                                <TextBlock Text="Any OpenAI-compatible or Anthropic address, by URL."
+                                           Classes="Secondary"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="+ Add"
+                                    Command="{Binding AddCustomCommand}"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- THE SHEET -->
+        <ContentControl IsVisible="{Binding IsEditing}" Content="{Binding Editor}">
+            <ContentControl.DataTemplates>
+                <DataTemplate DataType="vm:AiConnectionEditorViewModel">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" Classes="SectionTitle"/>
+                        <TextBlock Text="{Binding Blurb}" Classes="SettingDescription"/>
+
+                        <TextBlock Text="{Binding Problem}"
+                                   IsVisible="{Binding HasProblem}"
+                                   Classes="SettingDescription"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+
+                        <!-- The full form: a custom endpoint, or one being edited. -->
+                        <StackPanel IsVisible="{Binding IsFullForm}" Spacing="0">
+
+                            <TextBlock Text="Id" Classes="SettingLabel"/>
+                            <TextBox Text="{Binding Id}"
+                                     IsEnabled="{Binding IsIdEditable}"
+                                     Watermark="myprovider"
+                                     Width="320" HorizontalAlignment="Left"/>
+                            <!-- Immutable after creation because it is the account the credential is filed
+                                 under. A URL-derived id would change with a port and the key would look
+                                 rejected rather than lost. -->
+                            <TextBlock Text="Lowercase letters, numbers, hyphens and underscores. Fixed once the connection exists — it is what the saved key is filed under."
+                                       Classes="SettingDescription"/>
+
+                            <TextBlock Text="Display name" Classes="SettingLabel"/>
+                            <TextBox Text="{Binding DisplayName}"
+                                     Watermark="My provider"
+                                     Width="320" HorizontalAlignment="Left"/>
+                            <TextBlock Text="What this endpoint is called on screen. Rename it whenever you like."
+                                       Classes="SettingDescription"/>
+
+                            <TextBlock Text="Protocol" Classes="SettingLabel"/>
+                            <ComboBox ItemsSource="{Binding Kinds}"
+                                      SelectedItem="{Binding Kind}"
+                                      Width="320" HorizontalAlignment="Left">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AiKindChoice">
+                                        <TextBlock Text="{Binding Display}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Text="Which HTTP shape this endpoint speaks — not who runs it. Several providers serve the Anthropic protocol at their own address."
+                                       Classes="SettingDescription"/>
+
+                            <TextBlock Text="Endpoint address" Classes="SettingLabel"/>
+                            <TextBox Text="{Binding BaseUrl}"
+                                     Watermark="https://api.myprovider.com/v1"
+                                     Width="480" HorizontalAlignment="Left"/>
+                            <TextBlock Text="Required. For an OpenAI-compatible endpoint this is what selects the provider."
+                                       Classes="SettingDescription"/>
+
+                            <TextBlock Text="Headers (optional)" Classes="SettingLabel"
+                                       IsVisible="{Binding ShowHeaders}"/>
+                            <ItemsControl ItemsSource="{Binding Headers}" Margin="0,0,0,4">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AiHeaderRowViewModel">
+                                        <Grid ColumnDefinitions="240,240,Auto" Margin="0,0,0,4">
+                                            <TextBox Grid.Column="0" Text="{Binding Name}"
+                                                     Watermark="Header-Name" Margin="0,0,6,0"/>
+                                            <TextBox Grid.Column="1" Text="{Binding Value}"
+                                                     Watermark="value" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="2" Content="Remove" Classes="Link"
+                                                    Command="{Binding RemoveCommand}"
+                                                    VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="+ Add header" Classes="Link"
+                                    Command="{Binding AddHeaderCommand}"
+                                    HorizontalAlignment="Left"/>
+                            <TextBlock Text="For endpoints that authenticate with something other than a bearer key — a gateway token, or a provider's own key header."
+                                       Classes="SettingDescription" Margin="0,6,0,15"/>
+                        </StackPanel>
+
+                        <!-- The key is asked for HERE, on the sheet that already knows whose it is. A single
+                             shared key box elsewhere in Settings cannot say which connection it belongs to,
+                             so a reader pasting an OpenRouter key while some other endpoint happens to be
+                             active files it under that one — #678's collision with a new cause. -->
+                        <StackPanel IsVisible="{Binding ShowKeyField}">
+                            <TextBlock Text="API key" Classes="SettingLabel"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBox Text="{Binding ApiKeyEntry}"
+                                         PasswordChar="●"
+                                         IsEnabled="{Binding CanStoreKeys}"
+                                         Watermark="Paste a key"
+                                         Width="320"/>
+                                <Button Content="Remove stored key" Classes="Link"
+                                        IsVisible="{Binding HasStoredKey}"
+                                        Command="{Binding RemoveKeyCommand}"
+                                        VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding KeyStatus}" Classes="SettingDescription" Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding KeyUnavailable}"
+                                       IsVisible="{Binding HasKeyUnavailable}"
+                                       Classes="SettingDescription"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                            <TextBlock Text="{Binding KeyHint}" Classes="SettingDescription"/>
+                        </StackPanel>
+
+                        <!-- Only for an endpoint we cannot ask. A named provider's listing is fetched on the
+                             Models tab, so putting a model box here would make the reader decide whether they
+                             need to type an id before seeing what the provider returns. -->
+                        <StackPanel IsVisible="{Binding ShowModels}">
+                        <TextBlock Text="Models" Classes="SettingLabel"/>
+                        <ItemsControl ItemsSource="{Binding Models}" Margin="0,0,0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AiModelRowViewModel">
+                                    <Grid ColumnDefinitions="240,240,Auto" Margin="0,0,0,4">
+                                        <TextBox Grid.Column="0" Text="{Binding ModelId}"
+                                                 Watermark="model-id" Margin="0,0,6,0"/>
+                                        <TextBox Grid.Column="1" Text="{Binding DisplayName}"
+                                                 Watermark="Display name" Margin="0,0,6,0"/>
+                                        <Button Grid.Column="2" Content="Remove" Classes="Link"
+                                                Command="{Binding RemoveCommand}"
+                                                VerticalAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="+ Add model" Classes="Link"
+                                Command="{Binding AddModelCommand}"
+                                HorizontalAlignment="Left"/>
+                        <TextBlock Text="{Binding ModelsHint}"
+                                   Classes="SettingDescription" Margin="0,6,0,0"/>
+                        <TextBlock Text="The id goes on the wire, exactly as the provider spells it. The display name is yours, and is what the model picker shows."
+                                   Classes="SettingDescription" Margin="0,2,0,15"/>
+                        </StackPanel>
+
+                        <!-- A preset's address, read-only. Not a field to fill in, but the one fact that
+                             says where the reader's questions and money are about to go. -->
+                        <StackPanel IsVisible="{Binding ShowFixedEndpoint}">
+                            <TextBlock Text="Endpoint address" Classes="SettingLabel"/>
+                            <SelectableTextBlock Text="{Binding FixedEndpoint}"
+                                                 Classes="Secondary" Margin="0,0,0,15"/>
+                        </StackPanel>
+
+                        <!-- Whatever the preset says it still needs, generated from its own prompts. -->
+                        <ItemsControl ItemsSource="{Binding Inputs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AiInputRowViewModel">
+                                    <StackPanel IsVisible="{Binding IsVisible}">
+                                        <TextBlock Text="{Binding Message}" Classes="SettingLabel"/>
+                                        <TextBox Text="{Binding Value}"
+                                                 IsVisible="{Binding IsFreeText}"
+                                                 Watermark="{Binding Placeholder}"
+                                                 Width="320" HorizontalAlignment="Left"
+                                                 Margin="0,0,0,15"/>
+                                        <ComboBox ItemsSource="{Binding Options}"
+                                                  IsVisible="{Binding HasOptions}"
+                                                  SelectedValue="{Binding Value}"
+                                                  SelectedValueBinding="{Binding Value}"
+                                                  Width="320" HorizontalAlignment="Left"
+                                                  Margin="0,0,0,15">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="ai:AiPromptOption">
+                                                    <TextBlock Text="{Binding Label}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+                            <Button Content="{Binding SaveText}" Command="{Binding SaveCommand}"/>
+                            <Button Content="Cancel" Classes="Link" Command="{Binding CancelCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </DataTemplate>
+            </ContentControl.DataTemplates>
+        </ContentControl>
+    </Grid>
+</UserControl>

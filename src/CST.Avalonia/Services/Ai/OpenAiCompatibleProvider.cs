@@ -75,30 +75,8 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
     /// named <c>Authorization</c> in settings would otherwise silently replace the real key with whatever the
     /// reader pasted.</para>
     /// </summary>
-    private void ApplyAuth(HttpRequestMessage message)
-    {
-        if (_options.ExtraHeaders is { Count: > 0 })
-            foreach (var extra in _options.ExtraHeaders)
-                if (!string.IsNullOrWhiteSpace(extra.Key) && !IsAuthHeader(extra.Key))
-                    message.Headers.TryAddWithoutValidation(extra.Key, extra.Value);
-
-        if (string.IsNullOrWhiteSpace(_options.ApiKey)) return;   // a local runner needs none
-
-        var header = string.IsNullOrWhiteSpace(_options.AuthHeaderName)
-            ? "Authorization"
-            : _options.AuthHeaderName;
-
-        var credential = string.IsNullOrWhiteSpace(_options.AuthScheme)
-            ? _options.ApiKey!
-            : $"{_options.AuthScheme} {_options.ApiKey}";
-
-        message.Headers.TryAddWithoutValidation(header, credential);
-    }
-
-    /// <summary>Whether an extra header would collide with the credential, under either name.</summary>
-    private bool IsAuthHeader(string name) =>
-        string.Equals(name, "Authorization", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(name, _options.AuthHeaderName, StringComparison.OrdinalIgnoreCase);
+    private void ApplyAuth(HttpRequestMessage message) => AiHttp.ApplyAuth(
+        message, _options.ApiKey, _options.AuthHeaderName, _options.AuthScheme, _options.ExtraHeaders);
 
     public async IAsyncEnumerable<ChatDelta> StreamAsync(
         ChatRequest request,

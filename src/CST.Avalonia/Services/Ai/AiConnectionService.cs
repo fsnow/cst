@@ -61,6 +61,20 @@ namespace CST.Avalonia.Services.Ai
         AiConnectionResult SetModelEnabled(string connectionId, string modelId, bool enabled);
 
         /// <summary>
+        /// Turns a model on or off, adding it to the connection first if it is not there yet. (#674)
+        ///
+        /// <para>The verb a <i>fetched</i> listing needs. A provider's catalogue can run to hundreds of
+        /// models and none of them belongs in <c>settings.json</c> until the reader has chosen it — storing
+        /// all 414 so they can each carry a <c>false</c> would bloat the settings file to make a point the
+        /// file's emptiness already makes. So the stored list stays what it has always been: the models this
+        /// reader picked, whether they typed the id or promoted it from a listing.</para>
+        ///
+        /// <para>Turning one off keeps the entry rather than deleting it, so a display name the reader typed
+        /// survives being switched off and on again.</para>
+        /// </summary>
+        AiConnectionResult EnableModel(string connectionId, string modelId, string displayName, bool enabled);
+
+        /// <summary>
         /// Records what a real request just learned about an endpoint. (#673)
         ///
         /// <para>This is what stops Settings claiming "Connected" while the assistant reports it cannot
@@ -236,6 +250,32 @@ namespace CST.Avalonia.Services.Ai
 
             _reachability[connectionId] = state;
             ConnectionsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public AiConnectionResult EnableModel(
+            string connectionId, string modelId, string displayName, bool enabled)
+        {
+            if (Find(connectionId) is not { } record)
+                return AiConnectionResult.Fail($"No connection called '{connectionId}'.");
+
+            if (string.IsNullOrWhiteSpace(modelId))
+                return AiConnectionResult.Fail("A model needs an id.");
+
+            var model = record.Models.FirstOrDefault(
+                m => string.Equals(m.Id, modelId, StringComparison.Ordinal));
+
+            if (model is null)
+            {
+                model = new AiModelRecord
+                {
+                    Id = modelId.Trim(),
+                    DisplayName = string.IsNullOrWhiteSpace(displayName) ? modelId.Trim() : displayName.Trim(),
+                };
+                record.Models.Add(model);
+            }
+
+            model.Enabled = enabled;
+            return Saved(record);
         }
 
         public AiConnectionResult SetModelEnabled(string connectionId, string modelId, bool enabled)

@@ -1311,6 +1311,14 @@ public partial class App : Application
         // event and every consumer must see the same list.
         services.AddSingleton<Services.Ai.IAiConnectionService, Services.Ai.AiConnectionService>();
 
+        // Asking a connection what models it offers (#674). Additive to the hand-typed list, never a
+        // prerequisite: an endpoint that publishes no listing stays fully usable, so a failure here is
+        // reported and nothing more.
+        services.AddSingleton<Services.Ai.IAiModelCatalog>(sp => new Services.Ai.AiModelCatalog(
+            new System.Net.Http.HttpClient(),
+            sp.GetService<Services.Ai.IAiCredentialStore>(),
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<Services.Ai.AiModelCatalog>()));
+
         // The fidelity advisory (#584). Data only — Settings (#585) and the panel (#586) surface it.
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 

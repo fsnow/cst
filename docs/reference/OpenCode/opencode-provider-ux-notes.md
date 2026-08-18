@@ -568,6 +568,13 @@ screenshot cannot show — and it is usually the thing that determines what the 
 
 ### ⚠ Correction 2 — NOT-list item 6 was wrong; revised in place
 
+> **⚠ SUPERSEDED 2026-08-18 by the source finding below** ("where the pre-enabled subset comes from"). The
+> rule stated here — that subsets are the verdict and all-on/all-off are both neutral — **stands and is
+> unchanged**. What is wrong below is the factual claim that OpenCode defaults a connected provider to
+> all-on. It does not: it enables the newest model per family released in the last six months, which is a
+> pre-enabled subset, i.e. the very thing this correction rules out. The Veo/Lyria evidence was consistent
+> with all-on but did not establish it.
+
 Batch 2's NOT-list said "Any model toggled on by default… **Default must be all-off**." **That is wrong as
 written**, and it is now revised in place (see NOT-list 6). The correct rule is about **subsets**, not about
 the on-state:
@@ -647,6 +654,111 @@ to us; `CST_AI_API_KEY` is.
 
 ---
 
+## Source finding (2026-08-18) — where the pre-enabled subset comes from
+
+Read from the source rather than the screen, at `anomalyco/opencode@0033bb3`. This **closes open question 1's
+tail and corrects Correction 2**, and it is the first case in this study where the falsified thing is a rule
+we had already built policy on.
+
+### What the maintainer observed
+
+Connecting OpenRouter with a real key produced a toast — *"OpenRouter connected. Select models."* — and a
+Models list of a couple of hundred entries under an OpenRouter group, of which **roughly 30 to 40 were on and
+the rest off**.
+
+That is neither of the two defaults this document had argued about. Batch 2's screenshot suggested all-off;
+Correction 2 reversed it to all-on from the Veo/Lyria evidence. The truth is a **pre-enabled subset**, which
+is the one outcome #689 names as forbidden — and which neither a screenshot nor a single live session could
+have explained, because the question is not what the toggles show but what computes them.
+
+### The rule, from source
+
+`packages/app/src/context/models.tsx`:
+
+```js
+const visible = (model) => {
+  const state = visibility().get(key)
+  if (state === "hide") return false      // the user turned it off
+  if (state === "show") return true       // the user turned it on
+  if (latestSet().has(key)) return true   // otherwise: is it "latest"?
+  const date = release().get(key)
+  if (!date?.isValid) return true         // no release date at all -> on
+  return false                            // dated, and not latest -> off
+}
+```
+
+and `latest` is, in the same file: take every available model, **keep only those released within the last six
+months**, group by provider, group again by `family`, and keep **the newest member of each family**.
+
+So the default-on set is *the newest model in each family, per provider, released in the last six months*,
+plus anything whose `release_date` is missing or unparseable. `family` and `release_date` come from
+models.dev. There is no hand-written list of model ids anywhere in it.
+
+### Why this matters to us, precisely
+
+**It is mechanical in implementation and a verdict in substance.** Nobody typed a list of good models; a rule
+computed one. But the rule encodes "newer is what you want", and #689 rejects exactly that in words:
+
+> even "newest first" editorializes, since a newer point release can be worse at Pāli.
+
+For a coding agent the assumption is defensible — capability there does track recency fairly well. For Pāli it
+is the assumption the model registry was deleted over (#670/#681), and adopting it because it arrived as
+`release_date` arithmetic rather than as a curated table would be the registry returning through the back
+door. **A mechanical computation of an editorial judgment is still the editorial judgment.**
+
+Note also what this does *not* settle: it is a recency rule, **not** the capability filter this document
+speculated about under steal 9. There is no modality or `supported_parameters` gate on the default at all —
+which is why a music model and a video model reached the picker in batch 5. The capability filter remains a
+good idea that upstream has not had.
+
+### The second finding: "Popular" is a literal list
+
+`packages/app/src/hooks/use-providers.ts:8`:
+
+```js
+export const popularProviders = [
+  "opencode", "opencode-go", "anthropic", "github-copilot",
+  "openai", "google", "openrouter", "vercel",
+]
+```
+
+Eight entries, hand-written, **their own two products first**. It is used three times: to sort provider
+groups in Settings → Models, to sort the groups in the composer's model picker, and as the *"Popular
+providers"* section on the Providers page.
+
+So batch 1's suspicion about OpenCode Zen's `Recommended` badge was right and understated. The curation is not
+a badge on one row — it is the ordering of every provider surface in the app, and it is a constant in a hooks
+file. Nothing in the UI says a choice was made.
+
+### Consequences for the ongoing sync
+
+The plan is to track upstream provider facts and fold in changes. This finding sharpens the do-not-take list,
+which now has two tiers:
+
+- **Never take as an input to any default or ordering:** `release_date`, `family`, `popularProviders` or any
+  successor, pricing, `status`, vendor `description`. Displaying `release_date` verbatim next to a model is
+  fine; letting it decide what is enabled is not.
+- **Take freely:** base URLs, env var names, auth shapes, wire protocol, prompts/inputs a provider needs.
+
+The general rule this produces, worth keeping in front of whoever does the next sync: **pull named fields,
+never "whatever the source says", and audit any field that reaches a default rather than a display.** A
+recency rule is easy to re-adopt by accident precisely because it looks like arithmetic rather than an
+opinion.
+
+### Consequence for our own defaults (#692, #674)
+
+The two cases separate, and conflating them is what made this argument go round twice:
+
+- **A hand-typed model list — what #691/#692 ship.** Typing a model id *is* the act of selecting it. All-on
+  is right, and all-off would mean typing a model and then hunting for a switch before it appears anywhere.
+- **A fetched catalogue — #674.** Hundreds of models nobody asked for. All-off is right there, and the
+  maintainer's instinct on seeing OpenRouter's list agrees. OpenCode's toast (*"Select models"*) reads as if
+  they had made that choice too; their code did something else.
+
+Neither case may use a pre-enabled subset, however it is computed.
+
+---
+
 ## Method note — what screenshots could not show
 
 Worth stating plainly for whoever reads these notes later, because the pattern repeated with unusual
@@ -662,6 +774,12 @@ screenshot was falsified by someone actually using the app:**
    determines the mechanism's meaning.
 3. **The finding above — the empty action slot.** It photographed as principled restraint. In use it is a
    dead end with no exit.
+4. **(added 2026-08-18) The pre-enabled subset.** Two screenshots and a live session produced three different
+   answers about the default toggle state — off, then all-on, then "about forty of two hundred". Only the
+   source settled it, and the answer was a *rule*, which is a thing no amount of looking at the UI can show.
+   The lesson extends the one below: use gives you behaviour, but where behaviour is computed from data you
+   cannot see, **the source is the only witness** — and it is worth reading before building policy on an
+   inference about it.
 
 The generalisation: **screenshots show structure, wording, hierarchy and affordances — the happy path, at
 rest. They do not show what happens when something goes wrong, or when the user changes their mind.**
