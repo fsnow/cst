@@ -69,7 +69,7 @@ public class AiAssistantViewModel : ReactiveTool
     private bool _isBusy;
 
     public AiAssistantViewModel()
-        : this(null, null, null, null)
+        : this(null, null, null, null, null)
     {
     }
 
@@ -77,12 +77,18 @@ public class AiAssistantViewModel : ReactiveTool
         IAiChatOrchestrator? orchestrator,
         IReaderStateService? readerState,
         IChatProviderResolver? resolver,
-        ISettingsService? settings)
+        ISettingsService? settings,
+        IAiConnectionService? connections = null)
     {
         _orchestrator = orchestrator;
         _readerState = readerState;
         _resolver = resolver;
         _settings = settings;
+
+        // Changing model is the reason the provider rework exists, so it belongs here rather than in
+        // Settings (#693). Readiness is re-asked on every switch: picking a model on a connection with no
+        // key must change the standing notice, not wait to fail at send time.
+        ModelPicker = new AiModelPickerViewModel(connections, RefreshReadiness);
 
         Id = "AiAssistantTool";
         Title = "Assistant";
@@ -108,6 +114,9 @@ public class AiAssistantViewModel : ReactiveTool
         // Asked once at construction so the panel can say it is not configured before anything is pressed.
         RefreshReadiness();
     }
+
+    /// <summary>The per-turn model chip and its list. (#693)</summary>
+    public AiModelPickerViewModel ModelPicker { get; }
 
     public ReactiveCommand<Unit, Unit> ExplainCommand { get; }
     public ReactiveCommand<Unit, Unit> TranslateCommand { get; }

@@ -16,9 +16,60 @@ namespace CST.Avalonia.Views;
 /// </summary>
 public partial class AiAssistantPanel : UserControl
 {
-    public AiAssistantPanel() => InitializeComponent();
+    private AiModelPickerViewModel? _picker;
+
+    private bool _syncingFlyout;
+
+    public AiAssistantPanel()
+    {
+        InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+
+        // Mirror the flyout's own state into the view model. Needed in both directions: the view model has
+        // to KNOW it is open for its later close to register as a change, and a reader who dismisses the
+        // list by clicking away must not leave it believing otherwise.
+        if (ModelChip.Flyout is { } flyout)
+        {
+            flyout.Opened += (_, _) => SetOpen(true);
+            flyout.Closed += (_, _) => SetOpen(false);
+        }
+    }
+
+    private void SetOpen(bool open)
+    {
+        if (_picker is null) return;
+        _syncingFlyout = true;
+        try { _picker.IsOpen = open; }
+        finally { _syncingFlyout = false; }
+    }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+
+    private void OnDataContextChanged(object? sender, System.EventArgs e)
+    {
+        if (_picker is not null) _picker.PropertyChanged -= OnPickerChanged;
+        _picker = (DataContext as AiAssistantViewModel)?.ModelPicker;
+        if (_picker is not null) _picker.PropertyChanged += OnPickerChanged;
+    }
+
+    /// <summary>
+    /// Closes the model flyout once a choice is made. (#693)
+    ///
+    /// <para>Code-behind because a <c>Flyout</c> owns its own open state: it opens itself when the chip is
+    /// clicked and there is no bindable property to close it through. Without this, picking a model leaves
+    /// the list sitting over the composer — and the reader's next act is to dismiss a popup rather than to
+    /// ask the question they opened it for.</para>
+    ///
+    /// <para>Driven from the view model's own <c>IsOpen</c> rather than from each row's click handler, so
+    /// every route that ends the choice — picking a model, or leaving for Settings — closes it the same
+    /// way.</para>
+    /// </summary>
+    private void OnPickerChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_syncingFlyout) return;   // the flyout told us; do not tell it back
+        if (e.PropertyName != nameof(AiModelPickerViewModel.IsOpen)) return;
+        if (_picker?.IsOpen == false) ModelChip.Flyout?.Hide();
+    }
 
     /// <summary>
     /// Drag the reasoning panel taller or shorter. The one piece of code-behind here, because

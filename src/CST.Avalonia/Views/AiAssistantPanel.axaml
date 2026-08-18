@@ -83,6 +83,112 @@
                     </TextBox.KeyBindings>
                 </TextBox>
 
+                <!-- The per-turn model chip (#693). At the composer rather than in Settings: comparing two
+                     models on the same passage is the task the assistant exists for, and it wants to be one
+                     click from the answer on screen. Hidden until there is more than one model to choose
+                     between — a chip offering one thing is a control that cannot do anything. -->
+                <Button x:Name="ModelChip"
+                        IsVisible="{Binding ModelPicker.HasChoices}"
+                        HorizontalAlignment="Left"
+                        Padding="8,3"
+                        CornerRadius="12"
+                        FontSize="11"
+                        Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <TextBlock Text="{Binding ModelPicker.CurrentLabel}" VerticalAlignment="Center"/>
+                        <TextBlock Text="⌄" FontSize="10" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <Button.Flyout>
+                        <Flyout Placement="Top" ShowMode="Standard">
+                            <Grid RowDefinitions="Auto,*,Auto" Width="330" MaxHeight="360">
+
+                                <!-- Pinned above a scrolling list, and it takes focus: the list can grow. -->
+                                <TextBox Grid.Row="0" Text="{Binding ModelPicker.Search}"
+                                         Watermark="Search models" Margin="0,0,0,6"/>
+
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <TextBlock IsVisible="{Binding ModelPicker.HasNothingMatching}"
+                                                   Text="No models match."
+                                                   FontSize="11" Margin="4,6"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                                        <ItemsControl ItemsSource="{Binding ModelPicker.Groups}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:AiPickerGroupViewModel">
+                                                    <StackPanel Margin="0,0,0,6">
+                                                        <!-- Grouped by connection: it is what stops "the 8B I
+                                                             run locally" and "the hosted 70B" reading as
+                                                             interchangeable rows. -->
+                                                        <StackPanel Orientation="Horizontal" Spacing="6"
+                                                                    Margin="4,2">
+                                                            <TextBlock Text="{Binding DisplayName}"
+                                                                       FontSize="11" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                            <!-- Marked, never hidden: the reader may be
+                                                                 about to start their local runner. -->
+                                                            <TextBlock Text="{Binding Note}"
+                                                                       IsVisible="{Binding HasNote}"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                                        </StackPanel>
+
+                                                        <ItemsControl ItemsSource="{Binding Models}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:AiPickerModelViewModel">
+                                                                    <Button Command="{Binding SelectCommand}"
+                                                                            IsEnabled="{Binding IsUsable}"
+                                                                            HorizontalAlignment="Stretch"
+                                                                            HorizontalContentAlignment="Left"
+                                                                            Background="Transparent"
+                                                                            BorderThickness="0"
+                                                                            Padding="8,4">
+                                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                                            <TextBlock Grid.Column="0"
+                                                                                       Text="✓"
+                                                                                       IsVisible="{Binding IsCurrent}"
+                                                                                       Margin="0,0,6,0"
+                                                                                       Foreground="{DynamicResource DockApplicationAccentBrushLow}"/>
+                                                                            <TextBlock Grid.Column="1"
+                                                                                       Text="{Binding DisplayName}"
+                                                                                       TextTrimming="CharacterEllipsis"/>
+                                                                            <!-- Said here rather than
+                                                                                 discovered as a 401 naming
+                                                                                 nothing. -->
+                                                                            <TextBlock Grid.Column="2"
+                                                                                       Text="{Binding Unusable}"
+                                                                                       IsVisible="{Binding !IsUsable}"
+                                                                                       FontSize="11"
+                                                                                       Margin="6,0,0,0"
+                                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                        </Grid>
+                                                                    </Button>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </ScrollViewer>
+
+                                <!-- Pinned at the bottom: the route back to the full listing. -->
+                                <Button Grid.Row="2" Content="Manage models…"
+                                        Command="{Binding ModelPicker.ManageCommand}"
+                                        HorizontalAlignment="Left"
+                                        Background="Transparent" BorderThickness="0"
+                                        FontSize="11" Padding="4,4,4,0"
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </Grid>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
                 <WrapPanel Orientation="Horizontal">
                     <!-- First, and disabled until something is typed: the other four are complete without a
                          question, and this one IS the question. -->
