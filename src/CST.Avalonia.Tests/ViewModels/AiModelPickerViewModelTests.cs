@@ -1,0 +1,295 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using CST.Avalonia.Models;
+using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services;
+using CST.Avalonia.Services.Ai;
+using CST.Avalonia.ViewModels;
+using Moq;
+using Xunit;
+
+namespace CST.Avalonia.Tests.ViewModels;
+
+/// <summary>
+/// #693: the per-turn model chip in the Assistant's composer.
+///
+/// <para>The primitive the provider rework exists for — comparing two models on the same passage, one click
+/// from the answer on screen rather than a trip to Settings.</para>
+/// </summary>
+public class AiModelPickerViewModelTests
+{
+    private sealed class FakeCredentialStore : IAiCredentialStore
+    {
+        public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
+        public bool IsAvailable => true;
+        public string? Unavailable => null;
+        public string? GetApiKey(string connectionId) => Keys.GetValueOrDefault(connectionId);
+        public bool SetApiKey(string connectionId, string apiKey) { Keys[connectionId] = apiKey; return true; }
+        public bool DeleteApiKey(string connectionId) => Keys.Remove(connectionId);
+    }
+
+    private static (AiModelPickerViewModel Picker, AiConnectionService Service, FakeCredentialStore Keys) Make()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var keys = new FakeCredentialStore();
+        var service = new AiConnectionService(svc.Object, keys);
+        return (new AiModelPickerViewModel(service), service, keys);
+    }
+
+    private static AiConnectionDraft Draft(string name, params AiModelEntry[] models) =>
+        new(name, ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
+            models, new Dictionary<string, string>(), new Dictionary<string, string>());
+
+    private static IEnumerable<AiPickerModelViewModel> AllModels(AiModelPickerViewModel picker) =>
+        picker.Groups.SelectMany(g => g.Models);
+
+    // ---- what the list contains ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Only the enabled subset. The full listing lives in Settings → Models; this is the short list the
+    /// reader built there, which is what lets it be a flat grouped list with no virtualization.
+    /// </summary>
+    [Fact]
+    public void Only_enabled_models_are_offered()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine",
+            new AiModelEntry("on", "On", true),
+            new AiModelEntry("off", "Off", false)));
+
+        Assert.Equal(new[] { "on" }, AllModels(picker).Select(m => m.ModelId));
+    }
+
+    /// <summary>Grouped by connection — what stops "the 8B I run locally" and "the hosted 70B" reading as
+    /// interchangeable rows once several endpoints are configured.</summary>
+    [Fact]
+    public void Models_are_grouped_by_connection()
+    {
+        var (picker, service, _) = Make();
+        service.Add("local", Draft("Local Ollama", new AiModelEntry("a", "A")));
+        service.Add("hosted", Draft("Hosted", new AiModelEntry("b", "B")));
+
+        Assert.Equal(new[] { "Local Ollama", "Hosted" }, picker.Groups.Select(g => g.DisplayName));
+    }
+
+    /// <summary>A connection with nothing enabled contributes no header — an empty group is a heading
+    /// promising rows it does not have.</summary>
+    [Fact]
+    public void A_connection_with_nothing_enabled_is_absent()
+    {
+        var (picker, service, _) = Make();
+        service.Add("empty", Draft("Empty", new AiModelEntry("x", "X", false)));
+        service.Add("full", Draft("Full", new AiModelEntry("y", "Y")));
+
+        Assert.Equal(new[] { "Full" }, picker.Groups.Select(g => g.DisplayName));
+    }
+
+    /// <summary>The chip is hidden until there is a choice to make. One model, or none, is a control that
+    /// cannot do anything.</summary>
+    [Fact]
+    public void The_chip_appears_only_when_there_is_something_to_choose()
+    {
+        var (picker, service, _) = Make();
+        Assert.False(picker.HasChoices);
+
+        service.Add("mine", Draft("Mine", new AiModelEntry("a", "A")));
+        Assert.False(picker.HasChoices);
+
+        service.Update("mine", Draft("Mine", new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
+        Assert.True(picker.HasChoices);
+    }
+
+    // ---- choosing ---------------------------------------------------------------------------------------
+
+    /// <summary>The chip shows the display name, not the wire id: nobody calls the thing they are talking to
+    /// <c>nvidia/nemotron-nano-9b-v2</c>.</summary>
+    [Fact]
+    public void The_chip_shows_the_current_models_display_name()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine",
+            new AiModelEntry("nvidia/nemotron-nano-9b-v2", "Nemotron Nano 9B"),
+            new AiModelEntry("other", "Other")));
+
+        AllModels(picker).Single(m => m.ModelId == "nvidia/nemotron-nano-9b-v2")
+            .SelectCommand.Execute().Subscribe();
+
+        Assert.Equal("Nemotron Nano 9B", picker.CurrentLabel);
+    }
+
+    /// <summary>
+    /// Choosing a model on another connection moves the connection with it.
+    ///
+    /// <para>Switching model across providers means switching base URL <i>and</i> credential; a picker that
+    /// moved only the model id would send the second provider's model to the first provider's endpoint and
+    /// fail confusingly.</para>
+    /// </summary>
+    [Fact]
+    public void Choosing_a_model_on_another_connection_switches_the_connection_too()
+    {
+        var (picker, service, _) = Make();
+        service.Add("local", Draft("Local", new AiModelEntry("a", "A")));
+        service.Add("hosted", Draft("Hosted", new AiModelEntry("b", "B")));
+
+        AllModels(picker).Single(m => m.ModelId == "b").SelectCommand.Execute().Subscribe();
+
+        Assert.Equal("hosted", service.Active?.Id);
+        Assert.Equal("b", service.ActiveModelId);
+    }
+
+    /// <summary>The current one is marked, so the reader can see what answered the last question without
+    /// opening anything else.</summary>
+    [Fact]
+    public void The_current_model_is_marked()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine", new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
+
+        AllModels(picker).Single(m => m.ModelId == "b").SelectCommand.Execute().Subscribe();
+
+        Assert.True(AllModels(picker).Single(m => m.ModelId == "b").IsCurrent);
+        Assert.False(AllModels(picker).Single(m => m.ModelId == "a").IsCurrent);
+    }
+
+    /// <summary>Choosing closes the popup and clears the search, so the next open starts from the whole
+    /// list rather than from whatever was typed last time.</summary>
+    [Fact]
+    public void Choosing_closes_the_popup_and_clears_the_search()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine", new AiModelEntry("a", "Alpha"), new AiModelEntry("b", "Beta")));
+        picker.IsOpen = true;
+        picker.Search = "alp";
+
+        AllModels(picker).Single().SelectCommand.Execute().Subscribe();
+
+        Assert.False(picker.IsOpen);
+        Assert.Equal("", picker.Search);
+    }
+
+    /// <summary>The panel is told, so a standing "not configured" notice reflects the new choice rather than
+    /// waiting to be contradicted at send time.</summary>
+    [Fact]
+    public void Choosing_notifies_the_panel()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object);
+        var told = 0;
+        var picker = new AiModelPickerViewModel(service, () => told++);
+
+        service.Add("mine", Draft("Mine", new AiModelEntry("a", "A")));
+        AllModels(picker).Single().SelectCommand.Execute().Subscribe();
+
+        Assert.Equal(1, told);
+    }
+
+    // ---- search ------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Search_matches_the_name_or_the_id()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine",
+            new AiModelEntry("nvidia/nemotron", "Nano"),
+            new AiModelEntry("meta/llama", "Llama")));
+
+        picker.Search = "nemotron";
+        Assert.Equal(new[] { "nvidia/nemotron" }, AllModels(picker).Select(m => m.ModelId));
+
+        picker.Search = "llama";
+        Assert.Equal(new[] { "meta/llama" }, AllModels(picker).Select(m => m.ModelId));
+    }
+
+    [Fact]
+    public void A_search_matching_nothing_says_so()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine", new AiModelEntry("a", "A")));
+
+        picker.Search = "zzz";
+
+        Assert.True(picker.HasNothingMatching);
+    }
+
+    // ---- what cannot be used, and why ---------------------------------------------------------------------
+
+    /// <summary>
+    /// A provider whose preset says it needs a key, with none stored, is shown disabled and says why.
+    ///
+    /// <para>Otherwise the send fails with a 401 that names neither the cause nor the connection — which is
+    /// the failure this is here to prevent.</para>
+    /// </summary>
+    [Fact]
+    public void A_provider_missing_a_required_key_is_disabled_with_the_reason()
+    {
+        var (picker, service, keys) = Make();
+        service.AddFromPreset("openrouter", new Dictionary<string, string>());
+        service.EnableModel("openrouter", "x/y", "X", true);
+
+        var model = AllModels(picker).Single();
+        Assert.False(model.IsUsable);
+        Assert.Equal("no API key stored", model.Unusable);
+
+        keys.SetApiKey("openrouter", "sk-or-secret");
+        picker.Refresh();
+
+        Assert.True(AllModels(picker).Single().IsUsable);
+    }
+
+    /// <summary>
+    /// A custom endpoint with no key is left alone.
+    ///
+    /// <para>Plenty need none — every local runner — and there is no fact saying otherwise, so nothing is
+    /// claimed. Disabling on a hunch would be worse than letting the request explain itself.</para>
+    /// </summary>
+    [Fact]
+    public void A_custom_endpoint_with_no_key_is_not_second_guessed()
+    {
+        var (picker, service, _) = Make();
+        service.Add("my-ollama", Draft("My Ollama", new AiModelEntry("a", "A")));
+
+        Assert.True(AllModels(picker).Single().IsUsable);
+    }
+
+    /// <summary>A connection whose URL still has an unanswered placeholder cannot send anything, which is a
+    /// fact rather than a guess.</summary>
+    [Fact]
+    public void An_unfinished_connection_is_disabled_with_the_reason()
+    {
+        var (picker, service, keys) = Make();
+        service.Add("azure-ish", new AiConnectionDraft(
+            "Half-built", ChatProviderKind.OpenAiCompatible,
+            "https://{resourceName}.openai.azure.com/openai/v1",
+            new[] { new AiModelEntry("a", "A") },
+            new Dictionary<string, string>(), new Dictionary<string, string>()));
+
+        var model = AllModels(picker).Single();
+        Assert.False(model.IsUsable);
+        Assert.Equal("not finished being set up", model.Unusable);
+    }
+
+    /// <summary>
+    /// An unreachable connection is marked, not hidden.
+    ///
+    /// <para>The reader may be about to start their local runner; a provider that vanished from the picker
+    /// because it was asleep would look like a lost configuration.</para>
+    /// </summary>
+    [Fact]
+    public void An_unreachable_connection_is_marked_rather_than_hidden()
+    {
+        var (picker, service, _) = Make();
+        service.Add("local", Draft("Local", new AiModelEntry("a", "A")));
+
+        service.ReportReachability("local", reachable: false);
+
+        var group = Assert.Single(picker.Groups);
+        Assert.True(group.HasNote);
+        Assert.Equal("not responding", group.Note);
+        Assert.Single(group.Models);
+    }
+}

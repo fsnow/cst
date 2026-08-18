@@ -1370,7 +1370,8 @@ public partial class App : Application
             sp.GetService<Services.Ai.IAiChatOrchestrator>(),
             sp.GetService<Services.Ai.IReaderStateService>(),
             sp.GetService<Services.Ai.IChatProviderResolver>(),
-            sp.GetService<ISettingsService>()));
+            sp.GetService<ISettingsService>(),
+            sp.GetService<Services.Ai.IAiConnectionService>()));
         // services.AddTransient<MainWindowViewModel>();
     }
 
