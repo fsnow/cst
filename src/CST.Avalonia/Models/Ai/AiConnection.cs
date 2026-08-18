@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using CST.Avalonia.Services.Ai;
 
 namespace CST.Avalonia.Models.Ai
@@ -68,6 +69,11 @@ namespace CST.Avalonia.Models.Ai
     /// the host.</param>
     /// <param name="Headers">Extra request headers. The escape hatch that makes an absent key coherent:
     /// Azure's <c>api-key</c>, gateway tokens, and anything non-bearer live here.</param>
+    /// <param name="BaseUrl">May be a template — see <see cref="AiTemplate"/>. Azure and Cloudflare do not
+    /// have a fixed address so much as a shape with the reader's own resource name or account id in it.</param>
+    /// <param name="Inputs">The reader's answers to the preset's prompts (resource name, account id, region,
+    /// project). Substituted into <paramref name="BaseUrl"/> and <paramref name="Headers"/>. Empty for the
+    /// ~150 of 189 providers that are a plain base URL and a bearer token.</param>
     public sealed record AiConnection(
         string Id,
         string DisplayName,
@@ -75,8 +81,17 @@ namespace CST.Avalonia.Models.Ai
         string BaseUrl,
         IReadOnlyList<AiModelEntry> Models,
         IReadOnlyDictionary<string, string> Headers,
+        IReadOnlyDictionary<string, string> Inputs,
         CredentialSource KeySource = CredentialSource.None,
-        Reachability State = Reachability.Configured);
+        Reachability State = Reachability.Configured)
+    {
+        /// <summary>The base URL with <see cref="Inputs"/> substituted in — what a request actually goes to.</summary>
+        public string ResolvedBaseUrl => AiTemplate.Expand(BaseUrl, Inputs);
+
+        /// <summary>True when an input the URL needs has not been supplied, so this connection cannot be used
+        /// yet. Checked before sending rather than discovered as a DNS failure naming nothing.</summary>
+        public bool IsIncomplete => AiTemplate.HasUnresolvedPlaceholders(ResolvedBaseUrl);
+    }
 
     /// <summary>
     /// The editable fields of a connection — everything except <see cref="AiConnection.Id"/>, which cannot
@@ -87,7 +102,8 @@ namespace CST.Avalonia.Models.Ai
         ChatProviderKind Kind,
         string BaseUrl,
         IReadOnlyList<AiModelEntry> Models,
-        IReadOnlyDictionary<string, string> Headers);
+        IReadOnlyDictionary<string, string> Headers,
+        IReadOnlyDictionary<string, string> Inputs);
 
     /// <summary>
     /// A named endpoint a reader can add without knowing its URL. (#689, #691)
@@ -97,14 +113,36 @@ namespace CST.Avalonia.Models.Ai
     /// than endpoints. Its entire value is that a reader should not have to already know
     /// <c>https://openrouter.ai/api/v1</c> in order to use OpenRouter.</para>
     /// </summary>
-    /// <param name="EnvironmentVariables">Names conventionally carrying this provider's key, in precedence
-    /// order. Used to <b>detect</b> an available credential — never to adopt one silently; discovery makes a
-    /// provider <i>available</i>, not <i>connected</i>.</param>
+    /// <param name="BaseUrl">May contain <c>{key}</c> placeholders naming <paramref name="Prompts"/>.</param>
+    /// <param name="Methods">How a credential may be obtained. An empty list means none is needed — a local
+    /// runner. See <see cref="AiCredentialMethod"/> for why this is a union rather than a bool plus a list of
+    /// variable names.</param>
+    /// <param name="Prompts">Extra values this provider needs beyond a key, and what to ask for them.
+    /// Substituted into <paramref name="BaseUrl"/> and <paramref name="Headers"/>.</param>
+    /// <param name="Headers">Static or templated headers, NOT the credential. Values may contain <c>{key}</c>.</param>
+    /// <param name="AuthHeaderName">Which header carries the credential. Azure uses <c>api-key</c>, and
+    /// crucially expects <c>Authorization</c> to be <i>absent</i> rather than also present — so this replaces
+    /// the auth header rather than adding one.</param>
+    /// <param name="AuthScheme">Prefix before the credential, or null for a bare value. Bearer for almost
+    /// everything; null for Azure's <c>api-key</c>.</param>
     public sealed record AiProviderPreset(
         string Id,
         string DisplayName,
         ChatProviderKind Kind,
         string BaseUrl,
-        bool RequiresKey,
-        IReadOnlyList<string> EnvironmentVariables);
+        IReadOnlyList<AiCredentialMethod> Methods,
+        IReadOnlyList<AiInputPrompt>? Prompts = null,
+        IReadOnlyDictionary<string, string>? Headers = null,
+        string AuthHeaderName = "Authorization",
+        string? AuthScheme = "Bearer")
+    {
+        /// <summary>True when a key must be supplied or found. False for a local runner.</summary>
+        public bool RequiresKey => Methods.Any(m => m is AiCredentialMethod.Key or AiCredentialMethod.Env);
+
+        /// <summary>Environment variables that may already hold this provider's key, in precedence order.
+        /// Used to DETECT a credential, never to adopt one — discovery makes a provider available, not
+        /// connected.</summary>
+        public IReadOnlyList<string> EnvironmentVariables =>
+            Methods.OfType<AiCredentialMethod.Env>().SelectMany(m => m.Names).ToList();
+    }
 }

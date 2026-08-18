@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
@@ -26,7 +27,18 @@ public class AiProviderPresetsTests
         {
             Assert.False(string.IsNullOrWhiteSpace(p.Id), "a preset has no id");
             Assert.False(string.IsNullOrWhiteSpace(p.DisplayName), $"{p.Id} has no display name");
-            Assert.True(Uri.TryCreate(p.BaseUrl, UriKind.Absolute, out _), $"{p.Id} has a non-absolute base URL");
+            // A base URL may be a TEMPLATE (Azure's resource name, Cloudflare's account id), so substitute
+            // a value for every placeholder before parsing - otherwise this test would forbid the very shape
+            // that lets those providers exist at all.
+            var filled = AiTemplate.Expand(
+                p.BaseUrl,
+                AiTemplate.PlaceholdersIn(p.BaseUrl).ToDictionary(k => k, _ => "x"));
+            Assert.True(Uri.TryCreate(filled, UriKind.Absolute, out _), $"{p.Id} has a non-absolute base URL");
+
+            // Every placeholder must have a prompt to collect it, or the connection can never be completed
+            // and the reader is given no way to say what is missing.
+            foreach (var key in AiTemplate.PlaceholdersIn(p.BaseUrl))
+                Assert.Contains(key, (p.Prompts ?? new List<AiInputPrompt>()).Select(pr => pr.Key));
         }
     }
 
@@ -122,5 +134,84 @@ public class AiProviderPresetsTests
     public void The_source_commit_is_stamped()
     {
         Assert.False(string.IsNullOrWhiteSpace(AiProviderPresets.SourceCommit));
+    }
+
+    // ---- the credential-method union (revised after reading opencode's Integration.Method) ---------------
+
+    /// <summary>
+    /// A local runner declares NO credential method at all — which is a different statement from "a key that
+    /// happens to be empty", and is what makes an absent credential a valid configuration rather than an
+    /// error the reader has to dismiss.
+    /// </summary>
+    [Fact]
+    public void Local_runners_declare_no_credential_method()
+    {
+        foreach (var p in AiProviderPresets.All.Where(p => p.BaseUrl.Contains("localhost")))
+        {
+            Assert.Empty(p.Methods);
+            Assert.False(p.RequiresKey);
+        }
+    }
+
+    /// <summary>Env is a place a key MIGHT be, never a decision to use one. A preset that offers env
+    /// discovery must also offer the ordinary paste-a-key path, or a reader without the variable set has no
+    /// way in at all.</summary>
+    [Fact]
+    public void Env_discovery_never_stands_alone()
+    {
+        foreach (var p in AiProviderPresets.All.Where(p => p.Methods.OfType<AiCredentialMethod.Env>().Any()))
+            Assert.Contains(p.Methods, m => m is AiCredentialMethod.Key);
+    }
+
+    /// <summary>Azure is the case that forced the auth header to be configurable: it expects the credential in
+    /// `api-key` and expects `Authorization` to be ABSENT, so adding a header would not have been enough.</summary>
+    [Fact]
+    public void Azure_sends_its_credential_in_its_own_header_without_a_scheme()
+    {
+        var azure = AiProviderPresets.ById("azure");
+
+        Assert.NotNull(azure);
+        Assert.Equal("api-key", azure!.AuthHeaderName);
+        Assert.Null(azure.AuthScheme);
+    }
+
+    /// <summary>Everything else is an ordinary bearer token; the default must stay that way so a new preset
+    /// needs no auth ceremony.</summary>
+    [Fact]
+    public void Bearer_is_the_default_everywhere_else()
+    {
+        foreach (var p in AiProviderPresets.All.Where(p => p.Id != "azure"))
+        {
+            Assert.Equal("Authorization", p.AuthHeaderName);
+            Assert.Equal("Bearer", p.AuthScheme);
+        }
+    }
+
+    /// <summary>A prompt that no template consumes is dead weight the reader is asked to fill in for nothing;
+    /// the reverse (a placeholder with no prompt) is covered by the well-formed test.</summary>
+    [Fact]
+    public void Every_prompt_feeds_a_template()
+    {
+        foreach (var p in AiProviderPresets.All.Where(p => p.Prompts is { Count: > 0 }))
+        {
+            var used = AiTemplate.PlaceholdersIn(p.BaseUrl)
+                .Concat((p.Headers ?? new Dictionary<string, string>())
+                    .Values.SelectMany(AiTemplate.PlaceholdersIn))
+                .ToHashSet();
+
+            foreach (var prompt in p.Prompts!)
+                Assert.Contains(prompt.Key, used);
+        }
+    }
+
+    /// <summary>Conditional prompts: absent means empty, so a NotEquals condition is satisfied before the
+    /// reader has typed anything — which is what makes a dependent field appear rather than hide.</summary>
+    [Fact]
+    public void A_condition_treats_an_unanswered_input_as_empty()
+    {
+        var whenBlank = new AiPromptCondition("baseUrl", AiConditionOperator.NotEquals, "x");
+
+        Assert.True(whenBlank.IsSatisfiedBy(new Dictionary<string, string>()));
+        Assert.False(whenBlank.IsSatisfiedBy(new Dictionary<string, string> { ["baseUrl"] = "x" }));
     }
 }

@@ -38,6 +38,23 @@ namespace CST.Avalonia.Services.Ai
             P("anthropic", "Anthropic", ChatProviderKind.Anthropic,
                 "https://api.anthropic.com/v1", true, "ANTHROPIC_API_KEY"),
 
+            // Azure needs the reader's resource name in the URL, and sends the credential in an `api-key`
+            // header INSTEAD of Authorization - the one provider so far where adding a header is not enough.
+            new AiProviderPreset(
+                "azure", "Azure OpenAI", ChatProviderKind.OpenAiCompatible,
+                "https://{resourceName}.openai.azure.com/openai/v1",
+                new AiCredentialMethod[]
+                {
+                    new AiCredentialMethod.Key(),
+                    new AiCredentialMethod.Env(new[] { "AZURE_API_KEY", "AZURE_OPENAI_API_KEY" }),
+                },
+                new[]
+                {
+                    new AiInputPrompt("resourceName", "Azure resource name", "my-resource"),
+                },
+                AuthHeaderName: "api-key",
+                AuthScheme: null),
+
             P("baseten", "Baseten", ChatProviderKind.OpenAiCompatible,
                 "https://inference.baseten.co/v1", true, "BASETEN_API_KEY"),
 
@@ -46,6 +63,20 @@ namespace CST.Avalonia.Services.Ai
 
             P("chutes", "Chutes", ChatProviderKind.OpenAiCompatible,
                 "https://llm.chutes.ai/v1", true, "CHUTES_API_KEY"),
+
+            // Account id goes in the path; ordinary bearer auth otherwise.
+            new AiProviderPreset(
+                "cloudflare-workers-ai", "Cloudflare Workers AI", ChatProviderKind.OpenAiCompatible,
+                "https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/v1",
+                new AiCredentialMethod[]
+                {
+                    new AiCredentialMethod.Key(),
+                    new AiCredentialMethod.Env(new[] { "CLOUDFLARE_API_KEY", "CLOUDFLARE_WORKERS_AI_TOKEN" }),
+                },
+                new[]
+                {
+                    new AiInputPrompt("accountId", "Cloudflare account ID", "0123456789abcdef"),
+                }),
 
             P("deepinfra", "DeepInfra", ChatProviderKind.OpenAiCompatible,
                 "https://api.deepinfra.com/v1/openai", true, "DEEPINFRA_API_KEY"),
@@ -134,9 +165,19 @@ namespace CST.Avalonia.Services.Ai
         /// <summary>True when <paramref name="id"/> names a preset, so a custom connection cannot claim it.</summary>
         public static bool IsReservedId(string id) => ById(id) is not null;
 
+        /// <summary>The common case: a base URL, a bearer token, and the env vars that may already hold it.
+        /// Roughly 150 of 189 catalogued providers are exactly this.</summary>
         private static AiProviderPreset P(
             string id, string displayName, ChatProviderKind kind, string baseUrl, bool requiresKey,
-            params string[] envVars) =>
-            new(id, displayName, kind, baseUrl, requiresKey, envVars);
+            params string[] envVars)
+        {
+            var methods = new List<AiCredentialMethod>();
+            if (requiresKey)
+            {
+                methods.Add(new AiCredentialMethod.Key());
+                if (envVars.Length > 0) methods.Add(new AiCredentialMethod.Env(envVars));
+            }
+            return new AiProviderPreset(id, displayName, kind, baseUrl, methods);
+        }
     }
 }
