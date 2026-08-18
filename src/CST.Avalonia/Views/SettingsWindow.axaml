@@ -136,7 +136,7 @@
                                                 <TextBox Text="{Binding IndexDirectory}" 
                                                         Watermark="Default location will be used if empty"/>
                                             </DockPanel>
-                                            <TextBlock Text="Location where search index files are stored (leave empty for default location)" 
+                                            <TextBlock Text="Location where search index files are stored" 
                                                       Classes="SettingDescription"/>
                                         </StackPanel>
                                         
@@ -492,13 +492,10 @@
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="AI Features" Classes="SettingLabel"/>
-                                        <TextBlock Text="Let AI agents access the Tipitaka corpus through a local, loopback-only API. All AI features are off by default and opt-in."
-                                                  Classes="SettingDescription"/>
-
                                         <CheckBox IsChecked="{Binding AiEnabled}"
                                                  Content="Enable AI Features"
                                                  Margin="0,10,0,0"/>
-                                        <TextBlock Text="Master switch. When off, nothing AI-related runs. Two access modes are available below: a local API for code agents, and MCP for chat clients like Claude Desktop."
+                                        <TextBlock Text="When off, all AI features are disabled."
                                                   Classes="SettingDescription"/>
                                         <!-- #527: the API server reads these settings once, at startup
                                              (App.StartLocalApiIfEnabledAsync), so a toggle here does nothing until
@@ -513,13 +510,10 @@
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Access for AI Clients" Classes="SettingLabel"/>
-                                        <TextBlock Text="A loopback-only server that exposes read access to the corpus (search, dictionary, passages). Two surfaces run on it independently — enable either or both. Changes here also take effect after a restart."
-                                                  Classes="SettingDescription"/>
-
                                         <!-- REST surface (/v1): for code agents. -->
                                         <CheckBox IsChecked="{Binding LocalApiEnabled}"
                                                  IsEnabled="{Binding SubPermissionsEnabled}"
-                                                 Content="Run the local API server (for code agents)"
+                                                 Content="Run the local API server (Claude Code &amp; tool-calling agents)"
                                                  Margin="0,10,0,0"/>
 
                                         <!-- MCP surface (/mcp): for chat clients, reached via the app's mcp-bridge relay. #280 -->
@@ -534,8 +528,6 @@
                                                  IsEnabled="{Binding RemoteControlEnabled}"
                                                  Content="Allow agents to drive the reader (navigate and highlight)"
                                                  Margin="0,5,0,0"/>
-                                        <TextBlock Text="When off, agents can read the corpus but cannot control the reader window."
-                                                  Classes="SettingDescription"/>
 
                                         <!-- Copy the ready-made Claude Desktop MCP config: it launches CST Reader's
                                              mcp-bridge relay and carries no port/token. Clipboard is done in
