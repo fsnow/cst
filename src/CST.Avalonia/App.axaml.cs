@@ -184,6 +184,13 @@ public partial class App : Application
         WebView.Settings.PersistCache = false;
         // Leave CachePath as default (temp directory) to avoid ArgumentNullException on cleanup
 
+        // Slow CefGlue's macOS message pump from ~1 kHz to 30 Hz (#523). CefGlue drives CEF with a REPEATING
+        // 1 ms timer, so the UI thread wakes ~1000x/second to be told there is no work - ~38% CPU with a book
+        // open, almost all system time. This only ARRANGES the swap; it happens once CefGlue has initialized CEF
+        // normally, because pre-empting that initialization breaks the browser (see CefMessagePump). No-op off
+        // macOS, where CEF runs its own loop.
+        CefMessagePump.ScheduleInstall();
+
         // Welcome page will show startup status instead of separate splash screen
         Log.Information("Starting application with Welcome page status display");
 
