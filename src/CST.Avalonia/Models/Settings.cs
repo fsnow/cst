@@ -138,6 +138,16 @@ namespace CST.Avalonia.Models
         /// <summary>Answers to the preset's prompts — resource name, account id, region — substituted into
         /// <see cref="BaseUrl"/> and <see cref="Headers"/>.</summary>
         public Dictionary<string, string> Inputs { get; set; } = new();
+
+        /// <summary>
+        /// Which header carries the credential. Azure uses <c>api-key</c> and expects <c>Authorization</c> to
+        /// be ABSENT rather than also present, so this REPLACES the auth header rather than adding one.
+        /// </summary>
+        public string AuthHeaderName { get; set; } = "Authorization";
+
+        /// <summary>Prefix before the credential, or null for a bare value. Bearer for almost everything;
+        /// null for Azure.</summary>
+        public string? AuthScheme { get; set; } = "Bearer";
     }
 
     /// <summary>One model a connection offers, as persisted.</summary>

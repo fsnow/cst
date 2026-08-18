@@ -83,7 +83,9 @@ namespace CST.Avalonia.Models.Ai
         IReadOnlyDictionary<string, string> Headers,
         IReadOnlyDictionary<string, string> Inputs,
         CredentialSource KeySource = CredentialSource.None,
-        Reachability State = Reachability.Configured)
+        Reachability State = Reachability.Configured,
+        string AuthHeaderName = "Authorization",
+        string? AuthScheme = "Bearer")
     {
         /// <summary>The base URL with <see cref="Inputs"/> substituted in — what a request actually goes to.</summary>
         public string ResolvedBaseUrl => AiTemplate.Expand(BaseUrl, Inputs);
@@ -103,7 +105,9 @@ namespace CST.Avalonia.Models.Ai
         string BaseUrl,
         IReadOnlyList<AiModelEntry> Models,
         IReadOnlyDictionary<string, string> Headers,
-        IReadOnlyDictionary<string, string> Inputs);
+        IReadOnlyDictionary<string, string> Inputs,
+        string AuthHeaderName = "Authorization",
+        string? AuthScheme = "Bearer");
 
     /// <summary>
     /// A named endpoint a reader can add without knowing its URL. (#689, #691)

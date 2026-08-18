@@ -173,6 +173,8 @@ namespace CST.Avalonia.Services.Ai
                 BaseUrl = preset.BaseUrl,
                 Headers = new Dictionary<string, string>(preset.Headers ?? new Dictionary<string, string>()),
                 Inputs = new Dictionary<string, string>(inputs),
+                AuthHeaderName = preset.AuthHeaderName,
+                AuthScheme = preset.AuthScheme,
             };
             Chat.Connections.Add(record);
             Chat.ActiveConnectionId ??= record.Id;
@@ -273,6 +275,8 @@ namespace CST.Avalonia.Services.Ai
                 .ToList();
             record.Headers = new Dictionary<string, string>(draft.Headers);
             record.Inputs = new Dictionary<string, string>(draft.Inputs);
+            record.AuthHeaderName = draft.AuthHeaderName;
+            record.AuthScheme = draft.AuthScheme;
         }
 
         private AiConnection ToRuntime(AiConnectionRecord r) => new(
@@ -284,7 +288,9 @@ namespace CST.Avalonia.Services.Ai
             new Dictionary<string, string>(r.Headers),
             new Dictionary<string, string>(r.Inputs),
             SourceFor(r.Id),
-            _reachability.TryGetValue(r.Id, out var state) ? state : Reachability.Configured);
+            _reachability.TryGetValue(r.Id, out var state) ? state : Reachability.Configured,
+            r.AuthHeaderName,
+            r.AuthScheme);
 
         /// <summary>
         /// Ids are the reserved namespace a custom connection may not take, and they become the credential's
