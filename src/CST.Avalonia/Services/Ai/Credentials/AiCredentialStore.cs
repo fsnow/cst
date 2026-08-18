@@ -78,44 +78,44 @@ public sealed class AiCredentialStore : IAiCredentialStore
         : "Secure key storage is not available on this platform. "
           + "An endpoint that needs no API key still works.";
 
-    public string? GetApiKey(ChatProviderKind provider)
+    public string? GetApiKey(string connectionId)
     {
         if (!IsAvailable) return null;
 
         var key = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Find(_service, AccountFor(provider))
-            : MacOsKeychain.Find(_service, AccountFor(provider));
+            ? WindowsDpapiStore.Find(_service, AccountFor(connectionId))
+            : MacOsKeychain.Find(_service, AccountFor(connectionId));
 
         // The OUTCOME, never the value — and not its length either, which narrows a guess.
-        _logger.LogDebug("Credential lookup for {Provider}: {Result}",
-            provider, key is null ? "none stored" : "found");
+        _logger.LogDebug("Credential lookup for {Connection}: {Result}",
+            connectionId, key is null ? "none stored" : "found");
 
         return key;
     }
 
     /// <summary>Store or replace the key for a provider. Returns false when the platform cannot.</summary>
-    public bool SetApiKey(ChatProviderKind provider, string apiKey)
+    public bool SetApiKey(string connectionId, string apiKey)
     {
         if (!IsAvailable || string.IsNullOrWhiteSpace(apiKey)) return false;
 
         var saved = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Save(_service, AccountFor(provider), apiKey.Trim())
-            : MacOsKeychain.Save(_service, AccountFor(provider), apiKey.Trim());
-        _logger.LogInformation("Stored an API key for {Provider}: {Result}",
-            provider, saved ? "ok" : "failed");
+            ? WindowsDpapiStore.Save(_service, AccountFor(connectionId), apiKey.Trim())
+            : MacOsKeychain.Save(_service, AccountFor(connectionId), apiKey.Trim());
+        _logger.LogInformation("Stored an API key for {Connection}: {Result}",
+            connectionId, saved ? "ok" : "failed");
         return saved;
     }
 
     /// <summary>Forget the key for a provider. Forgetting one that was never stored counts as success.</summary>
-    public bool DeleteApiKey(ChatProviderKind provider)
+    public bool DeleteApiKey(string connectionId)
     {
         if (!IsAvailable) return false;
 
         var deleted = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Delete(_service, AccountFor(provider))
-            : MacOsKeychain.Delete(_service, AccountFor(provider));
-        _logger.LogInformation("Removed the API key for {Provider}: {Result}",
-            provider, deleted ? "ok" : "failed");
+            ? WindowsDpapiStore.Delete(_service, AccountFor(connectionId))
+            : MacOsKeychain.Delete(_service, AccountFor(connectionId));
+        _logger.LogInformation("Removed the API key for {Connection}: {Result}",
+            connectionId, deleted ? "ok" : "failed");
         return deleted;
     }
 
@@ -123,10 +123,34 @@ public sealed class AiCredentialStore : IAiCredentialStore
     /// One item per provider, so a user can keep a Claude key and an OpenAI-compatible key at once — which is
     /// the ordinary case for someone comparing a hosted model against a local one.
     /// </summary>
-    internal static string AccountFor(ChatProviderKind provider) => provider switch
+    /// <summary>
+    /// The credential-store account a connection's key is filed under. (#678)
+    ///
+    /// <para><b>Was keyed by <c>ChatProviderKind</c>, a two-member enum</b> — so every OpenAI-compatible
+    /// endpoint shared one slot. A reader who stored an OpenRouter key and then pointed the app at DeepSeek
+    /// silently sent the wrong key and got a 401 naming neither cause. That is the defect this issue exists
+    /// for, and it made comparing a hosted model against a local one impossible.</para>
+    ///
+    /// <para><b>Why the connection id and not the base URL.</b> A URL-derived account orphans the credential
+    /// the moment someone changes a port or swaps <c>localhost</c> for <c>127.0.0.1</c> — and the resulting
+    /// failure presents as a bad key rather than a lost one, which sends the reader to re-paste a key that
+    /// was fine. The id is immutable for exactly this reason.</para>
+    /// </summary>
+    internal static string AccountFor(string connectionId) => Sanitize(connectionId);
+
+    /// <summary>
+    /// Ids are validated as slugs before they reach here, so this is a belt-and-braces guard rather than the
+    /// primary defence: a stray separator in an account name is the kind of thing that silently writes a
+    /// credential to a path nobody looks at again.
+    /// </summary>
+    private static string Sanitize(string id)
     {
-        ChatProviderKind.Anthropic => "anthropic",
-        ChatProviderKind.OpenAiCompatible => "openai-compatible",
-        _ => provider.ToString().ToLowerInvariant(),
-    };
+        if (string.IsNullOrWhiteSpace(id)) return "default";
+
+        var chars = id.Trim().ToLowerInvariant().ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+            if (!(char.IsAsciiLetterOrDigit(chars[i]) || chars[i] is '-' or '_'))
+                chars[i] = '-';
+        return new string(chars);
+    }
 }

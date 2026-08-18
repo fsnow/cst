@@ -43,25 +43,25 @@ namespace CST.Avalonia.Tests.ViewModels
         /// </summary>
         private sealed class FakeCredentialStore : CST.Avalonia.Services.Ai.IAiCredentialStore
         {
-            private readonly System.Collections.Generic.Dictionary<CST.Avalonia.Services.Ai.ChatProviderKind, string> _keys = new();
+            private readonly System.Collections.Generic.Dictionary<string, string> _keys = new();
 
             public bool Available { get; set; } = true;
             public bool IsAvailable => Available;
             public string? Unavailable => Available ? null : "No secure storage in this build.";
 
-            public string? GetApiKey(CST.Avalonia.Services.Ai.ChatProviderKind provider) =>
-                Available && _keys.TryGetValue(provider, out var k) ? k : null;
+            public string? GetApiKey(string connectionId) =>
+                Available && _keys.TryGetValue(connectionId, out var k) ? k : null;
 
-            public bool SetApiKey(CST.Avalonia.Services.Ai.ChatProviderKind provider, string apiKey)
+            public bool SetApiKey(string connectionId, string apiKey)
             {
                 if (!Available) return false;
-                _keys[provider] = apiKey;
+                _keys[connectionId] = apiKey;
                 return true;
             }
 
-            public bool DeleteApiKey(CST.Avalonia.Services.Ai.ChatProviderKind provider)
+            public bool DeleteApiKey(string connectionId)
             {
-                _keys.Remove(provider);
+                _keys.Remove(connectionId);
                 return true;
             }
         }
@@ -96,9 +96,9 @@ namespace CST.Avalonia.Tests.ViewModels
             var json = System.Text.Json.JsonSerializer.Serialize(settings);
             Assert.DoesNotContain("sk-ant-secret-value", json);
 
-            // Stored under whichever provider is selected -- which provider that is belongs to the default
-            // test, not to this one.
-            Assert.Equal("sk-ant-secret-value", keys.GetApiKey(vm.SelectedProvider.Kind));
+            // Stored under the ACTIVE CONNECTION's id (#678), not under a provider kind - which is the whole
+            // point: two OpenAI-compatible endpoints used to share one slot.
+            Assert.Equal("sk-ant-secret-value", keys.GetApiKey(Active(settings).Id));
         }
 
         [Fact]
@@ -115,22 +115,30 @@ namespace CST.Avalonia.Tests.ViewModels
         }
 
         [Fact]
-        public void Keys_are_kept_per_provider()
+        public void Keys_are_kept_per_connection_not_per_provider_kind()
         {
-            var (vm, _, keys) = MakeWithAssistant();
+            var (vm, settings, keys) = MakeWithAssistant();
 
-            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.Anthropic);
-            vm.ApiKeyEntry = "claude-key";
+            // TWO OpenAI-compatible endpoints - the case that was broken. Both are `openai-compatible`, so
+            // under the old provider-kind keying the second silently overwrote the first and the reader got a
+            // 401 naming neither cause (#678).
+            var chat = settings.Ai.Chat;
+            chat.Connections.Clear();
+            chat.Connections.Add(new CST.Avalonia.Models.AiConnectionRecord
+            { Id = "openrouter-box", DisplayName = "OpenRouter", BaseUrl = "https://openrouter.ai/api/v1" });
+            chat.Connections.Add(new CST.Avalonia.Models.AiConnectionRecord
+            { Id = "local-ollama", DisplayName = "Ollama", BaseUrl = "http://localhost:11434/v1" });
+
+            chat.ActiveConnectionId = "openrouter-box";
+            vm.ApiKeyEntry = "openrouter-key";
             vm.SaveApiKeyCommand.Execute().Subscribe();
 
-            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible);
-            vm.ApiKeyEntry = "other-key";
+            chat.ActiveConnectionId = "local-ollama";
+            vm.ApiKeyEntry = "ollama-key";
             vm.SaveApiKeyCommand.Execute().Subscribe();
 
-            // The ordinary case for someone comparing a hosted model against a local one — storing the
-            // second must not silently replace the first.
-            Assert.Equal("claude-key", keys.GetApiKey(CST.Avalonia.Services.Ai.ChatProviderKind.Anthropic));
-            Assert.Equal("other-key", keys.GetApiKey(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible));
+            Assert.Equal("openrouter-key", keys.GetApiKey("openrouter-box"));
+            Assert.Equal("ollama-key", keys.GetApiKey("local-ollama"));
         }
 
         [Fact]

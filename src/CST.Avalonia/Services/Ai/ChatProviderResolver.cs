@@ -32,14 +32,20 @@ public interface IAiCredentialStore
     /// <summary>Why not, phrased for the user to read. Null when storage is available.</summary>
     string? Unavailable { get; }
 
-    /// <summary>The stored key for a provider, or null when none is stored.</summary>
-    string? GetApiKey(ChatProviderKind provider);
+    /// <summary>
+    /// The stored key for a CONNECTION, or null when none is stored. (#678)
+    ///
+    /// <para>Keyed by connection id rather than by provider kind, which was a two-member enum — so every
+    /// OpenAI-compatible endpoint shared a single slot, and configuring a second one silently overwrote the
+    /// first.</para>
+    /// </summary>
+    string? GetApiKey(string connectionId);
 
-    /// <summary>Store or replace a provider's key. False when the platform cannot.</summary>
-    bool SetApiKey(ChatProviderKind provider, string apiKey);
+    /// <summary>Store or replace a connection's key. False when the platform cannot.</summary>
+    bool SetApiKey(string connectionId, string apiKey);
 
-    /// <summary>Forget a provider's key. Forgetting one never stored counts as success.</summary>
-    bool DeleteApiKey(ChatProviderKind provider);
+    /// <summary>Forget a connection's key. Forgetting one never stored counts as success.</summary>
+    bool DeleteApiKey(string connectionId);
 }
 
 /// <summary>
@@ -169,7 +175,7 @@ public sealed class ChatProviderResolver : IChatProviderResolver
             return null;
         }
 
-        var apiKey = _credentials?.GetApiKey(kind);
+        var apiKey = _credentials?.GetApiKey(connection.Id);
 
         switch (kind)
         {

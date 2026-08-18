@@ -75,8 +75,15 @@ namespace CST.Avalonia.Services.Ai
         private static readonly Regex SlugPattern = new("^[a-z0-9][a-z0-9_-]*$", RegexOptions.Compiled);
 
         private readonly ISettingsService _settings;
+        private readonly IAiCredentialStore? _credentials;
 
-        public AiConnectionService(ISettingsService settings) => _settings = settings;
+        /// <param name="credentials">Optional: a platform with nowhere safe to put a key still runs, and an
+        /// endpoint needing no key still works. Resolved with <c>GetService</c> for that reason.</param>
+        public AiConnectionService(ISettingsService settings, IAiCredentialStore? credentials = null)
+        {
+            _settings = settings;
+            _credentials = credentials;
+        }
 
         public event EventHandler? ConnectionsChanged;
 
@@ -84,6 +91,19 @@ namespace CST.Avalonia.Services.Ai
 
         public IReadOnlyList<AiConnection> Connections =>
             Chat.Connections.Select(ToRuntime).ToList();
+
+        /// <summary>
+        /// Where this connection's credential came from. (#678, #689)
+        ///
+        /// <para>Only <c>Keychain</c> and <c>None</c> today. <c>Environment</c> arrives with the
+        /// <c>CST_AI_*</c> discovery work, and when it does the rule is that a found credential makes a
+        /// provider <i>available</i>, never <i>connected</i> — so it will be reported here without a
+        /// connection existing until the reader acts.</para>
+        /// </summary>
+        private CredentialSource SourceFor(string connectionId) =>
+            _credentials?.GetApiKey(connectionId) is not null
+                ? CredentialSource.Keychain
+                : CredentialSource.None;
 
         public IReadOnlyList<AiProviderPreset> Presets => AiProviderPresets.All;
 
@@ -154,6 +174,11 @@ namespace CST.Avalonia.Services.Ai
 
             Chat.Connections.Remove(record);
 
+            // The credential goes with the record. Removing a connection while leaving its key behind would
+            // leave an orphan in the keychain that nothing can ever reach or clean up - and that would be
+            // silently re-adopted if someone later created a connection with the same id.
+            _credentials?.DeleteApiKey(record.Id);
+
             // Do not leave the active pointer dangling at something that no longer exists - a stale id reads
             // as "configured" to anything that only checks for null.
             if (IdMatches(Chat.ActiveConnectionId, id))
@@ -220,14 +245,15 @@ namespace CST.Avalonia.Services.Ai
             record.Inputs = new Dictionary<string, string>(draft.Inputs);
         }
 
-        private static AiConnection ToRuntime(AiConnectionRecord r) => new(
+        private AiConnection ToRuntime(AiConnectionRecord r) => new(
             r.Id,
             r.DisplayName,
             ChatProviderResolver.TryParseKind(r.Kind, out var kind) ? kind : ChatProviderKind.OpenAiCompatible,
             r.BaseUrl,
             r.Models.Select(m => new AiModelEntry(m.Id, m.DisplayName, m.Enabled)).ToList(),
             new Dictionary<string, string>(r.Headers),
-            new Dictionary<string, string>(r.Inputs));
+            new Dictionary<string, string>(r.Inputs),
+            SourceFor(r.Id));
 
         /// <summary>
         /// Ids are the reserved namespace a custom connection may not take, and they become the credential's
