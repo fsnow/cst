@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using CST.Avalonia.Services;
 using Serilog;
 
 namespace CST.Avalonia
@@ -118,13 +119,20 @@ namespace CST.Avalonia
         /// <summary>Best-effort: bring the already-running instance to the foreground (macOS <c>open</c> the
         /// enclosing <c>.app</c> bundle, which LaunchServices activates rather than relaunching). No-op in dev /
         /// outside a bundle, so it can never spawn a second GUI.</summary>
-        public static void ActivateRunningInstance()
+        /// <param name="dataDirectory">
+        /// The data directory whose instance should come forward. Off macOS the running process has to be asked
+        /// directly, and the request is addressed per data directory - see <see cref="InstanceActivation"/>.
+        /// </param>
+        public static void ActivateRunningInstance(string dataDirectory)
         {
             if (!OperatingSystem.IsMacOS())
             {
-                // No foreground-activation path on Windows/Linux yet — say so (to the now-real logger, #316 A6-3)
-                // instead of a silent no-op that looks broken. (#317 A6-6)
-                Log.Information("SingleInstanceGuard: another instance is running; activation is macOS-only, so just exiting.");
+                // Windows has no `open` equivalent, so ask the running instance to raise itself. (#568) It
+                // returning false is not an error - it means nothing was listening (an older build, or an
+                // instance still starting up), and exiting quietly is then the old behaviour rather than a
+                // new failure.
+                if (!InstanceActivation.RequestActivation(dataDirectory))
+                    Log.Information("SingleInstanceGuard: another instance is running but did not come forward; exiting.");
                 return;
             }
             try

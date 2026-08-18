@@ -227,6 +227,11 @@ public partial class App : Application
             // Close application when main window is closed
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
+            // #568: a second launch (taskbar, Start menu, desktop shortcut) should bring THIS window forward
+            // rather than appear to do nothing. macOS gets that from LaunchServices; everywhere else the
+            // running process has to be asked, so start listening now that there is a window to raise.
+            StartInstanceActivationListener();
+
             // Set up window-level menu events (View toggles + checkmarks). On macOS these back the system
             // menu bar; on Windows/Linux they back the in-window <NativeMenuBar/>. SetupWindowMenuEvents is
             // platform-agnostic; the macOS-only #284 Window-list helpers it calls simply no-op off macOS.
@@ -1355,6 +1360,59 @@ public partial class App : Application
             sp.GetService<Services.Ai.IChatProviderResolver>(),
             sp.GetService<ISettingsService>()));
         // services.AddTransient<MainWindowViewModel>();
+    }
+
+    /// <summary>
+    /// Listen for "another launch happened - come forward" requests. (#568)
+    ///
+    /// <para>Windows only for now. macOS activates through LaunchServices and needs nothing here; Linux would
+    /// need a way to raise a window that does not exist yet, and shipping a listener whose request could not be
+    /// honoured would only move the silence somewhere else.</para>
+    /// </summary>
+    private void StartInstanceActivationListener()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            Services.InstanceActivation.StartListener(
+                Constants.AppConstants.DataDirectory,
+                () => Dispatcher.UIThread.Post(BringMainWindowForward));
+        }
+        catch (Exception ex)
+        {
+            // Never fatal: the app is entirely usable without it.
+            Log.Warning("Could not start the instance-activation listener | {Details}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Raise and focus the main window in response to a second launch. (#568)
+    ///
+    /// <para>Restoring first matters: the likeliest reason someone re-launches is that they minimised the
+    /// window and forgot it was open, and <c>Activate()</c> on a minimised window does not restore it.</para>
+    /// </summary>
+    private void BringMainWindowForward()
+    {
+        try
+        {
+            if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop) return;
+            if (desktop.MainWindow is not { } window) return;
+
+            // Fully qualified: CST.Avalonia.Models has its own WindowState (saved layout state), and an
+            // unqualified name here binds to whichever the compiler prefers rather than the one meant.
+            if (window.WindowState == global::Avalonia.Controls.WindowState.Minimized)
+                window.WindowState = global::Avalonia.Controls.WindowState.Normal;
+
+            window.Show();
+            window.Activate();
+
+            Log.Information("Brought the main window forward for a second launch. (#568)");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("Could not bring the main window forward | {Details}", ex.Message);
+        }
     }
 
     private void SetupNativeMenuEvents()
