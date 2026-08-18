@@ -1340,6 +1340,12 @@ public class AiSettingsViewModel : ViewModelBase
                 // are turned off." after the user had just turned them on, until some other field happened to
                 // be edited -- the one line on the screen whose entire job is not to be out of date.
                 RefreshReadiness();
+                // Apply live - no restart (#529). The server's surfaces are fixed at construction, so a change
+                // here rebuilds the host; discovery is the handshake file, not a fixed port, so clients pick up
+                // the new one on their next spawn (#278). Fire-and-forget with a logged failure: a checkbox must
+                // not block the UI thread on Kestrel binding a port.
+                _ = ApplyAiServerStateAsync();
+
             }
         }
 
@@ -1355,6 +1361,12 @@ public class AiSettingsViewModel : ViewModelBase
                 _settingsService.RequestSave();
                 // Remote control follows "a server surface is running", not the REST flag specifically. (#440)
                 this.RaisePropertyChanged(nameof(RemoteControlEnabled));
+                // Apply live - no restart (#529). The server's surfaces are fixed at construction, so a change
+                // here rebuilds the host; discovery is the handshake file, not a fixed port, so clients pick up
+                // the new one on their next spawn (#278). Fire-and-forget with a logged failure: a checkbox must
+                // not block the UI thread on Kestrel binding a port.
+                _ = ApplyAiServerStateAsync();
+
             }
         }
 
@@ -1371,6 +1383,32 @@ public class AiSettingsViewModel : ViewModelBase
                 _settingsService.RequestSave();
                 // navigate is offered over BOTH surfaces, so remote control is reachable whenever EITHER runs. (#440)
                 this.RaisePropertyChanged(nameof(RemoteControlEnabled));
+                // Apply live - no restart (#529). The server's surfaces are fixed at construction, so a change
+                // here rebuilds the host; discovery is the handshake file, not a fixed port, so clients pick up
+                // the new one on their next spawn (#278). Fire-and-forget with a logged failure: a checkbox must
+                // not block the UI thread on Kestrel binding a port.
+                _ = ApplyAiServerStateAsync();
+
+            }
+        }
+
+        /// <summary>
+        /// Applies the AI server settings live, logging rather than throwing. (#529)
+        ///
+        /// <para>Deliberately fire-and-forget from the setters: starting Kestrel and binding a loopback port
+        /// takes long enough to be visible, and a checkbox that freezes while it happens is a worse experience
+        /// than one that takes a moment to take effect. Failures are recorded on the lifecycle
+        /// (<c>App.LocalApiStartFailed</c>) for the Settings indicator, so a silent swallow here still surfaces.</para>
+        /// </summary>
+        private static async Task ApplyAiServerStateAsync()
+        {
+            try
+            {
+                await App.ApplyAiSettingsAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to apply AI server settings live (#529)");
             }
         }
 

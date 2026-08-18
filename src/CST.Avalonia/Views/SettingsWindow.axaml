@@ -497,13 +497,6 @@
                                                  Margin="0,10,0,0"/>
                                         <TextBlock Text="When off, all AI features are disabled."
                                                   Classes="SettingDescription"/>
-                                        <!-- #527: the API server reads these settings once, at startup
-                                             (App.StartLocalApiIfEnabledAsync), so a toggle here does nothing until
-                                             relaunch. Without this note the feature simply looks broken. -->
-                                        <TextBlock Text="⚠ Takes effect after you restart CST Reader."
-                                                  Classes="SettingDescription"
-                                                  FontWeight="SemiBold"
-                                                  Margin="0,6,0,0"/>
                                     </StackPanel>
                                 </Border>
 

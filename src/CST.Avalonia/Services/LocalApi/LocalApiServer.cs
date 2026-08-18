@@ -414,12 +414,23 @@ namespace CST.Avalonia.Services.LocalApi
             try
             {
                 if (_app == null) return;
+
+                // Delete the handshake file FIRST, before the port actually closes (#529). Discovery is the
+                // file, not a fixed port: --mcp-bridge reads local-api.json on every spawn (#278). Removing it
+                // up front means a client that polls stops finding a live endpoint slightly early, which costs
+                // nothing; the other order leaves a window where the file still advertises a port that is
+                // already refusing connections, and a bridge that reads it there fails with a confusing
+                // connection error instead of the plain "not running" it should see.
+                //
+                // NOTE: this ORDER is not covered by a test - the suite asserts the file is gone once StopAsync
+                // returns, which holds either way. Verified by reading, and left documented rather than pinned.
+                LocalApiInfo.Delete(_handshakeDirectory);
+
                 try { await _app.StopAsync(); } catch (Exception ex) { _logger.Warning(ex, "Local API stop error"); }
                 await _app.DisposeAsync();
                 _app = null;
                 BaseUrl = null;
                 Token = null;
-                LocalApiInfo.Delete(_handshakeDirectory);
                 _logger.Information("Local API stopped");
             }
             finally { _lifecycleLock.Release(); }
