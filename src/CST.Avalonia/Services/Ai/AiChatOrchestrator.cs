@@ -129,9 +129,14 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
     /// <param name="callerToken">The consumer's own token. Cancelling it must throw, as any .NET async method
     /// would; cancelling only ours means superseded or stopped, which ends the turn quietly.</param>
-    /// <param name="token">The linked token actually passed downstream.</param>
+    /// <param name="token">The linked token actually passed downstream. Carries
+    /// [EnumeratorCancellation] because it is the one with teeth: a token handed to
+    /// GetAsyncEnumerator has to reach the provider call to stop anything, and callerToken never
+    /// leaves this method — it only classifies a cancellation once one happens.</param>
     private async IAsyncEnumerable<AiTurnEvent> RunCoreAsync(
-        AiTurnRequest request, CancellationToken callerToken, CancellationToken token)
+        AiTurnRequest request,
+        CancellationToken callerToken,
+        [EnumeratorCancellation] CancellationToken token)
     {
         var provider = _resolver.Resolve(out var problem);
         if (provider is null)
@@ -187,6 +192,17 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         if (assemblyFailure is not null)
         {
             yield return AiTurnEvent.ForError(assemblyFailure);
+            yield break;
+        }
+
+        // Unreachable: the two are assigned together, and every failure above sets `superseded` or
+        // `assemblyFailure`. Stated anyway, because the compiler cannot relate the three locals (CS8602)
+        // and because the alternative — a null-forgiving `!` — would turn a future break in that invariant
+        // into a NullReferenceException mid-turn, which the panel would show as a raw crash.
+        if (bundle is null || prompt is null)
+        {
+            yield return AiTurnEvent.ForError(new AiError(
+                AiErrorKind.Provider, "The assistant could not assemble this request."));
             yield break;
         }
 

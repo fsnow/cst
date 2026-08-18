@@ -140,7 +140,10 @@ internal static class DocumentFocusReporter
     /// </summary>
     internal static IDockable? ResolveDockable(object? source)
     {
-        if (source is not Visual element) return null;
+        // Nullable walker rather than a pattern-declared non-nullable: GetVisualParent() returns Visual?,
+        // and assigning that to a non-nullable local was the whole of CS8600. A non-Visual source simply
+        // never enters the loop, which is what the old early return did.
+        var element = source as Visual;
 
         while (element != null)
         {

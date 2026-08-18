@@ -152,7 +152,8 @@ public class RetireUserXslDirectoryTests : IDisposable
         RunOnlyThisMigration(state, Context());
         RunOnlyThisMigration(state, Context());
 
-        Assert.Single(state.AppliedDataMigrations!.Where(id => id == "2026-08-retire-user-xsl-directory"));
+        Assert.NotNull(state.AppliedDataMigrations);
+        Assert.Single(state.AppliedDataMigrations, id => id == "2026-08-retire-user-xsl-directory");
     }
 
     [Fact]
