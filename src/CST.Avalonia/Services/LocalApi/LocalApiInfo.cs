@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using Serilog;
 
 namespace CST.Avalonia.Services.LocalApi
@@ -55,17 +56,31 @@ namespace CST.Avalonia.Services.LocalApi
             using (var w = new StreamWriter(fs, new UTF8Encoding(false)))
                 w.Write(json);
 
-            File.Move(tmp, path, overwrite: true);   // rename preserves the temp's 0600 mode
-            TrySetOwnerOnly(path);                    // belt-and-suspenders; also fixes a pre-existing file's mode
+            MoveIntoPlace(tmp, path);   // rename preserves the temp's 0600 mode
+            TrySetOwnerOnly(path);      // belt-and-suspenders; also fixes a pre-existing file's mode
         }
 
+        /// <summary>
+        /// Read the handshake, or null when it is absent or unreadable.
+        ///
+        /// <para><b>Opened share-delete</b> rather than via <c>File.ReadAllText</c>. On Unix a rename over an
+        /// open file always succeeds - the reader simply keeps the old inode - but Windows refuses to replace a
+        /// file that someone holds without <c>FILE_SHARE_DELETE</c>, and <c>ReadAllText</c> does not ask for it.
+        /// Since the <c>--mcp-bridge</c> relay polls this file while the server may be rewriting it, the default
+        /// share mode turns a reader into a blocker and makes <see cref="Write"/> fail intermittently. (#506)</para>
+        /// </summary>
         public static LocalApiInfo? Read(string directory)
         {
             try
             {
                 var path = PathIn(directory);
                 if (!File.Exists(path)) return null;
-                return JsonSerializer.Deserialize<LocalApiInfo>(File.ReadAllText(path), Options);
+
+                using var fs = new FileStream(
+                    path, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(fs, Encoding.UTF8);
+                return JsonSerializer.Deserialize<LocalApiInfo>(reader.ReadToEnd(), Options);
             }
             catch { return null; }
         }
@@ -73,6 +88,72 @@ namespace CST.Avalonia.Services.LocalApi
         public static void Delete(string directory)
         {
             try { File.Delete(PathIn(directory)); } catch { /* best effort */ }
+        }
+
+        /// <summary>
+        /// Put the temp file in place of the real one, tolerating a concurrent reader. (#506)
+        ///
+        /// <para><b>Measured on Windows 11, because the intuitive answer is wrong.</b> Replacing a file that
+        /// another handle has open behaves like this:</para>
+        ///
+        /// <code>
+        /// reader's FileShare      File.Move(overwrite: true)      File.Replace
+        /// Read                    UnauthorizedAccessException     IOException
+        /// ReadWrite               UnauthorizedAccessException     IOException
+        /// ReadWrite | Delete      UnauthorizedAccessException     OK
+        /// Delete                  UnauthorizedAccessException     OK
+        /// </code>
+        ///
+        /// <para>So <c>File.Move</c> NEVER replaces an open destination on Windows - not even when the reader
+        /// allowed delete, which is the case one would expect to work. Only <c>File.Replace</c> (Win32
+        /// <c>ReplaceFile</c>) can, and only when the reader permits deletion. BOTH halves are therefore
+        /// required: <see cref="Read"/> opens share-delete, and the swap goes through <c>File.Replace</c>.
+        /// Doing either alone leaves the failure exactly where it was.</para>
+        ///
+        /// <para><b>Windows only.</b> Unix renames over open files happily, and the existing <c>File.Move</c>
+        /// there carries a property worth keeping: the rename preserves the TEMP file's 0600 mode, which is how
+        /// the token avoids a world-readable window (#303). <c>ReplaceFile</c> semantics preserve the
+        /// DESTINATION's attributes instead, so switching Unix to it could silently inherit the permissions of
+        /// a pre-existing file. There is no problem to fix on that side, and a real property to lose.</para>
+        ///
+        /// <para><c>File.Replace</c> requires the destination to exist, so a first write still moves.</para>
+        /// </summary>
+        private static void MoveIntoPlace(string tmp, string path)
+        {
+            const int attempts = 5;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    if (OperatingSystem.IsWindows() && File.Exists(path))
+                        File.Replace(tmp, path, destinationBackupFileName: null);
+                    else
+                        File.Move(tmp, path, overwrite: true);
+                    return;
+                }
+                catch (IOException ex) when (attempt < attempts)
+                {
+                    // A reader we do NOT control - an antivirus scanner, a backup agent, a third-party client
+                    // reading the file the obvious way - can still hold it without share-delete. The window is
+                    // milliseconds, so a short backoff turns a startup failure into a brief pause.
+                    //
+                    // FileNotFoundException is an IOException too, and lands here deliberately: it means the
+                    // destination vanished between the check and the call, and the retry simply takes the move
+                    // branch instead.
+                    var delay = 20 * (int)Math.Pow(2, attempt - 1);   // 20, 40, 80, 160 ms
+                    Log.Debug("Handshake swap blocked (attempt {Attempt}/{Total}, {Error}); retrying in {Delay} ms.",
+                        attempt, attempts, ex.GetType().Name, delay);
+                    Thread.Sleep(delay);
+                }
+                catch
+                {
+                    // Give up: remove the temp so repeated failures cannot leave a litter of them beside a file
+                    // whose whole job is to be found and parsed by other programs, then report. A handshake that
+                    // was never written leaves the server running but undiscoverable - not something to swallow.
+                    try { File.Delete(tmp); } catch { /* best effort */ }
+                    throw;
+                }
+            }
         }
 
         private static void TrySetOwnerOnly(string path)
