@@ -209,7 +209,16 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                 return new ChatProviderResolution(
                     new OpenAiCompatibleProvider(
                         _http,
-                        new OpenAiCompatibleOptions(baseUrl.Trim(), NullIfBlank(apiKey)),
+                        new OpenAiCompatibleOptions(
+                            baseUrl.Trim(),
+                            NullIfBlank(apiKey),
+                            connection.AuthHeaderName,
+                            connection.AuthScheme,
+                            // Header VALUES are templates too - Cloudflare and Azure put reader-supplied
+                            // inputs in them, exactly as the base URL does.
+                            connection.Headers.ToDictionary(
+                                h => h.Key,
+                                h => CST.Avalonia.Models.Ai.AiTemplate.Expand(h.Value, connection.Inputs))),
                         _loggerFactory.CreateLogger<OpenAiCompatibleProvider>(),
                         firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());

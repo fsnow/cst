@@ -17,7 +17,17 @@ namespace CST.Avalonia.Services.Ai;
 /// Together, Ollama and LM Studio.</param>
 /// <param name="ApiKey">Optional — local runners (Ollama, LM Studio) accept anonymous requests, so an empty key
 /// is a valid configuration rather than a misconfiguration. A remote provider will answer 401 on its own.</param>
-public sealed record OpenAiCompatibleOptions(string? BaseUrl, string? ApiKey = null);
+/// <param name="AuthHeaderName">Which header carries the credential. Almost always <c>Authorization</c>;
+/// Azure uses <c>api-key</c> and expects <c>Authorization</c> to be ABSENT, so naming a different header
+/// REPLACES the standard one rather than adding to it. (#689)</param>
+/// <param name="AuthScheme">Prefix before the credential, or null for a bare value.</param>
+/// <param name="ExtraHeaders">Static or templated headers the endpoint needs — never the credential itself.</param>
+public sealed record OpenAiCompatibleOptions(
+    string? BaseUrl,
+    string? ApiKey = null,
+    string AuthHeaderName = "Authorization",
+    string? AuthScheme = "Bearer",
+    IReadOnlyDictionary<string, string>? ExtraHeaders = null);
 
 /// <summary>
 /// The OpenAI-compatible Chat Completions shape (<c>POST {baseUrl}/chat/completions</c>, SSE). One adapter for
@@ -53,6 +63,43 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
 
     public string Id => "openai-compatible";
 
+    /// <summary>
+    /// Attaches the credential in whatever shape this endpoint expects, plus any extra headers. (#689)
+    ///
+    /// <para><b>Naming a non-standard auth header replaces <c>Authorization</c>; it does not add a second
+    /// one.</b> Azure rejects a request carrying both, which is why this cannot be expressed as an entry in
+    /// <see cref="OpenAiCompatibleOptions.ExtraHeaders"/> — an extra header is additive by definition, and the
+    /// requirement here is an absence.</para>
+    ///
+    /// <para>Extra headers are applied first so they can never overwrite the credential: a mis-typed header
+    /// named <c>Authorization</c> in settings would otherwise silently replace the real key with whatever the
+    /// reader pasted.</para>
+    /// </summary>
+    private void ApplyAuth(HttpRequestMessage message)
+    {
+        if (_options.ExtraHeaders is { Count: > 0 })
+            foreach (var extra in _options.ExtraHeaders)
+                if (!string.IsNullOrWhiteSpace(extra.Key) && !IsAuthHeader(extra.Key))
+                    message.Headers.TryAddWithoutValidation(extra.Key, extra.Value);
+
+        if (string.IsNullOrWhiteSpace(_options.ApiKey)) return;   // a local runner needs none
+
+        var header = string.IsNullOrWhiteSpace(_options.AuthHeaderName)
+            ? "Authorization"
+            : _options.AuthHeaderName;
+
+        var credential = string.IsNullOrWhiteSpace(_options.AuthScheme)
+            ? _options.ApiKey!
+            : $"{_options.AuthScheme} {_options.ApiKey}";
+
+        message.Headers.TryAddWithoutValidation(header, credential);
+    }
+
+    /// <summary>Whether an extra header would collide with the credential, under either name.</summary>
+    private bool IsAuthHeader(string name) =>
+        string.Equals(name, "Authorization", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, _options.AuthHeaderName, StringComparison.OrdinalIgnoreCase);
+
     public async IAsyncEnumerable<ChatDelta> StreamAsync(
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
@@ -70,8 +117,7 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
         {
             Content = new StringContent(BuildBody(request), Encoding.UTF8, "application/json"),
         };
-        if (!string.IsNullOrWhiteSpace(_options.ApiKey))
-            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
+        ApplyAuth(message);
 
         HttpResponseMessage response;
         try
