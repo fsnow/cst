@@ -48,7 +48,7 @@ public partial class App : Application
     public static Window? MainWindow { get; private set; }
 
     // Opt-in loopback API server for AI tools; gated on settings at launch (restart to apply). (#186)
-    private CST.Avalonia.Services.LocalApi.LocalApiServer? _localApiServer;
+    private CST.Avalonia.Services.LocalApi.LocalApiLifecycle? _localApi;
 
     /// <summary>
     /// True once application shutdown has begun. Floating windows close as part of shutdown too;
@@ -453,48 +453,32 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Start the opt-in loopback API server if AI features + the local API are enabled. Gated at launch:
-    /// changes to the setting take effect on restart (live toggle is a later iteration). (#186)
+    /// Bring the loopback API server in line with the AI settings. This is BOTH the launch path and the path
+    /// every later settings toggle takes (#529) — one code path, so the two cannot drift. Before this the
+    /// settings were read once at startup and a toggle did nothing until relaunch.
     /// </summary>
-    private async Task StartLocalApiIfEnabledAsync(ISettingsService settingsService)
+    public static Task ApplyAiSettingsAsync()
     {
-        try
-        {
-            var ai = settingsService.Settings.Ai;
-            if (!ai.ServerShouldRun) return;
-
-            var dir = CST.Avalonia.Constants.AppConstants.DataDirectory;   // single source of truth (#317 A6-9)
-            System.IO.Directory.CreateDirectory(dir);
-
-            // #278 Phase 4: the loopback API is EPHEMERAL (OS-assigned port) with a PER-SESSION token — no stable
-            // secret is stored and there's no fixed port to collide. MCP clients don't need one either: the app's
-            // --mcp-bridge relay reads the current local-api.json each spawn. So we pass no port/token (server
-            // mints them) and mount each surface per its own permission.
-            var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
-            // Resolve the tools through the shared factory (covered by AppCompositionTests), so a tool that is
-            // registered but forgotten here can't silently 404 an endpoint again.
-            _localApiServer = ServiceProvider is { } sp
-                ? CST.Avalonia.Services.LocalApi.LocalApiServer.FromServiceProvider(
-                    sp, version, dir, Log.Logger, restApiEnabled: ai.LocalApiEnabled, mcpEnabled: ai.McpEnabled)
-                : new CST.Avalonia.Services.LocalApi.LocalApiServer(
-                    version, dir, Log.Logger, restApiEnabled: ai.LocalApiEnabled, mcpEnabled: ai.McpEnabled);
-            await _localApiServer.StartAsync();
-            LocalApiStartFailed = false;
-        }
-        catch (Exception ex)
-        {
-            // #316 A6-4: the API is EPHEMERAL now, so there is no "port in use" case — but ANY StartAsync failure
-            // (loopback bind blocked by security software, a DI fault) leaves AI shown as enabled while the server
-            // never started and every bridge spawn fails. Log it loudly and record the state so a Settings
-            // indicator can surface it (the old #277 port-in-use dialog was dead code and is removed).
-            LocalApiStartFailed = true;
-            Log.Error(ex, "Local API server failed to start — AI agent access will not work this session despite being enabled in Settings");
-        }
+        if (Current is App { _localApi: { } lifecycle }) return lifecycle.ApplyAsync();
+        return Task.CompletedTask;
     }
 
-    /// <summary>True when the loopback API was enabled but <c>StartAsync</c> threw, so AI access is silently
-    /// non-functional this session. Surfaced for a Settings status indicator. (#316 A6-4)</summary>
-    public bool LocalApiStartFailed { get; private set; }
+    private async Task StartLocalApiIfEnabledAsync(ISettingsService settingsService)
+    {
+        var dir = CST.Avalonia.Constants.AppConstants.DataDirectory;   // single source of truth (#317 A6-9)
+        var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
+
+        _localApi = new CST.Avalonia.Services.LocalApi.LocalApiLifecycle(
+            ServiceProvider, version, dir, Log.Logger, () => settingsService.Settings.Ai);
+
+        // The first apply IS the launch start - it reads the same settings and takes the same route a toggle
+        // would. LocalApiLifecycle swallows and records start failures, so this does not need its own try.
+        await _localApi.ApplyAsync();
+    }
+
+    /// <summary>True when the loopback API was enabled but starting it threw, so AI access is silently
+    /// non-functional. Surfaced for a Settings status indicator. (#316 A6-4)</summary>
+    public bool LocalApiStartFailed => _localApi?.StartFailed ?? false;
 
     /// <summary>
     /// Pre-load fonts for all scripts to avoid UI delays in settings
@@ -1140,9 +1124,9 @@ public partial class App : Application
                 Log.Information("SHUTDOWN: Pending settings save flushed");
             }
 
-            if (_localApiServer != null)
+            if (_localApi != null)
             {
-                await _localApiServer.StopAsync();
+                await _localApi.DisposeAsync();
                 Log.Information("SHUTDOWN: Local API server stopped");
             }
         }
