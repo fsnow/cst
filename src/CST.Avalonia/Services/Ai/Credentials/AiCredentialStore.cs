@@ -11,9 +11,9 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 /// there is no way to notice after the fact.</para>
 ///
 /// <para><b>Read lazily, on the request that needs it.</b> Nothing here runs at startup, so a user who never
-/// turns surface B on never triggers a Keychain access. That is the same class of mistake as the Chromium Safe
-/// Storage prompt this app already works around: a permission dialog on launch, for a feature the user has not
-/// asked for, teaches them to click through prompts.</para>
+/// turns surface B on never triggers a Keychain access (or, on Windows, a decrypt). That is the same class of
+/// mistake as the Chromium Safe Storage prompt this app already works around: a permission dialog on launch,
+/// for a feature the user has not asked for, teaches them to click through prompts.</para>
 ///
 /// <para><b>Nothing is cached.</b> A cache would go stale the moment the user changes the key in Settings, and
 /// the lookup costs microseconds — the wrong side of that trade is the one where the app keeps using a
@@ -24,8 +24,9 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 public sealed class AiCredentialStore : IAiCredentialStore
 {
     /// <summary>
-    /// The Keychain service name. Stable and app-scoped: changing it would orphan every key already stored,
-    /// with no error — the user would simply be told they had not configured one.
+    /// The service name: a Keychain service on macOS, a directory name on Windows. Stable and app-scoped:
+    /// changing it would orphan every key already stored, with no error — the user would simply be told they
+    /// had not configured one.
     /// </summary>
     internal const string ServiceName = "CST Reader — AI provider";
 
@@ -52,17 +53,23 @@ public sealed class AiCredentialStore : IAiCredentialStore
     /// reports itself unconfigured, which is honest. A local endpoint that needs no key is unaffected, so the
     /// privacy-first configuration still works on Linux.</para>
     ///
-    /// <para><b>Windows is false only because DPAPI is unbuilt</b> (#579 is landing macOS-first). It needs a
-    /// Windows target to develop against — it cannot be exercised under <c>dotnet test</c> on a Mac — so
-    /// shipping an untested implementation would be worse than reporting the truth.</para>
+    /// <para><b>Windows uses DPAPI</b> (CurrentUser scope) over a file per provider in the app data directory,
+    /// developed and exercised on a real Windows target — see <see cref="WindowsDpapiStore"/>. It can report
+    /// false there too, when the data directory cannot be written.</para>
     /// </summary>
-    public bool IsAvailable => OperatingSystem.IsMacOS() && MacOsKeychain.IsAvailable;
+    public bool IsAvailable =>
+        OperatingSystem.IsMacOS() ? MacOsKeychain.IsAvailable :
+        OperatingSystem.IsWindows() ? WindowsDpapiStore.IsAvailable :
+        false;
 
     /// <summary>Why there is nowhere to store a key, for the message the user actually reads. Null when fine.</summary>
     public string? Unavailable =>
         IsAvailable ? null
         : OperatingSystem.IsWindows()
-            ? "Secure key storage is not available in this build on Windows yet. "
+            // DPAPI is always present on Windows, so reaching here means the data directory could not be
+            // written — a full disk or a locked-down profile. Say that, rather than something the user would
+            // reasonably read as "this app does not support Windows".
+            ? "An API key could not be stored: CST Reader's data folder is not writable. "
               + "An endpoint that needs no API key still works."
         : OperatingSystem.IsMacOS()
             ? "The macOS Keychain could not be reached, so no API key can be stored."
@@ -73,7 +80,9 @@ public sealed class AiCredentialStore : IAiCredentialStore
     {
         if (!IsAvailable) return null;
 
-        var key = MacOsKeychain.Find(_service, AccountFor(provider));
+        var key = OperatingSystem.IsWindows()
+            ? WindowsDpapiStore.Find(_service, AccountFor(provider))
+            : MacOsKeychain.Find(_service, AccountFor(provider));
 
         // The OUTCOME, never the value — and not its length either, which narrows a guess.
         _logger.LogDebug("Credential lookup for {Provider}: {Result}",
@@ -87,7 +96,9 @@ public sealed class AiCredentialStore : IAiCredentialStore
     {
         if (!IsAvailable || string.IsNullOrWhiteSpace(apiKey)) return false;
 
-        var saved = MacOsKeychain.Save(_service, AccountFor(provider), apiKey.Trim());
+        var saved = OperatingSystem.IsWindows()
+            ? WindowsDpapiStore.Save(_service, AccountFor(provider), apiKey.Trim())
+            : MacOsKeychain.Save(_service, AccountFor(provider), apiKey.Trim());
         _logger.LogInformation("Stored an API key for {Provider}: {Result}",
             provider, saved ? "ok" : "failed");
         return saved;
@@ -98,7 +109,9 @@ public sealed class AiCredentialStore : IAiCredentialStore
     {
         if (!IsAvailable) return false;
 
-        var deleted = MacOsKeychain.Delete(_service, AccountFor(provider));
+        var deleted = OperatingSystem.IsWindows()
+            ? WindowsDpapiStore.Delete(_service, AccountFor(provider))
+            : MacOsKeychain.Delete(_service, AccountFor(provider));
         _logger.LogInformation("Removed the API key for {Provider}: {Result}",
             provider, deleted ? "ok" : "failed");
         return deleted;

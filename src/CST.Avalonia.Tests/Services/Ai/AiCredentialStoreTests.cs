@@ -169,9 +169,9 @@ public class AiCredentialStoreTests : IDisposable
     [Fact]
     public void Availability_matches_the_platform_this_ships_for()
     {
-        // macOS-first is deliberate. Windows reports unavailable because DPAPI is unbuilt, not because it
-        // cannot work — and saying so beats shipping an implementation no one could test from here.
-        if (OperatingSystem.IsMacOS())
+        // Both shipping platforms now have a store: Keychain on macOS (#608), DPAPI on Windows (#579). Linux
+        // remains deliberately false while it is unshipped.
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsWindows())
         {
             Assert.True(_store.IsAvailable);
             Assert.Null(_store.Unavailable);
@@ -187,8 +187,9 @@ public class AiCredentialStoreTests : IDisposable
     public void An_unavailable_platform_explains_that_a_keyless_endpoint_still_works()
     {
         // The privacy-first configuration — a local runner on loopback — needs no key at all, so "no secure
-        // storage" must not read as "no assistant".
-        if (OperatingSystem.IsMacOS()) return;
+        // storage" must not read as "no assistant". Only reachable where storage is genuinely absent, which
+        // after #579 means Linux (or a Windows profile whose data folder cannot be written).
+        if (_store.IsAvailable) return;
 
         Assert.Contains("no API key still works", _store.Unavailable);
     }

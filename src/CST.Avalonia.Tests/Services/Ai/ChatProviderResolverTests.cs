@@ -80,12 +80,15 @@ public class ChatProviderResolverTests
         // Two different problems with two different fixes. "You have not entered a key" is solved in Settings;
         // "this build cannot store one" is not solved there at all, and sending the user there to fix it wastes
         // their time on a screen that cannot help. (#579)
+        // The fixture is Linux's message, the one platform with genuinely nowhere to put a key. It used to be
+        // Windows', which stopped being true when DPAPI landed (#579) - a fixture that quotes a real message
+        // should not outlive it.
         var resolver = Resolver(
             c => { c.Provider = "anthropic"; c.Model = "claude-opus-5"; },
-            storageUnavailable: "Secure key storage is not available in this build on Windows yet.");
+            storageUnavailable: "Secure key storage is not available on this platform.");
 
         Assert.Null(resolver.Resolve(out var problem));
-        Assert.Contains("not available in this build", problem);
+        Assert.Contains("not available on this platform", problem);
         Assert.DoesNotContain("Add one in Settings", problem);
     }
 
