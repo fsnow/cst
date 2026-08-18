@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using CST.Avalonia.Models;
@@ -117,6 +118,13 @@ public sealed class ChatProviderResolver : IChatProviderResolver
     {
         var chat = _settings.Settings.Ai.Chat;
 
+        // The active connection replaces the scalar provider/base-URL/model this used to read (#689). Null
+        // when nothing is configured yet, which is a different problem from a misconfigured one and gets its
+        // own message below.
+        var connection = chat.Connections.FirstOrDefault(
+            c => string.Equals(c.Id, chat.ActiveConnectionId, StringComparison.Ordinal))
+            ?? chat.Connections.FirstOrDefault();
+
         // Two switches, two messages. One message for both sent a reader whose master switch was already ON
         // to look at a switch that was already on, with nothing to change — the exact failure this class is
         // written to avoid everywhere else, committed in its own first sentence. (#667)
@@ -132,15 +140,32 @@ public sealed class ChatProviderResolver : IChatProviderResolver
             return null;
         }
 
-        if (string.IsNullOrWhiteSpace(chat.Model))
+        if (connection is null)
+        {
+            problem = "No provider is configured. Add one in Settings \u2192 AI.";
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(chat.ActiveModelId))
         {
             problem = "No model is configured. Choose one in Settings.";
             return null;
         }
 
-        if (!TryParseKind(chat.Provider, out var kind))
+        if (!TryParseKind(connection.Kind, out var kind))
         {
-            problem = $"'{chat.Provider}' is not a provider this build knows how to talk to.";
+            problem = $"'{connection.Kind}' is not a provider this build knows how to talk to.";
+            return null;
+        }
+
+        // A connection whose URL still contains an unfilled {placeholder} - Azure without its resource name -
+        // must be refused HERE. Sent anyway it fails as a DNS error naming nothing, which tells the reader
+        // neither what is wrong nor where to fix it. (#689)
+        var baseUrl = CST.Avalonia.Models.Ai.AiTemplate.Expand(connection.BaseUrl, connection.Inputs);
+        if (CST.Avalonia.Models.Ai.AiTemplate.HasUnresolvedPlaceholders(baseUrl))
+        {
+            var missing = string.Join(", ", CST.Avalonia.Models.Ai.AiTemplate.PlaceholdersIn(baseUrl));
+            problem = $"This provider still needs: {missing}. Fill it in under Settings \u2192 AI.";
             return null;
         }
 
@@ -161,11 +186,11 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                 return new ChatProviderResolution(
                     new AnthropicMessagesProvider(
                         _http,
-                        new AnthropicOptions(apiKey, NullIfBlank(chat.BaseUrl)),
+                        new AnthropicOptions(apiKey, NullIfBlank(baseUrl)),
                         _loggerFactory.CreateLogger<AnthropicMessagesProvider>()),
-                    chat.Model!.Trim());
+                    chat.ActiveModelId!.Trim());
 
-            case ChatProviderKind.OpenAiCompatible when string.IsNullOrWhiteSpace(chat.BaseUrl):
+            case ChatProviderKind.OpenAiCompatible when string.IsNullOrWhiteSpace(baseUrl):
                 // No default is possible here — the base URL IS the provider. This is the field that makes one
                 // adapter serve DeepSeek, OpenRouter, Ollama and LM Studio.
                 problem = "No endpoint address is configured. Enter the provider's base URL in Settings.";
@@ -177,12 +202,12 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                 return new ChatProviderResolution(
                     new OpenAiCompatibleProvider(
                         _http,
-                        new OpenAiCompatibleOptions(chat.BaseUrl!.Trim(), NullIfBlank(apiKey)),
+                        new OpenAiCompatibleOptions(baseUrl.Trim(), NullIfBlank(apiKey)),
                         _loggerFactory.CreateLogger<OpenAiCompatibleProvider>()),
-                    chat.Model!.Trim());
+                    chat.ActiveModelId!.Trim());
 
             default:
-                problem = $"'{chat.Provider}' is not a provider this build knows how to talk to.";
+                problem = $"'{connection.Kind}' is not a provider this build knows how to talk to.";
                 return null;
         }
     }
