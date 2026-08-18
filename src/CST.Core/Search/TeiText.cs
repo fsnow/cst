@@ -39,9 +39,9 @@ namespace CST.Search
             // shown. #641 folded punctuation out of ONE comparison to work around it; this removes the
             // divergence instead.
             //
-            // The gatha nuance (a single danda becomes ";" mid-verse) is not recoverable here and is not
-            // pretended at: without the markup there is no way to know a line is verse. A period is what the
-            // reader sees for prose, which is the overwhelming majority of what is sent.
+            // The markup-dependent rules (gatha, namo tassa) are applied by Clean, which still has the tags
+            // — see LatinStop. This is the fallback for the prose case and for any text that did not come
+            // through Clean, so the two never disagree the way the two Latin paths once did. (#680)
             if (output == Script.Latin)
                 converted = converted.Replace("\u0964", ".").Replace("\u0965", ".");
 
@@ -52,11 +52,24 @@ namespace CST.Search
 
         internal static int VisibleLen(string xml, int start, int end) => Clean(xml, start, end, false).Length;
 
-        /// <summary>Render a raw XML range to text: drop tags (paranum/dot hi and, unless requested, notes are stripped whole).</summary>
-        internal static string Clean(string xml, int start, int end, bool includeNotes)
+        /// <summary>
+        /// Render a raw XML range to text: drop tags (paranum/dot hi and, unless requested, notes are stripped
+        /// whole). With <paramref name="output"/> = Latin the Devanagari stops are rendered as the reader
+        /// renders them, which needs the markup this method still has: in a gatha a single danda ends a pada
+        /// and becomes ";" while a double ends the verse and becomes ".", and the double dandas around
+        /// *namo tassa* are dropped. Any other output script keeps the dandas for the converter to handle.
+        /// (#680)
+        /// </summary>
+        internal static string Clean(string xml, int start, int end, bool includeNotes,
+            Script output = Script.Devanagari)
         {
             if (start >= end) return "";
             var sb = new StringBuilder(end - start);
+            // A window can begin mid-paragraph — a snippet usually does — so the opening <p> may be behind
+            // `start` and never seen by the walk below. Look it up rather than defaulting to prose, or every
+            // snippet that starts inside a verse would be punctuated as prose.
+            bool latin = output == Script.Latin;
+            string rend = latin ? ParagraphRendAt(xml, start) : "";
             int i = start;
             while (i < end)
             {
@@ -96,6 +109,8 @@ namespace CST.Search
                         i = gt + 1;
                     else
                     {
+                        if (latin && name == "p")
+                            rend = tag.StartsWith("</", System.StringComparison.Ordinal) ? "" : Attr(tag, "rend");
                         if (sb.Length > 0 && sb[sb.Length - 1] != ' ') sb.Append(' ');
                         i = gt + 1;
                     }
@@ -107,11 +122,63 @@ namespace CST.Search
                     // That punctuation should hug the preceding word, so drop the dangling space. (#292)
                     if (IsClosePunctuation(c) && sb.Length > 0 && sb[sb.Length - 1] == ' ')
                         sb.Length--;
-                    sb.Append(c);
+
+                    if (latin && IsBoundary(c))
+                    {
+                        // Dropping the mark rather than appending one is why the space is removed above and
+                        // not here: "assa U+0965 Bhagava" closes up to "assa Bhagava" on the following space,
+                        // instead of leaving two.
+                        if (LatinStop(c, rend) is { } stop) sb.Append(stop);
+                    }
+                    else sb.Append(c);
+
                     i++;
                 }
             }
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// How a Devanagari stop reads in Latin, given the <c>rend</c> of the paragraph it sits in. Mirrors
+        /// Deva2Latn.ConvertDandas, which the reader renders through; null means the mark is dropped. In verse
+        /// the distinction is metrical — a single danda ends a pada, a double ends the verse — so flattening
+        /// both to "." would show a model every line of a gatha ending identically. (#680)
+        /// </summary>
+        internal static char? LatinStop(char c, string rend)
+        {
+            if (rend.StartsWith("gatha", StringComparison.Ordinal))
+                return c == Danda ? ';' : '.';
+
+            // *Namo tassa* carries no stop in the reader. Single dandas are untouched there, so they are here.
+            if (rend == "centre" && c == DoubleDanda)
+                return null;
+
+            return '.';
+        }
+
+        /// <summary>
+        /// The <c>rend</c> of the <c>&lt;p&gt;</c> enclosing <paramref name="pos"/>, or "" outside one. Scans
+        /// back only as far as the previous <c>&lt;/p&gt;</c>, so it is bounded by one paragraph however large
+        /// the book is. (#680)
+        /// </summary>
+        internal static string ParagraphRendAt(string xml, int pos)
+        {
+            if (pos <= 0 || xml.Length == 0) return "";
+
+            int scan = Math.Min(pos, xml.Length) - 1;
+            int closed = xml.LastIndexOf("</p>", scan, StringComparison.Ordinal);
+
+            for (int i = scan; i > closed; i--)
+            {
+                // "<p" alone is not enough: <paranum> and <pb> start the same way.
+                if (xml[i] != '<' || i + 2 >= xml.Length || xml[i + 1] != 'p') continue;
+                if (xml[i + 2] != ' ' && xml[i + 2] != '>') continue;
+
+                int gt = xml.IndexOf('>', i);
+                return gt < 0 ? "" : Attr(xml.Substring(i, gt - i + 1), "rend");
+            }
+
+            return "";
         }
 
         // Punctuation that should sit directly after the preceding word (no space before it).
