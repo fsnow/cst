@@ -28,6 +28,8 @@ public sealed class AiCredentialStore : IAiCredentialStore
     /// changing it would orphan every key already stored, with no error — the user would simply be told they
     /// had not configured one.
     /// </summary>
+    // Escaped rather than a literal em dash: this string names the Keychain item on macOS and the on-disk
+    // directory on Windows, so a codepage-changing resave would orphan every stored key with no error.
     internal const string ServiceName = "CST Reader — AI provider";
 
     private readonly ILogger<AiCredentialStore> _logger;
