@@ -35,6 +35,12 @@ public class CstDockFactoryCloseBookTests
 
     private static Document Doc(string id, bool canClose = true) => new() { Id = id, CanClose = canClose };
 
+    // IDock.VisibleDockables is nullable, and the assertions below take non-nullable collections (CS8604).
+    // Every dock Window() builds has one, so a null here is a broken fixture — worth failing the test with a
+    // named reason rather than waving through with `!` and getting an unattributed NullReferenceException.
+    private static IList<IDockable> Contents(IDock dock) =>
+        dock.VisibleDockables ?? throw new InvalidOperationException($"{dock.Id} has no VisibleDockables");
+
     [Fact]
     public void CloseBook_removes_a_book_in_a_floating_window()
     {
@@ -47,8 +53,8 @@ public class CstDockFactoryCloseBookTests
 
         f.CloseBook("floatBook");
 
-        Assert.DoesNotContain(a, floatDock.VisibleDockables);          // removed from the FLOATING dock
-        Assert.Contains(b, floatDock.VisibleDockables);                // sibling untouched
+        Assert.DoesNotContain(a, Contents(floatDock));          // removed from the FLOATING dock
+        Assert.Contains(b, Contents(floatDock));                // sibling untouched
         Assert.Equal(b, floatDock.ActiveDockable);                     // sibling activated after the active doc closed
     }
 
@@ -62,8 +68,8 @@ public class CstDockFactoryCloseBookTests
 
         f.CloseBook("mainBook");
 
-        Assert.DoesNotContain(a, mainDock.VisibleDockables);
-        Assert.Contains(b, mainDock.VisibleDockables);
+        Assert.DoesNotContain(a, Contents(mainDock));
+        Assert.Contains(b, Contents(mainDock));
     }
 
     [Fact]
@@ -75,7 +81,7 @@ public class CstDockFactoryCloseBookTests
 
         f.CloseBook("does-not-exist");   // must not throw
 
-        Assert.Single(mainDock.VisibleDockables);
+        Assert.Single(Contents(mainDock));
     }
 
     [Fact]
@@ -89,6 +95,6 @@ public class CstDockFactoryCloseBookTests
 
         f.CloseBook("WelcomeDocument");
 
-        Assert.Contains(welcome, mainDock.VisibleDockables);   // still present
+        Assert.Contains(welcome, Contents(mainDock));   // still present
     }
 }

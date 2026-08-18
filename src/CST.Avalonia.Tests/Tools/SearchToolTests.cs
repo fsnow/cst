@@ -117,7 +117,9 @@ namespace CST.Avalonia.Tests.Tools
 
             // Opt in: the full per-book breakdown comes back.
             var full = await tool.SearchAsync(new SearchToolRequest("q", IncludeBooks: true));
-            Assert.Equal(2, Assert.Single(full.Terms).Books.Count);
+            var books = Assert.Single(full.Terms).Books;
+            Assert.NotNull(books);                     // opting in must populate it, not merely leave it null
+            Assert.Equal(2, books.Count);
         }
 
         [Fact]
@@ -138,6 +140,7 @@ namespace CST.Avalonia.Tests.Tools
             var term = Assert.Single(result.Terms);
             Assert.Equal(ScriptConverter.Convert("abc", Script.Ipe, Script.Latin), term.Term);
 
+            Assert.NotNull(term.Books);                // IncludeBooks: true was requested above
             var hit = Assert.Single(term.Books);
             Assert.Equal(book.FileName, hit.BookId);
             Assert.False(string.IsNullOrEmpty(hit.BookName));
