@@ -115,7 +115,7 @@ sealed class Program
             if (!SingleInstanceGuard.TryAcquire(appDataDir))
             {
                 Logger.Information("Another CST Reader instance already owns {Dir}; activating it and exiting.", appDataDir);
-                SingleInstanceGuard.ActivateRunningInstance();
+                SingleInstanceGuard.ActivateRunningInstance(appDataDir);
                 return;
             }
 
