@@ -30,7 +30,7 @@ public sealed class AiCredentialStore : IAiCredentialStore
     /// </summary>
     // Escaped rather than a literal em dash: this string names the Keychain item on macOS and the on-disk
     // directory on Windows, so a codepage-changing resave would orphan every stored key with no error.
-    internal const string ServiceName = "CST Reader — AI provider";
+    internal const string ServiceName = "CST Reader \u2014 AI provider";
 
     private readonly ILogger<AiCredentialStore> _logger;
     private readonly string _service;

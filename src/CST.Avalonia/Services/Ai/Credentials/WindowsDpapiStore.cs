@@ -36,12 +36,17 @@ internal static class WindowsDpapiStore
     /// The real guarantee here is DPAPI's own: another local account, or someone reading the disk offline,
     /// cannot decrypt it.
     ///
-    /// <para>Written with escapes rather than literal em dashes on purpose. Changing this value orphans every
-    /// stored key silently - the user is simply told they have not configured one - so the bytes must not be
-    /// at the mercy of an editor resaving the file in a different codepage.</para>
+    /// <para>Written with escapes rather than literal em dashes on purpose, and the source bytes really are
+    /// <c>5c 75 32 30 31 34</c> - an earlier commit claimed this while the file still held literal em dashes,
+    /// which is worse than not claiming it, because the false comment discourages anyone from re-checking.
+    /// Changing this value orphans every stored key silently - the user is simply told they have not
+    /// configured one - so the bytes must not be at the mercy of an editor resaving in another codepage.
+    /// <c>WindowsDpapiStoreTests.The_entropy_is_stable</c> is what actually holds the line; the round-trip
+    /// tests cannot, since save and find share the value in-process and stay green while every stored key
+    /// silently orphans.</para>
     /// </summary>
-    private static readonly byte[] Entropy =
-        Encoding.UTF8.GetBytes("CST Reader — AI provider key — v1");
+    internal static readonly byte[] Entropy =
+        Encoding.UTF8.GetBytes("CST Reader \u2014 AI provider key \u2014 v1");
 
     /// <summary>Serializes the three operations, so a save racing a read cannot see a half-installed file.</summary>
     private static readonly object Gate = new();
@@ -60,9 +65,13 @@ internal static class WindowsDpapiStore
     /// DPAPI itself is always present on Windows; what can fail is writing to the data directory. Probing that
     /// here - rather than assuming - keeps <c>IsAvailable</c> honest on a locked-down or full disk.
     ///
-    /// <para>Probed ONCE and cached, mirroring <see cref="MacOsKeychain.IsAvailable"/>, because this is read on
-    /// every credential operation and on every Settings binding refresh. An uncached probe would mean reading a
-    /// credential writes to disk, per request, forever.</para>
+    /// <para>Latched rather than simply cached. It is read on every credential operation and every Settings
+    /// refresh, so probing each time would mean reading a credential writes to disk, per request, forever -
+    /// but caching the FIRST answer would strand a user who frees up disk space showing "not writable" until
+    /// they restart, with nothing to suggest a restart would help. So: retry while it is false, and stop
+    /// probing for good once it succeeds. Steady state is identical to caching; the difference is only in the
+    /// direction that can actually heal. (The parallel to <see cref="MacOsKeychain.IsAvailable"/> is inexact -
+    /// that one caches a dlsym result, which cannot change mid-process. Disk writability can.)</para>
     ///
     /// <para>It creates the real <c>credentials</c> root - the directory <see cref="Save"/> creates anyway -
     /// rather than a fake service segment. An earlier version probed <c>DirectoryFor("probe")</c> and left a
@@ -73,21 +82,27 @@ internal static class WindowsDpapiStore
     /// where writing a file would not. <see cref="Save"/> still reports its own failure, which is what the
     /// user actually sees.</para>
     /// </summary>
-    private static readonly Lazy<bool> Probe = new(() =>
-    {
-        if (!OperatingSystem.IsWindows()) return false;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(AppConstants.DataDirectory, "credentials"));
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    });
+    private static volatile bool _canStore;
 
-    internal static bool IsAvailable => Probe.Value;
+    internal static bool IsAvailable
+    {
+        get
+        {
+            if (_canStore) return true;
+            if (!OperatingSystem.IsWindows()) return false;
+
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(AppConstants.DataDirectory, "credentials"));
+                _canStore = true;
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
 
     /// <summary>The stored secret, or null when there is none - or when the blob cannot be decrypted.</summary>
     internal static string? Find(string service, string account)
@@ -136,6 +151,11 @@ internal static class WindowsDpapiStore
             {
                 // Unreadable file, transient IO, a concurrent writer. Report "none stored" and leave the file
                 // alone - destroying it on a hiccup would be data loss.
+                //
+                // Behaviourally identical to the catch above, and kept separate only to carry the two
+                // different explanations: the cases arrive for unrelated reasons and a future change is
+                // likelier to want to treat one of them differently. No test distinguishes them, and none
+                // can - both tests below would pass with these collapsed into one.
                 return null;
             }
         }
