@@ -3,6 +3,9 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Threading;
 using Serilog;
 
@@ -156,12 +159,29 @@ namespace CST.Avalonia.Services.LocalApi
             }
         }
 
+        /// <summary>
+        /// Restrict the handshake to its owner. macOS/Linux get mode <c>0600</c>; Windows gets an explicit
+        /// owner-only ACL with inheritance switched off. (#303, #505)
+        ///
+        /// <para>Windows was previously a no-op here, which was not a hole so much as an unstated assumption:
+        /// <c>%APPDATA%</c> is the Roaming profile and is ACL'd per user by default, so another standard user
+        /// cannot read it. But that is inheritance doing the work, and inheritance is exactly the thing a
+        /// misconfigured profile, a redirected folder, or an over-broad grant higher up the tree can undo -
+        /// silently, with nothing here to notice. The Unix side does not lean on the directory, and neither
+        /// should this one.</para>
+        ///
+        /// <para><c>SetAccessRuleProtection(true, false)</c> is the important call: it detaches the file from
+        /// inherited permissions and drops the inherited entries rather than copying them down, so what remains
+        /// is the single rule added here. Without <c>preserveInheritance: false</c> the inherited grants would
+        /// be flattened onto the file and preserved, which looks like hardening while changing nothing.</para>
+        /// </summary>
         private static void TrySetOwnerOnly(string path)
         {
-            // Owner read/write only, where the OS models Unix permissions (macOS/Linux). No-op on Windows.
             try
             {
-                if (!OperatingSystem.IsWindows())
+                if (OperatingSystem.IsWindows())
+                    SetWindowsOwnerOnly(path);
+                else
                     File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             }
             catch (Exception ex)
@@ -169,6 +189,24 @@ namespace CST.Avalonia.Services.LocalApi
                 // Don't swallow: a token file left group/world-readable is a real exposure worth a log line. (#303)
                 Log.Warning(ex, "Could not restrict permissions on {Path}; the local-API token may be readable by other local users.", path);
             }
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static void SetWindowsOwnerOnly(string path)
+        {
+            var user = WindowsIdentity.GetCurrent().User;
+            if (user is null)
+            {
+                // No SID to grant to. Better to leave the inherited ACL - which is per-user in the ordinary
+                // case - than to write a protected ACL granting nobody and lock the app out of its own file.
+                Log.Warning("Could not determine the current user's SID; leaving inherited permissions on {Path}.", path);
+                return;
+            }
+
+            var security = new FileSecurity();
+            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+            security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
+            new FileInfo(path).SetAccessControl(security);
         }
     }
 }
