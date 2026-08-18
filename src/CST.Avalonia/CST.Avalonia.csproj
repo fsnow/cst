@@ -124,6 +124,11 @@
     <!-- Microsoft.Extensions.DependencyInjection / .Logging are deliberately NOT referenced here: the
          Microsoft.AspNetCore.App FrameworkReference above already supplies them, and referencing them
          explicitly warned NU1510 ("will not be pruned"). -->
+    <!-- DPAPI for the Windows half of surface B's key storage (#579). Referenced unconditionally rather than
+         behind a Windows condition so the macOS/Linux builds still COMPILE the Windows path - the API throws
+         PlatformNotSupportedException off Windows, and every call site here is OS-gated. A conditional
+         reference would let a change break the Windows build from a Mac without anyone noticing. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
