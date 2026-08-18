@@ -59,6 +59,15 @@ namespace CST.Avalonia.Services.Ai
 
         /// <summary>Turns one model on or off in the per-turn picker.</summary>
         AiConnectionResult SetModelEnabled(string connectionId, string modelId, bool enabled);
+
+        /// <summary>
+        /// Records what a real request just learned about an endpoint. (#673)
+        ///
+        /// <para>This is what stops Settings claiming "Connected" while the assistant reports it cannot
+        /// connect. The app already knows — it made the request — and the whole defect is that the knowledge
+        /// never reaches the surface a reader consults to diagnose. Both now read one fact.</para>
+        /// </summary>
+        void ReportReachability(string connectionId, bool reachable);
     }
 
     /// <summary>
@@ -76,6 +85,17 @@ namespace CST.Avalonia.Services.Ai
 
         private readonly ISettingsService _settings;
         private readonly IAiCredentialStore? _credentials;
+
+        /// <summary>
+        /// Last-known reachability, in memory only.
+        ///
+        /// <para><b>Deliberately not persisted.</b> "Unreachable" is a fact about a moment — a laptop that was
+        /// offline, a local runner that was not started yet — and writing it to settings would greet the reader
+        /// with a red endpoint on the next launch that no amount of fixing clears until something happens to
+        /// retry it. Every connection starts each session as <c>Configured</c>, which is the honest state:
+        /// not yet checked.</para>
+        /// </summary>
+        private readonly Dictionary<string, Reachability> _reachability = new(StringComparer.OrdinalIgnoreCase);
 
         /// <param name="credentials">Optional: a platform with nowhere safe to put a key still runs, and an
         /// endpoint needing no key still works. Resolved with <c>GetService</c> for that reason.</param>
@@ -206,6 +226,16 @@ namespace CST.Avalonia.Services.Ai
             return Saved(record);
         }
 
+        public void ReportReachability(string connectionId, bool reachable)
+        {
+            var state = reachable ? Reachability.Reachable : Reachability.Unreachable;
+
+            if (_reachability.TryGetValue(connectionId, out var current) && current == state) return;
+
+            _reachability[connectionId] = state;
+            ConnectionsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         public AiConnectionResult SetModelEnabled(string connectionId, string modelId, bool enabled)
         {
             if (Find(connectionId) is not { } record)
@@ -253,7 +283,8 @@ namespace CST.Avalonia.Services.Ai
             r.Models.Select(m => new AiModelEntry(m.Id, m.DisplayName, m.Enabled)).ToList(),
             new Dictionary<string, string>(r.Headers),
             new Dictionary<string, string>(r.Inputs),
-            SourceFor(r.Id));
+            SourceFor(r.Id),
+            _reachability.TryGetValue(r.Id, out var state) ? state : Reachability.Configured);
 
         /// <summary>
         /// Ids are the reserved namespace a custom connection may not take, and they become the credential's

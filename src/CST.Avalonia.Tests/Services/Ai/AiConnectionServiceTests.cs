@@ -323,4 +323,93 @@ public class AiConnectionServiceTests
 
         Assert.Null(keys.GetApiKey("box"));
     }
+
+    // ---- reachability write-back (#673) ------------------------------------------------------------------
+
+    /// <summary>
+    /// The honest default. "Configured" means the endpoint has never been contacted, NOT that it works —
+    /// conflating those is what lets a settings page claim "Connected" while the assistant reports it cannot
+    /// connect, which is the contradiction #673 exists to remove.
+    /// </summary>
+    [Fact]
+    public void A_new_connection_starts_as_configured_not_reachable()
+    {
+        var (service, _) = Make();
+        service.Add("box", Draft());
+
+        Assert.Equal(Reachability.Configured, service.Connections.Single().State);
+    }
+
+    [Fact]
+    public void A_failed_request_marks_the_endpoint_unreachable()
+    {
+        var (service, _) = Make();
+        service.Add("box", Draft());
+
+        service.ReportReachability("box", reachable: false);
+
+        Assert.Equal(Reachability.Unreachable, service.Connections.Single().State);
+    }
+
+    [Fact]
+    public void A_successful_request_marks_it_reachable_again()
+    {
+        var (service, _) = Make();
+        service.Add("box", Draft());
+        service.ReportReachability("box", reachable: false);
+
+        service.ReportReachability("box", reachable: true);
+
+        Assert.Equal(Reachability.Reachable, service.Connections.Single().State);
+    }
+
+    /// <summary>The UI rebinds on the change event, so a state change nobody is told about is a screen that
+    /// silently stops matching what the app knows — the whole defect, reintroduced.</summary>
+    [Fact]
+    public void A_reachability_change_raises_the_change_event()
+    {
+        var (service, _) = Make();
+        service.Add("box", Draft());
+
+        int raised = 0;
+        service.ConnectionsChanged += (_, _) => raised++;
+
+        service.ReportReachability("box", reachable: false);
+
+        Assert.Equal(1, raised);
+    }
+
+    /// <summary>Reporting the same state twice must not churn the UI — a turn a second reports success would
+    /// otherwise rebind every screen bound to the list.</summary>
+    [Fact]
+    public void Reporting_the_same_state_again_is_silent()
+    {
+        var (service, _) = Make();
+        service.Add("box", Draft());
+        service.ReportReachability("box", reachable: true);
+
+        int raised = 0;
+        service.ConnectionsChanged += (_, _) => raised++;
+        service.ReportReachability("box", reachable: true);
+
+        Assert.Equal(0, raised);
+    }
+
+    /// <summary>
+    /// Reachability is per-session and deliberately not persisted: "unreachable" is a fact about a moment — a
+    /// laptop that was offline, a runner not yet started — and storing it would greet the reader with a red
+    /// endpoint on next launch that nothing clears until something happens to retry it.
+    /// </summary>
+    [Fact]
+    public void Reachability_is_not_written_to_settings()
+    {
+        var (service, settings) = Make();
+        service.Add("box", Draft());
+        service.ReportReachability("box", reachable: false);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(settings);
+
+        Assert.DoesNotContain("Unreachable", json);
+        Assert.DoesNotContain("Reachab", json);
+    }
 }
