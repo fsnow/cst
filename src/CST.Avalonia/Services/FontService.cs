@@ -9,6 +9,7 @@ using CST.Avalonia.Models;
 #if MACOS
 using CST.Avalonia.Services.Platform.Mac;
 #endif
+using CST.Avalonia.Services.Platform;
 using CST.Conversion;
 using Microsoft.Extensions.Logging;
 
@@ -94,6 +95,11 @@ namespace CST.Avalonia.Services
         // ConcurrentDictionary: PreloadFontsForAllScriptsAsync writes this from many parallel task
         // continuations at once; a plain Dictionary can corrupt under concurrent writes. (SCRIPT-1)
         private readonly ConcurrentDictionary<Script, List<string>> _cachedFonts = new();
+
+        // Created lazily so that constructing a FontService - which several tests and the settings layer do -
+        // never has to touch Avalonia's FontManager. (#29)
+        private ScriptFontService? _scriptFonts;
+        private ScriptFontService ScriptFonts => _scriptFonts ??= new ScriptFontService(_logger);
         
         public async Task PreloadFontsForAllScriptsAsync()
         {
@@ -142,11 +148,12 @@ namespace CST.Avalonia.Services
             }
 #endif
         
-            // Fallback for non-Mac platforms
-            _logger.LogDebug("Using fallback method to get all system fonts.");
-            var fallbackFonts = FontManager.Current.SystemFonts.Select(f => f.Name).ToList();
-            _cachedFonts[script] = fallbackFonts; // Cache the result
-            return await Task.FromResult(fallbackFonts);
+            // Everywhere else, filter by actual glyph coverage rather than handing back every installed
+            // font. (#29) Before this, Windows offered the whole system list identically for all 14 scripts,
+            // so the fonts that work were indistinguishable from the ones that render tofu.
+            var detected = ScriptFonts.GetAvailableFontsForScript(script);
+            _cachedFonts[script] = detected; // Cache the result
+            return await Task.FromResult(detected);
         }
         
         public async Task<string?> GetSystemDefaultFontForScriptAsync(Script script)
@@ -161,9 +168,9 @@ namespace CST.Avalonia.Services
             }
 #endif
             
-            // Fallback for non-Mac platforms - return null to indicate system default
-            _logger.LogDebug("Using fallback method - returning null for system default");
-            return await Task.FromResult<string?>(null);
+            // Ask the platform which font IT would use for this script, rather than reporting "no opinion"
+            // and leaving the picker with nothing pre-selected. (#29)
+            return await Task.FromResult(ScriptFonts.GetSystemDefaultFontForScript(script));
         }
     }
 }
