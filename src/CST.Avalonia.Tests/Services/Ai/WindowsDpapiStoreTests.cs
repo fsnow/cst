@@ -45,6 +45,21 @@ public class WindowsDpapiStoreTests : IDisposable
 
     private string TheFile => Directory.EnumerateFiles(WindowsDpapiStore.DirectoryFor(_service)).Single();
 
+    [Fact]   // Not [WindowsFact]: a constant is worth pinning on every machine that runs the suite.
+    public void The_entropy_is_stable()
+    {
+        // Nothing else can catch a change to this. Save and Find share the value in-process, so every
+        // round-trip test stays green while every key already stored is silently orphaned - the user is simply
+        // told they have not configured one. The failure is invisible at exactly the moment it happens and
+        // undiagnosable afterwards, which is what earns a constant its own test.
+        //
+        // It doubles as the guard for the escaping: a commit once claimed these were escaped while the
+        // file still held literal em dashes, so if an editor ever resaves this file in another codepage, this
+        // is the test that goes red.
+        Assert.Equal("CST Reader \u2014 AI provider key \u2014 v1",
+                     Encoding.UTF8.GetString(WindowsDpapiStore.Entropy));
+    }
+
     [WindowsFact]
     public void The_key_is_not_written_to_disk_in_the_clear()
     {
@@ -129,7 +144,7 @@ public class WindowsDpapiStoreTests : IDisposable
     {
         // The real service name carries an em dash and spaces, and is free to change. Sanitizing is what keeps
         // a rename from silently producing an unwritable path.
-        var awkward = _service + " — with / \\ : * ? \" < > |";
+        var awkward = _service + " \u2014 with / \\ : * ? \" < > |";
 
         Assert.True(WindowsDpapiStore.Save(awkward, "anthropic", Secret));
         Assert.Equal(Secret, WindowsDpapiStore.Find(awkward, "anthropic"));
