@@ -93,6 +93,7 @@ Exploratory research and investigations:
 - [Git Integration](research/GIT_INTEGRATION.md) - Git-based features
 - [MAUI Blazor POC Plan](research/MAUI_BLAZOR_POC_PLAN.md) - Cross-platform proof of concept planning
 - [MAUI Blazor POC Results](research/MAUI_BLAZOR_POC_RESULTS.md) - POC findings and conclusions
+- [Provider Environment Variables and Endpoints](research/PROVIDER_ENV_VARS_AND_ENDPOINTS.md) - #682/#678 third-party provider facts (env vars, base URLs, auth shapes, OpenAI-compatible quirks) mined from opencode; input to the `Connections[]` preset list
 - [Rendering Requirements](research/RENDERING_REQUIREMENTS.md) - Content rendering needs analysis
 - [Search Index Shrink Spike](research/SEARCH_INDEX_SHRINK_SPIKE.md) - #55 dropping redundant term vectors / norms / payloads (~135 MB → ~75 MB)
 - [Source PDF Pagination](research/SOURCE_PDF_PAGINATION.md) - #540 pages missing from the scans (derived from XML page-marker gaps; fixed for navigation) and why two-page spreads reverse (Chrome's fixed pairing vs Preview's; why not to patch the PDFs)
@@ -113,6 +114,7 @@ External resources and CST4 feature references:
   - [State Management](reference/cst4/STATE_MANAGEMENT.md)
   - [Splash Screen](reference/cst4/SPLASH_SCREEN.md)
   - [Keyboard Shortcuts](reference/cst4/KEYBOARD_SHORTCUTS.md)
+  - [OpenCode provider/model UI study](reference/OpenCode/opencode-provider-ux-notes.md) — 9 screenshots + notes; design reference for the #689 provider/model rework
 
 - **sinhala/** - Sinhala script reference PDFs
   - Error Corrections (2011)
