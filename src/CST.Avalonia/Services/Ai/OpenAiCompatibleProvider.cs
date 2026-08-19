@@ -363,6 +363,12 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
         _logger.LogWarning(
             "OpenAI-compatible request failed: HTTP {Status} {Code}", (int)response.StatusCode, code ?? "(no code)");
 
+        // The body, at Debug, because "(no code)" is otherwise a dead end: a provider that puts its reason in
+        // prose rather than in a machine-readable field leaves the log saying only that something failed.
+        // Already bounded by ReadBoundedBodyAsync, and it is the provider's own error text - a request body
+        // or a credential never reaches here.
+        if (body.Length > 0) _logger.LogDebug("OpenAI-compatible error body: {Body}", body);
+
         // Read once and used twice: the sentence the reader sees and the delay any retry honours must agree,
         // and computing them from separate reads of the same headers is how they drift.
         var wait = AiHttp.RateLimitWait(response);

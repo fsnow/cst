@@ -318,6 +318,7 @@ internal static class AiHttp
     internal static AiErrorKind KindFor(HttpStatusCode status) => status switch
     {
         HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => AiErrorKind.Unauthorized,
+        HttpStatusCode.PaymentRequired => AiErrorKind.PaymentRequired,
         HttpStatusCode.TooManyRequests => AiErrorKind.RateLimited,
         _ => AiErrorKind.Provider,
     };
@@ -329,6 +330,11 @@ internal static class AiHttp
     {
         AiErrorKind.Unauthorized =>
             "The provider rejected the API key. Check the key and that it has access to this model.",
+        // Deliberately NOT "check your key": the key is fine, which is exactly why the rejected-key wording
+        // would send the reader to re-paste a working one and conclude the app is broken when that changes
+        // nothing.
+        AiErrorKind.PaymentRequired =>
+            "This provider account is out of credit. Add credit with the provider, or switch to a model that costs nothing.",
         AiErrorKind.RateLimited => RateLimitMessage(wait),
         AiErrorKind.ContextTooLong =>
             "The request was longer than the model's context window. Try a smaller passage or fewer glosses.",

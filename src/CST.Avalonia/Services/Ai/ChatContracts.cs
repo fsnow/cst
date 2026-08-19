@@ -117,6 +117,15 @@ public enum AiErrorKind
     /// <summary>429. <see cref="AiError.RetryAfter"/> is set when the provider said how long to wait.</summary>
     RateLimited,
 
+    /// <summary>
+    /// 402 — the key is valid but has nothing left to spend. (#673)
+    ///
+    /// <para>Separate from <see cref="Unauthorized"/> because the fix is different and the reader cannot
+    /// guess it from a rejected-key message: nothing is wrong with the key, the account behind it is out of
+    /// credit. Separate from <see cref="RateLimited"/> because no amount of waiting clears it.</para>
+    /// </summary>
+    PaymentRequired,
+
     /// <summary>The request exceeded the model's context window. Actionable: the caller can trim and retry.</summary>
     ContextTooLong,
 

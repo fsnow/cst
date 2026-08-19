@@ -133,4 +133,41 @@ public class AiRateLimitTests
         Assert.Contains(
             "in a minute",
             AiHttp.MessageFor(AiErrorKind.RateLimited, HttpStatusCode.TooManyRequests, TimeSpan.FromSeconds(30)));
+
+    // ---- 402, which is not a rate limit and not a bad key --------------------------------------------------
+
+    /// <summary>
+    /// 402 is its own kind.
+    ///
+    /// <para>Observed against Cerebras: a valid key on an account with no credit produced HTTP 402, which
+    /// fell through to the catch-all and was reported as "The provider rejected the request (HTTP 402)".</para>
+    /// </summary>
+    [Fact]
+    public void A_402_is_payment_required() =>
+        Assert.Equal(AiErrorKind.PaymentRequired, AiHttp.KindFor(HttpStatusCode.PaymentRequired));
+
+    /// <summary>
+    /// And it must not read like a rejected key.
+    ///
+    /// <para>Nothing is wrong with the key, so "check the key" sends the reader to re-paste a working one and
+    /// conclude the app is broken when that changes nothing. Nor is waiting any use, which rules out the
+    /// rate-limit wording.</para>
+    /// </summary>
+    [Fact]
+    public void The_402_message_blames_the_balance_rather_than_the_key()
+    {
+        var message = AiHttp.MessageFor(AiErrorKind.PaymentRequired, HttpStatusCode.PaymentRequired);
+
+        Assert.Contains("out of credit", message);
+        Assert.DoesNotContain("key", message, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("try again", message, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Statuses we have no better word for still fall through to the generic sentence, which names
+    /// the code so a reader can search for it.</summary>
+    [Fact]
+    public void An_unrecognised_status_still_names_its_code() =>
+        Assert.Contains(
+            "418",
+            AiHttp.MessageFor(AiErrorKind.Provider, (HttpStatusCode)418));
 }
