@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.Versioning;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -150,9 +151,15 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         /// </summary>
         private static void TryLaunchApp()
         {
+            if (OperatingSystem.IsWindows())
+            {
+                TryLaunchAppWindows();
+                return;
+            }
+
             if (!OperatingSystem.IsMacOS())
             {
-                Log.Warning("--mcp-bridge: auto-launch is macOS-only; start CST Reader manually.");
+                Log.Warning("--mcp-bridge: auto-launch is not supported on this platform; start CST Reader manually.");
                 return;
             }
 
@@ -175,6 +182,72 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
             {
                 Log.Warning(ex, "--mcp-bridge: failed to launch CST Reader via `open`.");
             }
+        }
+
+        /// <summary>
+        /// The Windows half of <see cref="TryLaunchApp"/>. (#507)
+        ///
+        /// <para>There is no <c>open</c> here, but there is something better: this relay IS CST Reader - the
+        /// bridge runs as <c>CST.Avalonia.exe --mcp-bridge</c> - so the GUI is the same executable started
+        /// without that flag. No registry lookup, no install-directory search, and no way to launch a DIFFERENT
+        /// copy than the one relaying, which a path search could do on a machine with two installs.</para>
+        ///
+        /// <para><b>It reuses a running instance, exactly as <c>open</c> does.</b> Not by checking first - by
+        /// launching unconditionally and letting the single-instance guard decide. A second launch now asks the
+        /// running instance to come forward and exits (#568), so "launch" and "activate" are the same call on
+        /// this platform too. Before #568 that second process would have exited silently, which is why this
+        /// issue and that one were the same missing capability.</para>
+        ///
+        /// <para><c>UseShellExecute</c> is deliberately TRUE. With it false the launched GUI inherits this
+        /// process's stdio handles - and those handles are the JSON-RPC channel to the chat client. A GUI
+        /// holding the relay's stdin/stdout open is a hang waiting to happen at shutdown.</para>
+        /// </summary>
+        [SupportedOSPlatform("windows")]
+        private static void TryLaunchAppWindows()
+        {
+            var exe = WindowsAppExecutable(Environment.ProcessPath);
+            if (exe is null)
+            {
+                // The dev case: `dotnet run -- --mcp-bridge` makes ProcessPath the dotnet host, and launching
+                // THAT with no arguments prints help rather than starting CST Reader. Say so instead of
+                // spawning something useless - the macOS side declines in the same situation, for the same
+                // reason (no .app bundle around a `dotnet run`).
+                Log.Warning("--mcp-bridge: {Path} is not the CST Reader executable, so auto-launch was skipped; "
+                            + "start CST Reader manually.", Environment.ProcessPath ?? "(unknown)");
+                return;
+            }
+
+            try
+            {
+                var psi = new ProcessStartInfo(exe)
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = Path.GetDirectoryName(exe) ?? string.Empty,
+                };
+                using var _ = Process.Start(psi);
+                Log.Information("--mcp-bridge: started {Exe}; if an instance was already running the single-instance guard activates that one instead of adding a second.", exe);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "--mcp-bridge: failed to launch CST Reader.");
+            }
+        }
+
+        /// <summary>
+        /// The GUI executable to start on Windows, or null when this process is not one. Pure/testable, and the
+        /// counterpart to <see cref="AppBundleFromExecutablePath"/>.
+        ///
+        /// <para>Matched on filename rather than trusted outright, so a bridge hosted by <c>dotnet</c> - or by
+        /// anything else - declines rather than launching a program that will not become CST Reader.</para>
+        /// </summary>
+        internal static string? WindowsAppExecutable(string? processPath)
+        {
+            if (string.IsNullOrEmpty(processPath)) return null;
+
+            var name = Path.GetFileNameWithoutExtension(processPath);
+            return string.Equals(name, "CST.Avalonia", StringComparison.OrdinalIgnoreCase)
+                ? processPath
+                : null;
         }
 
         /// <summary>
