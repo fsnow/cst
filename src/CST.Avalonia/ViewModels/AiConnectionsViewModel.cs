@@ -36,6 +36,7 @@ namespace CST.Avalonia.ViewModels
         private string? _problem;
         private string _presetSearch = "";
         private bool _isCatalogueExpanded;
+        private int _catalogueTotal;
 
         public AiConnectionsViewModel(IAiConnectionService? service, IAiCredentialStore? credentials = null)
         {
@@ -79,11 +80,25 @@ namespace CST.Avalonia.ViewModels
 
         public bool HasLocalPresets => LocalPresets.Count > 0;
 
-        /// <summary>How many the catalogue offers, so the reader can judge whether to expand before they
-        /// do.</summary>
+        /// <summary>
+        /// Whether the hosted catalogue has anything in it at all, <b>before</b> the search filter.
+        ///
+        /// <para>The search box is gated on this rather than on the filtered count, and the distinction is
+        /// not academic: gating on the filtered count meant that typing a string matching nothing hid the
+        /// search box itself, mid-keystroke, leaving no control on screen able to clear the search. The
+        /// catalogue was then gone for the life of the window.</para>
+        /// </summary>
+        public bool HasCatalogue => _catalogueTotal > 0;
+
+        /// <summary>How many the catalogue offers — the filtered count while searching, so the number always
+        /// describes the list beneath it.</summary>
         public string CatalogueCount => AvailablePresets.Count == 1
             ? "1 provider"
             : $"{AvailablePresets.Count} providers";
+
+        /// <summary>A search that matched nothing says so. An empty bordered box is the "broken feature"
+        /// reading this section exists to avoid.</summary>
+        public bool HasNoMatches => HasCatalogue && AvailablePresets.Count == 0;
 
         /// <summary>
         /// Filters the catalogue. Searching also reveals it — a reader who types has asked for the list, and
@@ -114,7 +129,17 @@ namespace CST.Avalonia.ViewModels
 
         /// <summary>No attempt has finished yet — said quietly, because it is the ordinary first second of a
         /// fresh install rather than a problem.</summary>
-        public bool IsCatalogueLoading => _service?.PresetState == AiPresetState.Loading;
+        /// <summary>
+        /// Said only while there is nothing to show.
+        ///
+        /// <para>The source seeds the built-in snapshot before any fetch finishes, so the state is
+        /// <c>Loading</c> over a fully populated list — and a "looking for the provider list" line above 166
+        /// rows contradicts itself. Worse, nothing ever initiates a fetch while the AI master switch is off,
+        /// so that line would otherwise sit there permanently on a tab that is reachable with AI
+        /// disabled.</para>
+        /// </summary>
+        public bool IsCatalogueLoading =>
+            _service?.PresetState == AiPresetState.Loading && !HasCatalogue;
 
         /// <summary>
         /// The hosted catalogue is missing, and the reader is told so.
@@ -125,7 +150,18 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public bool HasCatalogueProblem => _service?.PresetState == AiPresetState.Unavailable;
 
-        public string? CatalogueProblem => _service?.PresetProblem;
+        /// <summary>
+        /// The failure, worded for what is actually on screen.
+        ///
+        /// <para>A failed refresh keeps the previous list, so the service's sentence can end up above a
+        /// catalogue announcing 166 providers — two statements that contradict each other. When something
+        /// survived, this says so instead.</para>
+        /// </summary>
+        public string? CatalogueProblem => !HasCatalogueProblem
+            ? null
+            : HasCatalogue
+                ? "Couldn't refresh the provider list — showing the built-in one."
+                : _service?.PresetProblem;
 
         public ReactiveCommand<Unit, Unit> RetryCatalogueCommand { get; }
 
@@ -240,10 +276,15 @@ namespace CST.Avalonia.ViewModels
         }
 
         /// <summary>Matches on the display name and the id — a reader may know a provider by either.</summary>
-        private bool MatchesSearch(AiProviderPreset preset) =>
-            string.IsNullOrWhiteSpace(PresetSearch) ||
-            preset.DisplayName.Contains(PresetSearch, StringComparison.OrdinalIgnoreCase) ||
-            preset.Id.Contains(PresetSearch, StringComparison.OrdinalIgnoreCase);
+        private bool MatchesSearch(AiProviderPreset preset)
+        {
+            // Trimmed: a trailing space is invisible and would otherwise match nothing at all, which for a
+            // provider that plainly exists reads as the list being broken.
+            var needle = PresetSearch.Trim();
+            return needle.Length == 0 ||
+                preset.DisplayName.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                preset.Id.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        }
 
         private async Task RetryCatalogueAsync()
         {
@@ -294,7 +335,12 @@ namespace CST.Avalonia.ViewModels
 
             // Split by a fact, not by an opinion: a local runner needs no key and no network, which is what
             // earns it a permanent place above a catalogue that may be neither present nor short.
-            var local = AiProviderPresets.LocalOnly.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+            var local = AiProviderPresets.LocalOnly
+                .Select(p => p.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);   // as the service matches ids
+
+            // Counted BEFORE the search filter — see HasCatalogue.
+            _catalogueTotal = _service.AvailablePresets.Count(p => !local.Contains(p.Id));
 
             Sync(LocalPresets, _service.AvailablePresets.Where(p => local.Contains(p.Id)).ToList(),
                 p => p.Id,
@@ -316,6 +362,8 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(HasAvailablePresets));
             this.RaisePropertyChanged(nameof(HasLocalPresets));
             this.RaisePropertyChanged(nameof(CatalogueCount));
+            this.RaisePropertyChanged(nameof(HasCatalogue));
+            this.RaisePropertyChanged(nameof(HasNoMatches));
             this.RaisePropertyChanged(nameof(IsCatalogueLoading));
             this.RaisePropertyChanged(nameof(HasCatalogueProblem));
             this.RaisePropertyChanged(nameof(CatalogueProblem));

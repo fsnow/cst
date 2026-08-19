@@ -240,8 +240,10 @@
                        IsVisible="{Binding IsCatalogueLoading}"
                        Classes="SettingDescription"/>
 
+            <!-- Gated on the UNFILTERED catalogue: gating on the filtered count hid this box mid-keystroke
+                 the moment a search matched nothing, leaving nothing on screen able to clear it. -->
             <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8"
-                  IsVisible="{Binding HasAvailablePresets}">
+                  IsVisible="{Binding HasCatalogue}">
                 <TextBox Grid.Column="0" Text="{Binding PresetSearch}"
                          Watermark="Search providers"/>
                 <ToggleButton Grid.Column="1" IsChecked="{Binding IsCatalogueExpanded}"
@@ -252,6 +254,9 @@
             <Border Classes="SettingGroup" Padding="0"
                     IsVisible="{Binding IsCatalogueOpen}">
                 <StackPanel>
+                    <TextBlock Text="No provider matches that."
+                               IsVisible="{Binding HasNoMatches}"
+                               Classes="Secondary" Margin="12,10"/>
                     <ItemsControl ItemsSource="{Binding AvailablePresets}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:AiPresetRowViewModel">

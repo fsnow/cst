@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services;
@@ -25,14 +27,54 @@ public class AiConnectionsViewModelTests
     private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make() =>
         Make(new FakeCredentialStore());
 
-    private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make(FakeCredentialStore keys)
+    private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make(
+        FakeCredentialStore keys, IAiPresetSource? presets = null)
     {
         var settings = new Settings();
         var svc = new Mock<ISettingsService>();
         svc.SetupGet(s => s.Settings).Returns(settings);
-        var service = new AiConnectionService(svc.Object, keys);
+        var service = new AiConnectionService(svc.Object, keys, presets);
         return (new AiConnectionsViewModel(service, keys), service);
     }
+
+    /// <summary>
+    /// A preset source whose state the test chooses.
+    ///
+    /// <para>Without one, every test ran against a service built with <c>presets: null</c>, which hard-wires
+    /// <c>Ready</c> — so the failure and loading states this section exists for had no coverage at all.</para>
+    /// </summary>
+    private sealed class StubPresets : IAiPresetSource
+    {
+        public StubPresets(AiPresetState state, string? problem, params AiProviderPreset[] presets)
+        {
+            State = state;
+            Problem = problem;
+            Presets = presets;
+        }
+
+        public IReadOnlyList<AiProviderPreset> Presets { get; }
+        public AiPresetState State { get; private set; }
+        public string? Problem { get; private set; }
+        public int Refreshes { get; private set; }
+        public event EventHandler? PresetsChanged;
+
+        /// <summary>The startup path. Records that it was asked, so a test can tell a forced Retry from the
+        /// ordinary first load.</summary>
+        public Task EnsureLoadedAsync(CancellationToken ct = default) => RefreshAsync(ct);
+
+        public Task RefreshAsync(CancellationToken ct = default)
+        {
+            Refreshes++;
+            State = AiPresetState.Ready;
+            Problem = null;
+            PresetsChanged?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
+        }
+    }
+
+    private static AiProviderPreset Hosted(string id) =>
+        new(id, id, ChatProviderKind.OpenAiCompatible, $"https://{id}.test/v1",
+            new AiCredentialMethod[] { new AiCredentialMethod.Key() });
 
     /// <summary>An in-memory keychain. The real one would need a Keychain prompt per test.</summary>
     private sealed class FakeCredentialStore : IAiCredentialStore
@@ -543,6 +585,95 @@ public class AiConnectionsViewModelTests
         AddThroughSheet(vm, "openrouter");
 
         Assert.DoesNotContain(vm.AvailablePresets, p => p.Id == "openrouter");
+    }
+
+    // ---- the states this section exists for (#739) ----------------------------------------------------------
+
+    /// <summary>
+    /// A search matching nothing must not hide the search box.
+    ///
+    /// <para>The box was gated on the <i>filtered</i> count, so typing a string that matched nothing removed
+    /// the only control that could clear the search — mid-keystroke — and the catalogue was gone for the life
+    /// of the window. Recovery was closing and reopening Settings.</para>
+    /// </summary>
+    [Fact]
+    public void A_search_matching_nothing_keeps_the_search_reachable()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Ready, null, Hosted("openrouter"), Hosted("groq")));
+
+        vm.PresetSearch = "zzzzz";
+
+        Assert.Empty(vm.AvailablePresets);
+        Assert.True(vm.HasCatalogue);    // the box stays on screen
+        Assert.True(vm.HasNoMatches);    // and says why the list is empty
+    }
+
+    /// <summary>A trailing space is invisible; matching on it would report a provider that plainly exists as
+    /// absent.</summary>
+    [Fact]
+    public void Search_is_trimmed()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Ready, null, Hosted("openrouter")));
+
+        vm.PresetSearch = "openrouter ";
+
+        Assert.Single(vm.AvailablePresets);
+    }
+
+    /// <summary>
+    /// The loading line appears only while there is nothing to show.
+    ///
+    /// <para>The source seeds the built-in snapshot before any fetch finishes, so "looking for the provider
+    /// list" would otherwise sit above 166 rows — and nothing initiates a fetch at all while the AI master
+    /// switch is off, leaving it there permanently on a tab reachable with AI disabled.</para>
+    /// </summary>
+    [Fact]
+    public void Loading_is_not_announced_over_a_populated_catalogue()
+    {
+        var (populated, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Loading, null, Hosted("openrouter")));
+        Assert.False(populated.IsCatalogueLoading);
+
+        var (empty, _) = Make(new FakeCredentialStore(), new StubPresets(AiPresetState.Loading, null));
+        Assert.True(empty.IsCatalogueLoading);
+    }
+
+    /// <summary>A failure that kept the previous list says that, rather than contradicting the 166 rows
+    /// underneath it.</summary>
+    [Fact]
+    public void A_failure_over_a_surviving_list_says_so()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Unavailable, "Could not reach models.dev.", Hosted("openrouter")));
+
+        Assert.True(vm.HasCatalogueProblem);
+        Assert.Contains("built-in", vm.CatalogueProblem);
+    }
+
+    /// <summary>With nothing left, the service's own sentence is the honest one.</summary>
+    [Fact]
+    public void A_failure_with_nothing_left_shows_the_services_sentence()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Unavailable, "Could not reach models.dev."));
+
+        Assert.Equal("Could not reach models.dev.", vm.CatalogueProblem);
+    }
+
+    /// <summary>Retry asks the source again, and the recovery reaches the view.</summary>
+    [Fact]
+    public void Retry_refetches_and_clears_the_failure()
+    {
+        var stub = new StubPresets(AiPresetState.Unavailable, "Could not reach models.dev.");
+        var (vm, _) = Make(new FakeCredentialStore(), stub);
+        Assert.True(vm.HasCatalogueProblem);
+
+        vm.RetryCatalogueCommand.Execute().Subscribe();
+
+        Assert.Equal(1, stub.Refreshes);
+        Assert.False(vm.HasCatalogueProblem);
     }
 
     // ---- monograms -------------------------------------------------------------------------------------
