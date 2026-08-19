@@ -59,6 +59,13 @@
          edits live beside settings.json and override these at load. Wildcard so adding a preset needs no csproj
          edit — PromptTemplateNames.All is the list that matters, and a name there with no resource fails loudly. -->
     <EmbeddedResource Include="Resources\Ai\*.md" />
+
+    <!-- The models.dev catalogue snapshot (#733, #736): the LAST fallback behind the runtime cache and the
+         network, so a fresh install with no network still has providers to offer. Refreshed deliberately by
+         refresh-models-snapshot.sh before a release, never during packaging - see that script for why.
+         Committed pretty-printed so a refresh is reviewable; git stores it at ~0.4 MB. -->
+    <EmbeddedResource Include="Resources\Ai\models-dev-snapshot.json" />
+    <EmbeddedResource Include="Resources\Ai\models-dev-snapshot.meta.json" />
     <!-- The fidelity advisory's data (#584). Embedded so it ships with the app and cannot be edited into
          something that silently mis-rates a model. -->
   </ItemGroup>

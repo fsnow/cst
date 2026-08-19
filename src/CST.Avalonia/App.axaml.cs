@@ -414,6 +414,11 @@ public partial class App : Application
                 await settingsService.LoadSettingsAsync();
                 await StartLocalApiIfEnabledAsync(settingsService);
 
+                // Startup calls the lifecycle directly rather than going through ApplyAiSettingsAsync, so the
+                // catalogue refresh hung off that method never fired on a normal launch - a reader who enabled
+                // AI once and never re-saved settings rode the same cache forever. (fable review)
+                RefreshProviderCatalogueIfEnabled();
+
                 // The layout is built BEFORE this completes -- the window opened seven milliseconds ahead of
                 // the settings load in a measured run -- so anything in CreateLayout that reads a setting
                 // reads the constructor defaults. The assistant's panel is gated on a setting, so it was
@@ -464,8 +469,40 @@ public partial class App : Application
     /// </summary>
     public static Task ApplyAiSettingsAsync()
     {
+        // Refresh the provider catalogue whenever the AI settings are applied (#736). Startup calls this
+        // separately, because it reaches the lifecycle directly and does not pass through here. Both are
+        // needed: without the startup call a normal launch never refreshes; without this one, turning AI on
+        // mid-session would wait for a relaunch, which is #529 exactly. Fire-and-forget - a checkbox must not
+        // wait on a network call, and the catalogue degrades to its snapshot regardless.
+        RefreshProviderCatalogueIfEnabled();
+
         if (Current is App { _localApi: { } lifecycle }) return lifecycle.ApplyAsync();
         return Task.CompletedTask;
+    }
+
+    private static void RefreshProviderCatalogueIfEnabled()
+    {
+        try
+        {
+            var settings = ServiceProvider?.GetService<ISettingsService>();
+            // The master switch alone: this feeds the PROVIDERS list, which #739/#740 let a reader browse
+            // while configuring connections, before the assistant itself is turned on. Keying it to the
+            // assistant too would leave that screen on a stale catalogue. (fable review)
+            if (settings?.Settings.Ai is not { Enabled: true }) return;
+
+            if (ServiceProvider?.GetService<Services.Ai.IModelsDevCatalog>() is not { } catalogue) return;
+
+            _ = Task.Run(async () =>
+            {
+                try { await catalogue.RefreshAsync().ConfigureAwait(false); }
+                catch (Exception ex) { Log.Debug(ex, "Provider catalogue refresh failed (#736)"); }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Never let a catalogue refresh affect whether the AI settings apply.
+            Log.Debug(ex, "Could not schedule a provider catalogue refresh (#736)");
+        }
     }
 
     private async Task StartLocalApiIfEnabledAsync(ISettingsService settingsService)
@@ -1310,6 +1347,10 @@ public partial class App : Application
         // Endpoints the reader has configured (#689). Singleton because the UI binds to its ConnectionsChanged
         // event and every consumer must see the same list.
         services.AddSingleton<Services.Ai.IAiConnectionService, Services.Ai.AiConnectionService>();
+
+        // The models.dev provider catalogue (#736). Singleton because it caches the document in memory and
+        // holds the fetch gate; nothing user-visible depends on it yet (#737 turns it into presets).
+        services.AddSingleton<Services.Ai.IModelsDevCatalog>(_ => new Services.Ai.ModelsDevCatalog());
 
         // Asking a connection what models it offers (#674). Additive to the hand-typed list, never a
         // prerequisite: an endpoint that publishes no listing stays fully usable, so a failure here is
