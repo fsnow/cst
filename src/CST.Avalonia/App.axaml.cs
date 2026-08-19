@@ -464,8 +464,36 @@ public partial class App : Application
     /// </summary>
     public static Task ApplyAiSettingsAsync()
     {
+        // Refresh the provider catalogue whenever AI is on (#736). Deliberately here rather than only at
+        // startup: gating on "AI enabled" is right, but checking only at launch reproduces #529 exactly -
+        // a reader who turns AI on mid-session would get nothing until relaunch. Fire-and-forget, because a
+        // checkbox must not wait on a network call, and the catalogue degrades to its snapshot regardless.
+        RefreshProviderCatalogueIfEnabled();
+
         if (Current is App { _localApi: { } lifecycle }) return lifecycle.ApplyAsync();
         return Task.CompletedTask;
+    }
+
+    private static void RefreshProviderCatalogueIfEnabled()
+    {
+        try
+        {
+            var settings = ServiceProvider?.GetService<ISettingsService>();
+            if (settings?.Settings.Ai is not { Enabled: true, Chat.Enabled: true }) return;
+
+            if (ServiceProvider?.GetService<Services.Ai.IModelsDevCatalog>() is not { } catalogue) return;
+
+            _ = Task.Run(async () =>
+            {
+                try { await catalogue.RefreshAsync().ConfigureAwait(false); }
+                catch (Exception ex) { Log.Debug(ex, "Provider catalogue refresh failed (#736)"); }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Never let a catalogue refresh affect whether the AI settings apply.
+            Log.Debug(ex, "Could not schedule a provider catalogue refresh (#736)");
+        }
     }
 
     private async Task StartLocalApiIfEnabledAsync(ISettingsService settingsService)
@@ -1310,6 +1338,10 @@ public partial class App : Application
         // Endpoints the reader has configured (#689). Singleton because the UI binds to its ConnectionsChanged
         // event and every consumer must see the same list.
         services.AddSingleton<Services.Ai.IAiConnectionService, Services.Ai.AiConnectionService>();
+
+        // The models.dev provider catalogue (#736). Singleton because it caches the document in memory and
+        // holds the fetch gate; nothing user-visible depends on it yet (#737 turns it into presets).
+        services.AddSingleton<Services.Ai.IModelsDevCatalog>(_ => new Services.Ai.ModelsDevCatalog());
 
         // Asking a connection what models it offers (#674). Additive to the hand-typed list, never a
         // prerequisite: an endpoint that publishes no listing stays fully usable, so a failure here is
