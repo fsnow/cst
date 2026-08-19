@@ -1369,6 +1369,10 @@ public partial class App : Application
         // the disk cache lives under cache/provider-logos.
         services.AddSingleton<Services.Ai.IAiProviderLogos>(_ => new Services.Ai.AiProviderLogos());
 
+        // Rendering those logos (#748). Singleton so a mark is rasterised once per theme colour rather than
+        // once per row.
+        services.AddSingleton<Services.Ai.IAiLogoImages, Services.Ai.AiLogoImages>();
+
         // Asking a connection what models it offers (#674). Additive to the hand-typed list, never a
         // prerequisite: an endpoint that publishes no listing stays fully usable, so a failure here is
         // reported and nothing more.
