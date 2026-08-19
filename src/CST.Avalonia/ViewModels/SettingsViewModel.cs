@@ -1369,7 +1369,8 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
             // by hand; a null service leaves the tab inert rather than throwing, which is what the
             // parameterless constructor used by the designer needs.
             var connectionService = App.TryGetService<Services.Ai.IAiConnectionService>();
-            Connections = new AiConnectionsViewModel(connectionService, credentials);
+            Connections = new AiConnectionsViewModel(
+                connectionService, credentials, App.TryGetService<Services.Ai.IAiProviderLogos>());
             Models = new AiModelsViewModel(
                 connectionService, App.TryGetService<Services.Ai.IAiModelCatalog>());
 
