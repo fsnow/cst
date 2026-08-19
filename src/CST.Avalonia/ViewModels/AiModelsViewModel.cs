@@ -296,14 +296,14 @@ namespace CST.Avalonia.ViewModels
                 rows.Add(new AiCatalogRowViewModel(
                     this, model.Id, model.DisplayName,
                     _fetched.FirstOrDefault(f => string.Equals(f.Id, model.Id, StringComparison.Ordinal)),
-                    model.Enabled, typed: true));
+                    model.Enabled));
 
             foreach (var model in _fetched)
             {
                 if (stored.ContainsKey(model.Id)) continue;
                 if (freeOnly && model.CostsMoney) continue;
                 rows.Add(new AiCatalogRowViewModel(
-                    this, model.Id, model.DisplayName, model, enabled: false, typed: false));
+                    this, model.Id, model.DisplayName, model, enabled: false));
             }
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -377,7 +377,7 @@ namespace CST.Avalonia.ViewModels
 
         public AiCatalogRowViewModel(
             AiModelGroupViewModel group, string id, string displayName, AiCatalogModel? published,
-            bool enabled, bool typed)
+            bool enabled)
         {
             _group = group;
             _published = published;
@@ -385,17 +385,11 @@ namespace CST.Avalonia.ViewModels
 
             ModelId = id;
             DisplayName = displayName;
-            IsTyped = typed;
         }
 
         public string ModelId { get; }
 
         public string DisplayName { get; }
-
-        /// <summary>True for a model the reader typed rather than one that arrived in a listing. Shown,
-        /// because "I added this by hand" is the reason it appears even when the provider has never heard of
-        /// it.</summary>
-        public bool IsTyped { get; }
 
         /// <summary>
         /// The provider's own facts about the model, on one line: context window, price per million tokens,

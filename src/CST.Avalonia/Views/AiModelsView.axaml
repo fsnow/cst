@@ -131,7 +131,7 @@
                         <Border Padding="34,6,10,6"
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="0,0,0,1">
-                            <Grid ColumnDefinitions="*,Auto,Auto">
+                            <Grid ColumnDefinitions="*,Auto">
                                 <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
                                     <!-- The provider's own facts, verbatim. Empty for an endpoint that
@@ -140,18 +140,9 @@
                                                TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
 
-                                <Border Grid.Column="1" IsVisible="{Binding IsTyped}"
-                                        Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
-                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                        BorderThickness="1" CornerRadius="9" Padding="7,1"
-                                        VerticalAlignment="Center" Margin="8,0">
-                                    <TextBlock Text="Typed" FontSize="10"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                </Border>
-
                                 <!-- A switch, never a radio: several models under one connection must be
                                      on at once, which is the entire point of a short list. -->
-                                <ToggleSwitch Grid.Column="2" IsChecked="{Binding Enabled}"
+                                <ToggleSwitch Grid.Column="1" IsChecked="{Binding Enabled}"
                                               OnContent="" OffContent=""
                                               VerticalAlignment="Center"/>
                             </Grid>
