@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Markup.Xaml;
 using CST.Avalonia.ViewModels;
 
 namespace CST.Avalonia.Views;
@@ -22,6 +21,11 @@ public partial class AiAssistantPanel : UserControl
 
     public AiAssistantPanel()
     {
+        // The generated InitializeComponent, NOT a hand-written AvaloniaXamlLoader.Load(this). This file
+        // used to carry the hand-written one, which was harmless until a control here gained an x:Name:
+        // only the generated initializer assigns the fields those names produce, so a hand-written one
+        // loads the XAML and leaves ModelChip null. The result was a NullReferenceException three lines
+        // below, during the dock's layout pass, which presents as the app failing to start at all.
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
 
@@ -42,8 +46,6 @@ public partial class AiAssistantPanel : UserControl
         try { _picker.IsOpen = open; }
         finally { _syncingFlyout = false; }
     }
-
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     private void OnDataContextChanged(object? sender, System.EventArgs e)
     {
