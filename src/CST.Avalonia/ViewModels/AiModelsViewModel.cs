@@ -392,12 +392,17 @@ namespace CST.Avalonia.ViewModels
         public string DisplayName { get; }
 
         /// <summary>
-        /// The provider's own facts about the model, on one line: context window, price per million tokens,
+        /// The provider's own facts about the model — the wire id, context window, price per million tokens,
         /// and whether it accepts a reasoning parameter.
         ///
-        /// <para>Verbatim and attributed to the provider — that is what makes it safe where a table we
-        /// maintained would not be. Empty for an endpoint that publishes nothing, which is most local
-        /// runners, and the row degrades to a bare id rather than demanding metadata that does not exist.</para>
+        /// <para>Verbatim and attributed to the provider, which is what makes it safe where a table we
+        /// maintained would not be. An endpoint that publishes nothing leaves the id alone, rather than
+        /// demanding metadata that does not exist.</para>
+        ///
+        /// <para><b>Shown on hover rather than in the row.</b> It was a permanent second line, which at four
+        /// hundred rows is four hundred lines of small grey text between the reader and the names they came
+        /// to read. The facts matter when choosing between two models, which is a moment, not a state — so
+        /// they are a tooltip, and the list stays a list of names.</para>
         /// </summary>
         public string Details
         {
@@ -405,20 +410,22 @@ namespace CST.Avalonia.ViewModels
             {
                 if (_published is null) return ModelId;
 
-                var parts = new List<string> { ModelId };
+                var facts = new List<string>();
 
                 if (_published.ContextLength is { } context)
-                    parts.Add($"{context / 1000:N0}K context");
+                    facts.Add($"{context / 1000:N0}K context");
 
                 if (_published.PromptPricePerMillion is { } prompt &&
                     _published.CompletionPricePerMillion is { } completion)
-                    parts.Add(prompt == 0 && completion == 0
+                    facts.Add(prompt == 0 && completion == 0
                         ? "free"
                         : $"${Money(prompt)}/${Money(completion)} per M");
 
-                if (_published.SupportsReasoning) parts.Add("reasoning");
+                if (_published.SupportsReasoning) facts.Add("reasoning");
 
-                return string.Join("  ·  ", parts);
+                // The id on its own line: it is the string the reader would copy, and burying it in a run of
+                // facts separated by dots makes it hard to pick out.
+                return facts.Count == 0 ? ModelId : ModelId + "\n" + string.Join("  ·  ", facts);
             }
         }
 

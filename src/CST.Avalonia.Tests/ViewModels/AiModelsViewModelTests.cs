@@ -518,7 +518,7 @@ public class AiModelsViewModelTests
     // ---- what a row says ---------------------------------------------------------------------------------
 
     /// <summary>The provider's own facts, verbatim and attributed — safe where a table we maintained would
-    /// not be.</summary>
+    /// not be. Carried on the row's tooltip rather than a second line of text under every name.</summary>
     [Fact]
     public void A_row_shows_the_published_facts()
     {
@@ -532,6 +532,21 @@ public class AiModelsViewModelTests
         Assert.Contains("131K context", details);
         Assert.Contains("$0.4/$1.6 per M", details);
         Assert.Contains("reasoning", details);
+        // The id on its own line: it is the string a reader would copy, and burying it in a run of
+        // dot-separated facts makes it hard to pick out.
+        Assert.StartsWith("m\n", details);
+    }
+
+    /// <summary>With nothing published there is no second line to write — the tooltip is the bare id, not an
+    /// id followed by an empty run of separators.</summary>
+    [Fact]
+    public void A_row_with_no_facts_has_no_second_line()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("bare", "Bare")));
+        Group(vm).IsExpanded = true;
+
+        Assert.DoesNotContain("\n", Rows(vm).Single().Details);
     }
 
     /// <summary>An endpoint that publishes nothing degrades to the id rather than showing an empty
