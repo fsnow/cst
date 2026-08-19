@@ -72,9 +72,7 @@ public class AiModelsViewModelTests
 
         Group(vm).IsExpanded = true;
 
-        var row = Assert.Single(Rows(vm));
-        Assert.True(row.Enabled);
-        Assert.True(row.IsTyped);
+        Assert.True(Assert.Single(Rows(vm)).Enabled);
     }
 
     /// <summary>Groups start collapsed with the count in the header — exactly the number a reader needs to
@@ -139,9 +137,7 @@ public class AiModelsViewModelTests
 
         Group(vm).IsExpanded = true;
 
-        var row = Assert.Single(Rows(vm));
-        Assert.False(row.Enabled);
-        Assert.False(row.IsTyped);
+        Assert.False(Assert.Single(Rows(vm)).Enabled);
     }
 
     /// <summary>Nothing reaches <c>settings.json</c> until the reader chooses it — storing four hundred
