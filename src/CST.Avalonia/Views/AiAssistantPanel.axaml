@@ -459,18 +459,17 @@
                                                                  TextWrapping="Wrap"/>
                                         </DataTemplate>
                                         <DataTemplate DataType="ai:AnswerTable">
-                                            <!-- Horizontal scroll rather than squeeze: a four-column word
-                                                 analysis in a narrow panel is worth scrolling to read, and
-                                                 the page body must never scroll sideways on its account. -->
-                                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                                          VerticalScrollBarVisibility="Disabled"
-                                                          Margin="0,6,0,6">
-                                                <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                                        BorderThickness="1" CornerRadius="4"
-                                                        Padding="2">
-                                                    <Grid views:AnswerTableView.Table="{Binding}"/>
-                                                </Border>
-                                            </ScrollViewer>
+                                            <!-- No horizontal scroller. It was here on the reasoning that a
+                                                 four-column analysis is worth scrolling to read, but it is
+                                                 also what stopped the cells wrapping: it offers the grid
+                                                 infinite width, so Auto columns sized to their longest
+                                                 unwrapped line and the reader scrolled sideways through a
+                                                 sentence. The table now fits the panel and wraps. -->
+                                            <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1" CornerRadius="4"
+                                                    Padding="2" Margin="0,6,0,6">
+                                                <Grid views:AnswerTableView.Table="{Binding}"/>
+                                            </Border>
                                         </DataTemplate>
                                     </ItemsControl.DataTemplates>
                                 </ItemsControl>
