@@ -50,4 +50,34 @@ namespace CST.Avalonia.Converters
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             throw new NotSupportedException();
     }
+
+    /// <summary>
+    /// Whether a logo actually <b>rendered</b> — which is not the same as a path having resolved.
+    ///
+    /// <para>The row hid its monogram as soon as a cached file was known, but the file still has to be
+    /// read and parsed, and <c>Get</c> returns null for a malformed SVG, one over the size cap, or a call
+    /// off the UI thread. The row was then left with a hidden monogram and an empty image: a blank tile,
+    /// which is the one outcome a fallback exists to prevent.</para>
+    ///
+    /// <para>Asking the same question twice is cheap — <c>AiLogoImages</c> memoises by file and colour, so
+    /// the second call is a dictionary hit.</para>
+    /// </summary>
+    public sealed class ProviderLogoRenderedConverter : IValueConverter
+    {
+        public static readonly ProviderLogoRenderedConverter Instance = new();
+
+        /// <param name="parameter">Pass <c>invert</c> to ask the opposite question — "should the
+        /// monogram still be showing?" — so one converter drives both halves of the pair and they cannot
+        /// disagree.</param>
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            var rendered = ProviderLogoConverter.Instance.Convert(value, typeof(IImage), null, culture)
+                is not null;
+
+            return parameter as string == "invert" ? !rendered : rendered;
+        }
+
+        public object? ConvertBack(object? value, Type t, object? p, CultureInfo c) =>
+            throw new NotSupportedException();
+    }
 }

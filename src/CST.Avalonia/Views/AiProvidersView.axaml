@@ -106,12 +106,12 @@
                                     <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
                                            VerticalAlignment="Top">
                                         <Border Classes="Tile" Margin="0"
-                                                IsVisible="{Binding !HasLogo}"
+                                                IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}, ConverterParameter=invert}"
                                                 Background="{Binding MonogramTone,
                                                     Converter={x:Static conv:MonogramToneConverter.Instance}}">
                                             <TextBlock Text="{Binding Monogram}"/>
                                         </Border>
-                                        <Image IsVisible="{Binding HasLogo}"
+                                        <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
                                                Source="{Binding LogoPath,
                                                    Converter={x:Static conv:ProviderLogoConverter.Instance}}"
                                                Stretch="Uniform" Margin="2"/>
@@ -206,12 +206,12 @@
                                         <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
                                                VerticalAlignment="Top">
                                             <Border Classes="Tile" Margin="0"
-                                                    IsVisible="{Binding !HasLogo}"
+                                                    IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}, ConverterParameter=invert}"
                                                     Background="{Binding MonogramTone,
                                                         Converter={x:Static conv:MonogramToneConverter.Instance}}">
                                                 <TextBlock Text="{Binding Monogram}"/>
                                             </Border>
-                                            <Image IsVisible="{Binding HasLogo}"
+                                            <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
                                                    Source="{Binding LogoPath,
                                                        Converter={x:Static conv:ProviderLogoConverter.Instance}}"
                                                    Stretch="Uniform" Margin="2"/>
@@ -292,12 +292,12 @@
                                         <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
                                                VerticalAlignment="Top">
                                             <Border Classes="Tile" Margin="0"
-                                                    IsVisible="{Binding !HasLogo}"
+                                                    IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}, ConverterParameter=invert}"
                                                     Background="{Binding MonogramTone,
                                                         Converter={x:Static conv:MonogramToneConverter.Instance}}">
                                                 <TextBlock Text="{Binding Monogram}"/>
                                             </Border>
-                                            <Image IsVisible="{Binding HasLogo}"
+                                            <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
                                                    Source="{Binding LogoPath,
                                                        Converter={x:Static conv:ProviderLogoConverter.Instance}}"
                                                    Stretch="Uniform" Margin="2"/>
