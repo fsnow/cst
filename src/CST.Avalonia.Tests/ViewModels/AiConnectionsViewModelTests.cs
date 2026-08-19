@@ -291,7 +291,7 @@ public class AiConnectionsViewModelTests
 
         // ollama is in the local section now (#739) - it needs no key AND no network, which is what puts it
         // there rather than in the catalogue.
-        Assert.Equal("No key needed", vm.LocalPresets.Single(p => p.Id == "ollama").RequirementText);
+        Assert.Equal("No key needed", vm.AvailablePresets.Single(p => p.Id == "ollama").RequirementText);
         Assert.Equal("Needs an API key", vm.AvailablePresets.Single(p => p.Id == "openrouter").RequirementText);
     }
 
@@ -477,75 +477,9 @@ public class AiConnectionsViewModelTests
 
     // ---- the catalogue at scale (#739) ---------------------------------------------------------------------
 
-    /// <summary>
-    /// The local runners sit in their own section, chosen by a fact rather than an opinion.
-    ///
-    /// <para>They need no key and no network. That is what earns them a permanent place above a catalogue
-    /// which may be neither present nor short — a "popular" section would be the ranking #670/#681 removed,
-    /// arriving as a layout decision.</para>
-    /// </summary>
-    [Fact]
-    public void Local_runners_are_separated_from_the_catalogue()
-    {
-        var (vm, _) = Make();
 
-        var local = vm.LocalPresets.Select(p => p.Id).ToList();
-        Assert.Contains("ollama", local);
-        Assert.Contains("lmstudio", local);
-        Assert.DoesNotContain(vm.AvailablePresets.Select(p => p.Id), id => local.Contains(id));
-    }
 
-    /// <summary>
-    /// Adding every local runner must not take the custom-endpoint route with it.
-    ///
-    /// <para>The two sit in one section, and gating that section on having local runners left would hide
-    /// custom the moment a reader added Ollama and LM Studio — breaking #691's rule that a preset is never
-    /// required to reach a provider, in precisely the state where the reader has shown they configure things
-    /// by hand.</para>
-    /// </summary>
-    [Fact]
-    public void Adding_every_local_runner_leaves_the_custom_route()
-    {
-        var (vm, _) = Make();
-        foreach (var id in vm.LocalPresets.Select(p => p.Id).ToList()) AddThroughSheet(vm, id);
 
-        Assert.Empty(vm.LocalPresets);
-        Assert.False(vm.HasLocalPresets);
-        // The custom row is not a preset and is bound unconditionally; this pins the command that drives it.
-        Assert.NotNull(vm.AddCustomCommand);
-        vm.AddCustomCommand.Execute().Subscribe();
-        Assert.True(vm.IsEditing);
-    }
-
-    /// <summary>The catalogue is collapsed until asked for — a hundred and sixty rows above the fold is not a
-    /// list anyone reads.</summary>
-    [Fact]
-    public void The_catalogue_starts_collapsed_and_says_how_big_it_is()
-    {
-        var (vm, _) = Make();
-
-        Assert.False(vm.IsCatalogueOpen);
-        Assert.True(vm.AvailablePresets.Count > 20, "the snapshot should supply a real catalogue");
-        Assert.EndsWith("providers", vm.CatalogueCount);
-    }
-
-    /// <summary>
-    /// Typing reveals the catalogue as well as filtering it.
-    ///
-    /// <para>A reader who types has asked for the list; making them expand a section first is a second
-    /// gesture for one intention.</para>
-    /// </summary>
-    [Fact]
-    public void Searching_opens_the_catalogue_and_filters_it()
-    {
-        var (vm, _) = Make();
-
-        vm.PresetSearch = "openrouter";
-
-        Assert.True(vm.IsCatalogueOpen);
-        Assert.All(vm.AvailablePresets, p =>
-            Assert.Contains("openrouter", p.Id + p.DisplayName, StringComparison.OrdinalIgnoreCase));
-    }
 
     /// <summary>Search matches the id as well as the display name — a reader may know a provider by
     /// either.</summary>
@@ -559,19 +493,6 @@ public class AiConnectionsViewModelTests
         Assert.NotEmpty(vm.AvailablePresets);
     }
 
-    /// <summary>A search matching nothing empties the catalogue without disturbing the local runners, which
-    /// are not what was being searched.</summary>
-    [Fact]
-    public void A_fruitless_search_leaves_the_local_runners_alone()
-    {
-        var (vm, _) = Make();
-        var before = vm.LocalPresets.Count;
-
-        vm.PresetSearch = "zzzzz-no-such-provider";
-
-        Assert.Empty(vm.AvailablePresets);
-        Assert.Equal(before, vm.LocalPresets.Count);
-    }
 
     /// <summary>Adding a provider still removes it from the catalogue, so the list keeps reading as "what you
     /// could add next" at this scale too.</summary>
@@ -585,6 +506,40 @@ public class AiConnectionsViewModelTests
         AddThroughSheet(vm, "openrouter");
 
         Assert.DoesNotContain(vm.AvailablePresets, p => p.Id == "openrouter");
+    }
+
+    /// <summary>
+    /// The list is populated without a search term.
+    ///
+    /// <para>It used to be collapsed behind a count, so a reader who opened the tab saw an empty box until
+    /// they typed something — a populated list that looked broken. Reported from use, and the reason the
+    /// expander is gone rather than merely defaulted open.</para>
+    /// </summary>
+    [Fact]
+    public void The_provider_list_is_populated_with_no_search_term()
+    {
+        var (vm, _) = Make();
+
+        Assert.Equal("", vm.PresetSearch);
+        Assert.True(vm.AvailablePresets.Count > 20, "the snapshot should supply a real catalogue");
+    }
+
+    /// <summary>
+    /// One list, with the local runners in it rather than pinned above it.
+    ///
+    /// <para>They had their own section on the reasoning that needing no key and no network is a fact rather
+    /// than a ranking. True, and beside the point: it still gave three providers a permanent position above a
+    /// hundred and sixty others, which is prominence however it is justified.</para>
+    /// </summary>
+    [Fact]
+    public void Local_runners_sit_in_the_one_list_like_everything_else()
+    {
+        var (vm, _) = Make();
+        var ids = vm.AvailablePresets.Select(p => p.Id).ToList();
+
+        Assert.Contains("ollama", ids);
+        Assert.Contains("lmstudio", ids);
+        Assert.Contains("openrouter", ids);
     }
 
     // ---- the states this section exists for (#739) ----------------------------------------------------------
@@ -836,9 +791,8 @@ public class AiConnectionRowLogoTests
     {
         var (vm, _) = Make(new FakeLogos());
 
-        // In LocalPresets, not the catalogue: #739 split the local runners out, and they are exactly the rows
-        // models.dev has no mark for.
-        var row = vm.LocalPresets.First(p => p.Id == "ollama");
+        // Ollama is the row models.dev has no mark for, which is what makes it the case worth asserting.
+        var row = vm.AvailablePresets.First(p => p.Id == "ollama");
         await row.LogoLoad!;
 
         Assert.Null(row.LogoPath);
