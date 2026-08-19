@@ -52,7 +52,9 @@ public class AiModelCatalogTests
         var model = Assert.Single(models);
         Assert.Equal("Claude Sonnet 4.5", model.DisplayName);
         Assert.Null(model.ContextLength);
-        Assert.False(model.SupportsReasoning);
+        // Anthropic publishes no parameter list, which is not the same as publishing one without
+        // reasoning in it — so this is unknown rather than false.
+        Assert.Null(model.SupportsReasoning);
     }
 
     /// <summary>

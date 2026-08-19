@@ -171,7 +171,9 @@ namespace CST.Avalonia.Models
         /// </summary>
         public int? ContextLength { get; set; }
 
-        public bool SupportsReasoning { get; set; }
+        /// <summary>Null when the provider published no parameter list — not the same as publishing one
+        /// without reasoning in it.</summary>
+        public bool? SupportsReasoning { get; set; }
 
         /// <summary>What the model accepts, as the provider words it — "text", "text, image". Null when it
         /// said nothing.</summary>

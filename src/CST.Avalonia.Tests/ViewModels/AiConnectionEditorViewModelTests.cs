@@ -315,7 +315,7 @@ public class AiConnectionEditorViewModelTests
         var saved = Assert.Single(h.Service.Connections.Single().Models);
         Assert.Null(saved.ContextLength);
         Assert.Null(saved.Inputs);
-        Assert.False(saved.SupportsReasoning);
+        Assert.Null(saved.SupportsReasoning);
     }
 
     [Fact]

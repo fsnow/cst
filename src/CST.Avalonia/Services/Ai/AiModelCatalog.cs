@@ -50,12 +50,19 @@ namespace CST.Avalonia.Services.Ai
         public bool CostsMoney =>
             PromptPricePerMillion > 0m || CompletionPricePerMillion > 0m;
 
-        /// <summary>Whether the provider says it accepts a reasoning-effort parameter (#671). Published, not
-        /// inferred from the name.</summary>
-        public bool SupportsReasoning =>
-            SupportedParameters?.Any(p =>
+        /// <summary>
+        /// Whether the provider says it accepts a reasoning-effort parameter (#671). Published, never
+        /// inferred from the name.
+        ///
+        /// <para><b>Null means the provider said nothing</b>, which is a different fact from saying no — a
+        /// local runner publishes no parameter list at all, and rendering its silence as "No reasoning" would
+        /// state something about the model that nobody has established.</para>
+        /// </summary>
+        public bool? SupportsReasoning => SupportedParameters is null
+            ? null
+            : SupportedParameters.Any(p =>
                 p.Contains("reasoning", StringComparison.OrdinalIgnoreCase) ||
-                p.Equals("thinking", StringComparison.OrdinalIgnoreCase)) == true;
+                p.Equals("thinking", StringComparison.OrdinalIgnoreCase));
 
     }
 
