@@ -421,24 +421,64 @@ public class AiModelsViewModelTests
         Assert.Single(Rows(vm));
     }
 
-    /// <summary>The capability filter drops models the provider publishes as unable to answer in text. It is
-    /// mechanical and reversible, and it makes no claim about the models that remain.</summary>
+    /// <summary>
+    /// The price filter hides what the provider charges for, and is off by default.
+    ///
+    /// <para>Off by default because on would be a claim about what the reader wants to spend — and on
+    /// OpenRouter it would hide 395 of 415 models the first time they looked.</para>
+    /// </summary>
     [Fact]
-    public void The_capability_filter_drops_models_that_cannot_answer_in_text()
+    public void The_price_filter_hides_models_that_cost_money()
     {
         var (vm, service) = Make(new FakeCatalog(
-            new AiCatalogModel("chat", "Chat",
-                InputModalities: new[] { "text" }, OutputModalities: new[] { "text" }),
-            new AiCatalogModel("tts", "Speech",
-                InputModalities: new[] { "text" }, OutputModalities: new[] { "audio" })));
+            new AiCatalogModel("free", "Free",
+                PromptPricePerMillion: 0m, CompletionPricePerMillion: 0m),
+            new AiCatalogModel("paid", "Paid",
+                PromptPricePerMillion: 0.4m, CompletionPricePerMillion: 1.6m)));
         service.Add("mine", Draft());
         Group(vm).IsExpanded = true;
 
-        Assert.Equal(new[] { "chat" }, Rows(vm).Select(r => r.ModelId));
-
-        vm.TextOnly = false;
-
+        Assert.False(vm.FreeOnly);
         Assert.Equal(2, Rows(vm).Count);
+
+        vm.FreeOnly = true;
+
+        Assert.Equal(new[] { "free" }, Rows(vm).Select(r => r.ModelId));
+    }
+
+    /// <summary>
+    /// An endpoint that publishes no price is unaffected.
+    ///
+    /// <para>Unknown is not costly. A local runner charges nothing and says nothing, and hiding its models
+    /// behind a filter for a field it never sent would empty the group for a reader who is not spending
+    /// anything at all.</para>
+    /// </summary>
+    [Fact]
+    public void A_model_with_no_published_price_survives_the_filter()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel("quiet", "Quiet")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        vm.FreeOnly = true;
+
+        Assert.Single(Rows(vm), r => r.ModelId == "quiet");
+    }
+
+    /// <summary>A price of zero on only one side still counts as costing money — a model billed for output
+    /// alone is not free.</summary>
+    [Fact]
+    public void A_price_on_either_side_counts_as_costing_money()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("half", "Half",
+                PromptPricePerMillion: 0m, CompletionPricePerMillion: 1.6m)));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        vm.FreeOnly = true;
+
+        Assert.Empty(Rows(vm));
     }
 
     /// <summary>
@@ -451,11 +491,12 @@ public class AiModelsViewModelTests
     public void A_typed_model_is_never_hidden_by_the_filter()
     {
         var (vm, service) = Make(new FakeCatalog(
-            new AiCatalogModel("odd", "Odd", InputModalities: new[] { "text" },
-                OutputModalities: new[] { "audio" })));
+            new AiCatalogModel("odd", "Odd",
+                PromptPricePerMillion: 9m, CompletionPricePerMillion: 9m)));
         service.Add("mine", Draft(new AiModelEntry("odd", "Odd")));
-
         Group(vm).IsExpanded = true;
+
+        vm.FreeOnly = true;
 
         Assert.Single(Rows(vm), r => r.ModelId == "odd");
     }
