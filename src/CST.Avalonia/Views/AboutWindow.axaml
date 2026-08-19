@@ -1,0 +1,130 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CST.Avalonia.ViewModels"
+        x:Class="CST.Avalonia.Views.AboutWindow"
+        x:DataType="vm:AboutViewModel"
+        Title="About CST Reader"
+        Width="540" Height="660"
+        MinWidth="460" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+
+    <!-- The About box (#746). Two jobs, in this order: say which build this is, and say who it is built on.
+
+         The version block sits above the fold and never scrolls, because the reason someone opens this
+         window is usually to answer "which one are you running?" for a bug report. The acknowledgements
+         scroll below it: VRI's texts first — the app is a reader for their corpus — then the other data
+         sources, then the libraries as a plain list. -->
+
+    <Window.Styles>
+        <Style Selector=":is(TextBlock).Heading">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style Selector=":is(TextBlock).Secondary">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <!-- The URL under a credit. HyperlinkButton rather than a restyled Button so the theme decides
+             what a link looks like in each mode - an accent colour spelled out here would be one more
+             hardcoded value to get wrong in dark mode. -->
+        <Style Selector="HyperlinkButton">
+            <Setter Property="Padding" Value="0,2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- IDENTITY AND BUILD -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="20,18">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+
+                <!-- The application icon itself, from the iconset the macOS bundle is built from, so the
+                     window shows the same mark as the Dock and the installer rather than a second artwork
+                     that would drift from it. -->
+                <Image Source="avares://CST.Avalonia/Assets/cst-new.iconset/icon_256x256.png"
+                       Width="72" Height="72" VerticalAlignment="Top"/>
+
+                <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding AppName}" FontSize="20" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Subtitle}" Classes="Secondary" Margin="0,0,0,6"/>
+
+                    <!-- Selectable: a tester copying one field by hand should not have to retype it. -->
+                    <SelectableTextBlock Text="{Binding Version, StringFormat='Version {0}'}" FontSize="13"/>
+                    <SelectableTextBlock Text="{Binding Commit, StringFormat='Commit {0}'}"
+                                         IsVisible="{Binding HasCommit}"
+                                         Classes="Secondary"/>
+                    <SelectableTextBlock Text="{Binding Platform}" Classes="Secondary"/>
+                    <SelectableTextBlock Text="{Binding Runtime}" Classes="Secondary"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- ACKNOWLEDGEMENTS -->
+        <ScrollViewer Grid.Row="1" Padding="20,18" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="18">
+
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Texts and data" Classes="Heading"/>
+
+                    <ItemsControl ItemsSource="{Binding Credits}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AboutCredit">
+                                <StackPanel Margin="0,0,0,12" Spacing="1">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding Detail}" Classes="Secondary"/>
+                                    <HyperlinkButton Content="{Binding Url}"
+                                                     IsVisible="{Binding HasUrl}"
+                                                     Click="OnOpenLink"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Built with" Classes="Heading"/>
+
+                    <ItemsControl ItemsSource="{Binding Libraries}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AboutLibrary">
+                                <StackPanel Margin="0,0,0,8" Spacing="1">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding Purpose}" Classes="Secondary"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ACTIONS -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,12">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Content="Copy version details" Click="OnCopyBuildSummary"/>
+                    <TextBlock x:Name="CopyConfirm" Text="Copied ✓" Classes="Secondary"
+                               VerticalAlignment="Center" IsVisible="False"/>
+                </StackPanel>
+
+                <Button Grid.Column="2" Content="Close" IsDefault="True" IsCancel="True"
+                        MinWidth="88" Click="OnClose"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

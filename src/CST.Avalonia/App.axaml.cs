@@ -1502,12 +1502,22 @@ public partial class App : Application
         {
             foreach (var item in appMenu)
             {
-                if (item is NativeMenuItem menuItem && menuItem.Header?.ToString() == "Preferences...")
+                if (item is not NativeMenuItem menuItem) continue;
+
+                if (menuItem.Header?.ToString() == "Preferences...")
                 {
                     menuItem.Click += async (s, e) =>
                     {
                         Log.Information("Preferences menu clicked via native menu");
                         await ShowSettingsWindow();
+                    };
+                }
+                else if (menuItem.Header?.ToString() == AboutMenuHeader)
+                {
+                    menuItem.Click += async (s, e) =>
+                    {
+                        Log.Information("About menu clicked via native menu");
+                        await ShowAboutWindow();
                     };
                 }
             }
@@ -2211,6 +2221,41 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open settings window from native menu");
+        }
+    }
+
+    /// <summary>
+    /// The header both entry points match on — the macOS application menu declared in App.axaml, and the
+    /// Help menu SimpleTabbedWindow builds off macOS. Shared so a reworded menu cannot silently orphan one
+    /// of them the way a literal in two files would.
+    /// </summary>
+    internal const string AboutMenuHeader = "About CST Reader";
+
+    /// <summary>
+    /// The About box (#746).
+    ///
+    /// <para>Shown as a dialog, like Settings, which also makes it single-instance for free: About is the
+    /// kind of window someone opens twice without noticing, and a second copy has nothing to add.</para>
+    ///
+    /// <para>Its view model takes no services deliberately — see AboutViewModel. That means this can still
+    /// show the version when whatever the reporter is reporting has left the rest of the app unhappy.</para>
+    /// </summary>
+    internal static async Task ShowAboutWindow()
+    {
+        try
+        {
+            if (MainWindow == null)
+            {
+                Log.Warning("About requested with no main window to own the dialog");
+                return;
+            }
+
+            var aboutWindow = new AboutWindow { DataContext = new AboutViewModel() };
+            await aboutWindow.ShowDialog(MainWindow);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to open the About window");
         }
     }
 

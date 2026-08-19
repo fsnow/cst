@@ -136,11 +136,10 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        private void ShowAbout()
-        {
-            // TODO: Implement About dialog
-            Log.Debug("[Layout] About dialog requested");
-        }
+        // Both entry points that exist go through the menus (App.axaml on macOS, Help elsewhere); this
+        // command predates them and is bound nowhere, but it is kept pointing at the same window so a future
+        // binding cannot resurrect the old stub that only wrote a log line. (#746)
+        private void ShowAbout() => _ = App.ShowAboutWindow();
 
         public void ToggleSelectBookPanel()
         {

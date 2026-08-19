@@ -65,6 +65,8 @@ public partial class SimpleTabbedWindow : Window
         RegisterMenuShortcutKeyBindings();
         // #28: and Settings has no entry point off macOS until we add one.
         AddSettingsMenuItemOffMacOS();
+        // #746: same story for About, which macOS keeps in the application menu.
+        AddHelpMenuOffMacOS();
 
         // #621 Feed C: record which document owns whatever just took focus, so a command pressed after a
         // detour through a tool still targets the pane the user was working in. Bubbling and passive — it
@@ -873,6 +875,50 @@ public partial class SimpleTabbedWindow : Window
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to add the Settings menu item");
+        }
+    }
+
+    /// <summary>
+    /// Adds Help &gt; About CST Reader on Windows/Linux. (#746)
+    ///
+    /// <para>Same shape as <see cref="AddSettingsMenuItemOffMacOS"/> and for the same reason: About is
+    /// declared in App.axaml's application-level NativeMenu, which Avalonia only ever realises as the macOS
+    /// application menu, so off macOS that declaration is never shown.</para>
+    ///
+    /// <para>A whole new top-level menu rather than another Tools entry, because Help is where Windows and
+    /// Linux users look for About — and it is the menu the eventual user guide and issue-tracker links
+    /// belong in too. Built here rather than in SimpleTabbedWindow.axaml because a menu declared there would
+    /// also appear on macOS, which already has the item in the application menu.</para>
+    /// </summary>
+    private void AddHelpMenuOffMacOS()
+    {
+        if (OperatingSystem.IsMacOS()) return;
+
+        try
+        {
+            var windowMenu = NativeMenu.GetMenu(this);
+            if (windowMenu == null)
+            {
+                _logger.Warning("Window menu not found - About will have no entry point");
+                return;
+            }
+
+            var aboutItem = new NativeMenuItem { Header = App.AboutMenuHeader };
+            aboutItem.Click += async (s, e) =>
+            {
+                _logger.Information("About opened from the Help menu");
+                await App.ShowAboutWindow();
+            };
+
+            var helpMenu = new NativeMenu();
+            helpMenu.Add(aboutItem);
+            windowMenu.Add(new NativeMenuItem { Header = "Help", Menu = helpMenu });
+
+            _logger.Information("Added Help > About (macOS shows it in the application menu instead)");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to add the Help menu");
         }
     }
 
