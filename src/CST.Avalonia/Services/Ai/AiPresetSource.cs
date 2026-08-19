@@ -135,7 +135,15 @@ namespace CST.Avalonia.Services.Ai
                     // missing, not the section as empty - a reader with Ollama on this machine can still add
                     // it, and needs no network to do so.
                     State = AiPresetState.Unavailable;
-                    Problem = result.Problem ?? "Couldn't reach the provider list.";
+
+                    // Two different situations reach this branch and they deserve different sentences: the
+                    // catalogue was unreachable, or it was read and held nothing we can serve. Saying
+                    // "couldn't reach" for the second is simply untrue, and sends a reader to check their
+                    // network over a problem that is ours. (fable review)
+                    Problem = result.Problem
+                              ?? (result.Source == CatalogSource.None
+                                  ? "Couldn't reach the provider list."
+                                  : "The provider list held nothing this version can use.");
                 }
                 else
                 {
@@ -279,6 +287,12 @@ namespace CST.Avalonia.Services.Ai
             // "best", and any hand-arranged order would be a claim we refuse to make (#670/#681).
             return built.Values
                 .OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
+                // Tie-broken on id, and this is the anti-registry rule rather than tidiness. OrderBy is
+                // stable, so two providers sharing a display name would fall back to insertion order - which
+                // is the SOURCE DOCUMENT's order, the one remaining path by which models.dev's own ordering
+                // could decide what a reader sees first. No such pair exists today; the input is no longer
+                // ours to control. (fable review)
+                .ThenBy(p => p.Id, StringComparer.Ordinal)
                 .ToList();
         }
     }

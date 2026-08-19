@@ -299,8 +299,25 @@ public class AiPresetSourceTests
         await source.EnsureLoadedAsync();
 
         Assert.Equal(AiPresetState.Unavailable, source.State);
-        Assert.NotNull(source.Problem);
         Assert.Contains(source.Presets, p => p.Id == "ollama");
+
+        // Reached and unusable is not the same situation as unreachable, and must not borrow its sentence -
+        // that would send a reader to check their network over a problem that is ours.
+        Assert.NotNull(source.Problem);
+        Assert.DoesNotContain("reach", source.Problem!, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Ties fall back to insertion order, which is the source document's order — the last path by
+    /// which models.dev's own ordering could decide what a reader sees first (#670/#681).</summary>
+    [Fact]
+    public void A_shared_display_name_is_ordered_by_id_not_by_document_order()
+    {
+        var forward = AiPresetSource.Build(Catalogue(
+            new CatalogProvider("zzz", "Same Name", "https://z.test/v1"),
+            new CatalogProvider("aaa", "Same Name", "https://a.test/v1")));
+
+        var tied = forward.Where(p => p.DisplayName == "Same Name").Select(p => p.Id).ToList();
+        Assert.Equal(new[] { "aaa", "zzz" }, tied);
     }
 
     /// <summary>Before the first load, a caller WITH the service must not see fewer providers than one

@@ -19,10 +19,15 @@ namespace CST.Avalonia.Services.Ai
     /// "recommended", no model lists, no ordering by quality, no notes on which endpoint is better at Pāli.
     /// That is the registry removed in #670/#681, and the rule binds a mined table exactly as it binds a
     /// hand-written one — including on every future sync, because a ranking field can appear in an upstream
-    /// release nobody read. The order below is alphabetical by display name, which is mechanical.</para>
+    /// release nobody read.</para>
+    ///
+    /// <para><b>Order in this file is grouping, not ranking.</b> The arrays below are grouped by what they
+    /// are for; the order a reader sees is applied at read time — alphabetical by display name, with the id
+    /// as a tie-break — in <see cref="All"/> and <c>AiPresetSource.Build</c>. Nothing about a position here
+    /// reaches the UI.</para>
     ///
     /// <para><b>Presets are a convenience, never a gate.</b> A custom endpoint typed by hand is first-class and
-    /// always available; roughly 150 of 189 catalogued providers are plain
+    /// always available; most of the 192 catalogued providers are plain
     /// <c>POST {base}/chat/completions</c> with a bearer token, which is exactly what "custom" already is.</para>
     /// </summary>
     public static class AiProviderPresets
@@ -151,7 +156,6 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         public static IReadOnlyList<AiProviderPreset> All => AiPresetSource.SnapshotDefaults;
 
-        /// <summary>The preset with this id, or null. Ids are reserved: a custom connection may not take one.</summary>
         /// <summary>The preset with this id, or null. Looks at the whole derivable set, not only the
         /// hand-kept part — an id like <c>openrouter</c> comes from the catalogue, and treating it as unknown
         /// would let a custom connection claim it and would lose the key-required flag.</summary>
@@ -162,7 +166,7 @@ namespace CST.Avalonia.Services.Ai
         public static bool IsReservedId(string id) => ById(id) is not null;
 
         /// <summary>The common case: a base URL, a bearer token, and the env vars that may already hold it.
-        /// Roughly 150 of 189 catalogued providers are exactly this.</summary>
+        /// Most of the 192 catalogued providers are exactly this.</summary>
         private static AiProviderPreset P(
             string id, string displayName, ChatProviderKind kind, string baseUrl, bool requiresKey,
             params string[] envVars)
