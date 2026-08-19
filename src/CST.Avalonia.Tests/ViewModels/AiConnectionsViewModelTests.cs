@@ -453,6 +453,28 @@ public class AiConnectionsViewModelTests
         Assert.DoesNotContain(vm.AvailablePresets.Select(p => p.Id), id => local.Contains(id));
     }
 
+    /// <summary>
+    /// Adding every local runner must not take the custom-endpoint route with it.
+    ///
+    /// <para>The two sit in one section, and gating that section on having local runners left would hide
+    /// custom the moment a reader added Ollama and LM Studio — breaking #691's rule that a preset is never
+    /// required to reach a provider, in precisely the state where the reader has shown they configure things
+    /// by hand.</para>
+    /// </summary>
+    [Fact]
+    public void Adding_every_local_runner_leaves_the_custom_route()
+    {
+        var (vm, _) = Make();
+        foreach (var id in vm.LocalPresets.Select(p => p.Id).ToList()) AddThroughSheet(vm, id);
+
+        Assert.Empty(vm.LocalPresets);
+        Assert.False(vm.HasLocalPresets);
+        // The custom row is not a preset and is bound unconditionally; this pins the command that drives it.
+        Assert.NotNull(vm.AddCustomCommand);
+        vm.AddCustomCommand.Execute().Subscribe();
+        Assert.True(vm.IsEditing);
+    }
+
     /// <summary>The catalogue is collapsed until asked for — a hundred and sixty rows above the fold is not a
     /// list anyone reads.</summary>
     [Fact]

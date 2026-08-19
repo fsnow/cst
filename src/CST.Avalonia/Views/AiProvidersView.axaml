@@ -177,9 +177,10 @@
                  is unreachable. Chosen by that fact rather than by anyone's view of which providers are worth
                  having — a "popular" section would be the ranking #670/#681 removed, arriving as a layout
                  decision. -->
-            <Border Classes="SettingGroup" Padding="0" IsVisible="{Binding HasLocalPresets}">
+            <Border Classes="SettingGroup" Padding="0">
                 <StackPanel>
-                    <ItemsControl ItemsSource="{Binding LocalPresets}">
+                    <ItemsControl ItemsSource="{Binding LocalPresets}"
+                                  IsVisible="{Binding HasLocalPresets}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:AiPresetRowViewModel">
                                 <Border Classes="Row">
