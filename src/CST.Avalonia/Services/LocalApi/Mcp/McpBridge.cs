@@ -201,6 +201,21 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         /// <para><c>UseShellExecute</c> is deliberately TRUE. With it false the launched GUI inherits this
         /// process's stdio handles - and those handles are the JSON-RPC channel to the chat client. A GUI
         /// holding the relay's stdin/stdout open is a hang waiting to happen at shutdown.</para>
+        ///
+        /// <para><b>Two ways this is NOT `open`.</b> First, LINEAGE: `open` hands the launch to LaunchServices,
+        /// so the GUI's parent is launchd and it outlives the relay cleanly. Here the GUI is a direct CHILD of
+        /// the bridge and inherits any job object the chat client placed it in - so a client that kills the
+        /// server's whole process tree, rather than just the child, would take the reader's window down with
+        /// it. Breaking out of the job would need CREATE_BREAKAWAY_FROM_JOB or an explorer.exe intermediary,
+        /// both uglier than the risk; this note is here so "my reader vanished when I quit the chat client" is
+        /// findable rather than baffling.</para>
+        ///
+        /// <para>Second, ENVIRONMENT: a ShellExecute child inherits ours, and it cannot be scrubbed (setting
+        /// EnvironmentVariables with UseShellExecute throws). So <c>CST_ALLOW_MULTIPLE=1</c> reaching the
+        /// bridge - via a per-server `env` block in an MCP client config, say - propagates to the GUI and
+        /// disables the single-instance guard, making this launch a SECOND instance rather than an activation.
+        /// That bypass is a documented development escape hatch and only bites when no live handshake exists,
+        /// so it is accepted rather than defended against.</para>
         /// </summary>
         [SupportedOSPlatform("windows")]
         private static void TryLaunchAppWindows()
@@ -224,8 +239,16 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
                     UseShellExecute = true,
                     WorkingDirectory = Path.GetDirectoryName(exe) ?? string.Empty,
                 };
-                using var _ = Process.Start(psi);
-                Log.Information("--mcp-bridge: started {Exe}; if an instance was already running the single-instance guard activates that one instead of adding a second.", exe);
+                using var started = Process.Start(psi);
+                if (started is null)
+                {
+                    // ShellExecute can hand the request to an existing process and return nothing to own.
+                    Log.Information("--mcp-bridge: handed {Exe} to the shell; no new process to track.", exe);
+                    return;
+                }
+
+                Log.Information("--mcp-bridge: started {Exe}; if an instance was already running the "
+                                + "single-instance guard activates that one instead of adding a second.", exe);
             }
             catch (Exception ex)
             {
@@ -239,13 +262,31 @@ namespace CST.Avalonia.Services.LocalApi.Mcp
         ///
         /// <para>Matched on filename rather than trusted outright, so a bridge hosted by <c>dotnet</c> - or by
         /// anything else - declines rather than launching a program that will not become CST Reader.</para>
+        ///
+        /// <para><b>Windows path syntax is parsed here rather than delegated to <see cref="Path"/>.</b> Those
+        /// APIs are host-relative: on macOS a backslash is an ordinary filename character, so
+        /// <c>GetFileNameWithoutExtension</c> hands back a Windows path unchanged and this would answer null for
+        /// every real input. The suite runs on macOS, so that is not a hypothetical - it is a red suite on the
+        /// development machine for a function whose inputs are always Windows paths. Stripping the extension
+        /// explicitly also avoids a second host-relative trap: <c>GetFileNameWithoutExtension</c> reads
+        /// <c>CST.Avalonia</c> (no extension) as name <c>CST</c> with extension <c>.Avalonia</c>.</para>
+        ///
+        /// <para>The name is hardcoded rather than read from the assembly. A rename would silently stop
+        /// auto-launching - but it logs the path it declined, which is a debuggable failure rather than a
+        /// mystery, and the name is already load-bearing in <c>CST.Avalonia.iss</c>, so a rename touches that
+        /// file regardless.</para>
         /// </summary>
         internal static string? WindowsAppExecutable(string? processPath)
         {
             if (string.IsNullOrEmpty(processPath)) return null;
 
-            var name = Path.GetFileNameWithoutExtension(processPath);
-            return string.Equals(name, "CST.Avalonia", StringComparison.OrdinalIgnoreCase)
+            var lastSeparator = processPath.LastIndexOfAny(new[] { '\\', '/' });
+            var fileName = lastSeparator >= 0 ? processPath[(lastSeparator + 1)..] : processPath;
+
+            if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                fileName = fileName[..^4];
+
+            return string.Equals(fileName, "CST.Avalonia", StringComparison.OrdinalIgnoreCase)
                 ? processPath
                 : null;
         }

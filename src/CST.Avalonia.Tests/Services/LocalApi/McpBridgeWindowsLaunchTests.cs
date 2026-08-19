@@ -52,6 +52,32 @@ public class McpBridgeWindowsLaunchTests
     }
 
     [Fact]
+    public void The_decision_does_not_depend_on_which_OS_is_running_the_test()
+    {
+        // These are always Windows paths, whatever host the suite runs on. An earlier version used
+        // Path.GetFileNameWithoutExtension, which is HOST-relative: on macOS a backslash is an ordinary
+        // filename character, so it returned the whole path and this helper answered null for every real
+        // input - a red suite on the development machine, and a function that only worked where it was
+        // written. Parsing the separators explicitly is what makes these assertions mean the same thing
+        // everywhere.
+        Assert.NotNull(McpBridge.WindowsAppExecutable(@"C:\Program Files\CST Reader\CST.Avalonia.exe"));
+        Assert.Null(McpBridge.WindowsAppExecutable(@"C:\Program Files\dotnet\dotnet.exe"));
+
+        // Forward slashes too: plenty of tooling reports Windows paths this way.
+        Assert.NotNull(McpBridge.WindowsAppExecutable("C:/Program Files/CST Reader/CST.Avalonia.exe"));
+    }
+
+    [Fact]
+    public void A_dotted_name_without_an_extension_is_still_recognised()
+    {
+        // The trap the old implementation fell into even on Windows: GetFileNameWithoutExtension reads
+        // "CST.Avalonia" as the name "CST" with the extension ".Avalonia", so an extensionless path was
+        // rejected. Stripping ".exe" explicitly is what fixes it.
+        Assert.NotNull(McpBridge.WindowsAppExecutable(@"C:\portable\CST.Avalonia"));
+        Assert.NotNull(McpBridge.WindowsAppExecutable("CST.Avalonia"));
+    }
+
+    [Fact]
     public void The_two_platforms_decline_in_the_same_situation()
     {
         // Consistency between the halves: on macOS a `dotnet run` bridge has no enclosing .app bundle and
