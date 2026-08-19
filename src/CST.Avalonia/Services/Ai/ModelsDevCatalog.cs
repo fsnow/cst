@@ -231,7 +231,7 @@ namespace CST.Avalonia.Services.Ai
             }
         }
 
-        private static IReadOnlyDictionary<string, CatalogProvider>? ReadSnapshot()
+        internal static IReadOnlyDictionary<string, CatalogProvider>? ReadSnapshot()
         {
             try
             {

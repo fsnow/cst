@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
@@ -26,6 +28,22 @@ namespace CST.Avalonia.Services.Ai
 
         /// <summary>Named endpoints a reader can add. Facts only — no model lists, no rankings.</summary>
         IReadOnlyList<AiProviderPreset> Presets { get; }
+
+        /// <summary>
+        /// Whether the preset list is available, and why not. (#737, requested by #739)
+        ///
+        /// <para>Needed because two of the three outcomes arrive as an empty list — "all added" is a quiet
+        /// end state, "couldn't reach the catalogue" needs a sentence and a retry, and "not fetched yet"
+        /// wants "loading". A bare list cannot tell them apart, and the loud case reads as a broken
+        /// feature.</para>
+        /// </summary>
+        AiPresetState PresetState { get; }
+
+        /// <summary>A finished sentence to show, or null.</summary>
+        string? PresetProblem { get; }
+
+        /// <summary>What a Retry button calls.</summary>
+        Task RefreshPresetsAsync(CancellationToken ct = default);
 
         /// <summary>Presets with no connection yet, i.e. what an "add a provider" list should show. A preset
         /// drops out once added, so the catalogue always reads as "what you could add next".</summary>
@@ -102,6 +120,7 @@ namespace CST.Avalonia.Services.Ai
 
         private readonly ISettingsService _settings;
         private readonly IAiCredentialStore? _credentials;
+        private readonly IAiPresetSource? _presets;
 
         /// <summary>
         /// Last-known reachability, in memory only.
@@ -119,10 +138,19 @@ namespace CST.Avalonia.Services.Ai
 
         /// <param name="credentials">Optional: a platform with nowhere safe to put a key still runs, and an
         /// endpoint needing no key still works. Resolved with <c>GetService</c> for that reason.</param>
-        public AiConnectionService(ISettingsService settings, IAiCredentialStore? credentials = null)
+        public AiConnectionService(
+            ISettingsService settings,
+            IAiCredentialStore? credentials = null,
+            IAiPresetSource? presets = null)
         {
             _settings = settings;
             _credentials = credentials;
+            _presets = presets;
+
+            // The preset list changing is a change to what this service reports, so it reaches the UI on the
+            // one event it already binds to rather than through a second channel.
+            if (_presets is not null)
+                _presets.PresetsChanged += (_, _) => RaiseChanged();
         }
 
         public event EventHandler? ConnectionsChanged;
@@ -152,10 +180,18 @@ namespace CST.Avalonia.Services.Ai
                 ? CredentialSource.Keychain
                 : CredentialSource.None;
 
-        public IReadOnlyList<AiProviderPreset> Presets => AiProviderPresets.All;
+        public IReadOnlyList<AiProviderPreset> Presets =>
+            _presets?.Presets ?? AiPresetSource.SnapshotDefaults;
+
+        public AiPresetState PresetState => _presets?.State ?? AiPresetState.Ready;
+
+        public string? PresetProblem => _presets?.Problem;
+
+        public Task RefreshPresetsAsync(CancellationToken ct = default) =>
+            _presets?.RefreshAsync(ct) ?? Task.CompletedTask;
 
         public IReadOnlyList<AiProviderPreset> AvailablePresets =>
-            AiProviderPresets.All
+            Presets
                 .Where(p => !Chat.Connections.Any(c => IdMatches(c.Id, p.Id)))
                 .ToList();
 
@@ -179,7 +215,7 @@ namespace CST.Avalonia.Services.Ai
 
         public AiConnectionResult AddFromPreset(string presetId, IReadOnlyDictionary<string, string> inputs)
         {
-            var preset = AiProviderPresets.ById(presetId);
+            var preset = Presets.FirstOrDefault(p => IdMatches(p.Id, presetId));
             if (preset is null) return AiConnectionResult.Fail($"'{presetId}' is not a known provider.");
 
             if (Find(preset.Id) is not null)
@@ -438,7 +474,7 @@ namespace CST.Avalonia.Services.Ai
             if (string.IsNullOrWhiteSpace(id)) return "A connection needs an id.";
             if (!SlugPattern.IsMatch(id))
                 return "An id may use only lowercase letters, numbers, hyphens and underscores.";
-            if (AiProviderPresets.IsReservedId(id))
+            if (Presets.Any(p => IdMatches(p.Id, id)))
                 return $"'{id}' is the id of a built-in provider. Add it from the provider list instead.";
             if (!existingAllowed && Find(id) is not null)
                 return $"There is already a connection called '{id}'.";
