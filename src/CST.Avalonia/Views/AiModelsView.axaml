@@ -7,12 +7,17 @@
 
     <!-- The Models tab (#692, #674).
 
-         One flat, virtualized list of group headers and model rows. Flat because a provider listing runs to
-         hundreds of entries and a nested items control would build a control for every one; a single
-         ListBox lets the virtualizing panel do its job.
+         One flat list of group headers and model rows, scrolled by the settings page's own scroll viewer.
+         It was a height-capped ListBox, which virtualized but put a second scrolling region inside the
+         first: two scrollbars, and a wheel whose effect depended on where the pointer happened to be.
 
-         Search filters ACROSS groups rather than within the expanded one, and expands what matches — at four
-         hundred models this is a search box with results, not a menu you scroll. -->
+         Flat is still the right shape - search filters ACROSS groups rather than within the expanded one,
+         so results from several connections interleave, and at four hundred models this is a search box
+         with results rather than a menu you scroll.
+
+         The cost of dropping the cap is that nothing virtualizes: expanding a group of OpenRouter's ~415
+         builds a control per row. Groups start collapsed and the search is the intended way in, so that is
+         a deliberate expand, not the resting state. -->
 
     <UserControl.Styles>
         <Style Selector="Border.Tile">
@@ -44,18 +49,6 @@
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
         </Style>
 
-        <!-- The list is a container for rows, not a thing you select from: every row's action is its own
-             toggle. Selection chrome here would suggest a row-level choice that does not exist. -->
-        <Style Selector="ListBoxItem">
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="MinHeight" Value="0"/>
-        </Style>
-        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-        </Style>
     </UserControl.Styles>
 
     <StackPanel>
@@ -80,12 +73,8 @@
 
         <Border Classes="SettingGroup" Padding="0"
                 IsVisible="{Binding !HasNoConnections}">
-            <ListBox ItemsSource="{Binding Rows}"
-                     MaxHeight="460"
-                     Background="Transparent"
-                     BorderThickness="0"
-                     SelectionMode="Single">
-                <ListBox.DataTemplates>
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.DataTemplates>
 
                     <!-- Group header: one connection -->
                     <DataTemplate DataType="vm:AiModelGroupViewModel">
@@ -169,8 +158,8 @@
                         </Border>
                     </DataTemplate>
 
-                </ListBox.DataTemplates>
-            </ListBox>
+                </ItemsControl.DataTemplates>
+            </ItemsControl>
         </Border>
     </StackPanel>
 </UserControl>
