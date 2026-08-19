@@ -34,8 +34,10 @@ namespace CST.Avalonia.Services.Ai
     ///
     /// <para><b>A missing logo returns 200, not 404.</b> models.dev serves a default placeholder for any
     /// unknown id — measured byte-identical across ids (1,421 bytes, one hash) — so status cannot tell a real
-    /// logo from a stand-in. The placeholder is recognised by hash and reported as "no logo", because a
-    /// generic grey mark says less than a coloured initial does. Ollama returns the placeholder, which is the
+    /// logo from a stand-in. The placeholder is recognised by hash and reported as "no logo" — meaning
+    /// literally that, not that nothing should be drawn: the UI answers it with the bundled generic mark
+    /// (<c>GenericModelIcon</c>), which is the same sparkle. Reporting it here still matters, because caching
+    /// it would freeze a provider that later gains a real logo. Ollama returns the placeholder, which is the
     /// case that matters: local runners are not catalogue providers and never will be.</para>
     ///
     /// <para><b>The placeholder is never cached.</b> Caching it would leave a provider that gains a logo

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -738,6 +739,48 @@ public class AiConnectionsViewModelTests
     {
         Assert.True(AiConnectionsViewModel.ShouldOpen(url, out var uri));
         Assert.NotNull(uri);
+    }
+
+    // ---- the generic model icon (#740) ------------------------------------------------------------------------
+
+    /// <summary>
+    /// The bundled mark is the same file models.dev serves for a provider it has no logo for.
+    ///
+    /// <para>Pinned by hash against <c>AiProviderLogos.PlaceholderSha256</c>, which is what the fetcher uses
+    /// to recognise "this provider has no mark". If the two ever diverge, one of them is stale — and the
+    /// symptom would be a provider silently getting a letter tile again, which nobody would think to look
+    /// for.</para>
+    /// </summary>
+    [Fact]
+    public void The_bundled_generic_icon_is_the_mark_the_catalogue_serves_for_no_logo()
+    {
+        var asset = Path.Combine(RepoRoot(), "src", "CST.Avalonia", "Assets", "Ai", "generic-model.svg");
+        Assert.True(File.Exists(asset), asset);
+
+        var hash = System.Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(asset))).ToLowerInvariant();
+
+        Assert.Equal(AiProviderLogos.PlaceholderSha256, hash);
+    }
+
+    /// <summary>It draws with <c>currentColor</c>, which is what lets the renderer recolour it per theme — a
+    /// hardcoded fill would be invisible in one of the two.</summary>
+    [Fact]
+    public void The_generic_icon_takes_its_colour_from_the_theme()
+    {
+        var asset = Path.Combine(RepoRoot(), "src", "CST.Avalonia", "Assets", "Ai", "generic-model.svg");
+        var svg = File.ReadAllText(asset);
+
+        Assert.Contains("currentColor", svg, StringComparison.Ordinal);
+        Assert.DoesNotContain("#", svg, StringComparison.Ordinal);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, ".git"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 
     // ---- monograms -------------------------------------------------------------------------------------
