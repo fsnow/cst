@@ -77,6 +77,45 @@ public class AiModelCatalogTests
         Assert.False(model.CostsMoney);   // publishes no price; unknown is not costly
     }
 
+    // ---- telling "the provider sent few" from "we understood few" ------------------------------------------
+
+    /// <summary>
+    /// The listing's entry count is read separately from what we could parse.
+    ///
+    /// <para>Asked in earnest: a Cerebras connection offered two models and the maintainer knew the provider
+    /// supported more. "Fetched 2 models" reads as a fact about the provider and is equally consistent with
+    /// the provider having sent two and with our having understood two of nine — and nothing in the log could
+    /// tell them apart.</para>
+    /// </summary>
+    [Fact]
+    public void The_listing_count_is_independent_of_what_parsed()
+    {
+        const string json = """
+        {"data":[{"id":"a"},{"no-id":"here"},{"id":"c"},"a string"]}
+        """;
+
+        Assert.Equal(4, AiModelCatalog.CountEntries(json));
+        Assert.Equal(2, AiModelCatalog.Parse(json).Count);
+    }
+
+    /// <summary>When everything parses the two agree, which is what makes a disagreement worth logging.</summary>
+    [Fact]
+    public void A_listing_we_fully_understand_counts_the_same_both_ways()
+    {
+        const string json = """{"data":[{"id":"a"},{"id":"b"}]}""";
+
+        Assert.Equal(AiModelCatalog.Parse(json).Count, AiModelCatalog.CountEntries(json));
+    }
+
+    /// <summary>A body that is not a listing counts as nothing rather than throwing — this runs on the path
+    /// that is already reporting a problem.</summary>
+    [Theory]
+    [InlineData("not json at all")]
+    [InlineData("""{"models":[{"id":"a"}]}""")]
+    [InlineData("""{"data":"not an array"}""")]
+    public void An_unreadable_listing_counts_as_none(string json) =>
+        Assert.Equal(0, AiModelCatalog.CountEntries(json));
+
     // ---- price -------------------------------------------------------------------------------------------
 
     /// <summary>
