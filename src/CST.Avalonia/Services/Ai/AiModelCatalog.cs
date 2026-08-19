@@ -158,8 +158,24 @@ namespace CST.Avalonia.Services.Ai
                 if (models.Count == 0)
                     return AiCatalogResult.Fail($"{url} answered, but listed no models.");
 
-                _logger.LogInformation(
-                    "Fetched {Count} models from {Connection}", models.Count, connection.Id);
+                // Both numbers, because one of them cannot answer the question that gets asked of this line.
+                // "Fetched 2 models from cerebras" reads as a fact about the provider, and is equally
+                // consistent with the provider having sent two and with our having understood two of nine -
+                // and the reader who says "but I know they support more" has no way to tell which, nor did
+                // we, from the log.
+                var listed = CountEntries(body);
+                if (listed == models.Count)
+                {
+                    _logger.LogInformation(
+                        "Fetched {Count} models from {Connection}", models.Count, connection.Id);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Fetched {Count} models from {Connection}, but its listing had {Listed} entries - "
+                        + "{Skipped} had no usable id", models.Count, connection.Id, listed, listed - models.Count);
+                    _logger.LogDebug("{Connection} listing: {Body}", connection.Id, body);
+                }
                 return AiCatalogResult.Success(models);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -271,6 +287,29 @@ namespace CST.Avalonia.Services.Ai
             // can be worse at Pali (#689).
             models.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
             return models;
+        }
+
+        /// <summary>
+        /// How many entries the listing carried, whether or not we could read them.
+        ///
+        /// <para>Counted separately from parsing so the two can disagree in the log. A provider that offers
+        /// nine models and a parser that understands two produce the same "2" otherwise, and the difference
+        /// is the whole diagnosis.</para>
+        /// </summary>
+        internal static int CountEntries(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                return doc.RootElement.TryGetProperty("data", out var data) &&
+                       data.ValueKind == JsonValueKind.Array
+                    ? data.GetArrayLength()
+                    : 0;
+            }
+            catch (JsonException)
+            {
+                return 0;
+            }
         }
 
         private static JsonElement? Object(JsonElement? parent, string name) =>
