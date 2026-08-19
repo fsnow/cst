@@ -121,6 +121,13 @@ namespace CST.Avalonia.ViewModels
                 _baseUrl = connection.BaseUrl,
                 _kind = KindChoices.FirstOrDefault(k => k.Kind == connection.Kind) ?? KindChoices[0],
                 _idEdited = true,
+
+                // The auth shape is not editable in this form, but it MUST survive an edit. Azure sends its
+                // credential in `api-key` with no scheme and expects `Authorization` absent; letting these
+                // fall back to the draft defaults turned a rename into a 401 on every subsequent request.
+                // (fable review)
+                _authHeaderName = connection.AuthHeaderName,
+                _authScheme = connection.AuthScheme,
             };
 
             foreach (var model in connection.Models)
@@ -362,7 +369,10 @@ namespace CST.Avalonia.ViewModels
             if (models.Count == 0) return added;
 
             var updated = _service.Update(created.Id, new AiConnectionDraft(
-                created.DisplayName, created.Kind, created.BaseUrl, models, created.Headers, created.Inputs));
+                created.DisplayName, created.Kind, created.BaseUrl, models, created.Headers, created.Inputs,
+                // Carried explicitly: a preset's auth shape (Azure's `api-key`, no scheme) would otherwise be
+                // reset to Bearer by this very first update. (fable review)
+                created.AuthHeaderName, created.AuthScheme));
 
             return updated.Ok ? updated : added;
         }
@@ -402,6 +412,14 @@ namespace CST.Avalonia.ViewModels
                 m.Enabled))
             .ToList();
 
+        /// <summary>
+        /// The connection's auth shape, carried through an edit unchanged. Not editable here — a custom
+        /// endpoint needing a non-bearer header is #701's territory — but a draft that omitted them silently
+        /// reset a preset's shape to Bearer, which broke Azure on the first rename. (fable review)
+        /// </summary>
+        private string _authHeaderName = "Authorization";
+        private string? _authScheme = "Bearer";
+
         private AiConnectionDraft BuildDraft(IReadOnlyDictionary<string, string> inputs) => new(
             string.IsNullOrWhiteSpace(DisplayName) ? Id.Trim() : DisplayName.Trim(),
             Kind.Kind,
@@ -410,7 +428,9 @@ namespace CST.Avalonia.ViewModels
             Headers
                 .Where(h => !string.IsNullOrWhiteSpace(h.Name))
                 .ToDictionary(h => h.Name.Trim(), h => h.Value.Trim(), StringComparer.Ordinal),
-            inputs);
+            inputs,
+            _authHeaderName,
+            _authScheme);
 
         /// <summary>
         /// Fills the id in from the host while the reader has not typed one of their own.

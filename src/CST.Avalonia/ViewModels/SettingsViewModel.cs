@@ -1329,18 +1329,14 @@ public class AiSettingsViewModel : ViewModelBase
 
             var chat = ai.Chat;
             _chatEnabled = chat.Enabled;
-            // The existing single-provider fields now edit the ACTIVE connection (#689). Kept working, and
-            // deliberately not deleted, so the app stays configurable until the connections UI (#691) lands.
-            var active = ActiveConnection();
-            _providerChoice = Providers.FirstOrDefault(
-                c => Services.Ai.ChatProviderResolver.TryParseKind(active.Kind, out var k)
-                     && k == c.Kind) ?? Providers[0];
-            _baseUrl = active.BaseUrl;
-            _model = _settingsService.Settings.Ai.Chat.ActiveModelId ?? "";
+            // Nothing to seed. The single-provider controls this fed - a provider dropdown, a base-URL box,
+            // a model box and one shared API-key box - are gone, replaced by the Providers tab
+            // (#691/#692/#693). Their presence was a live defect, not just clutter: this screen wrote settings
+            // records directly, bypassing the service's validation and change event, filed keys under
+            // whichever connection happened to be active (the mis-filing #678 fixed), and CREATED a junk
+            // "default / My provider" record merely by being opened. (fable review)
             _answerLanguage = string.IsNullOrWhiteSpace(chat.AnswerLanguage) ? "English" : chat.AnswerLanguage;
 
-            SaveApiKeyCommand = ReactiveCommand.Create(SaveApiKey);
-            RemoveApiKeyCommand = ReactiveCommand.Create(RemoveApiKey);
 
             // The Providers tab (#691). Resolved rather than injected because this view model is constructed
             // by hand; a null service leaves the tab inert rather than throwing, which is what the
@@ -1350,7 +1346,6 @@ public class AiSettingsViewModel : ViewModelBase
             Models = new AiModelsViewModel(
                 connectionService, App.TryGetService<Services.Ai.IAiModelCatalog>());
 
-            RefreshKeyStatus();
         }
 
         /// <summary>
@@ -1490,35 +1485,16 @@ public class AiSettingsViewModel : ViewModelBase
         private readonly Services.Ai.IChatProviderResolver? _providerResolver;
 
         private bool _chatEnabled;
-        private AiProviderChoice _providerChoice = null!;
-        private string _baseUrl = "";
-        private string _model = "";
         private string _answerLanguage = "English";
-        private string _apiKeyEntry = "";
-        private string _keyStatus = "";
 
-        // Order is the dropdown's order, and the first entry is also the fallback when a stored value cannot
-        // be parsed — so it must agree with ChatSettings.Provider's default, or an unreadable setting would
-        // resolve to a different provider than a fresh install does.
-        private static readonly AiProviderChoice[] Providers =
-        {
-            new(Services.Ai.ChatProviderKind.OpenAiCompatible, "OpenAI-compatible endpoint", "openai-compatible"),
-            new(Services.Ai.ChatProviderKind.Anthropic, "Claude (Anthropic)", "anthropic"),
-        };
-
-        /// <summary>
-        /// Answer language suggestions. Editable rather than a closed list: the model decides what it can
-        /// write, not this app, and a reader whose language is missing would otherwise be told the feature is
-        /// not for them.
-        /// </summary>
+        /// <summary>Suggestions for the answer-language box. Not a closed list — the box is free text.</summary>
         private static readonly string[] AnswerLanguages =
         {
-            "English", "Italian", "German", "French", "Spanish", "Portuguese",
-            "Hindi", "Burmese", "Sinhala", "Thai", "Vietnamese", "Chinese", "Japanese", "Russian",
+            "English", "Hindi", "Burmese", "Sinhala", "Thai", "Vietnamese", "Chinese", "Japanese",
+            "Korean", "German", "French", "Spanish", "Italian", "Portuguese", "Russian",
         };
 
-        /// <summary>Bindable views of the two lists above — an instance binding cannot reach a static member.</summary>
-        public AiProviderChoice[] ProviderChoices => Providers;
+        /// <summary>Bindable view of the answer-language suggestions — an instance binding cannot reach a static member.</summary>
         public string[] AnswerLanguageSuggestions => AnswerLanguages;
 
         /// <summary>Turns the in-app assistant on. Effective only under the AI master switch, like every other surface.</summary>
@@ -1535,110 +1511,6 @@ public class AiSettingsViewModel : ViewModelBase
                 // Ticking the box IS the gesture: the panel appears now rather than at the next launch, and
                 // unticking takes it away rather than leaving four buttons that decline every request. (#667)
                 ApplyAssistantVisibility();
-            }
-        }
-
-        public AiProviderChoice SelectedProvider
-        {
-            get => _providerChoice;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _providerChoice, value);
-                ActiveConnection().Kind = value?.Stored ?? "anthropic";
-                _settingsService.RequestSave();
-                this.RaisePropertyChanged(nameof(IsOpenAiCompatible));
-                this.RaisePropertyChanged(nameof(BaseUrlDescription));
-                this.RaisePropertyChanged(nameof(ApiKeyDescription));
-                RefreshKeyStatus();
-                RefreshReadiness();
-            }
-        }
-
-        /// <summary>
-        /// The connection the single-provider fields edit, creating it on first use. (#689)
-        ///
-        /// <para>Surface B shipped with one provider, one base URL and one model; the model is now plural.
-        /// Rather than delete the working UI before its replacement (#691) exists, these fields edit the
-        /// <i>active</i> connection — so the app remains configurable, and whatever a reader sets here is a
-        /// real connection record that the new UI will show rather than state that has to be migrated.</para>
-        /// </summary>
-        private CST.Avalonia.Models.AiConnectionRecord ActiveConnection()
-        {
-            var chat = _settingsService.Settings.Ai.Chat;
-
-            var existing = chat.Connections.FirstOrDefault(
-                c => string.Equals(c.Id, chat.ActiveConnectionId, System.StringComparison.Ordinal));
-            if (existing is not null) return existing;
-
-            existing = chat.Connections.FirstOrDefault();
-            if (existing is not null)
-            {
-                chat.ActiveConnectionId = existing.Id;
-                return existing;
-            }
-
-            var created = new CST.Avalonia.Models.AiConnectionRecord
-            {
-                Id = "default",
-                DisplayName = "My provider",
-                Kind = "openai-compatible",
-                BaseUrl = "",
-            };
-            chat.Connections.Add(created);
-            chat.ActiveConnectionId = created.Id;
-            return created;
-        }
-
-        /// <summary>Sets the active model, keeping the connection's own list in step so the model a reader
-        /// typed here appears in the per-turn picker (#693) rather than only in this box.</summary>
-        private void SetActiveModel(string? value)
-        {
-            var chat = _settingsService.Settings.Ai.Chat;
-            var id = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-            chat.ActiveModelId = id;
-
-            if (id is null) return;
-
-            var connection = ActiveConnection();
-            if (!connection.Models.Any(m => string.Equals(m.Id, id, System.StringComparison.Ordinal)))
-                connection.Models.Add(new CST.Avalonia.Models.AiModelRecord { Id = id, DisplayName = id });
-        }
-
-        /// <summary>Whether the endpoint field is the load-bearing one — it is what selects the provider.</summary>
-        public bool IsOpenAiCompatible =>
-            SelectedProvider?.Kind == Services.Ai.ChatProviderKind.OpenAiCompatible;
-
-        public string BaseUrlDescription => IsOpenAiCompatible
-            ? "Required. The endpoint's base URL — this is what points the app at DeepSeek, OpenRouter, "
-              + "Ollama, LM Studio or any other OpenAI-compatible server, e.g. http://localhost:11434/v1"
-            : "Optional. Leave empty unless you reach Claude through a proxy or gateway.";
-
-        public string BaseUrl
-        {
-            get => _baseUrl;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _baseUrl, value);
-                ActiveConnection().BaseUrl = value?.Trim() ?? "";
-                _settingsService.RequestSave();
-                RefreshReadiness();
-            }
-        }
-
-        /// <summary>
-        /// The model id, verbatim. Never validated against a list and never a dropdown: the OpenAI-compatible
-        /// shape serves arbitrary endpoints, and any list shipped here would be wrong within a month — it
-        /// would reject a model that works and imply the app had been abandoned.
-        /// </summary>
-        public string Model
-        {
-            get => _model;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _model, value);
-                SetActiveModel(value);
-                _settingsService.RequestSave();
-                RefreshReadiness();
             }
         }
 
@@ -1668,59 +1540,12 @@ public class AiSettingsViewModel : ViewModelBase
             + "in. The answer language above is a separate setting and takes effect now.";
 
         /// <summary>
-        /// What the user is typing into the key box. Deliberately NOT persisted anywhere — it is handed to the
-        /// OS credential store on Save and cleared. Bound to a masked box.
-        /// </summary>
-        public string ApiKeyEntry
-        {
-            get => _apiKeyEntry;
-            set => this.RaiseAndSetIfChanged(ref _apiKeyEntry, value);
-        }
-
-        /// <summary>Whether a key is stored for the selected provider, or why one cannot be. Never the key.</summary>
-        public string KeyStatus
-        {
-            get => _keyStatus;
-            private set => this.RaiseAndSetIfChanged(ref _keyStatus, value);
-        }
-
-        /// <summary>
         /// Whether the assistant's own fields are editable: the master switch AND the assistant's switch.
         /// Keying them to the master alone left provider, endpoint, model and language fully editable with
         /// "Enable the assistant" unticked, and readiness still reporting on a feature that was off.
         /// </summary>
         public bool AssistantFieldsEnabled => AiEnabled && ChatEnabled;
 
-        public bool CanStoreKeys => _credentials?.IsAvailable == true && AssistantFieldsEnabled;
-
-        public string ApiKeyDescription => IsOpenAiCompatible
-            ? "Optional. A local runner on your own machine usually needs none; a hosted endpoint will."
-            : "Required for Claude.";
-
-        public ReactiveCommand<Unit, Unit> SaveApiKeyCommand { get; }
-        public ReactiveCommand<Unit, Unit> RemoveApiKeyCommand { get; }
-
-        /// <summary>
-        /// What can honestly be said about a model's Pāli, which is not a rating. (#670)
-        ///
-        /// <para>This replaced a curated per-model fidelity tier. Pāli ability is emergent from pre-training —
-        /// there is no Pāli-specific training — so it is not predicted by published benchmarks, is not
-        /// monotonic with general capability or size, and can move between point releases of one model. A tier
-        /// could not be kept true by sampling; it would have to be re-measured for every release of every
-        /// model. So the app states the general fact, which is permanently true, instead of a verdict that
-        /// would be stale on arrival.</para>
-        /// </summary>
-        public string PaliAbilityNote =>
-            "How well a model reads Pāli varies widely and is not predicted by its general benchmarks or its "
-            + "size — it is an ability that emerges from pre-training rather than one anybody trains for. This "
-            + "app cannot certify it for you. Check answers against the text in front of you, and treat a "
-            + "fluent translation as a claim to verify rather than a result.";
-
-        /// <summary>
-        /// Whether the assistant would actually run, asked of the SAME resolver the assistant uses. A second
-        /// implementation of "is this configured" would drift from the first, and the version that lies is
-        /// always the one in Settings.
-        /// </summary>
         public string ReadinessText
         {
             get
@@ -1742,52 +1567,6 @@ public class AiSettingsViewModel : ViewModelBase
             + "passage text from the book you are reading, your question, and the app's instructions to the "
             + "model. Nothing else is sent, and nothing is sent until you ask. If you point this at a model "
             + "running on your own machine, nothing leaves it at all.";
-
-        private void SaveApiKey()
-        {
-            if (_credentials == null || string.IsNullOrWhiteSpace(ApiKeyEntry)) return;
-
-            _credentials.SetApiKey(ActiveConnection().Id, ApiKeyEntry);
-            // Cleared immediately: the box exists to hand the key over, not to hold it.
-            ApiKeyEntry = "";
-            RefreshKeyStatus();
-            RefreshReadiness();
-        }
-
-        private void RemoveApiKey()
-        {
-            _credentials?.DeleteApiKey(ActiveConnection().Id);
-            ApiKeyEntry = "";
-            RefreshKeyStatus();
-            RefreshReadiness();
-        }
-
-        private void RefreshKeyStatus()
-        {
-            if (_credentials == null)
-            {
-                KeyStatus = "";
-            }
-            else if (!_credentials.IsAvailable)
-            {
-                // The honest message from the store itself, which knows WHY — a Windows build without DPAPI
-                // and a Linux build without libsecret are different sentences, and "add a key in Settings"
-                // is the wrong advice for both.
-                KeyStatus = _credentials.Unavailable ?? "Keys cannot be stored on this system.";
-            }
-            else
-            {
-                // Named, because the whole failure mode #678 fixes is a key that exists but belongs to a
-                // DIFFERENT endpoint. "No key stored" without saying which connection is the message that
-                // let the old collision hide.
-                var connection = ActiveConnection();
-                KeyStatus = _credentials.GetApiKey(connection.Id) is null
-                    ? $"No key stored for {connection.DisplayName}."
-                    : $"A key is stored for {connection.DisplayName}.";
-            }
-
-            this.RaisePropertyChanged(nameof(CanStoreKeys));
-        }
 
         /// <summary>
         /// Show or hide the assistant panel to match the two switches. Settings is a separate window, so the

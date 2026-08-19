@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Avalonia.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
 
@@ -111,6 +112,9 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         private readonly Dictionary<string, Reachability> _reachability = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Guards <see cref="_reachability"/>, which a background turn writes and the UI reads.</summary>
+        private readonly object _reachabilityGate = new();
+
         /// <param name="credentials">Optional: a platform with nowhere safe to put a key still runs, and an
         /// endpoint needing no key still works. Resolved with <c>GetService</c> for that reason.</param>
         public AiConnectionService(ISettingsService settings, IAiCredentialStore? credentials = null)
@@ -134,6 +138,13 @@ namespace CST.Avalonia.Services.Ai
         /// provider <i>available</i>, never <i>connected</i> — so it will be reported here without a
         /// connection existing until the reader acts.</para>
         /// </summary>
+        /// <summary>Reads last-known reachability under the lock; see <see cref="ReportReachability"/>.</summary>
+        private Reachability ReachabilityOf(string connectionId)
+        {
+            lock (_reachabilityGate)
+                return _reachability.TryGetValue(connectionId, out var state) ? state : Reachability.Configured;
+        }
+
         private CredentialSource SourceFor(string connectionId) =>
             _credentials?.GetApiKey(connectionId) is not null
                 ? CredentialSource.Keychain
@@ -224,7 +235,7 @@ namespace CST.Avalonia.Services.Ai
             }
 
             _settings.RequestSave();
-            ConnectionsChanged?.Invoke(this, EventArgs.Empty);
+            RaiseChanged();
             return new AiConnectionResult(true);
         }
 
@@ -246,10 +257,37 @@ namespace CST.Avalonia.Services.Ai
         {
             var state = reachable ? Reachability.Reachable : Reachability.Unreachable;
 
-            if (_reachability.TryGetValue(connectionId, out var current) && current == state) return;
+            // Called from a background turn (AiChatOrchestrator), while the UI reads _reachability on the UI
+            // thread. Both sides take the lock; without it this is a dictionary mutated during enumeration.
+            lock (_reachabilityGate)
+            {
+                if (_reachability.TryGetValue(connectionId, out var current) && current == state) return;
+                _reachability[connectionId] = state;
+            }
 
-            _reachability[connectionId] = state;
-            ConnectionsChanged?.Invoke(this, EventArgs.Empty);
+            RaiseChanged();
+        }
+
+        /// <summary>
+        /// Raises <see cref="ConnectionsChanged"/> on the UI thread. (fable review)
+        ///
+        /// <para><b>Why the hop lives here and not in each subscriber.</b> The only off-thread caller is
+        /// <c>ReportReachability</c>, invoked from a chat turn whose continuations run under
+        /// <c>ConfigureAwait(false)</c> — so the event arrived on a pool thread and three view models then
+        /// mutated <c>ObservableCollection</c>s that Avalonia was bound to. That corrupts the bound list rather
+        /// than throwing anywhere useful: the orchestrator's catch swallowed the exception, so the symptom was
+        /// a silently stale Providers list and model picker. Hopping centrally fixes every existing subscriber
+        /// and every future one, instead of relying on each to remember.</para>
+        /// </summary>
+        private void RaiseChanged()
+        {
+            var handler = ConnectionsChanged;
+            if (handler is null) return;
+
+            if (Dispatcher.UIThread.CheckAccess())
+                handler(this, EventArgs.Empty);
+            else
+                Dispatcher.UIThread.Post(() => handler(this, EventArgs.Empty));
         }
 
         public AiConnectionResult EnableModel(
@@ -301,7 +339,7 @@ namespace CST.Avalonia.Services.Ai
         private AiConnectionResult Saved(AiConnectionRecord record)
         {
             _settings.RequestSave();
-            ConnectionsChanged?.Invoke(this, EventArgs.Empty);
+            RaiseChanged();
             return AiConnectionResult.Success(ToRuntime(record));
         }
 
@@ -328,7 +366,7 @@ namespace CST.Avalonia.Services.Ai
             new Dictionary<string, string>(r.Headers),
             new Dictionary<string, string>(r.Inputs),
             SourceFor(r.Id),
-            _reachability.TryGetValue(r.Id, out var state) ? state : Reachability.Configured,
+            ReachabilityOf(r.Id),
             r.AuthHeaderName,
             r.AuthScheme);
 

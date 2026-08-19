@@ -66,12 +66,6 @@ namespace CST.Avalonia.Tests.ViewModels
             }
         }
 
-        /// <summary>Pick a provider by KIND, not by position. Indexing the list made these tests depend on
-        /// the dropdown's order, so changing which provider a fresh install opens on would have inverted
-        /// their meaning silently rather than failing.</summary>
-        private static AiProviderChoice Choice(AiSettingsViewModel vm, CST.Avalonia.Services.Ai.ChatProviderKind kind) =>
-            vm.ProviderChoices.First(c => c.Kind == kind);
-
         private static (AiSettingsViewModel Vm, Settings Settings, FakeCredentialStore Keys) MakeWithAssistant()
         {
             var settings = new Settings();
@@ -83,77 +77,9 @@ namespace CST.Avalonia.Tests.ViewModels
 
         // ---- The assistant (#585) ------------------------------------------------------------------
 
-        [Fact]
-        public void The_API_key_is_never_written_to_settings()
-        {
-            var (vm, settings, keys) = MakeWithAssistant();
 
-            vm.ApiKeyEntry = "sk-ant-secret-value";
-            vm.SaveApiKeyCommand.Execute().Subscribe();
 
-            // The whole reason #579 exists. settings.json is hand-edited, screenshotted and attached to bug
-            // reports; a key that reaches it has reached all three. Serialized in full so no field is missed.
-            var json = System.Text.Json.JsonSerializer.Serialize(settings);
-            Assert.DoesNotContain("sk-ant-secret-value", json);
 
-            // Stored under the ACTIVE CONNECTION's id (#678), not under a provider kind - which is the whole
-            // point: two OpenAI-compatible endpoints used to share one slot.
-            Assert.Equal("sk-ant-secret-value", keys.GetApiKey(Active(settings).Id));
-        }
-
-        [Fact]
-        public void The_entry_box_is_cleared_once_the_key_is_stored()
-        {
-            var (vm, _, _) = MakeWithAssistant();
-
-            vm.ApiKeyEntry = "sk-ant-secret-value";
-            vm.SaveApiKeyCommand.Execute().Subscribe();
-
-            // It exists to hand the key over, not to hold it: a key left sitting in a control is one
-            // screenshot away from being published.
-            Assert.Equal("", vm.ApiKeyEntry);
-        }
-
-        [Fact]
-        public void Keys_are_kept_per_connection_not_per_provider_kind()
-        {
-            var (vm, settings, keys) = MakeWithAssistant();
-
-            // TWO OpenAI-compatible endpoints - the case that was broken. Both are `openai-compatible`, so
-            // under the old provider-kind keying the second silently overwrote the first and the reader got a
-            // 401 naming neither cause (#678).
-            var chat = settings.Ai.Chat;
-            chat.Connections.Clear();
-            chat.Connections.Add(new CST.Avalonia.Models.AiConnectionRecord
-            { Id = "openrouter-box", DisplayName = "OpenRouter", BaseUrl = "https://openrouter.ai/api/v1" });
-            chat.Connections.Add(new CST.Avalonia.Models.AiConnectionRecord
-            { Id = "local-ollama", DisplayName = "Ollama", BaseUrl = "http://localhost:11434/v1" });
-
-            chat.ActiveConnectionId = "openrouter-box";
-            vm.ApiKeyEntry = "openrouter-key";
-            vm.SaveApiKeyCommand.Execute().Subscribe();
-
-            chat.ActiveConnectionId = "local-ollama";
-            vm.ApiKeyEntry = "ollama-key";
-            vm.SaveApiKeyCommand.Execute().Subscribe();
-
-            Assert.Equal("openrouter-key", keys.GetApiKey("openrouter-box"));
-            Assert.Equal("ollama-key", keys.GetApiKey("local-ollama"));
-        }
-
-        [Fact]
-        public void When_storage_is_unavailable_the_reason_is_shown_rather_than_advice_that_cannot_help()
-        {
-            var (vm, _, keys) = MakeWithAssistant();
-            keys.Available = false;
-
-            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.Anthropic);
-
-            // "Add a key in Settings" is the wrong instruction when this build cannot store one — it sends
-            // the user to the screen they are already on. The store knows why; the UI repeats it.
-            Assert.False(vm.CanStoreKeys);
-            Assert.Contains("No secure storage", vm.KeyStatus);
-        }
 
         /// <summary>The connection the single-provider fields edit. #689 made the model plural; these fields
         /// now write to the active connection rather than to scalar settings.</summary>
@@ -161,65 +87,19 @@ namespace CST.Avalonia.Tests.ViewModels
             settings.Ai.Chat.Connections.FirstOrDefault(
                 c => c.Id == settings.Ai.Chat.ActiveConnectionId) ?? settings.Ai.Chat.Connections.First();
 
-        [Fact]
-        public void Choosing_a_provider_records_the_string_the_resolver_parses()
-        {
-            var (vm, settings, _) = MakeWithAssistant();
 
-            vm.SelectedProvider = Choice(vm, CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible);
 
-            // The stored value has to be one ChatProviderResolver.TryParseKind accepts, or the UI would
-            // configure a provider the app then reports as unknown.
-            Assert.True(CST.Avalonia.Services.Ai.ChatProviderResolver.TryParseKind(
-                Active(settings).Kind, out var kind));
-            Assert.Equal(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible, kind);
-        }
 
-        [Fact]
-        public void A_fresh_install_opens_on_the_provider_most_readers_will_use()
-        {
-            // The OpenAI-compatible shape serves OpenRouter, DeepSeek, Together, Google's endpoint and every
-            // local runner. Anthropic needs API credits bought separately from any Claude subscription -- a
-            // Max subscription does not grant API access -- so opening there sent readers down the one path
-            // that cannot work without a second purchase.
-            var (vm, _, _) = MakeWithAssistant();
 
-            Assert.Equal(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible, vm.SelectedProvider.Kind);
 
-            // And the fallback for an unparseable stored value agrees with that, rather than resolving to a
-            // different provider than a fresh install does.
-            Assert.Equal(CST.Avalonia.Services.Ai.ChatProviderKind.OpenAiCompatible, vm.ProviderChoices[0].Kind);
-        }
-
-        [Fact]
-        public void Every_offered_provider_round_trips_through_the_resolver()
-        {
-            var (vm, settings, _) = MakeWithAssistant();
-
-            // Pins the whole list, not just the one a test happened to pick: adding a third choice with a
-            // spelling the resolver does not know would be invisible until a user selected it.
-            foreach (var choice in vm.ProviderChoices)
-            {
-                vm.SelectedProvider = choice;
-                Assert.True(CST.Avalonia.Services.Ai.ChatProviderResolver.TryParseKind(
-                    Active(settings).Kind, out var kind), $"unparseable: {Active(settings).Kind}");
-                Assert.Equal(choice.Kind, kind);
-            }
-        }
-
-        [Fact]
-        public void The_model_is_stored_verbatim_and_blank_means_unset()
-        {
-            var (vm, settings, _) = MakeWithAssistant();
-
-            vm.Model = "  claude-sonnet-4-5  ";
-            Assert.Equal("claude-sonnet-4-5", settings.Ai.Chat.ActiveModelId);
-
-            vm.Model = "   ";
-            // Null rather than whitespace: the resolver tests IsNullOrWhiteSpace, but a stored "   " would
-            // read as configured to anything that only checks for null.
-            Assert.Null(settings.Ai.Chat.ActiveModelId);
-        }
+        // Eight tests were removed here with the single-provider Settings UI they exercised - a provider
+        // dropdown, a base-URL box, a model box and one shared API-key box, all replaced by the Providers tab
+        // (#691/#692/#693). Their invariants did not go with them:
+        //   - keys kept per connection      -> AiConnectionServiceTests.Two_openai_compatible_endpoints_keep_separate_keys
+        //   - the key never reaching settings, and the entry box being cleared
+        //                                   -> AiConnectionEditorViewModelTests (the editor now owns key entry)
+        //   - provider strings the resolver can parse
+        //                                   -> ChatProviderResolverTests
 
         [Fact]
         public void An_empty_answer_language_falls_back_rather_than_asking_for_nothing()
