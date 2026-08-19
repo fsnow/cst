@@ -54,7 +54,16 @@ namespace CST.Avalonia.Models.Ai
     /// connection: all-on is neutral ("here is what this offers"), all-off is neutral but unusable, and a
     /// pre-selected <i>subset</i> is a verdict — which is the model registry deleted in #670/#681 wearing a
     /// toggle.</param>
-    public sealed record AiModelEntry(string Id, string DisplayName, bool Enabled = true);
+    /// <param name="ContextLength">What the provider published when this model was added, or null. Kept on
+    /// the record because the listing is only fetched while the Models tab is open, and the per-turn picker
+    /// (#693) has to be able to say it without asking again.</param>
+    public sealed record AiModelEntry(
+        string Id,
+        string DisplayName,
+        bool Enabled = true,
+        int? ContextLength = null,
+        bool SupportsReasoning = false,
+        string? Inputs = null);
 
     /// <summary>
     /// One configured endpoint: where to send a request, how to authenticate, and which models it offers.

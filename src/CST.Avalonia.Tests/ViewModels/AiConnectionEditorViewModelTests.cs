@@ -269,6 +269,55 @@ public class AiConnectionEditorViewModelTests
         Assert.False(saved.Models.Single(m => m.Id == "b").Enabled);
     }
 
+    /// <summary>
+    /// An edit preserves what the provider published about each model.
+    ///
+    /// <para>The form shows an id, a name and nothing else, so rebuilding entries from its visible fields
+    /// drops the context length, modalities and reasoning flag recorded when the model was promoted — and the
+    /// per-turn picker's hover card goes blank because the reader renamed a connection. Exactly the shape of
+    /// the auth-header reset found in the #689 review.</para>
+    /// </summary>
+    [Fact]
+    public void An_edit_preserves_what_the_provider_published()
+    {
+        var h = new Harness();
+        h.Service.Add("mine", Draft() with
+        {
+            Models = new List<AiModelEntry>
+            {
+                new("nvidia/nemotron", "Nemotron", true,
+                    ContextLength: 1_000_000, SupportsReasoning: true, Inputs: "text, image"),
+            },
+        });
+
+        var vm = h.Existing("mine");
+        vm.DisplayName = "Renamed";
+        Save(vm);
+
+        var saved = Assert.Single(h.Service.Connections.Single().Models);
+        Assert.Equal(1_000_000, saved.ContextLength);
+        Assert.True(saved.SupportsReasoning);
+        Assert.Equal("text, image", saved.Inputs);
+    }
+
+    /// <summary>A row the reader adds by hand has nothing published, and nothing is invented for it.</summary>
+    [Fact]
+    public void A_newly_typed_model_carries_no_published_facts()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+
+        vm.Id = "my-box";
+        vm.BaseUrl = "http://localhost:8000/v1";
+        vm.Models[0].ModelId = "typed";
+        Save(vm);
+
+        var saved = Assert.Single(h.Service.Connections.Single().Models);
+        Assert.Null(saved.ContextLength);
+        Assert.Null(saved.Inputs);
+        Assert.False(saved.SupportsReasoning);
+    }
+
     [Fact]
     public void Cancelling_closes_without_saving()
     {

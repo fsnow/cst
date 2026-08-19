@@ -147,25 +147,60 @@
                                                                             Background="Transparent"
                                                                             BorderThickness="0"
                                                                             Padding="8,4">
-                                                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                                                        <!-- Names start at the same x
+                                                                             whether or not a row is the
+                                                                             current one: a leading tick
+                                                                             indents the one row the eye is
+                                                                             most likely to be looking for.
+                                                                             So the tick goes last. -->
+                                                                        <Grid ColumnDefinitions="*,Auto,Auto">
                                                                             <TextBlock Grid.Column="0"
-                                                                                       Text="✓"
-                                                                                       IsVisible="{Binding IsCurrent}"
-                                                                                       Margin="0,0,6,0"
-                                                                                       Foreground="{DynamicResource DockApplicationAccentBrushLow}"/>
-                                                                            <TextBlock Grid.Column="1"
                                                                                        Text="{Binding DisplayName}"
                                                                                        TextTrimming="CharacterEllipsis"/>
                                                                             <!-- Said here rather than
                                                                                  discovered as a 401 naming
                                                                                  nothing. -->
-                                                                            <TextBlock Grid.Column="2"
+                                                                            <TextBlock Grid.Column="1"
                                                                                        Text="{Binding Unusable}"
                                                                                        IsVisible="{Binding !IsUsable}"
                                                                                        FontSize="11"
                                                                                        Margin="6,0,0,0"
                                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                            <TextBlock Grid.Column="2"
+                                                                                       Text="✓"
+                                                                                       IsVisible="{Binding IsCurrent}"
+                                                                                       Margin="6,0,0,0"
+                                                                                       Foreground="{DynamicResource DockApplicationAccentBrushLow}"/>
                                                                         </Grid>
+
+                                                                        <!-- What the provider published,
+                                                                             on hover. Only rows we actually
+                                                                             know: an absent field is shown
+                                                                             as an absent row rather than as
+                                                                             a zero, which would read as
+                                                                             fact and be none. -->
+                                                                        <ToolTip.Tip>
+                                                                            <ItemsControl ItemsSource="{Binding Facts}"
+                                                                                          IsVisible="{Binding HasFacts}">
+                                                                                <ItemsControl.ItemTemplate>
+                                                                                    <DataTemplate x:DataType="vm:AiPickerFact">
+                                                                                        <Grid ColumnDefinitions="Auto,*"
+                                                                                              Margin="0,1">
+                                                                                            <TextBlock Grid.Column="0"
+                                                                                                       Text="{Binding Label}"
+                                                                                                       FontSize="11"
+                                                                                                       MinWidth="70"
+                                                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                                            <TextBlock Grid.Column="1"
+                                                                                                       Text="{Binding Value}"
+                                                                                                       FontSize="11"
+                                                                                                       Margin="12,0,0,0"
+                                                                                                       HorizontalAlignment="Right"/>
+                                                                                        </Grid>
+                                                                                    </DataTemplate>
+                                                                                </ItemsControl.ItemTemplate>
+                                                                            </ItemsControl>
+                                                                        </ToolTip.Tip>
                                                                     </Button>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>

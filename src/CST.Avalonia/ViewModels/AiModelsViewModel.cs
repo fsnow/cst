@@ -316,6 +316,23 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(CountText));
         }
 
+        /// <summary>What the provider published about one model, or null when it published nothing — which is
+        /// every hand-typed id and every endpoint with no listing.</summary>
+        private AiModelEntry? Facts(string modelId)
+        {
+            var published = _fetched.FirstOrDefault(
+                f => string.Equals(f.Id, modelId, StringComparison.Ordinal));
+            if (published is null) return null;
+
+            var inputs = published.InputModalities is { Count: > 0 } modalities
+                ? string.Join(", ", modalities)
+                : null;
+
+            return new AiModelEntry(
+                published.Id, published.DisplayName, true,
+                published.ContextLength, published.SupportsReasoning, inputs);
+        }
+
         private async Task FetchAsync()
         {
             if (_owner.Catalog is null) return;
@@ -358,7 +375,12 @@ namespace CST.Avalonia.ViewModels
         {
             if (_owner.Service is not { } service) return;
 
-            _owner.Suppressed(() => service.EnableModel(Id, modelId, displayName, enabled));
+            // The listing is only in memory while this tab is open, so what the provider published has to be
+            // written down at the moment of promotion - otherwise the per-turn picker (#693) has nothing to
+            // show and no way to ask.
+            var facts = Facts(modelId);
+
+            _owner.Suppressed(() => service.EnableModel(Id, modelId, displayName, enabled, facts));
 
             if (service.Connections.FirstOrDefault(
                     c => string.Equals(c.Id, Id, StringComparison.Ordinal)) is { } fresh)

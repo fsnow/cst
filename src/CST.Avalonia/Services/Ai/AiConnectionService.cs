@@ -73,7 +73,9 @@ namespace CST.Avalonia.Services.Ai
         /// <para>Turning one off keeps the entry rather than deleting it, so a display name the reader typed
         /// survives being switched off and on again.</para>
         /// </summary>
-        AiConnectionResult EnableModel(string connectionId, string modelId, string displayName, bool enabled);
+        AiConnectionResult EnableModel(
+            string connectionId, string modelId, string displayName, bool enabled,
+            AiModelEntry? facts = null);
 
         /// <summary>
         /// Records what a real request just learned about an endpoint. (#673)
@@ -291,7 +293,8 @@ namespace CST.Avalonia.Services.Ai
         }
 
         public AiConnectionResult EnableModel(
-            string connectionId, string modelId, string displayName, bool enabled)
+            string connectionId, string modelId, string displayName, bool enabled,
+            AiModelEntry? facts = null)
         {
             if (Find(connectionId) is not { } record)
                 return AiConnectionResult.Fail($"No connection called '{connectionId}'.");
@@ -310,6 +313,16 @@ namespace CST.Avalonia.Services.Ai
                     DisplayName = string.IsNullOrWhiteSpace(displayName) ? modelId.Trim() : displayName.Trim(),
                 };
                 record.Models.Add(model);
+            }
+
+            // Written on every call, not only on first add: a reader who turns a model off and on again after
+            // a catalogue refresh should end up with what the provider says now, not what it said in a
+            // session they have forgotten.
+            if (facts is not null)
+            {
+                model.ContextLength = facts.ContextLength;
+                model.SupportsReasoning = facts.SupportsReasoning;
+                model.Inputs = facts.Inputs;
             }
 
             model.Enabled = enabled;
@@ -380,8 +393,19 @@ namespace CST.Avalonia.Services.Ai
             record.DisplayName = draft.DisplayName;
             record.Kind = draft.Kind == ChatProviderKind.Anthropic ? "anthropic" : "openai-compatible";
             record.BaseUrl = draft.BaseUrl;
+            // Every field, not just the ones the editor shows. Rebuilding from the visible fields alone is
+            // how an edit silently drops what the provider published - the same shape of bug as the auth
+            // headers reset in the #689 review.
             record.Models = draft.Models
-                .Select(m => new AiModelRecord { Id = m.Id, DisplayName = m.DisplayName, Enabled = m.Enabled })
+                .Select(m => new AiModelRecord
+                {
+                    Id = m.Id,
+                    DisplayName = m.DisplayName,
+                    Enabled = m.Enabled,
+                    ContextLength = m.ContextLength,
+                    SupportsReasoning = m.SupportsReasoning,
+                    Inputs = m.Inputs,
+                })
                 .ToList();
             record.Headers = new Dictionary<string, string>(draft.Headers);
             record.Inputs = new Dictionary<string, string>(draft.Inputs);
@@ -394,7 +418,10 @@ namespace CST.Avalonia.Services.Ai
             r.DisplayName,
             ChatProviderResolver.TryParseKind(r.Kind, out var kind) ? kind : ChatProviderKind.OpenAiCompatible,
             r.BaseUrl,
-            r.Models.Select(m => new AiModelEntry(m.Id, m.DisplayName, m.Enabled)).ToList(),
+            r.Models
+                .Select(m => new AiModelEntry(
+                    m.Id, m.DisplayName, m.Enabled, m.ContextLength, m.SupportsReasoning, m.Inputs))
+                .ToList(),
             new Dictionary<string, string>(r.Headers),
             new Dictionary<string, string>(r.Inputs),
             SourceFor(r.Id),

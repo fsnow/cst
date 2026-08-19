@@ -201,6 +201,9 @@ namespace CST.Avalonia.ViewModels
         public IReadOnlyList<AiPickerModelViewModel> Models { get; }
     }
 
+    /// <summary>One label/value row on the model hover card. (#693)</summary>
+    public sealed record AiPickerFact(string Label, string Value);
+
     /// <summary>One pickable model. (#693)</summary>
     public class AiPickerModelViewModel : ViewModelBase
     {
@@ -215,8 +218,14 @@ namespace CST.Avalonia.ViewModels
 
             ModelId = model.Id;
             DisplayName = model.DisplayName;
+            ProviderName = connection.DisplayName;
             IsCurrent = isCurrent;
             Unusable = ReasonItCannotBeUsed(connection);
+
+            // Only what the provider actually said. A model that published no context length gets no context
+            // row - rendering the absence as "0" would state a falsehood about the model, which is worse
+            // than saying nothing.
+            Facts = BuildFacts(connection, model);
 
             SelectCommand = ReactiveCommand.Create(() => _owner.Select(_connectionId, ModelId));
         }
@@ -239,7 +248,44 @@ namespace CST.Avalonia.ViewModels
 
         public bool IsUsable => Unusable.Length == 0;
 
+        /// <summary>The connection this model belongs to. Named on the hover card because with several
+        /// endpoints configured, "Gemma 4" alone does not say whether it is the local one.</summary>
+        public string ProviderName { get; }
+
+        /// <summary>
+        /// The hover card's rows: what is known about this model, and nothing else.
+        ///
+        /// <para>Only ever what the provider published and we wrote down when the model was promoted.
+        /// OpenCode's equivalent card shows "Context 0" and "No reasoning" for a local model that published
+        /// neither, which reads as fact and is not one — an absent row is the honest rendering of an absent
+        /// field.</para>
+        /// </summary>
+        public IReadOnlyList<AiPickerFact> Facts { get; }
+
+        public bool HasFacts => Facts.Count > 0;
+
         public ReactiveCommand<Unit, Unit> SelectCommand { get; }
+
+        private static IReadOnlyList<AiPickerFact> BuildFacts(AiConnection connection, AiModelEntry model)
+        {
+            var facts = new List<AiPickerFact>
+            {
+                new("Model", model.DisplayName),
+                new("Provider", connection.DisplayName),
+            };
+
+            // The wire id, when it differs from the name - when they are the same string, repeating it is
+            // noise rather than information.
+            if (!string.Equals(model.Id, model.DisplayName, StringComparison.Ordinal))
+                facts.Add(new AiPickerFact("Id", model.Id));
+
+            if (model.Inputs is { Length: > 0 } inputs) facts.Add(new AiPickerFact("Inputs", inputs));
+            if (model.ContextLength is { } context)
+                facts.Add(new AiPickerFact("Context", $"{context / 1000:N0}K"));
+            if (model.SupportsReasoning) facts.Add(new AiPickerFact("Reasoning", "supported"));
+
+            return facts;
+        }
 
         /// <summary>
         /// Only reasons we can state as fact.
