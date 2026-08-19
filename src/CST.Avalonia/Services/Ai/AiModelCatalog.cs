@@ -36,20 +36,19 @@ namespace CST.Avalonia.Services.Ai
         IReadOnlyList<string>? SupportedParameters = null)
     {
         /// <summary>
-        /// Whether this model can take text in and give text out — the only thing the assistant ever asks of
-        /// one.
+        /// Whether the provider publishes a price above zero for this model.
         ///
-        /// <para><b>A mechanical filter, not a judgment.</b> It reads the provider's own published modality
-        /// and removes models that cannot answer a question at all — a text-to-speech model, an image
-        /// generator, a video model. It says nothing about which of the remaining ones is better, which is the
-        /// line #670/#681 draws. OpenCode omits this filter, which is why a music model and a video model
-        /// reach their chat picker.</para>
+        /// <para><b>A fact, not a judgment.</b> What a provider charges is something it states; filtering on
+        /// it removes nothing on the grounds of quality, which is the line #670/#681 draws. It replaced a
+        /// modality filter that was correct and useless: of OpenRouter's 415 models every single one outputs
+        /// text, so "can this answer in text?" excluded nothing at all, while 395 of them cost money.</para>
         ///
-        /// <para>Unknown counts as usable. A provider that publishes no modality — every local runner — must
-        /// not have its models filtered away by a field it never sent.</para>
+        /// <para><b>Unknown is not costly.</b> A provider that publishes no price — every local runner — must
+        /// not have its models hidden by a field it never sent. Only a price we can read and that is above
+        /// zero counts.</para>
         /// </summary>
-        public bool IsTextToText =>
-            Handles(InputModalities, "text") && Handles(OutputModalities, "text");
+        public bool CostsMoney =>
+            PromptPricePerMillion > 0m || CompletionPricePerMillion > 0m;
 
         /// <summary>Whether the provider says it accepts a reasoning-effort parameter (#671). Published, not
         /// inferred from the name.</summary>
@@ -58,9 +57,6 @@ namespace CST.Avalonia.Services.Ai
                 p.Contains("reasoning", StringComparison.OrdinalIgnoreCase) ||
                 p.Equals("thinking", StringComparison.OrdinalIgnoreCase)) == true;
 
-        private static bool Handles(IReadOnlyList<string>? modalities, string want) =>
-            modalities is null || modalities.Count == 0 ||
-            modalities.Any(m => m.Contains(want, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>What a fetch produced, or why it produced nothing.</summary>

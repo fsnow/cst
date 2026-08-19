@@ -63,12 +63,12 @@
               IsVisible="{Binding !HasNoConnections}">
             <TextBox Grid.Column="0" Text="{Binding Search}"
                      Watermark="Search models"/>
-            <!-- Mechanical and reversible: it drops models that cannot take text in and give text out, using
-                 the provider's own published modality, and says nothing about which of the rest is better. -->
-            <CheckBox Grid.Column="1" IsChecked="{Binding TextOnly}"
-                      Content="Text models only"
+            <!-- Built from published price, which is a fact the provider states rather than a preference of
+                 ours. Off by default: on would be a claim about what the reader wants to spend. -->
+            <CheckBox Grid.Column="1" IsChecked="{Binding FreeOnly}"
+                      Content="Free models only"
                       Margin="10,0,0,0" VerticalAlignment="Center"
-                      ToolTip.Tip="Hides models the provider publishes as image, audio or video only. Nothing is judged — these cannot answer a question at all."/>
+                      ToolTip.Tip="Hides models the provider publishes a price for. Endpoints that publish no price at all — a local runner — are unaffected."/>
         </Grid>
 
         <Border Classes="SettingGroup" Padding="0"

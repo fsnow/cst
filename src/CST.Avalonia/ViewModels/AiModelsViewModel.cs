@@ -24,8 +24,8 @@ namespace CST.Avalonia.ViewModels
     /// reader promotes the handful they will switch between.</para>
     ///
     /// <para><b>Nothing here ranks anything.</b> Ordering is alphabetical within a group, groups follow the
-    /// order connections were added, and the only filter is a mechanical one built from the provider's own
-    /// published modality. No badge, no tier, no "recommended", and above all no pre-enabled subset — which
+    /// order connections were added, and the only filter is built from the provider's own published price.
+    /// No badge, no tier, no "recommended", and above all no pre-enabled subset — which
     /// is what upstream ships, computed from release dates, and is still a verdict for being arithmetic
     /// (#670/#681, #689).</para>
     /// </summary>
@@ -34,7 +34,7 @@ namespace CST.Avalonia.ViewModels
         private readonly IAiConnectionService? _service;
         private readonly IAiModelCatalog? _catalog;
         private string _search = "";
-        private bool _textOnly = true;
+        private bool _freeOnly;
         private bool _suppressRebind;
 
         public AiModelsViewModel(IAiConnectionService? service, IAiModelCatalog? catalog = null)
@@ -77,19 +77,21 @@ namespace CST.Avalonia.ViewModels
         public bool IsSearching => !string.IsNullOrWhiteSpace(Search);
 
         /// <summary>
-        /// Hide models that cannot take text in and give text out.
+        /// Hide models the provider charges for.
         ///
-        /// <para>Built entirely from the provider's published modality, so it removes models that cannot
-        /// answer a question at all — a text-to-speech model, an image generator — and says nothing about
-        /// which of the rest is better. Shown as a control and reversible, because a mechanical filter the
-        /// reader cannot see or turn off starts to look like a judgment even when it isn't.</para>
+        /// <para>Built from published price, so it states a fact rather than a preference — and unlike the
+        /// modality filter it replaced, it does something. Of OpenRouter's 415 models <b>every one</b> can
+        /// answer in text, so "text models only" excluded nothing at all; 395 of them cost money.</para>
+        ///
+        /// <para><b>Off by default.</b> On would be a claim about what the reader wants to spend, and it
+        /// would hide almost everything the first time they looked at their provider.</para>
         /// </summary>
-        public bool TextOnly
+        public bool FreeOnly
         {
-            get => _textOnly;
+            get => _freeOnly;
             set
             {
-                this.RaiseAndSetIfChanged(ref _textOnly, value);
+                this.RaiseAndSetIfChanged(ref _freeOnly, value);
                 Reflow();
             }
         }
@@ -120,7 +122,7 @@ namespace CST.Avalonia.ViewModels
 
             foreach (var group in Groups)
             {
-                group.ApplyFilter(Search, TextOnly, IsSearching);
+                group.ApplyFilter(Search, FreeOnly, IsSearching);
 
                 // A group with nothing matching disappears entirely while searching, rather than sitting
                 // there as a header promising results it does not have.
@@ -282,10 +284,10 @@ namespace CST.Avalonia.ViewModels
         /// Merges the reader's stored list with anything fetched, then filters.
         ///
         /// <para>Stored models are always shown and never filtered out — the reader put them there, and
-        /// hiding one behind a capability filter would look like it had been lost. Fetched models the reader
-        /// has not touched are subject to both the search and the modality filter.</para>
+        /// hiding one behind a price filter would look like it had been lost. Fetched models the reader has
+        /// not touched are subject to both the search and the price filter.</para>
         /// </summary>
-        internal void ApplyFilter(string search, bool textOnly, bool searching)
+        internal void ApplyFilter(string search, bool freeOnly, bool searching)
         {
             var stored = _connection.Models.ToDictionary(m => m.Id, StringComparer.Ordinal);
             var rows = new List<AiCatalogRowViewModel>();
@@ -299,7 +301,7 @@ namespace CST.Avalonia.ViewModels
             foreach (var model in _fetched)
             {
                 if (stored.ContainsKey(model.Id)) continue;
-                if (textOnly && !model.IsTextToText) continue;
+                if (freeOnly && model.CostsMoney) continue;
                 rows.Add(new AiCatalogRowViewModel(
                     this, model.Id, model.DisplayName, model, enabled: false, typed: false));
             }

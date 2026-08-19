@@ -38,7 +38,7 @@ public class AiModelCatalogTests
         Assert.Equal(0.4m, model.PromptPricePerMillion);
         Assert.Equal(1.6m, model.CompletionPricePerMillion);
         Assert.True(model.SupportsReasoning);
-        Assert.True(model.IsTextToText);
+        Assert.True(model.CostsMoney);
     }
 
     /// <summary>Anthropic names the field differently and publishes nothing else.</summary>
@@ -72,30 +72,44 @@ public class AiModelCatalogTests
         var model = Assert.Single(models);
         Assert.Equal("gemma4:12b-mlx", model.Id);
         Assert.Equal("gemma4:12b-mlx", model.DisplayName);
-        Assert.True(model.IsTextToText);
+        Assert.False(model.CostsMoney);   // publishes no price; unknown is not costly
     }
 
-    // ---- the capability filter -------------------------------------------------------------------------
+    // ---- price -------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Mechanical, and built only from what the provider published: a model that cannot take text in and give
-    /// text out cannot answer a question at all. It is not a judgment about the models that remain — which is
-    /// the line #670/#681 draws, and the filter OpenCode omits, which is why a music model and a video model
-    /// reach their chat picker.
+    /// What a provider charges is a fact it publishes, which is what makes filtering on it safe where a
+    /// judgment about quality would not be (#670/#681).
     /// </summary>
     [Theory]
-    [InlineData("""{"input_modalities":["text"],"output_modalities":["text"]}""", true)]
-    [InlineData("""{"input_modalities":["text","image"],"output_modalities":["text"]}""", true)]
-    [InlineData("""{"input_modalities":["text"],"output_modalities":["audio"]}""", false)]
-    [InlineData("""{"input_modalities":["text"],"output_modalities":["video"]}""", false)]
-    [InlineData("""{"modality":"text->text"}""", true)]
-    [InlineData("""{"modality":"text+image->text"}""", true)]
-    [InlineData("""{"modality":"text->image"}""", false)]
-    public void Only_models_that_answer_in_text_pass_the_capability_filter(string architecture, bool expected)
+    [InlineData("""{"prompt":"0","completion":"0"}""", false)]
+    [InlineData("""{"prompt":"0.0000004","completion":"0.0000016"}""", true)]
+    [InlineData("""{"prompt":"0","completion":"0.0000016"}""", true)]
+    public void Costing_money_is_read_from_the_published_price(string pricing, bool expected)
     {
-        var models = AiModelCatalog.Parse($$"""{"data":[{"id":"m","architecture":{{architecture}}}]}""");
+        var models = AiModelCatalog.Parse($$"""{"data":[{"id":"m","pricing":{{pricing}}}]}""");
 
-        Assert.Equal(expected, Assert.Single(models).IsTextToText);
+        Assert.Equal(expected, Assert.Single(models).CostsMoney);
+    }
+
+    /// <summary>Unknown is not costly. Every local runner publishes no price at all, and treating silence as
+    /// expensive would hide the models of a reader spending nothing.</summary>
+    [Fact]
+    public void A_model_with_no_published_price_does_not_count_as_costing_money() =>
+        Assert.False(Assert.Single(AiModelCatalog.Parse("""{"data":[{"id":"m"}]}""")).CostsMoney);
+
+    /// <summary>Modalities are still parsed and kept — they are provider-published facts worth showing, even
+    /// though they no longer drive a filter: on OpenRouter every one of 415 models can answer in text, so the
+    /// modality filter they used to drive excluded nothing.</summary>
+    [Fact]
+    public void Modalities_are_still_read()
+    {
+        var models = AiModelCatalog.Parse(
+            """{"data":[{"id":"m","architecture":{"input_modalities":["text","image"],"output_modalities":["text"]}}]}""");
+
+        var model = Assert.Single(models);
+        Assert.Equal(new[] { "text", "image" }, model.InputModalities);
+        Assert.Equal(new[] { "text" }, model.OutputModalities);
     }
 
     // ---- ordering and robustness -----------------------------------------------------------------------
