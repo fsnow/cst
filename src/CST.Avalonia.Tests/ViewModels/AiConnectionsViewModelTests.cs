@@ -247,7 +247,9 @@ public class AiConnectionsViewModelTests
     {
         var (vm, _) = Make();
 
-        Assert.Equal("No key needed", vm.AvailablePresets.Single(p => p.Id == "ollama").RequirementText);
+        // ollama is in the local section now (#739) - it needs no key AND no network, which is what puts it
+        // there rather than in the catalogue.
+        Assert.Equal("No key needed", vm.LocalPresets.Single(p => p.Id == "ollama").RequirementText);
         Assert.Equal("Needs an API key", vm.AvailablePresets.Single(p => p.Id == "openrouter").RequirementText);
     }
 
@@ -429,6 +431,96 @@ public class AiConnectionsViewModelTests
 
         Assert.Single(vm.Connections);          // did not see the second add
         Assert.Equal(2, service.Connections.Count);   // which did happen
+    }
+
+    // ---- the catalogue at scale (#739) ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The local runners sit in their own section, chosen by a fact rather than an opinion.
+    ///
+    /// <para>They need no key and no network. That is what earns them a permanent place above a catalogue
+    /// which may be neither present nor short — a "popular" section would be the ranking #670/#681 removed,
+    /// arriving as a layout decision.</para>
+    /// </summary>
+    [Fact]
+    public void Local_runners_are_separated_from_the_catalogue()
+    {
+        var (vm, _) = Make();
+
+        var local = vm.LocalPresets.Select(p => p.Id).ToList();
+        Assert.Contains("ollama", local);
+        Assert.Contains("lmstudio", local);
+        Assert.DoesNotContain(vm.AvailablePresets.Select(p => p.Id), id => local.Contains(id));
+    }
+
+    /// <summary>The catalogue is collapsed until asked for — a hundred and sixty rows above the fold is not a
+    /// list anyone reads.</summary>
+    [Fact]
+    public void The_catalogue_starts_collapsed_and_says_how_big_it_is()
+    {
+        var (vm, _) = Make();
+
+        Assert.False(vm.IsCatalogueOpen);
+        Assert.True(vm.AvailablePresets.Count > 20, "the snapshot should supply a real catalogue");
+        Assert.EndsWith("providers", vm.CatalogueCount);
+    }
+
+    /// <summary>
+    /// Typing reveals the catalogue as well as filtering it.
+    ///
+    /// <para>A reader who types has asked for the list; making them expand a section first is a second
+    /// gesture for one intention.</para>
+    /// </summary>
+    [Fact]
+    public void Searching_opens_the_catalogue_and_filters_it()
+    {
+        var (vm, _) = Make();
+
+        vm.PresetSearch = "openrouter";
+
+        Assert.True(vm.IsCatalogueOpen);
+        Assert.All(vm.AvailablePresets, p =>
+            Assert.Contains("openrouter", p.Id + p.DisplayName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Search matches the id as well as the display name — a reader may know a provider by
+    /// either.</summary>
+    [Fact]
+    public void Search_matches_the_id_as_well_as_the_name()
+    {
+        var (vm, _) = Make();
+
+        vm.PresetSearch = "togetherai";
+
+        Assert.NotEmpty(vm.AvailablePresets);
+    }
+
+    /// <summary>A search matching nothing empties the catalogue without disturbing the local runners, which
+    /// are not what was being searched.</summary>
+    [Fact]
+    public void A_fruitless_search_leaves_the_local_runners_alone()
+    {
+        var (vm, _) = Make();
+        var before = vm.LocalPresets.Count;
+
+        vm.PresetSearch = "zzzzz-no-such-provider";
+
+        Assert.Empty(vm.AvailablePresets);
+        Assert.Equal(before, vm.LocalPresets.Count);
+    }
+
+    /// <summary>Adding a provider still removes it from the catalogue, so the list keeps reading as "what you
+    /// could add next" at this scale too.</summary>
+    [Fact]
+    public void An_added_catalogue_provider_leaves_the_catalogue()
+    {
+        var (vm, _) = Make();
+        vm.PresetSearch = "openrouter";
+        Assert.NotEmpty(vm.AvailablePresets);
+
+        AddThroughSheet(vm, "openrouter");
+
+        Assert.DoesNotContain(vm.AvailablePresets, p => p.Id == "openrouter");
     }
 
     // ---- monograms -------------------------------------------------------------------------------------
