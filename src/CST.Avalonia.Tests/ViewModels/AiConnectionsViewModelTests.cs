@@ -77,7 +77,7 @@ public class AiConnectionsViewModelTests
             new AiCredentialMethod[] { new AiCredentialMethod.Key() });
 
     /// <summary>An in-memory keychain. The real one would need a Keychain prompt per test.</summary>
-    private sealed class FakeCredentialStore : IAiCredentialStore
+    internal sealed class FakeCredentialStore : IAiCredentialStore
     {
         public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
         public bool IsAvailable => true;
@@ -703,5 +703,145 @@ public class AiConnectionsViewModelTests
             Assert.InRange(tone, 0, AiMonogram.ToneCount - 1);
             Assert.Equal(tone, AiMonogram.ToneFor(id));
         }
+    }
+}
+
+/// <summary>
+/// #738: a row asks for its provider's logo and falls back to the monogram. The monogram is never removed —
+/// this adds a better first choice on top of a mechanism that has to keep working for custom endpoints,
+/// local runners, and anyone offline.
+/// </summary>
+public class AiConnectionRowLogoTests
+{
+    private sealed class FakeLogos : IAiProviderLogos
+    {
+        private readonly Dictionary<string, string?> _paths;
+        public List<string> Asked { get; } = new();
+
+        public FakeLogos(Dictionary<string, string?>? paths = null) =>
+            _paths = paths ?? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+        public Task<string?> GetLogoPathAsync(string providerId, CancellationToken ct = default)
+        {
+            Asked.Add(providerId);
+            return Task.FromResult(_paths.TryGetValue(providerId, out var p) ? p : null);
+        }
+    }
+
+    private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make(IAiProviderLogos logos)
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var keys = new AiConnectionsViewModelTests.FakeCredentialStore();
+        var service = new AiConnectionService(svc.Object, keys);
+        return (new AiConnectionsViewModel(service, keys, logos), service);
+    }
+
+    /// <summary>Adds through the sheet, which is the only path that produces a connection carrying a preset's
+    /// id — the editor seeds the id from the preset, and the reader may then change it.</summary>
+    private static void AddThroughSheet(AiConnectionsViewModel vm, string presetId, string? id = null)
+    {
+        vm.AddPreset(presetId);
+        var editor = vm.Editor!;
+        if (id is not null) editor.Id = id;
+        editor.ApiKeyEntry = "sk-test";
+        editor.SaveCommand.Execute().Subscribe();
+    }
+
+    /// <summary>The catalogue is the screen where logos matter most, and every row there has a real
+    /// provider id.</summary>
+    [Fact]
+    public async Task A_catalogue_row_shows_the_logo_when_there_is_one()
+    {
+        var logos = new FakeLogos(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            { ["anthropic"] = "/cache/anthropic.svg" });
+        var (vm, _) = Make(logos);
+
+        var row = vm.AvailablePresets.First(p => p.Id == "anthropic");
+        await row.LogoLoad!;
+
+        Assert.Equal("/cache/anthropic.svg", row.LogoPath);
+        Assert.True(row.HasLogo);
+    }
+
+    /// <summary>The fallback, and the ordinary case for a local runner: models.dev has no mark for Ollama, so
+    /// the coloured initial stays.</summary>
+    [Fact]
+    public async Task A_provider_with_no_logo_keeps_its_monogram()
+    {
+        var (vm, _) = Make(new FakeLogos());
+
+        var row = vm.AvailablePresets.First(p => p.Id == "ollama");
+        await row.LogoLoad!;
+
+        Assert.Null(row.LogoPath);
+        Assert.False(row.HasLogo);
+        Assert.False(string.IsNullOrWhiteSpace(row.Monogram));
+    }
+
+    /// <summary>A row must be drawable the instant it is created — the logo arriving later is the design, not
+    /// a race to wait out.</summary>
+    [Fact]
+    public void A_row_starts_on_its_monogram_before_anything_is_fetched()
+    {
+        var (vm, _) = Make(new FakeLogos(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            { ["anthropic"] = "/cache/anthropic.svg" }));
+
+        var row = new AiPresetRowViewModel(vm, AiProviderPresets.All.First(p => p.Id == "anthropic"));
+
+        Assert.False(string.IsNullOrWhiteSpace(row.Monogram));
+    }
+
+    /// <summary>A connection added from the catalogue keeps the preset's id, so its row resolves too.</summary>
+    [Fact]
+    public async Task A_configured_connection_resolves_by_its_id()
+    {
+        var logos = new FakeLogos(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            { ["anthropic"] = "/cache/anthropic.svg" });
+        var (vm, _) = Make(logos);
+
+        AddThroughSheet(vm, "anthropic");
+        var row = vm.Connections.Single();
+        await row.LogoLoad!;
+
+        Assert.Equal("/cache/anthropic.svg", row.LogoPath);
+    }
+
+    /// <summary>A custom endpoint has an id its owner invented, which is no provider's. Nothing is guessed
+    /// from it: showing one vendor's mark on another's row would be worse than showing a letter.</summary>
+    [Fact]
+    public async Task A_custom_connection_falls_back_rather_than_guessing()
+    {
+        var logos = new FakeLogos(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            { ["anthropic"] = "/cache/anthropic.svg" });
+        var (vm, service) = Make(logos);
+
+        service.Add("anthropic-work", new AiConnectionDraft(
+            "Anthropic (work)", ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
+            Array.Empty<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>()));
+        var row = vm.Connections.Single();
+        await row.LogoLoad!;
+
+        Assert.Equal("anthropic-work", row.Id);
+        Assert.Null(row.LogoPath);
+    }
+
+    /// <summary>Constructed without a resolver — the designer, and every test that predates this — must still
+    /// work rather than throw.</summary>
+    [Fact]
+    public void With_no_resolver_a_row_is_simply_a_monogram()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, new AiConnectionsViewModelTests.FakeCredentialStore());
+
+        var vm = new AiConnectionsViewModel(service);
+        var row = vm.AvailablePresets.First();
+
+        Assert.Null(row.LogoLoad);
+        Assert.Null(row.LogoPath);
+        Assert.False(string.IsNullOrWhiteSpace(row.Monogram));
     }
 }

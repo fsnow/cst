@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
 using ReactiveUI;
@@ -32,16 +33,21 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly IAiConnectionService? _service;
         private readonly IAiCredentialStore? _credentials;
+        private readonly IAiProviderLogos? _logos;
         private AiConnectionEditorViewModel? _editor;
         private string? _problem;
         private string _presetSearch = "";
         private bool _isCatalogueExpanded;
         private int _catalogueTotal;
 
-        public AiConnectionsViewModel(IAiConnectionService? service, IAiCredentialStore? credentials = null)
+        public AiConnectionsViewModel(
+            IAiConnectionService? service,
+            IAiCredentialStore? credentials = null,
+            IAiProviderLogos? logos = null)
         {
             _service = service;
             _credentials = credentials;
+            _logos = logos;
 
             AddCustomCommand = ReactiveCommand.Create(AddCustom);
             RetryCatalogueCommand = ReactiveCommand.CreateFromTask(RetryCatalogueAsync);
@@ -52,6 +58,10 @@ namespace CST.Avalonia.ViewModels
                 Rebind();
             }
         }
+
+        /// <summary>The logo resolver the rows use, or null when logos are unavailable — in tests, and
+        /// wherever this view model is constructed without one. (#738)</summary>
+        internal IAiProviderLogos? Logos => _logos;
 
         /// <summary>What is configured now, in the order the reader added it.</summary>
         public ObservableCollection<AiConnectionRowViewModel> Connections { get; } = new();
@@ -402,8 +412,75 @@ namespace CST.Avalonia.ViewModels
         }
     }
 
+    /// <summary>
+    /// The logo half of a row. (#738)
+    ///
+    /// <para>Shared by both row kinds because they want identical behaviour: start on the monogram, ask for a
+    /// logo once, and switch only if one arrives. Nothing here decides how a logo is drawn — size, shape and
+    /// placement are the view's.</para>
+    /// </summary>
+    public abstract class AiLogoRowViewModel : ViewModelBase
+    {
+        private string? _logoPath;
+        private bool _asked;
+
+        /// <summary>The models.dev provider id, or null for a row that has no provider behind it — a custom
+        /// endpoint, where the monogram is the only honest mark.</summary>
+        protected abstract string? ProviderId { get; }
+
+        /// <summary>A cached SVG on disk, or null while none is known. Null is the ordinary case, not a
+        /// failure: it means <see cref="Monogram"/> is what to draw.</summary>
+        public string? LogoPath
+        {
+            get => _logoPath;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _logoPath, value);
+                this.RaisePropertyChanged(nameof(HasLogo));
+            }
+        }
+
+        public bool HasLogo => !string.IsNullOrEmpty(LogoPath);
+
+        public abstract string Monogram { get; }
+
+        public abstract int MonogramTone { get; }
+
+        /// <summary>The in-flight lookup, so a test can await what the constructor started.</summary>
+        internal Task? LogoLoad { get; private set; }
+
+        /// <summary>
+        /// Asks for the logo, once per row.
+        ///
+        /// <para>Started and not awaited on purpose: a row must draw immediately with its monogram rather than
+        /// wait on a network call, and the logo replacing it a moment later is the intended sequence. Awaiting
+        /// it would put a settings pane behind an HTTP request.</para>
+        /// </summary>
+        protected void LoadLogo(IAiProviderLogos? logos)
+        {
+            if (_asked || logos is null) return;
+            _asked = true;
+
+            var id = ProviderId;
+            if (string.IsNullOrWhiteSpace(id)) return;
+
+            LogoLoad = ApplyLogoAsync(logos, id!);
+        }
+
+        private async Task ApplyLogoAsync(IAiProviderLogos logos, string id)
+        {
+            var path = await logos.GetLogoPathAsync(id);
+            if (path is null) return;   // no logo: the monogram already on screen is the answer
+
+            // Same shape as the service's change event: set directly when already on the UI thread, post when
+            // the fetch resumed on a pool thread. A property change raised off-thread reaches a binding.
+            if (Dispatcher.UIThread.CheckAccess()) LogoPath = path;
+            else Dispatcher.UIThread.Post(() => LogoPath = path);
+        }
+    }
+
     /// <summary>One configured endpoint, as a row in "Your connections". (#691)</summary>
-    public class AiConnectionRowViewModel : ViewModelBase
+    public class AiConnectionRowViewModel : AiLogoRowViewModel
     {
         private readonly AiConnectionsViewModel _owner;
         private AiConnection _connection;
@@ -419,7 +496,19 @@ namespace CST.Avalonia.ViewModels
             DeleteCommand = ReactiveCommand.Create(() => { IsConfirmingDelete = true; });
             ConfirmDeleteCommand = ReactiveCommand.Create(() => _owner.Delete(Id));
             CancelDeleteCommand = ReactiveCommand.Create(() => { IsConfirmingDelete = false; });
+
+            LoadLogo(owner.Logos);
         }
+
+        /// <summary>
+        /// The connection id, which is the provider id for a connection added from the catalogue — the editor
+        /// seeds it from the preset.
+        ///
+        /// <para>A reader who renames it, or adds a second connection to the same provider, gets the monogram
+        /// instead. The connection does not record which preset it came from, and guessing from a renamed id
+        /// would show one provider's mark on another's row — a wrong logo is worse than a letter.</para>
+        /// </summary>
+        protected override string? ProviderId => _connection.Id;
 
         public string Id => _connection.Id;
 
@@ -434,9 +523,9 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public string Endpoint => _connection.ResolvedBaseUrl;
 
-        public string Monogram => AiMonogram.For(DisplayName);
+        public override string Monogram => AiMonogram.For(DisplayName);
 
-        public int MonogramTone => AiMonogram.ToneFor(Id);
+        public override int MonogramTone => AiMonogram.ToneFor(Id);
 
         public int ModelCount => _connection.Models.Count;
 
@@ -551,7 +640,7 @@ namespace CST.Avalonia.ViewModels
     }
 
     /// <summary>One named endpoint in "Add a provider". (#691)</summary>
-    public class AiPresetRowViewModel : ViewModelBase
+    public class AiPresetRowViewModel : AiLogoRowViewModel
     {
         private readonly AiConnectionsViewModel _owner;
         private AiProviderPreset _preset;
@@ -562,15 +651,20 @@ namespace CST.Avalonia.ViewModels
             _preset = preset;
 
             AddCommand = ReactiveCommand.Create(() => _owner.AddPreset(Id));
+
+            LoadLogo(owner.Logos);
         }
 
         public string Id => _preset.Id;
 
+        /// <summary>Always a real provider id: the catalogue is built from models.dev.</summary>
+        protected override string? ProviderId => _preset.Id;
+
         public string DisplayName => _preset.DisplayName;
 
-        public string Monogram => AiMonogram.For(DisplayName);
+        public override string Monogram => AiMonogram.For(DisplayName);
 
-        public int MonogramTone => AiMonogram.ToneFor(Id);
+        public override int MonogramTone => AiMonogram.ToneFor(Id);
 
         /// <summary>
         /// The only thing a row says beyond the provider's name.

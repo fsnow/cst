@@ -1365,6 +1365,10 @@ public partial class App : Application
         // list and the load gate, and the connection service subscribes to its change event.
         services.AddSingleton<Services.Ai.IAiPresetSource, Services.Ai.AiPresetSource>();
 
+        // Provider logos (#738). Singleton so the per-session "this provider has none" answers are shared;
+        // the disk cache lives under cache/provider-logos.
+        services.AddSingleton<Services.Ai.IAiProviderLogos>(_ => new Services.Ai.AiProviderLogos());
+
         // Asking a connection what models it offers (#674). Additive to the hand-typed list, never a
         // prerequisite: an endpoint that publishes no listing stays fully usable, so a failure here is
         // reported and nothing more.
