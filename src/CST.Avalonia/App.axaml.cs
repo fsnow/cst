@@ -2234,8 +2234,11 @@ public partial class App : Application
     /// <summary>
     /// The About box (#746).
     ///
-    /// <para>Shown as a dialog, like Settings, which also makes it single-instance for free: About is the
-    /// kind of window someone opens twice without noticing, and a second copy has nothing to add.</para>
+    /// <para>Shown as a dialog, like Settings. That makes it single-instance off macOS, where the menu lives
+    /// inside the owner window and <c>ShowDialog</c> disables it — but <b>not</b> on macOS, where About sits
+    /// in the application-level menu that Avalonia leaves enabled during a window-modal dialog. Hence the
+    /// explicit guard: without it, App menu -> About twice stacks two dialogs. (Preferences has the same
+    /// gap; this fixes only its own.)</para>
     ///
     /// <para>Its view model takes no services deliberately — see AboutViewModel. That means this can still
     /// show the version when whatever the reporter is reporting has left the rest of the app unhappy.</para>
@@ -2250,14 +2253,35 @@ public partial class App : Application
                 return;
             }
 
-            var aboutWindow = new AboutWindow { DataContext = new AboutViewModel() };
-            await aboutWindow.ShowDialog(MainWindow);
+            // Bring the existing one forward rather than refusing silently: the reader asked for About and
+            // should get About, whether or not one is already behind something.
+            if (_aboutWindow is { } open)
+            {
+                open.Activate();
+                return;
+            }
+
+            _aboutWindow = new AboutWindow { DataContext = new AboutViewModel() };
+            try
+            {
+                await _aboutWindow.ShowDialog(MainWindow);
+            }
+            finally
+            {
+                // In a finally so a dialog that throws on close cannot leave the guard stuck, which would
+                // make About unopenable for the rest of the session - worse than the duplicate it prevents.
+                _aboutWindow = null;
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to open the About window");
         }
     }
+
+    /// <summary>The open About dialog, or null. UI-thread only, which is the only place the menu handlers
+    /// run.</summary>
+    private static AboutWindow? _aboutWindow;
 
     private void OnGoToMenuItemClickFromFloatingWindow(Window floatingWindow)
     {

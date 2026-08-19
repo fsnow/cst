@@ -37,6 +37,54 @@ public class AboutInventoryTests
         Path.Combine("CST.Lexicon", "CST.Lexicon.csproj"),
     ];
 
+    /// <summary>
+    /// The macOS menu item's header must match the constant the click handler matches on.
+    ///
+    /// <para>XAML cannot reference a C# const, so <c>App.axaml</c> carries the string literally and
+    /// <c>SetupNativeMenuEvents</c> compares against <c>App.AboutMenuHeader</c>. Reword one and the item
+    /// still appears, still looks enabled, and does nothing — the failure gives no sign of itself, which is
+    /// why it is worth a test rather than a comment.</para>
+    /// </summary>
+    [Fact]
+    public void The_macos_menu_header_matches_the_constant_it_is_matched_against()
+    {
+        var axaml = Path.Combine(RepoRoot(), "src", "CST.Avalonia", "App.axaml");
+        Assert.True(File.Exists(axaml), axaml);
+
+        Assert.Contains(
+            $"Header=\"{CST.Avalonia.App.AboutMenuHeader}\"",
+            File.ReadAllText(axaml),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The list above must match what CST.Avalonia actually references.
+    ///
+    /// <para>The blind spot in the two drift tests below: they check the packages of the projects named in
+    /// <see cref="ShippingProjects"/>, so a <c>ProjectReference</c> added later ships its packages
+    /// uncredited and every test still passes. The list is the one input neither of them can question, which
+    /// is exactly why it needs its own.</para>
+    /// </summary>
+    [Fact]
+    public void The_shipping_project_list_matches_what_the_app_references()
+    {
+        var app = Path.Combine(RepoRoot(), "src", "CST.Avalonia", "CST.Avalonia.csproj");
+        Assert.True(File.Exists(app), app);
+
+        var referenced = Regex.Matches(File.ReadAllText(app), @"<ProjectReference\s+Include=""([^""]+)""")
+            .Select(m => Path.GetFileName(m.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar)))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var listed = ShippingProjects
+            .Select(Path.GetFileName)
+            .Where(n => !string.Equals(n, "CST.Avalonia.csproj", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        Assert.Equal(referenced, listed);
+    }
+
     [Fact]
     public void Every_shipped_package_is_acknowledged()
     {
