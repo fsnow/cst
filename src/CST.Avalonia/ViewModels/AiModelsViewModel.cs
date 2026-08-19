@@ -194,6 +194,7 @@ namespace CST.Avalonia.ViewModels
             _connection = connection;
 
             ToggleCommand = ReactiveCommand.Create(() => { IsExpanded = !IsExpanded; });
+            OpenDocCommand = ReactiveCommand.Create(() => AiConnectionsViewModel.OpenUrl(DocUrl));
             FetchCommand = ReactiveCommand.CreateFromTask(FetchAsync);
         }
 
@@ -268,6 +269,34 @@ namespace CST.Avalonia.ViewModels
 
         private static string Plural(int n) => n == 1 ? "1 model" : $"{n} models";
 
+        /// <summary>
+        /// The provider's models page, offered when this group has nothing in it.
+        ///
+        /// <para>The case with no other answer today: an endpoint that publishes no listing, or whose listing
+        /// failed, leaves a reader needing a model id from somewhere. This is the somewhere. Hidden once the
+        /// group has models, where it would be a link to information already on screen.</para>
+        /// </summary>
+        public string? DocUrl => AiProviderPresets.ById(Id)?.Doc;
+
+        /// <summary>
+        /// Offered only once we have asked and come back with nothing.
+        ///
+        /// <para>Three states looked empty but are not the case this answers: <b>mid-fetch</b>, where it
+        /// rendered beside "asking the provider for its models"; <b>before any fetch</b>, where a collapsed
+        /// group would advertise a link although expanding it would have produced a listing; and <b>when a
+        /// filter hid everything</b>, where a provider whose four hundred models are all paid would be
+        /// described as publishing none. Only the last of those is even visible today, and all three said
+        /// something untrue.</para>
+        /// </summary>
+        public bool ShowDoc =>
+            _hasFetched && !IsFetching && !HasAnyModels && !string.IsNullOrEmpty(DocUrl);
+
+        /// <summary>Whether this connection has any models at all, before the search and price filters — the
+        /// question "does this provider publish a listing?" rather than "did the filter leave anything?".</summary>
+        private bool HasAnyModels => _fetched.Count > 0 || _connection.Models.Count > 0;
+
+        public ReactiveCommand<Unit, Unit> OpenDocCommand { get; }
+
         public ReactiveCommand<Unit, Unit> ToggleCommand { get; }
 
         public ReactiveCommand<Unit, Unit> FetchCommand { get; }
@@ -314,6 +343,7 @@ namespace CST.Avalonia.ViewModels
             Visible.Clear();
             Visible.AddRange(rows);
             this.RaisePropertyChanged(nameof(CountText));
+            this.RaisePropertyChanged(nameof(ShowDoc));
         }
 
         /// <summary>What the provider published about one model, or null when it published nothing — which is
@@ -365,6 +395,7 @@ namespace CST.Avalonia.ViewModels
             finally
             {
                 IsFetching = false;
+                this.RaisePropertyChanged(nameof(ShowDoc));
                 _owner.Reflow();
             }
         }

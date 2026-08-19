@@ -122,6 +122,15 @@
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
 
+                                <!-- Offered only when the group is empty. A reader whose endpoint publishes
+                                     no listing has to get a model id from somewhere, and this is the only
+                                     answer the app can give them. -->
+                                <Button Content="See this provider's models ↗" Classes="Link"
+                                        IsVisible="{Binding ShowDoc}"
+                                        Command="{Binding OpenDocCommand}"
+                                        ToolTip.Tip="{Binding DocUrl}"
+                                        HorizontalAlignment="Left" Margin="26,0,0,0"/>
+
                             </StackPanel>
                         </Border>
                     </DataTemplate>
