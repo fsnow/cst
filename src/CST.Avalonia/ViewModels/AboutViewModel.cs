@@ -136,7 +136,6 @@ namespace CST.Avalonia.ViewModels
                 ["Serilog", "Serilog.Extensions.Logging", "Serilog.Sinks.Console", "Serilog.Sinks.File"]),
             new("PdfPig", "Reading the scanned source editions.", ["PdfPig"]),
             new("Octokit", "Checking GitHub for corpus and dictionary updates.", ["Octokit"]),
-            new("Mono.Cecil", "Reading .NET assembly metadata.", ["Mono.Cecil"]),
             new("ModelContextProtocol", "The MCP server that exposes the reader's tools to AI clients.",
                 ["ModelContextProtocol.AspNetCore"]),
             new("Microsoft.Data.Sqlite and SQLitePCLRaw", "The dictionary and lemma databases.",
