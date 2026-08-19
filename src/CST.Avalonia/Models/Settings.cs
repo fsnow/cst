@@ -159,6 +159,23 @@ namespace CST.Avalonia.Models
         /// <summary>Whether it appears in the per-turn picker. Defaults true: all-on is neutral, whereas a
         /// pre-selected subset would be a quality verdict (#670/#681).</summary>
         public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// What the provider published about this model when it was added, kept so the assistant can say it
+        /// without asking again. (#693)
+        ///
+        /// <para>The listing is fetched only on the Models tab and only while that window is open, so
+        /// anything the per-turn picker wants to show has to have been written down at the moment the reader
+        /// promoted the model. Null throughout for a hand-typed id and for every endpoint that publishes no
+        /// listing — which the UI must render as silence rather than as zero.</para>
+        /// </summary>
+        public int? ContextLength { get; set; }
+
+        public bool SupportsReasoning { get; set; }
+
+        /// <summary>What the model accepts, as the provider words it — "text", "text, image". Null when it
+        /// said nothing.</summary>
+        public string? Inputs { get; set; }
     }
 
     /// <summary>Permissions for the loopback API server that exposes the corpus tools to agents (surface C).</summary>

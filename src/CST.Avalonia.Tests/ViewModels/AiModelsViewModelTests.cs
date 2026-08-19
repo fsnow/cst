@@ -371,6 +371,49 @@ public class AiModelsViewModelTests
         Assert.Null(service.ActiveModelId);
     }
 
+    // ---- what gets written down on promotion ---------------------------------------------------------------
+
+    /// <summary>
+    /// Promoting a model records what the provider published about it.
+    ///
+    /// <para>The listing lives only in this tab and only while the window is open, so the per-turn picker
+    /// (#693) can never ask again — whatever it is to show has to be written down here.</para>
+    /// </summary>
+    [Fact]
+    public void Promoting_a_model_records_what_the_provider_published()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel(
+            "nvidia/nemotron", "Nemotron", ContextLength: 1_000_000,
+            InputModalities: new[] { "text", "image" },
+            SupportedParameters: new[] { "reasoning" })));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Rows(vm).Single().Enabled = true;
+
+        var stored = Assert.Single(service.Connections.Single().Models);
+        Assert.Equal(1_000_000, stored.ContextLength);
+        Assert.True(stored.SupportsReasoning);
+        Assert.Equal("text, image", stored.Inputs);
+    }
+
+    /// <summary>A hand-typed model has nothing published about it, and nothing is invented.</summary>
+    [Fact]
+    public void A_typed_model_records_no_published_facts()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("typed", "Typed")));
+        Group(vm).IsExpanded = true;
+
+        Rows(vm).Single().Enabled = false;
+        Rows(vm).Single().Enabled = true;
+
+        var stored = Assert.Single(service.Connections.Single().Models);
+        Assert.Null(stored.ContextLength);
+        Assert.Null(stored.Inputs);
+        Assert.False(stored.SupportsReasoning);
+    }
+
     // ---- search and the capability filter ---------------------------------------------------------------
 
     /// <summary>Search filters across every group, not within the expanded one, and shows what it finds

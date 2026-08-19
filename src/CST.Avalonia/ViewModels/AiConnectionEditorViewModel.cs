@@ -136,6 +136,7 @@ namespace CST.Avalonia.ViewModels
                     ModelId = model.Id,
                     DisplayName = model.DisplayName,
                     Enabled = model.Enabled,
+                    Published = model,
                 });
 
             foreach (var header in connection.Headers)
@@ -404,12 +405,24 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(KeyStatus));
         }
 
+        /// <summary>
+        /// The model rows as entries, carrying through everything the form does not show.
+        ///
+        /// <para>Rebuilding from the visible fields alone is how an edit silently drops what the provider
+        /// published — the reader renames a connection and the per-turn picker's hover card goes blank. The
+        /// same shape as the auth-header reset found in the #689 review, which is why it is worth stating
+        /// rather than leaving to the reader of the expression.</para>
+        /// </summary>
         private List<AiModelEntry> TypedModels() => Models
             .Where(m => !string.IsNullOrWhiteSpace(m.ModelId))
-            .Select(m => new AiModelEntry(
-                m.ModelId.Trim(),
-                string.IsNullOrWhiteSpace(m.DisplayName) ? m.ModelId.Trim() : m.DisplayName.Trim(),
-                m.Enabled))
+            .Select(m => (m.Published ?? new AiModelEntry(m.ModelId.Trim(), m.ModelId.Trim())) with
+            {
+                Id = m.ModelId.Trim(),
+                DisplayName = string.IsNullOrWhiteSpace(m.DisplayName)
+                    ? m.ModelId.Trim()
+                    : m.DisplayName.Trim(),
+                Enabled = m.Enabled,
+            })
             .ToList();
 
         /// <summary>
@@ -512,6 +525,10 @@ namespace CST.Avalonia.ViewModels
             get => _enabled;
             set => this.RaiseAndSetIfChanged(ref _enabled, value);
         }
+
+        /// <summary>The entry this row was loaded from, so fields the form does not show — what the provider
+        /// published about the model — survive an edit. Null for a row the reader has just added.</summary>
+        public AiModelEntry? Published { get; set; }
 
         public ReactiveCommand<Unit, Unit> RemoveCommand { get; }
     }

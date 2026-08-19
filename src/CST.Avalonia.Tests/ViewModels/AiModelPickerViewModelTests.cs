@@ -220,6 +220,74 @@ public class AiModelPickerViewModelTests
         Assert.True(picker.HasNothingMatching);
     }
 
+    // ---- the hover card ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The card names the model and its provider, always.
+    ///
+    /// <para>With several endpoints configured, "Gemma 4" alone does not say whether it is the local one —
+    /// which is exactly the confusion the grouping exists to prevent, and the card should not undo it.</para>
+    /// </summary>
+    [Fact]
+    public void The_hover_card_names_the_model_and_its_provider()
+    {
+        var (picker, service, _) = Make();
+        service.Add("local", Draft("Local Ollama", new AiModelEntry("gemma4:12b-mlx", "Gemma4 12B MLX")));
+
+        var facts = AllModels(picker).Single().Facts;
+
+        Assert.Equal("Gemma4 12B MLX", facts.Single(f => f.Label == "Model").Value);
+        Assert.Equal("Local Ollama", facts.Single(f => f.Label == "Provider").Value);
+    }
+
+    /// <summary>
+    /// A field the provider never published gets no row.
+    ///
+    /// <para>OpenCode's equivalent card shows "Context 0" and "No reasoning" for a local model that published
+    /// neither. That reads as fact and is not one — an absent row is the honest rendering of an absent
+    /// field, and a local runner publishes nothing at all.</para>
+    /// </summary>
+    [Fact]
+    public void Unpublished_facts_get_no_row_rather_than_a_zero()
+    {
+        var (picker, service, _) = Make();
+        service.Add("local", Draft("Local Ollama", new AiModelEntry("gemma4:12b-mlx", "Gemma4 12B MLX")));
+
+        var labels = AllModels(picker).Single().Facts.Select(f => f.Label).ToList();
+
+        Assert.DoesNotContain("Context", labels);
+        Assert.DoesNotContain("Reasoning", labels);
+        Assert.DoesNotContain("Inputs", labels);
+    }
+
+    /// <summary>What the provider did publish is shown, in its own words.</summary>
+    [Fact]
+    public void Published_facts_become_rows()
+    {
+        var (picker, service, _) = Make();
+        service.Add("openrouter-ish", Draft("OpenRouter",
+            new AiModelEntry("nvidia/nemotron", "Nemotron", true,
+                ContextLength: 1_000_000, SupportsReasoning: true, Inputs: "text, image")));
+
+        var facts = AllModels(picker).Single().Facts;
+
+        Assert.Equal("1,000K", facts.Single(f => f.Label == "Context").Value);
+        Assert.Equal("supported", facts.Single(f => f.Label == "Reasoning").Value);
+        Assert.Equal("text, image", facts.Single(f => f.Label == "Inputs").Value);
+        Assert.Equal("nvidia/nemotron", facts.Single(f => f.Label == "Id").Value);
+    }
+
+    /// <summary>The wire id is shown only when it differs from the name — repeating the same string twice is
+    /// noise, and a hand-typed model usually has no separate name.</summary>
+    [Fact]
+    public void The_id_row_is_omitted_when_it_repeats_the_name()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine", new AiModelEntry("gemma4:12b", "gemma4:12b")));
+
+        Assert.DoesNotContain(AllModels(picker).Single().Facts, f => f.Label == "Id");
+    }
+
     // ---- what cannot be used, and why ---------------------------------------------------------------------
 
     /// <summary>
