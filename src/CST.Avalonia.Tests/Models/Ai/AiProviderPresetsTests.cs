@@ -61,7 +61,9 @@ public class AiProviderPresetsTests
     [Fact]
     public void A_preset_that_needs_a_key_says_where_one_might_already_be()
     {
-        foreach (var p in AiProviderPresets.All.Where(p => p.RequiresKey))
+        // Asserted of the HAND-KEPT entries only. Build treats the catalogue's `env` as optional, so a
+        // future snapshot carrying an env-less provider would break this suite rather than the app.
+        foreach (var p in AiProviderPresets.HandKept.Where(p => p.RequiresKey))
             Assert.NotEmpty(p.EnvironmentVariables);
     }
 

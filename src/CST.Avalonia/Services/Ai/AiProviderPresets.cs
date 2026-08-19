@@ -145,24 +145,6 @@ namespace CST.Avalonia.Services.Ai
         public static IReadOnlyList<AiProviderPreset> HandKept => Local.Concat(Hosted).ToList();
 
         /// <summary>
-        /// Every preset, ordered alphabetically by display name.
-        ///
-        /// <para><b>Deliberately absent, and why</b> — these need fields the connection record does not yet
-        /// model, and guessing at them would ship endpoints that cannot work:</para>
-        /// <list type="bullet">
-        /// <item>Azure OpenAI — needs a resource name, and uses an <c>api-key</c> header that requires
-        /// <i>removing</i> <c>authorization</c> rather than adding to it.</item>
-        /// <item>Amazon Bedrock — SigV4 request signing, or ambient AWS credentials with no environment
-        /// variable set at all.</item>
-        /// <item>Google Vertex — project plus location, authenticated by ADC rather than a key.</item>
-        /// <item>Cloudflare AI Gateway — an account id and <b>two</b> tokens on a single request.</item>
-        /// <item>Google Gemini — its native protocol is neither of our two kinds (<c>x-goog-api-key</c>, and
-        /// the model id embedded in the path). It does publish an OpenAI-compatible endpoint, but that was not
-        /// part of the extraction, so it is left out rather than asserted from memory.</item>
-        /// </list>
-        /// <para>All remain reachable today by adding a custom endpoint by hand.</para>
-        /// </summary>
-        /// <summary>
         /// Every preset derivable without the catalogue service — the hand-kept table plus whatever the
         /// build-time snapshot supplies. Callers holding an <c>IAiPresetSource</c> should use that instead;
         /// this is the answer for code with no access to one.

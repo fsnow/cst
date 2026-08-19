@@ -78,7 +78,12 @@ namespace CST.Avalonia.Services.Ai
         public AiPresetSource(IModelsDevCatalog catalog)
         {
             _catalog = catalog;
-            Presets = AiProviderPresets.LocalOnly;
+
+            // Seeded from the snapshot, not the local runners. Before the first load completes, a caller WITH
+            // this service would otherwise see fewer providers than one without it - and with a stale cache
+            // and a hung models.dev that window is the length of an HTTP timeout, during which
+            // AddFromPreset("openai") answers "not a known provider". (fable review)
+            Presets = SnapshotDefaults;
         }
 
         /// <summary>
@@ -116,7 +121,11 @@ namespace CST.Avalonia.Services.Ai
                 var result = await _catalog.GetAsync(ct).ConfigureAwait(false);
 
                 var built = Build(result.Providers);
-                var hosted = built.Count - AiProviderPresets.LocalOnly.Count;
+                // Catalogue-DERIVED count. Subtracting only the local runners left this permanently >= 10,
+                // because Build always seeds the whole hand-kept table - so the guard below could never fire,
+                // and a models.dev reshape that left every record templated or URL-less would have reported
+                // Ready with 12 presets and no Problem. A silent collapse from 171 to 12. (fable review)
+                var hosted = built.Count - AiProviderPresets.HandKept.Count;
 
                 Presets = built;
 
@@ -137,7 +146,9 @@ namespace CST.Avalonia.Services.Ai
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 Log.Warning(ex, "Could not build the provider presets (#737)");
-                Presets = AiProviderPresets.LocalOnly;
+
+                // Whatever was already built stays. Resetting to the local runners would be this feature's
+                // one rule - a failure never destroys what we had - broken in its own error handler.
                 State = AiPresetState.Unavailable;
                 Problem = "Couldn't reach the provider list.";
             }
@@ -158,6 +169,12 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         internal static string? SkipReason(CatalogProvider provider)
         {
+            // Endpoints whose URL parses fine and whose protocol we speak, but which our endpoint
+            // resolution would still address wrongly. Each was confirmed by probing the live endpoint, not
+            // reasoned about, and each would otherwise be a preset that looks configured and 404s.
+            if (DeniedIds.Contains(provider.Id))
+                return "endpoint path does not match how we resolve it (#742)";
+
             // The id becomes the credential's keychain account name, so it has to be a safe segment.
             // `wafer.ai` is the real case: a dot in the id.
             if (!SlugPattern.IsMatch(provider.Id)) return "id is not a slug";
@@ -178,6 +195,36 @@ namespace CST.Avalonia.Services.Ai
 
             return null;
         }
+
+        /// <summary>
+        /// <c>github-copilot</c> publishes a bare host and serves <c>/chat/completions</c>, so our
+        /// bare-host rule builds <c>/v1/chat/completions</c> — a 404 — and it cannot authenticate with a
+        /// pasted key regardless. <c>perplexity-agent</c> is the sibling of the <c>perplexity</c> case
+        /// already skipped by hand: <c>/v1</c> in the base plus our versioned path yields
+        /// <c>/v1/chat/completions</c> against an endpoint serving <c>/chat/completions</c>. Both revisit
+        /// when #742 lands.
+        /// </summary>
+        private static readonly HashSet<string> DeniedIds =
+            new(StringComparer.OrdinalIgnoreCase) { "github-copilot", "perplexity-agent" };
+
+        /// <summary>
+        /// The wire protocol a catalogue record implies. (fable review)
+        ///
+        /// <para><b>The <c>npm</c> field names the protocol, and ignoring it shipped wrong endpoints.</b>
+        /// Eight providers with a perfectly valid <c>api</c> URL declare <c>@ai-sdk/anthropic</c> — minimax,
+        /// thinkingmachines, kimi-for-coding and others — meaning that URL serves Anthropic Messages, not
+        /// <c>/chat/completions</c>. Probed: <c>POST /anthropic/v1/chat/completions</c> returns 404 while
+        /// <c>/anthropic/v1/messages</c> returns 401, i.e. the route exists. Emitting them as
+        /// OpenAI-compatible produced presets that could only ever fail.</para>
+        ///
+        /// <para>Deliberately NOT a general mapping from package to kind: <c>openrouter</c> ships
+        /// <c>@openrouter/ai-sdk-provider</c> and is genuinely OpenAI-compatible. Only the one package whose
+        /// protocol we can name is special-cased; everything else keeps the default.</para>
+        /// </summary>
+        internal static ChatProviderKind KindFor(CatalogProvider provider) =>
+            string.Equals(provider.Npm, "@ai-sdk/anthropic", StringComparison.OrdinalIgnoreCase)
+                ? ChatProviderKind.Anthropic
+                : ChatProviderKind.OpenAiCompatible;
 
         private static readonly System.Text.RegularExpressions.Regex SlugPattern =
             new("^[a-z0-9][a-z0-9_-]*$", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -213,7 +260,7 @@ namespace CST.Avalonia.Services.Ai
                 built[provider.Id] = new AiProviderPreset(
                     provider.Id,
                     string.IsNullOrWhiteSpace(provider.Name) ? provider.Id : provider.Name!,
-                    ChatProviderKind.OpenAiCompatible,
+                    KindFor(provider),
                     provider.Api!,
                     methods);
             }

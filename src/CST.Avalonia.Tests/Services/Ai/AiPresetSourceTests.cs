@@ -232,4 +232,86 @@ public class AiPresetSourceTests
         Assert.Equal(1, catalog.Refreshes);
         Assert.Equal(1, raised);
     }
+
+    // ---- the wire protocol comes from the catalogue, not from an assumption (fable review) -------------
+
+    /// <summary>
+    /// The finding that would have shipped eight broken presets. Eight catalogue providers carry a perfectly
+    /// valid `api` URL and declare `@ai-sdk/anthropic` — minimax, thinkingmachines, kimi-for-coding and
+    /// others — so that URL serves Anthropic Messages, not `/chat/completions`. Probed live:
+    /// `/anthropic/v1/chat/completions` returns 404 while `/anthropic/v1/messages` returns 401.
+    /// </summary>
+    [Fact]
+    public void A_provider_declaring_the_anthropic_sdk_is_emitted_as_anthropic()
+    {
+        var built = AiPresetSource.Build(Catalogue(
+            new CatalogProvider("minimax", "MiniMax", "https://api.minimax.io/anthropic/v1",
+                Npm: "@ai-sdk/anthropic")));
+
+        var minimax = Assert.Single(built.Where(p => p.Id == "minimax"));
+        Assert.Equal(ChatProviderKind.Anthropic, minimax.Kind);
+    }
+
+    /// <summary>Deliberately not a general package-to-kind mapping: OpenRouter ships its own provider package
+    /// and is genuinely OpenAI-compatible, so only the one package whose protocol we can name is special.</summary>
+    [Fact]
+    public void Another_vendors_own_sdk_package_does_not_change_the_protocol()
+    {
+        var built = AiPresetSource.Build(Catalogue(
+            new CatalogProvider("openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
+                Npm: "@openrouter/ai-sdk-provider")));
+
+        Assert.Equal(ChatProviderKind.OpenAiCompatible,
+            built.Single(p => p.Id == "openrouter").Kind);
+    }
+
+    /// <summary>Endpoints whose URL parses fine but which our resolution addresses wrongly. Both were
+    /// confirmed by probing rather than reasoned about; revisit when #742 lands.</summary>
+    [Theory]
+    [InlineData("github-copilot", "https://api.githubcopilot.com")]
+    [InlineData("perplexity-agent", "https://api.perplexity.ai/v1")]
+    public void An_endpoint_we_would_address_wrongly_is_not_emitted(string id, string api)
+    {
+        var built = AiPresetSource.Build(Catalogue(new CatalogProvider(id, id, api)));
+
+        Assert.DoesNotContain(built, p => p.Id == id);
+    }
+
+    /// <summary>
+    /// The guard was dead code: subtracting only the local runners left the count permanently above zero,
+    /// because Build always seeds the whole hand-kept table. A models.dev reshape leaving every record
+    /// templated would then have reported Ready with a dozen presets and no Problem — a silent collapse.
+    /// </summary>
+    [Fact]
+    public async Task A_catalogue_that_yields_no_hosted_presets_reports_unavailable()
+    {
+        var catalog = new FakeCatalog
+        {
+            // Parses fine, plenty of records, every one unusable: templated against host-expanded variables.
+            Result = new CatalogResult(
+                Catalogue(Enumerable.Range(0, 60)
+                    .Select(i => new CatalogProvider($"p{i}", $"P{i}", "https://${HOST}/v1"))
+                    .ToArray()),
+                CatalogSource.Network),
+        };
+        var source = new AiPresetSource(catalog);
+
+        await source.EnsureLoadedAsync();
+
+        Assert.Equal(AiPresetState.Unavailable, source.State);
+        Assert.NotNull(source.Problem);
+        Assert.Contains(source.Presets, p => p.Id == "ollama");
+    }
+
+    /// <summary>Before the first load, a caller WITH the service must not see fewer providers than one
+    /// without it — that window is an HTTP timeout long when the cache is stale and the host is hung.</summary>
+    [Fact]
+    public void Presets_are_seeded_from_the_snapshot_before_any_load()
+    {
+        var source = new AiPresetSource(new FakeCatalog());
+
+        Assert.Equal(AiPresetState.Loading, source.State);
+        Assert.True(source.Presets.Count > 100,
+            $"seeded with only {source.Presets.Count}; AddFromPreset would refuse known providers");
+    }
 }
