@@ -59,8 +59,11 @@ namespace CST.Avalonia.Converters
     /// off the UI thread. The row was then left with a hidden monogram and an empty image: a blank tile,
     /// which is the one outcome a fallback exists to prevent.</para>
     ///
-    /// <para>Asking the same question twice is cheap — <c>AiLogoImages</c> memoises by file and colour, so
-    /// the second call is a dictionary hit.</para>
+    /// <para>Asking the same question twice is cheap <b>when the answer is yes</b> — <c>AiLogoImages</c>
+    /// memoises by file and colour, so a second call for a mark that rendered is a dictionary hit. Failures
+    /// are deliberately not cached, so a malformed or oversized file is re-read and re-parsed on each
+    /// evaluation. Bounded and rare, and the alternative — caching a failure — would defeat the delete-and-
+    /// refetch heal that repairs a corrupt cache entry. (fable review)</para>
     /// </summary>
     public sealed class ProviderLogoRenderedConverter : IValueConverter
     {

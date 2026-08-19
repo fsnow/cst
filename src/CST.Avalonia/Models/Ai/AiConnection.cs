@@ -144,8 +144,11 @@ namespace CST.Avalonia.Models.Ai
     /// <para><b>In practice a models page</b>, not an account or key page — sampled across the catalogue, nine
     /// in ten point at a list of model ids. So its use is for a reader with a working connection who needs to
     /// know what to run on it, not for one who cannot find their key: anyone pasting a key has already been to
-    /// the provider. Null for the hand-kept presets and the local runners, which have no catalogue
-    /// record.</para>
+    /// the provider. Null only where the catalogue has nothing to give: the local runners, which it does not
+    /// carry at all, and a custom endpoint, which has no provider identity. <b>A hand-kept preset still gets
+    /// one</b> — those are hand-kept because the catalogue omits their <c>api</c> URL, not because they are
+    /// absent from it, and reading that the other way round cost the ten most prominent providers their
+    /// link.</para>
     /// </param>
     public sealed record AiProviderPreset(
         string Id,

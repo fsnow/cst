@@ -720,8 +720,25 @@ public class AiConnectionsViewModelTests
     [InlineData("not a url")]
     [InlineData("file:///etc/passwd")]
     [InlineData("javascript:alert(1)")]
-    public void A_url_that_is_not_http_is_not_opened(string? url) =>
-        AiConnectionsViewModel.OpenUrl(url);   // must return without launching anything, and without throwing
+    [InlineData("/etc/passwd")]
+    public void A_url_that_is_not_http_is_refused(string? url) =>
+        Assert.False(AiConnectionsViewModel.ShouldOpen(url, out _));
+
+    /// <summary>
+    /// Asserted on the decision, not on the launch.
+    ///
+    /// <para>A test that merely calls the launcher can only observe that nothing threw — so if the scheme
+    /// check were deleted it would pass while actually shell-opening <c>file:///etc/passwd</c> on whoever ran
+    /// it. Green, and worse than useless.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("https://openrouter.ai/models")]
+    [InlineData("http://example.test/docs")]
+    public void An_http_url_is_allowed(string url)
+    {
+        Assert.True(AiConnectionsViewModel.ShouldOpen(url, out var uri));
+        Assert.NotNull(uri);
+    }
 
     // ---- monograms -------------------------------------------------------------------------------------
 

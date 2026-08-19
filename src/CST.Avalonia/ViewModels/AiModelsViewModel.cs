@@ -278,7 +278,22 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public string? DocUrl => AiProviderPresets.ById(Id)?.Doc;
 
-        public bool ShowDoc => Visible.Count == 0 && !string.IsNullOrEmpty(DocUrl);
+        /// <summary>
+        /// Offered only once we have asked and come back with nothing.
+        ///
+        /// <para>Three states looked empty but are not the case this answers: <b>mid-fetch</b>, where it
+        /// rendered beside "asking the provider for its models"; <b>before any fetch</b>, where a collapsed
+        /// group would advertise a link although expanding it would have produced a listing; and <b>when a
+        /// filter hid everything</b>, where a provider whose four hundred models are all paid would be
+        /// described as publishing none. Only the last of those is even visible today, and all three said
+        /// something untrue.</para>
+        /// </summary>
+        public bool ShowDoc =>
+            _hasFetched && !IsFetching && !HasAnyModels && !string.IsNullOrEmpty(DocUrl);
+
+        /// <summary>Whether this connection has any models at all, before the search and price filters — the
+        /// question "does this provider publish a listing?" rather than "did the filter leave anything?".</summary>
+        private bool HasAnyModels => _fetched.Count > 0 || _connection.Models.Count > 0;
 
         public ReactiveCommand<Unit, Unit> OpenDocCommand { get; }
 
@@ -380,6 +395,7 @@ namespace CST.Avalonia.ViewModels
             finally
             {
                 IsFetching = false;
+                this.RaisePropertyChanged(nameof(ShowDoc));
                 _owner.Reflow();
             }
         }

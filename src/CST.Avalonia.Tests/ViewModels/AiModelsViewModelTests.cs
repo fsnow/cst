@@ -486,6 +486,48 @@ public class AiModelsViewModelTests
         Assert.Equal(Reachability.Configured, service.Connections.Single().State);
     }
 
+    // ---- the documentation link on an empty group (#740) ----------------------------------------------------
+
+    /// <summary>
+    /// Offered only once we have asked and come back with nothing.
+    ///
+    /// <para>Before a fetch, a collapsed group would advertise a link although expanding it would have
+    /// produced a listing — which is the opposite of what the link says.</para>
+    /// </summary>
+    [Fact]
+    public void The_doc_link_is_not_offered_before_anything_has_been_asked()
+    {
+        var (vm, service) = Make(new FakeCatalog(AiCatalogResult.Fail("404")));
+        service.AddFromPreset("openrouter", new Dictionary<string, string>());
+
+        Assert.False(Group(vm).ShowDoc);
+
+        Group(vm).IsExpanded = true;
+
+        Assert.True(Group(vm).ShowDoc);
+    }
+
+    /// <summary>
+    /// A filter hiding everything is not a provider publishing nothing.
+    ///
+    /// <para>A connection whose four hundred fetched models are all paid would otherwise be described as
+    /// having no listing, and pointed at documentation it does not need.</para>
+    /// </summary>
+    [Fact]
+    public void A_filter_that_hides_every_model_does_not_offer_the_doc_link()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("paid", "Paid",
+                PromptPricePerMillion: 5m, CompletionPricePerMillion: 5m)));
+        service.AddFromPreset("openrouter", new Dictionary<string, string>());
+        Group(vm).IsExpanded = true;
+
+        vm.FreeOnly = true;
+
+        Assert.Empty(Rows(vm));            // nothing on screen
+        Assert.False(Group(vm).ShowDoc);   // but the provider does publish a listing
+    }
+
     // ---- search and the capability filter ---------------------------------------------------------------
 
     /// <summary>Search filters across every group, not within the expanded one, and shows what it finds
