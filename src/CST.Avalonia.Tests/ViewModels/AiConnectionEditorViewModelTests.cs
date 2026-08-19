@@ -410,4 +410,78 @@ public class AiConnectionEditorViewModelTests
     private static AiConnectionDraft Draft(string name = "My box", string url = "http://localhost:8000/v1") =>
         new(name, ChatProviderKind.OpenAiCompatible, url,
             new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+
+    // ---- the auth shape must survive an edit (fable review) ----------------------------------------------
+
+    /// <summary>
+    /// Azure sends its credential in `api-key` with no scheme, and expects `Authorization` to be ABSENT. That
+    /// shape is set by the preset and is not editable in this form — so a draft that omitted it silently reset
+    /// the connection to Bearer, and every request after the first rename came back 401.
+    ///
+    /// <para>The failure was invisible from the editor: nothing on screen shows the auth shape, so the
+    /// connection looked untouched while it had stopped working.</para>
+    /// </summary>
+    [Fact]
+    public void Renaming_an_azure_connection_does_not_reset_its_auth_shape()
+    {
+        var h = new Harness();
+        Save(h.Preset("azure").With(vm => vm.Inputs.Single().Value = "acme"));
+
+        var before = h.Service.Connections.Single();
+        Assert.Equal("api-key", before.AuthHeaderName);
+        Assert.Null(before.AuthScheme);
+
+        var edit = h.Existing("azure");
+        edit.DisplayName = "Work Azure";
+        Save(edit);
+
+        var after = h.Service.Connections.Single();
+        Assert.Equal("Work Azure", after.DisplayName);
+        Assert.Equal("api-key", after.AuthHeaderName);
+        Assert.Null(after.AuthScheme);
+    }
+
+    /// <summary>Adding a model to a preset connection goes through Update too, so it is the same hazard.</summary>
+    [Fact]
+    public void Adding_a_model_does_not_reset_the_auth_shape()
+    {
+        var h = new Harness();
+        Save(h.Preset("azure").With(vm => vm.Inputs.Single().Value = "acme"));
+
+        var edit = h.Existing("azure");
+        edit.Models.Add(new AiModelRowViewModel(edit.Models) { ModelId = "gpt-4o" });
+        Save(edit);
+
+        var after = h.Service.Connections.Single();
+        Assert.Equal("api-key", after.AuthHeaderName);
+        Assert.Null(after.AuthScheme);
+    }
+
+    /// <summary>An ordinary bearer connection keeps its shape too — the fix must not simply pin every
+    /// connection to Azure's.</summary>
+    [Fact]
+    public void An_ordinary_connection_keeps_bearer_through_an_edit()
+    {
+        var h = new Harness();
+        Save(h.Preset("openrouter"));
+
+        var edit = h.Existing("openrouter");
+        edit.DisplayName = "OR";
+        Save(edit);
+
+        var after = h.Service.Connections.Single();
+        Assert.Equal("Authorization", after.AuthHeaderName);
+        Assert.Equal("Bearer", after.AuthScheme);
+    }
+}
+
+internal static class EditorTestExtensions
+{
+    /// <summary>Small helper so a preset needing inputs can be configured inline.</summary>
+    public static AiConnectionEditorViewModel With(
+        this AiConnectionEditorViewModel vm, System.Action<AiConnectionEditorViewModel> configure)
+    {
+        configure(vm);
+        return vm;
+    }
 }

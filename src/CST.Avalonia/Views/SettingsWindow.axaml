@@ -586,40 +586,14 @@
                                         <!-- The protocol and the address moved to the Providers tab, where
                                              they belong to a connection rather than to the app (#691). What
                                              is left here is what is still genuinely one-per-app. -->
-                                        <TextBlock Text="Model" Classes="SettingLabel" Margin="0,14,0,0"/>
-                                        <TextBox Text="{Binding Model}"
-                                                IsEnabled="{Binding AssistantFieldsEnabled}"
-                                                Watermark="e.g. claude-sonnet-4-5"
-                                                Width="480" HorizontalAlignment="Left"/>
-                                        <TextBlock Text="Typed exactly as the provider spells it."
-                                                  Classes="SettingDescription"/>
-
-                                        <!-- What can honestly be said about a model's Pāli, which is not a
-                                             rating. Replaced a curated per-model tier: Pāli ability is
-                                             emergent from pre-training, so it is not predicted by
-                                             benchmarks or size and cannot be certified by this app. (#670) -->
-                                        <TextBlock Text="{Binding PaliAbilityNote}" Classes="SettingDescription"/>
-
-                                        <TextBlock Text="API key" Classes="SettingLabel" Margin="0,14,0,0"/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBox Text="{Binding ApiKeyEntry}"
-                                                    PasswordChar="●"
-                                                    IsEnabled="{Binding CanStoreKeys}"
-                                                    Watermark="Paste a key to store it"
-                                                    Width="320"/>
-                                            <Button Content="Save key"
-                                                    Command="{Binding SaveApiKeyCommand}"
-                                                    IsEnabled="{Binding CanStoreKeys}"
-                                                    Margin="8,0,0,0"/>
-                                            <Button Content="Remove"
-                                                    Command="{Binding RemoveApiKeyCommand}"
-                                                    IsEnabled="{Binding CanStoreKeys}"
-                                                    Margin="6,0,0,0"/>
-                                        </StackPanel>
-                                        <TextBlock Text="{Binding KeyStatus}" Classes="SettingDescription"/>
-                                        <TextBlock Text="{Binding ApiKeyDescription}" Classes="SettingDescription"/>
-                                        <TextBlock Text="Stored securely in the operating system's credential store."
-                                                  Classes="SettingDescription"/>
+                                        <!-- The Model box, the shared API-key box and the per-model Pāli note
+                                             lived here while the assistant had exactly one provider. The
+                                             Providers tab replaced all three (#691/#692/#693), and leaving
+                                             them meant two screens editing the same records by different
+                                             routes: this one wrote settings directly, bypassing validation
+                                             and the change event, and filed keys under whichever connection
+                                             happened to be active - the very mis-filing #678 fixed. Removed
+                                             rather than hidden. (fable review) -->
 
                                         <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <AutoCompleteBox Text="{Binding AnswerLanguage}"
