@@ -407,6 +407,30 @@ public class AiConnectionsViewModelTests
         Assert.Equal("Delete My box and its 2 models?", vm.Connections.Single().DeleteConfirmText);
     }
 
+    // ---- lifetime ----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Disposing stops the view model listening.
+    ///
+    /// <para>The connection service is a singleton and a fresh Settings window builds a fresh view model
+    /// every time it is opened. Without this, each visit leaves another subscriber alive — rebuilding
+    /// collections nobody can see, on every connection change, for the rest of the session — and the cost
+    /// grows with how often the reader visits a screen whose whole job is being visited.</para>
+    /// </summary>
+    [Fact]
+    public void A_disposed_view_model_stops_listening()
+    {
+        var (vm, service) = Make();
+        service.Add("first", Draft());
+        Assert.Single(vm.Connections);
+
+        vm.Dispose();
+        service.Add("second", Draft("Second"));
+
+        Assert.Single(vm.Connections);          // did not see the second add
+        Assert.Equal(2, service.Connections.Count);   // which did happen
+    }
+
     // ---- monograms -------------------------------------------------------------------------------------
 
     [Theory]

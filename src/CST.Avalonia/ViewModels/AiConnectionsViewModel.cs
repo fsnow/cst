@@ -27,7 +27,7 @@ namespace CST.Avalonia.ViewModels
     /// order the service hands them over in. There is no "recommended" badge and no pre-selection anywhere,
     /// because that is the model registry deleted in #670/#681 wearing different clothes.</para>
     /// </summary>
-    public class AiConnectionsViewModel : ViewModelBase
+    public class AiConnectionsViewModel : ViewModelBase, IDisposable
     {
         private readonly IAiConnectionService? _service;
         private readonly IAiCredentialStore? _credentials;
@@ -177,6 +177,20 @@ namespace CST.Avalonia.ViewModels
         }
 
         private void OnConnectionsChanged(object? sender, EventArgs e) => Rebind();
+
+        /// <summary>
+        /// Stops listening to the service.
+        ///
+        /// <para><b>Required, not tidiness.</b> The connection service is a singleton and a fresh Settings
+        /// window builds a fresh view model every time it is opened, so without this each open leaves another
+        /// subscriber alive — rebuilding collections nobody can see, on every connection change, for the rest
+        /// of the session. The cost grows with how often the reader visits Settings, which for a screen whose
+        /// whole job is being visited is the wrong direction.</para>
+        /// </summary>
+        public void Dispose()
+        {
+            if (_service is not null) _service.ConnectionsChanged -= OnConnectionsChanged;
+        }
 
         /// <summary>
         /// Syncs both lists in place, keyed by id, rather than rebuilding them.

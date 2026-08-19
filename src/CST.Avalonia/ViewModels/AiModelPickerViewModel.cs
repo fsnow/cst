@@ -24,7 +24,7 @@ namespace CST.Avalonia.ViewModels
     /// list the reader built there, so it needs no virtualization and the search box is for comfort rather
     /// than necessity.</para>
     /// </summary>
-    public class AiModelPickerViewModel : ViewModelBase
+    public class AiModelPickerViewModel : ViewModelBase, IDisposable
     {
         private readonly IAiConnectionService? _service;
         private readonly Action? _changed;
@@ -40,7 +40,7 @@ namespace CST.Avalonia.ViewModels
 
             if (_service is not null)
             {
-                _service.ConnectionsChanged += (_, _) => Rebuild();
+                _service.ConnectionsChanged += OnConnectionsChanged;
                 Rebuild();
             }
         }
@@ -150,6 +150,16 @@ namespace CST.Avalonia.ViewModels
         private bool IsCurrent(AiConnection connection, AiModelEntry model) =>
             string.Equals(_service?.Active?.Id, connection.Id, StringComparison.Ordinal) &&
             string.Equals(_service?.ActiveModelId, model.Id, StringComparison.Ordinal);
+
+        private void OnConnectionsChanged(object? sender, EventArgs e) => Rebuild();
+
+        /// <summary>Stops listening. This one lives on the singleton assistant rather than being rebuilt per
+        /// window, so it does not leak today — it is disposable so that stays true if the assistant is ever
+        /// made per-panel.</summary>
+        public void Dispose()
+        {
+            if (_service is not null) _service.ConnectionsChanged -= OnConnectionsChanged;
+        }
 
         internal void Refresh() => Rebuild();
     }

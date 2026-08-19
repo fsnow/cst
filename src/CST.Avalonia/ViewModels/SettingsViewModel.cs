@@ -28,11 +28,16 @@ namespace CST.Avalonia.ViewModels
         private SettingsCategoryViewModel? _selectedCategory;
         private bool _hasUnsavedChanges;
 
-        // Held only so it can be disposed with the window; it also lives in Categories.
+        // Held only so they can be disposed with the window; both also live in Categories.
         private readonly AppearanceSettingsViewModel? _appearanceSettings;
+        private readonly AiSettingsViewModel? _aiSettings;
 
         /// <summary>Releases child subscriptions. Called from the window's Closed handler.</summary>
-        public void Dispose() => _appearanceSettings?.Dispose();
+        public void Dispose()
+        {
+            _appearanceSettings?.Dispose();
+            _aiSettings?.Dispose();
+        }
 
         public SettingsViewModel(ISettingsService settingsService, Services.Dictionaries.DictionarySourcePreferenceService sourcePrefs)
         {
@@ -61,6 +66,7 @@ namespace CST.Avalonia.ViewModels
                 _settingsService,
                 App.TryGetService<Services.Ai.IAiCredentialStore>(),
                 App.TryGetService<Services.Ai.IChatProviderResolver>());
+            _aiSettings = aiSettings;
             var loggingSettings = new DeveloperSettingsViewModel(_settingsService) { Parent = this };
 
             // Order: most-adjusted settings first, informational ones last (#100).
@@ -1299,7 +1305,7 @@ namespace CST.Avalonia.ViewModels
 /// </summary>
 public sealed record AiProviderChoice(Services.Ai.ChatProviderKind Kind, string Display, string Stored);
 
-public class AiSettingsViewModel : ViewModelBase
+public class AiSettingsViewModel : ViewModelBase, IDisposable
     {
         private readonly ISettingsService _settingsService;
         private bool _aiEnabled;
@@ -1362,6 +1368,15 @@ public class AiSettingsViewModel : ViewModelBase
         /// (#692, #674)
         /// </summary>
         public AiModelsViewModel Models { get; }
+
+        /// <summary>Releases the two tabs' subscriptions to the connection service. The service is a
+        /// singleton and this view model is rebuilt on every Settings open, so without this each visit leaves
+        /// another pair of listeners alive for the rest of the session.</summary>
+        public void Dispose()
+        {
+            Connections.Dispose();
+            Models.Dispose();
+        }
 
         /// <summary>Master switch — "Enable AI Features". Everything AI-related is gated behind this (default OFF).</summary>
         public bool AiEnabled
