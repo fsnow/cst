@@ -117,6 +117,11 @@ Before starting the release process, verify on Kestrel:
 - [ ] All version strings updated and consistent — see **Version strings: two timing buckets** below.
       By release time, bucket A should already be done (it is bumped at the *start* of the cycle);
       verify it rather than discovering it here. These all drifted before Beta 4.
+- [ ] Provider catalogue snapshot refreshed: `./src/CST.Avalonia/refresh-models-snapshot.sh`, then
+      **read the diff** before committing — it shows which providers appeared or disappeared since the last
+      release, and that review is the point of committing the file rather than fetching it at build time.
+      Skipping this degrades gracefully: the snapshot is only the last fallback behind the runtime cache and
+      the network, so a stale one costs nothing at runtime. (#733, #736)
 - [ ] Build succeeds: `dotnet build src/CST.Avalonia`
 - [ ] Tests pass: `dotnet test src/CST.Avalonia.Tests` (or acceptable skip rate documented) — pass the
       project path or run from that directory; `dotnet test` in `src/CST.Avalonia` runs nothing and exits 0

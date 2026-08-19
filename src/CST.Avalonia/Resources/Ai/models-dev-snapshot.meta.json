@@ -1,0 +1,8 @@
+{
+  "source": "https://models.dev/api.json",
+  "fetchedUtc": "2026-08-19T16:44:27Z",
+  "providers": 192,
+  "providersWithApiUrl": 166,
+  "sha256": "b8fbe9904bfd4e2ab092592032834e10803eea55c5cd76495854068cf8ae5b0f",
+  "license": "MIT (models.dev)"
+}
