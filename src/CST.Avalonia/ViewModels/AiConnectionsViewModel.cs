@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
@@ -303,6 +304,28 @@ namespace CST.Avalonia.ViewModels
             Rebind();
         }
 
+        /// <summary>
+        /// Hands a documentation link to the operating system.
+        ///
+        /// <para>Guarded on the scheme: the URL comes from a fetched catalogue, and handing an arbitrary
+        /// string to the shell is how a data file becomes a way to run something. http and https only.</para>
+        /// </summary>
+        internal static void OpenUrl(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
+            if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) return;
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            }
+            catch
+            {
+                // A browser that will not open is not worth taking the settings window down for.
+            }
+        }
+
         private void CloseEditor(bool saved)
         {
             Editor = null;
@@ -492,6 +515,7 @@ namespace CST.Avalonia.ViewModels
             _connection = connection;
 
             EditCommand = ReactiveCommand.Create(() => _owner.BeginEdit(Id));
+            OpenDocCommand = ReactiveCommand.Create(() => AiConnectionsViewModel.OpenUrl(DocUrl));
             RemoveKeyCommand = ReactiveCommand.Create(() => _owner.RemoveKey(Id));
             DeleteCommand = ReactiveCommand.Create(() => { IsConfirmingDelete = true; });
             ConfirmDeleteCommand = ReactiveCommand.Create(() => _owner.Delete(Id));
@@ -541,6 +565,19 @@ namespace CST.Avalonia.ViewModels
         /// <para>"No key" is a legitimate resting state, not a warning: a local runner needs none, and a
         /// connection may authenticate entirely through its headers.</para>
         /// </summary>
+        /// <summary>
+        /// The provider's own documentation, where the catalogue publishes one.
+        ///
+        /// <para>In practice a <b>models</b> page rather than an account page — nine of ten sampled point at a
+        /// list of model ids. So it is for a reader with a working connection who needs to know what to run on
+        /// it, not for one who cannot find their key: anyone who has pasted a key has already been to the
+        /// provider. Null for a custom endpoint and for the local runners, which have no catalogue
+        /// record.</para>
+        /// </summary>
+        public string? DocUrl => AiProviderPresets.ById(_connection.Id)?.Doc;
+
+        public bool HasDoc => !string.IsNullOrEmpty(DocUrl);
+
         public string KeySourceBadge => _connection.KeySource switch
         {
             CredentialSource.Keychain => "Keychain",
@@ -612,6 +649,8 @@ namespace CST.Avalonia.ViewModels
             : $"Delete {DisplayName} and its {ModelSummary}?";
 
         public ReactiveCommand<Unit, Unit> EditCommand { get; }
+
+        public ReactiveCommand<Unit, Unit> OpenDocCommand { get; }
 
         public ReactiveCommand<Unit, Unit> RemoveKeyCommand { get; }
 

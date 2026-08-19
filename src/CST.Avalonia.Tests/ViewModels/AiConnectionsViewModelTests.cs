@@ -676,6 +676,53 @@ public class AiConnectionsViewModelTests
         Assert.False(vm.HasCatalogueProblem);
     }
 
+    // ---- the documentation link (#740) ----------------------------------------------------------------------
+
+    /// <summary>
+    /// A catalogue-backed connection offers its provider's documentation.
+    ///
+    /// <para>Sampled across the catalogue, nine `doc` links in ten point at a <b>models</b> page rather than an
+    /// account page — so this answers "what can I run on this?", not "where do I get a key?". Anyone who has
+    /// pasted a key has already been to the provider.</para>
+    /// </summary>
+    [Fact]
+    public void A_catalogue_backed_connection_links_to_its_provider_docs()
+    {
+        var (vm, service) = Make();
+        service.AddFromPreset("openrouter", new Dictionary<string, string>());
+
+        var row = vm.Connections.Single();
+        Assert.True(row.HasDoc);
+        Assert.StartsWith("https://", row.DocUrl);
+    }
+
+    /// <summary>A custom endpoint has no provider behind it and therefore no documentation to point at —
+    /// the link is absent rather than pointing somewhere generic.</summary>
+    [Fact]
+    public void A_custom_endpoint_offers_no_documentation_link()
+    {
+        var (vm, service) = Make();
+        service.Add("my-box", Draft());
+
+        Assert.False(vm.Connections.Single().HasDoc);
+    }
+
+    /// <summary>
+    /// Only http(s) is handed to the shell.
+    ///
+    /// <para>The URL arrives in a fetched catalogue. Passing an arbitrary string to the operating system is
+    /// how a data file becomes a way to run something, so the scheme is checked rather than trusted.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("not a url")]
+    [InlineData("file:///etc/passwd")]
+    [InlineData("javascript:alert(1)")]
+    public void A_url_that_is_not_http_is_not_opened(string? url) =>
+        AiConnectionsViewModel.OpenUrl(url);   // must return without launching anything, and without throwing
+
     // ---- monograms -------------------------------------------------------------------------------------
 
     [Theory]

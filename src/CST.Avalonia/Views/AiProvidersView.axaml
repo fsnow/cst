@@ -99,11 +99,23 @@
                             <Border Classes="Row">
                                 <Grid ColumnDefinitions="Auto,*,Auto,Auto">
 
-                                    <Border Grid.Column="0" Classes="Tile"
-                                            Background="{Binding MonogramTone,
-                                                Converter={x:Static conv:MonogramToneConverter.Instance}}">
-                                        <TextBlock Text="{Binding Monogram}"/>
-                                    </Border>
+                                    <!-- The logo replaces the tile where one resolved; the monogram stays
+                                         for a provider with none, a custom endpoint (no provider id at all),
+                                         and any fetch that failed. It is a better first choice, not a
+                                         replacement mechanism. -->
+                                    <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
+                                           VerticalAlignment="Top">
+                                        <Border Classes="Tile" Margin="0"
+                                                IsVisible="{Binding !HasLogo}"
+                                                Background="{Binding MonogramTone,
+                                                    Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                            <TextBlock Text="{Binding Monogram}"/>
+                                        </Border>
+                                        <Image IsVisible="{Binding HasLogo}"
+                                               Source="{Binding LogoPath,
+                                                   Converter={x:Static conv:ProviderLogoConverter.Instance}}"
+                                               Stretch="Uniform" Margin="2"/>
+                                    </Panel>
 
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                                         <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
@@ -133,6 +145,12 @@
                                     <StackPanel Grid.Column="3" Orientation="Horizontal"
                                                 VerticalAlignment="Center"
                                                 IsVisible="{Binding IsNotConfirmingDelete}">
+                                        <!-- Points at the provider's models page, which is the question a
+                                             configured connection actually raises: what can I run on it. -->
+                                        <Button Content="Models ↗" Classes="Link"
+                                                IsVisible="{Binding HasDoc}"
+                                                Command="{Binding OpenDocCommand}"
+                                                ToolTip.Tip="{Binding DocUrl}"/>
                                         <Button Content="Edit" Classes="Link"
                                                 Command="{Binding EditCommand}"/>
                                         <!-- Two destructive actions, not one: stopping the billing and
@@ -185,11 +203,19 @@
                             <DataTemplate x:DataType="vm:AiPresetRowViewModel">
                                 <Border Classes="Row">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <Border Grid.Column="0" Classes="Tile"
-                                                Background="{Binding MonogramTone,
-                                                    Converter={x:Static conv:MonogramToneConverter.Instance}}">
-                                            <TextBlock Text="{Binding Monogram}"/>
-                                        </Border>
+                                        <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
+                                               VerticalAlignment="Top">
+                                            <Border Classes="Tile" Margin="0"
+                                                    IsVisible="{Binding !HasLogo}"
+                                                    Background="{Binding MonogramTone,
+                                                        Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                                <TextBlock Text="{Binding Monogram}"/>
+                                            </Border>
+                                            <Image IsVisible="{Binding HasLogo}"
+                                                   Source="{Binding LogoPath,
+                                                       Converter={x:Static conv:ProviderLogoConverter.Instance}}"
+                                                   Stretch="Uniform" Margin="2"/>
+                                        </Panel>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                                             <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
                                             <TextBlock Text="{Binding RequirementText}" Classes="Secondary"/>
@@ -263,11 +289,19 @@
                                 <Border Classes="Row">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
 
-                                        <Border Grid.Column="0" Classes="Tile"
-                                                Background="{Binding MonogramTone,
-                                                    Converter={x:Static conv:MonogramToneConverter.Instance}}">
-                                            <TextBlock Text="{Binding Monogram}"/>
-                                        </Border>
+                                        <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
+                                               VerticalAlignment="Top">
+                                            <Border Classes="Tile" Margin="0"
+                                                    IsVisible="{Binding !HasLogo}"
+                                                    Background="{Binding MonogramTone,
+                                                        Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                                <TextBlock Text="{Binding Monogram}"/>
+                                            </Border>
+                                            <Image IsVisible="{Binding HasLogo}"
+                                                   Source="{Binding LogoPath,
+                                                       Converter={x:Static conv:ProviderLogoConverter.Instance}}"
+                                                   Stretch="Uniform" Margin="2"/>
+                                        </Panel>
 
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                                             <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>

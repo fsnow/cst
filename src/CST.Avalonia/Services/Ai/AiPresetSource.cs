@@ -270,7 +270,10 @@ namespace CST.Avalonia.Services.Ai
                     string.IsNullOrWhiteSpace(provider.Name) ? provider.Id : provider.Name!,
                     KindFor(provider),
                     provider.Api!,
-                    methods);
+                    methods,
+                    // #737 said doc was carried through; it was parsed into CatalogProvider and then dropped
+                    // here. The UI issue that consumes it (#740) had nothing to bind to.
+                    Doc: provider.Doc);
             }
 
             if (skipped.Count > 0)

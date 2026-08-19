@@ -138,6 +138,15 @@ namespace CST.Avalonia.Models.Ai
     /// the auth header rather than adding one.</param>
     /// <param name="AuthScheme">Prefix before the credential, or null for a bare value. Bearer for almost
     /// everything; null for Azure's <c>api-key</c>.</param>
+    /// <param name="Doc">
+    /// The provider's own documentation link, as the catalogue publishes it.
+    ///
+    /// <para><b>In practice a models page</b>, not an account or key page — sampled across the catalogue, nine
+    /// in ten point at a list of model ids. So its use is for a reader with a working connection who needs to
+    /// know what to run on it, not for one who cannot find their key: anyone pasting a key has already been to
+    /// the provider. Null for the hand-kept presets and the local runners, which have no catalogue
+    /// record.</para>
+    /// </param>
     public sealed record AiProviderPreset(
         string Id,
         string DisplayName,
@@ -147,7 +156,8 @@ namespace CST.Avalonia.Models.Ai
         IReadOnlyList<AiInputPrompt>? Prompts = null,
         IReadOnlyDictionary<string, string>? Headers = null,
         string AuthHeaderName = "Authorization",
-        string? AuthScheme = "Bearer")
+        string? AuthScheme = "Bearer",
+        string? Doc = null)
     {
         /// <summary>True when a key must be supplied or found. False for a local runner.</summary>
         public bool RequiresKey => Methods.Any(m => m is AiCredentialMethod.Key or AiCredentialMethod.Env);

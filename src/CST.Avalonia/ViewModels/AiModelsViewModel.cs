@@ -194,6 +194,7 @@ namespace CST.Avalonia.ViewModels
             _connection = connection;
 
             ToggleCommand = ReactiveCommand.Create(() => { IsExpanded = !IsExpanded; });
+            OpenDocCommand = ReactiveCommand.Create(() => AiConnectionsViewModel.OpenUrl(DocUrl));
             FetchCommand = ReactiveCommand.CreateFromTask(FetchAsync);
         }
 
@@ -268,6 +269,19 @@ namespace CST.Avalonia.ViewModels
 
         private static string Plural(int n) => n == 1 ? "1 model" : $"{n} models";
 
+        /// <summary>
+        /// The provider's models page, offered when this group has nothing in it.
+        ///
+        /// <para>The case with no other answer today: an endpoint that publishes no listing, or whose listing
+        /// failed, leaves a reader needing a model id from somewhere. This is the somewhere. Hidden once the
+        /// group has models, where it would be a link to information already on screen.</para>
+        /// </summary>
+        public string? DocUrl => AiProviderPresets.ById(Id)?.Doc;
+
+        public bool ShowDoc => Visible.Count == 0 && !string.IsNullOrEmpty(DocUrl);
+
+        public ReactiveCommand<Unit, Unit> OpenDocCommand { get; }
+
         public ReactiveCommand<Unit, Unit> ToggleCommand { get; }
 
         public ReactiveCommand<Unit, Unit> FetchCommand { get; }
@@ -314,6 +328,7 @@ namespace CST.Avalonia.ViewModels
             Visible.Clear();
             Visible.AddRange(rows);
             this.RaisePropertyChanged(nameof(CountText));
+            this.RaisePropertyChanged(nameof(ShowDoc));
         }
 
         /// <summary>What the provider published about one model, or null when it published nothing — which is
