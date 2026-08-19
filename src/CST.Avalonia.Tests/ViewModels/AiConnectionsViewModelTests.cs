@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services;
@@ -25,14 +27,54 @@ public class AiConnectionsViewModelTests
     private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make() =>
         Make(new FakeCredentialStore());
 
-    private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make(FakeCredentialStore keys)
+    private static (AiConnectionsViewModel Vm, AiConnectionService Service) Make(
+        FakeCredentialStore keys, IAiPresetSource? presets = null)
     {
         var settings = new Settings();
         var svc = new Mock<ISettingsService>();
         svc.SetupGet(s => s.Settings).Returns(settings);
-        var service = new AiConnectionService(svc.Object, keys);
+        var service = new AiConnectionService(svc.Object, keys, presets);
         return (new AiConnectionsViewModel(service, keys), service);
     }
+
+    /// <summary>
+    /// A preset source whose state the test chooses.
+    ///
+    /// <para>Without one, every test ran against a service built with <c>presets: null</c>, which hard-wires
+    /// <c>Ready</c> — so the failure and loading states this section exists for had no coverage at all.</para>
+    /// </summary>
+    private sealed class StubPresets : IAiPresetSource
+    {
+        public StubPresets(AiPresetState state, string? problem, params AiProviderPreset[] presets)
+        {
+            State = state;
+            Problem = problem;
+            Presets = presets;
+        }
+
+        public IReadOnlyList<AiProviderPreset> Presets { get; }
+        public AiPresetState State { get; private set; }
+        public string? Problem { get; private set; }
+        public int Refreshes { get; private set; }
+        public event EventHandler? PresetsChanged;
+
+        /// <summary>The startup path. Records that it was asked, so a test can tell a forced Retry from the
+        /// ordinary first load.</summary>
+        public Task EnsureLoadedAsync(CancellationToken ct = default) => RefreshAsync(ct);
+
+        public Task RefreshAsync(CancellationToken ct = default)
+        {
+            Refreshes++;
+            State = AiPresetState.Ready;
+            Problem = null;
+            PresetsChanged?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
+        }
+    }
+
+    private static AiProviderPreset Hosted(string id) =>
+        new(id, id, ChatProviderKind.OpenAiCompatible, $"https://{id}.test/v1",
+            new AiCredentialMethod[] { new AiCredentialMethod.Key() });
 
     /// <summary>An in-memory keychain. The real one would need a Keychain prompt per test.</summary>
     private sealed class FakeCredentialStore : IAiCredentialStore
@@ -247,7 +289,9 @@ public class AiConnectionsViewModelTests
     {
         var (vm, _) = Make();
 
-        Assert.Equal("No key needed", vm.AvailablePresets.Single(p => p.Id == "ollama").RequirementText);
+        // ollama is in the local section now (#739) - it needs no key AND no network, which is what puts it
+        // there rather than in the catalogue.
+        Assert.Equal("No key needed", vm.LocalPresets.Single(p => p.Id == "ollama").RequirementText);
         Assert.Equal("Needs an API key", vm.AvailablePresets.Single(p => p.Id == "openrouter").RequirementText);
     }
 
@@ -429,6 +473,207 @@ public class AiConnectionsViewModelTests
 
         Assert.Single(vm.Connections);          // did not see the second add
         Assert.Equal(2, service.Connections.Count);   // which did happen
+    }
+
+    // ---- the catalogue at scale (#739) ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The local runners sit in their own section, chosen by a fact rather than an opinion.
+    ///
+    /// <para>They need no key and no network. That is what earns them a permanent place above a catalogue
+    /// which may be neither present nor short — a "popular" section would be the ranking #670/#681 removed,
+    /// arriving as a layout decision.</para>
+    /// </summary>
+    [Fact]
+    public void Local_runners_are_separated_from_the_catalogue()
+    {
+        var (vm, _) = Make();
+
+        var local = vm.LocalPresets.Select(p => p.Id).ToList();
+        Assert.Contains("ollama", local);
+        Assert.Contains("lmstudio", local);
+        Assert.DoesNotContain(vm.AvailablePresets.Select(p => p.Id), id => local.Contains(id));
+    }
+
+    /// <summary>
+    /// Adding every local runner must not take the custom-endpoint route with it.
+    ///
+    /// <para>The two sit in one section, and gating that section on having local runners left would hide
+    /// custom the moment a reader added Ollama and LM Studio — breaking #691's rule that a preset is never
+    /// required to reach a provider, in precisely the state where the reader has shown they configure things
+    /// by hand.</para>
+    /// </summary>
+    [Fact]
+    public void Adding_every_local_runner_leaves_the_custom_route()
+    {
+        var (vm, _) = Make();
+        foreach (var id in vm.LocalPresets.Select(p => p.Id).ToList()) AddThroughSheet(vm, id);
+
+        Assert.Empty(vm.LocalPresets);
+        Assert.False(vm.HasLocalPresets);
+        // The custom row is not a preset and is bound unconditionally; this pins the command that drives it.
+        Assert.NotNull(vm.AddCustomCommand);
+        vm.AddCustomCommand.Execute().Subscribe();
+        Assert.True(vm.IsEditing);
+    }
+
+    /// <summary>The catalogue is collapsed until asked for — a hundred and sixty rows above the fold is not a
+    /// list anyone reads.</summary>
+    [Fact]
+    public void The_catalogue_starts_collapsed_and_says_how_big_it_is()
+    {
+        var (vm, _) = Make();
+
+        Assert.False(vm.IsCatalogueOpen);
+        Assert.True(vm.AvailablePresets.Count > 20, "the snapshot should supply a real catalogue");
+        Assert.EndsWith("providers", vm.CatalogueCount);
+    }
+
+    /// <summary>
+    /// Typing reveals the catalogue as well as filtering it.
+    ///
+    /// <para>A reader who types has asked for the list; making them expand a section first is a second
+    /// gesture for one intention.</para>
+    /// </summary>
+    [Fact]
+    public void Searching_opens_the_catalogue_and_filters_it()
+    {
+        var (vm, _) = Make();
+
+        vm.PresetSearch = "openrouter";
+
+        Assert.True(vm.IsCatalogueOpen);
+        Assert.All(vm.AvailablePresets, p =>
+            Assert.Contains("openrouter", p.Id + p.DisplayName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Search matches the id as well as the display name — a reader may know a provider by
+    /// either.</summary>
+    [Fact]
+    public void Search_matches_the_id_as_well_as_the_name()
+    {
+        var (vm, _) = Make();
+
+        vm.PresetSearch = "togetherai";
+
+        Assert.NotEmpty(vm.AvailablePresets);
+    }
+
+    /// <summary>A search matching nothing empties the catalogue without disturbing the local runners, which
+    /// are not what was being searched.</summary>
+    [Fact]
+    public void A_fruitless_search_leaves_the_local_runners_alone()
+    {
+        var (vm, _) = Make();
+        var before = vm.LocalPresets.Count;
+
+        vm.PresetSearch = "zzzzz-no-such-provider";
+
+        Assert.Empty(vm.AvailablePresets);
+        Assert.Equal(before, vm.LocalPresets.Count);
+    }
+
+    /// <summary>Adding a provider still removes it from the catalogue, so the list keeps reading as "what you
+    /// could add next" at this scale too.</summary>
+    [Fact]
+    public void An_added_catalogue_provider_leaves_the_catalogue()
+    {
+        var (vm, _) = Make();
+        vm.PresetSearch = "openrouter";
+        Assert.NotEmpty(vm.AvailablePresets);
+
+        AddThroughSheet(vm, "openrouter");
+
+        Assert.DoesNotContain(vm.AvailablePresets, p => p.Id == "openrouter");
+    }
+
+    // ---- the states this section exists for (#739) ----------------------------------------------------------
+
+    /// <summary>
+    /// A search matching nothing must not hide the search box.
+    ///
+    /// <para>The box was gated on the <i>filtered</i> count, so typing a string that matched nothing removed
+    /// the only control that could clear the search — mid-keystroke — and the catalogue was gone for the life
+    /// of the window. Recovery was closing and reopening Settings.</para>
+    /// </summary>
+    [Fact]
+    public void A_search_matching_nothing_keeps_the_search_reachable()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Ready, null, Hosted("openrouter"), Hosted("groq")));
+
+        vm.PresetSearch = "zzzzz";
+
+        Assert.Empty(vm.AvailablePresets);
+        Assert.True(vm.HasCatalogue);    // the box stays on screen
+        Assert.True(vm.HasNoMatches);    // and says why the list is empty
+    }
+
+    /// <summary>A trailing space is invisible; matching on it would report a provider that plainly exists as
+    /// absent.</summary>
+    [Fact]
+    public void Search_is_trimmed()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Ready, null, Hosted("openrouter")));
+
+        vm.PresetSearch = "openrouter ";
+
+        Assert.Single(vm.AvailablePresets);
+    }
+
+    /// <summary>
+    /// The loading line appears only while there is nothing to show.
+    ///
+    /// <para>The source seeds the built-in snapshot before any fetch finishes, so "looking for the provider
+    /// list" would otherwise sit above 166 rows — and nothing initiates a fetch at all while the AI master
+    /// switch is off, leaving it there permanently on a tab reachable with AI disabled.</para>
+    /// </summary>
+    [Fact]
+    public void Loading_is_not_announced_over_a_populated_catalogue()
+    {
+        var (populated, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Loading, null, Hosted("openrouter")));
+        Assert.False(populated.IsCatalogueLoading);
+
+        var (empty, _) = Make(new FakeCredentialStore(), new StubPresets(AiPresetState.Loading, null));
+        Assert.True(empty.IsCatalogueLoading);
+    }
+
+    /// <summary>A failure that kept the previous list says that, rather than contradicting the 166 rows
+    /// underneath it.</summary>
+    [Fact]
+    public void A_failure_over_a_surviving_list_says_so()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Unavailable, "Could not reach models.dev.", Hosted("openrouter")));
+
+        Assert.True(vm.HasCatalogueProblem);
+        Assert.Contains("built-in", vm.CatalogueProblem);
+    }
+
+    /// <summary>With nothing left, the service's own sentence is the honest one.</summary>
+    [Fact]
+    public void A_failure_with_nothing_left_shows_the_services_sentence()
+    {
+        var (vm, _) = Make(new FakeCredentialStore(),
+            new StubPresets(AiPresetState.Unavailable, "Could not reach models.dev."));
+
+        Assert.Equal("Could not reach models.dev.", vm.CatalogueProblem);
+    }
+
+    /// <summary>Retry asks the source again, and the recovery reaches the view.</summary>
+    [Fact]
+    public void Retry_refetches_and_clears_the_failure()
+    {
+        var stub = new StubPresets(AiPresetState.Unavailable, "Could not reach models.dev.");
+        var (vm, _) = Make(new FakeCredentialStore(), stub);
+        Assert.True(vm.HasCatalogueProblem);
+
+        vm.RetryCatalogueCommand.Execute().Subscribe();
+
+        Assert.Equal(1, stub.Refreshes);
+        Assert.False(vm.HasCatalogueProblem);
     }
 
     // ---- monograms -------------------------------------------------------------------------------------

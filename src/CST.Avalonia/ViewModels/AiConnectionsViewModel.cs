@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
+using System.Threading.Tasks;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
 using ReactiveUI;
@@ -33,6 +34,9 @@ namespace CST.Avalonia.ViewModels
         private readonly IAiCredentialStore? _credentials;
         private AiConnectionEditorViewModel? _editor;
         private string? _problem;
+        private string _presetSearch = "";
+        private bool _isCatalogueExpanded;
+        private int _catalogueTotal;
 
         public AiConnectionsViewModel(IAiConnectionService? service, IAiCredentialStore? credentials = null)
         {
@@ -40,6 +44,7 @@ namespace CST.Avalonia.ViewModels
             _credentials = credentials;
 
             AddCustomCommand = ReactiveCommand.Create(AddCustom);
+            RetryCatalogueCommand = ReactiveCommand.CreateFromTask(RetryCatalogueAsync);
 
             if (_service is not null)
             {
@@ -51,7 +56,20 @@ namespace CST.Avalonia.ViewModels
         /// <summary>What is configured now, in the order the reader added it.</summary>
         public ObservableCollection<AiConnectionRowViewModel> Connections { get; } = new();
 
-        /// <summary>The presets with no connection yet — "what you could add next".</summary>
+        /// <summary>
+        /// Presets that need no key and no network — the local runners. Always shown, never collapsed, and
+        /// still offered when the hosted catalogue is unreachable. (#739)
+        ///
+        /// <para><b>Not a "popular" section.</b> Its members are chosen by a fact — these work with no
+        /// credential and no internet — rather than by anyone's view of which providers are worth having,
+        /// which would be the ranking #670/#681 removed arriving as a layout decision.</para>
+        /// </summary>
+        public ObservableCollection<AiPresetRowViewModel> LocalPresets { get; } = new();
+
+        /// <summary>
+        /// Everything the catalogue offers, alphabetically. Collapsed until asked for, because ~166 rows
+        /// above the fold is not a list anyone reads.
+        /// </summary>
         public ObservableCollection<AiPresetRowViewModel> AvailablePresets { get; } = new();
 
         /// <summary>True while nothing is configured, so the empty state can say so rather than showing a
@@ -59,6 +77,93 @@ namespace CST.Avalonia.ViewModels
         public bool HasNoConnections => Connections.Count == 0;
 
         public bool HasAvailablePresets => AvailablePresets.Count > 0;
+
+        public bool HasLocalPresets => LocalPresets.Count > 0;
+
+        /// <summary>
+        /// Whether the hosted catalogue has anything in it at all, <b>before</b> the search filter.
+        ///
+        /// <para>The search box is gated on this rather than on the filtered count, and the distinction is
+        /// not academic: gating on the filtered count meant that typing a string matching nothing hid the
+        /// search box itself, mid-keystroke, leaving no control on screen able to clear the search. The
+        /// catalogue was then gone for the life of the window.</para>
+        /// </summary>
+        public bool HasCatalogue => _catalogueTotal > 0;
+
+        /// <summary>How many the catalogue offers — the filtered count while searching, so the number always
+        /// describes the list beneath it.</summary>
+        public string CatalogueCount => AvailablePresets.Count == 1
+            ? "1 provider"
+            : $"{AvailablePresets.Count} providers";
+
+        /// <summary>A search that matched nothing says so. An empty bordered box is the "broken feature"
+        /// reading this section exists to avoid.</summary>
+        public bool HasNoMatches => HasCatalogue && AvailablePresets.Count == 0;
+
+        /// <summary>
+        /// Filters the catalogue. Searching also reveals it — a reader who types has asked for the list, and
+        /// making them expand a section first would be a second gesture for one intention.
+        /// </summary>
+        public string PresetSearch
+        {
+            get => _presetSearch;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _presetSearch, value);
+                this.RaisePropertyChanged(nameof(IsCatalogueOpen));
+                Rebind();
+            }
+        }
+
+        public bool IsCatalogueExpanded
+        {
+            get => _isCatalogueExpanded;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _isCatalogueExpanded, value);
+                this.RaisePropertyChanged(nameof(IsCatalogueOpen));
+            }
+        }
+
+        public bool IsCatalogueOpen => IsCatalogueExpanded || !string.IsNullOrWhiteSpace(PresetSearch);
+
+        /// <summary>No attempt has finished yet — said quietly, because it is the ordinary first second of a
+        /// fresh install rather than a problem.</summary>
+        /// <summary>
+        /// Said only while there is nothing to show.
+        ///
+        /// <para>The source seeds the built-in snapshot before any fetch finishes, so the state is
+        /// <c>Loading</c> over a fully populated list — and a "looking for the provider list" line above 166
+        /// rows contradicts itself. Worse, nothing ever initiates a fetch while the AI master switch is off,
+        /// so that line would otherwise sit there permanently on a tab that is reachable with AI
+        /// disabled.</para>
+        /// </summary>
+        public bool IsCatalogueLoading =>
+            _service?.PresetState == AiPresetState.Loading && !HasCatalogue;
+
+        /// <summary>
+        /// The hosted catalogue is missing, and the reader is told so.
+        ///
+        /// <para>An empty section reads as a broken feature; a named failure with a retry reads as weather.
+        /// The local runners and the custom route stay on screen throughout — they need no network, which
+        /// makes them exactly the wrong thing to hide when the network is what failed.</para>
+        /// </summary>
+        public bool HasCatalogueProblem => _service?.PresetState == AiPresetState.Unavailable;
+
+        /// <summary>
+        /// The failure, worded for what is actually on screen.
+        ///
+        /// <para>A failed refresh keeps the previous list, so the service's sentence can end up above a
+        /// catalogue announcing 166 providers — two statements that contradict each other. When something
+        /// survived, this says so instead.</para>
+        /// </summary>
+        public string? CatalogueProblem => !HasCatalogueProblem
+            ? null
+            : HasCatalogue
+                ? "Couldn't refresh the provider list — showing the built-in one."
+                : _service?.PresetProblem;
+
+        public ReactiveCommand<Unit, Unit> RetryCatalogueCommand { get; }
 
         /// <summary>
         /// The sheet, or null while the list is showing.
@@ -170,6 +275,24 @@ namespace CST.Avalonia.ViewModels
             Rebind();
         }
 
+        /// <summary>Matches on the display name and the id — a reader may know a provider by either.</summary>
+        private bool MatchesSearch(AiProviderPreset preset)
+        {
+            // Trimmed: a trailing space is invisible and would otherwise match nothing at all, which for a
+            // provider that plainly exists reads as the list being broken.
+            var needle = PresetSearch.Trim();
+            return needle.Length == 0 ||
+                preset.DisplayName.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                preset.Id.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task RetryCatalogueAsync()
+        {
+            if (_service is null) return;
+            await _service.RefreshPresetsAsync().ConfigureAwait(true);
+            Rebind();
+        }
+
         private void CloseEditor(bool saved)
         {
             Editor = null;
@@ -210,7 +333,26 @@ namespace CST.Avalonia.ViewModels
                 c => new AiConnectionRowViewModel(this, c),
                 (row, c) => row.Update(c));
 
-            Sync(AvailablePresets, _service.AvailablePresets,
+            // Split by a fact, not by an opinion: a local runner needs no key and no network, which is what
+            // earns it a permanent place above a catalogue that may be neither present nor short.
+            var local = AiProviderPresets.LocalOnly
+                .Select(p => p.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);   // as the service matches ids
+
+            // Counted BEFORE the search filter — see HasCatalogue.
+            _catalogueTotal = _service.AvailablePresets.Count(p => !local.Contains(p.Id));
+
+            Sync(LocalPresets, _service.AvailablePresets.Where(p => local.Contains(p.Id)).ToList(),
+                p => p.Id,
+                r => r.Id,
+                p => new AiPresetRowViewModel(this, p),
+                (row, p) => row.Update(p));
+
+            Sync(AvailablePresets,
+                _service.AvailablePresets
+                    .Where(p => !local.Contains(p.Id))
+                    .Where(MatchesSearch)
+                    .ToList(),
                 p => p.Id,
                 r => r.Id,
                 p => new AiPresetRowViewModel(this, p),
@@ -218,6 +360,13 @@ namespace CST.Avalonia.ViewModels
 
             this.RaisePropertyChanged(nameof(HasNoConnections));
             this.RaisePropertyChanged(nameof(HasAvailablePresets));
+            this.RaisePropertyChanged(nameof(HasLocalPresets));
+            this.RaisePropertyChanged(nameof(CatalogueCount));
+            this.RaisePropertyChanged(nameof(HasCatalogue));
+            this.RaisePropertyChanged(nameof(HasNoMatches));
+            this.RaisePropertyChanged(nameof(IsCatalogueLoading));
+            this.RaisePropertyChanged(nameof(HasCatalogueProblem));
+            this.RaisePropertyChanged(nameof(CatalogueProblem));
         }
 
         /// <summary>Makes <paramref name="rows"/> match <paramref name="source"/> by key, reusing rows that

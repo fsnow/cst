@@ -173,8 +173,90 @@
             <TextBlock Text="A named provider fills in the address for you. Nothing here is a recommendation — every entry is the same mechanism as a custom endpoint, with its URL already known."
                        Classes="SettingDescription"/>
 
+            <!-- These need no key and no network, which is why they sit above the catalogue and stay when it
+                 is unreachable. Chosen by that fact rather than by anyone's view of which providers are worth
+                 having — a "popular" section would be the ranking #670/#681 removed, arriving as a layout
+                 decision. -->
             <Border Classes="SettingGroup" Padding="0">
                 <StackPanel>
+                    <ItemsControl ItemsSource="{Binding LocalPresets}"
+                                  IsVisible="{Binding HasLocalPresets}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AiPresetRowViewModel">
+                                <Border Classes="Row">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <Border Grid.Column="0" Classes="Tile"
+                                                Background="{Binding MonogramTone,
+                                                    Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                            <TextBlock Text="{Binding Monogram}"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding RequirementText}" Classes="Secondary"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Content="+ Add"
+                                                Command="{Binding AddCommand}"
+                                                VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Custom last, as OpenCode has it, and always present. The named rows are this same row
+                         with the address filled in; a preset must never be required to reach a provider that
+                         never appears in anyone's catalogue. -->
+                    <Border Classes="Row" BorderThickness="0">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Grid.Column="0" Classes="Tile"
+                                    Background="{DynamicResource DockApplicationAccentBrushLow}">
+                                <TextBlock Text="+"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                <TextBlock Text="Custom endpoint" FontWeight="SemiBold"/>
+                                <TextBlock Text="Any OpenAI-compatible or Anthropic address, by URL."
+                                           Classes="Secondary"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="+ Add"
+                                    Command="{Binding AddCustomCommand}"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- The hosted catalogue. Named when it is missing rather than rendered as an empty section: an
+                 empty list reads as a broken feature, a sentence with a Retry reads as weather. -->
+            <StackPanel IsVisible="{Binding HasCatalogueProblem}" Margin="0,0,0,16">
+                <TextBlock Text="{Binding CatalogueProblem}"
+                           Classes="SettingDescription"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                           Margin="0,0,0,6"/>
+                <Button Content="Try again" Command="{Binding RetryCatalogueCommand}"
+                        HorizontalAlignment="Left"/>
+            </StackPanel>
+
+            <TextBlock Text="Looking for the provider list…"
+                       IsVisible="{Binding IsCatalogueLoading}"
+                       Classes="SettingDescription"/>
+
+            <!-- Gated on the UNFILTERED catalogue: gating on the filtered count hid this box mid-keystroke
+                 the moment a search matched nothing, leaving nothing on screen able to clear it. -->
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8"
+                  IsVisible="{Binding HasCatalogue}">
+                <TextBox Grid.Column="0" Text="{Binding PresetSearch}"
+                         Watermark="Search providers"/>
+                <ToggleButton Grid.Column="1" IsChecked="{Binding IsCatalogueExpanded}"
+                              Content="{Binding CatalogueCount}"
+                              Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </Grid>
+
+            <Border Classes="SettingGroup" Padding="0"
+                    IsVisible="{Binding IsCatalogueOpen}">
+                <StackPanel>
+                    <TextBlock Text="No provider matches that."
+                               IsVisible="{Binding HasNoMatches}"
+                               Classes="Secondary" Margin="12,10"/>
                     <ItemsControl ItemsSource="{Binding AvailablePresets}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:AiPresetRowViewModel">
@@ -201,25 +283,6 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <!-- Custom last, as OpenCode has it, and always present. The named rows above are this
-                         same row with the address filled in; a preset must never be required to reach a
-                         provider that never appears in anyone's catalogue. -->
-                    <Border Classes="Row" BorderThickness="0">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Border Grid.Column="0" Classes="Tile"
-                                    Background="{DynamicResource DockApplicationAccentBrushLow}">
-                                <TextBlock Text="+"/>
-                            </Border>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                <TextBlock Text="Custom endpoint" FontWeight="SemiBold"/>
-                                <TextBlock Text="Any OpenAI-compatible or Anthropic address, by URL."
-                                           Classes="Secondary"/>
-                            </StackPanel>
-                            <Button Grid.Column="2" Content="+ Add"
-                                    Command="{Binding AddCustomCommand}"
-                                    VerticalAlignment="Center"/>
-                        </Grid>
-                    </Border>
                 </StackPanel>
             </Border>
         </StackPanel>
