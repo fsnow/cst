@@ -87,6 +87,26 @@ namespace CST.Avalonia.ViewModels
 
         public ObservableCollection<SettingsCategoryViewModel> Categories { get; }
 
+        /// <summary>
+        /// Opens on a named category, and on a sub-tab within it where the category has any. (#693)
+        ///
+        /// <para>Unknown names are ignored rather than throwing: the caller is naming a screen, and a screen
+        /// that has been renamed should land the reader on the default one rather than take the window
+        /// down.</para>
+        /// </summary>
+        public void OpenAt(string categoryName, int tab = 0)
+        {
+            var match = Categories.FirstOrDefault(
+                c => string.Equals(c.Name, categoryName, StringComparison.Ordinal));
+            if (match is null) return;
+
+            SelectedCategory = match;
+
+            // Only the AI category has sub-tabs. A cast rather than an interface for exactly one
+            // implementor - if a second category gains tabs, that is the moment to generalise it.
+            if (match.Content is AiSettingsViewModel ai) ai.SelectedTab = tab;
+        }
+
         public SettingsCategoryViewModel? SelectedCategory
         {
             get => _selectedCategory;
@@ -1312,6 +1332,7 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         private bool _localApiEnabled;
         private bool _mcpEnabled;
         private bool _allowRemoteControl;
+        private int _selectedTab;
 
         public AiSettingsViewModel(ISettingsService settingsService)
             : this(settingsService, null, null)
@@ -1368,6 +1389,25 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         /// (#692, #674)
         /// </summary>
         public AiModelsViewModel Models { get; }
+
+        /// <summary>Which sub-tab the AI category opens on. Named rather than numbered at the call sites, so
+        /// reordering the tabs cannot silently send a caller somewhere else. (#693)</summary>
+        public const int GeneralTab = 0;
+        public const int ProvidersTab = 1;
+        public const int ModelsTab = 2;
+
+        /// <summary>
+        /// The selected sub-tab.
+        ///
+        /// <para>Bindable so somewhere else in the app can open Settings <i>at</i> a tab — the assistant's
+        /// "Manage models…" means the Models tab specifically, and landing the reader on the first category's
+        /// first tab makes them navigate to the thing they just asked for.</para>
+        /// </summary>
+        public int SelectedTab
+        {
+            get => _selectedTab;
+            set => this.RaiseAndSetIfChanged(ref _selectedTab, value);
+        }
 
         /// <summary>Releases the two tabs' subscriptions to the connection service. The service is a
         /// singleton and this view model is rebuilt on every Settings open, so without this each visit leaves

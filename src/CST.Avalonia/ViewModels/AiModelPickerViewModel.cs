@@ -118,10 +118,17 @@ namespace CST.Avalonia.ViewModels
             _changed?.Invoke();
         }
 
+        /// <summary>
+        /// Opens Settings on the Models tab — the screen this control's label names.
+        ///
+        /// <para>It used to open Settings at whatever came first, leaving the reader to find the AI category
+        /// and then the right tab: a link that says "Manage models" and lands somewhere else is a small lie
+        /// the reader pays for every time.</para>
+        /// </summary>
         private void Manage()
         {
             IsOpen = false;
-            _ = App.ShowSettingsWindow();
+            _ = App.ShowSettingsWindow("AI", AiSettingsViewModel.ModelsTab);
         }
 
         private void Rebuild()
