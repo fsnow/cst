@@ -52,8 +52,9 @@ namespace CST.Avalonia.Services.Ai
 
     public interface IModelsDevCatalog
     {
-        /// <summary>The catalogue, from the best source available. Never throws; a failure arrives as a
-        /// <see cref="CatalogResult.Problem"/> alongside whatever fallback was reachable.</summary>
+        /// <summary>The catalogue, from the best source available. A failure to LOAD arrives as a
+        /// <see cref="CatalogResult.Problem"/> alongside whatever fallback was reachable, rather than as an
+        /// exception; cancelling <paramref name="ct"/> still throws, as it should.</summary>
         Task<CatalogResult> GetAsync(CancellationToken ct = default);
 
         /// <summary>Fetches unless the cache is younger than the freshness window. <paramref name="force"/>
@@ -85,6 +86,17 @@ namespace CST.Avalonia.Services.Ai
         /// <summary>How long a cached copy is treated as fresh. Matches opencode's guard; the point is that
         /// several starts in an hour do not each hit the network.</summary>
         internal static readonly TimeSpan Freshness = TimeSpan.FromHours(1);
+
+        /// <summary>
+        /// Fewest providers a fetched document may contain before we refuse it. (fable review)
+        ///
+        /// <para>A count of one is not a sanity check. An API error body — <c>{"error":{"id":"rate_limited"}}</c>
+        /// — is valid JSON that deserializes to a single record carrying an id, so it passed, overwrote a good
+        /// 192-provider cache, and became the answer for every subsequent start until a successful refetch.
+        /// A reader who then went offline was stuck with one provider. Matches the floor
+        /// <c>refresh-models-snapshot.sh</c> already applies to the same document.</para>
+        /// </summary>
+        internal const int MinimumPlausibleProviders = 50;
 
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
         {
@@ -133,7 +145,11 @@ namespace CST.Avalonia.Services.Ai
                 {
                     text = await _http.GetStringAsync(_source, ct).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                // Filtering on the token, not the exception type: HttpClient.Timeout surfaces as
+                // TaskCanceledException, so `is not OperationCanceledException` would let a hung models.dev
+                // throw straight out of a method whose contract is that failures arrive as Problem - which
+                // #739's retry button calls directly. (fable review)
+                catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
                     // Keep whatever we had. An unreachable models.dev must degrade to "slightly stale",
                     // never to nothing - the reader may be about to configure a local runner that needs
@@ -146,11 +162,12 @@ namespace CST.Avalonia.Services.Ai
                     return;
                 }
 
-                if (Parse(text) is not { Count: > 0 } parsed)
+                if (Parse(text) is not { } parsed || parsed.Count < MinimumPlausibleProviders)
                 {
                     // A 200 carrying an error page is the realistic failure, not a 404 - so validate the
                     // shape rather than trusting the status code.
-                    Log.Warning("The provider catalogue did not parse; keeping the existing copy (#736)");
+                    Log.Warning("The provider catalogue did not parse, or held implausibly few providers; " +
+                                "keeping the existing copy (#736)");
                     _current = (_current ?? LoadWithoutNetwork()) with
                     {
                         Problem = "The provider list could not be read. Showing the last copy.",

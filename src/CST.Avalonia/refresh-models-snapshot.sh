@@ -21,7 +21,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$DIR/Resources/Ai/models-dev-snapshot.json"
 META="$DIR/Resources/Ai/models-dev-snapshot.meta.json"
 TMP="$(mktemp)"
-trap 'rm -f "$TMP"' EXIT
+trap 'rm -f "$TMP" "$OUT.tmp"' EXIT
 
 echo "Fetching $SOURCE"
 curl -fsSL --max-time 60 "$SOURCE" -o "$TMP"
@@ -47,12 +47,16 @@ then
 fi
 
 mkdir -p "$(dirname "$OUT")"
+# Written to a temp file and moved into place: a 5.7 MB dump interrupted by Ctrl-C or a full disk would
+# otherwise leave a truncated snapshot, contradicting the guarantee printed above. (fable review)
 python3 -c '
 import json, sys
 doc = json.load(open(sys.argv[1]))
-json.dump(doc, open(sys.argv[2], "w"), indent=1, sort_keys=True, ensure_ascii=False)
-open(sys.argv[2], "a").write("\n")
-' "$TMP" "$OUT"
+with open(sys.argv[2], "w") as f:
+    json.dump(doc, f, indent=1, sort_keys=True, ensure_ascii=False)
+    f.write("\n")
+' "$TMP" "$OUT.tmp"
+mv "$OUT.tmp" "$OUT"
 
 PROVIDERS=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$OUT")
 WITH_API=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(sum(1 for v in d.values() if v.get("api")))' "$OUT")

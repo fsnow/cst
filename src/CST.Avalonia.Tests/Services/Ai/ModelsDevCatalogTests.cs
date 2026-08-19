@@ -31,6 +31,13 @@ public class ModelsDevCatalogTests : IDisposable
          "openai":{"id":"openai","name":"OpenAI","npm":"@ai-sdk/openai","env":["OPENAI_API_KEY"]}}
         """;
 
+    /// <summary>A document large enough to clear the plausibility floor a fetch applies. The floor exists so
+    /// an API error body cannot pose as a catalogue, so a network-success fixture has to be realistic-sized;
+    /// a cache read applies no floor, which is why the two-provider fixture is still used there.</summary>
+    private static string ManyProviders(int count = 60) =>
+        "{" + string.Join(",", Enumerable.Range(0, count).Select(i =>
+            $"\"p{i}\":{{\"id\":\"p{i}\",\"name\":\"Provider {i}\",\"api\":\"https://p{i}.example/v1\"}}")) + "}";
+
     private sealed class Stub : HttpMessageHandler
     {
         private readonly Func<HttpResponseMessage> _reply;
@@ -112,12 +119,13 @@ public class ModelsDevCatalogTests : IDisposable
     [Fact]
     public async Task A_refresh_writes_the_cache_and_reports_the_network()
     {
-        var catalog = Make(Client(() => Ok(TwoProviders), out _));
+        var catalog = Make(Client(() => Ok(ManyProviders()), out _));
 
         await catalog.RefreshAsync(force: true);
         var result = await catalog.GetAsync();
 
         Assert.Equal(CatalogSource.Network, result.Source);
+        Assert.Equal(60, result.Providers.Count);
         Assert.True(File.Exists(CachePath));
     }
 
@@ -138,7 +146,7 @@ public class ModelsDevCatalogTests : IDisposable
     public async Task Force_refetches_even_when_the_cache_is_fresh()
     {
         File.WriteAllText(CachePath, TwoProviders);
-        var catalog = Make(Client(() => Ok(TwoProviders), out var stub));
+        var catalog = Make(Client(() => Ok(ManyProviders()), out var stub));
 
         await catalog.RefreshAsync(force: true);
 
@@ -160,7 +168,10 @@ public class ModelsDevCatalogTests : IDisposable
         await catalog.RefreshAsync(force: true);
         var result = await catalog.GetAsync();
 
-        Assert.NotEmpty(result.Providers);
+        // Source and count asserted, not merely NotEmpty: this test would otherwise pass if the snapshot had
+        // silently replaced the cache, which is the failure it exists to catch. (fable review)
+        Assert.Equal(CatalogSource.Cache, result.Source);
+        Assert.Equal(2, result.Providers.Count);
         Assert.NotNull(result.Problem);
         Assert.Contains("Couldn't reach", result.Problem!);
     }
@@ -176,7 +187,45 @@ public class ModelsDevCatalogTests : IDisposable
         await catalog.RefreshAsync(force: true);
         var result = await catalog.GetAsync();
 
-        Assert.NotEmpty(result.Providers);
+        Assert.Equal(CatalogSource.Cache, result.Source);
+        Assert.NotNull(result.Problem);
+    }
+
+    /// <summary>
+    /// The one path where a failure destroyed what we had. An API error body is VALID JSON that deserializes
+    /// to a single record carrying an id — so a `Count > 0` guard accepted it, overwrote a good 192-provider
+    /// cache, and became the answer for every subsequent start. A reader who then went offline was stuck with
+    /// one provider. (fable review)
+    /// </summary>
+    [Fact]
+    public async Task An_error_body_that_is_valid_json_does_not_replace_the_cache()
+    {
+        File.WriteAllText(CachePath, TwoProviders);
+        var catalog = Make(Client(() => Ok("""{"error":{"id":"rate_limited","message":"slow down"}}"""), out _));
+
+        await catalog.RefreshAsync(force: true);
+        var result = await catalog.GetAsync();
+
+        Assert.Equal(CatalogSource.Cache, result.Source);
+        Assert.Equal(2, result.Providers.Count);
+        Assert.NotNull(result.Problem);
+
+        // And the poison never reached disk, so the next start is not stuck with it either.
+        Assert.Equal(2, ModelsDevCatalog.Parse(File.ReadAllText(CachePath))!.Count);
+    }
+
+    /// <summary>A hung endpoint surfaces as TaskCanceledException from HttpClient.Timeout. It must arrive as
+    /// a Problem, not thrown — #739's retry button calls RefreshAsync directly. (fable review)</summary>
+    [Fact]
+    public async Task A_client_timeout_arrives_as_a_problem_rather_than_an_exception()
+    {
+        File.WriteAllText(CachePath, TwoProviders);
+        var catalog = Make(new HttpClient(new Stub(() => throw new TaskCanceledException("timed out"))));
+
+        await catalog.RefreshAsync(force: true);   // must not throw
+        var result = await catalog.GetAsync();
+
+        Assert.Equal(CatalogSource.Cache, result.Source);
         Assert.NotNull(result.Problem);
     }
 
