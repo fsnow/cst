@@ -443,7 +443,7 @@ namespace CST.Avalonia.ViewModels
                         ? "free"
                         : $"${Money(prompt)}/${Money(completion)} per M");
 
-                if (_published.SupportsReasoning) facts.Add("reasoning");
+                if (_published.SupportsReasoning == true) facts.Add("reasoning");
 
                 // The id on its own line: it is the string the reader would copy, and burying it in a run of
                 // facts separated by dots makes it hard to pick out.

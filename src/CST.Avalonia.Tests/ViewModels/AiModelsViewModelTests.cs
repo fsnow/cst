@@ -411,7 +411,7 @@ public class AiModelsViewModelTests
         var stored = Assert.Single(service.Connections.Single().Models);
         Assert.Null(stored.ContextLength);
         Assert.Null(stored.Inputs);
-        Assert.False(stored.SupportsReasoning);
+        Assert.Null(stored.SupportsReasoning);   // nothing published is not "published: no"
     }
 
     // ---- search and the capability filter ---------------------------------------------------------------

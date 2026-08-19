@@ -274,15 +274,23 @@ namespace CST.Avalonia.ViewModels
                 new("Provider", connection.DisplayName),
             };
 
-            // The wire id, when it differs from the name - when they are the same string, repeating it is
-            // noise rather than information.
+            if (model.Inputs is { Length: > 0 } inputs) facts.Add(new AiPickerFact("Inputs", inputs));
+
+            // Three states, not two. Null is the provider having said nothing - a local runner publishes no
+            // parameter list at all - and "No reasoning" there would assert something about the model that
+            // nobody has established.
+            if (model.SupportsReasoning is { } reasoning)
+                facts.Add(new AiPickerFact("Reasoning", reasoning ? "Allows reasoning" : "No reasoning"));
+
+            // Written out in full rather than rounded to "1,000K": the card has the room, and a context
+            // window is a number readers compare exactly.
+            if (model.ContextLength is { } context)
+                facts.Add(new AiPickerFact("Context", context.ToString("N0")));
+
+            // The wire id last, and only when it differs from the name - it is the string a reader would
+            // copy, but it is not what they came to the card to read.
             if (!string.Equals(model.Id, model.DisplayName, StringComparison.Ordinal))
                 facts.Add(new AiPickerFact("Id", model.Id));
-
-            if (model.Inputs is { Length: > 0 } inputs) facts.Add(new AiPickerFact("Inputs", inputs));
-            if (model.ContextLength is { } context)
-                facts.Add(new AiPickerFact("Context", $"{context / 1000:N0}K"));
-            if (model.SupportsReasoning) facts.Add(new AiPickerFact("Reasoning", "supported"));
 
             return facts;
         }

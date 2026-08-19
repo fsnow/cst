@@ -271,10 +271,49 @@ public class AiModelPickerViewModelTests
 
         var facts = AllModels(picker).Single().Facts;
 
-        Assert.Equal("1,000K", facts.Single(f => f.Label == "Context").Value);
-        Assert.Equal("supported", facts.Single(f => f.Label == "Reasoning").Value);
+        Assert.Equal("1,000,000", facts.Single(f => f.Label == "Context").Value);
+        Assert.Equal("Allows reasoning", facts.Single(f => f.Label == "Reasoning").Value);
         Assert.Equal("text, image", facts.Single(f => f.Label == "Inputs").Value);
         Assert.Equal("nvidia/nemotron", facts.Single(f => f.Label == "Id").Value);
+    }
+
+    /// <summary>
+    /// A provider that published a parameter list without reasoning in it says so; one that published no list
+    /// at all says nothing.
+    ///
+    /// <para>Three states, not two. OpenCode renders both as "No reasoning", which turns a local runner's
+    /// silence into an assertion about the model.</para>
+    /// </summary>
+    [Fact]
+    public void Reasoning_distinguishes_published_no_from_no_answer()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine",
+            new AiModelEntry("said-yes", "Said yes", true, SupportsReasoning: true),
+            new AiModelEntry("said-no", "Said no", true, SupportsReasoning: false),
+            new AiModelEntry("said-nothing", "Said nothing", true)));
+
+        string? Reasoning(string id) => AllModels(picker).Single(m => m.ModelId == id)
+            .Facts.FirstOrDefault(f => f.Label == "Reasoning")?.Value;
+
+        Assert.Equal("Allows reasoning", Reasoning("said-yes"));
+        Assert.Equal("No reasoning", Reasoning("said-no"));
+        Assert.Null(Reasoning("said-nothing"));
+    }
+
+    /// <summary>Rows read in the order a reader scans them, with the wire id last — the card has room for the
+    /// context window in full rather than rounded to thousands.</summary>
+    [Fact]
+    public void The_card_reads_in_a_fixed_order()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine",
+            new AiModelEntry("nvidia/nemotron", "Nemotron", true,
+                ContextLength: 1_000_000, SupportsReasoning: true, Inputs: "text")));
+
+        Assert.Equal(
+            new[] { "Model", "Provider", "Inputs", "Reasoning", "Context", "Id" },
+            AllModels(picker).Single().Facts.Select(f => f.Label));
     }
 
     /// <summary>The wire id is shown only when it differs from the name — repeating the same string twice is

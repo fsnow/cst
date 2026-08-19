@@ -62,7 +62,7 @@ namespace CST.Avalonia.Models.Ai
         string DisplayName,
         bool Enabled = true,
         int? ContextLength = null,
-        bool SupportsReasoning = false,
+        bool? SupportsReasoning = null,
         string? Inputs = null);
 
     /// <summary>
