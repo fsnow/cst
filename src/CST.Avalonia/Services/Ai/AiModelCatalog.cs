@@ -70,12 +70,21 @@ namespace CST.Avalonia.Services.Ai
     /// <param name="Problem">A finished sentence for the reader. Never null when <paramref name="Ok"/> is
     /// false, and it names the endpoint — "cannot connect" without saying to what is the message that sends
     /// someone looking in the wrong place.</param>
-    public sealed record AiCatalogResult(bool Ok, string? Problem, IReadOnlyList<AiCatalogModel> Models)
+    /// <param name="Reachable">
+    /// Whether the endpoint answered at all — <b>not</b> whether the listing was useful.
+    ///
+    /// <para>An HTTP error is proof of contact: a 401, a 402, a 404 all mean something was there to say no.
+    /// Only a transport failure means the endpoint could not be reached. Null when nothing was sent, so an
+    /// unfinished connection cannot be reported either way.</para>
+    /// </param>
+    public sealed record AiCatalogResult(
+        bool Ok, string? Problem, IReadOnlyList<AiCatalogModel> Models, bool? Reachable = null)
     {
-        public static AiCatalogResult Success(IReadOnlyList<AiCatalogModel> models) => new(true, null, models);
+        public static AiCatalogResult Success(IReadOnlyList<AiCatalogModel> models) =>
+            new(true, null, models, true);
 
-        public static AiCatalogResult Fail(string problem) =>
-            new(false, problem, Array.Empty<AiCatalogModel>());
+        public static AiCatalogResult Fail(string problem, bool? reachable = null) =>
+            new(false, problem, Array.Empty<AiCatalogModel>(), reachable);
     }
 
     /// <summary>
@@ -147,8 +156,12 @@ namespace CST.Avalonia.Services.Ai
             {
                 using var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
 
+                // Answered, even if the answer was no. A rejected key and a missing listing both prove the
+                // endpoint is there, which is the fact this reports - it says nothing about whether the
+                // listing was any use.
                 if (!response.IsSuccessStatusCode)
-                    return AiCatalogResult.Fail(Explain(response.StatusCode, connection, url));
+                    return AiCatalogResult.Fail(
+                        Explain(response.StatusCode, connection, url), reachable: true);
 
                 var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
                 var models = Parse(body);
@@ -156,7 +169,7 @@ namespace CST.Avalonia.Services.Ai
                 // A 200 carrying no models is not an error, but it is not a success the UI should silently
                 // present as an empty list either - the reader would read it as "this provider has none".
                 if (models.Count == 0)
-                    return AiCatalogResult.Fail($"{url} answered, but listed no models.");
+                    return AiCatalogResult.Fail($"{url} answered, but listed no models.", reachable: true);
 
                 _logger.LogInformation(
                     "Fetched {Count} models from {Connection}", models.Count, connection.Id);
@@ -168,18 +181,19 @@ namespace CST.Avalonia.Services.Ai
             }
             catch (OperationCanceledException)
             {
-                return AiCatalogResult.Fail($"No answer from {url} within {Timeout.TotalSeconds:0} seconds.");
+                return AiCatalogResult.Fail(
+                    $"No answer from {url} within {Timeout.TotalSeconds:0} seconds.", reachable: false);
             }
             catch (HttpRequestException ex)
             {
                 // The endpoint is named on purpose. "Cannot connect to API" is the sentence OpenCode writes
                 // and the reason its users cannot diagnose a stopped local runner.
                 _logger.LogDebug(ex, "Model listing failed for {Connection}", connection.Id);
-                return AiCatalogResult.Fail($"No response from {url} — is the endpoint running?");
+                return AiCatalogResult.Fail($"No response from {url} — is the endpoint running?", reachable: false);
             }
             catch (JsonException)
             {
-                return AiCatalogResult.Fail($"{url} answered, but not with a model listing.");
+                return AiCatalogResult.Fail($"{url} answered, but not with a model listing.", reachable: true);
             }
         }
 

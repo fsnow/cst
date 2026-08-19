@@ -28,11 +28,14 @@ public class AiModelsViewModelTests
         public FakeCatalog(params AiCatalogModel[] models)
             : this(AiCatalogResult.Success(models)) { }
 
+        public AiConnection? Asked { get; private set; }
+
         public FakeCatalog(AiCatalogResult result) => _result = result;
 
         public Task<AiCatalogResult> FetchAsync(AiConnection connection, CancellationToken ct = default)
         {
             Calls++;
+            Asked = connection;
             return Task.FromResult(_result);
         }
     }
@@ -412,6 +415,75 @@ public class AiModelsViewModelTests
         Assert.Null(stored.ContextLength);
         Assert.Null(stored.Inputs);
         Assert.Null(stored.SupportsReasoning);   // nothing published is not "published: no"
+    }
+
+    // ---- a listing is contact ------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Fetching a listing marks the connection reachable.
+    ///
+    /// <para>Asking a provider for its models <i>is</i> contacting it, and establishes the same fact a chat
+    /// turn does. Without this a reader who had just fetched four hundred models from OpenRouter was still
+    /// told the connection had never been checked — the app had contacted the endpoint and thrown the
+    /// knowledge away.</para>
+    /// </summary>
+    [Fact]
+    public void A_successful_listing_marks_the_connection_reachable()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel("a", "A")));
+        service.Add("mine", Draft());
+        Assert.Equal(Reachability.Configured, service.Connections.Single().State);
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Equal(Reachability.Reachable, service.Connections.Single().State);
+    }
+
+    /// <summary>
+    /// An endpoint that refuses is still an endpoint that answered.
+    ///
+    /// <para>A rejected key or a missing listing proves something was there to say no. Marking that
+    /// unreachable would send the reader to check their network over what is a credential problem — the
+    /// confusion between "cannot reach" and "reached, and was refused" that #673 exists to keep apart.</para>
+    /// </summary>
+    [Fact]
+    public void A_refused_listing_still_counts_as_contact()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            AiCatalogResult.Fail("rejected the stored key", reachable: true)));
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Equal(Reachability.Reachable, service.Connections.Single().State);
+        Assert.True(Group(vm).HasFetchProblem);
+    }
+
+    /// <summary>A transport failure is the one case that means unreachable — nothing answered.</summary>
+    [Fact]
+    public void A_listing_that_never_arrived_marks_it_unreachable()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            AiCatalogResult.Fail("No response from http://localhost:8000/v1/models", reachable: false)));
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Equal(Reachability.Unreachable, service.Connections.Single().State);
+    }
+
+    /// <summary>Where nothing was sent, nothing is claimed — an unfinished connection is not evidence either
+    /// way.</summary>
+    [Fact]
+    public void A_listing_that_was_never_attempted_reports_nothing()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            AiCatalogResult.Fail("is not finished being set up")));
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Equal(Reachability.Configured, service.Connections.Single().State);
     }
 
     // ---- search and the capability filter ---------------------------------------------------------------
