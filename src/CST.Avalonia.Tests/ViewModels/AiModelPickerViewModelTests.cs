@@ -87,18 +87,22 @@ public class AiModelPickerViewModelTests
         Assert.Equal(new[] { "Full" }, picker.Groups.Select(g => g.DisplayName));
     }
 
-    /// <summary>The chip is hidden until there is a choice to make. One model, or none, is a control that
-    /// cannot do anything.</summary>
+    /// <summary>
+    /// The chip appears as soon as one model is enabled, not two.
+    ///
+    /// <para>It used to require two, on the reasoning that a chip offering a single model cannot do anything.
+    /// The chip is also the only place that says which model will answer — and while it was hidden at one
+    /// enabled model, a reader with exactly one had no control anywhere that could configure the
+    /// assistant.</para>
+    /// </summary>
     [Fact]
-    public void The_chip_appears_only_when_there_is_something_to_choose()
+    public void The_chip_appears_as_soon_as_one_model_is_enabled()
     {
         var (picker, service, _) = Make();
         Assert.False(picker.HasChoices);
 
         service.Add("mine", Draft("Mine", new AiModelEntry("a", "A")));
-        Assert.False(picker.HasChoices);
 
-        service.Update("mine", Draft("Mine", new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
         Assert.True(picker.HasChoices);
     }
 
