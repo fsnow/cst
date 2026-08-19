@@ -502,15 +502,24 @@ namespace CST.Avalonia.ViewModels
             _asked = true;
 
             var id = ProviderId;
-            if (string.IsNullOrWhiteSpace(id)) return;
+
+            // A custom endpoint has no provider id, so there is nothing to ask for - but it still gets the
+            // generic mark rather than being the one row in a list of icons that shows a letter.
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                LogoPath = GenericModelIcon.Path();
+                return;
+            }
 
             LogoLoad = ApplyLogoAsync(logos, id!);
         }
 
         private async Task ApplyLogoAsync(IAiProviderLogos logos, string id)
         {
-            var path = await logos.GetLogoPathAsync(id);
-            if (path is null) return;   // no logo: the monogram already on screen is the answer
+            // Null means models.dev has no mark for this provider - every local runner, and anything it does
+            // not carry. The generic sparkle is the answer there, not a letter tile. (#740)
+            var path = await logos.GetLogoPathAsync(id) ?? GenericModelIcon.Path();
+            if (path is null) return;   // could not even write the bundled one: keep the monogram
 
             // Same shape as the service's change event: set directly when already on the UI thread, post when
             // the fetch resumed on a pool thread. A property change raised off-thread reaches a binding.
