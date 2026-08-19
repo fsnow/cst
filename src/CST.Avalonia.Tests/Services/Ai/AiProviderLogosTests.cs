@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -62,7 +63,8 @@ public class AiProviderLogosTests : IDisposable
         Assert.Equal(RealLogo, await File.ReadAllBytesAsync(first));
     }
 
-    /// <summary>Asked once per session, not per rebind — the connections list rebinds on every change.</summary>
+    /// <summary>Asked once per settled answer, not per rebind — the connections list rebinds on every
+    /// change.</summary>
     [Fact]
     public async Task A_second_request_does_not_hit_the_network()
     {
@@ -174,6 +176,8 @@ public class AiProviderLogosTests : IDisposable
     [InlineData("my/box")]
     [InlineData("my box")]
     [InlineData("-leading-dash")]
+    [InlineData("openai\n")]     // `$` would have matched before the newline, naming a file that contains one
+    [InlineData("OpenAI")]       // case-sensitive, like the id validators this mirrors
     public async Task An_id_that_is_not_a_slug_is_never_fetched(string id)
     {
         var stub = new Stub(() => Svg(RealLogo));
@@ -214,6 +218,112 @@ public class AiProviderLogosTests : IDisposable
         await logos.GetLogoPathAsync("ollama");
 
         Assert.Equal(1, stub.Calls);
+    }
+
+    /// <summary>
+    /// The one that would have shipped a permanent wrong answer.
+    ///
+    /// <para>A captive portal answers every request with 200 and a login page. Without a content check that
+    /// HTML is written into anthropic.svg and served from disk by every later session, turning a transient
+    /// network condition into a permanent bad cache — the exact failure this class refuses even to remember
+    /// for a session. A non-2xx cannot get this far, because GetByteArrayAsync throws on one.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_captive_portal_login_page_is_not_cached_as_a_logo()
+    {
+        var portal = Encoding.UTF8.GetBytes("<html><body>Sign in to Airport WiFi</body></html>");
+        var logos = Make(new Stub(() => Svg(portal)));
+
+        Assert.Null(await logos.GetLogoPathAsync("anthropic"));
+        Assert.False(File.Exists(Path.Combine(_dir, "anthropic.svg")));
+    }
+
+    /// <summary>And it is not remembered either: the portal is weather, so the next session — or the next
+    /// row — must be free to ask again.</summary>
+    [Fact]
+    public async Task A_non_svg_response_is_retried_rather_than_remembered()
+    {
+        var captive = true;
+        var logos = Make(new Stub(() => captive
+            ? Svg(Encoding.UTF8.GetBytes("<html>portal</html>"))
+            : Svg(RealLogo)));
+
+        Assert.Null(await logos.GetLogoPathAsync("anthropic"));
+
+        captive = false;
+        Assert.NotNull(await logos.GetLogoPathAsync("anthropic"));
+    }
+
+    /// <summary>
+    /// A cache already poisoned — by a release before the check existed, or by a placeholder hash that has
+    /// since drifted — heals rather than serving the bad copy forever.
+    /// </summary>
+    [Fact]
+    public async Task A_poisoned_cache_entry_is_replaced_rather_than_served()
+    {
+        Directory.CreateDirectory(_dir);
+        var poisoned = Path.Combine(_dir, "anthropic.svg");
+        await File.WriteAllBytesAsync(poisoned, Encoding.UTF8.GetBytes("<html>portal</html>"));
+
+        var path = await Make(new Stub(() => Svg(RealLogo))).GetLogoPathAsync("anthropic");
+
+        Assert.NotNull(path);
+        Assert.Equal(RealLogo, await File.ReadAllBytesAsync(path!));
+    }
+
+    /// <summary>Same, for a placeholder that reached the disk before it was recognised.</summary>
+    [Fact]
+    public async Task A_cached_placeholder_is_not_served_as_a_logo()
+    {
+        Directory.CreateDirectory(_dir);
+        await File.WriteAllBytesAsync(Path.Combine(_dir, "ollama.svg"), PlaceholderStandIn);
+
+        Assert.Null(await Make(new Stub(() => Svg(PlaceholderStandIn))).GetLogoPathAsync("ollama"));
+    }
+
+    /// <summary>An XML declaration or a licence comment ahead of the root element is ordinary in a real SVG
+    /// and must not read as "not an SVG".</summary>
+    [Theory]
+    [InlineData("<?xml version=\"1.0\"?><svg/>")]
+    [InlineData("<!-- Copyright --><svg/>")]
+    [InlineData("\n  <svg/>")]
+    [InlineData("<SVG/>")]
+    public async Task A_real_svg_is_recognised_however_it_opens(string body)
+    {
+        var logos = Make(new Stub(() => Svg(Encoding.UTF8.GetBytes(body))));
+
+        Assert.NotNull(await logos.GetLogoPathAsync("anthropic"));
+    }
+
+    /// <summary>The cache directory is documented as safe to delete. Deleting it must cost a refetch, not a
+    /// row bound to a file that has gone.</summary>
+    [Fact]
+    public async Task A_deleted_cache_is_refetched_rather_than_returned()
+    {
+        var logos = Make(new Stub(() => Svg(RealLogo)));
+
+        var first = await logos.GetLogoPathAsync("openrouter");
+        Directory.Delete(_dir, recursive: true);
+
+        var second = await logos.GetLogoPathAsync("openrouter");
+
+        Assert.NotNull(second);
+        Assert.True(File.Exists(second!));
+        Assert.Equal(first, second);
+    }
+
+    /// <summary>Two rows can carry the same id — a preset row and the connection added from it — and load at
+    /// the same moment. Neither may end up on a monogram because the other won a race to the same file.</summary>
+    [Fact]
+    public async Task Concurrent_loads_of_one_id_both_get_the_logo()
+    {
+        var logos = Make(new Stub(() => Svg(RealLogo)));
+
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 8).Select(_ => Task.Run(() => logos.GetLogoPathAsync("anthropic"))));
+
+        Assert.All(results, r => Assert.NotNull(r));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
     }
 
     /// <summary>The measured value, pinned. A wrong constant means placeholders get cached and displayed as

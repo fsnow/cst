@@ -772,7 +772,9 @@ public class AiConnectionRowLogoTests
     {
         var (vm, _) = Make(new FakeLogos());
 
-        var row = vm.AvailablePresets.First(p => p.Id == "ollama");
+        // In LocalPresets, not the catalogue: #739 split the local runners out, and they are exactly the rows
+        // models.dev has no mark for.
+        var row = vm.LocalPresets.First(p => p.Id == "ollama");
         await row.LogoLoad!;
 
         Assert.Null(row.LogoPath);
@@ -780,17 +782,56 @@ public class AiConnectionRowLogoTests
         Assert.False(string.IsNullOrWhiteSpace(row.Monogram));
     }
 
-    /// <summary>A row must be drawable the instant it is created — the logo arriving later is the design, not
-    /// a race to wait out.</summary>
+    /// <summary>
+    /// A row must be drawable the instant it is created — the logo arriving later is the design, not a race
+    /// to wait out.
+    ///
+    /// <para>The resolver here never completes, which is the point: with a fake that answers synchronously
+    /// there is no "before" to observe, and this test passed while asserting nothing. (fable review)</para>
+    /// </summary>
     [Fact]
-    public void A_row_starts_on_its_monogram_before_anything_is_fetched()
+    public void A_row_starts_on_its_monogram_while_the_logo_is_still_coming()
     {
-        var (vm, _) = Make(new FakeLogos(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
-            { ["anthropic"] = "/cache/anthropic.svg" }));
+        var pending = new TaskCompletionSource<string?>();
+        var (vm, _) = Make(new PendingLogos(pending.Task));
 
-        var row = new AiPresetRowViewModel(vm, AiProviderPresets.All.First(p => p.Id == "anthropic"));
+        var row = vm.AvailablePresets.First(p => p.Id == "anthropic");
 
+        Assert.False(row.LogoLoad!.IsCompleted);   // genuinely still in flight
+        Assert.Null(row.LogoPath);
+        Assert.False(row.HasLogo);
         Assert.False(string.IsNullOrWhiteSpace(row.Monogram));
+
+        pending.SetResult("/cache/anthropic.svg");
+    }
+
+    /// <summary>And it swaps once the logo does arrive, without the row being rebuilt.</summary>
+    [Fact]
+    public async Task The_logo_replaces_the_monogram_when_it_arrives()
+    {
+        var pending = new TaskCompletionSource<string?>();
+        var (vm, _) = Make(new PendingLogos(pending.Task));
+        var row = vm.AvailablePresets.First(p => p.Id == "anthropic");
+
+        var changed = new List<string>();
+        row.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+
+        pending.SetResult("/cache/anthropic.svg");
+        await row.LogoLoad!;
+
+        Assert.Equal("/cache/anthropic.svg", row.LogoPath);
+        Assert.True(row.HasLogo);
+        Assert.Contains(nameof(AiLogoRowViewModel.LogoPath), changed);
+        Assert.Contains(nameof(AiLogoRowViewModel.HasLogo), changed);
+    }
+
+    /// <summary>A resolver that never answers must not leave the row bound to nothing — the monogram is
+    /// already what is on screen.</summary>
+    private sealed class PendingLogos : IAiProviderLogos
+    {
+        private readonly Task<string?> _pending;
+        public PendingLogos(Task<string?> pending) => _pending = pending;
+        public Task<string?> GetLogoPathAsync(string providerId, CancellationToken ct = default) => _pending;
     }
 
     /// <summary>A connection added from the catalogue keeps the preset's id, so its row resolves too.</summary>
