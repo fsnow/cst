@@ -295,12 +295,16 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         _logger.LogWarning(
             "Anthropic request failed: HTTP {Status} {Code}", (int)response.StatusCode, code ?? "(no code)");
 
+        // Read once and used twice: the sentence the reader sees and the delay any retry honours must agree,
+        // and computing them from separate reads of the same headers is how they drift.
+        var wait = AiHttp.RateLimitWait(response);
+
         return new AiError(
             kind,
-            AiHttp.MessageFor(kind, response.StatusCode),
+            AiHttp.MessageFor(kind, response.StatusCode, wait),
             StatusCode: (int)response.StatusCode,
             ProviderCode: code,
-            RetryAfter: AiHttp.RetryAfter(response));
+            RetryAfter: wait);
     }
 
     /// <summary>

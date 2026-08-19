@@ -184,6 +184,52 @@ internal static class AiHttp
         segment.Length > 1 && segment[0] is 'v' or 'V' && char.IsAsciiDigit(segment[1]);
 
     /// <summary>The provider's requested backoff, when it sent one. Seconds and HTTP-date forms are both legal.</summary>
+    /// <summary>
+    /// How long until the limit lifts, from whichever header the provider sent. (#673)
+    ///
+    /// <para><c>Retry-After</c> first, because it is the standard and states a duration outright. OpenRouter
+    /// sends it only when <i>every</i> upstream provider returned a retry hint, so on a plain account-level
+    /// cap there is no <c>Retry-After</c> at all and <c>X-RateLimit-Reset</c> is the only thing available —
+    /// which is exactly the case that produced "wait a moment" for a limit that lasts until tomorrow.</para>
+    /// </summary>
+    internal static TimeSpan? RateLimitWait(HttpResponseMessage response) =>
+        RetryAfter(response) ?? RateLimitReset(response);
+
+    /// <summary>
+    /// <c>X-RateLimit-Reset</c> as a wait, or null.
+    ///
+    /// <para><b>Seconds and milliseconds are both accepted</b>, told apart by magnitude rather than by
+    /// trusting a convention: providers disagree about the unit, and reading a millisecond timestamp as
+    /// seconds puts the reset tens of thousands of years out, which would be reported to the reader with a
+    /// straight face. Anything that lands more than a day and a bit away is treated as not understood.</para>
+    /// </summary>
+    internal static TimeSpan? RateLimitReset(HttpResponseMessage response)
+    {
+        if (!response.Headers.TryGetValues("x-ratelimit-reset", out var values)) return null;
+
+        foreach (var value in values)
+        {
+            if (!long.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var raw))
+                continue;
+
+            var epochMs = raw > 100_000_000_000 ? raw : raw * 1000;
+
+            // FromUnixTimeMilliseconds throws outside its range, and a header is somebody else's input: a
+            // malformed value must produce no advice, never an exception on the error path.
+            if (epochMs < 0 || epochMs > 253_402_300_799_000) continue;
+
+            var moment = DateTimeOffset.FromUnixTimeMilliseconds(epochMs);
+            var wait = moment - DateTimeOffset.UtcNow;
+
+            // Just past is "now" - clocks disagree by seconds and a reset a moment ago is not a reason to
+            // say nothing.
+            if (wait <= TimeSpan.Zero) return wait > TimeSpan.FromMinutes(-5) ? TimeSpan.Zero : null;
+            if (wait < TimeSpan.FromHours(26)) return wait;
+        }
+
+        return null;
+    }
+
     internal static TimeSpan? RetryAfter(HttpResponseMessage response)
     {
         var header = response.Headers.RetryAfter;
@@ -277,16 +323,42 @@ internal static class AiHttp
     };
 
     /// <summary>The user-facing sentence for a kind. Never contains provider text — see <see cref="AiError"/>.</summary>
-    internal static string MessageFor(AiErrorKind kind, HttpStatusCode status) => kind switch
+    /// <param name="wait">How long until the limit lifts, where the provider said. Turns "wait a moment" —
+    /// which is wrong by many hours for a daily cap — into something the reader can act on.</param>
+    internal static string MessageFor(AiErrorKind kind, HttpStatusCode status, TimeSpan? wait = null) => kind switch
     {
         AiErrorKind.Unauthorized =>
             "The provider rejected the API key. Check the key and that it has access to this model.",
-        AiErrorKind.RateLimited =>
-            "The provider is rate-limiting this key. Wait a moment and try again.",
+        AiErrorKind.RateLimited => RateLimitMessage(wait),
         AiErrorKind.ContextTooLong =>
             "The request was longer than the model's context window. Try a smaller passage or fewer glosses.",
         _ => $"The provider rejected the request (HTTP {(int)status}).",
     };
+
+    /// <summary>
+    /// What to tell a reader who has been rate-limited.
+    ///
+    /// <para>The old wording was "wait a moment and try again" for every 429. That is right for a
+    /// per-minute cap and badly wrong for a daily one — a free OpenRouter key allows 50 requests a day, and a
+    /// reader told to wait a moment will retry, fail, and reasonably conclude the app is broken.</para>
+    ///
+    /// <para>Where the provider said nothing the wording stays vague, because vague is what we know. It no
+    /// longer promises a moment.</para>
+    /// </summary>
+    internal static string RateLimitMessage(TimeSpan? wait)
+    {
+        const string prefix = "The provider is rate-limiting this key.";
+
+        if (wait is not { } left) return $"{prefix} It may be a per-minute limit or a daily quota — the provider did not say which.";
+        if (left <= TimeSpan.FromSeconds(90)) return $"{prefix} Try again in a minute.";
+        if (left < TimeSpan.FromHours(1)) return $"{prefix} Try again in about {Math.Ceiling(left.TotalMinutes):N0} minutes.";
+
+        // Beyond an hour, a duration alone is hard to act on - "about 7 hours" invites arithmetic, and the
+        // reader wants to know whether it is worth waiting or worth coming back tomorrow.
+        var hours = Math.Round(left.TotalHours, MidpointRounding.AwayFromZero);
+        var at = DateTime.Now.Add(left).ToString("t", CultureInfo.CurrentCulture);
+        return $"{prefix} The quota resets at {at}, about {hours:N0} hours from now.";
+    }
 
     /// <summary>The error for a 200 that carried nothing a provider stream could possibly be made of.</summary>
     internal static AiError EmptyResponse() => new(
