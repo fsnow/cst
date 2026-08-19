@@ -346,6 +346,13 @@ namespace CST.Avalonia.ViewModels
 
                 if (result.Ok) _fetched = result.Models;
                 else FetchProblem = result.Problem;
+
+                // Asking a provider for its models IS contacting it, and the answer is the same fact a chat
+                // turn establishes. Without this a reader who had just fetched four hundred models from
+                // OpenRouter was still told the connection had never been checked - the app had contacted
+                // the endpoint and thrown the knowledge away.
+                if (result.Reachable is { } reachable)
+                    _owner.Service?.ReportReachability(Id, reachable);
             }
             catch (Exception ex)
             {

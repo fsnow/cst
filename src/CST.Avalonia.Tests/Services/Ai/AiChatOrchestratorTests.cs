@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CST;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
+using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
 using CST.Navigation;
 using CST.Search;
@@ -140,7 +141,8 @@ public class AiChatOrchestratorTests
         IChatProvider? provider = null,
         string? notConfigured = null,
         IAiContextBundler? bundler = null,
-        string language = "English")
+        string language = "English",
+        IAiConnectionService? connections = null)
     {
         // A store pointed at a directory that does not exist: no user override can be picked up, so every test
         // runs against the shipped templates.
@@ -153,7 +155,8 @@ public class AiChatOrchestratorTests
             bundler ?? new StubBundler(),
             new PromptBuilder(templates),
             Settings(language),
-            NullLogger<AiChatOrchestrator>.Instance);
+            NullLogger<AiChatOrchestrator>.Instance,
+            connections);
     }
 
     private static AiTurnRequest Request(AiTask task = AiTask.Explain) =>
@@ -303,6 +306,72 @@ public class AiChatOrchestratorTests
 
         Assert.Equal(AiErrorKind.Unauthorized, events[^1].Error!.Kind);
         Assert.Equal(AiTurnEventKind.Started, events[0].Kind);   // the citation still rendered
+    }
+
+    // ---- what a turn teaches us about the endpoint (#673) --------------------------------------------------
+
+    private static (IAiConnectionService Service, string Id) Connected()
+    {
+        var settings = new CST.Avalonia.Models.Settings();
+        var mock = new Mock<ISettingsService>();
+        mock.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(mock.Object);
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[] { new AiModelEntry("m", "M") },
+            new Dictionary<string, string>(), new Dictionary<string, string>()));
+        return (service, "mine");
+    }
+
+    /// <summary>
+    /// A refusal with a status code proves the endpoint answered.
+    ///
+    /// <para>Reported from use: a Cerebras connection returned HTTP 402 and was still described as never
+    /// checked. The old rule only ever recorded a NETWORK failure (unreachable) or a turn that produced
+    /// output (reachable), so every HTTP-level refusal taught the app nothing — though a status code is
+    /// precisely the evidence that something was there to send one.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(402)]
+    [InlineData(401)]
+    [InlineData(429)]
+    public async Task A_refusal_with_a_status_code_marks_the_endpoint_reachable(int status)
+    {
+        var (service, id) = Connected();
+        var provider = new FakeProvider(throwBeforeStreaming: new AiException(
+            new AiError(AiErrorKind.Provider, "refused", StatusCode: status)));
+
+        await CollectAsync(Orchestrator(provider, connections: service));
+
+        Assert.Equal(Reachability.Reachable, service.Connections.Single(c => c.Id == id).State);
+    }
+
+    /// <summary>A network failure is the one that means unreachable — nothing answered, so there is no status
+    /// code to have come from anywhere.</summary>
+    [Fact]
+    public async Task A_network_failure_marks_the_endpoint_unreachable()
+    {
+        var (service, id) = Connected();
+        var provider = new FakeProvider(throwBeforeStreaming: new AiException(
+            new AiError(AiErrorKind.Network, "The endpoint could not be reached.")));
+
+        await CollectAsync(Orchestrator(provider, connections: service));
+
+        Assert.Equal(Reachability.Unreachable, service.Connections.Single(c => c.Id == id).State);
+    }
+
+    /// <summary>A failure that never left the machine says nothing about the endpoint: no request was sent,
+    /// so there is nothing to have learned.</summary>
+    [Fact]
+    public async Task A_failure_with_no_status_code_teaches_nothing()
+    {
+        var (service, id) = Connected();
+        var provider = new FakeProvider(throwBeforeStreaming: new AiException(
+            new AiError(AiErrorKind.Provider, "something went wrong locally")));
+
+        await CollectAsync(Orchestrator(provider, connections: service));
+
+        Assert.Equal(Reachability.Configured, service.Connections.Single(c => c.Id == id).State);
     }
 
     [Fact]

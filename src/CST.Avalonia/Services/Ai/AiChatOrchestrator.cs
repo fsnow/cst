@@ -331,11 +331,17 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
             _logger.LogInformation("AI turn failed: {Kind} ({Code})", failure.Kind, failure.ProviderCode ?? "-");
 
-            // Only a NETWORK failure says anything about the endpoint. A 401, a rate limit or an over-long
-            // context all prove the endpoint answered - marking those unreachable would be wrong, and would
+            // Only a NETWORK failure says the endpoint could not be reached. A 401, a rate limit or an
+            // over-long context all prove it answered - marking those unreachable would be wrong, and would
             // put a red mark on a perfectly good connection whose key simply needs fixing.
+            //
+            // And they prove it POSITIVELY, which this used to leave on the table: a status code means
+            // something was there to send one, so it is contact and should be recorded as such. Reported
+            // from use - a connection that had just returned a 402 was still described as never checked.
             if (failure.Kind == AiErrorKind.Network)
                 ReportReachability(false);
+            else if (failure.StatusCode is not null)
+                ReportReachability(true);
             yield return AiTurnEvent.ForError(failure);
             yield break;
         }
