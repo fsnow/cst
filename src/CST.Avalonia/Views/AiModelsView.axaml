@@ -128,17 +128,19 @@
 
                     <!-- One model -->
                     <DataTemplate DataType="vm:AiCatalogRowViewModel">
-                        <Border Padding="34,6,10,6"
+                        <!-- The provider's facts are on the tooltip, not in the row. As a permanent second
+                             line they were, at four hundred rows, four hundred lines of small grey text
+                             between the reader and the names they came to read. They matter when choosing
+                             between two models — a moment, not a state. -->
+                        <Border Padding="34,4,10,4"
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="0,0,0,1">
+                                BorderThickness="0,0,0,1"
+                                Background="Transparent"
+                                ToolTip.Tip="{Binding Details}">
                             <Grid ColumnDefinitions="*,Auto">
-                                <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
-                                    <!-- The provider's own facts, verbatim. Empty for an endpoint that
-                                         publishes none, and the row degrades to its id. -->
-                                    <TextBlock Text="{Binding Details}" Classes="Secondary"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
+                                <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
 
                                 <!-- A switch, never a radio: several models under one connection must be
                                      on at once, which is the entire point of a short list. -->
