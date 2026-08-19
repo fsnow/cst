@@ -390,6 +390,24 @@ public class AiModelsViewModelTests
         Assert.Single(Rows(vm), r => r.ModelId == "odd");
     }
 
+    // ---- lifetime ----------------------------------------------------------------------------------------
+
+    /// <summary>Same reason as the Providers tab: the service is a singleton and this is rebuilt on every
+    /// Settings open.</summary>
+    [Fact]
+    public void A_disposed_view_model_stops_listening()
+    {
+        var (vm, service) = Make();
+        service.Add("first", Draft());
+        Assert.Single(vm.Groups);
+
+        vm.Dispose();
+        service.Add("second", Draft());
+
+        Assert.Single(vm.Groups);
+        Assert.Equal(2, service.Connections.Count);
+    }
+
     // ---- what a row says ---------------------------------------------------------------------------------
 
     /// <summary>The provider's own facts, verbatim and attributed — safe where a table we maintained would

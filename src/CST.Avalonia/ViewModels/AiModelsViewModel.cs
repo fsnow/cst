@@ -29,7 +29,7 @@ namespace CST.Avalonia.ViewModels
     /// is what upstream ships, computed from release dates, and is still a verdict for being arithmetic
     /// (#670/#681, #689).</para>
     /// </summary>
-    public class AiModelsViewModel : ViewModelBase
+    public class AiModelsViewModel : ViewModelBase, IDisposable
     {
         private readonly IAiConnectionService? _service;
         private readonly IAiModelCatalog? _catalog;
@@ -44,7 +44,7 @@ namespace CST.Avalonia.ViewModels
 
             if (_service is not null)
             {
-                _service.ConnectionsChanged += (_, _) => Rebind();
+                _service.ConnectionsChanged += OnConnectionsChanged;
                 Rebind();
             }
         }
@@ -133,6 +133,15 @@ namespace CST.Avalonia.ViewModels
             }
 
             this.RaisePropertyChanged(nameof(HasNoConnections));
+        }
+
+        private void OnConnectionsChanged(object? sender, EventArgs e) => Rebind();
+
+        /// <summary>Stops listening. See the note on <see cref="AiConnectionsViewModel.Dispose"/> — the
+        /// service is a singleton and every Settings open builds one of these.</summary>
+        public void Dispose()
+        {
+            if (_service is not null) _service.ConnectionsChanged -= OnConnectionsChanged;
         }
 
         private void Rebind()
