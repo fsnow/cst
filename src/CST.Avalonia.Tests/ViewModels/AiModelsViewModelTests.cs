@@ -305,6 +305,76 @@ public class AiModelsViewModelTests
         Assert.True(Rows(vm).Single(r => r.ModelId == "a").Enabled);
     }
 
+    // ---- the active model follows what is switched on ------------------------------------------------------
+
+    /// <summary>
+    /// Switching a model on, with nothing active, makes it the one that answers.
+    ///
+    /// <para>The defect this pins: enabling only ever set a flag, so a reader who connected OpenRouter and
+    /// switched on a single model was told "No model is configured" by the assistant while looking at the
+    /// model they had just enabled. With one model enabled the per-turn picker had nothing to choose between
+    /// either, so there was no control anywhere that could set it.</para>
+    /// </summary>
+    [Fact]
+    public void Switching_a_model_on_makes_it_active_when_nothing_is()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("nvidia/nemotron", "Nemotron"), new AiCatalogModel("other", "Other")));
+        service.Add("openrouter-ish", Draft());
+        Group(vm).IsExpanded = true;
+        Assert.Null(service.ActiveModelId);
+
+        Rows(vm).Single(r => r.ModelId == "nvidia/nemotron").Enabled = true;
+
+        Assert.Equal("nvidia/nemotron", service.ActiveModelId);
+        Assert.Equal("openrouter-ish", service.Active?.Id);
+    }
+
+    /// <summary>A later enable does not steal the choice — the reader picked one already.</summary>
+    [Fact]
+    public void A_later_enable_does_not_change_the_active_model()
+    {
+        var (vm, service) = Make(new FakeCatalog(
+            new AiCatalogModel("first", "First"), new AiCatalogModel("second", "Second")));
+        service.Add("mine", Draft());
+        Group(vm).IsExpanded = true;
+
+        Rows(vm).Single(r => r.ModelId == "first").Enabled = true;
+        Rows(vm).Single(r => r.ModelId == "second").Enabled = true;
+
+        Assert.Equal("first", service.ActiveModelId);
+    }
+
+    /// <summary>Switching the active model off moves the pointer to another enabled one, rather than leaving
+    /// requests aimed at a model the reader has just hidden.</summary>
+    [Fact]
+    public void Switching_the_active_model_off_moves_to_another_enabled_one()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
+        Group(vm).IsExpanded = true;
+        service.SetActive("mine", "a");
+
+        Rows(vm).Single(r => r.ModelId == "a").Enabled = false;
+
+        Assert.Equal("b", service.ActiveModelId);
+    }
+
+    /// <summary>With nothing else enabled it clears, which is honest — and the assistant's own message then
+    /// says so rather than the request failing at the endpoint.</summary>
+    [Fact]
+    public void Switching_the_last_enabled_model_off_clears_the_active_one()
+    {
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("a", "A")));
+        Group(vm).IsExpanded = true;
+        service.SetActive("mine", "a");
+
+        Rows(vm).Single().Enabled = false;
+
+        Assert.Null(service.ActiveModelId);
+    }
+
     // ---- search and the capability filter ---------------------------------------------------------------
 
     /// <summary>Search filters across every group, not within the expanded one, and shows what it finds

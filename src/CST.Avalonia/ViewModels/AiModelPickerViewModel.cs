@@ -65,9 +65,16 @@ namespace CST.Avalonia.ViewModels
             }
         }
 
-        /// <summary>Hidden entirely until there is a choice to make. A chip offering one model, or none, is a
-        /// control that cannot do anything.</summary>
-        public bool HasChoices => Groups.Sum(g => g.Models.Count) > 1;
+        /// <summary>
+        /// Shown as soon as one model is enabled.
+        ///
+        /// <para>It used to require <i>two</i>, on the reasoning that a chip offering a single model cannot
+        /// do anything. That was wrong twice: the chip is also the only place that says which model will
+        /// answer, and — until the service learned to follow an enable — it was the only control that could
+        /// set the active model at all, so hiding it at one enabled model left no way to configure the
+        /// assistant.</para>
+        /// </summary>
+        public bool HasChoices => Groups.Sum(g => g.Models.Count) > 0;
 
         public bool IsOpen
         {

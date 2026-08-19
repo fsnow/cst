@@ -313,6 +313,7 @@ namespace CST.Avalonia.Services.Ai
             }
 
             model.Enabled = enabled;
+            FollowTheChoice(record, model, enabled);
             return Saved(record);
         }
 
@@ -325,7 +326,38 @@ namespace CST.Avalonia.Services.Ai
             if (model is null) return AiConnectionResult.Fail($"'{modelId}' is not a model on {record.DisplayName}.");
 
             model.Enabled = enabled;
+            FollowTheChoice(record, model, enabled);
             return Saved(record);
+        }
+
+        /// <summary>
+        /// Keeps the active model in step with what the reader just switched on or off.
+        ///
+        /// <para><b>Turning a model on when nothing is active makes it active.</b> Enabling is the reader
+        /// saying "this is one I want to use", and with a single enabled model there is nothing else it could
+        /// mean. Without this the assistant answered "No model is configured" to someone looking at the model
+        /// they had just switched on — and with only one enabled, the per-turn picker had nothing to choose
+        /// between and so offered no way out at all.</para>
+        ///
+        /// <para><b>Turning the active model off moves the pointer.</b> To another enabled model on the same
+        /// connection where there is one, and otherwise to nothing — leaving it pointing at a model the
+        /// reader has just hidden would send requests to something the picker no longer lists.</para>
+        /// </summary>
+        private void FollowTheChoice(AiConnectionRecord record, AiModelRecord model, bool enabled)
+        {
+            if (enabled)
+            {
+                if (!string.IsNullOrEmpty(Chat.ActiveModelId)) return;
+                Chat.ActiveConnectionId = record.Id;
+                Chat.ActiveModelId = model.Id;
+                return;
+            }
+
+            if (!IdMatches(Chat.ActiveConnectionId, record.Id)) return;
+            if (!string.Equals(Chat.ActiveModelId, model.Id, StringComparison.Ordinal)) return;
+
+            Chat.ActiveModelId = record.Models
+                .FirstOrDefault(m => m.Enabled && !string.Equals(m.Id, model.Id, StringComparison.Ordinal))?.Id;
         }
 
         // ---- internals -------------------------------------------------------------------------------
