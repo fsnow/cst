@@ -19,10 +19,15 @@ namespace CST.Avalonia.Services.Ai
     /// "recommended", no model lists, no ordering by quality, no notes on which endpoint is better at Pāli.
     /// That is the registry removed in #670/#681, and the rule binds a mined table exactly as it binds a
     /// hand-written one — including on every future sync, because a ranking field can appear in an upstream
-    /// release nobody read. The order below is alphabetical by display name, which is mechanical.</para>
+    /// release nobody read.</para>
+    ///
+    /// <para><b>Order in this file is grouping, not ranking.</b> The arrays below are grouped by what they
+    /// are for; the order a reader sees is applied at read time — alphabetical by display name, with the id
+    /// as a tie-break — in <see cref="All"/> and <c>AiPresetSource.Build</c>. Nothing about a position here
+    /// reaches the UI.</para>
     ///
     /// <para><b>Presets are a convenience, never a gate.</b> A custom endpoint typed by hand is first-class and
-    /// always available; roughly 150 of 189 catalogued providers are plain
+    /// always available; most of the 192 catalogued providers are plain
     /// <c>POST {base}/chat/completions</c> with a bearer token, which is exactly what "custom" already is.</para>
     /// </summary>
     public static class AiProviderPresets
@@ -31,9 +36,55 @@ namespace CST.Avalonia.Services.Ai
         /// answerable and a refresh is a diff rather than an audit.</summary>
         public const string SourceCommit = "e14acea";
 
-        private static readonly AiProviderPreset[] Items =
+        /// <summary>
+        /// Endpoints that run on this machine. <b>Always present, catalogue or not</b> — models.dev
+        /// catalogues hosted providers and will never list Ollama; LM Studio appears with three models,
+        /// a number about nothing, since what either serves is whatever the reader has loaded.
+        ///
+        /// <para>Structurally the simplest presets possible: a fixed loopback URL, no credential method,
+        /// no prompts, nothing to template — which is why hardcoding them cannot rot, and why they are
+        /// exactly the wrong thing to hide when the network is down.</para>
+        /// </summary>
+        private static readonly AiProviderPreset[] Local =
         {
-            // Anthropic speaks its own protocol. Kind and BaseUrl stay independent: other providers serve the
+            P("lmstudio", "LM Studio (local)", ChatProviderKind.OpenAiCompatible,
+                "http://localhost:1234/v1", false),
+
+            P("ollama", "Ollama (local)", ChatProviderKind.OpenAiCompatible,
+                "http://localhost:11434/v1", false),
+        };
+
+        /// <summary>
+        /// Hosted endpoints whose base URL the catalogue does not record, or whose auth shape it does not
+        /// describe. (#737)
+        ///
+        /// <para><b>Why this table exists at all.</b> models.dev records an <c>api</c> URL exactly when a
+        /// provider is served by the generic OpenAI-compatible adapter, and omits it when a dedicated SDK
+        /// package carries its own default. 26 of its 192 providers are in that state — including OpenAI and
+        /// Anthropic — so "no <c>api</c> field" means "packaged differently", never "unsupported".</para>
+        ///
+        /// <para><b>The wire format is a column here, not an assumption.</b> Each entry carries an explicit
+        /// <see cref="ChatProviderKind"/>, and that enum has two members. So a provider speaking a third
+        /// protocol cannot be added even by accident: Cohere posts to <c>/chat</c> on
+        /// <c>api.cohere.com/v2</c> and would need a value that does not exist. Recording a base URL for it
+        /// would produce a preset that looks configured and 404s on every request.</para>
+        ///
+        /// <para><b>Deliberately absent, with reasons</b> — each is a skip the generator logs rather than a
+        /// silent omission:</para>
+        /// <list type="bullet">
+        /// <item><c>cohere</c> — a third wire protocol, not a missing URL.</item>
+        /// <item><c>perplexity</c> — <c>https://api.perplexity.ai</c> has no version segment, and
+        /// <c>AiHttp.ResolveEndpoint</c> adds one to a bare host, so it would build
+        /// <c>/v1/chat/completions</c> against an endpoint serving <c>/chat/completions</c>. Tracked as
+        /// <b>#742</b>; add it here once that lands.</item>
+        /// <item><c>google</c>, <c>amazon-bedrock</c>, <c>google-vertex</c> — protocol or credential work
+        /// (#700, #702, #703).</item>
+        /// <item><c>cloudflare-ai-gateway</c> — two credentials on one request (#701).</item>
+        /// </list>
+        /// </summary>
+        private static readonly AiProviderPreset[] Hosted =
+        {
+            // Anthropic's own protocol. Kind and BaseUrl stay independent: other providers serve the
             // Anthropic Messages shape at their own URLs, so Kind must never imply this host.
             P("anthropic", "Anthropic", ChatProviderKind.Anthropic,
                 "https://api.anthropic.com/v1", true, "ANTHROPIC_API_KEY"),
@@ -48,23 +99,33 @@ namespace CST.Avalonia.Services.Ai
                     new AiCredentialMethod.Key(),
                     new AiCredentialMethod.Env(new[] { "AZURE_API_KEY", "AZURE_OPENAI_API_KEY" }),
                 },
-                new[]
-                {
-                    new AiInputPrompt("resourceName", "Azure resource name", "my-resource"),
-                },
+                new[] { new AiInputPrompt("resourceName", "Azure resource name", "my-resource") },
                 AuthHeaderName: "api-key",
                 AuthScheme: null),
 
-            P("baseten", "Baseten", ChatProviderKind.OpenAiCompatible,
-                "https://inference.baseten.co/v1", true, "BASETEN_API_KEY"),
-
+            // The five below carry no `api` field but are ordinary bearer endpoints we already ship and
+            // whose URLs are proven in use. opencode's own openai-compatible-profile.ts agrees on all five,
+            // which is a cross-check rather than the source.
             P("cerebras", "Cerebras", ChatProviderKind.OpenAiCompatible,
                 "https://api.cerebras.ai/v1", true, "CEREBRAS_API_KEY"),
 
-            P("chutes", "Chutes", ChatProviderKind.OpenAiCompatible,
-                "https://llm.chutes.ai/v1", true, "CHUTES_API_KEY"),
+            P("deepinfra", "DeepInfra", ChatProviderKind.OpenAiCompatible,
+                "https://api.deepinfra.com/v1/openai", true, "DEEPINFRA_API_KEY"),
 
-            // Account id goes in the path; ordinary bearer auth otherwise.
+            P("groq", "Groq", ChatProviderKind.OpenAiCompatible,
+                "https://api.groq.com/openai/v1", true, "GROQ_API_KEY"),
+
+            P("togetherai", "Together AI", ChatProviderKind.OpenAiCompatible,
+                "https://api.together.xyz/v1", true, "TOGETHER_API_KEY"),
+
+            P("xai", "xAI", ChatProviderKind.OpenAiCompatible,
+                "https://api.x.ai/v1", true, "XAI_API_KEY"),
+
+            P("openai", "OpenAI", ChatProviderKind.OpenAiCompatible,
+                "https://api.openai.com/v1", true, "OPENAI_API_KEY"),
+
+            // Account id goes in the path, and the catalogue cannot express a prompt for it - which is
+            // precisely what this table is for. Ordinary bearer auth otherwise.
             new AiProviderPreset(
                 "cloudflare-workers-ai", "Cloudflare Workers AI", ChatProviderKind.OpenAiCompatible,
                 "https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/v1",
@@ -73,100 +134,39 @@ namespace CST.Avalonia.Services.Ai
                     new AiCredentialMethod.Key(),
                     new AiCredentialMethod.Env(new[] { "CLOUDFLARE_API_KEY", "CLOUDFLARE_WORKERS_AI_TOKEN" }),
                 },
-                new[]
-                {
-                    new AiInputPrompt("accountId", "Cloudflare account ID", "0123456789abcdef"),
-                }),
+                new[] { new AiInputPrompt("accountId", "Cloudflare account ID", "0123456789abcdef") }),
 
-            P("deepinfra", "DeepInfra", ChatProviderKind.OpenAiCompatible,
-                "https://api.deepinfra.com/v1/openai", true, "DEEPINFRA_API_KEY"),
-
-            P("deepseek", "DeepSeek", ChatProviderKind.OpenAiCompatible,
-                "https://api.deepseek.com/v1", true, "DEEPSEEK_API_KEY"),
-
-            P("fireworks-ai", "Fireworks AI", ChatProviderKind.OpenAiCompatible,
-                "https://api.fireworks.ai/inference/v1", true, "FIREWORKS_API_KEY"),
-
-            P("groq", "Groq", ChatProviderKind.OpenAiCompatible,
-                "https://api.groq.com/openai/v1", true, "GROQ_API_KEY"),
-
-            P("huggingface", "Hugging Face", ChatProviderKind.OpenAiCompatible,
-                "https://router.huggingface.co/v1", true, "HF_TOKEN"),
-
-            // Local runners. No key by default - which is why an absent credential must be a valid state
-            // rather than an error, and why CredentialSource has a None member.
-            P("lmstudio", "LM Studio (local)", ChatProviderKind.OpenAiCompatible,
-                "http://localhost:1234/v1", false),
-
-            P("moonshotai", "Moonshot AI", ChatProviderKind.OpenAiCompatible,
-                "https://api.moonshot.ai/v1", true, "MOONSHOT_API_KEY"),
-
-            P("nebius", "Nebius Token Factory", ChatProviderKind.OpenAiCompatible,
-                "https://api.tokenfactory.nebius.com/v1", true, "NEBIUS_API_KEY"),
-
-            P("novita-ai", "Novita AI", ChatProviderKind.OpenAiCompatible,
-                "https://api.novita.ai/openai", true, "NOVITA_API_KEY"),
-
-            P("nvidia", "Nvidia", ChatProviderKind.OpenAiCompatible,
-                "https://integrate.api.nvidia.com/v1", true, "NVIDIA_API_KEY"),
-
-            P("ollama", "Ollama (local)", ChatProviderKind.OpenAiCompatible,
-                "http://localhost:11434/v1", false),
-
-            P("openai", "OpenAI", ChatProviderKind.OpenAiCompatible,
-                "https://api.openai.com/v1", true, "OPENAI_API_KEY"),
-
-            P("openrouter", "OpenRouter", ChatProviderKind.OpenAiCompatible,
-                "https://openrouter.ai/api/v1", true, "OPENROUTER_API_KEY"),
-
-            P("requesty", "Requesty", ChatProviderKind.OpenAiCompatible,
-                "https://router.requesty.ai/v1", true, "REQUESTY_API_KEY"),
-
-            P("siliconflow", "SiliconFlow", ChatProviderKind.OpenAiCompatible,
-                "https://api.siliconflow.com/v1", true, "SILICONFLOW_API_KEY"),
-
-            P("togetherai", "Together AI", ChatProviderKind.OpenAiCompatible,
-                "https://api.together.xyz/v1", true, "TOGETHER_API_KEY"),
-
-            P("xai", "xAI", ChatProviderKind.OpenAiCompatible,
-                "https://api.x.ai/v1", true, "XAI_API_KEY"),
-
-            P("zai", "Z.ai", ChatProviderKind.OpenAiCompatible,
-                "https://api.z.ai/api/paas/v4", true, "ZHIPU_API_KEY"),
-
-            P("zhipuai", "Zhipu AI", ChatProviderKind.OpenAiCompatible,
-                "https://open.bigmodel.cn/api/paas/v4", true, "ZHIPU_API_KEY"),
+            // Read out of @ai-sdk/mistral rather than assumed: base https://api.mistral.ai/v1, posts to
+            // /chat/completions.
+            P("mistral", "Mistral", ChatProviderKind.OpenAiCompatible,
+                "https://api.mistral.ai/v1", true, "MISTRAL_API_KEY"),
         };
 
-        /// <summary>
-        /// Every preset, ordered alphabetically by display name.
-        ///
-        /// <para><b>Deliberately absent, and why</b> — these need fields the connection record does not yet
-        /// model, and guessing at them would ship endpoints that cannot work:</para>
-        /// <list type="bullet">
-        /// <item>Azure OpenAI — needs a resource name, and uses an <c>api-key</c> header that requires
-        /// <i>removing</i> <c>authorization</c> rather than adding to it.</item>
-        /// <item>Amazon Bedrock — SigV4 request signing, or ambient AWS credentials with no environment
-        /// variable set at all.</item>
-        /// <item>Google Vertex — project plus location, authenticated by ADC rather than a key.</item>
-        /// <item>Cloudflare AI Gateway — an account id and <b>two</b> tokens on a single request.</item>
-        /// <item>Google Gemini — its native protocol is neither of our two kinds (<c>x-goog-api-key</c>, and
-        /// the model id embedded in the path). It does publish an OpenAI-compatible endpoint, but that was not
-        /// part of the extraction, so it is left out rather than asserted from memory.</item>
-        /// </list>
-        /// <para>All remain reachable today by adding a custom endpoint by hand.</para>
-        /// </summary>
-        public static IReadOnlyList<AiProviderPreset> All => Items;
+        /// <summary>Local runners only — what remains offerable when the hosted catalogue is unavailable.</summary>
+        public static IReadOnlyList<AiProviderPreset> LocalOnly => Local;
 
-        /// <summary>The preset with this id, or null. Ids are reserved: a custom connection may not take one.</summary>
+        /// <summary>Everything not derived from the catalogue. Wins over a catalogue entry of the same id:
+        /// these carry URLs it does not record and auth shapes it does not describe.</summary>
+        public static IReadOnlyList<AiProviderPreset> HandKept => Local.Concat(Hosted).ToList();
+
+        /// <summary>
+        /// Every preset derivable without the catalogue service — the hand-kept table plus whatever the
+        /// build-time snapshot supplies. Callers holding an <c>IAiPresetSource</c> should use that instead;
+        /// this is the answer for code with no access to one.
+        /// </summary>
+        public static IReadOnlyList<AiProviderPreset> All => AiPresetSource.SnapshotDefaults;
+
+        /// <summary>The preset with this id, or null. Looks at the whole derivable set, not only the
+        /// hand-kept part — an id like <c>openrouter</c> comes from the catalogue, and treating it as unknown
+        /// would let a custom connection claim it and would lose the key-required flag.</summary>
         public static AiProviderPreset? ById(string id) =>
-            Items.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+            All.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>True when <paramref name="id"/> names a preset, so a custom connection cannot claim it.</summary>
         public static bool IsReservedId(string id) => ById(id) is not null;
 
         /// <summary>The common case: a base URL, a bearer token, and the env vars that may already hold it.
-        /// Roughly 150 of 189 catalogued providers are exactly this.</summary>
+        /// Most of the 192 catalogued providers are exactly this.</summary>
         private static AiProviderPreset P(
             string id, string displayName, ChatProviderKind kind, string baseUrl, bool requiresKey,
             params string[] envVars)

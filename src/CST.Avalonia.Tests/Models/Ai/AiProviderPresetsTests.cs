@@ -61,7 +61,9 @@ public class AiProviderPresetsTests
     [Fact]
     public void A_preset_that_needs_a_key_says_where_one_might_already_be()
     {
-        foreach (var p in AiProviderPresets.All.Where(p => p.RequiresKey))
+        // Asserted of the HAND-KEPT entries only. Build treats the catalogue's `env` as optional, so a
+        // future snapshot carrying an env-less provider would break this suite rather than the app.
+        foreach (var p in AiProviderPresets.HandKept.Where(p => p.RequiresKey))
             Assert.NotEmpty(p.EnvironmentVariables);
     }
 
@@ -70,7 +72,10 @@ public class AiProviderPresetsTests
     [Fact]
     public void Local_runners_do_not_require_a_key()
     {
-        var local = AiProviderPresets.All.Where(p => p.BaseUrl.Contains("localhost")).ToList();
+        // Keyed off OUR local presets rather than "any URL containing localhost": the catalogue lists at
+        // least one hosted provider (privatemode-ai) that advertises a loopback address, and it is not a
+        // local runner in the sense this rule is about.
+        var local = AiProviderPresets.LocalOnly;
 
         Assert.NotEmpty(local);
         Assert.All(local, p => Assert.False(p.RequiresKey, $"{p.Id} is local but demands a key"));
@@ -146,7 +151,7 @@ public class AiProviderPresetsTests
     [Fact]
     public void Local_runners_declare_no_credential_method()
     {
-        foreach (var p in AiProviderPresets.All.Where(p => p.BaseUrl.Contains("localhost")))
+        foreach (var p in AiProviderPresets.LocalOnly)
         {
             Assert.Empty(p.Methods);
             Assert.False(p.RequiresKey);

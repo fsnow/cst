@@ -492,9 +492,18 @@ public partial class App : Application
 
             if (ServiceProvider?.GetService<Services.Ai.IModelsDevCatalog>() is not { } catalogue) return;
 
+            var presets = ServiceProvider?.GetService<Services.Ai.IAiPresetSource>();
+
             _ = Task.Run(async () =>
             {
-                try { await catalogue.RefreshAsync().ConfigureAwait(false); }
+                try
+                {
+                    await catalogue.RefreshAsync().ConfigureAwait(false);
+
+                    // Rebuild after the fetch, so the list the reader sees reflects what just arrived rather
+                    // than what was cached when the app started.
+                    if (presets is not null) await presets.EnsureLoadedAsync().ConfigureAwait(false);
+                }
                 catch (Exception ex) { Log.Debug(ex, "Provider catalogue refresh failed (#736)"); }
             });
         }
@@ -1351,6 +1360,10 @@ public partial class App : Application
         // The models.dev provider catalogue (#736). Singleton because it caches the document in memory and
         // holds the fetch gate; nothing user-visible depends on it yet (#737 turns it into presets).
         services.AddSingleton<Services.Ai.IModelsDevCatalog>(_ => new Services.Ai.ModelsDevCatalog());
+
+        // Presets built from the catalogue plus the hand-kept table (#737). Singleton: it holds the built
+        // list and the load gate, and the connection service subscribes to its change event.
+        services.AddSingleton<Services.Ai.IAiPresetSource, Services.Ai.AiPresetSource>();
 
         // Asking a connection what models it offers (#674). Additive to the hand-typed list, never a
         // prerequisite: an endpoint that publishes no listing stays fully usable, so a failure here is
