@@ -279,6 +279,20 @@ framing is SSE.
 No per-provider request-shape table is needed for the common case. That is a real, reassuring
 finding — the complexity we might have budgeted for does not exist.
 
+### Observed provider behaviour (from use, not from the extraction)
+
+Facts established by running CST Reader against a real key, recorded here because they look like bugs in our
+code until someone checks.
+
+- **Cerebras lists two models on the shared endpoint, and that is correct.** `GET
+  https://api.cerebras.ai/v1/models` returns two entries. Their other models are not on the shared inference
+  endpoint at all — they are provisioned on per-customer endpoints for corporate accounts, so no key on the
+  public endpoint will list them (confirmed against Cerebras' own documentation, 2026-08-18). A short model
+  list here is the provider's shape, not a parsing failure on our side.
+- **Both of those models require payment, so a Cerebras key with no credit gets HTTP 402**, not 401 and not
+  429. Cerebras has no free tier on the shared endpoint, so "switch to a model that costs nothing" is advice
+  about switching *provider*, not about finding a free model there. See the `PaymentRequired` error kind.
+
 ### Endpoint quirks
 
 Where per-endpoint adjustments *do* exist, they are isolated exceptions, not a matrix. The complete
