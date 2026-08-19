@@ -38,7 +38,6 @@ namespace CST.Avalonia.ViewModels
         private AiConnectionEditorViewModel? _editor;
         private string? _problem;
         private string _presetSearch = "";
-        private bool _isCatalogueExpanded;
         private int _catalogueTotal;
 
         public AiConnectionsViewModel(
@@ -68,18 +67,16 @@ namespace CST.Avalonia.ViewModels
         public ObservableCollection<AiConnectionRowViewModel> Connections { get; } = new();
 
         /// <summary>
-        /// Presets that need no key and no network — the local runners. Always shown, never collapsed, and
-        /// still offered when the hosted catalogue is unreachable. (#739)
+        /// Every provider that can still be added, alphabetically, in one list.
         ///
-        /// <para><b>Not a "popular" section.</b> Its members are chosen by a fact — these work with no
-        /// credential and no internet — rather than by anyone's view of which providers are worth having,
-        /// which would be the ranking #670/#681 removed arriving as a layout decision.</para>
-        /// </summary>
-        public ObservableCollection<AiPresetRowViewModel> LocalPresets { get; } = new();
-
-        /// <summary>
-        /// Everything the catalogue offers, alphabetically. Collapsed until asked for, because ~166 rows
-        /// above the fold is not a list anyone reads.
+        /// <para>It was two: local runners pinned above a catalogue collapsed behind a count. Both were
+        /// wrong in use. The collapse made a populated list look like a broken one — the reader saw nothing
+        /// until they typed — and the pinned section gave three providers a permanent position above a
+        /// hundred and sixty others, which is prominence however mechanically it was justified.</para>
+        ///
+        /// <para>One alphabetical list ranks nothing and needs no explanation. Search filters it; the custom
+        /// endpoint sits at the end, where OpenCode puts it, because it is the generic case rather than a
+        /// provider.</para>
         /// </summary>
         public ObservableCollection<AiPresetRowViewModel> AvailablePresets { get; } = new();
 
@@ -88,8 +85,6 @@ namespace CST.Avalonia.ViewModels
         public bool HasNoConnections => Connections.Count == 0;
 
         public bool HasAvailablePresets => AvailablePresets.Count > 0;
-
-        public bool HasLocalPresets => LocalPresets.Count > 0;
 
         /// <summary>
         /// Whether the hosted catalogue has anything in it at all, <b>before</b> the search filter.
@@ -121,22 +116,9 @@ namespace CST.Avalonia.ViewModels
             set
             {
                 this.RaiseAndSetIfChanged(ref _presetSearch, value);
-                this.RaisePropertyChanged(nameof(IsCatalogueOpen));
                 Rebind();
             }
         }
-
-        public bool IsCatalogueExpanded
-        {
-            get => _isCatalogueExpanded;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _isCatalogueExpanded, value);
-                this.RaisePropertyChanged(nameof(IsCatalogueOpen));
-            }
-        }
-
-        public bool IsCatalogueOpen => IsCatalogueExpanded || !string.IsNullOrWhiteSpace(PresetSearch);
 
         /// <summary>No attempt has finished yet — said quietly, because it is the ordinary first second of a
         /// fresh install rather than a problem.</summary>
@@ -383,24 +365,11 @@ namespace CST.Avalonia.ViewModels
                 c => new AiConnectionRowViewModel(this, c),
                 (row, c) => row.Update(c));
 
-            // Split by a fact, not by an opinion: a local runner needs no key and no network, which is what
-            // earns it a permanent place above a catalogue that may be neither present nor short.
-            var local = AiProviderPresets.LocalOnly
-                .Select(p => p.Id)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);   // as the service matches ids
-
             // Counted BEFORE the search filter — see HasCatalogue.
-            _catalogueTotal = _service.AvailablePresets.Count(p => !local.Contains(p.Id));
-
-            Sync(LocalPresets, _service.AvailablePresets.Where(p => local.Contains(p.Id)).ToList(),
-                p => p.Id,
-                r => r.Id,
-                p => new AiPresetRowViewModel(this, p),
-                (row, p) => row.Update(p));
+            _catalogueTotal = _service.AvailablePresets.Count;
 
             Sync(AvailablePresets,
                 _service.AvailablePresets
-                    .Where(p => !local.Contains(p.Id))
                     .Where(MatchesSearch)
                     .ToList(),
                 p => p.Id,
@@ -410,7 +379,6 @@ namespace CST.Avalonia.ViewModels
 
             this.RaisePropertyChanged(nameof(HasNoConnections));
             this.RaisePropertyChanged(nameof(HasAvailablePresets));
-            this.RaisePropertyChanged(nameof(HasLocalPresets));
             this.RaisePropertyChanged(nameof(CatalogueCount));
             this.RaisePropertyChanged(nameof(HasCatalogue));
             this.RaisePropertyChanged(nameof(HasNoMatches));
@@ -582,6 +550,25 @@ namespace CST.Avalonia.ViewModels
         public string ModelSummary => ModelCount == 1 ? "1 model" : $"{ModelCount} models";
 
         /// <summary>
+        /// Status and model count on one line rather than two.
+        ///
+        /// <para>Both are secondary text, and stacking them made a four-line row out of a fact and a
+        /// number.</para>
+        /// </summary>
+        public string StatusSummary => $"{StatusText} · {ModelSummary}";
+
+        /// <summary>
+        /// The address, on hover.
+        ///
+        /// <para>It was a permanent second line, and against a row that already carried a badge, a status, a
+        /// count and four buttons it was the thing making the list hard to read. The reason for showing it
+        /// stands — two local runners are two names the reader chose and nothing else tells them apart — so it
+        /// moves to the tooltip rather than going away. Same trade as the model metadata on the Models
+        /// tab.</para>
+        /// </summary>
+        public string RowTooltip => $"{DisplayName}\n{Endpoint}";
+
+        /// <summary>
         /// Names where the credential came from, on <b>every</b> row.
         ///
         /// <para>OpenCode badges only the unusual row and overloads the slot across two different axes
@@ -695,9 +682,12 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(MonogramTone));
             this.RaisePropertyChanged(nameof(ModelCount));
             this.RaisePropertyChanged(nameof(ModelSummary));
+            this.RaisePropertyChanged(nameof(StatusSummary));
+            this.RaisePropertyChanged(nameof(RowTooltip));
             this.RaisePropertyChanged(nameof(KeySourceBadge));
             this.RaisePropertyChanged(nameof(CanRemoveKey));
             this.RaisePropertyChanged(nameof(StatusText));
+            this.RaisePropertyChanged(nameof(StatusSummary));
             this.RaisePropertyChanged(nameof(IsIncomplete));
             this.RaisePropertyChanged(nameof(IncompleteText));
             this.RaisePropertyChanged(nameof(DeleteConfirmText));

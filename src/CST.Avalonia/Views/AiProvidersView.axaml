@@ -96,7 +96,8 @@
                 <ItemsControl ItemsSource="{Binding Connections}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:AiConnectionRowViewModel">
-                            <Border Classes="Row">
+                            <Border Classes="Row" Background="Transparent"
+                                    ToolTip.Tip="{Binding RowTooltip}">
                                 <Grid ColumnDefinitions="Auto,*,Auto,Auto">
 
                                     <!-- The logo replaces the tile where one resolved; the monogram stays
@@ -119,9 +120,10 @@
 
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                                         <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                                        <!-- The address, which OpenCode omits. Two local endpoints are two
-                                             names the reader chose and nothing else to tell them apart. -->
-                                        <TextBlock Text="{Binding Endpoint}" Classes="Secondary"/>
+                                        <!-- The address is on the row's tooltip, not a permanent second line.
+                                             The reason for having it stands - two local runners are two names
+                                             the reader chose - but it was the largest part of what made this
+                                             list hard to read. -->
                                         <TextBlock Text="{Binding IncompleteText}"
                                                    IsVisible="{Binding IsIncomplete}"
                                                    Classes="Secondary"
@@ -136,21 +138,17 @@
                                         <!-- Never "Connected": configured is not reachable, and the screen a
                                              reader consults to diagnose a failure must not be the one lying
                                              about it. -->
-                                        <TextBlock Text="{Binding StatusText}" Classes="Secondary"
-                                                   HorizontalAlignment="Right"/>
-                                        <TextBlock Text="{Binding ModelSummary}" Classes="Secondary"
+                                        <TextBlock Text="{Binding StatusSummary}" Classes="Secondary"
                                                    HorizontalAlignment="Right"/>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="3" Orientation="Horizontal"
                                                 VerticalAlignment="Center"
                                                 IsVisible="{Binding IsNotConfirmingDelete}">
-                                        <!-- Points at the provider's models page, which is the question a
-                                             configured connection actually raises: what can I run on it. -->
-                                        <Button Content="Models ↗" Classes="Link"
-                                                IsVisible="{Binding HasDoc}"
-                                                Command="{Binding OpenDocCommand}"
-                                                ToolTip.Tip="{Binding DocUrl}"/>
+                                        <!-- Two actions, not four. The provider's models page and Remove key
+                                             both live in the editor sheet, which is where a reader who wants
+                                             to change something is already going - and Remove key was a
+                                             straight duplicate of the sheet's own. -->
                                         <Button Content="Edit" Classes="Link"
                                                 Command="{Binding EditCommand}"/>
                                         <!-- Two destructive actions, not one: stopping the billing and
@@ -158,9 +156,6 @@
                                              An environment-sourced row gets an EMPTY slot here rather than a
                                              disabled button — the app cannot delete a key it never stored,
                                              and a control there would lie about what it can do. -->
-                                        <Button Content="Remove key" Classes="Link"
-                                                IsVisible="{Binding CanRemoveKey}"
-                                                Command="{Binding RemoveKeyCommand}"/>
                                         <Button Content="Delete" Classes="Link"
                                                 Command="{Binding DeleteCommand}"/>
                                     </StackPanel>
@@ -188,69 +183,6 @@
 
             <!-- Add a provider -->
             <TextBlock Text="Add a provider" Classes="SettingLabel" FontWeight="SemiBold"/>
-            <TextBlock Text="A named provider fills in the address for you. Nothing here is a recommendation — every entry is the same mechanism as a custom endpoint, with its URL already known."
-                       Classes="SettingDescription"/>
-
-            <!-- These need no key and no network, which is why they sit above the catalogue and stay when it
-                 is unreachable. Chosen by that fact rather than by anyone's view of which providers are worth
-                 having — a "popular" section would be the ranking #670/#681 removed, arriving as a layout
-                 decision. -->
-            <Border Classes="SettingGroup" Padding="0">
-                <StackPanel>
-                    <ItemsControl ItemsSource="{Binding LocalPresets}"
-                                  IsVisible="{Binding HasLocalPresets}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:AiPresetRowViewModel">
-                                <Border Classes="Row">
-                                    <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
-                                               VerticalAlignment="Top">
-                                            <Border Classes="Tile" Margin="0"
-                                                    IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}, ConverterParameter=invert}"
-                                                    Background="{Binding MonogramTone,
-                                                        Converter={x:Static conv:MonogramToneConverter.Instance}}">
-                                                <TextBlock Text="{Binding Monogram}"/>
-                                            </Border>
-                                            <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
-                                                   Source="{Binding LogoPath,
-                                                       Converter={x:Static conv:ProviderLogoConverter.Instance}}"
-                                                   Stretch="Uniform" Margin="2"/>
-                                        </Panel>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                                            <TextBlock Text="{Binding RequirementText}" Classes="Secondary"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="2" Content="+ Add"
-                                                Command="{Binding AddCommand}"
-                                                VerticalAlignment="Center"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <!-- Custom last, as OpenCode has it, and always present. The named rows are this same row
-                         with the address filled in; a preset must never be required to reach a provider that
-                         never appears in anyone's catalogue. -->
-                    <Border Classes="Row" BorderThickness="0">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Border Grid.Column="0" Classes="Tile"
-                                    Background="{DynamicResource DockApplicationAccentBrushLow}">
-                                <TextBlock Text="+"/>
-                            </Border>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                <TextBlock Text="Custom endpoint" FontWeight="SemiBold"/>
-                                <TextBlock Text="Any OpenAI-compatible or Anthropic address, by URL."
-                                           Classes="Secondary"/>
-                            </StackPanel>
-                            <Button Grid.Column="2" Content="+ Add"
-                                    Command="{Binding AddCustomCommand}"
-                                    VerticalAlignment="Center"/>
-                        </Grid>
-                    </Border>
-                </StackPanel>
-            </Border>
-
             <!-- The hosted catalogue. Named when it is missing rather than rendered as an empty section: an
                  empty list reads as a broken feature, a sentence with a Retry reads as weather. -->
             <StackPanel IsVisible="{Binding HasCatalogueProblem}" Margin="0,0,0,16">
@@ -272,13 +204,11 @@
                   IsVisible="{Binding HasCatalogue}">
                 <TextBox Grid.Column="0" Text="{Binding PresetSearch}"
                          Watermark="Search providers"/>
-                <ToggleButton Grid.Column="1" IsChecked="{Binding IsCatalogueExpanded}"
-                              Content="{Binding CatalogueCount}"
-                              Margin="8,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding CatalogueCount}" Classes="Secondary"
+                           Margin="10,0,2,0" VerticalAlignment="Center"/>
             </Grid>
 
-            <Border Classes="SettingGroup" Padding="0"
-                    IsVisible="{Binding IsCatalogueOpen}">
+            <Border Classes="SettingGroup" Padding="0">
                 <StackPanel>
                     <TextBlock Text="No provider matches that."
                                IsVisible="{Binding HasNoMatches}"
@@ -316,6 +246,26 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <!-- Last, as OpenCode has it, and always present: the named rows above are this same row
+                         with the address filled in. A preset must never be required to reach a provider that
+                         appears in nobody's catalogue. -->
+                    <Border Classes="Row" BorderThickness="0">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Grid.Column="0" Classes="Tile"
+                                    Background="{DynamicResource DockApplicationAccentBrushLow}">
+                                <TextBlock Text="+"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                <TextBlock Text="Custom endpoint" FontWeight="SemiBold"/>
+                                <TextBlock Text="Any OpenAI-compatible or Anthropic address, by URL."
+                                           Classes="Secondary"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="+ Add"
+                                    Command="{Binding AddCustomCommand}"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
 
                 </StackPanel>
             </Border>
