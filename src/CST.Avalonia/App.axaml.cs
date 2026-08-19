@@ -1502,12 +1502,22 @@ public partial class App : Application
         {
             foreach (var item in appMenu)
             {
-                if (item is NativeMenuItem menuItem && menuItem.Header?.ToString() == "Preferences...")
+                if (item is not NativeMenuItem menuItem) continue;
+
+                if (menuItem.Header?.ToString() == "Preferences...")
                 {
                     menuItem.Click += async (s, e) =>
                     {
                         Log.Information("Preferences menu clicked via native menu");
                         await ShowSettingsWindow();
+                    };
+                }
+                else if (menuItem.Header?.ToString() == AboutMenuHeader)
+                {
+                    menuItem.Click += async (s, e) =>
+                    {
+                        Log.Information("About menu clicked via native menu");
+                        await ShowAboutWindow();
                     };
                 }
             }
@@ -2213,6 +2223,65 @@ public partial class App : Application
             Log.Error(ex, "Failed to open settings window from native menu");
         }
     }
+
+    /// <summary>
+    /// The header both entry points match on — the macOS application menu declared in App.axaml, and the
+    /// Help menu SimpleTabbedWindow builds off macOS. Shared so a reworded menu cannot silently orphan one
+    /// of them the way a literal in two files would.
+    /// </summary>
+    internal const string AboutMenuHeader = "About CST Reader";
+
+    /// <summary>
+    /// The About box (#746).
+    ///
+    /// <para>Shown as a dialog, like Settings. That makes it single-instance off macOS, where the menu lives
+    /// inside the owner window and <c>ShowDialog</c> disables it — but <b>not</b> on macOS, where About sits
+    /// in the application-level menu that Avalonia leaves enabled during a window-modal dialog. Hence the
+    /// explicit guard: without it, App menu -> About twice stacks two dialogs. (Preferences has the same
+    /// gap; this fixes only its own.)</para>
+    ///
+    /// <para>Its view model takes no services deliberately — see AboutViewModel. That means this can still
+    /// show the version when whatever the reporter is reporting has left the rest of the app unhappy.</para>
+    /// </summary>
+    internal static async Task ShowAboutWindow()
+    {
+        try
+        {
+            if (MainWindow == null)
+            {
+                Log.Warning("About requested with no main window to own the dialog");
+                return;
+            }
+
+            // Bring the existing one forward rather than refusing silently: the reader asked for About and
+            // should get About, whether or not one is already behind something.
+            if (_aboutWindow is { } open)
+            {
+                open.Activate();
+                return;
+            }
+
+            _aboutWindow = new AboutWindow { DataContext = new AboutViewModel() };
+            try
+            {
+                await _aboutWindow.ShowDialog(MainWindow);
+            }
+            finally
+            {
+                // In a finally so a dialog that throws on close cannot leave the guard stuck, which would
+                // make About unopenable for the rest of the session - worse than the duplicate it prevents.
+                _aboutWindow = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to open the About window");
+        }
+    }
+
+    /// <summary>The open About dialog, or null. UI-thread only, which is the only place the menu handlers
+    /// run.</summary>
+    private static AboutWindow? _aboutWindow;
 
     private void OnGoToMenuItemClickFromFloatingWindow(Window floatingWindow)
     {

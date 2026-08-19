@@ -98,6 +98,10 @@
     <!-- Native Menu for macOS - Application level (goes into CST Reader app menu) -->
     <NativeMenu.Menu>
         <NativeMenu>
+            <!-- About first, then Preferences, per the macOS application menu. Off macOS this whole menu is
+                 never realised, so SimpleTabbedWindow adds a Help menu carrying the same item. (#746) -->
+            <NativeMenuItem Header="About CST Reader" />
+            <NativeMenuItemSeparator />
             <!-- Preferences in app menu following macOS convention. This application-level NativeMenu is
                  only realised as the macOS app menu, so the gesture is ⌘, in practice - but it resolves
                  per platform like every other shortcut rather than hardcoding the modifier. (#28) -->
