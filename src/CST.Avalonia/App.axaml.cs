@@ -2119,7 +2119,9 @@ public partial class App : Application
     // #28: also invoked from the Windows/Linux Tools menu. The macOS Preferences item lives in the
     // application-level NativeMenu, which is only ever realised as the macOS app menu - off macOS the
     // in-window <NativeMenuBar/> renders the *window's* menu, so Settings had no entry point at all.
-    internal static async Task ShowSettingsWindow()
+    /// <param name="category">Category to open on, e.g. "AI". Null opens on the first, as before.</param>
+    /// <param name="tab">Sub-tab within that category, where it has any. (#693)</param>
+    internal static async Task ShowSettingsWindow(string? category = null, int tab = 0)
     {
         try
         {
@@ -2128,6 +2130,7 @@ public partial class App : Application
             {
                 var sourcePrefs = ServiceProvider!.GetRequiredService<Services.Dictionaries.DictionarySourcePreferenceService>();
                 var settingsViewModel = new SettingsViewModel(settingsService, sourcePrefs);
+                if (category is not null) settingsViewModel.OpenAt(category, tab);
                 var settingsWindow = new SettingsWindow
                 {
                     DataContext = settingsViewModel

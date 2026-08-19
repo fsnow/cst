@@ -504,7 +504,7 @@
                              they belong to. The master switch stays on the first tab, adjacent to what it
                              gates, rather than becoming a left-nav row of its own. -->
                         <DataTemplate DataType="vm:AiSettingsViewModel">
-                            <TabControl>
+                            <TabControl SelectedIndex="{Binding SelectedTab}">
                               <TabItem Header="General">
                                 <StackPanel Margin="0,12,0,0">
                                 <Border Classes="SettingGroup">
