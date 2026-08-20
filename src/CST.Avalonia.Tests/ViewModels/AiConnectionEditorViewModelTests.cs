@@ -156,10 +156,11 @@ public class AiConnectionEditorViewModelTests
     {
         var h = new Harness();
         var vm = h.Preset("azure");
+        vm.ApiKeyEntry = "sk-test";   // supplied, so this exercises the missing answer and not #761's refusal
 
         Save(vm);
 
-        Assert.True(vm.HasProblem);
+        Assert.Contains("resource", vm.Problem, StringComparison.OrdinalIgnoreCase);
         Assert.Null(h.Closed);
         Assert.Empty(h.Service.Connections);
     }
@@ -173,6 +174,7 @@ public class AiConnectionEditorViewModelTests
         var vm = h.Preset("azure");
 
         vm.Inputs.Single(i => i.Key == "resourceName").Value = "my-resource";
+        vm.ApiKeyEntry = "sk-test";
         Save(vm);
 
         Assert.True(h.Closed);
@@ -351,9 +353,70 @@ public class AiConnectionEditorViewModelTests
         Assert.False(vm.ShowHeaders);       // the preset carries whatever headers it needs
         Assert.False(vm.ShowModels);        // fetched, not typed
         Assert.Empty(vm.Models);
+        Assert.True(vm.ShowKeyField);       // the key, and on a preset sheet that is the whole form
+    }
+
+    /// <summary>
+    /// A named provider whose key is required is not told the box is optional.
+    ///
+    /// <para>The two ways to reach that sheet are exhaustive: a provider needing no key shows no box, so any
+    /// box on a preset sheet is a required one. Calling it optional contradicts the blurb three lines above it
+    /// and invites the reader to save a connection that cannot answer.</para>
+    /// </summary>
+    [Fact]
+    public void A_required_key_is_not_called_optional()
+    {
+        var vm = new Harness().Preset("deepseek");
+
         Assert.True(vm.ShowKeyField);
-        Assert.True(vm.ShowFixedEndpoint);  // shown, not asked - where the money goes
-        Assert.Equal("https://openrouter.ai/api/v1", vm.FixedEndpoint);
+        Assert.False(vm.HasKeyHint);
+    }
+
+    /// <summary>
+    /// Editing a connection added from a key-requiring provider does not call the key optional either.
+    ///
+    /// <para>Gating on "is this a preset sheet" would leave the line on the sheet a reader is most likely to
+    /// be reading it on: Edit is reached precisely because the key is missing or wrong, one click from where
+    /// the contradiction was reported. The edit form carries no preset, so the requirement has to be
+    /// recovered from the id — which is unambiguous, a custom connection being refused a preset's id.
+    /// (fable review)</para>
+    /// </summary>
+    [Fact]
+    public void Editing_a_named_provider_does_not_call_its_key_optional()
+    {
+        var h = new Harness();
+        h.Service.AddFromPreset("deepseek", new Dictionary<string, string>());
+
+        var vm = h.Existing("deepseek");
+
+        Assert.True(vm.ShowKeyField);
+        Assert.False(vm.HasKeyHint);
+    }
+
+    /// <summary>Editing a custom endpoint keeps the line: nothing about it requires a key.</summary>
+    [Fact]
+    public void Editing_a_custom_endpoint_keeps_the_optional_line()
+    {
+        var h = new Harness();
+        Save(h.Custom().With(vm =>
+        {
+            vm.Id = "my-box";
+            vm.BaseUrl = "http://localhost:1234/v1";
+        }));
+
+        Assert.True(h.Existing("my-box").HasKeyHint);
+    }
+
+    /// <summary>A custom endpoint keeps the line: there the box genuinely is optional — a local runner needs
+    /// no key, and a gateway may authenticate through a header instead.</summary>
+    [Fact]
+    public void A_custom_endpoint_keeps_the_optional_line()
+    {
+        var vm = new Harness().Custom();
+
+        Assert.True(vm.ShowKeyField);
+        Assert.True(vm.HasKeyHint);
+        Assert.True(vm.ShowHeaders);        // the "header below" the line points at
     }
 
     /// <summary>A custom endpoint still asks, and must: it may publish no listing at all, which is the
@@ -374,7 +437,6 @@ public class AiConnectionEditorViewModelTests
         var vm = new Harness().Preset("ollama");
 
         Assert.False(vm.ShowKeyField);
-        Assert.True(vm.ShowFixedEndpoint);
     }
 
     /// <summary>The key reaches the store under the connection's own id, not under whichever one happened to
@@ -460,6 +522,84 @@ public class AiConnectionEditorViewModelTests
         new(name, ChatProviderKind.OpenAiCompatible, url,
             new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>());
 
+    // ---- a required key is required (#761) ---------------------------------------------------------------
+
+    /// <summary>
+    /// A provider that requires a key is not added without one.
+    ///
+    /// <para>What the save created otherwise looked exactly like a working connection — the provider's own
+    /// logo and name on the Providers tab, its models on the next — and announced itself as a 401 later, at
+    /// the moment the reader was trying to read something.</para>
+    /// </summary>
+    [Fact]
+    public void A_named_provider_is_not_added_without_its_key()
+    {
+        var h = new Harness();
+        var vm = h.Preset("deepseek");
+
+        Save(vm);
+
+        Assert.Empty(h.Service.Connections);
+        Assert.Null(h.Closed);
+        Assert.Contains("API key", vm.Problem);
+    }
+
+    /// <summary>With the key, the same sheet saves — the refusal is about the key alone.</summary>
+    [Fact]
+    public void A_named_provider_is_added_with_its_key()
+    {
+        var h = new Harness();
+
+        Save(h.Preset("deepseek").With(vm => vm.ApiKeyEntry = "sk-test"));
+
+        Assert.Single(h.Service.Connections);
+        Assert.Equal("sk-test", h.Keys.Stored["deepseek"]);
+    }
+
+    /// <summary>Editing a connection whose key is already stored does not demand it again — the box is empty
+    /// on every edit, and the key it would be asking for is the one already filed.</summary>
+    [Fact]
+    public void Editing_a_named_provider_with_a_stored_key_does_not_demand_it_again()
+    {
+        var h = new Harness();
+        Save(h.Preset("deepseek").With(vm => vm.ApiKeyEntry = "sk-test"));
+
+        var edit = h.Existing("deepseek");
+        edit.DisplayName = "DS";
+        Save(edit);
+
+        Assert.Equal("DS", h.Service.Connections.Single().DisplayName);
+        Assert.True(h.Closed);
+    }
+
+    /// <summary>A local runner is still added with nothing typed: it requires no key, so there is none to
+    /// withhold.</summary>
+    [Fact]
+    public void A_local_runner_is_still_added_with_no_key()
+    {
+        var h = new Harness();
+
+        Save(h.Preset("ollama"));
+
+        Assert.Single(h.Service.Connections);
+    }
+
+    /// <summary>A custom endpoint is still added with no key: it may authenticate by header, or need nothing
+    /// at all, which is exactly what its own hint says.</summary>
+    [Fact]
+    public void A_custom_endpoint_is_still_added_with_no_key()
+    {
+        var h = new Harness();
+
+        Save(h.Custom().With(vm =>
+        {
+            vm.Id = "my-box";
+            vm.BaseUrl = "http://localhost:1234/v1";
+        }));
+
+        Assert.Single(h.Service.Connections);
+    }
+
     // ---- the auth shape must survive an edit (fable review) ----------------------------------------------
 
     /// <summary>
@@ -474,7 +614,11 @@ public class AiConnectionEditorViewModelTests
     public void Renaming_an_azure_connection_does_not_reset_its_auth_shape()
     {
         var h = new Harness();
-        Save(h.Preset("azure").With(vm => vm.Inputs.Single().Value = "acme"));
+        Save(h.Preset("azure").With(vm =>
+        {
+            vm.Inputs.Single().Value = "acme";
+            vm.ApiKeyEntry = "sk-test";   // required, and refused without one (#761)
+        }));
 
         var before = h.Service.Connections.Single();
         Assert.Equal("api-key", before.AuthHeaderName);
@@ -495,7 +639,11 @@ public class AiConnectionEditorViewModelTests
     public void Adding_a_model_does_not_reset_the_auth_shape()
     {
         var h = new Harness();
-        Save(h.Preset("azure").With(vm => vm.Inputs.Single().Value = "acme"));
+        Save(h.Preset("azure").With(vm =>
+        {
+            vm.Inputs.Single().Value = "acme";
+            vm.ApiKeyEntry = "sk-test";   // required, and refused without one (#761)
+        }));
 
         var edit = h.Existing("azure");
         edit.Models.Add(new AiModelRowViewModel(edit.Models) { ModelId = "gpt-4o" });
@@ -512,7 +660,7 @@ public class AiConnectionEditorViewModelTests
     public void An_ordinary_connection_keeps_bearer_through_an_edit()
     {
         var h = new Harness();
-        Save(h.Preset("openrouter"));
+        Save(h.Preset("openrouter").With(vm => vm.ApiKeyEntry = "sk-test"));
 
         var edit = h.Existing("openrouter");
         edit.DisplayName = "OR";

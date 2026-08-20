@@ -90,15 +90,20 @@ public class AiConnectionsViewModelTests
 
     /// <summary>Adds a preset the way a reader does — open the sheet, fill it in, save. There is no
     /// add-without-a-sheet path any more, which is the point of the first test below.</summary>
+    /// <param name="key">Supplied by default because a provider that requires one is refused without it
+    /// (#761), and every test here that adds a hosted provider is adding it to use it. Ignored where the sheet
+    /// shows no key box, so a local runner still stores nothing.</param>
     private static void AddThroughSheet(
-        AiConnectionsViewModel vm, string presetId, string? key = null,
+        AiConnectionsViewModel vm, string presetId, string? key = "sk-test",
         params (string Key, string Value)[] inputs)
     {
         vm.AddPreset(presetId);
         var editor = vm.Editor!;
 
         foreach (var (k, v) in inputs) editor.Inputs.Single(i => i.Key == k).Value = v;
-        if (key is not null) editor.ApiKeyEntry = key;
+        // Only where the sheet shows the box: a local runner has none, and typing into a field the reader
+        // cannot see would file a key nothing asked for.
+        if (key is not null && editor.ShowKeyField) editor.ApiKeyEntry = key;
 
         editor.SaveCommand.Execute().Subscribe();
     }

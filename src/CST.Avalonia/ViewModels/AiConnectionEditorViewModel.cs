@@ -44,6 +44,7 @@ namespace CST.Avalonia.ViewModels
         private readonly Action<bool> _close;
         private readonly AiProviderPreset? _preset;
         private readonly string? _existingId;
+        private readonly bool _keyRequired;
 
         private string _id = "";
         private string _displayName = "";
@@ -62,6 +63,7 @@ namespace CST.Avalonia.ViewModels
             _close = close;
             _preset = preset;
             _existingId = existingId;
+            _keyRequired = preset?.RequiresKey ?? OriginPreset(service, existingId)?.RequiresKey ?? false;
 
             SaveCommand = ReactiveCommand.Create(Save);
             CancelCommand = ReactiveCommand.Create(() => _close(false));
@@ -69,6 +71,20 @@ namespace CST.Avalonia.ViewModels
             AddHeaderCommand = ReactiveCommand.Create(() => Headers.Add(new AiHeaderRowViewModel(Headers)));
             RemoveKeyCommand = ReactiveCommand.Create(RemoveKey);
         }
+
+        /// <summary>
+        /// The preset an already-configured connection was added from, or null for a custom endpoint.
+        ///
+        /// <para>Matching on the id is exact rather than a guess: a custom connection is refused a preset's id
+        /// outright (<i>"'deepseek' is the id of a built-in provider"</i>), so an id that matches one came from
+        /// it. Not stored as <see cref="_preset"/> — that field decides which <i>fields</i> the sheet shows,
+        /// and an edit must keep showing all of them.</para>
+        /// </summary>
+        private static AiProviderPreset? OriginPreset(IAiConnectionService service, string? existingId) =>
+            existingId is null
+                ? null
+                : service.Presets.FirstOrDefault(
+                    p => string.Equals(p.Id, existingId, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>An endpoint in nobody's catalogue. The generic mechanism the named ones are a shortcut
         /// for, and always available — a preset must never be required to reach a provider.</summary>
@@ -163,12 +179,6 @@ namespace CST.Avalonia.ViewModels
         public bool IsFullForm => _preset is null;
 
         public bool IsIdEditable => _existingId is null && _preset is null;
-
-        /// <summary>A preset's address, shown read-only. Not a field to fill in, but worth seeing: it is the
-        /// one fact that says where the reader's questions and money are about to go.</summary>
-        public bool ShowFixedEndpoint => _preset is not null;
-
-        public string FixedEndpoint => _preset?.BaseUrl ?? "";
 
         public string Title => _preset is not null
             ? $"Add {_preset.DisplayName}"
@@ -273,6 +283,37 @@ namespace CST.Avalonia.ViewModels
                 ? $"A key is stored for {_displayName}. Paste a new one to replace it."
                 : $"No key is stored for {_displayName}.";
 
+        /// <summary>
+        /// Whether the "optional" line under the key box applies.
+        ///
+        /// <para><b>Not where the provider requires a key.</b> Telling that reader the box is optional
+        /// contradicts the blurb three lines above it and invites them to save a connection that cannot
+        /// answer. The header clause is equally wrong there: headers are asked for on a custom endpoint
+        /// alone.</para>
+        ///
+        /// <para><b>Adding is not the only way in.</b> Gating on "is this a preset sheet" leaves the line on
+        /// the sheet a reader is most likely to be reading it on — Edit, reached precisely <i>because</i> the
+        /// key is missing or wrong. That sheet carries no preset, so the requirement is recovered from the
+        /// connection's id instead (<see cref="OriginPreset"/>).</para>
+        /// </summary>
+        public bool HasKeyHint => !_keyRequired;
+
+        /// <summary>
+        /// A provider that requires a key, with none supplied here and none already stored. (#761)
+        ///
+        /// <para>Refused rather than saved, because what it creates otherwise looks exactly like a working
+        /// connection — the provider's own logo and name on the Providers tab, its models listed on the next
+        /// tab — and only announces itself as a 401 later, at the moment the reader was trying to read
+        /// something. The Models tab does catch it ("no API key stored"), but that is one screen past where
+        /// the reader thought they had finished.</para>
+        ///
+        /// <para><b>Not where no key can be stored at all.</b> The sheet already says so in caution colour,
+        /// and no key can be filed by any route on that machine, so a refusal on top of the explanation would
+        /// leave the reader nowhere to go — a row that cannot answer is the lesser evil there.</para>
+        /// </summary>
+        private bool MissingRequiredKey =>
+            _keyRequired && CanStoreKeys && string.IsNullOrWhiteSpace(ApiKeyEntry) && !HasStoredKey;
+
         public string KeyHint => "Optional — leave it empty if this endpoint needs no key, or if you authenticate with a header below.";
 
         /// <summary>
@@ -333,6 +374,12 @@ namespace CST.Avalonia.ViewModels
 
         private void Save()
         {
+            if (MissingRequiredKey)
+            {
+                Problem = $"{_displayName} needs an API key. Paste one to continue.";
+                return;
+            }
+
             var inputs = Inputs
                 .Where(i => i.IsVisible && !string.IsNullOrWhiteSpace(i.Value))
                 .ToDictionary(i => i.Key, i => i.Value.Trim(), StringComparer.Ordinal);

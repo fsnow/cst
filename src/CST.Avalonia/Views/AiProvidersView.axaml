@@ -376,7 +376,8 @@
                                        IsVisible="{Binding HasKeyUnavailable}"
                                        Classes="SettingDescription"
                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
-                            <TextBlock Text="{Binding KeyHint}" Classes="SettingDescription"/>
+                            <TextBlock Text="{Binding KeyHint}" IsVisible="{Binding HasKeyHint}"
+                                       Classes="SettingDescription"/>
                         </StackPanel>
 
                         <!-- Only for an endpoint we cannot ask. A named provider's listing is fetched on the
@@ -406,14 +407,6 @@
                                    Classes="SettingDescription" Margin="0,6,0,0"/>
                         <TextBlock Text="The id goes on the wire, exactly as the provider spells it. The display name is yours, and is what the model picker shows."
                                    Classes="SettingDescription" Margin="0,2,0,15"/>
-                        </StackPanel>
-
-                        <!-- A preset's address, read-only. Not a field to fill in, but the one fact that
-                             says where the reader's questions and money are about to go. -->
-                        <StackPanel IsVisible="{Binding ShowFixedEndpoint}">
-                            <TextBlock Text="Endpoint address" Classes="SettingLabel"/>
-                            <SelectableTextBlock Text="{Binding FixedEndpoint}"
-                                                 Classes="Secondary" Margin="0,0,0,15"/>
                         </StackPanel>
 
                         <!-- Whatever the preset says it still needs, generated from its own prompts. -->
