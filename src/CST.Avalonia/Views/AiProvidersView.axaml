@@ -130,17 +130,10 @@
                                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
                                     </StackPanel>
 
-                                    <StackPanel Grid.Column="2" VerticalAlignment="Center"
-                                                HorizontalAlignment="Right" Spacing="3" Margin="12,0">
-                                        <Border Classes="Pill" HorizontalAlignment="Right">
-                                            <TextBlock Text="{Binding KeySourceBadge}"/>
-                                        </Border>
-                                        <!-- Never "Connected": configured is not reachable, and the screen a
-                                             reader consults to diagnose a failure must not be the one lying
-                                             about it. -->
-                                        <TextBlock Text="{Binding StatusSummary}" Classes="Secondary"
-                                                   HorizontalAlignment="Right"/>
-                                    </StackPanel>
+                                    <Border Grid.Column="2" Classes="Pill" VerticalAlignment="Center"
+                                            HorizontalAlignment="Right" Margin="12,0">
+                                        <TextBlock Text="{Binding KeySourceBadge}"/>
+                                    </Border>
 
                                     <StackPanel Grid.Column="3" Orientation="Horizontal"
                                                 VerticalAlignment="Center"

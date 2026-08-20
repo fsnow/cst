@@ -550,14 +550,6 @@ namespace CST.Avalonia.ViewModels
         public string ModelSummary => ModelCount == 1 ? "1 model" : $"{ModelCount} models";
 
         /// <summary>
-        /// Status and model count on one line rather than two.
-        ///
-        /// <para>Both are secondary text, and stacking them made a four-line row out of a fact and a
-        /// number.</para>
-        /// </summary>
-        public string StatusSummary => $"{StatusText} · {ModelSummary}";
-
-        /// <summary>
         /// The address, on hover.
         ///
         /// <para>It was a permanent second line, and against a row that already carried a badge, a status, a
@@ -618,6 +610,17 @@ namespace CST.Avalonia.ViewModels
         /// that claims otherwise is the screen a reader consults to diagnose the failure it is lying about —
         /// observed in OpenCode, where the assistant reported "cannot connect" while settings went on saying
         /// Connected. "Not checked yet" is honest and costs nothing.</para>
+        /// </summary>
+        /// <summary>
+        /// What we actually know about whether this works.
+        ///
+        /// <para><b>No longer shown on the row.</b> Every connection reads "Not checked yet" until something
+        /// contacts it, so in practice the line said the same thing on every row and carried no information
+        /// at all — reported from use. Kept because the wording is the honest one and the per-turn picker
+        /// still marks an unreachable connection, which is the case that was worth saying.</para>
+        ///
+        /// <para><b>Never "Connected".</b> A configured endpoint is not a reachable one, and the screen a
+        /// reader consults to diagnose a failure must not be the one lying about it (#673).</para>
         /// </summary>
         public string StatusText => _connection.State switch
         {
@@ -682,12 +685,10 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(MonogramTone));
             this.RaisePropertyChanged(nameof(ModelCount));
             this.RaisePropertyChanged(nameof(ModelSummary));
-            this.RaisePropertyChanged(nameof(StatusSummary));
             this.RaisePropertyChanged(nameof(RowTooltip));
             this.RaisePropertyChanged(nameof(KeySourceBadge));
             this.RaisePropertyChanged(nameof(CanRemoveKey));
             this.RaisePropertyChanged(nameof(StatusText));
-            this.RaisePropertyChanged(nameof(StatusSummary));
             this.RaisePropertyChanged(nameof(IsIncomplete));
             this.RaisePropertyChanged(nameof(IncompleteText));
             this.RaisePropertyChanged(nameof(DeleteConfirmText));
