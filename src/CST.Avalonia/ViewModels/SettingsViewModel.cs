@@ -1372,7 +1372,9 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
             Connections = new AiConnectionsViewModel(
                 connectionService, credentials, App.TryGetService<Services.Ai.IAiProviderLogos>());
             Models = new AiModelsViewModel(
-                connectionService, App.TryGetService<Services.Ai.IAiModelCatalog>());
+                connectionService,
+                App.TryGetService<Services.Ai.IAiModelCatalog>(),
+                App.TryGetService<Services.Ai.IAiProviderLogos>());
 
         }
 

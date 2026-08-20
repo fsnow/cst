@@ -40,13 +40,14 @@ public class AiModelsViewModelTests
         }
     }
 
-    private static (AiModelsViewModel Vm, AiConnectionService Service) Make(IAiModelCatalog? catalog = null)
+    private static (AiModelsViewModel Vm, AiConnectionService Service) Make(
+        IAiModelCatalog? catalog = null, IAiProviderLogos? logos = null)
     {
         var settings = new Settings();
         var svc = new Mock<ISettingsService>();
         svc.SetupGet(s => s.Settings).Returns(settings);
         var service = new AiConnectionService(svc.Object);
-        return (new AiModelsViewModel(service, catalog), service);
+        return (new AiModelsViewModel(service, catalog, logos), service);
     }
 
     private static AiConnectionDraft Draft(params AiModelEntry[] models) =>
@@ -670,6 +671,59 @@ public class AiModelsViewModelTests
 
         Assert.Single(vm.Groups);
         Assert.Equal(2, service.Connections.Count);
+    }
+
+    // ---- provider marks on the group headers (#740) -----------------------------------------------------------
+
+    /// <summary>
+    /// A group header asks for its provider's logo, keyed by the connection id.
+    ///
+    /// <para>The same id models.dev uses for anything added from the catalogue, so the mark on this tab is
+    /// the one on the Providers tab. A reader who has learnt to find OpenRouter by its logo should not have
+    /// to fall back to reading letters one tab over.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_group_asks_for_its_providers_logo()
+    {
+        var logos = new FakeLogos("openrouter");
+        var (vm, service) = Make(logos: logos);
+        service.AddFromPreset("openrouter", new Dictionary<string, string>());
+
+        var group = Group(vm);
+        if (group.LogoLoad is { } load) await load;
+
+        Assert.Equal("openrouter", logos.Asked);
+        Assert.True(group.HasLogo);
+    }
+
+    /// <summary>A provider with no mark keeps its lettered tile — the fallback is never removed, only covered
+    /// when something actually rendered.</summary>
+    [Fact]
+    public async Task A_group_with_no_logo_keeps_its_monogram()
+    {
+        var logos = new FakeLogos(null);
+        var (vm, service) = Make(logos: logos);
+        service.Add("my-box", Draft());
+
+        var group = Group(vm);
+        if (group.LogoLoad is { } load) await load;
+
+        Assert.False(group.HasLogo);
+        Assert.False(string.IsNullOrWhiteSpace(group.Monogram));
+    }
+
+    /// <summary>Hands back a path for one id and null for anything else, recording what it was asked.</summary>
+    private sealed class FakeLogos : IAiProviderLogos
+    {
+        private readonly string? _known;
+        public FakeLogos(string? known) => _known = known;
+        public string? Asked { get; private set; }
+
+        public Task<string?> GetLogoPathAsync(string providerId, CancellationToken ct = default)
+        {
+            Asked = providerId;
+            return Task.FromResult(providerId == _known ? "/tmp/cst-test-logo.svg" : null);
+        }
     }
 
     // ---- what a row says ---------------------------------------------------------------------------------

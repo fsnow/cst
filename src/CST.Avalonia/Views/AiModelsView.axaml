@@ -91,11 +91,24 @@
                                                    FontSize="10"/>
                                     </Button>
 
-                                    <Border Grid.Column="1" Classes="Tile"
-                                            Background="{Binding MonogramTone,
-                                                Converter={x:Static conv:MonogramToneConverter.Instance}}">
-                                        <TextBlock Text="{Binding Monogram}"/>
-                                    </Border>
+                                    <!-- The provider's own mark, as on the Providers tab; the lettered tile
+                                         behind it for anything that has none or fails to render. -->
+                                    <Panel Grid.Column="1" Width="22" Height="22" Margin="0,0,8,0"
+                                           VerticalAlignment="Center">
+                                        <Border Classes="Tile" Margin="0"
+                                                IsVisible="{Binding LogoPath,
+                                                    Converter={x:Static conv:ProviderLogoRenderedConverter.Instance},
+                                                    ConverterParameter=invert}"
+                                                Background="{Binding MonogramTone,
+                                                    Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                            <TextBlock Text="{Binding Monogram}"/>
+                                        </Border>
+                                        <Image IsVisible="{Binding LogoPath,
+                                                   Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
+                                               Source="{Binding LogoPath,
+                                                   Converter={x:Static conv:ProviderLogoConverter.Instance}}"
+                                               Stretch="Uniform" Margin="1"/>
+                                    </Panel>
 
                                     <TextBlock Grid.Column="2" Text="{Binding DisplayName}"
                                                FontWeight="SemiBold" VerticalAlignment="Center"/>
