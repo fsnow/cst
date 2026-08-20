@@ -33,14 +33,19 @@ namespace CST.Avalonia.ViewModels
     {
         private readonly IAiConnectionService? _service;
         private readonly IAiModelCatalog? _catalog;
+        private readonly IAiProviderLogos? _logos;
         private string _search = "";
         private bool _freeOnly;
         private bool _suppressRebind;
 
-        public AiModelsViewModel(IAiConnectionService? service, IAiModelCatalog? catalog = null)
+        public AiModelsViewModel(
+            IAiConnectionService? service,
+            IAiModelCatalog? catalog = null,
+            IAiProviderLogos? logos = null)
         {
             _service = service;
             _catalog = catalog;
+            _logos = logos;
 
             if (_service is not null)
             {
@@ -99,6 +104,8 @@ namespace CST.Avalonia.ViewModels
         internal IAiConnectionService? Service => _service;
 
         internal IAiModelCatalog? Catalog => _catalog;
+
+        internal IAiProviderLogos? Logos => _logos;
 
         /// <summary>
         /// Runs a change that must not rebuild the list.
@@ -178,7 +185,12 @@ namespace CST.Avalonia.ViewModels
     }
 
     /// <summary>One connection's models, as a collapsible group. (#692)</summary>
-    public class AiModelGroupViewModel : ViewModelBase
+    /// <remarks>
+    /// Carries a logo for the same reason the Providers rows do: these headers name the same connections, and
+    /// a reader who has learnt to find OpenRouter by its mark on one tab should not have to fall back to
+    /// reading letters on the next.
+    /// </remarks>
+    public class AiModelGroupViewModel : AiLogoRowViewModel
     {
         private readonly AiModelsViewModel _owner;
         private AiConnection _connection;
@@ -193,6 +205,8 @@ namespace CST.Avalonia.ViewModels
             _owner = owner;
             _connection = connection;
 
+            LoadLogo(owner.Logos);
+
             ToggleCommand = ReactiveCommand.Create(() => { IsExpanded = !IsExpanded; });
             OpenDocCommand = ReactiveCommand.Create(() => AiConnectionsViewModel.OpenUrl(DocUrl));
             FetchCommand = ReactiveCommand.CreateFromTask(FetchAsync);
@@ -202,9 +216,14 @@ namespace CST.Avalonia.ViewModels
 
         public string DisplayName => _connection.DisplayName;
 
-        public string Monogram => AiMonogram.For(DisplayName);
+        public override string Monogram => AiMonogram.For(DisplayName);
 
-        public int MonogramTone => AiMonogram.ToneFor(Id);
+        public override int MonogramTone => AiMonogram.ToneFor(Id);
+
+        /// <summary>The connection id, which is the models.dev provider id for anything added from the
+        /// catalogue. A custom endpoint's own slug matches nothing, and falls back to the generic mark like
+        /// everywhere else.</summary>
+        protected override string? ProviderId => Id;
 
         /// <summary>Every row this group could show, filtered and ordered.</summary>
         public List<AiCatalogRowViewModel> Visible { get; } = new();
