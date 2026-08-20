@@ -604,14 +604,14 @@ public class AiConnectionEditorViewModelTests
 
     /// <summary>
     /// Azure sends its credential in `api-key` with no scheme, and expects `Authorization` to be ABSENT. That
-    /// shape is set by the preset and is not editable in this form — so a draft that omitted it silently reset
-    /// the connection to Bearer, and every request after the first rename came back 401.
+    /// shape is set by the preset and is not editable on either form — so a draft that omitted it silently
+    /// reset the connection to Bearer, and every request after the first edit came back 401.
     ///
     /// <para>The failure was invisible from the editor: nothing on screen shows the auth shape, so the
     /// connection looked untouched while it had stopped working.</para>
     /// </summary>
     [Fact]
-    public void Renaming_an_azure_connection_does_not_reset_its_auth_shape()
+    public void Editing_an_azure_connection_does_not_reset_its_auth_shape()
     {
         var h = new Harness();
         Save(h.Preset("azure").With(vm =>
@@ -625,31 +625,11 @@ public class AiConnectionEditorViewModelTests
         Assert.Null(before.AuthScheme);
 
         var edit = h.Existing("azure");
-        edit.DisplayName = "Work Azure";
+        edit.Inputs.Single().Value = "acme-2";
         Save(edit);
 
         var after = h.Service.Connections.Single();
-        Assert.Equal("Work Azure", after.DisplayName);
-        Assert.Equal("api-key", after.AuthHeaderName);
-        Assert.Null(after.AuthScheme);
-    }
-
-    /// <summary>Adding a model to a preset connection goes through Update too, so it is the same hazard.</summary>
-    [Fact]
-    public void Adding_a_model_does_not_reset_the_auth_shape()
-    {
-        var h = new Harness();
-        Save(h.Preset("azure").With(vm =>
-        {
-            vm.Inputs.Single().Value = "acme";
-            vm.ApiKeyEntry = "sk-test";   // required, and refused without one (#761)
-        }));
-
-        var edit = h.Existing("azure");
-        edit.Models.Add(new AiModelRowViewModel(edit.Models) { ModelId = "gpt-4o" });
-        Save(edit);
-
-        var after = h.Service.Connections.Single();
+        Assert.Contains("acme-2", after.ResolvedBaseUrl);
         Assert.Equal("api-key", after.AuthHeaderName);
         Assert.Null(after.AuthScheme);
     }
@@ -663,12 +643,148 @@ public class AiConnectionEditorViewModelTests
         Save(h.Preset("openrouter").With(vm => vm.ApiKeyEntry = "sk-test"));
 
         var edit = h.Existing("openrouter");
-        edit.DisplayName = "OR";
+        edit.ApiKeyEntry = "sk-replaced";
         Save(edit);
 
         var after = h.Service.Connections.Single();
         Assert.Equal("Authorization", after.AuthHeaderName);
         Assert.Equal("Bearer", after.AuthScheme);
+    }
+
+    // ---- an edit is the form the add was (#691) ----------------------------------------------------------
+
+    /// <summary>
+    /// Editing a connection added from the provider list opens the same form it was added on.
+    ///
+    /// <para>Reported as a surprise from use: the edit sheet offered protocol, address, models and headers,
+    /// none of which are the reader's to override on a named provider — and that form was load-bearing for
+    /// the auth-shape bug above. Where a provider stops behaving as its preset says, it can be added again as
+    /// a custom endpoint.</para>
+    /// </summary>
+    [Fact]
+    public void Editing_a_named_provider_shows_the_form_it_was_added_on()
+    {
+        var h = new Harness();
+        Save(h.Preset("openrouter").With(vm => vm.ApiKeyEntry = "sk-test"));
+
+        var edit = h.Existing("openrouter");
+
+        Assert.False(edit.IsFullForm);      // no protocol or address to override
+        Assert.False(edit.ShowModels);      // the Models tab owns those
+        Assert.False(edit.ShowHeaders);     // the preset carries whatever it needs
+        Assert.True(edit.ShowKeyField);
+        Assert.StartsWith("Edit", edit.Title);
+    }
+
+    /// <summary>
+    /// What the narrowed form no longer shows, it still carries.
+    ///
+    /// <para>The draft is built from the form, so hiding the model and header rows without carrying their
+    /// values would turn a key replacement into silent data loss — a model list built on the Models tab,
+    /// gone because the reader pasted a new key.</para>
+    /// </summary>
+    [Fact]
+    public void An_edit_keeps_what_the_form_no_longer_shows()
+    {
+        var h = new Harness();
+        Save(h.Preset("openrouter").With(vm => vm.ApiKeyEntry = "sk-test"));
+
+        var added = h.Service.Connections.Single();
+        h.Service.Update(added.Id, new AiConnectionDraft(
+            added.DisplayName, added.Kind, added.BaseUrl,
+            new[] { new AiModelEntry("nvidia/nemotron", "Nemotron") },
+            new Dictionary<string, string> { ["X-Gateway"] = "token" },
+            added.Inputs, added.AuthHeaderName, added.AuthScheme));
+
+        var edit = h.Existing("openrouter");
+        edit.ApiKeyEntry = "sk-replaced";
+        Save(edit);
+
+        var after = h.Service.Connections.Single();
+        Assert.Equal("nvidia/nemotron", after.Models.Single().Id);
+        Assert.Equal("token", after.Headers["X-Gateway"]);
+        Assert.Equal("https://openrouter.ai/api/v1", after.BaseUrl);
+        Assert.Equal("sk-replaced", h.Keys.Stored["openrouter"]);
+    }
+
+    /// <summary>An edit updates the connection rather than adding a second one — the id is already taken, and
+    /// the add path would be refused by its own collision check.</summary>
+    [Fact]
+    public void An_edit_updates_rather_than_adding_again()
+    {
+        var h = new Harness();
+        Save(h.Preset("openrouter").With(vm => vm.ApiKeyEntry = "sk-test"));
+
+        var edit = h.Existing("openrouter");
+        edit.ApiKeyEntry = "sk-replaced";
+        Save(edit);
+
+        Assert.Single(h.Service.Connections);
+        Assert.True(h.Closed);
+    }
+
+    /// <summary>An edit asks for the provider's inputs in the provider's own words, with the stored answer
+    /// filled in — not the raw key it happens to be stored under.</summary>
+    [Fact]
+    public void An_edit_asks_for_inputs_in_the_presets_own_words()
+    {
+        var h = new Harness();
+        Save(h.Preset("azure").With(vm =>
+        {
+            vm.Inputs.Single().Value = "acme";
+            vm.ApiKeyEntry = "sk-test";
+        }));
+
+        var input = h.Existing("azure").Inputs.Single();
+
+        Assert.Equal("acme", input.Value);
+        Assert.Equal(h.Service.Presets.Single(p => p.Id == "azure").Prompts!.Single().Message, input.Message);
+    }
+
+    /// <summary>A custom endpoint keeps the whole form: nothing about it comes from a preset.</summary>
+    [Fact]
+    public void Editing_a_custom_endpoint_still_shows_the_full_form()
+    {
+        var h = new Harness();
+        Save(h.Custom().With(vm =>
+        {
+            vm.Id = "my-box";
+            vm.BaseUrl = "http://localhost:1234/v1";
+        }));
+
+        var edit = h.Existing("my-box");
+
+        Assert.True(edit.IsFullForm);
+        Assert.True(edit.ShowModels);
+        Assert.True(edit.ShowHeaders);
+        Assert.False(edit.IsIdEditable);   // except the id, which the credential is filed under
+    }
+
+    /// <summary>A local runner from the provider list has nothing to edit — no key, no questions — so its row
+    /// offers no Edit rather than a sheet with a title and two buttons.</summary>
+    [Fact]
+    public void A_local_runner_has_nothing_to_edit()
+    {
+        var h = new Harness();
+        Save(h.Preset("ollama"));
+
+        Assert.False(AiConnectionEditorViewModel.CanEdit(h.Service, h.Service.Connections.Single()));
+    }
+
+    /// <summary>Everything else does: a hosted provider has its key, and a custom endpoint has all of it.</summary>
+    [Fact]
+    public void A_hosted_provider_and_a_custom_endpoint_can_both_be_edited()
+    {
+        var h = new Harness();
+        Save(h.Preset("openrouter").With(vm => vm.ApiKeyEntry = "sk-test"));
+        Save(h.Custom().With(vm =>
+        {
+            vm.Id = "my-box";
+            vm.BaseUrl = "http://localhost:1234/v1";
+        }));
+
+        foreach (var connection in h.Service.Connections)
+            Assert.True(AiConnectionEditorViewModel.CanEdit(h.Service, connection));
     }
 }
 

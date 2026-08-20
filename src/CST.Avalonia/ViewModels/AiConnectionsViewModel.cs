@@ -63,6 +63,8 @@ namespace CST.Avalonia.ViewModels
         /// wherever this view model is constructed without one. (#738)</summary>
         internal IAiProviderLogos? Logos => _logos;
 
+        internal IAiConnectionService? Service => _service;
+
         /// <summary>What is configured now, in the order the reader added it.</summary>
         public ObservableCollection<AiConnectionRowViewModel> Connections { get; } = new();
 
@@ -520,6 +522,9 @@ namespace CST.Avalonia.ViewModels
             _owner = owner;
             _connection = connection;
 
+            CanEdit = owner.Service is null
+                || AiConnectionEditorViewModel.CanEdit(owner.Service, connection);
+
             EditCommand = ReactiveCommand.Create(() => _owner.BeginEdit(Id));
             OpenDocCommand = ReactiveCommand.Create(() => AiConnectionsViewModel.OpenUrl(DocUrl));
             RemoveKeyCommand = ReactiveCommand.Create(() => _owner.RemoveKey(Id));
@@ -675,6 +680,11 @@ namespace CST.Avalonia.ViewModels
         public string DeleteConfirmText => ModelCount == 0
             ? $"Delete {DisplayName}?"
             : $"Delete {DisplayName} and its {ModelSummary}?";
+
+        /// <summary>Whether the sheet would have anything on it. A local runner from the provider list asks
+        /// nothing and needs no key, so its row shows no Edit rather than a dead end.
+        /// (<see cref="AiConnectionEditorViewModel.CanEdit"/>)</summary>
+        public bool CanEdit { get; }
 
         public ReactiveCommand<Unit, Unit> EditCommand { get; }
 
