@@ -143,7 +143,7 @@
                                                                     <Button Command="{Binding SelectCommand}"
                                                                             IsEnabled="{Binding IsUsable}"
                                                                             HorizontalAlignment="Stretch"
-                                                                            HorizontalContentAlignment="Left"
+                                                                            HorizontalContentAlignment="Stretch"
                                                                             Background="Transparent"
                                                                             BorderThickness="0"
                                                                             Padding="8,4">
@@ -152,11 +152,31 @@
                                                                              current one: a leading tick
                                                                              indents the one row the eye is
                                                                              most likely to be looking for.
-                                                                             So the tick goes last. -->
+                                                                             So the tick goes last - and at
+                                                                             the far edge, which is why the
+                                                                             button stretches its content:
+                                                                             left-aligned, the grid shrank
+                                                                             to the text and the tick
+                                                                             trailed the name at whatever x
+                                                                             that name happened to end. -->
                                                                         <Grid ColumnDefinitions="*,Auto,Auto">
+                                                                            <!-- The current model is named
+                                                                                 in the accent colour as well
+                                                                                 as ticked: two readings of
+                                                                                 the same fact, one of which
+                                                                                 survives a glance that never
+                                                                                 reaches the far edge. -->
                                                                             <TextBlock Grid.Column="0"
                                                                                        Text="{Binding DisplayName}"
-                                                                                       TextTrimming="CharacterEllipsis"/>
+                                                                                       TextTrimming="CharacterEllipsis"
+                                                                                       Classes.current="{Binding IsCurrent}">
+                                                                                <TextBlock.Styles>
+                                                                                    <Style Selector="TextBlock.current">
+                                                                                        <Setter Property="Foreground"
+                                                                                                Value="{DynamicResource DockApplicationAccentBrushLow}"/>
+                                                                                    </Style>
+                                                                                </TextBlock.Styles>
+                                                                            </TextBlock>
                                                                             <!-- Said here rather than
                                                                                  discovered as a 401 naming
                                                                                  nothing. -->
