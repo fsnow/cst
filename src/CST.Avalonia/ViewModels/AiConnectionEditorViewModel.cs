@@ -87,20 +87,31 @@ namespace CST.Avalonia.ViewModels
                     p => string.Equals(p.Id, existingId, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>
-        /// Whether an edit of this connection would have anything on it. (#691)
+        /// What the row's edit button should say, or null where it should not be there at all. (#691)
         ///
-        /// <para>False only for a local runner added from the provider list: it needs no key and asks nothing,
-        /// so the sheet would open with a title, a sentence and two buttons. The row hides Edit rather than
-        /// offering a dead end — a reader who needs that runner at another address adds it as a custom
-        /// endpoint, which is the same mechanism with the address left to them.</para>
+        /// <para>One function rather than a visibility flag beside a label, so the two cannot disagree — the
+        /// button that appears is the one whose word was chosen.</para>
+        ///
+        /// <para><b>"Replace key"</b> for the ~150 providers that are a base URL and a bearer token: that is
+        /// the entire sheet, and it is the thing readers actually do — a key rotates, expires, or hits a daily
+        /// cap. Naming it stops the button implying that a named provider's settings are the reader's to
+        /// change. <b>"Edit"</b> where the sheet holds more: a custom endpoint, whose every field is the
+        /// reader's, and a provider that asks something besides a key (Azure's resource name, Cloudflare's
+        /// account id). <b>Nothing</b> for a local runner from the provider list, which needs no key and asks
+        /// nothing, so the sheet would open with a title, a sentence and two buttons.</para>
+        ///
+        /// <para>Delete-and-re-add is <i>not</i> the substitute OpenCode can make it: deleting takes the
+        /// reader's enabled models with it, and a re-fetched catalogue comes back all-off by #674's rule, so
+        /// rotating a key would cost them their short list.</para>
         ///
         /// <para>Deliberately not symmetric with Add, which opens a sheet even for a provider that asks
         /// nothing: there the sheet is how the reader confirms an add they can see happen.</para>
         /// </summary>
-        public static bool CanEdit(IAiConnectionService service, AiConnection connection)
+        public static string? EditAction(IAiConnectionService service, AiConnection connection)
         {
             var preset = OriginPreset(service, connection.Id);
-            return preset is null || preset.RequiresKey || preset.Prompts?.Count > 0;
+            if (preset is null || preset.Prompts?.Count > 0) return "Edit";
+            return preset.RequiresKey ? "Replace key" : null;
         }
 
         /// <summary>An endpoint in nobody's catalogue. The generic mechanism the named ones are a shortcut
@@ -216,9 +227,12 @@ namespace CST.Avalonia.ViewModels
 
         public bool IsIdEditable => _existingId is null && _preset is null;
 
-        public string Title => _existingId is not null
-            ? $"Edit {_displayName}"
-            : _preset is not null ? $"Add {_preset.DisplayName}" : "Add a custom endpoint";
+        /// <summary>Says at the top of the sheet what the button that opened it said.</summary>
+        public string Title => _existingId is null
+            ? _preset is not null ? $"Add {_preset.DisplayName}" : "Add a custom endpoint"
+            : _preset is not null && !(_preset.Prompts?.Count > 0)
+                ? $"Replace the {_preset.DisplayName} API key"
+                : $"Edit {_displayName}";
 
         /// <summary>
         /// One sentence saying what this sheet is for, worded after OpenCode's — which says in a line what

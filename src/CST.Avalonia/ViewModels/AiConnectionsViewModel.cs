@@ -522,8 +522,9 @@ namespace CST.Avalonia.ViewModels
             _owner = owner;
             _connection = connection;
 
-            CanEdit = owner.Service is null
-                || AiConnectionEditorViewModel.CanEdit(owner.Service, connection);
+            EditLabel = owner.Service is null
+                ? "Edit"
+                : AiConnectionEditorViewModel.EditAction(owner.Service, connection);
 
             EditCommand = ReactiveCommand.Create(() => _owner.BeginEdit(Id));
             OpenDocCommand = ReactiveCommand.Create(() => AiConnectionsViewModel.OpenUrl(DocUrl));
@@ -681,10 +682,11 @@ namespace CST.Avalonia.ViewModels
             ? $"Delete {DisplayName}?"
             : $"Delete {DisplayName} and its {ModelSummary}?";
 
-        /// <summary>Whether the sheet would have anything on it. A local runner from the provider list asks
-        /// nothing and needs no key, so its row shows no Edit rather than a dead end.
-        /// (<see cref="AiConnectionEditorViewModel.CanEdit"/>)</summary>
-        public bool CanEdit { get; }
+        /// <summary>What the edit button says, or null where the sheet would be empty and the button is not
+        /// drawn at all. (<see cref="AiConnectionEditorViewModel.EditAction"/>)</summary>
+        public string? EditLabel { get; }
+
+        public bool CanEdit => EditLabel is not null;
 
         public ReactiveCommand<Unit, Unit> EditCommand { get; }
 

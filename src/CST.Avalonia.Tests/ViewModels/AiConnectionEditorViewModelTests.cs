@@ -673,7 +673,7 @@ public class AiConnectionEditorViewModelTests
         Assert.False(edit.ShowModels);      // the Models tab owns those
         Assert.False(edit.ShowHeaders);     // the preset carries whatever it needs
         Assert.True(edit.ShowKeyField);
-        Assert.StartsWith("Edit", edit.Title);
+        Assert.Equal("Replace the OpenRouter API key", edit.Title);
     }
 
     /// <summary>
@@ -761,30 +761,64 @@ public class AiConnectionEditorViewModelTests
     }
 
     /// <summary>A local runner from the provider list has nothing to edit — no key, no questions — so its row
-    /// offers no Edit rather than a sheet with a title and two buttons.</summary>
+    /// offers no button rather than a sheet with a title and two buttons.</summary>
     [Fact]
     public void A_local_runner_has_nothing_to_edit()
     {
         var h = new Harness();
         Save(h.Preset("ollama"));
 
-        Assert.False(AiConnectionEditorViewModel.CanEdit(h.Service, h.Service.Connections.Single()));
+        Assert.Null(AiConnectionEditorViewModel.EditAction(h.Service, h.Service.Connections.Single()));
     }
 
-    /// <summary>Everything else does: a hosted provider has its key, and a custom endpoint has all of it.</summary>
+    /// <summary>
+    /// A plain hosted provider says "Replace key", because that is the whole sheet and the thing readers
+    /// actually do — a key rotates, expires, or hits a daily cap.
+    ///
+    /// <para>Delete-and-re-add is not the substitute it is in OpenCode: deleting takes the reader's enabled
+    /// models with it, and a re-fetched catalogue comes back all-off (#674), so rotating a key would cost
+    /// them their short list.</para>
+    /// </summary>
     [Fact]
-    public void A_hosted_provider_and_a_custom_endpoint_can_both_be_edited()
+    public void A_plain_hosted_provider_offers_to_replace_its_key()
     {
         var h = new Harness();
         Save(h.Preset("openrouter").With(vm => vm.ApiKeyEntry = "sk-test"));
+
+        var connection = h.Service.Connections.Single();
+
+        Assert.Equal("Replace key", AiConnectionEditorViewModel.EditAction(h.Service, connection));
+        Assert.Equal("Replace the OpenRouter API key", h.Existing("openrouter").Title);
+    }
+
+    /// <summary>A provider that asks for something besides a key still says Edit — the sheet holds more than
+    /// the key, so naming it after the key would be a lie.</summary>
+    [Fact]
+    public void A_provider_that_asks_for_more_than_a_key_still_says_edit()
+    {
+        var h = new Harness();
+        Save(h.Preset("azure").With(vm =>
+        {
+            vm.Inputs.Single().Value = "acme";
+            vm.ApiKeyEntry = "sk-test";
+        }));
+
+        Assert.Equal("Edit", AiConnectionEditorViewModel.EditAction(h.Service, h.Service.Connections.Single()));
+        Assert.StartsWith("Edit", h.Existing("azure").Title);
+    }
+
+    /// <summary>A custom endpoint says Edit: every field on that form is the reader's.</summary>
+    [Fact]
+    public void A_custom_endpoint_says_edit()
+    {
+        var h = new Harness();
         Save(h.Custom().With(vm =>
         {
             vm.Id = "my-box";
             vm.BaseUrl = "http://localhost:1234/v1";
         }));
 
-        foreach (var connection in h.Service.Connections)
-            Assert.True(AiConnectionEditorViewModel.CanEdit(h.Service, connection));
+        Assert.Equal("Edit", AiConnectionEditorViewModel.EditAction(h.Service, h.Service.Connections.Single()));
     }
 }
 
