@@ -194,6 +194,18 @@ namespace CST.Avalonia.ViewModels
 
         public bool HasProblem => !string.IsNullOrEmpty(Problem);
 
+        /// <summary>
+        /// The generic mark, for the add-a-provider list's custom row. (#740)
+        ///
+        /// <para>That row is not a preset and has no view model of its own — it is a fixed row in the view —
+        /// so it cannot inherit the fallback the others get. Without this it was the one row in a list of
+        /// icons showing a plus sign in a coloured tile.</para>
+        ///
+        /// <para>Null when the bundled file cannot be written, which the view answers by keeping the
+        /// tile.</para>
+        /// </summary>
+        public string? GenericLogoPath => GenericModelIcon.Path();
+
         public ReactiveCommand<Unit, Unit> AddCustomCommand { get; }
 
         /// <summary>Opens the full form for an endpoint that is in nobody's catalogue. Custom is first-class

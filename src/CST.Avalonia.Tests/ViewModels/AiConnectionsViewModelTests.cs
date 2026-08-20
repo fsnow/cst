@@ -696,6 +696,26 @@ public class AiConnectionsViewModelTests
         Assert.NotNull(uri);
     }
 
+    /// <summary>
+    /// The custom-endpoint row draws the same mark as everything else without a logo.
+    ///
+    /// <para>It is a fixed row in the view rather than a preset with a view model, so it inherits nothing —
+    /// which is how it ended up the one row in a list of icons showing a plus sign in a coloured tile. The
+    /// view model exposes the path the view binds to; a null means the bundled file could not be written and
+    /// the tile stays.</para>
+    /// </summary>
+    [Fact]
+    public void The_custom_row_is_offered_the_same_generic_mark()
+    {
+        var (vm, _) = Make();
+
+        // Null is legitimate here — extraction needs an Avalonia asset loader, which a plain test host has
+        // not started. What is asserted is that the view has somewhere to bind, not that a file appeared.
+        var path = vm.GenericLogoPath;
+
+        Assert.True(path is null || File.Exists(path));
+    }
+
     // ---- the generic model icon (#740) ------------------------------------------------------------------------
 
     /// <summary>

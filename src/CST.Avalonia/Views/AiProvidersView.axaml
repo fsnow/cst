@@ -252,10 +252,22 @@
                          appears in nobody's catalogue. -->
                     <Border Classes="Row" BorderThickness="0">
                         <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Border Grid.Column="0" Classes="Tile"
-                                    Background="{DynamicResource DockApplicationAccentBrushLow}">
-                                <TextBlock Text="+"/>
-                            </Border>
+                            <!-- The same generic mark every provider without a logo gets, so this row reads
+                                 as one of the list rather than as a control wedged into it. The plus tile
+                                 stays behind it for the case where the bundled file cannot be written. -->
+                            <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
+                                   VerticalAlignment="Top">
+                                <Border Classes="Tile" Margin="0"
+                                        IsVisible="{Binding $parent[UserControl].((vm:AiConnectionsViewModel)DataContext).GenericLogoPath,
+                                            Converter={x:Static conv:ProviderLogoRenderedConverter.Instance},
+                                            ConverterParameter=invert}"
+                                        Background="{DynamicResource DockApplicationAccentBrushLow}">
+                                    <TextBlock Text="+"/>
+                                </Border>
+                                <Image Source="{Binding $parent[UserControl].((vm:AiConnectionsViewModel)DataContext).GenericLogoPath,
+                                           Converter={x:Static conv:ProviderLogoConverter.Instance}}"
+                                       Stretch="Uniform" Margin="2"/>
+                            </Panel>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                                 <TextBlock Text="Custom endpoint" FontWeight="SemiBold"/>
                                 <TextBlock Text="Any OpenAI-compatible or Anthropic address, by URL."
