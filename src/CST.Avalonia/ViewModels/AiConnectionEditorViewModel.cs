@@ -63,7 +63,7 @@ namespace CST.Avalonia.ViewModels
             _close = close;
             _preset = preset;
             _existingId = existingId;
-            _keyRequired = preset?.RequiresKey ?? OriginPreset(service, existingId)?.RequiresKey ?? false;
+            _keyRequired = preset?.RequiresKey ?? false;
 
             SaveCommand = ReactiveCommand.Create(Save);
             CancelCommand = ReactiveCommand.Create(() => _close(false));
@@ -85,6 +85,34 @@ namespace CST.Avalonia.ViewModels
                 ? null
                 : service.Presets.FirstOrDefault(
                     p => string.Equals(p.Id, existingId, StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// What the row's edit button should say, or null where it should not be there at all. (#691)
+        ///
+        /// <para>One function rather than a visibility flag beside a label, so the two cannot disagree — the
+        /// button that appears is the one whose word was chosen.</para>
+        ///
+        /// <para><b>"Replace key"</b> for the ~150 providers that are a base URL and a bearer token: that is
+        /// the entire sheet, and it is the thing readers actually do — a key rotates, expires, or hits a daily
+        /// cap. Naming it stops the button implying that a named provider's settings are the reader's to
+        /// change. <b>"Edit"</b> where the sheet holds more: a custom endpoint, whose every field is the
+        /// reader's, and a provider that asks something besides a key (Azure's resource name, Cloudflare's
+        /// account id). <b>Nothing</b> for a local runner from the provider list, which needs no key and asks
+        /// nothing, so the sheet would open with a title, a sentence and two buttons.</para>
+        ///
+        /// <para>Delete-and-re-add is <i>not</i> the substitute OpenCode can make it: deleting takes the
+        /// reader's enabled models with it, and a re-fetched catalogue comes back all-off by #674's rule, so
+        /// rotating a key would cost them their short list.</para>
+        ///
+        /// <para>Deliberately not symmetric with Add, which opens a sheet even for a provider that asks
+        /// nothing: there the sheet is how the reader confirms an add they can see happen.</para>
+        /// </summary>
+        public static string? EditAction(IAiConnectionService service, AiConnection connection)
+        {
+            var preset = OriginPreset(service, connection.Id);
+            if (preset is null || preset.Prompts?.Count > 0) return "Edit";
+            return preset.RequiresKey ? "Replace key" : null;
+        }
 
         /// <summary>An endpoint in nobody's catalogue. The generic mechanism the named ones are a shortcut
         /// for, and always available — a preset must never be required to reach a provider.</summary>
@@ -123,14 +151,28 @@ namespace CST.Avalonia.ViewModels
             return vm;
         }
 
-        /// <summary>Editing what is already configured. Everything is editable except the id, which is the
-        /// account the credential is filed under — changing it would orphan the key, and the failure would
-        /// read as a rejected key rather than a lost one.</summary>
+        /// <summary>
+        /// Editing what is already configured.
+        ///
+        /// <para><b>A connection added from a provider list is edited on the same form it was added on</b> —
+        /// the key, and whatever that provider asks for besides. Anything else about it belongs to the
+        /// preset: its address, its protocol and the auth shape those imply are not the reader's to override,
+        /// and offering them made a one-field form look like an infrastructure panel. It was also load-bearing
+        /// for a bug — a rename through that form silently reset Azure's auth shape to Bearer, and nothing on
+        /// screen showed the shape. Where a provider genuinely stops behaving as its preset says, the answer
+        /// is to add it as a custom endpoint, which is the same mechanism with the address left to the
+        /// reader.</para>
+        ///
+        /// <para>Only the id is never editable, on either form: it is the account the credential is filed
+        /// under, so changing it would orphan the key and the failure would read as a rejected key rather
+        /// than a lost one.</para>
+        /// </summary>
         public static AiConnectionEditorViewModel ForExisting(
             IAiConnectionService service, IAiCredentialStore? credentials, AiConnection connection,
             Action<bool> close)
         {
-            var vm = new AiConnectionEditorViewModel(service, credentials, close, null, connection.Id)
+            var preset = OriginPreset(service, connection.Id);
+            var vm = new AiConnectionEditorViewModel(service, credentials, close, preset, connection.Id)
             {
                 _id = connection.Id,
                 _displayName = connection.DisplayName,
@@ -164,9 +206,14 @@ namespace CST.Avalonia.ViewModels
 
             foreach (var input in connection.Inputs)
                 vm.Inputs.Add(new AiInputRowViewModel(
-                    new AiInputPrompt(input.Key, input.Key), vm.OnInputChanged) { Value = input.Value });
+                    // The preset's own wording where there is one, so an edit asks "Resource name" exactly as
+                    // the add did rather than falling back to the raw key.
+                    preset?.Prompts?.FirstOrDefault(p => p.Key == input.Key)
+                        ?? new AiInputPrompt(input.Key, input.Key),
+                    vm.OnInputChanged) { Value = input.Value });
 
             if (vm.Models.Count == 0) vm.Models.Add(new AiModelRowViewModel(vm.Models));
+            vm.RefreshInputVisibility();
             return vm;
         }
 
@@ -180,9 +227,12 @@ namespace CST.Avalonia.ViewModels
 
         public bool IsIdEditable => _existingId is null && _preset is null;
 
-        public string Title => _preset is not null
-            ? $"Add {_preset.DisplayName}"
-            : _existingId is not null ? $"Edit {_displayName}" : "Add a custom endpoint";
+        /// <summary>Says at the top of the sheet what the button that opened it said.</summary>
+        public string Title => _existingId is null
+            ? _preset is not null ? $"Add {_preset.DisplayName}" : "Add a custom endpoint"
+            : _preset is not null && !(_preset.Prompts?.Count > 0)
+                ? $"Replace the {_preset.DisplayName} API key"
+                : $"Edit {_displayName}";
 
         /// <summary>
         /// One sentence saying what this sheet is for, worded after OpenCode's — which says in a line what
@@ -196,6 +246,10 @@ namespace CST.Avalonia.ViewModels
                     return _existingId is not null
                         ? "Everything except the id can be changed."
                         : "Any endpoint that speaks one of the two protocols below. This is the same mechanism the named providers use, with the address left to you.";
+
+                if (_existingId is not null)
+                    return $"{_preset.DisplayName}'s address and protocol come from the provider list, and its "
+                        + "models are on the Models tab. What is left is what it asks you for.";
 
                 return _preset.RequiresKey
                     ? $"Enter your {_preset.DisplayName} API key to use {_preset.DisplayName} models in CST Reader. Its model list is fetched afterwards, on the Models tab."
@@ -384,10 +438,12 @@ namespace CST.Avalonia.ViewModels
                 .Where(i => i.IsVisible && !string.IsNullOrWhiteSpace(i.Value))
                 .ToDictionary(i => i.Key, i => i.Value.Trim(), StringComparer.Ordinal);
 
-            var result = _preset is not null
-                ? AddPreset(inputs)
-                : _existingId is not null
-                    ? _service.Update(_existingId, BuildDraft(inputs))
+            // Order matters: an edit updates even when it carries a preset, or saving one would try to add a
+            // second connection under an id that is already taken.
+            var result = _existingId is not null
+                ? _service.Update(_existingId, BuildDraft(inputs))
+                : _preset is not null
+                    ? AddPreset(inputs)
                     : _service.Add(Id.Trim(), BuildDraft(inputs));
 
             if (!result.Ok)

@@ -142,7 +142,8 @@
                                              both live in the editor sheet, which is where a reader who wants
                                              to change something is already going - and Remove key was a
                                              straight duplicate of the sheet's own. -->
-                                        <Button Content="Edit" Classes="Link"
+                                        <Button Content="{Binding EditLabel}" Classes="Link"
+                                                IsVisible="{Binding CanEdit}"
                                                 Command="{Binding EditCommand}"/>
                                         <!-- Two destructive actions, not one: stopping the billing and
                                              throwing away a hand-typed model list are different intentions.
