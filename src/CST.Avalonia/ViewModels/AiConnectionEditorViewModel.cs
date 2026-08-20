@@ -304,6 +304,22 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public bool HasKeyHint => !_keyRequired;
 
+        /// <summary>
+        /// A provider that requires a key, with none supplied here and none already stored. (#761)
+        ///
+        /// <para>Refused rather than saved, because what it creates otherwise looks exactly like a working
+        /// connection — the provider's own logo and name on the Providers tab, its models listed on the next
+        /// tab — and only announces itself as a 401 later, at the moment the reader was trying to read
+        /// something. The Models tab does catch it ("no API key stored"), but that is one screen past where
+        /// the reader thought they had finished.</para>
+        ///
+        /// <para><b>Not where no key can be stored at all.</b> The sheet already says so in caution colour,
+        /// and no key can be filed by any route on that machine, so a refusal on top of the explanation would
+        /// leave the reader nowhere to go — a row that cannot answer is the lesser evil there.</para>
+        /// </summary>
+        private bool MissingRequiredKey =>
+            _keyRequired && CanStoreKeys && string.IsNullOrWhiteSpace(ApiKeyEntry) && !HasStoredKey;
+
         public string KeyHint => "Optional — leave it empty if this endpoint needs no key, or if you authenticate with a header below.";
 
         /// <summary>
@@ -364,6 +380,12 @@ namespace CST.Avalonia.ViewModels
 
         private void Save()
         {
+            if (MissingRequiredKey)
+            {
+                Problem = $"{_displayName} needs an API key. Paste one to continue.";
+                return;
+            }
+
             var inputs = Inputs
                 .Where(i => i.IsVisible && !string.IsNullOrWhiteSpace(i.Value))
                 .ToDictionary(i => i.Key, i => i.Value.Trim(), StringComparer.Ordinal);
