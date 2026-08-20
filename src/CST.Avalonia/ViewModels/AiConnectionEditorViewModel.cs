@@ -180,12 +180,6 @@ namespace CST.Avalonia.ViewModels
 
         public bool IsIdEditable => _existingId is null && _preset is null;
 
-        /// <summary>A preset's address, shown read-only. Not a field to fill in, but worth seeing: it is the
-        /// one fact that says where the reader's questions and money are about to go.</summary>
-        public bool ShowFixedEndpoint => _preset is not null;
-
-        public string FixedEndpoint => _preset?.BaseUrl ?? "";
-
         public string Title => _preset is not null
             ? $"Add {_preset.DisplayName}"
             : _existingId is not null ? $"Edit {_displayName}" : "Add a custom endpoint";

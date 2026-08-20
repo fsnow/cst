@@ -353,9 +353,7 @@ public class AiConnectionEditorViewModelTests
         Assert.False(vm.ShowHeaders);       // the preset carries whatever headers it needs
         Assert.False(vm.ShowModels);        // fetched, not typed
         Assert.Empty(vm.Models);
-        Assert.True(vm.ShowKeyField);
-        Assert.True(vm.ShowFixedEndpoint);  // shown, not asked - where the money goes
-        Assert.Equal("https://openrouter.ai/api/v1", vm.FixedEndpoint);
+        Assert.True(vm.ShowKeyField);       // the key, and on a preset sheet that is the whole form
     }
 
     /// <summary>
@@ -439,7 +437,6 @@ public class AiConnectionEditorViewModelTests
         var vm = new Harness().Preset("ollama");
 
         Assert.False(vm.ShowKeyField);
-        Assert.True(vm.ShowFixedEndpoint);
     }
 
     /// <summary>The key reaches the store under the connection's own id, not under whichever one happened to

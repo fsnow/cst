@@ -409,14 +409,6 @@
                                    Classes="SettingDescription" Margin="0,2,0,15"/>
                         </StackPanel>
 
-                        <!-- A preset's address, read-only. Not a field to fill in, but the one fact that
-                             says where the reader's questions and money are about to go. -->
-                        <StackPanel IsVisible="{Binding ShowFixedEndpoint}">
-                            <TextBlock Text="Endpoint address" Classes="SettingLabel"/>
-                            <SelectableTextBlock Text="{Binding FixedEndpoint}"
-                                                 Classes="Secondary" Margin="0,0,0,15"/>
-                        </StackPanel>
-
                         <!-- Whatever the preset says it still needs, generated from its own prompts. -->
                         <ItemsControl ItemsSource="{Binding Inputs}">
                             <ItemsControl.ItemTemplate>
