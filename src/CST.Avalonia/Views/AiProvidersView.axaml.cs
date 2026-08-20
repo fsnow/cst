@@ -30,17 +30,22 @@ namespace CST.Avalonia.Views
         }
 
         /// <summary>
-        /// Puts the top of the tab back in view when the sheet closes.
+        /// Puts the top of the tab back in view whenever the sheet opens or closes.
         ///
-        /// <para>Without this, saving leaves the settings pane scrolled to wherever the reader was when they
-        /// reached the catalogue — the bottom — while the connection they just added is a row at the very
-        /// top. The add then reads as having done nothing, which is exactly the confusion that made every
+        /// <para><b>Closing:</b> saving would otherwise leave the pane scrolled to wherever the reader was
+        /// when they reached the catalogue — the bottom — while the connection they just added is a row at
+        /// the very top. The add then reads as having done nothing, which is the confusion that made every
         /// add open a sheet in the first place.</para>
+        ///
+        /// <para><b>Opening:</b> the sheet replaces the list inside the same scroll viewer, which keeps the
+        /// offset it had. Reaching Custom endpoint means scrolling to the bottom of ~166 providers, so the
+        /// form arrives scrolled past its own first field — the reader is looking at the Save button of a
+        /// form they have not seen the top of. Both directions are the same fix: a screen the reader has not
+        /// seen before starts at its beginning.</para>
         /// </summary>
         private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName != nameof(AiConnectionsViewModel.IsListing)) return;
-            if (_bound?.IsListing != true) return;
             if (this.FindAncestorOfType<ScrollViewer>() is { } scroll) scroll.Offset = default;
         }
     }
