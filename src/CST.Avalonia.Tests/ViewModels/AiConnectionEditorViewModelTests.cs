@@ -356,6 +356,34 @@ public class AiConnectionEditorViewModelTests
         Assert.Equal("https://openrouter.ai/api/v1", vm.FixedEndpoint);
     }
 
+    /// <summary>
+    /// A named provider whose key is required is not told the box is optional.
+    ///
+    /// <para>The two ways to reach that sheet are exhaustive: a provider needing no key shows no box, so any
+    /// box on a preset sheet is a required one. Calling it optional contradicts the blurb three lines above it
+    /// and invites the reader to save a connection that cannot answer.</para>
+    /// </summary>
+    [Fact]
+    public void A_required_key_is_not_called_optional()
+    {
+        var vm = new Harness().Preset("deepseek");
+
+        Assert.True(vm.ShowKeyField);
+        Assert.False(vm.HasKeyHint);
+    }
+
+    /// <summary>A custom endpoint keeps the line: there the box genuinely is optional — a local runner needs
+    /// no key, and a gateway may authenticate through a header instead.</summary>
+    [Fact]
+    public void A_custom_endpoint_keeps_the_optional_line()
+    {
+        var vm = new Harness().Custom();
+
+        Assert.True(vm.ShowKeyField);
+        Assert.True(vm.HasKeyHint);
+        Assert.True(vm.ShowHeaders);        // the "header below" the line points at
+    }
+
     /// <summary>A custom endpoint still asks, and must: it may publish no listing at all, which is the
     /// ordinary case for a local runner, and then typing is the only way in.</summary>
     [Fact]

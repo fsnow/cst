@@ -376,7 +376,8 @@
                                        IsVisible="{Binding HasKeyUnavailable}"
                                        Classes="SettingDescription"
                                        Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
-                            <TextBlock Text="{Binding KeyHint}" Classes="SettingDescription"/>
+                            <TextBlock Text="{Binding KeyHint}" IsVisible="{Binding HasKeyHint}"
+                                       Classes="SettingDescription"/>
                         </StackPanel>
 
                         <!-- Only for an endpoint we cannot ask. A named provider's listing is fetched on the

@@ -273,6 +273,17 @@ namespace CST.Avalonia.ViewModels
                 ? $"A key is stored for {_displayName}. Paste a new one to replace it."
                 : $"No key is stored for {_displayName}.";
 
+        /// <summary>
+        /// Whether the "optional" line under the key box applies.
+        ///
+        /// <para><b>Only a custom endpoint.</b> A named provider that reaches this sheet with a key box is one
+        /// whose key is required — a provider needing none shows no box at all (<see cref="ShowKeyField"/>) —
+        /// so telling that reader the box is optional contradicts the blurb three lines above it and invites
+        /// them to save a connection that cannot answer. The header clause is equally wrong there: headers are
+        /// asked for on a custom endpoint alone.</para>
+        /// </summary>
+        public bool HasKeyHint => _preset is null;
+
         public string KeyHint => "Optional — leave it empty if this endpoint needs no key, or if you authenticate with a header below.";
 
         /// <summary>
