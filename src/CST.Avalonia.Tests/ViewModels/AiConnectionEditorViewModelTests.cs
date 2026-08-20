@@ -372,6 +372,41 @@ public class AiConnectionEditorViewModelTests
         Assert.False(vm.HasKeyHint);
     }
 
+    /// <summary>
+    /// Editing a connection added from a key-requiring provider does not call the key optional either.
+    ///
+    /// <para>Gating on "is this a preset sheet" would leave the line on the sheet a reader is most likely to
+    /// be reading it on: Edit is reached precisely because the key is missing or wrong, one click from where
+    /// the contradiction was reported. The edit form carries no preset, so the requirement has to be
+    /// recovered from the id — which is unambiguous, a custom connection being refused a preset's id.
+    /// (fable review)</para>
+    /// </summary>
+    [Fact]
+    public void Editing_a_named_provider_does_not_call_its_key_optional()
+    {
+        var h = new Harness();
+        h.Service.AddFromPreset("deepseek", new Dictionary<string, string>());
+
+        var vm = h.Existing("deepseek");
+
+        Assert.True(vm.ShowKeyField);
+        Assert.False(vm.HasKeyHint);
+    }
+
+    /// <summary>Editing a custom endpoint keeps the line: nothing about it requires a key.</summary>
+    [Fact]
+    public void Editing_a_custom_endpoint_keeps_the_optional_line()
+    {
+        var h = new Harness();
+        Save(h.Custom().With(vm =>
+        {
+            vm.Id = "my-box";
+            vm.BaseUrl = "http://localhost:1234/v1";
+        }));
+
+        Assert.True(h.Existing("my-box").HasKeyHint);
+    }
+
     /// <summary>A custom endpoint keeps the line: there the box genuinely is optional — a local runner needs
     /// no key, and a gateway may authenticate through a header instead.</summary>
     [Fact]

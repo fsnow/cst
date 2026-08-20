@@ -44,6 +44,7 @@ namespace CST.Avalonia.ViewModels
         private readonly Action<bool> _close;
         private readonly AiProviderPreset? _preset;
         private readonly string? _existingId;
+        private readonly bool _keyRequired;
 
         private string _id = "";
         private string _displayName = "";
@@ -62,6 +63,7 @@ namespace CST.Avalonia.ViewModels
             _close = close;
             _preset = preset;
             _existingId = existingId;
+            _keyRequired = preset?.RequiresKey ?? OriginPreset(service, existingId)?.RequiresKey ?? false;
 
             SaveCommand = ReactiveCommand.Create(Save);
             CancelCommand = ReactiveCommand.Create(() => _close(false));
@@ -69,6 +71,20 @@ namespace CST.Avalonia.ViewModels
             AddHeaderCommand = ReactiveCommand.Create(() => Headers.Add(new AiHeaderRowViewModel(Headers)));
             RemoveKeyCommand = ReactiveCommand.Create(RemoveKey);
         }
+
+        /// <summary>
+        /// The preset an already-configured connection was added from, or null for a custom endpoint.
+        ///
+        /// <para>Matching on the id is exact rather than a guess: a custom connection is refused a preset's id
+        /// outright (<i>"'deepseek' is the id of a built-in provider"</i>), so an id that matches one came from
+        /// it. Not stored as <see cref="_preset"/> — that field decides which <i>fields</i> the sheet shows,
+        /// and an edit must keep showing all of them.</para>
+        /// </summary>
+        private static AiProviderPreset? OriginPreset(IAiConnectionService service, string? existingId) =>
+            existingId is null
+                ? null
+                : service.Presets.FirstOrDefault(
+                    p => string.Equals(p.Id, existingId, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>An endpoint in nobody's catalogue. The generic mechanism the named ones are a shortcut
         /// for, and always available — a preset must never be required to reach a provider.</summary>
@@ -276,13 +292,17 @@ namespace CST.Avalonia.ViewModels
         /// <summary>
         /// Whether the "optional" line under the key box applies.
         ///
-        /// <para><b>Only a custom endpoint.</b> A named provider that reaches this sheet with a key box is one
-        /// whose key is required — a provider needing none shows no box at all (<see cref="ShowKeyField"/>) —
-        /// so telling that reader the box is optional contradicts the blurb three lines above it and invites
-        /// them to save a connection that cannot answer. The header clause is equally wrong there: headers are
-        /// asked for on a custom endpoint alone.</para>
+        /// <para><b>Not where the provider requires a key.</b> Telling that reader the box is optional
+        /// contradicts the blurb three lines above it and invites them to save a connection that cannot
+        /// answer. The header clause is equally wrong there: headers are asked for on a custom endpoint
+        /// alone.</para>
+        ///
+        /// <para><b>Adding is not the only way in.</b> Gating on "is this a preset sheet" leaves the line on
+        /// the sheet a reader is most likely to be reading it on — Edit, reached precisely <i>because</i> the
+        /// key is missing or wrong. That sheet carries no preset, so the requirement is recovered from the
+        /// connection's id instead (<see cref="OriginPreset"/>).</para>
         /// </summary>
-        public bool HasKeyHint => _preset is null;
+        public bool HasKeyHint => !_keyRequired;
 
         public string KeyHint => "Optional — leave it empty if this endpoint needs no key, or if you authenticate with a header below.";
 
