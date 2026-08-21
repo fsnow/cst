@@ -379,7 +379,13 @@ namespace CST.Avalonia.ViewModels
 
             return new AiModelEntry(
                 published.Id, published.DisplayName, true,
-                published.ContextLength, published.SupportsReasoning, inputs);
+                published.ContextLength, published.SupportsReasoning, inputs,
+                Missing: false,
+                // Captured at the moment the reader promotes the model, for the same reason the rest of these
+                // are: the listing is only fetched while the Models tab is open, and the per-turn picker has
+                // to be able to offer the levels without one. (#671)
+                ReasoningEfforts: published.ReasoningEfforts,
+                DefaultReasoningEffort: published.DefaultReasoningEffort);
         }
 
         private async Task FetchAsync()

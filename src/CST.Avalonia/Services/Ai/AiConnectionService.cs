@@ -468,6 +468,8 @@ namespace CST.Avalonia.Services.Ai
                 model.ContextLength = facts.ContextLength;
                 model.SupportsReasoning = facts.SupportsReasoning;
                 model.Inputs = facts.Inputs;
+                model.ReasoningEfforts = facts.ReasoningEfforts?.ToList();
+                model.DefaultReasoningEffort = facts.DefaultReasoningEffort;
 
                 // Facts exist because the listing carried this model, so it is by definition not missing from
                 // it. Clearing here as well as in MarkListing keeps the two from disagreeing. (#728)
@@ -555,6 +557,8 @@ namespace CST.Avalonia.Services.Ai
                     SupportsReasoning = m.SupportsReasoning,
                     Inputs = m.Inputs,
                     Missing = m.Missing,
+                    ReasoningEfforts = m.ReasoningEfforts?.ToList(),
+                    DefaultReasoningEffort = m.DefaultReasoningEffort,
                 })
                 .ToList();
             // A secret header's value is NOT carried through the draft - the editor puts it in the credential
@@ -582,7 +586,7 @@ namespace CST.Avalonia.Services.Ai
             r.Models
                 .Select(m => new AiModelEntry(
                     m.Id, m.DisplayName, m.Enabled, m.ContextLength, m.SupportsReasoning, m.Inputs,
-                    m.Missing))
+                    m.Missing, m.ReasoningEfforts, m.DefaultReasoningEffort))
                 .ToList(),
             r.Headers.Select(h => new AiHeader(h.Name, h.Secret ? null : h.Value, h.Secret)).ToList(),
             new Dictionary<string, string>(r.Inputs),

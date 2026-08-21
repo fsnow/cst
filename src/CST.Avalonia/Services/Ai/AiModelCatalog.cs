@@ -33,7 +33,10 @@ namespace CST.Avalonia.Services.Ai
         decimal? CompletionPricePerMillion = null,
         IReadOnlyList<string>? InputModalities = null,
         IReadOnlyList<string>? OutputModalities = null,
-        IReadOnlyList<string>? SupportedParameters = null)
+        IReadOnlyList<string>? SupportedParameters = null,
+        IReadOnlyList<string>? ReasoningEfforts = null,
+        string? DefaultReasoningEffort = null,
+        bool? ReasoningIsMandatory = null)
     {
         /// <summary>
         /// Whether the provider publishes a price above zero for this model.
@@ -51,12 +54,21 @@ namespace CST.Avalonia.Services.Ai
             PromptPricePerMillion > 0m || CompletionPricePerMillion > 0m;
 
         /// <summary>
-        /// Whether the provider says it accepts a reasoning-effort parameter (#671). Published, never
-        /// inferred from the name.
+        /// Whether the provider says this model produces reasoning at all (#671). Published, never inferred
+        /// from the name.
         ///
         /// <para><b>Null means the provider said nothing</b>, which is a different fact from saying no — a
         /// local runner publishes no parameter list at all, and rendering its silence as "No reasoning" would
         /// state something about the model that nobody has established.</para>
+        ///
+        /// <para><b>This is "emits reasoning", NOT "takes an effort knob"</b>, and the distinction is not
+        /// pedantic. The first version matched any parameter containing "reasoning", which catches
+        /// <c>reasoning</c> and <c>include_reasoning</c> — both of which mean the model <i>returns</i>
+        /// reasoning content. Measured against OpenRouter's live listing: 287 models matched, 142 actually
+        /// list <c>reasoning_effort</c>, so <b>51% were false positives</b>. Gating an effort control on this
+        /// would put the control on 145 models that publish no such parameter. Use
+        /// <see cref="AcceptsReasoningEffort"/> for that. (The old predicate also had a dead arm: it tested
+        /// for <c>thinking</c>, which never appears in OpenRouter's vocabulary at all.)</para>
         /// </summary>
         public bool? SupportsReasoning => SupportedParameters is null
             ? null
@@ -64,6 +76,17 @@ namespace CST.Avalonia.Services.Ai
                 p.Contains("reasoning", StringComparison.OrdinalIgnoreCase) ||
                 p.Equals("thinking", StringComparison.OrdinalIgnoreCase));
 
+        /// <summary>
+        /// Whether the provider says this model accepts <c>reasoning_effort</c> — the question the effort
+        /// control actually needs answered. (#671)
+        ///
+        /// <para>Named exactly, not matched loosely. Null keeps the same meaning as everywhere else here:
+        /// the provider published no parameter list, which is silence rather than a no.</para>
+        /// </summary>
+        public bool? AcceptsReasoningEffort => SupportedParameters is null
+            ? null
+            : SupportedParameters.Any(
+                p => p.Equals("reasoning_effort", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>What a fetch produced, or why it produced nothing.</summary>
@@ -353,6 +376,7 @@ namespace CST.Avalonia.Services.Ai
 
                 var architecture = Object(item, "architecture");
                 var pricing = Object(item, "pricing");
+                var reasoning = Object(item, "reasoning");
 
                 models.Add(new AiCatalogModel(
                     id,
@@ -362,7 +386,18 @@ namespace CST.Avalonia.Services.Ai
                     PerMillion(pricing, "completion"),
                     Modalities(architecture, "input_modalities"),
                     Modalities(architecture, "output_modalities"),
-                    Strings(item, "supported_parameters")));
+                    Strings(item, "supported_parameters"),
+                    // OpenRouter publishes a richer object beside the flat parameter list, and it is the one
+                    // that answers "which values, and which is the default" rather than merely "is the knob
+                    // there". Absent everywhere else, which reads as null. (#671)
+                    //
+                    // NOTE for anyone widening this parse: the same objects carry a `benchmarks` field with
+                    // intelligence_index / coding_index / agentic_index on 229 of 420 models. It is
+                    // provider-published, so it passes the letter of "a published capability is fine" while
+                    // being unambiguously a score. It is NOT read here and must not be: #670/#681.
+                    Strings(reasoning, "supported_efforts"),
+                    Text(reasoning, "default_effort"),
+                    Bool(reasoning, "mandatory")));
             }
 
             // Alphabetical by the name the provider published. Mechanical, and the only ordering allowed:
@@ -405,6 +440,14 @@ namespace CST.Avalonia.Services.Ai
             parent is { } p && p.ValueKind == JsonValueKind.Object &&
             p.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
                 ? value.GetString()
+                : null;
+
+        /// <summary>Null when the field is absent or is not a boolean — silence, not false. (#671)</summary>
+        private static bool? Bool(JsonElement? parent, string name) =>
+            parent is { } p && p.ValueKind == JsonValueKind.Object &&
+            p.TryGetProperty(name, out var value)
+            && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? value.GetBoolean()
                 : null;
 
         private static int? Int(JsonElement? parent, string name) =>

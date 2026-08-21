@@ -445,4 +445,85 @@ public class AiModelCatalogTests
             new[] { "secret-only-credential" },
             handler.LastRequest!.Headers.GetValues("x-api-key"));
     }
+
+    // ---- reasoning effort (#671) ------------------------------------------------------------------------
+
+    /// <summary>
+    /// The published levels and the provider's own default, read from the richer object OpenRouter carries
+    /// beside the flat parameter list. That object is what answers "which values, and which is the default";
+    /// the flat list only answers "is the knob there".
+    /// </summary>
+    [Fact]
+    public void Published_effort_levels_and_default_are_read()
+    {
+        var models = AiModelCatalog.Parse("""
+        {"data":[{"id":"m","name":"M","supported_parameters":["reasoning_effort"],
+                  "reasoning":{"supported_efforts":["low","high","max"],"default_effort":"high","mandatory":false}}]}
+        """);
+
+        var model = Assert.Single(models);
+        Assert.Equal(new[] { "low", "high", "max" }, model.ReasoningEfforts);
+        Assert.Equal("high", model.DefaultReasoningEffort);
+        Assert.False(model.ReasoningIsMandatory);
+    }
+
+    /// <summary>
+    /// The correction this issue turned up. The old predicate matched any parameter containing "reasoning",
+    /// which catches `reasoning` and `include_reasoning` — both meaning the model RETURNS reasoning content,
+    /// not that it takes an effort knob. Measured against OpenRouter's live listing, 287 models matched and
+    /// only 142 list reasoning_effort: 51% false positives. Gating the effort chip on the loose test would
+    /// have put it on 145 models that publish no such parameter.
+    /// </summary>
+    [Fact]
+    public void Emitting_reasoning_is_not_the_same_as_accepting_an_effort_parameter()
+    {
+        var models = AiModelCatalog.Parse("""
+        {"data":[{"id":"m","name":"M","supported_parameters":["reasoning","include_reasoning"]}]}
+        """);
+
+        var model = Assert.Single(models);
+        Assert.True(model.SupportsReasoning);        // it does emit reasoning
+        Assert.False(model.AcceptsReasoningEffort);  // and it does NOT take the knob
+    }
+
+    [Fact]
+    public void A_model_that_lists_reasoning_effort_accepts_it()
+    {
+        var models = AiModelCatalog.Parse("""
+        {"data":[{"id":"m","name":"M","supported_parameters":["reasoning","reasoning_effort"]}]}
+        """);
+
+        Assert.True(Assert.Single(models).AcceptsReasoningEffort);
+    }
+
+    /// <summary>Silence stays silence. A provider that publishes no parameter list has not said no.</summary>
+    [Fact]
+    public void A_provider_that_publishes_no_parameters_says_nothing_about_effort()
+    {
+        var models = AiModelCatalog.Parse("""{"data":[{"id":"m","name":"M"}]}""");
+
+        var model = Assert.Single(models);
+        Assert.Null(model.AcceptsReasoningEffort);
+        Assert.Null(model.ReasoningEfforts);
+        Assert.Null(model.DefaultReasoningEffort);
+    }
+
+    /// <summary>
+    /// #670/#681: the same OpenRouter objects carry benchmark scores on 229 of 420 models. Provider-published,
+    /// so it passes the letter of "a published capability is fine" while being unambiguously a ranking. This
+    /// pins that the parser does not pick it up as one more fact when someone widens it.
+    /// </summary>
+    [Fact]
+    public void Published_benchmark_scores_are_not_read()
+    {
+        var models = AiModelCatalog.Parse("""
+        {"data":[{"id":"m","name":"M",
+                  "benchmarks":{"artificial_analysis":{"intelligence_index":59.5,"coding_index":74.8}}}]}
+        """);
+
+        var model = Assert.Single(models);
+        var serialised = System.Text.Json.JsonSerializer.Serialize(model);
+        Assert.DoesNotContain("59.5", serialised, StringComparison.Ordinal);
+        Assert.DoesNotContain("intelligence", serialised, StringComparison.OrdinalIgnoreCase);
+    }
 }

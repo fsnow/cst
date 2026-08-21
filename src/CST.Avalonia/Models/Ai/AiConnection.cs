@@ -77,7 +77,9 @@ namespace CST.Avalonia.Models.Ai
         int? ContextLength = null,
         bool? SupportsReasoning = null,
         string? Inputs = null,
-        bool Missing = false);
+        bool Missing = false,
+        IReadOnlyList<string>? ReasoningEfforts = null,
+        string? DefaultReasoningEffort = null);
 
     /// <summary>
     /// One extra request header on a connection. (#711, #771)
