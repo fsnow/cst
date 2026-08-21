@@ -41,13 +41,40 @@ public class AiModelsViewModelTests
     }
 
     private static (AiModelsViewModel Vm, AiConnectionService Service) Make(
-        IAiModelCatalog? catalog = null, IAiProviderLogos? logos = null)
+        IAiModelCatalog? catalog = null, IAiProviderLogos? logos = null,
+        IAiModelListingCache? listings = null)
     {
         var settings = new Settings();
         var svc = new Mock<ISettingsService>();
         svc.SetupGet(s => s.Settings).Returns(settings);
         var service = new AiConnectionService(svc.Object);
-        return (new AiModelsViewModel(service, catalog, logos), service);
+        return (new AiModelsViewModel(service, catalog, logos, listings), service);
+    }
+
+    /// <summary>A catalog that cannot reach the endpoint, for the offline and provider-down cases.</summary>
+    private sealed class FailingCatalog : IAiModelCatalog
+    {
+        public Task<AiCatalogResult> FetchAsync(AiConnection connection, CancellationToken ct = default) =>
+            Task.FromResult(AiCatalogResult.Fail($"Cannot connect to {connection.DisplayName}.", reachable: false));
+    }
+
+    /// <summary>An in-memory listing cache, so a test can stand a connection up as if it had been fetched in
+    /// an earlier session.</summary>
+    private sealed class FakeListings : IAiModelListingCache
+    {
+        public Dictionary<string, IReadOnlyList<AiCatalogModel>> Entries { get; } = new(StringComparer.Ordinal);
+        public List<string> Written { get; } = new();
+
+        public IReadOnlyList<AiCatalogModel> Get(string connectionId) =>
+            Entries.TryGetValue(connectionId, out var models) ? models : Array.Empty<AiCatalogModel>();
+
+        public void Put(string connectionId, IReadOnlyList<AiCatalogModel> models)
+        {
+            Entries[connectionId] = models;
+            Written.Add(connectionId);
+        }
+
+        public void Forget(string connectionId) => Entries.Remove(connectionId);
     }
 
     private static AiConnectionDraft Draft(params AiModelEntry[] models) =>
@@ -958,5 +985,141 @@ public class AiModelsViewModelTests
         service.Add("mine", Draft(new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
 
         Assert.Equal("2 models", Group(vm).CountText);
+    }
+
+    // ---- the cached listing (#790) ----------------------------------------------------------------------
+
+    /// <summary>
+    /// The requirement, in one assertion: the provider's list is on screen before anything is expanded and
+    /// before any request. Without the cache the reader met their own saved models on every launch — three
+    /// against thirteen in the report that prompted this.
+    /// </summary>
+    [Fact]
+    public void A_group_opens_on_the_cached_listing_rather_than_the_saved_models()
+    {
+        var listings = new FakeListings();
+        listings.Entries["mine"] = new[]
+        {
+            new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B"), new AiCatalogModel("c", "C"),
+        };
+
+        var (vm, service) = Make(listings: listings);
+        service.Add("mine", Draft(new AiModelEntry("a", "A")));
+
+        // Row counts rather than CountText: the wording is #786's business and this test is about which set
+        // is on screen, not what it is called.
+        Assert.Equal(3, Group(vm).Visible.Count);
+        Assert.Equal(1, Group(vm).Visible.Count(r => r.Enabled));
+    }
+
+    /// <summary>
+    /// A cache is what the reader SEES, never what the app CONCLUDES. #728's "no longer listed" mark needs a
+    /// fetch that succeeded and was complete; seeding from a stored listing must mark nothing, or a model the
+    /// provider still offers gets reported as retired on the strength of a file.
+    /// </summary>
+    [Fact]
+    public void Seeding_from_the_cache_marks_no_model_as_missing()
+    {
+        var listings = new FakeListings();
+        listings.Entries["mine"] = new[] { new AiCatalogModel("a", "A") };
+
+        var (vm, service) = Make(listings: listings);
+        service.Add("mine", Draft(
+            new AiModelEntry("a", "A"),
+            new AiModelEntry("gone", "Gone")));   // absent from the cached listing
+
+        Assert.All(service.Connections.Single().Models, m => Assert.False(m.Missing));
+    }
+
+    [Fact]
+    public void A_successful_fetch_is_written_to_the_cache()
+    {
+        var listings = new FakeListings();
+        var (vm, service) = Make(
+            new FakeCatalog(new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B")),
+            listings: listings);
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Contains("mine", listings.Written);
+        Assert.Equal(2, listings.Entries["mine"].Count);
+    }
+
+    /// <summary>Removing a connection drops its listing, so a new one created under the same id starts
+    /// blank rather than inheriting an endpoint it never spoke to.</summary>
+    [Fact]
+    public void Removing_a_connection_drops_its_cached_listing()
+    {
+        var listings = new FakeListings();
+        listings.Entries["mine"] = new[] { new AiCatalogModel("a", "A") };
+        listings.Entries["other"] = new[] { new AiCatalogModel("b", "B") };
+
+        var (vm, service) = Make(listings: listings);
+        service.Add("mine", Draft());
+        service.Add("other", Draft());
+
+        service.Remove("mine");
+
+        Assert.Empty(listings.Get("mine"));
+        Assert.Single(listings.Get("other"));
+    }
+
+    /// <summary>
+    /// A failed refresh over a cached listing must say the list is the old one.
+    ///
+    /// <para>Otherwise the reader sees an error line above a full list of models and reasonably concludes the
+    /// failure did not matter — "this is what the provider lists" and "this is what it listed some time ago
+    /// and we could not reach it just now" render identically. That is #786's defect exactly, in a different
+    /// place: two states, one appearance. (raised in review)</para>
+    /// </summary>
+    [Fact]
+    public void A_failed_refresh_over_a_cached_listing_says_it_is_the_old_one()
+    {
+        var listings = new FakeListings();
+        listings.Entries["mine"] = new[] { new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B") };
+
+        var (vm, service) = Make(new FailingCatalog(), listings: listings);
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        Assert.Contains("listed last time", Group(vm).FetchProblem);
+        Assert.Equal(2, Group(vm).Visible.Count);   // and the cached list is still shown
+    }
+
+    /// <summary>With nothing cached, the provider's own reason is what the reader needs — there is no older
+    /// list to explain.</summary>
+    [Fact]
+    public void A_failed_fetch_with_no_cache_reports_the_providers_reason()
+    {
+        var (vm, service) = Make(new FailingCatalog(), listings: new FakeListings());
+        service.Add("mine", Draft());
+
+        Group(vm).IsExpanded = true;
+
+        Assert.DoesNotContain("listed last time", Group(vm).FetchProblem ?? "");
+    }
+
+    /// <summary>
+    /// A connection that has not loaded yet keeps its listing.
+    ///
+    /// <para>The first cut of this deleted everything absent from the current connection list, which is wrong
+    /// on every rebind where the list is still filling: adding one connection wiped the entry of every
+    /// connection not yet added back, and the very first rebind — before anything loads — wiped all of them.
+    /// A snapshot of what exists right now is not a statement that everything else is gone, which is the same
+    /// reasoning behind #728's marking rules.</para>
+    /// </summary>
+    [Fact]
+    public void A_connection_that_has_not_loaded_yet_keeps_its_listing()
+    {
+        var listings = new FakeListings();
+        listings.Entries["mine"] = new[] { new AiCatalogModel("a", "A") };
+        listings.Entries["later"] = new[] { new AiCatalogModel("b", "B") };
+
+        var (vm, service) = Make(listings: listings);
+        service.Add("mine", Draft());   // "later" is not here yet
+
+        Assert.Single(listings.Get("later"));
     }
 }
