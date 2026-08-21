@@ -431,17 +431,34 @@ public class AiModelPickerViewModelTests
         Assert.True(AllModels(picker).Single().IsUsable);
     }
 
-    /// <summary>A connection whose URL still has an unanswered placeholder cannot send anything, which is a
-    /// fact rather than a guess.</summary>
+    /// <summary>
+    /// A connection whose URL still has an unanswered placeholder cannot send anything, which is a fact
+    /// rather than a guess.
+    ///
+    /// <para><b>Built directly in settings rather than through the service</b>, because #767 taught the
+    /// service to refuse this state on every save path — which is why the picker's guard now looks
+    /// unreachable and is not. A hand-edited <c>settings.json</c> is a supported way in (the resolver's own
+    /// comments say so, and #784 is the reminder of what happens when we assume otherwise), and a file
+    /// written before #767 can hold exactly this. The service refusing to CREATE it does not mean nothing
+    /// can be READING it.</para>
+    /// </summary>
     [Fact]
     public void An_unfinished_connection_is_disabled_with_the_reason()
     {
-        var (picker, service, keys) = Make();
-        service.Add("azure-ish", new AiConnectionDraft(
-            "Half-built", ChatProviderKind.OpenAiCompatible,
-            "https://{resourceName}.openai.azure.com/openai/v1",
-            new[] { new AiModelEntry("a", "A") },
-            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        settings.Ai.Chat.Connections.Add(new CST.Avalonia.Models.AiConnectionRecord
+        {
+            Id = "azure-ish",
+            DisplayName = "Half-built",
+            BaseUrl = "https://{resourceName}.openai.azure.com/openai/v1",
+            Models = { new CST.Avalonia.Models.AiModelRecord { Id = "a", DisplayName = "A", Enabled = true } },
+        });
+        settings.Ai.Chat.ActiveConnectionId = "azure-ish";
+
+        var picker = new AiModelPickerViewModel(
+            new AiConnectionService(svc.Object, new FakeCredentialStore()));
 
         var model = AllModels(picker).Single();
         Assert.False(model.IsUsable);

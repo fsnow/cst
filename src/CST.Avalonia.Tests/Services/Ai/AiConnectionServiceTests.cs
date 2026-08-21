@@ -559,4 +559,83 @@ public class AiConnectionServiceTests
 
         Assert.True(result.Ok);
     }
+
+    // ---- an unfilled input is refused on every path (#767) ----------------------------------------------
+
+    private static AiConnectionDraft Templated(string? resourceName) =>
+        new("Azure OpenAI", ChatProviderKind.OpenAiCompatible,
+            "https://{resourceName}.openai.azure.com/openai/v1",
+            new List<AiModelEntry>(),
+            Array.Empty<AiHeader>(),
+            resourceName is null
+                ? new Dictionary<string, string>()
+                : new Dictionary<string, string> { ["resourceName"] = resourceName });
+
+    /// <summary>
+    /// The reported bug: clearing the resource name on the edit sheet saved cleanly, the sheet closed as
+    /// though it had worked, and what was stored was a base URL still reading
+    /// https://{resourceName}.openai.azure.com/openai/v1. The reader found out when a request went nowhere.
+    /// </summary>
+    [Fact]
+    public void An_edit_that_empties_a_templated_input_is_refused()
+    {
+        var (service, _, _) = MakeWithKeys();
+        service.Add("my-azure", Templated("my-resource"));
+
+        var result = service.Update("my-azure", Templated(""));
+
+        Assert.False(result.Ok);
+        Assert.Contains("resource", result.Problem, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            "https://my-resource.openai.azure.com/openai/v1",
+            service.Connections.Single().ResolvedBaseUrl);   // the good one is still there
+    }
+
+    /// <summary>Removing the answer entirely is the same state as blanking it.</summary>
+    [Fact]
+    public void An_edit_that_drops_a_templated_input_is_refused()
+    {
+        var (service, _, _) = MakeWithKeys();
+        service.Add("my-azure", Templated("my-resource"));
+
+        Assert.False(service.Update("my-azure", Templated(null)).Ok);
+    }
+
+    /// <summary>
+    /// Add was missing the check too, which the issue did not report — found by reading the three paths side
+    /// by side rather than by fixing only the one that was named. A custom endpoint typed with a brace in it
+    /// saved just as quietly.
+    /// </summary>
+    [Fact]
+    public void An_add_with_an_unfilled_placeholder_is_refused()
+    {
+        var (service, _, _) = MakeWithKeys();
+
+        var result = service.Add("my-azure", Templated(null));
+
+        Assert.False(result.Ok);
+        Assert.Empty(service.Connections);
+    }
+
+    [Fact]
+    public void A_filled_input_saves_on_both_paths()
+    {
+        var (service, _, _) = MakeWithKeys();
+
+        Assert.True(service.Add("my-azure", Templated("first")).Ok);
+        Assert.True(service.Update("my-azure", Templated("second")).Ok);
+        Assert.Equal(
+            "https://second.openai.azure.com/openai/v1",
+            service.Connections.Single().ResolvedBaseUrl);
+    }
+
+    /// <summary>A base URL with no placeholders is unaffected — most connections are this.</summary>
+    [Fact]
+    public void A_plain_base_url_is_untouched_by_the_check()
+    {
+        var (service, _, _) = MakeWithKeys();
+
+        Assert.True(service.Add("mine", Draft()).Ok);
+        Assert.True(service.Update("mine", Draft("Renamed")).Ok);
+    }
 }
