@@ -220,6 +220,7 @@ namespace CST.Avalonia.ViewModels
             DisplayName = model.DisplayName;
             ProviderName = connection.DisplayName;
             IsCurrent = isCurrent;
+            Missing = model.Missing;
             Unusable = ReasonItCannotBeUsed(connection);
 
             // Only what the provider actually said. A model that published no context length gets no context
@@ -248,6 +249,19 @@ namespace CST.Avalonia.ViewModels
 
         public bool IsUsable => Unusable.Length == 0;
 
+        /// <summary>
+        /// The provider's listing no longer carries this model. (#728)
+        ///
+        /// <para><b>Marked, not disabled.</b> A listing is not authority over the reader's configuration, and
+        /// the mark is only ever set from a fetch that succeeded — so it is worth saying and not worth acting
+        /// on. Whether the request works is still the provider's answer to give.</para>
+        /// </summary>
+        public bool Missing { get; }
+
+        /// <summary>Shown only where nothing more serious is already in that space: a model on a connection
+        /// with no key stored has a reason it cannot be used at all, and that is the one to read.</summary>
+        public bool ShowMissingNote => Missing && IsUsable;
+
         /// <summary>The connection this model belongs to. Named on the hover card because with several
         /// endpoints configured, "Gemma 4" alone does not say whether it is the local one.</summary>
         public string ProviderName { get; }
@@ -273,6 +287,18 @@ namespace CST.Avalonia.ViewModels
                 new("Model", model.DisplayName),
                 new("Provider", connection.DisplayName),
             };
+
+            // What the provider published about a model it no longer lists describes nothing it offers. Left
+            // in, the card would confidently state a context window and a reasoning flag for a model that has
+            // been retired, in the same shape it describes real ones - a worse failure than the silence that
+            // preceded the cache. So the card says the one thing that is still true. (#728)
+            if (model.Missing)
+            {
+                facts.Add(new AiPickerFact("Status", $"not in {connection.DisplayName}'s model list"));
+                if (!string.Equals(model.Id, model.DisplayName, StringComparison.Ordinal))
+                    facts.Add(new AiPickerFact("Id", model.Id));
+                return facts;
+            }
 
             if (model.Inputs is { Length: > 0 } inputs) facts.Add(new AiPickerFact("Inputs", inputs));
 

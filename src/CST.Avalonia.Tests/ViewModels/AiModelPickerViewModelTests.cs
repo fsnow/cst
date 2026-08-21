@@ -46,6 +46,66 @@ public class AiModelPickerViewModelTests
     private static IEnumerable<AiPickerModelViewModel> AllModels(AiModelPickerViewModel picker) =>
         picker.Groups.SelectMany(g => g.Models);
 
+    // ---- a model the provider dropped (#728) -------------------------------------------------------------
+
+    /// <summary>
+    /// A model the provider no longer lists is marked in the picker, and still pickable.
+    ///
+    /// <para>A listing is not authority over the reader's configuration, and the mark is only ever set from a
+    /// fetch that succeeded — so it is worth saying and not worth acting on. Whether the request works is
+    /// still the provider's answer to give.</para>
+    /// </summary>
+    [Fact]
+    public void A_model_the_provider_dropped_is_marked_and_still_pickable()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine", new AiModelEntry("retired", "Retired", Missing: true)));
+
+        var model = AllModels(picker).Single();
+
+        Assert.True(model.ShowMissingNote);
+        Assert.True(model.IsUsable);
+    }
+
+    /// <summary>
+    /// Its hover card stops describing it.
+    ///
+    /// <para>The published facts were cached (#726) so the card could show them without a fetch. Left in for
+    /// a retired model, the app would confidently state a context window and a reasoning flag for something
+    /// that no longer exists, in the same shape it describes real models — a worse failure than the silence
+    /// the cache replaced. The card says the one thing still true.</para>
+    /// </summary>
+    [Fact]
+    public void A_dropped_models_card_says_it_is_gone_rather_than_describing_it()
+    {
+        var (picker, service, _) = Make();
+        service.Add("mine", Draft("Mine", new AiModelEntry(
+            "retired", "Retired", true, ContextLength: 128_000, SupportsReasoning: true, Inputs: "text",
+            Missing: true)));
+
+        var facts = AllModels(picker).Single().Facts;
+
+        Assert.Contains(facts, f => f.Label == "Status" && f.Value.Contains("Mine"));
+        Assert.DoesNotContain(facts, f => f.Label is "Context" or "Reasoning" or "Inputs");
+    }
+
+    /// <summary>A reason it cannot be used at all outranks the mark: one message in that space, and the one
+    /// that stops the request is the one to read.</summary>
+    [Fact]
+    public void A_reason_it_cannot_be_used_outranks_the_mark()
+    {
+        var (picker, service, _) = Make();
+        service.AddFromPreset("openrouter", new Dictionary<string, string>());
+        service.EnableModel("openrouter", "retired", "Retired", true);
+        service.MarkListing("openrouter", new[] { "something-else" });
+
+        var model = AllModels(picker).Single(m => m.ModelId == "retired");
+
+        Assert.False(model.IsUsable);          // no key stored
+        Assert.True(model.Missing);
+        Assert.False(model.ShowMissingNote);   // so the mark stands down
+    }
+
     // ---- what the list contains ------------------------------------------------------------------------
 
     /// <summary>

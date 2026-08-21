@@ -55,6 +55,18 @@ namespace CST.Avalonia.Services.Ai
         /// <summary>The model within <see cref="Active"/>, or null.</summary>
         string? ActiveModelId { get; }
 
+        /// <summary>
+        /// Records which of a connection's stored models the provider's listing still carries. (#728)
+        ///
+        /// <para>Call it <b>only</b> with the models of a fetch that succeeded. A failed fetch, or one from an
+        /// endpoint that publishes no listing, must not call this at all: there is nothing to conclude, and
+        /// concluding anyway would mark every model on a laptop whose runner is simply not started.</para>
+        ///
+        /// <para>An empty list is treated as no evidence rather than as total removal, and nothing is written
+        /// unless a mark actually changed.</para>
+        /// </summary>
+        AiConnectionResult MarkListing(string connectionId, IReadOnlyList<string> listedIds);
+
         /// <summary>Raised when the list, or any connection's state, changes. Rebind on this.</summary>
         event EventHandler? ConnectionsChanged;
 
@@ -328,6 +340,33 @@ namespace CST.Avalonia.Services.Ai
                 Dispatcher.UIThread.Post(() => handler(this, EventArgs.Empty));
         }
 
+        public AiConnectionResult MarkListing(string connectionId, IReadOnlyList<string> listedIds)
+        {
+            if (Find(connectionId) is not { } record)
+                return AiConnectionResult.Fail($"No connection called '{connectionId}'.");
+
+            // An empty listing is not a report that everything is gone. Endpoints answer 200 with an empty
+            // data[] for reasons that have nothing to do with the reader's models - a key without listing
+            // scope, a gateway with no upstream configured - and marking every stored model on that basis
+            // would be the loudest possible way to say nothing. (#728)
+            if (listedIds.Count == 0) return AiConnectionResult.Success(ToRuntime(record));
+
+            var listed = new HashSet<string>(listedIds, StringComparer.Ordinal);
+            var changed = false;
+
+            foreach (var model in record.Models)
+            {
+                var missing = !listed.Contains(model.Id);
+                if (missing == model.Missing) continue;
+                model.Missing = missing;
+                changed = true;
+            }
+
+            // Saving unconditionally would write settings.json and raise ConnectionsChanged every time the
+            // Models tab is opened, rebuilding a list the reader is looking at to say nothing new.
+            return changed ? Saved(record) : AiConnectionResult.Success(ToRuntime(record));
+        }
+
         public AiConnectionResult EnableModel(
             string connectionId, string modelId, string displayName, bool enabled,
             AiModelEntry? facts = null)
@@ -359,6 +398,10 @@ namespace CST.Avalonia.Services.Ai
                 model.ContextLength = facts.ContextLength;
                 model.SupportsReasoning = facts.SupportsReasoning;
                 model.Inputs = facts.Inputs;
+
+                // Facts exist because the listing carried this model, so it is by definition not missing from
+                // it. Clearing here as well as in MarkListing keeps the two from disagreeing. (#728)
+                model.Missing = false;
             }
 
             model.Enabled = enabled;
@@ -441,6 +484,7 @@ namespace CST.Avalonia.Services.Ai
                     ContextLength = m.ContextLength,
                     SupportsReasoning = m.SupportsReasoning,
                     Inputs = m.Inputs,
+                    Missing = m.Missing,
                 })
                 .ToList();
             record.Headers = new Dictionary<string, string>(draft.Headers);
@@ -456,7 +500,8 @@ namespace CST.Avalonia.Services.Ai
             r.BaseUrl,
             r.Models
                 .Select(m => new AiModelEntry(
-                    m.Id, m.DisplayName, m.Enabled, m.ContextLength, m.SupportsReasoning, m.Inputs))
+                    m.Id, m.DisplayName, m.Enabled, m.ContextLength, m.SupportsReasoning, m.Inputs,
+                    m.Missing))
                 .ToList(),
             new Dictionary<string, string>(r.Headers),
             new Dictionary<string, string>(r.Inputs),

@@ -178,6 +178,15 @@ namespace CST.Avalonia.Models
         /// <summary>What the model accepts, as the provider words it — "text", "text, image". Null when it
         /// said nothing.</summary>
         public string? Inputs { get; set; }
+
+        /// <summary>
+        /// Whether the provider's listing no longer carries this model. (#728)
+        ///
+        /// <para>Written only from a successful, non-empty fetch, and cleared by the next one that carries it
+        /// again. False for every model on an endpoint that publishes no listing — silence is not a
+        /// removal.</para>
+        /// </summary>
+        public bool Missing { get; set; }
     }
 
     /// <summary>Permissions for the loopback API server that exposes the corpus tools to agents (surface C).</summary>
