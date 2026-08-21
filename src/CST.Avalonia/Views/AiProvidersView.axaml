@@ -362,7 +362,7 @@
                                     Command="{Binding AddHeaderCommand}"
                                     HorizontalAlignment="Left"/>
                             <TextBlock Text="For endpoints that authenticate with something other than a bearer key — a gateway token, or a provider's own key header. Mark such a value Secret: it then goes to the system keychain, and only the header's name is written to the settings file."
-                                       Classes="SettingDescription" Margin="0,6,0,0"/>
+                                       Classes="SettingDescription" Margin="0,6,0,15"/>
                             <!-- Where there is nowhere to store a secret the checkbox is disabled, so the
                                  reader is told what that means rather than left to wonder why (#771). -->
                             <TextBlock Text="{Binding KeyUnavailable}" IsVisible="{Binding !CanStoreKeys}"
@@ -371,7 +371,7 @@
                             <TextBlock Text="Until then a header value is stored in the settings file as typed."
                                        IsVisible="{Binding !CanStoreKeys}"
                                        Classes="SettingDescription Caution" TextWrapping="Wrap" MaxWidth="480"
-                                       HorizontalAlignment="Left" Margin="0,0,0,15"/>
+                                       HorizontalAlignment="Left" Margin="0,0,0,0"/>
                         </StackPanel>
 
                         <!-- The key is asked for HERE, on the sheet that already knows whose it is. A single

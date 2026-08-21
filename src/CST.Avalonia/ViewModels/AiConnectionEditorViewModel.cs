@@ -211,6 +211,7 @@ namespace CST.Avalonia.ViewModels
                     // reader sees is an empty box and a "stored" note, the same shape as the API key.
                     Value = header.Value ?? "",
                     IsSecret = header.Secret,
+                    ArrivedSecret = header.Secret,
                     OriginalName = header.Name,
                     HasStoredSecret = header.Secret
                         && credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) is not null,
@@ -393,10 +394,25 @@ namespace CST.Avalonia.ViewModels
         /// row cannot be marked secret at all where there is nowhere to put one.</para>
         /// </summary>
         private AiHeaderRowViewModel? UnstoredSecretHeader => Headers.FirstOrDefault(
-            h => h.IsSecret && h.CanBeSecret
+            h => h.KeepsSecret
                  && !string.IsNullOrWhiteSpace(h.Name)
                  && string.IsNullOrWhiteSpace(h.Value)
                  && !h.HasStoredSecret);
+
+        /// <summary>
+        /// A row that arrived with a stored secret, has been unmarked, and has nothing typed in its box.
+        /// (#771, fable review)
+        ///
+        /// <para>Unmarking reads as declassifying — moving the value from the keychain into the settings file
+        /// — and for a row the reader just typed, it is. For a row with a <i>stored</i> secret it cannot be:
+        /// the value was never read back into the box, so there is nothing to move, and the save would delete
+        /// the credential and persist an empty header that both request paths then send blank. That is the
+        /// anonymous 401 this whole feature exists to remove, arriving by the door marked exit.</para>
+        /// </summary>
+        private AiHeaderRowViewModel? EmptiedSecretHeader => Headers.FirstOrDefault(
+            h => !h.IsSecret && h.ArrivedSecret
+                 && !string.IsNullOrWhiteSpace(h.Name)
+                 && string.IsNullOrWhiteSpace(h.Value));
 
         public string KeyHint => "Optional — leave it empty if this endpoint needs no key, or if you authenticate with a header below.";
 
@@ -466,8 +482,17 @@ namespace CST.Avalonia.ViewModels
 
             if (UnstoredSecretHeader is { } unstored)
             {
+                // Not "clear the mark to keep it in the settings file": the box is empty, so there is nothing
+                // to keep, and for a renamed row clearing the mark would abandon the stored value too.
                 Problem = $"The {unstored.Name.Trim()} header is marked secret but has no value. "
-                          + "Paste one, or clear the mark to keep it in the settings file.";
+                          + "Paste one, or remove the row.";
+                return;
+            }
+
+            if (EmptiedSecretHeader is { } emptied)
+            {
+                Problem = $"The {emptied.Name.Trim()} header's value is stored in the keychain and cannot be "
+                          + "read back. Type it in to move it into the settings file, or mark it secret again.";
                 return;
             }
 
@@ -545,16 +570,37 @@ namespace CST.Avalonia.ViewModels
         {
             if (_credentials is null) return;
 
+            // FIRST, carry a renamed row's secret to its new name. (#771, fable review)
+            //
+            // A stored secret is never read back into the box, and the box says so - "stored, type to
+            // replace". A reader renaming a header because the provider renamed it therefore leaves it empty,
+            // which is what the screen tells them to do. Without this the sweep below would delete the old
+            // name and the store loop would skip the row for having no typed value: the credential is gone,
+            // the save reports success, and every request afterwards is refused for a secret the reader has
+            // no way to recover except from the provider.
+            foreach (var row in Headers.Where(h => h.KeepsSecret && !string.IsNullOrWhiteSpace(h.Name)))
+            {
+                if (row.OriginalName is not { } was) continue;
+
+                var from = AiCredentialNames.Header(was);
+                var to = AiCredentialNames.Header(row.Name.Trim());
+                if (string.Equals(from, to, StringComparison.Ordinal)) continue;
+
+                if (_credentials.Get(connectionId, from) is { } carried)
+                    _credentials.Set(connectionId, to, carried);
+            }
+
             var keeping = Headers
-                .Where(h => h.IsSecret && h.CanBeSecret && !string.IsNullOrWhiteSpace(h.Name))
+                .Where(h => h.KeepsSecret && !string.IsNullOrWhiteSpace(h.Name))
                 .Select(h => AiCredentialNames.Header(h.Name.Trim()))
                 .ToHashSet(StringComparer.Ordinal);
 
             foreach (var gone in _secretHeadersAtOpen.Where(name => !keeping.Contains(name)))
                 _credentials.Delete(connectionId, gone);
 
+            // A typed value wins over anything carried above, so renaming and rotating in one edit does both.
             foreach (var row in Headers.Where(
-                         h => h.IsSecret && h.CanBeSecret
+                         h => h.KeepsSecret
                               && !string.IsNullOrWhiteSpace(h.Name)
                               && !string.IsNullOrWhiteSpace(h.Value)))
             {
@@ -625,10 +671,7 @@ namespace CST.Avalonia.ViewModels
                 .Where(h => !string.IsNullOrWhiteSpace(h.Name))
                 // A secret row's value is deliberately dropped here rather than carried: the draft is what
                 // reaches settings.json, and the secret goes to the credential store on its own path (#771).
-                .Select(h => new AiHeader(
-                    h.Name.Trim(),
-                    h.IsSecret && h.CanBeSecret ? null : h.Value.Trim(),
-                    h.IsSecret && h.CanBeSecret))
+                .Select(h => new AiHeader(h.Name.Trim(), h.Value.Trim(), h.KeepsSecret))
                 .ToList(),
             inputs,
             _authHeaderName,
@@ -795,6 +838,23 @@ namespace CST.Avalonia.ViewModels
         /// Renaming a secret header moves its credential, and without this the old one would be orphaned in
         /// the keychain where nothing can ever reach it.</summary>
         public string? OriginalName { get; init; }
+
+        /// <summary>
+        /// Whether this row was already marked secret when the sheet opened. (#771, fable review)
+        ///
+        /// <para><b>The mark is data, not a capability of the machine doing the editing.</b> Without this, a
+        /// row that arrived secret is persisted unmarked wherever <see cref="CanBeSecret"/> is false — a
+        /// Windows profile whose data folder is briefly unwritable, or the settings file opened on Linux. The
+        /// value box is empty, because a stored secret is never read back, so what gets written is a blank
+        /// plaintext header: the credential is orphaned beyond even the delete sweep's reach, and the
+        /// missing-secret refusal can no longer fire because there is no longer a mark to fire on. The reader
+        /// renamed a connection and silently lost their gateway token.</para>
+        /// </summary>
+        public bool ArrivedSecret { get; init; }
+
+        /// <summary>Whether this row's mark survives a save here — either the store can take it, or it came
+        /// with one already and this machine has no business dropping it.</summary>
+        public bool KeepsSecret => IsSecret && (CanBeSecret || ArrivedSecret);
 
         public bool ShowStoredNote => IsSecret && HasStoredSecret;
 

@@ -1054,11 +1054,140 @@ public class AiConnectionEditorViewModelTests
         var edit = h.Existing("gw");
         var row = edit.Headers.Single();
         row.Name = "x-gateway-token";
-        row.Value = "cf-token-abc";
+        // Deliberately NOT retyping the value. The box is empty on every edit and says "stored - type to
+        // replace", so leaving it is what the screen tells the reader to do. Retyping here is what hid this:
+        // it turns the test into delete-plus-fresh-store and pins nothing about the rename. (fable review)
         Save(edit);
 
         Assert.Null(h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
         Assert.Equal("cf-token-abc", h.Keys.Get("gw", AiCredentialNames.Header("x-gateway-token")));
+    }
+
+    /// <summary>Renaming and rotating in one edit does both: a typed value wins over the carried one.</summary>
+    [Fact]
+    public void Renaming_a_secret_header_and_retyping_it_stores_the_new_value_under_the_new_name()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var edit = h.Existing("gw");
+        var row = edit.Headers.Single();
+        row.Name = "x-gateway-token";
+        row.Value = "cf-token-rotated";
+        Save(edit);
+
+        Assert.Null(h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+        Assert.Equal("cf-token-rotated", h.Keys.Get("gw", AiCredentialNames.Header("x-gateway-token")));
+    }
+
+    /// <summary>
+    /// Unmarking reads as declassifying — moving the value out of the keychain into the settings file — and
+    /// for a row the reader just typed, it is. For one with a STORED secret it cannot be: the value was never
+    /// read back, so there is nothing to move, and the save would delete the credential and persist an empty
+    /// header that both request paths then send blank. (fable review)
+    /// </summary>
+    [Fact]
+    public void Unmarking_a_stored_secret_with_an_empty_box_is_refused_rather_than_destructive()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var edit = h.Existing("gw");
+        edit.Headers.Single().IsSecret = false;
+        Save(edit);
+
+        Assert.Contains("cf-aig-authorization", edit.Problem);
+        Assert.Equal("cf-token-abc", h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+        Assert.True(h.Service.Connections.Single().Headers.Single().Secret);
+    }
+
+    /// <summary>
+    /// The mark is data, not a capability of the machine doing the editing. A Windows profile whose data
+    /// folder is briefly unwritable — the state the store's own Unavailable message describes — must not turn
+    /// a stored-secret header into a blank plaintext one, which would orphan the credential beyond even the
+    /// delete sweep and remove the mark the missing-secret refusal fires on. (fable review)
+    /// </summary>
+    [Fact]
+    public void An_edit_where_no_store_is_available_keeps_a_secret_header_marked()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        h.Keys.Available = false;
+
+        var edit = h.Existing("gw");
+        edit.DisplayName = "Renamed";
+        Save(edit);
+
+        var stored = h.Service.Connections.Single().Headers.Single();
+        Assert.True(stored.Secret);
+        Assert.Null(stored.Value);
+    }
+
+    /// <summary>
+    /// A duplicate name was unrepresentable while headers were a dictionary and is not any more. Both request
+    /// paths project back through a dictionary, so an unrefused duplicate reaches the reader as "Something
+    /// went wrong running that request" and "An item with the same key has already been added" — two dead ends
+    /// naming nothing, persisted across sessions. The natural way in: converting a plaintext header to a
+    /// secret one by adding a new row instead of ticking the box, and forgetting the old row. (fable review)
+    /// </summary>
+    [Fact]
+    public void Two_headers_with_the_same_name_are_refused()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+        vm.Id = "gw";
+        vm.BaseUrl = "https://gateway.example/v1";
+        Header(vm, "cf-aig-authorization", "plaintext", secret: false);
+        Header(vm, "cf-aig-authorization", "cf-token-abc", secret: true);
+
+        Save(vm);
+
+        Assert.Contains("cf-aig-authorization", vm.Problem);
+        Assert.Empty(h.Service.Connections);
+    }
+
+    /// <summary>Case-insensitively, because HTTP header names are.</summary>
+    [Fact]
+    public void Two_headers_differing_only_in_case_are_refused()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+        vm.Id = "gw";
+        vm.BaseUrl = "https://gateway.example/v1";
+        Header(vm, "X-Token", "a", secret: false);
+        Header(vm, "x-token", "b", secret: false);
+
+        Save(vm);
+
+        Assert.Contains("token", vm.Problem, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(h.Service.Connections);
+    }
+
+    /// <summary>
+    /// The invariant has to survive a <c>with</c>, not only the constructor. As a positional record the
+    /// generated init accessors let <c>header with { Secret = true }</c> produce a secret carrying a value —
+    /// the state the type's comment said could not exist. Get-only properties make that not compile; this
+    /// pins the construction half. (fable review)
+    /// </summary>
+    [Fact]
+    public void A_header_marked_secret_cannot_carry_a_value_at_all()
+    {
+        var header = new AiHeader("cf-aig-authorization", "cf-token-abc", Secret: true);
+
+        Assert.Null(header.Value);
     }
 
     /// <summary>
@@ -1084,19 +1213,6 @@ public class AiConnectionEditorViewModelTests
         var stored = h.Service.Connections.Single().Headers.Single();
         Assert.False(stored.Secret);
         Assert.Equal("cf-token-abc", stored.Value);
-    }
-
-    /// <summary>
-    /// The type refuses the state rather than each caller remembering to. Found by mutation: the sheet's own
-    /// drop of the value can be deleted with the whole suite still green, because the service drops it again
-    /// on the way to settings.json — two guards each relying on the other. (fable review method)
-    /// </summary>
-    [Fact]
-    public void A_header_marked_secret_cannot_carry_a_value_at_all()
-    {
-        var header = new AiHeader("cf-aig-authorization", "cf-token-abc", Secret: true);
-
-        Assert.Null(header.Value);
     }
 
     /// <summary>The mask is what stops a token standing on screen in a screenshot or over a shoulder; it is

@@ -147,6 +147,14 @@ namespace CST.Avalonia.Services.Ai
             // is the #711 complaint arriving from a third direction. Refused in BOTH places or not at all -
             // a listing that loads while the chat refuses is the surface split #673 exists to prevent, just
             // pointing the other way. (#771)
+            var duplicate = connection.Headers
+                .Where(h => !string.IsNullOrWhiteSpace(h.Name))
+                .GroupBy(h => h.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(g => g.Count() > 1);
+            if (duplicate is not null)
+                return AiCatalogResult.Fail(
+                    $"This connection has two {duplicate.Key} headers. Remove one under Settings \u2192 AI.");
+
             var missingSecrets = connection.Headers
                 .Where(h => h.Secret
                             && string.IsNullOrEmpty(_credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name))))
@@ -256,11 +264,11 @@ namespace CST.Avalonia.Services.Ai
             // Same rule as the chat path, for the same reason the summary above gives: the two surfaces send
             // the same credentials, so a secret header must resolve identically here or a provider's model
             // list would load while its answers 401. A secret is a literal, never a template. (#771)
-            var headers = connection.Headers.ToDictionary(
-                h => h.Name,
-                h => h.Secret
-                    ? _credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name)) ?? string.Empty
-                    : AiTemplate.Expand(h.Value ?? string.Empty, connection.Inputs));
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var header in connection.Headers)
+                headers[header.Name] = header.Secret
+                    ? _credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) ?? string.Empty
+                    : AiTemplate.Expand(header.Value ?? string.Empty, connection.Inputs);
 
             if (connection.Kind == ChatProviderKind.Anthropic)
             {

@@ -217,6 +217,7 @@ namespace CST.Avalonia.Services.Ai
             var problem = ValidateId(id, existingAllowed: false);
             if (problem is not null) return AiConnectionResult.Fail(problem);
 
+            if (DuplicateHeader(draft) is { } duplicate) return AiConnectionResult.Fail(duplicate);
             if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
 
             var record = new AiConnectionRecord { Id = id };
@@ -267,6 +268,7 @@ namespace CST.Avalonia.Services.Ai
         {
             if (Find(id) is not { } record) return AiConnectionResult.Fail($"No connection called '{id}'.");
 
+            if (DuplicateHeader(draft) is { } duplicate) return AiConnectionResult.Fail(duplicate);
             if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
 
             Apply(record, draft);
@@ -285,6 +287,34 @@ namespace CST.Avalonia.Services.Ai
         /// <para>Checked here rather than in the sheet because this is the seam every write goes through, and
         /// <c>settings.json</c> is hand-edited.</para>
         /// </summary>
+        /// <summary>
+        /// Two header rows with the same name, or null when there are none. (#771, fable review)
+        ///
+        /// <para><b>A regression the shape change introduced.</b> While headers were a
+        /// <c>Dictionary&lt;string, string&gt;</c> a duplicate was unrepresentable; a list stores one happily,
+        /// and both request paths project back through <c>ToDictionary</c>, which throws. The reader gets
+        /// "Something went wrong running that request" from the chat and "An item with the same key has
+        /// already been added" from the Models tab — two dead ends naming nothing, persisted across sessions,
+        /// with no screen pointing at the row that caused it.</para>
+        ///
+        /// <para>The natural way in is not exotic: converting a plaintext header to a secret one by adding a
+        /// new row rather than ticking the box on the old one, and forgetting to delete the old row.</para>
+        ///
+        /// <para>Compared case-insensitively because HTTP header names are. HTTP does permit a repeated
+        /// header, so this refuses something the protocol allows — deliberately: the previous shape refused it
+        /// too, nothing in the app can express what a repeat would mean, and a refusal naming the header beats
+        /// an exception naming nothing.</para>
+        /// </summary>
+        private static string? DuplicateHeader(AiConnectionDraft draft)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var header in draft.Headers.Where(h => !string.IsNullOrWhiteSpace(h.Name)))
+                if (!seen.Add(header.Name.Trim()))
+                    return $"There are two {header.Name.Trim()} headers. Remove one.";
+
+            return null;
+        }
+
         private static string? CollidingSecretHeader(AiConnectionDraft draft)
         {
             var seen = new Dictionary<string, string>(StringComparer.Ordinal);

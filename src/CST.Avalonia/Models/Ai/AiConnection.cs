@@ -86,18 +86,37 @@ namespace CST.Avalonia.Models.Ai
     /// record is handed to the UI. Keeping it null here is what stops a secret reaching a screen, a log or a
     /// settings file by simply being carried along — the request path fetches it at the moment it sends.</param>
     /// <param name="Secret">Whether the value is a credential rather than a routing hint.</param>
-    public sealed record AiHeader(string Name, string? Value, bool Secret = false)
+    public sealed record AiHeader
     {
         /// <summary>
-        /// Null whenever <see cref="Secret"/>, enforced here rather than trusted from each caller.
+        /// A secret header carries a name and a mark, never a value — normalised here rather than trusted from
+        /// each caller.
         ///
-        /// <para>Two places already drop a secret's value on the way past — the sheet building this record and
-        /// the service writing the settings record — and a mutation test showed the first of them can be
-        /// removed with every test still green, because the second catches it. Two guards that each believe
-        /// the other is the belt is how a leak eventually gets through. Here the state simply cannot be
-        /// constructed: a secret header carries a name and a mark, never a value. (#771)</para>
+        /// <para>Two places already drop a secret's value on the way past: the sheet building this record and
+        /// the service writing the settings record. A mutation showed the first can be deleted with every test
+        /// still green, because the second catches it — two guards each believing the other is the belt, which
+        /// is how a leak eventually gets through.</para>
+        ///
+        /// <para><b>Deliberately not a positional record.</b> As one, the generated <c>init</c> accessors made
+        /// <c>header with { Secret = true }</c> produce a secret carrying a value: the copy constructor copies
+        /// the backing fields and re-runs the initialiser only for members the <c>with</c> names. So the
+        /// invariant held at construction and nowhere else, while the comment claimed otherwise. Get-only
+        /// properties make <c>with</c> refuse to compile against any of them. (#771, fable review)</para>
         /// </summary>
-        public string? Value { get; init; } = Secret ? null : Value;
+        public AiHeader(string Name, string? Value, bool Secret = false)
+        {
+            this.Name = Name;
+            this.Secret = Secret;
+            this.Value = Secret ? null : Value;
+        }
+
+        public string Name { get; }
+
+        /// <summary>Null whenever <see cref="Secret"/> — the value is in the credential store, and the request
+        /// path fetches it at the moment it sends.</summary>
+        public string? Value { get; }
+
+        public bool Secret { get; }
     }
 
     /// <summary>

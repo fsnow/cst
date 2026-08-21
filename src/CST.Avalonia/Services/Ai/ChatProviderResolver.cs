@@ -213,6 +213,21 @@ public sealed class ChatProviderResolver : IChatProviderResolver
             return null;
         }
 
+        // Two headers with the same name. Refused at the service on every write path, so reaching here means
+        // a hand-edited settings.json - which is a supported way in, and used to be impossible to get wrong
+        // while headers were a dictionary. Named here rather than left to the projection below, which would
+        // otherwise surface as "An item with the same key has already been added" through a generic catch.
+        // (#771, fable review)
+        var duplicate = connection.Headers
+            .Where(h => !string.IsNullOrWhiteSpace(h.Name))
+            .GroupBy(h => h.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            problem = $"This connection has two {duplicate.Key} headers. Remove one under Settings \u2192 AI.";
+            return null;
+        }
+
         // A connection whose URL still contains an unfilled {placeholder} - Azure without its resource name -
         // must be refused HERE. Sent anyway it fails as a DNS error naming nothing, which tells the reader
         // neither what is wrong nor where to fix it. (#689)
@@ -356,10 +371,17 @@ public sealed class ChatProviderResolver : IChatProviderResolver
     /// <para>A secret with nothing stored yields an empty string, which the caller treats as an unfinished
     /// credential rather than sending a blank header — see the guard at the call site.</para>
     /// </summary>
-    private IReadOnlyDictionary<string, string> ExpandHeaders(AiConnectionRecord connection) =>
-        connection.Headers.ToDictionary(
-            h => h.Name,
-            h => h.Secret
-                ? _credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name)) ?? string.Empty
-                : CST.Avalonia.Models.Ai.AiTemplate.Expand(h.Value ?? string.Empty, connection.Inputs));
+    private IReadOnlyDictionary<string, string> ExpandHeaders(AiConnectionRecord connection)
+    {
+        // Indexer assignment rather than ToDictionary: a duplicate name is refused before this runs, so this
+        // cannot be reached with one - and if a later edit moves the guard, the reader should get a wrong
+        // header rather than an exception surfacing as "Something went wrong running that request".
+        var headers = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var header in connection.Headers)
+            headers[header.Name] = header.Secret
+                ? _credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) ?? string.Empty
+                : CST.Avalonia.Models.Ai.AiTemplate.Expand(header.Value ?? string.Empty, connection.Inputs);
+
+        return headers;
+    }
 }
