@@ -148,6 +148,7 @@ namespace CST.Avalonia.Models
         /// Extra request headers. A value that IS a credential is marked secret and kept in the OS credential
         /// store rather than here. (#771)
         /// </summary>
+        [System.Text.Json.Serialization.JsonConverter(typeof(AiHeaderRecordListConverter))]
         public List<AiHeaderRecord> Headers { get; set; } = new();
 
         /// <summary>Answers to the preset's prompts — resource name, account id, region — substituted into
