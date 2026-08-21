@@ -298,6 +298,9 @@ answer about three paragraphs. Three fences:
    *not* let the model improvise from training data, which is exactly the invented-citation hazard.
 4. **A trimmed passage gets a visible "partial passage" badge**, driven by `BudgetReport`. A *translation*
    labelled as of a passage that was silently truncated is a fidelity failure specific to this corpus.
+   *Implemented 2026-08-21 (#672).* Until then the badge could not fire at all: the bundler wrote
+   `BundlePartState.Included` for every passage on every path, so the signal it reads was never raised. It now
+   fires when a selection was longer than the cap and was cut — the only case that currently trims one.
 
 > **Fence 4, and how it was finally driveable — 2026-08-11 (#580 → #602).** #580 could not implement this. The
 > obvious signal, `PassageResult.NextCursor`, is non-null whenever the window ends before the end of the *book
@@ -602,12 +605,28 @@ the requirement had not worked. The mistranslation was not fixable by prompting 
 
 **A live end-to-end run found a scope bug the unit tests could not** — filed as **#602**. A Translate turn on
 Dhp 21 returned a good translation of roughly *thirty* verses, spanning into two later chapters, beside a
-citation reading "paragraph 21". The window is budgeted in **characters** and is structurally blind: 2,400
+citation reading "paragraph 21". The window was budgeted in **characters** and was structurally blind: 2,400
 characters of prose is a passage, but a Dhammapada verse is ~80 characters. `WindowMayExtendPastReference` fired
 and #582 surfaced its notice, which is true and reads like a rounding caveat rather than a warning that the
 answer covers twenty-nine paragraphs nobody asked about. §6 names truthful output over a *narrower* scope than
 assumed as the characteristic failure; this is that failure mirrored, and the app-rendered citation makes it
 worse rather than better. Fixing it also unblocks §6's fence 4, since the missing capability is the same one.
+
+**2026-08-21 (#672, the budget that was never derived from anything)** — the five per-task character budgets
+are gone. Expansion is **two sentences either side of the selection**, bounded as before by the enclosing
+`<div>`; a character figure survives only where there is no selection to count from. Characters were the wrong
+unit for exactly the reason #602 records above — verse and prose priced identically — and the numbers
+themselves had no derivation anywhere.
+
+Two things were measured rather than argued. Sending the whole enclosing section was the obvious alternative
+and the corpus rules it out: the 968 innermost `<div>` sections in the 78 books carrying div markup have a
+median rendered length of 12,224 characters and a p75 of 30,967, so the section is the right *bound* and a poor
+*target*. And the walk's scan cap comes from the corpus's own sentences — of 1,038,209 danda-delimited
+sentences the median is 56 characters and 30 (0.003%) exceed 2,000.
+
+A selection is also capped for the first time, so a select-all cannot send a whole book, and the cut is
+reported rather than silent — which is what finally makes fence 4's badge fire, having been unreachable since
+it was specified.
 
 **2026-08-11 (#602, the window's real extent)** — the passage reader now reports the paragraph in effect where
 the window **ended**, not only where it began. Three consequences: `normalizedReference` names a range
