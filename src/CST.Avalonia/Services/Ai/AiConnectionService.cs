@@ -219,6 +219,7 @@ namespace CST.Avalonia.Services.Ai
 
             if (DuplicateHeader(draft) is { } duplicate) return AiConnectionResult.Fail(duplicate);
             if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
+            if (UnfilledInput(id, draft) is { } unfilled) return AiConnectionResult.Fail(unfilled);
 
             var record = new AiConnectionRecord { Id = id };
             Apply(record, draft);
@@ -270,6 +271,7 @@ namespace CST.Avalonia.Services.Ai
 
             if (DuplicateHeader(draft) is { } duplicate) return AiConnectionResult.Fail(duplicate);
             if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
+            if (UnfilledInput(id, draft) is { } unfilled) return AiConnectionResult.Fail(unfilled);
 
             Apply(record, draft);
             return Saved(record);
@@ -305,6 +307,35 @@ namespace CST.Avalonia.Services.Ai
         /// too, nothing in the app can express what a repeat would mean, and a refusal naming the header beats
         /// an exception naming nothing.</para>
         /// </summary>
+        /// <summary>
+        /// A base URL still carrying a {placeholder} nothing fills, or null when it is complete. (#767)
+        ///
+        /// <para><b>The add-from-preset path has always refused this and the two draft paths never did.</b>
+        /// So an Azure connection whose resource name is cleared on the edit sheet saved cleanly, the sheet
+        /// closed as though it had worked, and what was stored was a base URL still reading
+        /// <c>https://{resourceName}.openai.azure.com/openai/v1</c>. The reader found out when a request went
+        /// nowhere. Reachable in one action: open Azure from the Providers tab, clear the box, press Save.</para>
+        ///
+        /// <para><b>Add was missing it too</b>, which the issue did not report — found by reading the three
+        /// paths side by side rather than by fixing the one that was named. A custom endpoint typed with a
+        /// brace in it saved just as quietly.</para>
+        ///
+        /// <para>Blank counts as unfilled, exactly as it does on the preset path: expanding an empty answer
+        /// leaves no placeholder behind, so a check that only looked for surviving braces would pass a URL
+        /// with a hole in it.</para>
+        /// </summary>
+        private string? UnfilledInput(string id, AiConnectionDraft draft)
+        {
+            var preset = Presets.FirstOrDefault(p => IdMatches(p.Id, id));
+
+            foreach (var key in AiTemplate.PlaceholdersIn(draft.BaseUrl))
+                if (!draft.Inputs.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+                    return $"{draft.DisplayName} needs "
+                           + $"{(preset is null ? key : PromptLabel(preset, key))} before it can be saved.";
+
+            return null;
+        }
+
         private static string? DuplicateHeader(AiConnectionDraft draft)
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
