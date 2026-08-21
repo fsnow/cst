@@ -36,7 +36,7 @@ Neither user needs to know which spine they are standing on.
 > **Scope note on B.** The row above describes B as a companion "over the open text **or corpus**". **B v1 is the
 > open-text half only** — it assembles context around the passage the reader has open and sends one request; the
 > corpus half needs the model to choose its own searches and arrives with a later tool-calling tier. See
-> [AI_SURFACE_B.md](AI_SURFACE_B.md) (epic #186 → #578–#587).
+> [AI_SURFACE_B.md](../in-progress/AI_SURFACE_B.md) (epic #186 → #578–#587).
 
 ## 3. The organizing principle
 
