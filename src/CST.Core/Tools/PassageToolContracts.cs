@@ -24,12 +24,25 @@ namespace CST.Tools
     /// to start reading there, or a <see cref="Cursor"/> from a previous result to page forward/backward. The
     /// window is bounded by <see cref="MaxChars"/> of rendered text and ends at a sentence boundary, so a
     /// long paragraph becomes page 1 of N rather than a wall.
+    ///
+    /// <para><b>With a <see cref="SelectionText"/> the rule is different</b> — see that parameter. <see
+    /// cref="MaxChars"/> does not bound that window; two sentences either side of the selection does, and the
+    /// selection itself is bounded only by an absolute cap. (#672)</para>
     /// </summary>
     /// <param name="Cursor">A page cursor from a prior <see cref="PassageResult"/>; overrides <see cref="Reference"/> when set.</param>
     /// <param name="SelectionText">
     /// Text the reader has selected, in Latin. When it can be found inside the referenced paragraph, the
-    /// window is built AROUND it rather than from the paragraph's start — half the budget behind, the rest
-    /// ahead, neither crossing a section boundary. (#649)
+    /// window is built AROUND it rather than from the paragraph's start: two sentences either side, neither
+    /// side crossing a section boundary. (#649, #672)
+    ///
+    /// <para>Sentences, not characters, since #672. A character budget bought a whole gāthā or a fraction of
+    /// one commentarial sentence depending only on where the reader happened to be, and was measured on source
+    /// text whose length varies by script. The <c>&lt;div&gt;</c> bound is what lets the count be small: text
+    /// beyond it belongs to the previous sutta and is not this passage's context at any budget.</para>
+    ///
+    /// <para>A selection longer than the absolute cap is CUT, and
+    /// <c>PassageResult.SelectionTruncated</c> says so — the one case where the subject of a request is
+    /// trimmed, because an entire book selected by accident is neither a passage nor a question.</para>
     ///
     /// <para>Set only by the in-app assistant, which is the only caller that has a selection. It exists on
     /// the request rather than as a separate method so that "which window" stays one decision made in one
@@ -79,5 +92,7 @@ namespace CST.Tools
         int NoteCount,
         IReadOnlyList<ApparatusNote> Notes,
         int? EndParagraphNumber = null,
-        string? EndParagraphBookCode = null);
+        string? EndParagraphBookCode = null,
+        /// <summary>The selection was longer than the cap and was cut. (#672)</summary>
+        bool SelectionTruncated = false);
 }

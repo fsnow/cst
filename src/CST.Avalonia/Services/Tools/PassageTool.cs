@@ -152,7 +152,8 @@ namespace CST.Avalonia.Services.Tools
                 NoteCount: w.NoteCount,
                 Notes: w.Notes,
                 EndParagraphNumber: w.EndParagraphNumber,
-                EndParagraphBookCode: w.EndParagraphBookCode);
+                EndParagraphBookCode: w.EndParagraphBookCode,
+                SelectionTruncated: w.SelectionTruncated);
         }
 
         private static int ResolveStart(NavigationReference? reference, BookMarkers markers) => reference switch

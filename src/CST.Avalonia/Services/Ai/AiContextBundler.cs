@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CST;
 using CST.Avalonia.Services.Tools;
+using CST.Search;
 using CST.Conversion;
 using CST.Tools;
 using Microsoft.Extensions.Logging;
@@ -53,17 +54,17 @@ public sealed class AiContextException : Exception
 /// </summary>
 public sealed class AiContextBundler : IAiContextBundler
 {
-    /// <summary>Rendered characters of passage per task. Translation earns a wider window than a quick gloss.</summary>
-    private static readonly Dictionary<AiTask, int> PassageBudget = new()
-    {
-        [AiTask.Explain] = 1600,
-        [AiTask.Translate] = 2400,
-        [AiTask.Grammar] = 900,
-        [AiTask.WordByWord] = 600,
-        // Generous, like Translate: a reader's own question is the one task whose scope the app cannot
-        // predict, so the passage it is answered from should be the fullest one on offer.
-        [AiTask.Ask] = 2400,
-    };
+    /// <summary>
+    /// The window when there is NO selection to build around — the reader asked about the passage they have
+    /// open rather than something they highlighted, so there is no anchor and no sentence to count from.
+    ///
+    /// <para>This is the one place a character figure survives #672. It is the old Translate/Ask budget,
+    /// carried over deliberately rather than re-guessed: with no selection there is nothing better to derive
+    /// it from, and its scope has shrunk from every request to this fallback alone. Where there IS a selection
+    /// the window is two sentences either side of it, bounded by the enclosing section — see
+    /// <see cref="TeiPassageReader.DefaultContextSentences"/>.</para>
+    /// </summary>
+    private const int NoSelectionPassageChars = 2400;
 
     /// <summary>How many distinct words get a lemma resolution — the grammatical presets only.</summary>
     private static readonly Dictionary<AiTask, int> LemmaBudget = new()
@@ -101,9 +102,6 @@ public sealed class AiContextBundler : IAiContextBundler
 
     public async Task<AiContextBundle> BuildAsync(AiContextRequest request, CancellationToken ct = default)
     {
-        if (!PassageBudget.TryGetValue(request.Task, out var budget))
-            throw new AiContextException($"No passage budget is defined for task '{request.Task}'.");
-
         // The same catalog guard the passage tool applies, reused rather than re-implemented so the two cannot
         // drift apart (#301 made that guard the defence against reading arbitrary files).
         if (!PassageTool.IsCatalogBook(request.BookId))
@@ -120,7 +118,9 @@ public sealed class AiContextBundler : IAiContextBundler
             new PassageRequest(
                 BookId: request.BookId,
                 Reference: request.Reference,
-                MaxChars: budget,
+                // A CAP, not a target. With a selection the window is two sentences either side of it,
+                // bounded by the section; this only bites on the no-selection fallback. (#672)
+                MaxChars: NoSelectionPassageChars,
                 OutputScript: Script.Latin,
                 IncludeFootnotes: false,
                 StructuredNotes: true,
@@ -140,10 +140,18 @@ public sealed class AiContextBundler : IAiContextBundler
                 $"({passage.NormalizedReference}).");
         }
 
+        // TrimmedForBudget, not Included, when the reader's selection was cut. This is what raises the
+        // partial-passage badge (AI_SURFACE_B.md §6) — and until #672 nothing ever wrote it, so the badge
+        // could not fire at all: the passage part was hardcoded Included on every path. An answer about part
+        // of a selection, captioned as being about the whole of it, is the one outcome this bundle exists to
+        // prevent. (#672, fable)
         parts.Add(new BundlePart(
             BundlePartNames.Passage,
-            BundlePartState.Included,
-            $"reading window of up to {budget} characters from {passage.NormalizedReference}"));
+            passage.SelectionTruncated ? BundlePartState.TrimmedForBudget : BundlePartState.Included,
+            passage.SelectionTruncated
+                ? $"reading window from {passage.NormalizedReference} \u2014 your selection was longer than "
+                  + $"{TeiPassageReader.MaxSelectionChars:N0} characters and was cut to fit"
+                : $"reading window from {passage.NormalizedReference}"));
 
         parts.Add(new BundlePart(
             BundlePartNames.Apparatus,
