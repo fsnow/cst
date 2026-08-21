@@ -159,5 +159,93 @@ namespace CST.Avalonia.Tests.ViewModels
             vm.LocalApiEnabled = true;
             Assert.True(raised);   // the REST toggle must re-notify the remote-control gate, not just the MCP one
         }
+
+        // ---- the connection tabs follow the assistant (#795) -------------------------------------------
+
+        /// <summary>
+        /// Providers and Models configure connections and model lists, and the assistant is their only
+        /// consumer — nothing in the local API or MCP surfaces resolves a provider. With it off they are two
+        /// tabs of settings for a feature that is not running.
+        /// </summary>
+        [Fact]
+        public void The_connection_tabs_are_shown_only_while_the_assistant_is_on()
+        {
+            var (vm, _) = Make();
+
+            vm.AiEnabled = true;
+            vm.ChatEnabled = true;
+            Assert.True(vm.ShowConnectionTabs);
+
+            vm.ChatEnabled = false;
+            Assert.False(vm.ShowConnectionTabs);
+        }
+
+        /// <summary>The master switch takes them too — everything under it is off when it is.</summary>
+        [Fact]
+        public void The_master_switch_hides_the_connection_tabs_as_well()
+        {
+            var (vm, _) = Make();
+            vm.AiEnabled = true;
+            vm.ChatEnabled = true;
+
+            vm.AiEnabled = false;
+
+            Assert.False(vm.ShowConnectionTabs);
+        }
+
+        /// <summary>
+        /// The selection cannot be left pointing at a tab that is no longer there: a reader on Models who
+        /// unticks the assistant would otherwise be looking at a blank pane with no tab header selected.
+        /// </summary>
+        [Fact]
+        public void Hiding_the_tabs_moves_the_selection_off_them()
+        {
+            var (vm, _) = Make();
+            vm.AiEnabled = true;
+            vm.ChatEnabled = true;
+            vm.SelectedTab = 2;              // Models
+
+            vm.ChatEnabled = false;
+
+            Assert.Equal(0, vm.SelectedTab);
+        }
+
+        /// <summary>
+        /// HIDDEN, never cleared. Every connection, model list and stored key survives the assistant being
+        /// switched off and comes back untouched — tidying up on the way past is how a settings file loses
+        /// work that took a reader an evening to build. (#784 is the fresh reminder.)
+        /// </summary>
+        [Fact]
+        public void Turning_the_assistant_off_preserves_the_providers_and_models()
+        {
+            var (vm, settings, keys) = MakeWithAssistant();
+
+            // A configured provider with a hand-built model list, which is the work at stake.
+            settings.Ai.Chat.Connections.Add(new CST.Avalonia.Models.AiConnectionRecord
+            {
+                Id = "groq",
+                DisplayName = "Groq",
+                BaseUrl = "https://api.groq.com/openai/v1",
+                Models =
+                {
+                    new CST.Avalonia.Models.AiModelRecord { Id = "openai/gpt-oss-120b", Enabled = true },
+                    new CST.Avalonia.Models.AiModelRecord { Id = "qwen/qwen3.6-27b", Enabled = true },
+                },
+            });
+            keys.Set("groq", CST.Avalonia.Services.Ai.AiCredentialNames.Primary, "gsk-test");
+
+            vm.AiEnabled = true;
+            vm.ChatEnabled = true;
+
+            vm.ChatEnabled = false;
+
+            var after = settings.Ai.Chat.Connections.Single();
+            Assert.Equal("groq", after.Id);
+            Assert.Equal(
+                new[] { "openai/gpt-oss-120b", "qwen/qwen3.6-27b" },
+                after.Models.Select(m => m.Id));
+            Assert.All(after.Models, m => Assert.True(m.Enabled));
+            Assert.Equal("gsk-test", keys.Get("groq", CST.Avalonia.Services.Ai.AiCredentialNames.Primary));
+        }
     }
 }

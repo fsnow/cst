@@ -1433,6 +1433,9 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
                 _settingsService.RequestSave();
                 // The two enable-gates below both depend on the master.
                 this.RaisePropertyChanged(nameof(SubPermissionsEnabled));
+                this.RaisePropertyChanged(nameof(ShowConnectionTabs));
+                // The selection cannot be left pointing at a tab that is no longer there.
+                if (!ShowConnectionTabs) SelectedTab = 0;
                 this.RaisePropertyChanged(nameof(RemoteControlEnabled));
                 this.RaisePropertyChanged(nameof(AssistantFieldsEnabled));
                 // The assistant hangs off the master switch too, so turning AI off takes its panel with it.
@@ -1566,6 +1569,8 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
                 _settingsService.Settings.Ai.Chat.Enabled = value;
                 _settingsService.RequestSave();
                 this.RaisePropertyChanged(nameof(AssistantFieldsEnabled));
+                this.RaisePropertyChanged(nameof(ShowConnectionTabs));
+                if (!ShowConnectionTabs) SelectedTab = 0;
                 RefreshReadiness();
                 // Ticking the box IS the gesture: the panel appears now rather than at the next launch, and
                 // unticking takes it away rather than leaving four buttons that decline every request. (#667)
@@ -1604,6 +1609,20 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         /// "Enable the assistant" unticked, and readiness still reporting on a feature that was off.
         /// </summary>
         public bool AssistantFieldsEnabled => AiEnabled && ChatEnabled;
+
+        /// <summary>
+        /// Whether the Providers and Models tabs are shown at all. (#795)
+        ///
+        /// <para>They configure connections and model lists, and the assistant is their only consumer —
+        /// nothing in the local API or MCP surfaces resolves a provider. So with the assistant off they are
+        /// two tabs of settings for a feature that is not running, and the reader has to work out that the
+        /// checkbox on the first tab is what makes them meaningful.</para>
+        ///
+        /// <para><b>Hidden, never cleared.</b> Every connection, model list and stored key stays exactly as it
+        /// was and comes back untouched when the assistant is switched on again. Tidying up on the way past is
+        /// how a settings file loses work that took a reader an evening to build.</para>
+        /// </summary>
+        public bool ShowConnectionTabs => AiEnabled && ChatEnabled;
 
         public string ReadinessText
         {
