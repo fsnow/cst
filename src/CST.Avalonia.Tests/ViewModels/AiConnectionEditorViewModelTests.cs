@@ -16,18 +16,36 @@ namespace CST.Avalonia.Tests.ViewModels;
 /// </summary>
 public class AiConnectionEditorViewModelTests
 {
+    /// <summary>A preset list a test can grow, which is what a models.dev refresh does. (#766)</summary>
+    private sealed class GrowablePresets : IAiPresetSource
+    {
+        public List<AiProviderPreset> Entries { get; } = AiPresetSource.SnapshotDefaults.ToList();
+        public IReadOnlyList<AiProviderPreset> Presets => Entries;
+        public AiPresetState State => AiPresetState.Ready;
+        public string? Problem => null;
+        public event EventHandler? PresetsChanged;
+        public Task EnsureLoadedAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public void Grow(AiProviderPreset preset)
+        {
+            Entries.Add(preset);
+            PresetsChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private sealed class Harness
     {
         public AiConnectionService Service { get; }
         public FakeCredentialStore Keys { get; } = new();
+        public Settings Settings { get; } = new();
+        public GrowablePresets Presets { get; } = new();
         public bool? Closed { get; private set; }
 
         public Harness()
         {
-            var settings = new Settings();
             var svc = new Mock<ISettingsService>();
-            svc.SetupGet(s => s.Settings).Returns(settings);
-            Service = new AiConnectionService(svc.Object, Keys);
+            svc.SetupGet(s => s.Settings).Returns(Settings);
+            Service = new AiConnectionService(svc.Object, Keys, Presets);
         }
 
         public void Close(bool saved) => Closed = saved;
@@ -1229,6 +1247,78 @@ public class AiConnectionEditorViewModelTests
         row.IsSecret = true;
 
         Assert.NotEqual('\0', row.ValueMask);
+    }
+
+    // ---- the origin is recorded, not guessed (#766) -----------------------------------------------------
+
+    /// <summary>
+    /// The reported bug. A custom endpoint whose slug the models.dev catalogue later grows into was
+    /// reclassified as that provider: the sheet narrowed to the key box, hiding the reader's own address,
+    /// protocol, models and headers, and told them the address "comes from the provider list" — which was
+    /// false. Since #733 the preset list is fetched and grows, so this needed no action by the reader at all.
+    /// </summary>
+    [Fact]
+    public void A_custom_connection_is_not_reclassified_when_the_catalogue_grows_into_its_id()
+    {
+        var h = new Harness();
+
+        // Added as a custom endpoint, so no origin is recorded.
+        var add = h.Custom();
+        add.Id = "deepseek-mine";
+        add.BaseUrl = "https://my-proxy.example/v1";
+        Save(add);
+
+        // Simulate the catalogue growing an entry with that exact id.
+        h.Presets.Grow(new AiProviderPreset(
+            "deepseek-mine", "DeepSeek Mine", ChatProviderKind.OpenAiCompatible,
+            "https://api.deepseek.com/v1",
+            new AiCredentialMethod[] { new AiCredentialMethod.Key() }));
+
+        var connection = h.Service.Connections.Single();
+
+        // Still a custom endpoint: the full form, not the narrowed key sheet.
+        Assert.Equal("Edit", AiConnectionEditorViewModel.EditAction(h.Service, connection));
+
+        var edit = h.Existing("deepseek-mine");
+        Assert.True(edit.ShowHeaders);                      // the custom-only section is present
+        Assert.Equal("https://my-proxy.example/v1", edit.BaseUrl);
+    }
+
+    /// <summary>A connection genuinely added from the provider list still gets the narrowed sheet.</summary>
+    [Fact]
+    public void A_preset_connection_still_knows_its_origin()
+    {
+        var h = new Harness();
+        var vm = h.Preset("deepseek");
+        vm.ApiKeyEntry = "sk-test";
+        Save(vm);
+
+        var connection = h.Service.Connections.Single();
+
+        Assert.Equal("deepseek", connection.PresetId);
+        Assert.Equal("Replace key", AiConnectionEditorViewModel.EditAction(h.Service, connection));
+    }
+
+    /// <summary>
+    /// A settings file written before the origin was recorded falls back to the id match, which is the right
+    /// answer for every connection such a file can hold — a custom one was refused any preset's id at the
+    /// time, and the only presets that could have existed are the ones that did.
+    /// </summary>
+    [Fact]
+    public void An_older_connection_with_no_recorded_origin_falls_back_to_the_id()
+    {
+        var h = new Harness();
+        h.Settings.Ai.Chat.Connections.Add(new CST.Avalonia.Models.AiConnectionRecord
+        {
+            Id = "deepseek",
+            DisplayName = "DeepSeek",
+            BaseUrl = "https://api.deepseek.com/v1",
+            PresetId = null,                       // written before #766
+        });
+
+        var connection = h.Service.Connections.Single();
+
+        Assert.Equal("Replace key", AiConnectionEditorViewModel.EditAction(h.Service, connection));
     }
 }
 

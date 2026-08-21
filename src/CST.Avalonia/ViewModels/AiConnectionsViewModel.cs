@@ -537,14 +537,32 @@ namespace CST.Avalonia.ViewModels
         }
 
         /// <summary>
-        /// The connection id, which is the provider id for a connection added from the catalogue — the editor
-        /// seeds it from the preset.
+        /// The provider this connection was added from, recorded at creation since #766.
         ///
-        /// <para>A reader who renames it, or adds a second connection to the same provider, gets the monogram
-        /// instead. The connection does not record which preset it came from, and guessing from a renamed id
-        /// would show one provider's mark on another's row — a wrong logo is worse than a letter.</para>
+        /// <para>This was the second guess of the same shape the id match was: the comment here used to
+        /// concede that "the connection does not record which preset it came from, and guessing from a renamed
+        /// id would show one provider's mark on another's row". It records it now, so the mark follows the
+        /// provider rather than the slug — a connection renamed by its reader keeps the right logo, and a
+        /// custom endpoint whose slug the catalogue later grew into does not acquire one.</para>
+        ///
+        /// <para>Falls back to the id for a settings file written before that, where it is the same answer for
+        /// every connection such a file can hold. A custom endpoint still gets its monogram.</para>
         /// </summary>
-        protected override string? ProviderId => _connection.Id;
+        protected override string? ProviderId => _connection.PresetId switch
+        {
+            // Added from the provider list, and we know which entry. The mark follows the provider, so a
+            // connection the reader renamed keeps it.
+            { Length: > 0 } preset => preset,
+
+            // Recorded as a custom endpoint. No provider mark, and no lookup attempted: we KNOW there is no
+            // provider behind it, so trying the id would be the guess this issue removes. The monogram is the
+            // right answer and it is the answer we can give without asking anything. (#766)
+            { } => null,
+
+            // Nothing recorded — a file older than the field. The id is the same answer it always was, and
+            // right for every connection such a file can hold.
+            null => _connection.Id,
+        };
 
         public string Id => _connection.Id;
 

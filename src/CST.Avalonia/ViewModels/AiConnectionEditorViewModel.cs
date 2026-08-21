@@ -86,11 +86,25 @@ namespace CST.Avalonia.ViewModels
         /// it. Not stored as <see cref="_preset"/> — that field decides which <i>fields</i> the sheet shows,
         /// and an edit must keep showing all of them.</para>
         /// </summary>
-        private static AiProviderPreset? OriginPreset(IAiConnectionService service, string? existingId) =>
-            existingId is null
-                ? null
-                : service.Presets.FirstOrDefault(
-                    p => string.Equals(p.Id, existingId, StringComparison.OrdinalIgnoreCase));
+        private static AiProviderPreset? OriginPreset(IAiConnectionService service, AiConnection? connection)
+        {
+            if (connection is null) return null;
+
+            // Recorded at creation since #766, and an EMPTY string is a recorded answer: this connection is
+            // a custom endpoint. Only null means nothing was recorded.
+            if (connection.PresetId is { } recorded)
+                return recorded.Length == 0
+                    ? null
+                    : service.Presets.FirstOrDefault(
+                        p => string.Equals(p.Id, recorded, StringComparison.OrdinalIgnoreCase));
+
+            // Null on a settings file written before that, where matching the id is still right: a custom
+            // connection was refused any preset's id, and the only presets that could have existed are the
+            // ones that did. What it is NOT right for is a custom endpoint whose slug the catalogue grew into
+            // afterwards - which is the bug, and which cannot happen to a connection created from here on.
+            return service.Presets.FirstOrDefault(
+                p => string.Equals(p.Id, connection.Id, StringComparison.OrdinalIgnoreCase));
+        }
 
         /// <summary>
         /// What the row's edit button should say, or null where it should not be there at all. (#691)
@@ -115,7 +129,7 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public static string? EditAction(IAiConnectionService service, AiConnection connection)
         {
-            var preset = OriginPreset(service, connection.Id);
+            var preset = OriginPreset(service, connection);
             if (preset is null || preset.Prompts?.Count > 0) return "Edit";
             return preset.RequiresKey ? "Replace key" : null;
         }
@@ -177,7 +191,7 @@ namespace CST.Avalonia.ViewModels
             IAiConnectionService service, IAiCredentialStore? credentials, AiConnection connection,
             Action<bool> close)
         {
-            var preset = OriginPreset(service, connection.Id);
+            var preset = OriginPreset(service, connection);
             var vm = new AiConnectionEditorViewModel(service, credentials, close, preset, connection.Id)
             {
                 _id = connection.Id,
