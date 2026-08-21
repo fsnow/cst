@@ -85,6 +85,32 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     /// </summary>
     private readonly IAiConnectionService? _connections;
 
+    /// <summary>
+    /// The reasoning effort to send, or null to send none. (#671)
+    ///
+    /// <para><b>Validated here rather than trusted from the setting</b>, because this is the last point before
+    /// the wire and the only one that knows which model the request is actually going to. A reader who chooses
+    /// "high" on a model that offers it and then switches to one that does not would otherwise send a field
+    /// that model never published — and an unsupported parameter can be a 400 rather than an ignored key. The
+    /// picker not offering it is presentation; this is the part that has to be right.</para>
+    ///
+    /// <para>Matched against what the provider published for THIS model, ordinally: the vocabularies differ
+    /// between providers and a value is only meaningful in the list it came from.</para>
+    /// </summary>
+    private string? ReasoningEffortFor(string model)
+    {
+        var chosen = _settings.Settings.Ai.Chat.ReasoningEffort;
+        if (string.IsNullOrWhiteSpace(chosen)) return null;
+        if (_connections?.Active is not { } connection) return null;
+
+        var entry = connection.Models.FirstOrDefault(
+            m => string.Equals(m.Id, model, StringComparison.Ordinal));
+
+        return entry?.ReasoningEfforts?.Any(v => string.Equals(v, chosen, StringComparison.Ordinal)) == true
+            ? chosen
+            : null;
+    }
+
     public void Stop()
     {
         CancellationTokenSource? running;
@@ -238,7 +264,8 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             provider.Model,
             prompt.MaxOutputTokens,
             prompt.System,
-            new[] { new ChatMessage(ChatRole.User, prompt.UserContent) });
+            new[] { new ChatMessage(ChatRole.User, prompt.UserContent) },
+            ReasoningEffortFor(provider.Model));
 
         var markers = new PaliQuoteFilter();
         int? inputTokens = null, outputTokens = null;

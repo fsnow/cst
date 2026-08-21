@@ -83,6 +83,8 @@
                     </TextBox.KeyBindings>
                 </TextBox>
 
+                <!-- Both chips on one line, wrapping rather than clipping: the assistant docks narrow. -->
+                <WrapPanel Orientation="Horizontal">
                 <!-- The per-turn model chip (#693). At the composer rather than in Settings: comparing two
                      models on the same passage is the task the assistant exists for, and it wants to be one
                      click from the answer on screen. Hidden until there is more than one model to choose
@@ -255,6 +257,75 @@
                         </Flyout>
                     </Button.Flyout>
                 </Button>
+
+                <!-- The per-turn effort chip (#671), beside the model chip and in the same visual language.
+                     Hidden unless the model in front of the reader published levels to choose between: a chip
+                     that is always there but empty for most models would imply the app knows something about
+                     a model it knows nothing about. -->
+                <Button x:Name="EffortChip"
+                        IsVisible="{Binding EffortPicker.HasChoices}"
+                        HorizontalAlignment="Left"
+                        Margin="6,0,0,0"
+                        Padding="8,3"
+                        CornerRadius="12"
+                        FontSize="11"
+                        Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <TextBlock Text="{Binding EffortPicker.CurrentLabel}" VerticalAlignment="Center"/>
+                        <TextBlock Text="⌄" FontSize="10" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <Button.Flyout>
+                        <Flyout Placement="Top" ShowMode="Standard">
+                            <StackPanel Width="240">
+                                <ItemsControl ItemsSource="{Binding EffortPicker.Choices}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AiEffortChoiceViewModel">
+                                            <Button Command="{Binding ChooseCommand}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    Padding="6,4">
+                                                <!-- Star column then the mark at the far edge, matching the
+                                                     model picker (#693). An Auto column would measure the
+                                                     label at infinite width and push the tick off the row. -->
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Text="{Binding Label}" FontSize="12"
+                                                                   Classes.current="{Binding IsCurrent}">
+                                                            <TextBlock.Styles>
+                                                                <Style Selector="TextBlock.current">
+                                                                    <Setter Property="Foreground"
+                                                                            Value="{DynamicResource SystemAccentColor}"/>
+                                                                </Style>
+                                                            </TextBlock.Styles>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding Hint}"
+                                                                   IsVisible="{Binding HasHint}"
+                                                                   FontSize="10" TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1" Text="✓" FontSize="11"
+                                                               IsVisible="{Binding IsCurrent}"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource SystemAccentColor}"/>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="Only the levels this model publishes. Provider default sends nothing, so the provider applies its own."
+                                           FontSize="10" TextWrapping="Wrap" Margin="6,6,6,2"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                </WrapPanel>
 
                 <WrapPanel Orientation="Horizontal">
                     <!-- First, and disabled until something is typed: the other four are complete without a

@@ -90,6 +90,11 @@ public class AiAssistantViewModel : ReactiveTool
         // key must change the standing notice, not wait to fail at send time.
         ModelPicker = new AiModelPickerViewModel(connections, RefreshReadiness);
 
+        // Beside the model chip rather than in Settings, and for the same reason (#671): effort is the lever
+        // that trades cost against depth on the turn about to be sent, and on a free tier it is the difference
+        // between a usable answer and a 504. It hides itself where the model published no levels.
+        EffortPicker = new AiEffortPickerViewModel(connections, settings);
+
         Id = "AiAssistantTool";
         Title = "Assistant";
         CanClose = false;
@@ -117,6 +122,8 @@ public class AiAssistantViewModel : ReactiveTool
 
     /// <summary>The per-turn model chip and its list. (#693)</summary>
     public AiModelPickerViewModel ModelPicker { get; }
+
+    public AiEffortPickerViewModel EffortPicker { get; }
 
     public ReactiveCommand<Unit, Unit> ExplainCommand { get; }
     public ReactiveCommand<Unit, Unit> TranslateCommand { get; }
