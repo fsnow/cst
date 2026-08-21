@@ -297,14 +297,15 @@ public sealed class AiContextBundler : IAiContextBundler
     }
 
     /// <summary>
-    /// A rough size for the budget report. <b>A heuristic, and knowingly a poor one for this corpus</b> — there
-    /// is no local tokenizer, and romanized Pāli with diacritics tokenizes considerably worse than English, so
-    /// treat it as an order of magnitude rather than a figure. Never build a hard limit on it.
+    /// The BUNDLE's own approximate size — the passage and the lemma entries, which is what a bundle contains.
+    ///
+    /// <para>Deliberately not what the assistant reports as "estimated context": that is the rendered prompt,
+    /// which also carries the system prompt, the preset's template and the reader's own question, and it is
+    /// estimated where those exist rather than here where they do not. Reporting this figure as the context
+    /// sent was one of the two things wrong with the estimate before #672; the ratio was the other.</para>
     /// </summary>
-    private static int ApproximateTokens(string passage, IReadOnlyList<LemmaEntry> lemmas)
-    {
-        var characters = passage.Length
-            + lemmas.Sum(l => l.Form.Length + l.Lemma.Length + (l.Gloss?.Length ?? 0));
-        return characters / 4;
-    }
+    private static int ApproximateTokens(string passage, IReadOnlyList<LemmaEntry> lemmas) =>
+        AiTokens.Estimate(
+            new[] { passage }.Concat(
+                lemmas.SelectMany(l => new[] { l.Form, l.Lemma, l.Gloss })));
 }
