@@ -357,7 +357,9 @@ namespace CST.Avalonia.Tests.Search
                 outputScript: Script.Devanagari, markers);
 
             Assert.Contains("hhh", window.Text);
-            Assert.Contains("aaa", window.Text);        // the budget is spent backwards instead
+            Assert.Contains("ggg", window.Text);        // two sentences of context behind it
+            Assert.Contains("fff", window.Text);
+            Assert.DoesNotContain("eee", window.Text);  // and only two
             Assert.DoesNotContain("zzz", window.Text);  // never forwards past the boundary
         }
 
@@ -382,12 +384,12 @@ namespace CST.Avalonia.Tests.Search
         }
 
         [Fact]
-        public void The_redirected_budget_reaches_text_that_half_a_budget_could_not()
+        public void A_selection_opening_a_section_gets_its_context_from_ahead()
         {
-            // The version of the test above that actually distinguishes redistribution from its absence. The
-            // first fixture's tail section was short enough that WalkForward's post-budget sentence-finish
-            // reached the asserted word anyway, so the assertion held with or without the fix it named — a
-            // test that was true for a reason unrelated to its own comment.
+            // There is nothing behind a selection that opens a section, and the previous sutta is not an
+            // answer. Under the character budget this was a redistribution question — the unspendable
+            // backward half went forward. Under sentence counts it is simpler: the backward walk finds no
+            // boundary inside the section and yields nothing, the forward walk still takes its two. (#672)
             const string longTail =
                 "<body><div id=\"b\" type=\"book\">" +
                 "<div id=\"s1\" type=\"sutta\"><p rend=\"bodytext\" n=\"1\">aaa। bbb।</p></div>" +
@@ -397,38 +399,40 @@ namespace CST.Avalonia.Tests.Search
             var markers = BookMarkers.Build(longTail);
             var (from, to) = Span(longTail, "ccc");
 
-            // Half of this budget spent backwards would buy nothing (the selection opens its section), so
-            // everything after "ddd" is reached only because the unspendable half went forward.
+            // "ccc" opens s2, so the backward walk has nothing to find inside the section.
             var window = TeiPassageReader.ReadWindowAroundSelection(
                 longTail, from, to, maxChars: 40, includeVariants: false,
                 outputScript: Script.Devanagari, markers);
 
             Assert.Contains("ccc", window.Text);
-            Assert.Contains("hhh", window.Text);
-            Assert.DoesNotContain("bbb", window.Text);   // still never backwards across the boundary
+            Assert.Contains("ddd", window.Text);          // two sentences ahead
+            Assert.Contains("eee", window.Text);
+            Assert.DoesNotContain("fff", window.Text);    // and only two
+            Assert.DoesNotContain("bbb", window.Text);    // still never backwards across the boundary
         }
 
         [Fact]
-        public void The_backward_snap_cannot_run_away_from_the_budget()
+        public void The_backward_walk_cannot_run_away_when_there_is_no_punctuation_behind_it()
         {
-            // Found by Fable, not by the tests: the outward snap walks to the previous sentence end, and with
-            // no cap that is however far away the previous danda happens to be. Front matter — a title, a
-            // nikaya heading — carries no danda, so a selection in the first sentence of a book with no div
-            // markup snapped all the way to position 0. A 40-character budget produced a 2,000-character
-            // window, and every fixture here had a danda every few characters, so nothing noticed.
-            var filler = new string('x', 2000);
+            // Originally found by Fable against the character budget; the hazard survives the move to
+            // sentence counts (#672) and so does the guard. Front matter — a title, a nikaya heading — carries
+            // no danda at all, so "back two sentences" has no boundary to find and would walk to the start of
+            // the section, which in a book with no div markup is position 0. SentenceScanCap bounds each hop.
+            var filler = new string('x', 6000);
             var xml = $"<body><p rend=\"bodytext\" n=\"1\">{filler} target। tail।</p></body>";
             var markers = BookMarkers.Build(xml);
             var (from, to) = Span(xml, "target");
 
             var window = TeiPassageReader.ReadWindowAroundSelection(
-                xml, from, to, maxChars: 40, includeVariants: false,
+                xml, from, to, maxChars: 40_000, includeVariants: false,
                 outputScript: Script.Devanagari, markers);
 
             Assert.Contains("target", window.Text);
-            // Bounded rather than exact: both ends may overshoot to finish a sentence. What must not happen
-            // is a window two orders of magnitude over budget.
-            Assert.True(window.Text.Length < 400, $"window ran away: {window.Text.Length} chars");
+            // Bounded rather than exact: the scan cap is per hop, and the window may overshoot to finish the
+            // sentence it ends inside. What must not happen is the whole 2,000-character filler coming back.
+            // The scan cap is 2,000 characters per hop — derived from the corpus's own sentence lengths — so
+            // the window is bounded near that, not by the 6,000-character run it sits in.
+            Assert.True(window.Text.Length < 3000, $"window ran away: {window.Text.Length} chars");
         }
 
         [Fact]
@@ -464,7 +468,9 @@ namespace CST.Avalonia.Tests.Search
                 outputScript: Script.Devanagari, markers);
 
             Assert.Contains("www", window.Text);
-            Assert.Contains("zzz", window.Text);        // its own section, behind it
+            Assert.Contains("xxx", window.Text);        // its own section, behind it
+            Assert.Contains("yyy", window.Text);
+            Assert.DoesNotContain("zzz", window.Text);  // two sentences, not the whole section
             Assert.DoesNotContain("hhh", window.Text);  // never back into the previous one
         }
 
@@ -735,7 +741,7 @@ namespace CST.Avalonia.Tests.Search
             var (from, to) = Span(Xml, "echo");
 
             var window = TeiPassageReader.ReadWindowAroundSelection(
-                Xml, from, to, maxChars: 30, includeVariants: false,
+                Xml, from, to, maxChars: 400, includeVariants: false,
                 outputScript: Script.Devanagari, markers);
 
             Assert.Equal(5, window.ParagraphNumber);

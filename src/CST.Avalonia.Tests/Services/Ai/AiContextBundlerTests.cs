@@ -304,16 +304,22 @@ public class AiContextBundlerTests : IDisposable
     }
 
     [Fact]
-    public async Task A_window_contained_in_one_paragraph_says_so_rather_than_hedging()
+    public async Task A_short_window_reports_the_paragraphs_it_actually_covers()
     {
-        // The other side of the boundary: word-by-word's 600-character budget stays inside paragraph 5's verse.
-        // Reporting 1 here is what makes AI_SURFACE_B.md §6's partial-passage badge implementable at all — its
-        // predecessor was derived from NextCursor and so was set on essentially every request.
+        // Reporting a real count is what makes AI_SURFACE_B.md §6's partial-passage badge implementable at
+        // all — its predecessor was derived from NextCursor and so was set on essentially every request.
+        //
+        // Two, not one, since #672: the window is two sentences either side of the selection, and a paragraph
+        // boundary is not a stopping point. Only a <div> bounds the expansion, because only a <div> means the
+        // text beyond belongs to a different sutta. This used to be word-by-word's 600-character budget
+        // stopping inside paragraph 5's verse — an accident of the character count, not a property of the
+        // passage, and it is gone with the budget that produced it.
         var bundle = await Bundler().BuildAsync(Request(AiTask.WordByWord));
 
-        Assert.Equal(1, bundle.Budget.ParagraphsCovered);
-        Assert.False(bundle.Budget.WindowExtendsPastReference);
-        Assert.Equal("paragraph 5 (dn1)", bundle.Citation.NormalizedReference);
+        Assert.Equal(2, bundle.Budget.ParagraphsCovered);
+        // And the citation widens with it. A passage that cites itself as paragraph 5 while carrying half of
+        // paragraph 6 would be describing something other than what was sent.
+        Assert.Equal("paragraphs 5-6 (dn1)", bundle.Citation.NormalizedReference);
     }
 
     [Fact]

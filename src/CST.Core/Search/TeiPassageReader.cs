@@ -134,13 +134,34 @@ namespace CST.Search
         /// </summary>
         /// <param name="selectionStart">Start of the selection, as a character position in the raw XML.</param>
         /// <param name="selectionEnd">End of the selection, exclusive.</param>
+        /// <param name="contextSentences">How many sentences to expand by on each side. (#672)</param>
+        /// <param name="selectionCap">Absolute bound on the selection itself, so a select-all cannot send a
+        /// whole book. Deliberately NOT <paramref name="maxChars"/>, which is the caller's requested window
+        /// size: a client asking for a small window is asking for less context, not for its own selection to
+        /// be cut. (#672)</param>
         public static PassageWindow ReadWindowAroundSelection(
             string xml, int selectionStart, int selectionEnd, int maxChars, bool includeVariants,
-            Script outputScript, BookMarkers markers, bool structuredNotes = false)
+            Script outputScript, BookMarkers markers, bool structuredNotes = false,
+            int contextSentences = DefaultContextSentences, int selectionCap = MaxSelectionChars)
         {
             selectionStart = Math.Clamp(selectionStart, 0, xml.Length);
             selectionEnd = Math.Clamp(selectionEnd, selectionStart, xml.Length);
             if (maxChars < 1) maxChars = 1;
+            if (contextSentences < 0) contextSentences = 0;
+
+            // The SELECTION is capped too, which it never used to be. (#672)
+            //
+            // The rule that the subject of a request is never trimmed to make room for its own context is
+            // still right, and it is not what this changes: expansion is what yields. But the selection was
+            // unbounded in absolute terms as well, so a select-all sent an entire book verbatim — which is
+            // neither a passage nor a question anyone meant to ask. Capping it at the same limit that already
+            // bounds a requested window keeps one number rather than inventing a second, and a reader who
+            // selected more than that is far past any reading intent the window is built to serve.
+            //
+            // Clamped from the START of the selection, so what survives is what the reader selected first
+            // rather than an arbitrary middle. Reported through the ordinary trimmed path, never silently.
+            if (selectionCap > 0 && RenderedLength(xml, selectionStart, selectionEnd, includeNotes: true) > selectionCap)
+                selectionEnd = RawForwardCap(xml, selectionStart, selectionCap, xml.Length);
 
             // Each direction is bounded by the section at ITS OWN end of the selection, not by one section
             // chosen for the whole window.
@@ -164,52 +185,19 @@ namespace CST.Search
             int start = selectionStart;
             int end = selectionEnd;
 
-            int selectionLength = RenderedLength(xml, selectionStart, selectionEnd, includeNotes);
-            if (selectionLength < maxChars)
-            {
-                int shortfall = maxChars - selectionLength;
-                int half = shortfall / 2;
-
-                // Backwards first, so what it cannot spend is known before the forward budget is set.
-                //
-                // Snapped OUTWARDS, to the start of the sentence the budget landed inside — not forwards to
-                // the next one. WalkBackward snaps forward, which is right for a paging cursor and wrong
-                // here: it discards the partial sentence, so a half-budget reliably bought one sentence less
-                // than it paid for and the window came out lopsided towards what follows the selection.
-                //
-                // The two directions are NOT symmetric and it is worth not pretending otherwise: forward
-                // extends past its budget only once the budget is spent, backward always snaps — so a
-                // selection one character under budget gets a preceding sentence and one exactly at budget
-                // gets none. A discontinuity at the edge, accepted because the alternative is cutting the
-                // sentence the selection sits in.
-                // The snap gets the SAME hard cap the forward walk has (1.5x its budget), and for the same
-                // reason. Unbounded, it walks to the previous danda however far away that is: a selection in
-                // the danda-free front matter of a book with no div markup snapped to position 0, and a
-                // 40-character budget produced a 2,000-character window. Bounding the floor rather than
-                // rejecting the snap keeps the behaviour it was added for — finishing the sentence the budget
-                // landed inside — while making the total window actually bounded.
-                int floor = RawBackward(xml, selectionStart, half + half / 2, sectionStart);
-                int rough = RawBackward(xml, selectionStart, half, sectionStart);
-                var boundaryNotes = TeiText.NoteRegions(xml, floor, selectionStart);
-                start = SnapBackToSentenceStart(xml, rough, floor, boundaryNotes);
-
-                int spentBack = RenderedLength(xml, start, selectionStart, includeNotes);
-
-                // Clamped at zero: snapping outwards can spend more than half.
-                int forwardBudget = Math.Max(0, shortfall - spentBack);
-                end = WalkForward(xml, selectionEnd, forwardBudget, includeNotes, sectionEnd);
-            }
-
-            // Finish the sentence the window ends inside, whatever the budget had left.
+            // Expansion is a SENTENCE COUNT, not a character budget. (#672)
             //
-            // WalkForward's hard cap is 1.5x ITS budget, so a budget of zero caps at zero and it returns after
-            // a single character — cutting mid-sentence, which is the one thing this class promises never to
-            // do. That is reachable whenever the backward snap spends the whole shortfall, and it is exactly
-            // the case where the reader most needs the sentence intact, because the selection is the subject.
-            end = ExtendToSentenceEnd(xml, end, sectionEnd, includeNotes);
-
-            {
-            }
+            // The character budgets this replaces were never derived from anything, and characters are the
+            // wrong unit for this corpus twice over: the same figure buys a whole gāthā or a fraction of one
+            // commentarial sentence, and it is measured on source text whose length varies by script. A
+            // sentence is the unit these walkers already snap to, and it is the unit in which "the context
+            // around what I selected" is actually meaningful.
+            //
+            // The section still bounds it, and not merely as a backstop for an over-long expansion: text
+            // beyond a <div> belongs to the previous sutta and is not this passage's context however close it
+            // sits in the file.
+            start = WalkBackSentences(xml, selectionStart, contextSentences, sectionStart, includeNotes);
+            end = WalkForwardSentences(xml, selectionEnd, contextSentences, sectionEnd, includeNotes);
 
             return Materialize(xml, start, end, maxChars, includeVariants, outputScript, markers, structuredNotes);
         }
@@ -339,6 +327,123 @@ namespace CST.Search
             char.IsLetterOrDigit(c)
             || System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
                == System.Globalization.UnicodeCategory.NonSpacingMark;
+
+        /// <summary>
+        /// Sentences of context on each side of a selection. Two, decided rather than derived: every task the
+        /// assistant offers benefits from the sentences immediately around the selection, none of them
+        /// benefits from a fixed character count, and one rule is one thing to revise when evidence arrives.
+        /// Bounded by the enclosing &lt;div&gt; in both directions. (#672)
+        /// </summary>
+        public const int DefaultContextSentences = 2;
+
+        /// <summary>
+        /// Absolute bound on a selection, so a select-all on the longest book is not sent verbatim. Matches
+        /// the hardening clamp the API already applies to a requested window (#305); reusing that figure keeps
+        /// one number rather than inventing a second, and a reader who selected more than this is far past any
+        /// reading intent a passage window is built to serve. (#672)
+        /// </summary>
+        public const int MaxSelectionChars = 20_000;
+
+        /// <summary>
+        /// How far one hop may scan for a sentence boundary before concluding it is not looking at a sentence.
+        ///
+        /// <para><b>Measured, not chosen.</b> Across the 217-book corpus — 1,038,209 danda-delimited sentences,
+        /// notes stripped — the median is 56 characters, p99 is 363, p99.9 is 713, and just 30 sentences
+        /// (0.003%) run past 2,000. So a scan that has read 2,000 characters without meeting a boundary is
+        /// almost certainly not in running text at all: front matter, a heading, a table or a verse index,
+        /// where "two sentences back" has no answer and an unbounded walk returns the whole run. (#672)</para>
+        /// </summary>
+        private const int SentenceScanCap = 2_000;
+
+        /// <summary>
+        /// Back to the start of the <paramref name="count"/>-th preceding sentence, or to <paramref name="limit"/>
+        /// (the section start) — whichever comes first. Note-aware: a danda inside a &lt;note&gt; is apparatus
+        /// punctuation, not a base-text sentence end (#310). (#672)
+        /// </summary>
+        private static int WalkBackSentences(string xml, int start, int count, int limit, bool includeNotes)
+        {
+            // The first hop finds the boundary ENDING the sentence before the selection's own — so it snaps the
+            // window to the start of the sentence the selection sits in — and each further hop buys one whole
+            // sentence of context. Hence count + 1.
+            int at = start, boundary = -1;
+            for (int n = 0; n < count + 1; n++)
+            {
+                int floor = Math.Max(limit, at - SentenceScanCap);
+                var notes = TeiText.NoteRegions(xml, floor, at);
+                int found = -1;
+                for (int i = at - 1; i >= floor; i--)
+                    if (TeiText.IsBoundary(xml[i]) && !TeiText.InNote(i, notes)) { found = i; break; }
+
+                // No boundary within reach. Take what the scan could see and stop — bounded by the section,
+                // and by the cap above.
+                //
+                // Stopping dead instead would be wrong in an ordinary case: the FIRST sentence of a section
+                // has no danda in front of it, so a selection in the second sentence would get no context at
+                // all despite a whole sentence sitting right there. Falling back to the scan floor keeps that
+                // sentence and still bounds the front-matter case the cap exists for. (#672)
+                if (found < 0) return Math.Min(start, SkipMarkupForward(xml, floor, start));
+                boundary = found;
+                at = found;
+            }
+
+            // Just past the danda: the first character of the sentence. No boundary anywhere behind means no
+            // expansion at all — the selection keeps its own start.
+            return boundary < 0 ? start : Math.Min(start, boundary + 1);
+        }
+
+        /// <summary>
+        /// Forward past <paramref name="count"/> sentence ends, then on to the end of the sentence in progress
+        /// — so the window never stops mid-sentence — bounded by <paramref name="limit"/> (the section end).
+        /// (#672)
+        /// </summary>
+        private static int WalkForwardSentences(string xml, int end, int count, int limit, bool includeNotes)
+        {
+            int at = ExtendToSentenceEnd(xml, end, limit, includeNotes);   // finish the selection's own sentence
+            for (int n = 0; n < count; n++)
+            {
+                int next = ExtendToSentenceEnd(xml, at, limit, includeNotes);
+                if (next <= at) break;      // nothing further within the section
+                at = next;
+            }
+            return Math.Min(at, limit);
+        }
+
+        /// <summary>
+        /// Advance past any markup at <paramref name="from"/> so a window begins on a text character.
+        ///
+        /// <para>The scan-floor fallback lands wherever the section begins, which is immediately before the
+        /// element tags that open it. A window starting there carries no text it did not already have, but it
+        /// starts OUTSIDE the paragraph — and the citation is resolved from the paragraph the window starts in,
+        /// so the passage came back describing itself as belonging to no paragraph at all. (#672)</para>
+        /// </summary>
+        private static int SkipMarkupForward(string xml, int from, int limit)
+        {
+            int i = Math.Max(0, from);
+            while (i < limit && xml[i] == '<')
+            {
+                int gt = xml.IndexOf('>', i);
+                if (gt < 0 || gt >= limit) break;
+                i = gt + 1;
+            }
+            return Math.Min(i, limit);
+        }
+
+        /// <summary>Raw forward walk of at most <paramref name="maxChars"/> RENDERED characters — the selection
+        /// clamp, which is a hard bound and so deliberately does not snap to a sentence. (#672)</summary>
+        private static int RawForwardCap(string xml, int start, int maxChars, int limit)
+        {
+            int i = start, rendered = 0;
+            while (i < limit && rendered < maxChars)
+            {
+                if (xml[i] == '<')
+                {
+                    int gt = xml.IndexOf('>', i);
+                    i = gt < 0 || gt >= limit ? limit : gt + 1;
+                }
+                else { rendered++; i++; }
+            }
+            return Math.Min(i, limit);
+        }
 
         /// <summary>
         /// Walk on to the end of the sentence in progress, ignoring any budget. Bounded by the section and by
