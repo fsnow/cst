@@ -78,70 +78,90 @@ public sealed class AiCredentialStore : IAiCredentialStore
         : "Secure key storage is not available on this platform. "
           + "An endpoint that needs no API key still works.";
 
-    public string? GetApiKey(string connectionId)
+    public string? Get(string connectionId, string name)
     {
         if (!IsAvailable) return null;
 
-        var key = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Find(_service, AccountFor(connectionId))
-            : MacOsKeychain.Find(_service, AccountFor(connectionId));
+        var account = AccountFor(connectionId, name);
+        var secret = OperatingSystem.IsWindows()
+            ? WindowsDpapiStore.Find(_service, account)
+            : MacOsKeychain.Find(_service, account);
 
-        // The OUTCOME, never the value — and not its length either, which narrows a guess.
-        _logger.LogDebug("Credential lookup for {Connection}: {Result}",
-            connectionId, key is null ? "none stored" : "found");
+        // The OUTCOME, never the value — and not its length either, which narrows a guess. The name is safe
+        // to log and worth logging: it is ours, and "which of this connection's secrets was missing" is the
+        // whole diagnosis when a two-credential provider 401s.
+        _logger.LogDebug("Credential lookup for {Connection}/{Name}: {Result}",
+            connectionId, name, secret is null ? "none stored" : "found");
 
-        return key;
+        return secret;
     }
 
-    /// <summary>Store or replace the key for a provider. Returns false when the platform cannot.</summary>
-    public bool SetApiKey(string connectionId, string apiKey)
+    /// <summary>Store or replace one named secret. Returns false when the platform cannot.</summary>
+    public bool Set(string connectionId, string name, string secret)
     {
-        if (!IsAvailable || string.IsNullOrWhiteSpace(apiKey)) return false;
+        if (!IsAvailable || string.IsNullOrWhiteSpace(secret)) return false;
 
         var saved = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Save(_service, AccountFor(connectionId), apiKey.Trim())
-            : MacOsKeychain.Save(_service, AccountFor(connectionId), apiKey.Trim());
-        _logger.LogInformation("Stored an API key for {Connection}: {Result}",
-            connectionId, saved ? "ok" : "failed");
+            ? WindowsDpapiStore.Save(_service, AccountFor(connectionId, name), secret.Trim())
+            : MacOsKeychain.Save(_service, AccountFor(connectionId, name), secret.Trim());
+        _logger.LogInformation("Stored a secret for {Connection}/{Name}: {Result}",
+            connectionId, name, saved ? "ok" : "failed");
         return saved;
     }
 
-    /// <summary>Forget the key for a provider. Forgetting one that was never stored counts as success.</summary>
-    public bool DeleteApiKey(string connectionId)
+    /// <summary>Forget one named secret. Forgetting one that was never stored counts as success.</summary>
+    public bool Delete(string connectionId, string name)
     {
         if (!IsAvailable) return false;
 
         var deleted = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Delete(_service, AccountFor(connectionId))
-            : MacOsKeychain.Delete(_service, AccountFor(connectionId));
-        _logger.LogInformation("Removed the API key for {Connection}: {Result}",
-            connectionId, deleted ? "ok" : "failed");
+            ? WindowsDpapiStore.Delete(_service, AccountFor(connectionId, name))
+            : MacOsKeychain.Delete(_service, AccountFor(connectionId, name));
+        _logger.LogInformation("Removed a secret for {Connection}/{Name}: {Result}",
+            connectionId, name, deleted ? "ok" : "failed");
         return deleted;
     }
 
     /// <summary>
-    /// One item per provider, so a user can keep a Claude key and an OpenAI-compatible key at once — which is
-    /// the ordinary case for someone comparing a hosted model against a local one.
+    /// The character joining a connection id to a credential name in one account string.
+    ///
+    /// <para>It differs by platform because the two namespaces do. A Keychain account is an arbitrary string,
+    /// so <c>:</c> — the conventional spelling — survives. A DPAPI account is a <i>filename</i>
+    /// (<see cref="WindowsDpapiStore"/>), and <c>:</c> is an invalid filename character on Windows, so that
+    /// store would rewrite it to <c>_</c>: a character an id is allowed to contain, which is how the collision
+    /// below would come back on one platform only. <c>.</c> is legal in a filename and excluded from ids.</para>
     /// </summary>
+    private static char Separator => OperatingSystem.IsWindows() ? '.' : ':';
+
     /// <summary>
-    /// The credential-store account a connection's key is filed under. (#678)
+    /// The account one named secret of one connection is filed under. (#678, #759)
     ///
     /// <para><b>Was keyed by <c>ChatProviderKind</c>, a two-member enum</b> — so every OpenAI-compatible
     /// endpoint shared one slot. A reader who stored an OpenRouter key and then pointed the app at DeepSeek
-    /// silently sent the wrong key and got a 401 naming neither cause. That is the defect this issue exists
-    /// for, and it made comparing a hosted model against a local one impossible.</para>
+    /// silently sent the wrong key and got a 401 naming neither cause (#678).</para>
     ///
     /// <para><b>Why the connection id and not the base URL.</b> A URL-derived account orphans the credential
     /// the moment someone changes a port or swaps <c>localhost</c> for <c>127.0.0.1</c> — and the resulting
     /// failure presents as a bad key rather than a lost one, which sends the reader to re-paste a key that
     /// was fine. The id is immutable for exactly this reason.</para>
+    ///
+    /// <para><b>Each part is sanitised, then they are joined — never the other way round.</b> Sanitising the
+    /// joined string would fold the separator into <c>-</c>, which ids may contain: connection <c>gw</c> with
+    /// secret <c>primary</c> and a connection called <c>gw-primary</c> would land on one account and silently
+    /// overwrite each other. That is #678 again, one layer down, and it is invisible because the symptom is a
+    /// 401 rather than an error. Joining afterwards makes it unreachable instead of unlikely:
+    /// <see cref="Sanitize"/> emits only <c>[a-z0-9-_]</c>, so neither separator can occur inside a part.</para>
     /// </summary>
-    internal static string AccountFor(string connectionId) => Sanitize(connectionId);
+    internal static string AccountFor(string connectionId, string name) =>
+        Sanitize(connectionId) + Separator + Sanitize(name);
 
     /// <summary>
-    /// Ids are validated as slugs before they reach here, so this is a belt-and-braces guard rather than the
-    /// primary defence: a stray separator in an account name is the kind of thing that silently writes a
-    /// credential to a path nobody looks at again.
+    /// Ids are validated as slugs and names are our own constants, so this is a belt-and-braces guard rather
+    /// than the primary defence: a stray separator in an account name is the kind of thing that silently
+    /// writes a credential to a path nobody looks at again.
+    ///
+    /// <para>The allowed set is what <see cref="AccountFor"/> depends on. Widening it to admit <c>:</c> or
+    /// <c>.</c> would reintroduce the collision documented there.</para>
     /// </summary>
     private static string Sanitize(string id)
     {

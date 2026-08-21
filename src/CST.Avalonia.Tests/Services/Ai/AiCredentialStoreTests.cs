@@ -49,11 +49,14 @@ public class AiCredentialStoreTests : IDisposable
 
     public void Dispose()
     {
-        // Connection ids now, not provider kinds (#678): keys are keyed per endpoint, so the cleanup list is
-        // whatever ids the tests in this class use rather than an enum's members.
-        if (_store.IsAvailable)
-            foreach (var id in new[] { "anthropic", "openai-compatible", "openrouter-box", "local-ollama" })
-                _store.DeleteApiKey(id);
+        // Connection ids, not provider kinds (#678), and every NAME each id is used with (#759): an account is
+        // the pair, so sweeping only the primary one would leave a test's second secret behind in the
+        // developer's own keychain.
+        if (!_store.IsAvailable) return;
+
+        foreach (var id in new[] { "anthropic", "openai-compatible", "openrouter-box", "local-ollama", "gw", "gw-header" })
+            foreach (var name in new[] { AiCredentialNames.Primary, "gateway", "header-x", "x" })
+                _store.Delete(id, name);
     }
 
     // ---- The acceptance test ------------------------------------------------------------------------------
@@ -66,9 +69,9 @@ public class AiCredentialStoreTests : IDisposable
         // is the easier one to introduce by accident.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey("anthropic", Secret);
-        _store.GetApiKey("anthropic");
-        _store.DeleteApiKey("anthropic");
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        _store.Get("anthropic", AiCredentialNames.Primary);
+        _store.Delete("anthropic", AiCredentialNames.Primary);
 
         Assert.NotEmpty(_log.Lines);   // the logger really was wired, so absence means absence
         foreach (var line in _log.Lines)
@@ -87,8 +90,8 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        Assert.True(_store.SetApiKey("anthropic", Secret));
-        Assert.Equal(Secret, _store.GetApiKey("anthropic"));
+        Assert.True(_store.Set("anthropic", AiCredentialNames.Primary, Secret));
+        Assert.Equal(Secret, _store.Get("anthropic", AiCredentialNames.Primary));
     }
 
     [Fact]
@@ -98,10 +101,10 @@ public class AiCredentialStoreTests : IDisposable
         // a window with no key at all if the add failed.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey("anthropic", Secret);
-        Assert.True(_store.SetApiKey("anthropic", "sk-ant-second-value"));
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        Assert.True(_store.Set("anthropic", AiCredentialNames.Primary, "sk-ant-second-value"));
 
-        Assert.Equal("sk-ant-second-value", _store.GetApiKey("anthropic"));
+        Assert.Equal("sk-ant-second-value", _store.Get("anthropic", AiCredentialNames.Primary));
     }
 
     [Fact]
@@ -110,11 +113,11 @@ public class AiCredentialStoreTests : IDisposable
         // The ordinary case for someone comparing a hosted model against a local one.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey("anthropic", "sk-ant-aaa");
-        _store.SetApiKey("openai-compatible", "sk-oai-bbb");
+        _store.Set("anthropic", AiCredentialNames.Primary, "sk-ant-aaa");
+        _store.Set("openai-compatible", AiCredentialNames.Primary, "sk-oai-bbb");
 
-        Assert.Equal("sk-ant-aaa", _store.GetApiKey("anthropic"));
-        Assert.Equal("sk-oai-bbb", _store.GetApiKey("openai-compatible"));
+        Assert.Equal("sk-ant-aaa", _store.Get("anthropic", AiCredentialNames.Primary));
+        Assert.Equal("sk-oai-bbb", _store.Get("openai-compatible", AiCredentialNames.Primary));
     }
 
     [Fact]
@@ -122,7 +125,7 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        Assert.Null(_store.GetApiKey("anthropic"));
+        Assert.Null(_store.Get("anthropic", AiCredentialNames.Primary));
     }
 
     [Fact]
@@ -131,7 +134,7 @@ public class AiCredentialStoreTests : IDisposable
         // Idempotent: Settings should be able to offer "forget this key" without first checking.
         if (!_store.IsAvailable) return;
 
-        Assert.True(_store.DeleteApiKey("anthropic"));
+        Assert.True(_store.Delete("anthropic", AiCredentialNames.Primary));
     }
 
     [Fact]
@@ -139,10 +142,10 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey("anthropic", Secret);
-        Assert.True(_store.DeleteApiKey("anthropic"));
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        Assert.True(_store.Delete("anthropic", AiCredentialNames.Primary));
 
-        Assert.Null(_store.GetApiKey("anthropic"));
+        Assert.Null(_store.Get("anthropic", AiCredentialNames.Primary));
     }
 
     [Fact]
@@ -152,9 +155,9 @@ public class AiCredentialStoreTests : IDisposable
         // a trailing newline, and storing that verbatim produces a 401 nobody can explain.
         if (!_store.IsAvailable) return;
 
-        _store.SetApiKey("anthropic", "  sk-ānt-ṃixed-42\n");
+        _store.Set("anthropic", AiCredentialNames.Primary, "  sk-ānt-ṃixed-42\n");
 
-        Assert.Equal("sk-ānt-ṃixed-42", _store.GetApiKey("anthropic"));
+        Assert.Equal("sk-ānt-ṃixed-42", _store.Get("anthropic", AiCredentialNames.Primary));
     }
 
     [Fact]
@@ -162,8 +165,71 @@ public class AiCredentialStoreTests : IDisposable
     {
         if (!_store.IsAvailable) return;
 
-        Assert.False(_store.SetApiKey("anthropic", "   "));
-        Assert.Null(_store.GetApiKey("anthropic"));
+        Assert.False(_store.Set("anthropic", AiCredentialNames.Primary, "   "));
+        Assert.Null(_store.Get("anthropic", AiCredentialNames.Primary));
+    }
+
+    // ---- Named credentials (#759) -------------------------------------------------------------------------
+
+    [Fact]
+    public void Two_names_on_one_connection_are_two_secrets()
+    {
+        // The case the whole reshape exists for: Cloudflare's gateway wants a gateway token beside the
+        // upstream key (#701), and one opaque string per connection had nowhere to put the second.
+        if (!_store.IsAvailable) return;
+
+        _store.Set("gw", AiCredentialNames.Primary, "sk-upstream");
+        _store.Set("gw", "gateway", "cf-gateway-token");
+
+        Assert.Equal("sk-upstream", _store.Get("gw", AiCredentialNames.Primary));
+        Assert.Equal("cf-gateway-token", _store.Get("gw", "gateway"));
+    }
+
+    [Fact]
+    public void Deleting_one_name_leaves_the_others()
+    {
+        // Degrading one credential at a time is the reason for N accounts rather than one JSON blob per
+        // connection: losing the gateway token must not lose the upstream key with it.
+        if (!_store.IsAvailable) return;
+
+        _store.Set("gw", AiCredentialNames.Primary, "sk-upstream");
+        _store.Set("gw", "gateway", "cf-gateway-token");
+
+        Assert.True(_store.Delete("gw", "gateway"));
+
+        Assert.Null(_store.Get("gw", "gateway"));
+        Assert.Equal("sk-upstream", _store.Get("gw", AiCredentialNames.Primary));
+    }
+
+    [Fact]
+    public void A_name_that_was_never_stored_reads_as_null_even_when_another_name_was()
+    {
+        // Absence of one secret must not be answered with a different one — that would present as a 401 the
+        // reader cannot attribute, which is #678's symptom exactly.
+        if (!_store.IsAvailable) return;
+
+        _store.Set("gw", AiCredentialNames.Primary, "sk-upstream");
+
+        Assert.Null(_store.Get("gw", "gateway"));
+    }
+
+    [Fact]
+    public void An_id_ending_in_a_name_does_not_share_an_account_with_it()
+    {
+        // The regression this design exists to make unreachable. Sanitising the JOINED string folds the
+        // separator into '-', which ids may contain, so ("gw", "header-x") and ("gw-header", "x") both become
+        // "gw-header-x" and silently overwrite each other. Sanitising each part and joining afterwards cannot:
+        // the separator never occurs inside a part, so the split is unambiguous.
+        //
+        // Invisible if it regresses — the symptom is one connection answering with another's credential, i.e.
+        // a 401 naming neither cause — which is why it is pinned rather than left to the doc comment.
+        if (!_store.IsAvailable) return;
+
+        _store.Set("gw", "header-x", "secret-for-gw");
+        _store.Set("gw-header", "x", "secret-for-gw-header");
+
+        Assert.Equal("secret-for-gw", _store.Get("gw", "header-x"));
+        Assert.Equal("secret-for-gw-header", _store.Get("gw-header", "x"));
     }
 
     // ---- Platform behaviour -------------------------------------------------------------------------------
@@ -200,10 +266,60 @@ public class AiCredentialStoreTests : IDisposable
     public void Each_provider_gets_its_own_account_name()
     {
         Assert.NotEqual(
-            AiCredentialStore.AccountFor("anthropic"),
-            AiCredentialStore.AccountFor("openai-compatible"));
+            AiCredentialStore.AccountFor("anthropic", AiCredentialNames.Primary),
+            AiCredentialStore.AccountFor("openai-compatible", AiCredentialNames.Primary));
     }
 
+    [Fact]
+    public void Each_name_gets_its_own_account_name()
+    {
+        Assert.NotEqual(
+            AiCredentialStore.AccountFor("gw", AiCredentialNames.Primary),
+            AiCredentialStore.AccountFor("gw", "gateway"));
+    }
+
+    [Fact]
+    public void The_separator_cannot_occur_inside_either_part()
+    {
+        // What makes the account string unambiguously splittable, and therefore collision-free. Asserted on the
+        // sanitiser's OUTPUT rather than on its allowed set, so widening that set trips this rather than
+        // silently reopening the collision An_id_ending_in_a_name_does_not_share_an_account_with_it pins.
+        //
+        // Deliberately does not name the separator: it differs by platform (':' on macOS, '.' on Windows,
+        // because a DPAPI account is a filename), and a test that named one would be vacuous on the other.
+        // What must hold on both is that exactly ONE character of the account lies outside what Sanitize
+        // emits — the join — so the parts cannot bleed into each other.
+        var account = AiCredentialStore.AccountFor("a:b.c", "d.e:f");
+
+        Assert.Equal(1, account.Count(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_')));
+    }
+
+    [Fact]
+    public void The_account_spelling_is_stable()
+    {
+        // The same property ServiceName has, and for the same reason: change it and every credential already
+        // stored reads as "not configured", with no error anywhere. The round-trip tests above cannot hold
+        // this line - save and find share the value in-process, so they stay green across any reformatting of
+        // the account - and The_separator_cannot_occur_inside_either_part deliberately does not name the
+        // separator. So the exact spelling is pinned here, per platform.
+        //
+        // The concrete regression: someone "unifies" the two separators to one character (they look like an
+        // irregularity, and '.' is legal in a Keychain account too). Every macOS credential moves from
+        // anthropic:primary to anthropic.primary, every stored key silently disappears, and the whole suite
+        // passes. (fable review)
+        if (OperatingSystem.IsWindows())
+            Assert.Equal("anthropic.primary", AiCredentialStore.AccountFor("anthropic", AiCredentialNames.Primary));
+        else
+            Assert.Equal("anthropic:primary", AiCredentialStore.AccountFor("anthropic", AiCredentialNames.Primary));
+    }
+
+    /// <summary>
+    /// The two collision tests are load-bearing AS A PAIR, which is worth saying before someone deletes the
+    /// "redundant" one: a '_' separator leaves ("gw","header-x") and ("gw-header","x") distinct, so
+    /// An_id_ending_in_a_name_does_not_share_an_account_with_it stays green - and only
+    /// The_separator_cannot_occur_inside_either_part catches it, because '_' is a character Sanitize emits.
+    /// (fable review)
+    /// </summary>
     [Fact]
     public void The_service_name_is_stable()
     {

@@ -47,12 +47,16 @@ public class AiConnectionEditorViewModelTests
     /// <summary>An in-memory keychain, so no test prompts for a real one.</summary>
     private sealed class FakeCredentialStore : IAiCredentialStore
     {
+        /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Stored { get; } = new(StringComparer.Ordinal);
+        private static string Account(string connectionId, string name) => connectionId + ":" + name;
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? GetApiKey(string connectionId) => Stored.GetValueOrDefault(connectionId);
-        public bool SetApiKey(string connectionId, string apiKey) { Stored[connectionId] = apiKey; return true; }
-        public bool DeleteApiKey(string connectionId) => Stored.Remove(connectionId);
+        public string? Get(string connectionId, string name) =>
+            Stored.GetValueOrDefault(Account(connectionId, name));
+        public bool Set(string connectionId, string name, string secret)
+        { Stored[Account(connectionId, name)] = secret; return true; }
+        public bool Delete(string connectionId, string name) => Stored.Remove(Account(connectionId, name));
     }
 
     private static void Save(AiConnectionEditorViewModel vm) => vm.SaveCommand.Execute().Subscribe();
@@ -450,7 +454,7 @@ public class AiConnectionEditorViewModelTests
         vm.ApiKeyEntry = "sk-or-secret";
         Save(vm);
 
-        Assert.Equal("sk-or-secret", h.Keys.GetApiKey("openrouter"));
+        Assert.Equal("sk-or-secret", h.Keys.Get("openrouter", AiCredentialNames.Primary));
         Assert.Empty(h.Service.Connections.Single().Models);
     }
 
@@ -474,7 +478,7 @@ public class AiConnectionEditorViewModelTests
     {
         var h = new Harness();
         h.Service.Add("mine", Draft());
-        h.Keys.SetApiKey("mine", "sk-secret");
+        h.Keys.Set("mine", AiCredentialNames.Primary, "sk-secret");
 
         var vm = h.Existing("mine");
         Assert.True(vm.HasStoredKey);
@@ -482,7 +486,7 @@ public class AiConnectionEditorViewModelTests
         vm.RemoveKeyCommand.Execute().Subscribe();
 
         Assert.False(vm.HasStoredKey);
-        Assert.Null(h.Keys.GetApiKey("mine"));
+        Assert.Null(h.Keys.Get("mine", AiCredentialNames.Primary));
         Assert.Single(h.Service.Connections);
     }
 
@@ -553,7 +557,7 @@ public class AiConnectionEditorViewModelTests
         Save(h.Preset("deepseek").With(vm => vm.ApiKeyEntry = "sk-test"));
 
         Assert.Single(h.Service.Connections);
-        Assert.Equal("sk-test", h.Keys.Stored["deepseek"]);
+        Assert.Equal("sk-test", h.Keys.Get("deepseek", AiCredentialNames.Primary));
     }
 
     /// <summary>Editing a connection whose key is already stored does not demand it again — the box is empty
@@ -704,7 +708,7 @@ public class AiConnectionEditorViewModelTests
         Assert.Equal("nvidia/nemotron", after.Models.Single().Id);
         Assert.Equal("token", after.Headers["X-Gateway"]);
         Assert.Equal("https://openrouter.ai/api/v1", after.BaseUrl);
-        Assert.Equal("sk-replaced", h.Keys.Stored["openrouter"]);
+        Assert.Equal("sk-replaced", h.Keys.Get("openrouter", AiCredentialNames.Primary));
     }
 
     /// <summary>An edit updates the connection rather than adding a second one — the id is already taken, and

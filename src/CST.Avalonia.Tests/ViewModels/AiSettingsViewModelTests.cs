@@ -49,19 +49,25 @@ namespace CST.Avalonia.Tests.ViewModels
             public bool IsAvailable => Available;
             public string? Unavailable => Available ? null : "No secure storage in this build.";
 
-            public string? GetApiKey(string connectionId) =>
-                Available && _keys.TryGetValue(connectionId, out var k) ? k : null;
+            private static string Account(string connectionId, string name) => connectionId + ":" + name;
 
-            public bool SetApiKey(string connectionId, string apiKey)
+            public string? Get(string connectionId, string name) =>
+                Available && _keys.TryGetValue(Account(connectionId, name), out var k) ? k : null;
+
+            public bool Set(string connectionId, string name, string secret)
             {
                 if (!Available) return false;
-                _keys[connectionId] = apiKey;
+                _keys[Account(connectionId, name)] = secret;
                 return true;
             }
 
-            public bool DeleteApiKey(string connectionId)
+            public bool Delete(string connectionId, string name)
             {
-                _keys.Remove(connectionId);
+                // Mirrors the real store, which refuses rather than reports success when there is nowhere to
+                // delete from - a fake that is more forgiving than the thing it stands for is how a bug gets
+                // through green. (fable review)
+                if (!Available) return false;
+                _keys.Remove(Account(connectionId, name));
                 return true;
             }
         }

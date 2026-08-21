@@ -329,7 +329,7 @@ namespace CST.Avalonia.ViewModels
         /// <summary>Whether a key is already filed under this id — only knowable for a connection that
         /// exists.</summary>
         public bool HasStoredKey =>
-            _existingId is not null && _credentials?.GetApiKey(_existingId) is not null;
+            _existingId is not null && _credentials?.Get(_existingId, AiCredentialNames.Primary) is not null;
 
         public string KeyStatus => _existingId is null
             ? "Stored in the operating system's credential store, never in settings."
@@ -487,7 +487,7 @@ namespace CST.Avalonia.ViewModels
         {
             if (_credentials is null || string.IsNullOrWhiteSpace(ApiKeyEntry)) return;
 
-            _credentials.SetApiKey(connectionId, ApiKeyEntry.Trim());
+            _credentials.Set(connectionId, AiCredentialNames.Primary, ApiKeyEntry.Trim());
             ApiKeyEntry = "";
         }
 
@@ -502,7 +502,7 @@ namespace CST.Avalonia.ViewModels
         {
             if (_credentials is null || _existingId is null) return;
 
-            _credentials.DeleteApiKey(_existingId);
+            _credentials.Delete(_existingId, AiCredentialNames.Primary);
             ApiKeyEntry = "";
             this.RaisePropertyChanged(nameof(HasStoredKey));
             this.RaisePropertyChanged(nameof(KeyStatus));

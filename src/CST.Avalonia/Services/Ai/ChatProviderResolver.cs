@@ -27,26 +27,42 @@ public enum ChatProviderKind
 /// </summary>
 public interface IAiCredentialStore
 {
-    /// <summary>Whether this platform has somewhere safe to put a key at all.</summary>
+    /// <summary>Whether this platform has somewhere safe to put a secret at all.</summary>
     bool IsAvailable { get; }
 
     /// <summary>Why not, phrased for the user to read. Null when storage is available.</summary>
     string? Unavailable { get; }
 
     /// <summary>
-    /// The stored key for a CONNECTION, or null when none is stored. (#678)
+    /// One stored secret, or null when none is stored.
     ///
-    /// <para>Keyed by connection id rather than by provider kind, which was a two-member enum — so every
-    /// OpenAI-compatible endpoint shared a single slot, and configuring a second one silently overwrote the
-    /// first.</para>
+    /// <para><b>Keyed by connection AND name</b> (#759). By connection because a two-member provider enum once
+    /// meant every OpenAI-compatible endpoint shared a slot (#678); by name because a single request can need
+    /// more than one secret — Cloudflare's gateway wants a gateway token beside the upstream key (#701),
+    /// Bedrock a secret access key beside an access key id (#702). A connection with one secret simply calls
+    /// it <see cref="AiCredentialNames.Primary"/>.</para>
     /// </summary>
-    string? GetApiKey(string connectionId);
+    string? Get(string connectionId, string name);
 
-    /// <summary>Store or replace a connection's key. False when the platform cannot.</summary>
-    bool SetApiKey(string connectionId, string apiKey);
+    /// <summary>Store or replace one named secret. False when the platform cannot.</summary>
+    bool Set(string connectionId, string name, string secret);
 
-    /// <summary>Forget a connection's key. Forgetting one never stored counts as success.</summary>
-    bool DeleteApiKey(string connectionId);
+    /// <summary>Forget one named secret. Forgetting one never stored counts as success.</summary>
+    bool Delete(string connectionId, string name);
+}
+
+/// <summary>
+/// The names a connection files its secrets under. (#759)
+///
+/// <para>These are ours, never the reader's: a name is part of the storage address, so a typo in one is a
+/// credential that cannot be found again rather than an error anyone sees. Presets declare which names they
+/// need; the reader only ever fills them in.</para>
+/// </summary>
+public static class AiCredentialNames
+{
+    /// <summary>The credential the auth header carries — what every provider in the catalogue needs, and for
+    /// almost all of them the only one.</summary>
+    public const string Primary = "primary";
 }
 
 /// <summary>
@@ -192,7 +208,7 @@ public sealed class ChatProviderResolver : IChatProviderResolver
             return null;
         }
 
-        var apiKey = _credentials?.GetApiKey(connection.Id);
+        var apiKey = _credentials?.Get(connection.Id, AiCredentialNames.Primary);
 
         switch (kind)
         {

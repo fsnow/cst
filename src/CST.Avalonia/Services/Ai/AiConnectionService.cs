@@ -188,7 +188,7 @@ namespace CST.Avalonia.Services.Ai
         }
 
         private CredentialSource SourceFor(string connectionId) =>
-            _credentials?.GetApiKey(connectionId) is not null
+            _credentials?.Get(connectionId, AiCredentialNames.Primary) is not null
                 ? CredentialSource.Keychain
                 : CredentialSource.None;
 
@@ -271,10 +271,15 @@ namespace CST.Avalonia.Services.Ai
 
             Chat.Connections.Remove(record);
 
-            // The credential goes with the record. Removing a connection while leaving its key behind would
+            // The credentials go with the record. Removing a connection while leaving a secret behind would
             // leave an orphan in the keychain that nothing can ever reach or clean up - and that would be
             // silently re-adopted if someone later created a connection with the same id.
-            _credentials?.DeleteApiKey(record.Id);
+            //
+            // EVERY name, not just the primary one (#759): a connection may file more than one secret, and an
+            // orphan is invisible precisely because nothing reads it. This is the one place that has to know
+            // the full set, so it is the one place to extend when a provider adds a name.
+            foreach (var name in CredentialNamesOf(record))
+                _credentials?.Delete(record.Id, name);
 
             // Do not leave the active pointer dangling at something that no longer exists - a stale id reads
             // as "configured" to anything that only checks for null.
@@ -509,6 +514,18 @@ namespace CST.Avalonia.Services.Ai
             ReachabilityOf(r.Id),
             r.AuthHeaderName,
             r.AuthScheme);
+
+        /// <summary>
+        /// Every credential name this connection could have filed a secret under. (#759)
+        ///
+        /// <para>Derived rather than recorded, so it cannot drift out of step with what was actually stored:
+        /// a list in the settings file would be one more thing to keep true, and the failure mode of it being
+        /// stale is an orphaned credential nobody can see.</para>
+        /// </summary>
+        private static IEnumerable<string> CredentialNamesOf(AiConnectionRecord record)
+        {
+            yield return AiCredentialNames.Primary;
+        }
 
         /// <summary>
         /// Ids are the reserved namespace a custom connection may not take, and they become the credential's
