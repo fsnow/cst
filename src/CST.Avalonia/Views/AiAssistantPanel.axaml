@@ -293,21 +293,16 @@
                                                      model picker (#693). An Auto column would measure the
                                                      label at infinite width and push the tick off the row. -->
                                                 <Grid ColumnDefinitions="*,Auto">
-                                                    <StackPanel Grid.Column="0">
-                                                        <TextBlock Text="{Binding Label}" FontSize="12"
-                                                                   Classes.current="{Binding IsCurrent}">
-                                                            <TextBlock.Styles>
-                                                                <Style Selector="TextBlock.current">
-                                                                    <Setter Property="Foreground"
-                                                                            Value="{DynamicResource SystemAccentColor}"/>
-                                                                </Style>
-                                                            </TextBlock.Styles>
-                                                        </TextBlock>
-                                                        <TextBlock Text="{Binding Hint}"
-                                                                   IsVisible="{Binding HasHint}"
-                                                                   FontSize="10" TextWrapping="Wrap"
-                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="0" Text="{Binding Label}"
+                                                               FontSize="12" VerticalAlignment="Center"
+                                                               Classes.current="{Binding IsCurrent}">
+                                                        <TextBlock.Styles>
+                                                            <Style Selector="TextBlock.current">
+                                                                <Setter Property="Foreground"
+                                                                        Value="{DynamicResource SystemAccentColor}"/>
+                                                            </Style>
+                                                        </TextBlock.Styles>
+                                                    </TextBlock>
                                                     <TextBlock Grid.Column="1" Text="✓" FontSize="11"
                                                                IsVisible="{Binding IsCurrent}"
                                                                VerticalAlignment="Center"
@@ -317,10 +312,6 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-
-                                <TextBlock Text="Only the levels this model publishes. Provider default sends nothing, so the provider applies its own."
-                                           FontSize="10" TextWrapping="Wrap" Margin="6,6,6,2"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>
