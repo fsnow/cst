@@ -132,6 +132,35 @@ namespace CST.Avalonia.Models
         /// <summary>Stable slug, immutable once created, and the account the credential is filed under.</summary>
         public string Id { get; set; } = "";
 
+        /// <summary>
+        /// The provider-list entry this connection was added from, or null for a custom endpoint. (#766)
+        ///
+        /// <para><b>Recorded at the moment it is known, because it cannot be recovered later.</b> It used to
+        /// be inferred by matching the id against the preset list, on the reasoning that a custom connection
+        /// is refused any preset's id — true when the connection is created, and only against the presets
+        /// known then. Since #733 that list is generated from a models.dev catalogue that grows, so a custom
+        /// endpoint whose slug later appears in it was silently reclassified: its sheet narrowed to the key
+        /// box, hiding its own address and models, and told the reader the address "comes from the provider
+        /// list", which was false.</para>
+        ///
+        /// <para><b>Three states, and the difference between two of them is the whole point.</b></para>
+        /// <list type="bullet">
+        /// <item>a preset id — added from the provider list, and this is which entry;</item>
+        /// <item><b>empty</b> — recorded as a custom endpoint. Known, not merely unstated;</item>
+        /// <item><b>null</b> — nothing was recorded, because the file predates this field.</item>
+        /// </list>
+        ///
+        /// <para>Collapsing the last two is what the first cut of this did, and it did not fix the bug: a
+        /// custom connection created after the change looked exactly like one from an older file, so it still
+        /// fell through to the id match and was still reclassified when the catalogue grew into its slug. An
+        /// absence has to be recorded as an absence to be worth anything — the same shape as #728's marking
+        /// rules and <c>Reachability</c>'s third state.</para>
+        ///
+        /// <para>Only null falls back to matching the id, which is the right answer for every connection a
+        /// pre-#766 file can hold.</para>
+        /// </summary>
+        public string? PresetId { get; set; }
+
         public string DisplayName { get; set; } = "";
 
         /// <summary><c>anthropic</c> or <c>openai-compatible</c>. A string rather than the enum so a rename

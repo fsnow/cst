@@ -225,7 +225,7 @@ public class AiConnectionsViewModelTests
         var connection = new AiConnection(
             "local", "Local Ollama", ChatProviderKind.OpenAiCompatible, baseUrl,
             new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>(),
-            source, state);
+            PresetId: null, KeySource: source, State: state);
         return new AiConnectionRowViewModel(new AiConnectionsViewModel(null, null), connection);
     }
 
@@ -959,7 +959,11 @@ public class AiConnectionRowLogoTests
             "Anthropic (work)", ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
             Array.Empty<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>()));
         var row = vm.Connections.Single();
-        await row.LogoLoad!;
+
+        // May be null now: a connection recorded as custom does not attempt a lookup at all, because there is
+        // no provider behind it to look up. Before #766 it tried the id and got nothing; now it does not ask.
+        // The assertion is the intent either way — a custom endpoint shows no provider mark.
+        if (row.LogoLoad is not null) await row.LogoLoad;
 
         Assert.Equal("anthropic-work", row.Id);
         Assert.Null(row.LogoPath);

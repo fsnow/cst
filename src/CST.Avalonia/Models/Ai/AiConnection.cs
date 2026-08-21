@@ -147,6 +147,7 @@ namespace CST.Avalonia.Models.Ai
         IReadOnlyList<AiModelEntry> Models,
         IReadOnlyList<AiHeader> Headers,
         IReadOnlyDictionary<string, string> Inputs,
+        string? PresetId = null,
         CredentialSource KeySource = CredentialSource.None,
         Reachability State = Reachability.Configured,
         string AuthHeaderName = "Authorization",

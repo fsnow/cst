@@ -221,7 +221,9 @@ namespace CST.Avalonia.Services.Ai
             if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
             if (UnfilledInput(id, draft) is { } unfilled) return AiConnectionResult.Fail(unfilled);
 
-            var record = new AiConnectionRecord { Id = id };
+            // Empty rather than null: this connection is recorded as having NO preset, which is a different
+            // fact from "nothing was recorded". See AiConnectionRecord.PresetId. (#766)
+            var record = new AiConnectionRecord { Id = id, PresetId = "" };
             Apply(record, draft);
             Chat.Connections.Add(record);
             Chat.ActiveConnectionId ??= record.Id;
@@ -247,6 +249,8 @@ namespace CST.Avalonia.Services.Ai
             var record = new AiConnectionRecord
             {
                 Id = preset.Id,
+                // The one moment the origin is a fact rather than an inference. (#766)
+                PresetId = preset.Id,
                 DisplayName = preset.DisplayName,
                 Kind = preset.Kind == ChatProviderKind.Anthropic ? "anthropic" : "openai-compatible",
                 BaseUrl = preset.BaseUrl,
@@ -621,6 +625,7 @@ namespace CST.Avalonia.Services.Ai
                 .ToList(),
             r.Headers.Select(h => new AiHeader(h.Name, h.Secret ? null : h.Value, h.Secret)).ToList(),
             new Dictionary<string, string>(r.Inputs),
+            r.PresetId,
             SourceFor(r.Id),
             ReachabilityOf(r.Id),
             r.AuthHeaderName,
