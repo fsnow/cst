@@ -21,12 +21,16 @@ public class AiModelPickerViewModelTests
 {
     private sealed class FakeCredentialStore : IAiCredentialStore
     {
+        /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
+        private static string Account(string connectionId, string name) => connectionId + ":" + name;
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? GetApiKey(string connectionId) => Keys.GetValueOrDefault(connectionId);
-        public bool SetApiKey(string connectionId, string apiKey) { Keys[connectionId] = apiKey; return true; }
-        public bool DeleteApiKey(string connectionId) => Keys.Remove(connectionId);
+        public string? Get(string connectionId, string name) =>
+            Keys.GetValueOrDefault(Account(connectionId, name));
+        public bool Set(string connectionId, string name, string secret)
+        { Keys[Account(connectionId, name)] = secret; return true; }
+        public bool Delete(string connectionId, string name) => Keys.Remove(Account(connectionId, name));
     }
 
     private static (AiModelPickerViewModel Picker, AiConnectionService Service, FakeCredentialStore Keys) Make()
@@ -406,7 +410,7 @@ public class AiModelPickerViewModelTests
         Assert.False(model.IsUsable);
         Assert.Equal("no API key stored", model.Unusable);
 
-        keys.SetApiKey("openrouter", "sk-or-secret");
+        keys.Set("openrouter", AiCredentialNames.Primary, "sk-or-secret");
         picker.Refresh();
 
         Assert.True(AllModels(picker).Single().IsUsable);

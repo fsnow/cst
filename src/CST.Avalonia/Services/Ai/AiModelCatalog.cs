@@ -237,7 +237,7 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         private void Authenticate(HttpRequestMessage request, AiConnection connection)
         {
-            var key = _credentials?.GetApiKey(connection.Id);
+            var key = _credentials?.Get(connection.Id, AiCredentialNames.Primary);
             var headers = connection.Headers.ToDictionary(
                 h => h.Key, h => AiTemplate.Expand(h.Value, connection.Inputs));
 

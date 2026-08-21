@@ -278,7 +278,7 @@ namespace CST.Avalonia.ViewModels
         internal void RemoveKey(string id)
         {
             if (_credentials is null) return;
-            _credentials.DeleteApiKey(id);
+            _credentials.Delete(id, AiCredentialNames.Primary);
             Rebind();
         }
 

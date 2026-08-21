@@ -80,12 +80,16 @@ public class AiConnectionsViewModelTests
     /// <summary>An in-memory keychain. The real one would need a Keychain prompt per test.</summary>
     internal sealed class FakeCredentialStore : IAiCredentialStore
     {
+        /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
+        private static string Account(string connectionId, string name) => connectionId + ":" + name;
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? GetApiKey(string connectionId) => Keys.GetValueOrDefault(connectionId);
-        public bool SetApiKey(string connectionId, string apiKey) { Keys[connectionId] = apiKey; return true; }
-        public bool DeleteApiKey(string connectionId) => Keys.Remove(connectionId);
+        public string? Get(string connectionId, string name) =>
+            Keys.GetValueOrDefault(Account(connectionId, name));
+        public bool Set(string connectionId, string name, string secret)
+        { Keys[Account(connectionId, name)] = secret; return true; }
+        public bool Delete(string connectionId, string name) => Keys.Remove(Account(connectionId, name));
     }
 
     /// <summary>Adds a preset the way a reader does — open the sheet, fill it in, save. There is no
@@ -349,8 +353,8 @@ public class AiConnectionsViewModelTests
         AddThroughSheet(vm, "ollama");
         AddThroughSheet(vm, "openrouter", key: "sk-or-secret");
 
-        Assert.Equal("sk-or-secret", keys.GetApiKey("openrouter"));
-        Assert.Null(keys.GetApiKey("ollama"));
+        Assert.Equal("sk-or-secret", keys.Get("openrouter", AiCredentialNames.Primary));
+        Assert.Null(keys.Get("ollama", AiCredentialNames.Primary));
     }
 
     /// <summary>Where the credential came from is read off the store, so storing one moves the badge without
@@ -370,7 +374,7 @@ public class AiConnectionsViewModelTests
         row.RemoveKeyCommand.Execute().Subscribe();
 
         Assert.Equal("No key", vm.Connections.Single().KeySourceBadge);
-        Assert.Null(keys.GetApiKey("openrouter"));
+        Assert.Null(keys.Get("openrouter", AiCredentialNames.Primary));
     }
 
     /// <summary>Removing a key must not take the connection or its models with it — the whole reason the two

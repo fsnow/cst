@@ -254,13 +254,20 @@ public class AiConnectionServiceTests
     /// <summary>An in-memory credential store, keyed by connection id exactly as the real one now is.</summary>
     private sealed class Keys : IAiCredentialStore
     {
-        private readonly Dictionary<string, string> _byConnection = new();
+        private readonly Dictionary<string, string> _byAccount = new();
+
+        /// <summary>The same joined spelling the real store uses, so a test that stores under one name and
+        /// reads under another sees a miss rather than a hit (#759).</summary>
+        private static string Account(string connectionId, string name) => connectionId + ":" + name;
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? GetApiKey(string connectionId) =>
-            _byConnection.TryGetValue(connectionId, out var k) ? k : null;
-        public bool SetApiKey(string connectionId, string apiKey) { _byConnection[connectionId] = apiKey; return true; }
-        public bool DeleteApiKey(string connectionId) { _byConnection.Remove(connectionId); return true; }
+        public string? Get(string connectionId, string name) =>
+            _byAccount.TryGetValue(Account(connectionId, name), out var k) ? k : null;
+        public bool Set(string connectionId, string name, string secret)
+        { _byAccount[Account(connectionId, name)] = secret; return true; }
+        public bool Delete(string connectionId, string name)
+        { _byAccount.Remove(Account(connectionId, name)); return true; }
     }
 
     private static (AiConnectionService Service, Settings Settings, Keys Keys) MakeWithKeys()
@@ -286,11 +293,11 @@ public class AiConnectionServiceTests
         service.Add("openrouter-box", Draft("OpenRouter", "https://openrouter.ai/api/v1"));
         service.Add("local-ollama", Draft("Ollama", "http://localhost:11434/v1"));
 
-        keys.SetApiKey("openrouter-box", "or-key");
-        keys.SetApiKey("local-ollama", "ollama-key");
+        keys.Set("openrouter-box", AiCredentialNames.Primary, "or-key");
+        keys.Set("local-ollama", AiCredentialNames.Primary, "ollama-key");
 
-        Assert.Equal("or-key", keys.GetApiKey("openrouter-box"));
-        Assert.Equal("ollama-key", keys.GetApiKey("local-ollama"));
+        Assert.Equal("or-key", keys.Get("openrouter-box", AiCredentialNames.Primary));
+        Assert.Equal("ollama-key", keys.Get("local-ollama", AiCredentialNames.Primary));
     }
 
     /// <summary>A connection reports where its credential came from, so the UI can name the source and — for
@@ -303,7 +310,7 @@ public class AiConnectionServiceTests
 
         Assert.Equal(CredentialSource.None, service.Connections.Single().KeySource);
 
-        keys.SetApiKey("box", "k");
+        keys.Set("box", AiCredentialNames.Primary, "k");
 
         Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
     }
@@ -317,11 +324,11 @@ public class AiConnectionServiceTests
     {
         var (service, _, keys) = MakeWithKeys();
         service.Add("box", Draft());
-        keys.SetApiKey("box", "k");
+        keys.Set("box", AiCredentialNames.Primary, "k");
 
         service.Remove("box");
 
-        Assert.Null(keys.GetApiKey("box"));
+        Assert.Null(keys.Get("box", AiCredentialNames.Primary));
     }
 
     // ---- reachability write-back (#673) ------------------------------------------------------------------
