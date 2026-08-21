@@ -509,6 +509,15 @@ public class AiModelPickerViewModelTests
             picker.Choices.Select(c => c.Label));
     }
 
+    /// <summary>And with a published default, the levels alone.</summary>
+    [Fact]
+    public void The_effort_chip_offers_only_the_levels_when_the_default_is_known()
+    {
+        var (picker, _) = MakeEffortWithDefault("high", "low", "high", "max");
+
+        Assert.Equal(new[] { "low", "high", "max" }, picker.Choices.Select(c => c.Label));
+    }
+
     /// <summary>Provider default is first, sends nothing, and is where an untouched setting sits.</summary>
     [Fact]
     public void Provider_default_is_first_and_current_until_something_is_chosen()
@@ -541,6 +550,88 @@ public class AiModelPickerViewModelTests
         picker.Choices.First().ChooseCommand.Execute().Subscribe();
 
         Assert.Null(settings.Ai.Chat.ReasoningEffort);
+    }
+
+    private static (AiEffortPickerViewModel Picker, Settings Settings) MakeEffortWithDefault(
+        string theirDefault, params string[] efforts)
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, new FakeCredentialStore());
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[] { new AiModelEntry("m", "M", ReasoningEfforts: efforts,
+                                     DefaultReasoningEffort: theirDefault) },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "m");
+        return (new AiEffortPickerViewModel(service, svc.Object), settings);
+    }
+
+    /// <summary>
+    /// Where the provider says which level it applies, that level is ticked and there is no separate
+    /// "Provider default" row: the reader wants to know what will happen, and a row saying "default" above a
+    /// list containing the default says it twice and answers it once.
+    /// </summary>
+    [Fact]
+    public void A_published_default_is_ticked_and_needs_no_extra_row()
+    {
+        var (picker, settings) = MakeEffortWithDefault("high", "high", "medium");
+
+        Assert.Equal(new[] { "high", "medium" }, picker.Choices.Select(c => c.Label));
+        Assert.True(picker.Choices.Single(c => c.Label == "high").IsCurrent);
+        Assert.Equal("Effort: high", picker.CurrentLabel);
+        Assert.Null(settings.Ai.Chat.ReasoningEffort);   // ticked, and still sending nothing
+    }
+
+    /// <summary>The tick describes the outcome, not the payload: nothing is sent until the reader moves it.</summary>
+    [Fact]
+    public void Ticking_the_published_default_does_not_start_sending_a_field()
+    {
+        var (_, settings) = MakeEffortWithDefault("high", "high", "medium");
+
+        Assert.Null(settings.Ai.Chat.ReasoningEffort);
+    }
+
+    [Fact]
+    public void Choosing_a_level_beside_the_published_default_moves_the_tick()
+    {
+        var (picker, settings) = MakeEffortWithDefault("high", "high", "medium");
+
+        picker.Choices.Single(c => c.Label == "medium").ChooseCommand.Execute().Subscribe();
+
+        Assert.Equal("medium", settings.Ai.Chat.ReasoningEffort);
+        Assert.True(picker.Choices.Single(c => c.Label == "medium").IsCurrent);
+        Assert.False(picker.Choices.Single(c => c.Label == "high").IsCurrent);
+    }
+
+    /// <summary>
+    /// The same stale-choice case with a published default: the default level is ticked, not nothing — the
+    /// wire drops the stale value and the provider applies its own, so that is what the flyout must say.
+    /// </summary>
+    [Fact]
+    public void A_stale_choice_falls_back_to_the_published_default_being_ticked()
+    {
+        var (picker, settings) = MakeEffortWithDefault("high", "high", "medium");
+        settings.Ai.Chat.ReasoningEffort = "max";   // real elsewhere, absent here
+        picker.Rebuild();
+
+        Assert.True(picker.Choices.Single(c => c.Label == "high").IsCurrent);
+        Assert.False(picker.Choices.Single(c => c.Label == "medium").IsCurrent);
+        Assert.Equal("Effort: high", picker.CurrentLabel);
+    }
+
+    /// <summary>
+    /// Where the provider publishes no default there is no basis for ticking a level, so the extra row earns
+    /// its place: something has to be current.
+    /// </summary>
+    [Fact]
+    public void With_no_published_default_the_provider_default_row_remains()
+    {
+        var (picker, _, _) = MakeEffort("low", "high");
+
+        Assert.Equal(new[] { "Provider default", "low", "high" }, picker.Choices.Select(c => c.Label));
+        Assert.True(picker.Choices.First().IsCurrent);
     }
 
     /// <summary>
@@ -617,29 +708,4 @@ public class AiModelPickerViewModelTests
         Assert.False(picker.HasChoices);
     }
 
-    /// <summary>
-    /// The provider's own statement of its default is shown against that position rather than acted on: not
-    /// sending the field already means exactly that, so preselecting a level would send something where
-    /// nothing was asked for.
-    /// </summary>
-    [Fact]
-    public void A_published_default_is_shown_as_a_hint_not_preselected()
-    {
-        var settings = new Settings();
-        var svc = new Mock<ISettingsService>();
-        svc.SetupGet(s => s.Settings).Returns(settings);
-        var service = new AiConnectionService(svc.Object, new FakeCredentialStore());
-        service.Add("mine", new AiConnectionDraft(
-            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
-            new[] { new AiModelEntry("m", "M", ReasoningEfforts: new[] { "low", "high" },
-                                     DefaultReasoningEffort: "high") },
-            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
-        service.SetActive("mine", "m");
-
-        var picker = new AiEffortPickerViewModel(service, svc.Object);
-
-        Assert.Contains("high", picker.Choices.First().Hint);
-        Assert.True(picker.Choices.First().IsCurrent);       // still the default position
-        Assert.Null(settings.Ai.Chat.ReasoningEffort);       // and still sends nothing
-    }
 }

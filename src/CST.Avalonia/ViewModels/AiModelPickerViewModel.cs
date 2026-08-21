@@ -427,32 +427,30 @@ namespace CST.Avalonia.ViewModels
             }
 
             var chosen = Chosen;
+            var theirs = model!.DefaultReasoningEffort;
+            var knowTheirDefault = theirs is { Length: > 0 } && published.Contains(theirs, StringComparer.Ordinal);
 
-            // Current when nothing WILL be sent, which is not the same as nothing being stored. A choice made
-            // on another model - "max" on DeepSeek, then a switch to a model offering low/medium/high - is
-            // outside this model's vocabulary, so the wire guard drops it and the provider applies its own
-            // default. Keying this off "is anything stored" left no row ticked at all, showing the reader an
-            // unmarked list for a setting that does in fact have an effect. This is the same fact the chip
-            // label already told them; the flyout has to agree with it. (fable review)
+            // What will actually happen on the next turn, which is what the tick has to describe.
+            //
+            // A stored choice only counts while it is in THIS model's vocabulary — the wire guard drops it
+            // otherwise, so "max" chosen on DeepSeek is inert on a model offering low/medium/high. Where the
+            // provider states its own default, that is what happens when nothing is sent, so that level is
+            // current. Where it does not, nothing here can say what happens, and the extra row carries it.
             var willSend = !string.IsNullOrWhiteSpace(chosen)
-                           && published.Any(v => string.Equals(v, chosen, StringComparison.Ordinal));
+                           && published.Contains(chosen!, StringComparer.Ordinal);
+            var current = willSend ? chosen : (knowTheirDefault ? theirs : null);
 
-            // The default sits first because it is the position that sends nothing, and because a reader
-            // scanning the list should meet "leave it alone" before any level.
-            Choices.Add(new AiEffortChoiceViewModel(
-                null,
-                "Provider default",
-                model!.DefaultReasoningEffort is { Length: > 0 } theirs ? $"the provider uses {theirs}" : null,
-                !willSend,
-                Choose));
+            // No separate "Provider default" row where the provider named its default: the reader wants to
+            // know what will happen, and a row saying "default" above a list containing that same default
+            // says it twice and answers it once. Nothing is sent while their choice matches it, exactly as
+            // before — the tick describes the outcome, not the payload.
+            if (!knowTheirDefault)
+                Choices.Add(new AiEffortChoiceViewModel(
+                    null, "Provider default", current is null, Choose));
 
             foreach (var value in published)
                 Choices.Add(new AiEffortChoiceViewModel(
-                    value,
-                    value,
-                    null,
-                    string.Equals(value, chosen, StringComparison.Ordinal),
-                    Choose));
+                    value, value, string.Equals(value, current, StringComparison.Ordinal), Choose));
 
             this.RaisePropertyChanged(nameof(HasChoices));
             this.RaisePropertyChanged(nameof(CurrentLabel));
@@ -484,11 +482,10 @@ namespace CST.Avalonia.ViewModels
         private readonly Action<string?> _choose;
 
         public AiEffortChoiceViewModel(
-            string? value, string label, string? hint, bool isCurrent, Action<string?> choose)
+            string? value, string label, bool isCurrent, Action<string?> choose)
         {
             Value = value;
             Label = label;
-            Hint = hint;
             IsCurrent = isCurrent;
             _choose = choose;
             ChooseCommand = ReactiveCommand.Create(() => _choose(Value));
@@ -497,11 +494,6 @@ namespace CST.Avalonia.ViewModels
         public string? Value { get; }
         public string Label { get; }
 
-        /// <summary>The provider's own statement of what it does by default, where it makes one. Shown rather
-        /// than acted on: we do not preselect it, because not sending the field already means exactly that.</summary>
-        public string? Hint { get; }
-
-        public bool HasHint => !string.IsNullOrWhiteSpace(Hint);
         public bool IsCurrent { get; }
 
         /// <summary>What the chip shows when this position is the current one.</summary>
