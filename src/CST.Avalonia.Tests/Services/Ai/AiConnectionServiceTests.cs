@@ -480,4 +480,67 @@ public class AiConnectionServiceTests
 
         Assert.False(service.Connections.Single().Models.Single().Missing);
     }
+
+    // ---- the endpoint's measured path convention (#742) --------------------------------------------------
+
+    [Fact]
+    public void A_measured_path_convention_is_recorded_on_the_connection()
+    {
+        var (service, settings) = Make();
+        service.Add("perplexity-custom", Draft(url: "https://api.perplexity.ai"));
+
+        service.ReportEndpointVersioning("perplexity-custom", false);
+
+        var record = settings.Ai.Chat.Connections.Single(c => c.Id == "perplexity-custom");
+        Assert.False(record.UsesVersionSegment);
+        Assert.False(service.Connections.Single(c => c.Id == "perplexity-custom").UsesVersionSegment);
+    }
+
+    /// <summary>
+    /// The Models tab records this on every successful fetch, so re-reporting the same answer must not
+    /// rewrite settings or raise ConnectionsChanged — a tab opened five times would otherwise churn both.
+    /// </summary>
+    [Fact]
+    public void Re_reporting_the_same_convention_raises_nothing()
+    {
+        var (service, _) = Make();
+        service.Add("my-box", Draft(url: "https://api.perplexity.ai"));
+        service.ReportEndpointVersioning("my-box", false);
+
+        var raised = 0;
+        service.ConnectionsChanged += (_, _) => raised++;
+        service.ReportEndpointVersioning("my-box", false);
+
+        Assert.Equal(0, raised);
+    }
+
+    /// <summary>
+    /// It is a fact about one URL. Retyping the base URL invalidates it, and keeping it would apply the old
+    /// endpoint's convention to a new host — the failure being silent is the whole reason #742 exists.
+    /// </summary>
+    [Fact]
+    public void Retyping_the_base_url_forgets_what_was_measured()
+    {
+        var (service, settings) = Make();
+        service.Add("my-box", Draft(url: "https://api.perplexity.ai"));
+        service.ReportEndpointVersioning("my-box", false);
+
+        service.Update("my-box", Draft(url: "https://api.deepseek.com"));
+
+        Assert.Null(settings.Ai.Chat.Connections.Single(c => c.Id == "my-box").UsesVersionSegment);
+    }
+
+    /// <summary>An edit that leaves the URL alone keeps it — renaming a connection is not a reason to
+    /// re-probe an endpoint that has not moved.</summary>
+    [Fact]
+    public void An_edit_that_leaves_the_url_alone_keeps_what_was_measured()
+    {
+        var (service, settings) = Make();
+        service.Add("my-box", Draft(url: "https://api.perplexity.ai"));
+        service.ReportEndpointVersioning("my-box", false);
+
+        service.Update("my-box", Draft(name: "Renamed", url: "https://api.perplexity.ai"));
+
+        Assert.False(settings.Ai.Chat.Connections.Single(c => c.Id == "my-box").UsesVersionSegment);
+    }
 }

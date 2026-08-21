@@ -27,7 +27,8 @@ namespace CST.Avalonia.Services.Ai;
 public sealed record AnthropicOptions(
     string? ApiKey,
     string? BaseUrl = null,
-    IReadOnlyDictionary<string, string>? ExtraHeaders = null)
+    IReadOnlyDictionary<string, string>? ExtraHeaders = null,
+    bool? UsesVersionSegment = null)
 {
     internal const string DefaultBaseUrl = "https://api.anthropic.com";
 
@@ -147,7 +148,8 @@ public sealed class AnthropicMessagesProvider : IChatProvider
             string.IsNullOrWhiteSpace(_options.BaseUrl) ? AnthropicOptions.DefaultBaseUrl : _options.BaseUrl!,
             versionedPath: "v1/messages",
             path: "messages",
-            convention: BaseUrlConvention.ExcludesVersion);
+            convention: BaseUrlConvention.ExcludesVersion,
+            usesVersionSegment: _options.UsesVersionSegment);
 
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {

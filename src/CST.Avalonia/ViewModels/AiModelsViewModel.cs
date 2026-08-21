@@ -422,6 +422,13 @@ namespace CST.Avalonia.ViewModels
                 // the endpoint and thrown the knowledge away.
                 if (result.Reachable is { } reachable)
                     _owner.Service?.ReportReachability(Id, reachable);
+
+                // The listing also measures something the chat path has been guessing at: whether this
+                // endpoint takes a version segment on a bare base URL. Recorded here because this is the one
+                // request that can find out cheaply, and recording it is what stops every later chat turn
+                // from 404-ing against a URL the reader cannot see us rewriting. (#742)
+                if (result.UsesVersionSegment is { } usesVersion)
+                    _owner.Service?.ReportEndpointVersioning(Id, usesVersion);
             }
             catch (Exception ex)
             {

@@ -147,8 +147,14 @@ internal static class AiHttp
     /// <param name="versionedPath">Path used when the version segment must be added, e.g. <c>v1/chat/completions</c>.</param>
     /// <param name="path">Path used when the base already carries the version, e.g. <c>chat/completions</c>.</param>
     /// <param name="convention">Which convention the provider's own documentation follows.</param>
+    /// <param name="usesVersionSegment">
+    /// What this endpoint was measured to want, overriding the guess. Null until something has actually
+    /// asked it. A base URL that already carries a version segment, or already names the endpoint, is left
+    /// alone either way — this decides only the cases where we would otherwise be guessing. (#742)
+    /// </param>
     internal static Uri ResolveEndpoint(
-        string baseUrl, string versionedPath, string path, BaseUrlConvention convention)
+        string baseUrl, string versionedPath, string path, BaseUrlConvention convention,
+        bool? usesVersionSegment = null)
     {
         var trimmed = (baseUrl ?? string.Empty).Trim();
         if (trimmed.Length == 0 || !Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
@@ -171,8 +177,11 @@ internal static class AiHttp
         var segments = existing.Length == 0 ? Array.Empty<string>() : existing.Split('/');
         var addVersion = segments.Length switch
         {
-            0 => true,                                   // bare host always needs the version segment
-            _ when IsVersionSegment(segments[^1]) => false,   // already versioned
+            _ when segments.Length > 0 && IsVersionSegment(segments[^1]) => false,   // already versioned
+            // A measured answer beats the guess, and only ever replaces a guess: the two branches above are
+            // facts about the URL in hand, not inferences about the provider.
+            _ when usesVersionSegment is { } measured => measured,
+            0 => true,                                   // bare host: assume it needs the version segment
             _ => convention == BaseUrlConvention.ExcludesVersion || segments.Length == 1,
         };
 

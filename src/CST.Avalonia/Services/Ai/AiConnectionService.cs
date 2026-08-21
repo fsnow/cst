@@ -115,6 +115,12 @@ namespace CST.Avalonia.Services.Ai
         /// never reaches the surface a reader consults to diagnose. Both now read one fact.</para>
         /// </summary>
         void ReportReachability(string connectionId, bool reachable);
+
+        /// <summary>
+        /// Records what a listing measured about this endpoint's path convention, so every later request
+        /// stops guessing. Written only when it changes. (#742)
+        /// </summary>
+        void ReportEndpointVersioning(string connectionId, bool usesVersionSegment);
     }
 
     /// <summary>
@@ -319,6 +325,24 @@ namespace CST.Avalonia.Services.Ai
         }
 
         /// <summary>
+        /// Records the endpoint's measured path convention. Written to settings, because the point is that the
+        /// NEXT launch does not have to rediscover it — and unlike reachability, which is a fact about right
+        /// now, this is a fact about the endpoint. (#742)
+        ///
+        /// <para>Writes only on a change, so a Models tab opened repeatedly does not rewrite settings or
+        /// raise <see cref="ConnectionsChanged"/> for nothing.</para>
+        /// </summary>
+        public void ReportEndpointVersioning(string connectionId, bool usesVersionSegment)
+        {
+            if (Find(connectionId) is not { } record) return;
+            if (record.UsesVersionSegment == usesVersionSegment) return;
+
+            record.UsesVersionSegment = usesVersionSegment;
+            _settings.RequestSave();
+            RaiseChanged();
+        }
+
+        /// <summary>
         /// Raises <see cref="ConnectionsChanged"/> on the UI thread. (fable review)
         ///
         /// <para><b>Why the hop lives here and not in each subscriber.</b> The only off-thread caller is
@@ -469,6 +493,14 @@ namespace CST.Avalonia.Services.Ai
 
         private static void Apply(AiConnectionRecord record, AiConnectionDraft draft)
         {
+            // BEFORE the assignment below, which is what makes this readable as a comparison at all.
+            //
+            // UsesVersionSegment is measured, not edited - there is no field for it on the editor and there
+            // should not be. But it is a fact about one URL, so a reader who retypes the base URL has
+            // invalidated it, and keeping it would apply the old endpoint's convention to a new host. (#742)
+            if (!string.Equals(record.BaseUrl, draft.BaseUrl, StringComparison.Ordinal))
+                record.UsesVersionSegment = null;
+
             record.DisplayName = draft.DisplayName;
             record.Kind = draft.Kind == ChatProviderKind.Anthropic ? "anthropic" : "openai-compatible";
             record.BaseUrl = draft.BaseUrl;
@@ -508,7 +540,8 @@ namespace CST.Avalonia.Services.Ai
             SourceFor(r.Id),
             ReachabilityOf(r.Id),
             r.AuthHeaderName,
-            r.AuthScheme);
+            r.AuthScheme,
+            r.UsesVersionSegment);
 
         /// <summary>
         /// Ids are the reserved namespace a custom connection may not take, and they become the credential's

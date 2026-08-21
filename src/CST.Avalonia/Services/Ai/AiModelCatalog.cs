@@ -88,10 +88,12 @@ namespace CST.Avalonia.Services.Ai
     /// </param>
     public sealed record AiCatalogResult(
         bool Ok, string? Problem, IReadOnlyList<AiCatalogModel> Models, bool? Reachable = null,
-        bool Complete = true)
+        bool Complete = true,
+        bool? UsesVersionSegment = null)
     {
-        public static AiCatalogResult Success(IReadOnlyList<AiCatalogModel> models, bool complete = true) =>
-            new(true, null, models, true, complete);
+        public static AiCatalogResult Success(
+            IReadOnlyList<AiCatalogModel> models, bool complete = true, bool? usesVersionSegment = null) =>
+            new(true, null, models, true, complete, usesVersionSegment);
 
         public static AiCatalogResult Fail(string problem, bool? reachable = null) =>
             new(false, problem, Array.Empty<AiCatalogModel>(), reachable, false);
@@ -142,19 +144,32 @@ namespace CST.Avalonia.Services.Ai
                 return AiCatalogResult.Fail(
                     $"{connection.DisplayName} is not finished being set up, so it cannot be asked for a list.");
 
+            var convention = connection.Kind == ChatProviderKind.Anthropic
+                ? BaseUrlConvention.ExcludesVersion
+                : BaseUrlConvention.IncludesVersion;
+
             Uri url;
+            Uri? alternative;
             try
             {
                 url = AiHttp.ResolveEndpoint(
-                    connection.ResolvedBaseUrl, "v1/models", "models",
-                    connection.Kind == ChatProviderKind.Anthropic
-                        ? BaseUrlConvention.ExcludesVersion
-                        : BaseUrlConvention.IncludesVersion);
+                    connection.ResolvedBaseUrl, "v1/models", "models", convention,
+                    connection.UsesVersionSegment);
+
+                // The other reading of the same base URL. Null when there is no other reading — the base
+                // already carries a version segment, or already names the endpoint, in which case nothing
+                // was guessed and there is nothing to probe.
+                var other = AiHttp.ResolveEndpoint(
+                    connection.ResolvedBaseUrl, "v1/models", "models", convention,
+                    !(connection.UsesVersionSegment ?? true));
+                alternative = other == url ? null : other;
             }
             catch (AiException ex)
             {
                 return AiCatalogResult.Fail(ex.Error.Message);
             }
+
+            bool? learned = null;
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             Authenticate(request, connection);
@@ -164,7 +179,40 @@ namespace CST.Avalonia.Services.Ai
 
             try
             {
-                using var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
+                var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
+
+                // A 404 from a URL we GUESSED at is the one failure worth a second question, because the
+                // guess is invisible to the reader: they typed the base URL their provider documents, and
+                // we added or withheld a /v1 they never saw. Perplexity is the measured case - it documents
+                // https://api.perplexity.ai and serves /chat/completions, so our version segment 404s
+                // every request. Asked once, at a moment the reader is already waiting, and never again:
+                // the answer is recorded on the connection. (#742)
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound
+                    && alternative is not null
+                    && connection.UsesVersionSegment is null)
+                {
+                    response.Dispose();
+                    _logger.LogDebug(
+                        "{Connection}: {Url} answered 404; trying {Alternative}",
+                        connection.Id, url, alternative);
+
+                    using var retry = new HttpRequestMessage(HttpMethod.Get, alternative);
+                    Authenticate(retry, connection);
+                    response = await _http.SendAsync(retry, timeout.Token).ConfigureAwait(false);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        // `alternative` is built with usesVersionSegment: false, so reaching here means the
+                        // endpoint answers WITHOUT the version segment. That is the fact to record.
+                        learned = false;
+                        url = alternative;
+                        _logger.LogInformation(
+                            "{Connection}: endpoint {Verb} a version segment; recorded",
+                            connection.Id, learned == true ? "takes" : "does not take");
+                    }
+                }
+
+                using var _held = response;
 
                 // Answered, even if the answer was no. A rejected key and a missing listing both prove the
                 // endpoint is there, which is the fact this reports - it says nothing about whether the
@@ -200,7 +248,7 @@ namespace CST.Avalonia.Services.Ai
                         + "{Skipped} had no usable id", models.Count, connection.Id, listed, listed - models.Count);
                     _logger.LogDebug("{Connection} listing: {Body}", connection.Id, body);
                 }
-                return AiCatalogResult.Success(models, complete);
+                return AiCatalogResult.Success(models, complete, learned);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

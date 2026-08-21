@@ -27,7 +27,8 @@ public sealed record OpenAiCompatibleOptions(
     string? ApiKey = null,
     string AuthHeaderName = "Authorization",
     string? AuthScheme = "Bearer",
-    IReadOnlyDictionary<string, string>? ExtraHeaders = null);
+    IReadOnlyDictionary<string, string>? ExtraHeaders = null,
+    bool? UsesVersionSegment = null);
 
 /// <summary>
 /// The OpenAI-compatible Chat Completions shape (<c>POST {baseUrl}/chat/completions</c>, SSE). One adapter for
@@ -89,7 +90,8 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
 
         var endpoint = AiHttp.ResolveEndpoint(
             _options.BaseUrl!, versionedPath: "v1/chat/completions", path: "chat/completions",
-            convention: BaseUrlConvention.IncludesVersion);
+            convention: BaseUrlConvention.IncludesVersion,
+            usesVersionSegment: _options.UsesVersionSegment);
 
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {

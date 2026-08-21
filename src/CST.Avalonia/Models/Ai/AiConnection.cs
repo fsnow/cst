@@ -108,7 +108,8 @@ namespace CST.Avalonia.Models.Ai
         CredentialSource KeySource = CredentialSource.None,
         Reachability State = Reachability.Configured,
         string AuthHeaderName = "Authorization",
-        string? AuthScheme = "Bearer")
+        string? AuthScheme = "Bearer",
+        bool? UsesVersionSegment = null)
     {
         /// <summary>The base URL with <see cref="Inputs"/> substituted in — what a request actually goes to.</summary>
         public string ResolvedBaseUrl => AiTemplate.Expand(BaseUrl, Inputs);

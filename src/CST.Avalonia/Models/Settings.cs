@@ -148,6 +148,18 @@ namespace CST.Avalonia.Models
         /// <summary>Prefix before the credential, or null for a bare value. Bearer for almost everything;
         /// null for Azure.</summary>
         public string? AuthScheme { get; set; } = "Bearer";
+
+        /// <summary>
+        /// Whether this endpoint takes a version segment on a base URL that has no path — learned from its
+        /// model listing, not configured. Null until learned. (#742)
+        ///
+        /// <para>Learned rather than typed because the reader cannot see the transformation: we turn
+        /// <c>https://api.perplexity.ai</c> into <c>…/v1/chat/completions</c>, Perplexity serves
+        /// <c>…/chat/completions</c>, and every request 404s with nothing on screen suggesting the URL was
+        /// altered. Asking the reader to know their provider's path convention would be asking them about
+        /// the one thing this bug hides from them.</para>
+        /// </summary>
+        public bool? UsesVersionSegment { get; set; }
     }
 
     /// <summary>One model a connection offers, as persisted.</summary>

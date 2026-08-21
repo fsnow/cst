@@ -214,7 +214,7 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                 return new ChatProviderResolution(
                     new AnthropicMessagesProvider(
                         _http,
-                        new AnthropicOptions(apiKey, NullIfBlank(baseUrl), headers),
+                        new AnthropicOptions(apiKey, NullIfBlank(baseUrl), headers, connection.UsesVersionSegment),
                         _loggerFactory.CreateLogger<AnthropicMessagesProvider>(),
                         firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());
@@ -236,7 +236,8 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                             NullIfBlank(apiKey),
                             connection.AuthHeaderName,
                             connection.AuthScheme,
-                            headers),
+                            headers,
+                            connection.UsesVersionSegment),
                         _loggerFactory.CreateLogger<OpenAiCompatibleProvider>(),
                         firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());
