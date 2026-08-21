@@ -34,6 +34,7 @@ namespace CST.Avalonia.ViewModels
         private readonly IAiConnectionService? _service;
         private readonly IAiModelCatalog? _catalog;
         private readonly IAiProviderLogos? _logos;
+        private readonly IAiModelListingCache? _listings;
         private string _search = "";
         private bool _freeOnly;
         private bool _suppressRebind;
@@ -41,17 +42,39 @@ namespace CST.Avalonia.ViewModels
         public AiModelsViewModel(
             IAiConnectionService? service,
             IAiModelCatalog? catalog = null,
-            IAiProviderLogos? logos = null)
+            IAiProviderLogos? logos = null,
+            IAiModelListingCache? listings = null)
         {
             _service = service;
             _catalog = catalog;
             _logos = logos;
+            _listings = listings;
 
             if (_service is not null)
             {
                 _service.ConnectionsChanged += OnConnectionsChanged;
                 Rebind();
+
+                // Every connection is asked again when this tab is built, which is the moment the reader has
+                // said "show me models". Not at application start: firing at every configured provider on
+                // launch, for a feature that ships disabled and a reader who may never open Settings, is the
+                // same thing AiCredentialStore refuses to do with the keychain and for the same reason.
+                //
+                // The cache is what makes the numbers right immediately; this is what keeps them current.
+                // Neither is redundant - without the cache the count is the reader's own list until the
+                // response lands, and offline it stays that way. (#790)
+                RefreshAll();
             }
+        }
+
+        internal IAiModelListingCache? Listings => _listings;
+
+        /// <summary>Asks every connection for its listing, without waiting and without reporting failures
+        /// here: each group already shows its own outcome, and a provider being down must not stop the tab
+        /// from rendering the others.</summary>
+        private void RefreshAll()
+        {
+            foreach (var group in Groups) group.BeginRefresh();
         }
 
         /// <summary>
@@ -161,7 +184,13 @@ namespace CST.Avalonia.ViewModels
 
             for (int i = Groups.Count - 1; i >= 0; i--)
                 if (!connections.Any(c => string.Equals(c.Id, Groups[i].Id, StringComparison.Ordinal)))
+                {
+                    // Forgetting here, where a connection is actually going away, rather than deleting
+                    // everything absent from the current list: a group only disappears because its connection
+                    // did. (#790)
+                    _listings?.Forget(Groups[i].Id);
                     Groups.RemoveAt(i);
+                }
 
             for (int i = 0; i < connections.Count; i++)
             {
@@ -207,9 +236,22 @@ namespace CST.Avalonia.ViewModels
 
             LoadLogo(owner.Logos);
 
+            // The provider's list, from the last time anyone asked - so the first paint is already the right
+            // set rather than the reader's own saved models. _hasFetched stays FALSE: this is what is shown,
+            // never what is concluded, and expanding still asks the endpoint. (#790)
+            _fetched = owner.Listings?.Get(connection.Id) ?? Array.Empty<AiCatalogModel>();
+
             ToggleCommand = ReactiveCommand.Create(() => { IsExpanded = !IsExpanded; });
             OpenDocCommand = ReactiveCommand.Create(() => AiConnectionsViewModel.OpenUrl(DocUrl));
             FetchCommand = ReactiveCommand.CreateFromTask(FetchAsync);
+        }
+
+        /// <summary>Start a listing fetch without waiting for it, unless one has already happened or is in
+        /// flight. Used when the tab is built, so a cached listing is brought up to date. (#790)</summary>
+        internal void BeginRefresh()
+        {
+            if (_hasFetched || _isFetching) return;
+            _ = FetchAsync();
         }
 
         public string Id => _connection.Id;
@@ -413,6 +455,12 @@ namespace CST.Avalonia.ViewModels
                 if (result.Ok)
                 {
                     _fetched = result.Models;
+
+                    // Recorded from any successful fetch, complete or not: an incomplete listing is a fine
+                    // thing to SHOW - every model in it is real - and showing it beats showing the reader's
+                    // own saved list. The completeness gate below is about what we INFER, which is a
+                    // different question and stays where it is. (#790, #728)
+                    _owner.Listings?.Put(Id, result.Models);
 
                     // The listing is in memory only while this tab is open, so what it says about the
                     // reader's stored models has to be written down now or the per-turn picker will go on

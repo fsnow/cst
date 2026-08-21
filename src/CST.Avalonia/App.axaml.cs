@@ -1439,6 +1439,12 @@ public partial class App : Application
             sp.GetService<Services.Ai.IAiCredentialStore>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<Services.Ai.AiModelCatalog>()));
 
+        // Each connection's last model listing, so the Models tab opens on the provider's list rather than
+        // on whatever the reader had saved. Beside models-dev.json rather than in settings.json: provider
+        // data, hundreds of entries per connection, and nothing else should share that file's failure
+        // mode. (#790)
+        services.AddSingleton<Services.Ai.IAiModelListingCache>(_ => new Services.Ai.AiModelListingCache());
+
         // The fidelity advisory (#584). Data only — Settings (#585) and the panel (#586) surface it.
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
