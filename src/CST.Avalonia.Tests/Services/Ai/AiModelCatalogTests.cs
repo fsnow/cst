@@ -376,21 +376,23 @@ public class AiModelCatalogTests
             handler.LastRequest!.Headers.GetValues("cf-aig-authorization"));
     }
 
-    /// <summary>The listing must never send the credential NAME in place of a value it could not find. An
-    /// empty header is the honest outcome of nothing stored; the chat path turns the same state into a
-    /// message naming the header.</summary>
+    /// <summary>
+    /// A secret with nothing stored is refused here exactly as the chat path refuses it. A listing that loads
+    /// while the chat refuses is the surface split #673 exists to prevent, pointing the other way — and a
+    /// blank header dropped at the wire comes back as a 401 naming nothing.
+    /// </summary>
     [Fact]
-    public async Task A_listing_sends_no_value_for_a_secret_header_with_nothing_stored()
+    public async Task A_listing_refuses_a_secret_header_with_nothing_stored()
     {
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"data":[]}"""),
+            Content = new StringContent("""{"data":[{"id":"some-model"}]}"""),
         });
 
         var catalog = new AiModelCatalog(
             new HttpClient(handler), new NamedKeys(), NullLogger<AiModelCatalog>.Instance);
 
-        await catalog.FetchAsync(new AiConnection(
+        var result = await catalog.FetchAsync(new AiConnection(
             Id: "gw",
             DisplayName: "Gateway",
             Kind: ChatProviderKind.OpenAiCompatible,
@@ -399,10 +401,48 @@ public class AiModelCatalogTests
             Headers: new[] { new AiHeader("cf-aig-authorization", null, Secret: true) },
             Inputs: new Dictionary<string, string>()));
 
-        var values = handler.LastRequest!.Headers.TryGetValues("cf-aig-authorization", out var v)
-            ? v.ToArray()
-            : Array.Empty<string>();
+        Assert.False(result.Ok);
+        Assert.Contains("cf-aig-authorization", result.Problem);
+        Assert.Null(handler.LastRequest);   // refused before anything went out
+    }
 
-        Assert.DoesNotContain(values, value => value.Contains("header-", StringComparison.Ordinal));
+    /// <summary>
+    /// The case that could not exist before #771: the ONLY credential is a secret header. Anthropic, no API
+    /// key stored, authenticating entirely by a header whose value is in the credential store.
+    ///
+    /// <para>This is #689's "leave the key empty if you manage auth via headers" escape hatch, and it is the
+    /// one most at risk from this change — <c>IsSendableHeader</c> requires a non-blank VALUE (that was #764's
+    /// fix, after a cosmetic X-Title let a keyless connection through and its 401 surfaced as "the provider
+    /// rejected the API key"). A secret header is blank in settings.json, so if the value were fetched after
+    /// the credential check rather than before it, this connection would be refused by the very feature built
+    /// to make it safe. (raised in review by the session that landed #711/#764)</para>
+    /// </summary>
+    [Fact]
+    public async Task A_listing_authenticates_by_a_secret_header_alone()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"claude-opus-5"}]}"""),
+        });
+
+        var keys = new NamedKeys();
+        keys.Set("gw", AiCredentialNames.Header("x-api-key"), "secret-only-credential");
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), keys, NullLogger<AiModelCatalog>.Instance);
+
+        var result = await catalog.FetchAsync(new AiConnection(
+            Id: "gw",
+            DisplayName: "Gateway",
+            Kind: ChatProviderKind.Anthropic,
+            BaseUrl: "https://gateway.example",
+            Models: new List<AiModelEntry>(),
+            Headers: new[] { new AiHeader("x-api-key", null, Secret: true) },
+            Inputs: new Dictionary<string, string>()));
+
+        Assert.True(result.Ok);
+        Assert.Equal(
+            new[] { "secret-only-credential" },
+            handler.LastRequest!.Headers.GetValues("x-api-key"));
     }
 }

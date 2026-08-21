@@ -336,4 +336,55 @@ public class ChatProviderResolverTests
         var options = Assert.IsType<OpenAiCompatibleProvider>(resolution!.Provider).Options;
         Assert.Equal("literal-{gatewayToken}-value", options.ExtraHeaders!["x-token"]);
     }
+
+    /// <summary>
+    /// The case that could not exist before #771, on the chat path: Anthropic with NO API key, authenticating
+    /// entirely by a secret header.
+    ///
+    /// <para><c>AnthropicMessagesProvider.HasCredential</c> counts only headers with a non-blank VALUE — which
+    /// was #764's fix, after a cosmetic <c>X-Title</c> let a keyless connection through and its 401 surfaced
+    /// as "the provider rejected the API key", naming a key that did not exist. A secret header is blank in
+    /// settings.json, so this resolves only because the value is pulled from the credential store BEFORE the
+    /// credential check runs. Reorder those two and #689's "leave the key empty if you manage auth via
+    /// headers" is defeated by the feature built to make it safe. (raised in review)</para>
+    /// </summary>
+    [Fact]
+    public void Anthropic_resolves_when_the_only_credential_is_a_secret_header()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "anthropic";
+            conn.BaseUrl = "https://gateway.example";
+            conn.Headers.Add(new AiHeaderRecord { Name = "x-api-key", Secret = true });
+            c.ActiveModelId = "claude-opus-5";
+        },
+        secrets: new Dictionary<string, string>
+        {
+            [AiCredentialNames.Header("x-api-key")] = "secret-only-credential",
+        });
+
+        var resolution = resolver.Resolve(out var problem);
+
+        Assert.Null(problem);
+        Assert.NotNull(resolution);
+    }
+
+    /// <summary>The mirror of the above: with the secret NOT stored, the same connection must be refused by
+    /// name rather than allowed through to send a blank header and 401.</summary>
+    [Fact]
+    public void Anthropic_is_refused_when_its_only_credential_is_a_secret_header_with_nothing_stored()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "anthropic";
+            conn.BaseUrl = "https://gateway.example";
+            conn.Headers.Add(new AiHeaderRecord { Name = "x-api-key", Secret = true });
+            c.ActiveModelId = "claude-opus-5";
+        });
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.Contains("x-api-key", problem);
+    }
 }

@@ -142,6 +142,21 @@ namespace CST.Avalonia.Services.Ai
                 return AiCatalogResult.Fail(
                     $"{connection.DisplayName} is not finished being set up, so it cannot be asked for a list.");
 
+            // A header marked secret with nothing stored, refused here for the same reason the chat path
+            // refuses it: sent blank it is dropped at the wire and comes back as a 401 naming nothing, which
+            // is the #711 complaint arriving from a third direction. Refused in BOTH places or not at all -
+            // a listing that loads while the chat refuses is the surface split #673 exists to prevent, just
+            // pointing the other way. (#771)
+            var missingSecrets = connection.Headers
+                .Where(h => h.Secret
+                            && string.IsNullOrEmpty(_credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name))))
+                .Select(h => h.Name)
+                .ToList();
+            if (missingSecrets.Count > 0)
+                return AiCatalogResult.Fail(
+                    $"No stored value for the {string.Join(", ", missingSecrets)} header. "
+                    + "Re-enter it under Settings \u2192 AI.");
+
             Uri url;
             try
             {
