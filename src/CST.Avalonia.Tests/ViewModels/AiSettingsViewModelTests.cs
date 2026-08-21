@@ -63,6 +63,10 @@ namespace CST.Avalonia.Tests.ViewModels
 
             public bool Delete(string connectionId, string name)
             {
+                // Mirrors the real store, which refuses rather than reports success when there is nowhere to
+                // delete from - a fake that is more forgiving than the thing it stands for is how a bug gets
+                // through green. (fable review)
+                if (!Available) return false;
                 _keys.Remove(Account(connectionId, name));
                 return true;
             }

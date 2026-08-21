@@ -516,10 +516,6 @@ namespace CST.Avalonia.Services.Ai
             r.AuthScheme);
 
         /// <summary>
-        /// Ids are the reserved namespace a custom connection may not take, and they become the credential's
-        /// account name — so a collision would mean one connection quietly inheriting another's key.
-        /// </summary>
-        /// <summary>
         /// Every credential name this connection could have filed a secret under. (#759)
         ///
         /// <para>Derived rather than recorded, so it cannot drift out of step with what was actually stored:
@@ -531,6 +527,10 @@ namespace CST.Avalonia.Services.Ai
             yield return AiCredentialNames.Primary;
         }
 
+        /// <summary>
+        /// Ids are the reserved namespace a custom connection may not take, and they become the credential's
+        /// account name — so a collision would mean one connection quietly inheriting another's key.
+        /// </summary>
         private string? ValidateId(string id, bool existingAllowed)
         {
             if (string.IsNullOrWhiteSpace(id)) return "A connection needs an id.";

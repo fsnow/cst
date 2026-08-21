@@ -295,6 +295,32 @@ public class AiCredentialStoreTests : IDisposable
     }
 
     [Fact]
+    public void The_account_spelling_is_stable()
+    {
+        // The same property ServiceName has, and for the same reason: change it and every credential already
+        // stored reads as "not configured", with no error anywhere. The round-trip tests above cannot hold
+        // this line - save and find share the value in-process, so they stay green across any reformatting of
+        // the account - and The_separator_cannot_occur_inside_either_part deliberately does not name the
+        // separator. So the exact spelling is pinned here, per platform.
+        //
+        // The concrete regression: someone "unifies" the two separators to one character (they look like an
+        // irregularity, and '.' is legal in a Keychain account too). Every macOS credential moves from
+        // anthropic:primary to anthropic.primary, every stored key silently disappears, and the whole suite
+        // passes. (fable review)
+        if (OperatingSystem.IsWindows())
+            Assert.Equal("anthropic.primary", AiCredentialStore.AccountFor("anthropic", AiCredentialNames.Primary));
+        else
+            Assert.Equal("anthropic:primary", AiCredentialStore.AccountFor("anthropic", AiCredentialNames.Primary));
+    }
+
+    /// <summary>
+    /// The two collision tests are load-bearing AS A PAIR, which is worth saying before someone deletes the
+    /// "redundant" one: a '_' separator leaves ("gw","header-x") and ("gw-header","x") distinct, so
+    /// An_id_ending_in_a_name_does_not_share_an_account_with_it stays green - and only
+    /// The_separator_cannot_occur_inside_either_part catches it, because '_' is a character Sanitize emits.
+    /// (fable review)
+    /// </summary>
+    [Fact]
     public void The_service_name_is_stable()
     {
         // Changing it orphans every key already stored, silently: the user is simply told they have not

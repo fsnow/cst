@@ -251,7 +251,7 @@ public class AiConnectionServiceTests
         Assert.Equal("http://b/v1", result.Connection.BaseUrl);
     }
 
-    /// <summary>An in-memory credential store, keyed by connection id exactly as the real one now is.</summary>
+    /// <summary>An in-memory credential store, keyed by the joined account exactly as the real one is.</summary>
     private sealed class Keys : IAiCredentialStore
     {
         private readonly Dictionary<string, string> _byAccount = new();
