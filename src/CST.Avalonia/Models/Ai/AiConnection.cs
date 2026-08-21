@@ -80,6 +80,27 @@ namespace CST.Avalonia.Models.Ai
         bool Missing = false);
 
     /// <summary>
+    /// One extra request header on a connection. (#711, #771)
+    /// </summary>
+    /// <param name="Value">Null when <paramref name="Secret"/>: the value is in the credential store, and this
+    /// record is handed to the UI. Keeping it null here is what stops a secret reaching a screen, a log or a
+    /// settings file by simply being carried along — the request path fetches it at the moment it sends.</param>
+    /// <param name="Secret">Whether the value is a credential rather than a routing hint.</param>
+    public sealed record AiHeader(string Name, string? Value, bool Secret = false)
+    {
+        /// <summary>
+        /// Null whenever <see cref="Secret"/>, enforced here rather than trusted from each caller.
+        ///
+        /// <para>Two places already drop a secret's value on the way past — the sheet building this record and
+        /// the service writing the settings record — and a mutation test showed the first of them can be
+        /// removed with every test still green, because the second catches it. Two guards that each believe
+        /// the other is the belt is how a leak eventually gets through. Here the state simply cannot be
+        /// constructed: a secret header carries a name and a mark, never a value. (#771)</para>
+        /// </summary>
+        public string? Value { get; init; } = Secret ? null : Value;
+    }
+
+    /// <summary>
     /// One configured endpoint: where to send a request, how to authenticate, and which models it offers.
     /// Replaces the single scalar provider/base-URL/model/key that surface B shipped with. (#689)
     /// </summary>
@@ -103,7 +124,7 @@ namespace CST.Avalonia.Models.Ai
         ChatProviderKind Kind,
         string BaseUrl,
         IReadOnlyList<AiModelEntry> Models,
-        IReadOnlyDictionary<string, string> Headers,
+        IReadOnlyList<AiHeader> Headers,
         IReadOnlyDictionary<string, string> Inputs,
         CredentialSource KeySource = CredentialSource.None,
         Reachability State = Reachability.Configured,
@@ -127,7 +148,7 @@ namespace CST.Avalonia.Models.Ai
         ChatProviderKind Kind,
         string BaseUrl,
         IReadOnlyList<AiModelEntry> Models,
-        IReadOnlyDictionary<string, string> Headers,
+        IReadOnlyList<AiHeader> Headers,
         IReadOnlyDictionary<string, string> Inputs,
         string AuthHeaderName = "Authorization",
         string? AuthScheme = "Bearer");

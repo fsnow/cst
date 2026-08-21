@@ -238,8 +238,14 @@ namespace CST.Avalonia.Services.Ai
         private void Authenticate(HttpRequestMessage request, AiConnection connection)
         {
             var key = _credentials?.Get(connection.Id, AiCredentialNames.Primary);
+            // Same rule as the chat path, for the same reason the summary above gives: the two surfaces send
+            // the same credentials, so a secret header must resolve identically here or a provider's model
+            // list would load while its answers 401. A secret is a literal, never a template. (#771)
             var headers = connection.Headers.ToDictionary(
-                h => h.Key, h => AiTemplate.Expand(h.Value, connection.Inputs));
+                h => h.Name,
+                h => h.Secret
+                    ? _credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name)) ?? string.Empty
+                    : AiTemplate.Expand(h.Value ?? string.Empty, connection.Inputs));
 
             if (connection.Kind == ChatProviderKind.Anthropic)
             {

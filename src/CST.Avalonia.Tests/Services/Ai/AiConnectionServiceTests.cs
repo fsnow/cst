@@ -25,7 +25,7 @@ public class AiConnectionServiceTests
 
     private static AiConnectionDraft Draft(string name = "My box", string url = "http://localhost:8000/v1") =>
         new(name, ChatProviderKind.OpenAiCompatible, url,
-            new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+            new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>());
 
     // ---- ids ------------------------------------------------------------------------------------------
 
@@ -486,5 +486,77 @@ public class AiConnectionServiceTests
         service.EnableModel("box", "a", "A", true, new AiModelEntry("a", "A", ContextLength: 8192));
 
         Assert.False(service.Connections.Single().Models.Single().Missing);
+    }
+
+    // ---- secret headers (#771) --------------------------------------------------------------------------
+
+    /// <summary>
+    /// The delete sweep has to know every name, not just the primary one. A credential left behind is
+    /// invisible by definition - nothing reads it, so nothing reports it - and it would be silently re-adopted
+    /// if a connection with the same id were ever created again.
+    /// </summary>
+    [Fact]
+    public void Removing_a_connection_deletes_its_secret_header_credentials_too()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("gw", new AiConnectionDraft(
+            "Gateway", ChatProviderKind.OpenAiCompatible, "https://gateway.example/v1",
+            new List<AiModelEntry>(),
+            new[] { new AiHeader("cf-aig-authorization", null, Secret: true) },
+            new Dictionary<string, string>()));
+
+        keys.Set("gw", AiCredentialNames.Primary, "sk-upstream");
+        keys.Set("gw", AiCredentialNames.Header("cf-aig-authorization"), "cf-token-abc");
+
+        service.Remove("gw");
+
+        Assert.Null(keys.Get("gw", AiCredentialNames.Primary));
+        Assert.Null(keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+    }
+
+    /// <summary>
+    /// Header names are richer than credential names: <c>x.y</c> and <c>x-y</c> are different headers that
+    /// fold to one account, so one would overwrite the other's secret and the endpoint would authenticate
+    /// with the wrong one - a 401 naming nothing, which is #678's symptom. Refused at the service because
+    /// settings.json is hand-edited and the sheet is not the only way in.
+    /// </summary>
+    [Fact]
+    public void Two_secret_headers_that_fold_to_one_credential_name_are_refused()
+    {
+        var (service, _, _) = MakeWithKeys();
+
+        var result = service.Add("gw", new AiConnectionDraft(
+            "Gateway", ChatProviderKind.OpenAiCompatible, "https://gateway.example/v1",
+            new List<AiModelEntry>(),
+            new[]
+            {
+                new AiHeader("x.y", null, Secret: true),
+                new AiHeader("x-y", null, Secret: true),
+            },
+            new Dictionary<string, string>()));
+
+        Assert.False(result.Ok);
+        Assert.Contains("cannot both be secret", result.Problem);
+        Assert.Empty(service.Connections);
+    }
+
+    /// <summary>The same two names are fine while only one is secret - they are different headers, and only
+    /// the credential namespace is narrower than the header one.</summary>
+    [Fact]
+    public void Header_names_that_fold_together_are_allowed_while_only_one_is_secret()
+    {
+        var (service, _, _) = MakeWithKeys();
+
+        var result = service.Add("gw", new AiConnectionDraft(
+            "Gateway", ChatProviderKind.OpenAiCompatible, "https://gateway.example/v1",
+            new List<AiModelEntry>(),
+            new[]
+            {
+                new AiHeader("x.y", null, Secret: true),
+                new AiHeader("x-y", "cosmetic", Secret: false),
+            },
+            new Dictionary<string, string>()));
+
+        Assert.True(result.Ok);
     }
 }

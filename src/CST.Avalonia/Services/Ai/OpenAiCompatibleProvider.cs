@@ -43,6 +43,10 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
 {
     private readonly HttpClient _http;
     private readonly OpenAiCompatibleOptions _options;
+
+    /// <summary>Test seam: what the resolver actually built, so a test can assert that a secret header was
+    /// fetched and attached without standing up an HTTP stub for it (#771).</summary>
+    internal OpenAiCompatibleOptions Options => _options;
     private readonly ILogger<OpenAiCompatibleProvider> _logger;
     private readonly TimeSpan _idleTimeout;
     private readonly TimeSpan _firstEventTimeout;

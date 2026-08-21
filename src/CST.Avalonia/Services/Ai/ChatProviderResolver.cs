@@ -54,15 +54,47 @@ public interface IAiCredentialStore
 /// <summary>
 /// The names a connection files its secrets under. (#759)
 ///
-/// <para>These are ours, never the reader's: a name is part of the storage address, so a typo in one is a
-/// credential that cannot be found again rather than an error anyone sees. Presets declare which names they
-/// need; the reader only ever fills them in.</para>
+/// <para><b>A name is part of the storage address</b>, so a typo in one is a credential that cannot be found
+/// again rather than an error anyone sees. Most are constants: presets declare which names they need and the
+/// reader only ever fills them in. <see cref="Header"/> is the exception — it derives a name from a header
+/// name the reader typed — which is why it folds through <see cref="Slug"/> and why
+/// <c>AiConnectionService</c> refuses two secret headers that would fold together. (#771)</para>
 /// </summary>
 public static class AiCredentialNames
 {
     /// <summary>The credential the auth header carries — what every provider in the catalogue needs, and for
     /// almost all of them the only one.</summary>
     public const string Primary = "primary";
+
+    /// <summary>
+    /// The name a header's secret value is filed under. (#771)
+    ///
+    /// <para><b>Derived from the header rather than generated.</b> A serial number would be collision-proof
+    /// for free, but one of the stated reasons for N accounts over a single blob is that a reader can see in
+    /// Keychain Access what this app is holding and revoke one item — and <c>header-1</c> tells them nothing.
+    /// Derivation costs a uniqueness check instead, which <see cref="AiConnectionService"/> makes at the point
+    /// of save.</para>
+    /// </summary>
+    public static string Header(string headerName) => "header-" + Slug(headerName);
+
+    /// <summary>
+    /// The character folding every part of an account name goes through, defined here so that the code which
+    /// checks two names for collision and the code which stores under them cannot disagree.
+    ///
+    /// <para>Emits only <c>[a-z0-9-_]</c>. That is what makes an account string splittable — see
+    /// <c>AiCredentialStore.AccountFor</c>, whose separator is chosen to be a character this can never
+    /// produce. Widening this set reopens the collision documented there.</para>
+    /// </summary>
+    public static string Slug(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "default";
+
+        var chars = value.Trim().ToLowerInvariant().ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+            if (!(char.IsAsciiLetterOrDigit(chars[i]) || chars[i] is '-' or '_'))
+                chars[i] = '-';
+        return new string(chars);
+    }
 }
 
 /// <summary>
@@ -196,7 +228,17 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         // reaches the wire verbatim and comes back as a 401 the reader would read as a bad key - the header
         // IS the credential in the gateway case, so an unfinished one is an unfinished credential. (#711)
         var headers = ExpandHeaders(connection);
+
+        // Secret values are excluded: they are literals, never templates, so a brace in one is part of the
+        // credential rather than an unfilled field. Scanning them refuses a perfectly good key for containing
+        // a character, with a message naming a placeholder that does not exist. (#771)
+        var secretHeaderNames = connection.Headers
+            .Where(h => h.Secret)
+            .Select(h => h.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var unfinished = headers
+            .Where(h => !secretHeaderNames.Contains(h.Key))
             .Where(h => CST.Avalonia.Models.Ai.AiTemplate.HasUnresolvedPlaceholders(h.Value))
             .SelectMany(h => CST.Avalonia.Models.Ai.AiTemplate.PlaceholdersIn(h.Value))
             .Distinct()
@@ -205,6 +247,20 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         {
             problem = $"This provider still needs: {string.Join(", ", unfinished)}. "
                       + "Fill it in under Settings \u2192 AI.";
+            return null;
+        }
+
+        // A header marked secret whose secret is not stored - the store was unavailable when it was saved, or
+        // the reader deleted the item in Keychain Access. Sending the header empty produces a 401 that reads
+        // as a bad key, so say which header is missing instead. (#771)
+        var missingSecrets = connection.Headers
+            .Where(h => h.Secret && string.IsNullOrEmpty(headers.GetValueOrDefault(h.Name)))
+            .Select(h => h.Name)
+            .ToList();
+        if (missingSecrets.Count > 0)
+        {
+            problem = $"No stored value for the {string.Join(", ", missingSecrets)} header. "
+                      + "Re-enter it under Settings \u2192 AI.";
             return null;
         }
 
@@ -289,8 +345,21 @@ public sealed class ChatProviderResolver : IChatProviderResolver
     /// reader-supplied input inside one. Shared by both provider kinds so that neither can quietly stop
     /// sending them, which is how the Anthropic adapter came to drop every header it was given. (#711)</para>
     /// </summary>
-    private static IReadOnlyDictionary<string, string> ExpandHeaders(AiConnectionRecord connection) =>
+    /// <summary>
+    /// The headers as they go on the wire: templated values filled in from the reader's inputs, and secret
+    /// values fetched from the credential store at this moment rather than carried around. (#711, #771)
+    ///
+    /// <para><b>A secret value is not expanded as a template.</b> A credential is a literal; running one
+    /// through <see cref="CST.Avalonia.Models.Ai.AiTemplate"/> would mean a key containing braces came out
+    /// mangled, and there is no legitimate reason for a secret to reference an input.</para>
+    ///
+    /// <para>A secret with nothing stored yields an empty string, which the caller treats as an unfinished
+    /// credential rather than sending a blank header — see the guard at the call site.</para>
+    /// </summary>
+    private IReadOnlyDictionary<string, string> ExpandHeaders(AiConnectionRecord connection) =>
         connection.Headers.ToDictionary(
-            h => h.Key,
-            h => CST.Avalonia.Models.Ai.AiTemplate.Expand(h.Value, connection.Inputs));
+            h => h.Name,
+            h => h.Secret
+                ? _credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name)) ?? string.Empty
+                : CST.Avalonia.Models.Ai.AiTemplate.Expand(h.Value ?? string.Empty, connection.Inputs));
 }

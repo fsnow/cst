@@ -319,7 +319,7 @@ public class AiChatOrchestratorTests
         service.Add("mine", new AiConnectionDraft(
             "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
             new[] { new AiModelEntry("m", "M") },
-            new Dictionary<string, string>(), new Dictionary<string, string>()));
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
         return (service, "mine");
     }
 

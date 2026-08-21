@@ -1,4 +1,5 @@
 using System;
+using CST.Avalonia.Services.Ai;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services.Ai.Credentials;
@@ -87,9 +88,13 @@ public sealed class AiCredentialStore : IAiCredentialStore
             ? WindowsDpapiStore.Find(_service, account)
             : MacOsKeychain.Find(_service, account);
 
-        // The OUTCOME, never the value — and not its length either, which narrows a guess. The name is safe
-        // to log and worth logging: it is ours, and "which of this connection's secrets was missing" is the
-        // whole diagnosis when a two-credential provider 401s.
+        // The OUTCOME, never the value — and not its length either, which narrows a guess.
+        //
+        // The NAME is logged, and after #771 that is no longer simply "ours": a secret header's name is
+        // derived from a header name the reader typed. Logged anyway, deliberately — an HTTP header name
+        // travels on every request in the clear, so it is public in a way its value never is, and "which of
+        // this connection's secrets was missing" is the whole diagnosis when a two-credential provider 401s.
+        // The line to hold is the value, and it is held here and at every other call. (fable review)
         _logger.LogDebug("Credential lookup for {Connection}/{Name}: {Result}",
             connectionId, name, secret is null ? "none stored" : "found");
 
@@ -163,14 +168,5 @@ public sealed class AiCredentialStore : IAiCredentialStore
     /// <para>The allowed set is what <see cref="AccountFor"/> depends on. Widening it to admit <c>:</c> or
     /// <c>.</c> would reintroduce the collision documented there.</para>
     /// </summary>
-    private static string Sanitize(string id)
-    {
-        if (string.IsNullOrWhiteSpace(id)) return "default";
-
-        var chars = id.Trim().ToLowerInvariant().ToCharArray();
-        for (int i = 0; i < chars.Length; i++)
-            if (!(char.IsAsciiLetterOrDigit(chars[i]) || chars[i] is '-' or '_'))
-                chars[i] = '-';
-        return new string(chars);
-    }
+    private static string Sanitize(string id) => AiCredentialNames.Slug(id);
 }

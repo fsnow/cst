@@ -296,7 +296,7 @@ public class AiModelCatalogTests
             Kind: ChatProviderKind.Anthropic,
             BaseUrl: "https://gateway.example",
             Models: new List<AiModelEntry>(),
-            Headers: new Dictionary<string, string> { ["anthropic-version"] = "2026-01-01" },
+            Headers: new[] { new AiHeader("anthropic-version", "2026-01-01") },
             Inputs: new Dictionary<string, string>()));
 
         var sent = handler.LastRequest!;
@@ -321,9 +321,88 @@ public class AiModelCatalogTests
             Kind: ChatProviderKind.Anthropic,
             BaseUrl: "https://api.anthropic.com",
             Models: new List<AiModelEntry>(),
-            Headers: new Dictionary<string, string>(),
+            Headers: Array.Empty<AiHeader>(),
             Inputs: new Dictionary<string, string>()));
 
         Assert.Equal(new[] { "2023-06-01" }, handler.LastRequest!.Headers.GetValues("anthropic-version"));
+    }
+
+    /// <summary>An in-memory store keyed by the joined account, so a test that asks for the wrong name misses
+    /// rather than being handed the only secret there is.</summary>
+    private sealed class NamedKeys : IAiCredentialStore
+    {
+        private readonly Dictionary<string, string> _byAccount = new(StringComparer.Ordinal);
+        public bool IsAvailable => true;
+        public string? Unavailable => null;
+        public string? Get(string connectionId, string name) =>
+            _byAccount.GetValueOrDefault(connectionId + ":" + name);
+        public bool Set(string connectionId, string name, string secret)
+        { _byAccount[connectionId + ":" + name] = secret; return true; }
+        public bool Delete(string connectionId, string name) => _byAccount.Remove(connectionId + ":" + name);
+    }
+
+    /// <summary>
+    /// The listing sends a secret header exactly as the chat path does. (#771)
+    ///
+    /// <para>The two surfaces send the same credentials, so they have to authenticate identically — the
+    /// symptom of them diverging is a provider whose model list loads while its answers 401, which is the
+    /// contradiction #673 exists to prevent and is close to undiagnosable from a bug report.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_listing_sends_a_secret_header_from_the_credential_store()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"some-model"}]}"""),
+        });
+
+        var keys = new NamedKeys();
+        keys.Set("gw", AiCredentialNames.Header("cf-aig-authorization"), "cf-token-abc");
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), keys, NullLogger<AiModelCatalog>.Instance);
+
+        await catalog.FetchAsync(new AiConnection(
+            Id: "gw",
+            DisplayName: "Gateway",
+            Kind: ChatProviderKind.OpenAiCompatible,
+            BaseUrl: "https://gateway.example/v1",
+            Models: new List<AiModelEntry>(),
+            Headers: new[] { new AiHeader("cf-aig-authorization", null, Secret: true) },
+            Inputs: new Dictionary<string, string>()));
+
+        Assert.Equal(
+            new[] { "cf-token-abc" },
+            handler.LastRequest!.Headers.GetValues("cf-aig-authorization"));
+    }
+
+    /// <summary>The listing must never send the credential NAME in place of a value it could not find. An
+    /// empty header is the honest outcome of nothing stored; the chat path turns the same state into a
+    /// message naming the header.</summary>
+    [Fact]
+    public async Task A_listing_sends_no_value_for_a_secret_header_with_nothing_stored()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[]}"""),
+        });
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), new NamedKeys(), NullLogger<AiModelCatalog>.Instance);
+
+        await catalog.FetchAsync(new AiConnection(
+            Id: "gw",
+            DisplayName: "Gateway",
+            Kind: ChatProviderKind.OpenAiCompatible,
+            BaseUrl: "https://gateway.example/v1",
+            Models: new List<AiModelEntry>(),
+            Headers: new[] { new AiHeader("cf-aig-authorization", null, Secret: true) },
+            Inputs: new Dictionary<string, string>()));
+
+        var values = handler.LastRequest!.Headers.TryGetValues("cf-aig-authorization", out var v)
+            ? v.ToArray()
+            : Array.Empty<string>();
+
+        Assert.DoesNotContain(values, value => value.Contains("header-", StringComparison.Ordinal));
     }
 }

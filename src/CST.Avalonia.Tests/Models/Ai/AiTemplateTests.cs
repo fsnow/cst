@@ -87,7 +87,7 @@ public class AiTemplateTests
         var incomplete = new AiConnection(
             "azure-prod", "Azure", ChatProviderKind.OpenAiCompatible,
             "https://{resourceName}.openai.azure.com/openai/v1",
-            new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+            new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>());
 
         Assert.True(incomplete.IsIncomplete);
 

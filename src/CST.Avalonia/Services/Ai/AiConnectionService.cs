@@ -217,6 +217,8 @@ namespace CST.Avalonia.Services.Ai
             var problem = ValidateId(id, existingAllowed: false);
             if (problem is not null) return AiConnectionResult.Fail(problem);
 
+            if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
+
             var record = new AiConnectionRecord { Id = id };
             Apply(record, draft);
             Chat.Connections.Add(record);
@@ -246,7 +248,11 @@ namespace CST.Avalonia.Services.Ai
                 DisplayName = preset.DisplayName,
                 Kind = preset.Kind == ChatProviderKind.Anthropic ? "anthropic" : "openai-compatible",
                 BaseUrl = preset.BaseUrl,
-                Headers = new Dictionary<string, string>(preset.Headers ?? new Dictionary<string, string>()),
+                // A preset's headers are never secret: they are routing hints the catalogue publishes, and a
+                // preset cannot carry a credential (#771).
+                Headers = (preset.Headers ?? new Dictionary<string, string>())
+                    .Select(h => new AiHeaderRecord { Name = h.Key, Value = h.Value })
+                    .ToList(),
                 Inputs = new Dictionary<string, string>(inputs),
                 AuthHeaderName = preset.AuthHeaderName,
                 AuthScheme = preset.AuthScheme,
@@ -261,8 +267,37 @@ namespace CST.Avalonia.Services.Ai
         {
             if (Find(id) is not { } record) return AiConnectionResult.Fail($"No connection called '{id}'.");
 
+            if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
+
             Apply(record, draft);
             return Saved(record);
+        }
+
+        /// <summary>
+        /// Two secret headers whose names fold to one credential name, or null when there are none. (#771)
+        ///
+        /// <para>Header names are richer than credential names: <c>x.y</c> and <c>x-y</c> are different headers
+        /// and both fold to <c>header-x-y</c>, so one would silently overwrite the other's secret and the
+        /// endpoint would authenticate with the wrong one. Vanishingly rare - real header names are letters,
+        /// digits and hyphens - and refused rather than tolerated because the failure is a 401 that names
+        /// nothing, which is the same symptom #678 took a release to find.</para>
+        ///
+        /// <para>Checked here rather than in the sheet because this is the seam every write goes through, and
+        /// <c>settings.json</c> is hand-edited.</para>
+        /// </summary>
+        private static string? CollidingSecretHeader(AiConnectionDraft draft)
+        {
+            var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var header in draft.Headers.Where(h => h.Secret && !string.IsNullOrWhiteSpace(h.Name)))
+            {
+                var name = AiCredentialNames.Header(header.Name);
+                if (seen.TryGetValue(name, out var first))
+                    return $"The {first} and {header.Name} headers cannot both be secret: "
+                           + "they would share one stored value.";
+                seen[name] = header.Name;
+            }
+
+            return null;
         }
 
         public AiConnectionResult Remove(string id)
@@ -492,7 +527,18 @@ namespace CST.Avalonia.Services.Ai
                     Missing = m.Missing,
                 })
                 .ToList();
-            record.Headers = new Dictionary<string, string>(draft.Headers);
+            // A secret header's value is NOT carried through the draft - the editor puts it in the credential
+            // store directly, exactly as it does the API key - so what is persisted is the name and the mark.
+            // Writing draft.Value here for a secret row is the one line that would put a credential in
+            // settings.json, which is why it cannot be reached: the draft's Value is null when Secret (#771).
+            record.Headers = draft.Headers
+                .Select(h => new AiHeaderRecord
+                {
+                    Name = h.Name,
+                    Value = h.Secret ? null : h.Value,
+                    Secret = h.Secret,
+                })
+                .ToList();
             record.Inputs = new Dictionary<string, string>(draft.Inputs);
             record.AuthHeaderName = draft.AuthHeaderName;
             record.AuthScheme = draft.AuthScheme;
@@ -508,7 +554,7 @@ namespace CST.Avalonia.Services.Ai
                     m.Id, m.DisplayName, m.Enabled, m.ContextLength, m.SupportsReasoning, m.Inputs,
                     m.Missing))
                 .ToList(),
-            new Dictionary<string, string>(r.Headers),
+            r.Headers.Select(h => new AiHeader(h.Name, h.Secret ? null : h.Value, h.Secret)).ToList(),
             new Dictionary<string, string>(r.Inputs),
             SourceFor(r.Id),
             ReachabilityOf(r.Id),
@@ -525,6 +571,9 @@ namespace CST.Avalonia.Services.Ai
         private static IEnumerable<string> CredentialNamesOf(AiConnectionRecord record)
         {
             yield return AiCredentialNames.Primary;
+
+            foreach (var header in record.Headers.Where(h => h.Secret))
+                yield return AiCredentialNames.Header(header.Name);
         }
 
         /// <summary>

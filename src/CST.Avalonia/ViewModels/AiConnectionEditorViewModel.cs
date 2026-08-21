@@ -46,6 +46,11 @@ namespace CST.Avalonia.ViewModels
         private readonly string? _existingId;
         private readonly bool _keyRequired;
 
+        /// <summary>The credential names this connection's secret headers occupied when the sheet opened, so a
+        /// header that is renamed, unmarked or removed takes its stored secret with it rather than leaving an
+        /// orphan nothing can reach. (#771)</summary>
+        private readonly List<string> _secretHeadersAtOpen = new();
+
         private string _id = "";
         private string _displayName = "";
         private AiKindChoice _kind = KindChoices[0];
@@ -68,7 +73,8 @@ namespace CST.Avalonia.ViewModels
             SaveCommand = ReactiveCommand.Create(Save);
             CancelCommand = ReactiveCommand.Create(() => _close(false));
             AddModelCommand = ReactiveCommand.Create(() => Models.Add(new AiModelRowViewModel(Models)));
-            AddHeaderCommand = ReactiveCommand.Create(() => Headers.Add(new AiHeaderRowViewModel(Headers)));
+            AddHeaderCommand = ReactiveCommand.Create(
+                () => Headers.Add(new AiHeaderRowViewModel(Headers, CanStoreKeys)));
             RemoveKeyCommand = ReactiveCommand.Create(RemoveKey);
         }
 
@@ -198,11 +204,21 @@ namespace CST.Avalonia.ViewModels
                 });
 
             foreach (var header in connection.Headers)
-                vm.Headers.Add(new AiHeaderRowViewModel(vm.Headers)
+                vm.Headers.Add(new AiHeaderRowViewModel(vm.Headers, vm.CanStoreKeys)
                 {
-                    Name = header.Key,
-                    Value = header.Value,
+                    Name = header.Name,
+                    // Null for a secret one, by construction - the runtime record does not carry it. What the
+                    // reader sees is an empty box and a "stored" note, the same shape as the API key.
+                    Value = header.Value ?? "",
+                    IsSecret = header.Secret,
+                    OriginalName = header.Name,
+                    HasStoredSecret = header.Secret
+                        && credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) is not null,
                 });
+
+            vm._secretHeadersAtOpen.AddRange(connection.Headers
+                .Where(h => h.Secret)
+                .Select(h => AiCredentialNames.Header(h.Name)));
 
             foreach (var input in connection.Inputs)
                 vm.Inputs.Add(new AiInputRowViewModel(
@@ -368,6 +384,20 @@ namespace CST.Avalonia.ViewModels
         private bool MissingRequiredKey =>
             _keyRequired && CanStoreKeys && string.IsNullOrWhiteSpace(ApiKeyEntry) && !HasStoredKey;
 
+        /// <summary>
+        /// A header marked secret with nothing to store and nothing already stored. (#771)
+        ///
+        /// <para>Same reasoning as <see cref="MissingRequiredKey"/>: saved anyway it produces a connection that
+        /// looks configured and 401s on every request, and the reader finds out later, from the provider,
+        /// while trying to read something. Refusing needs no <see cref="CanStoreKeys"/> exemption because the
+        /// row cannot be marked secret at all where there is nowhere to put one.</para>
+        /// </summary>
+        private AiHeaderRowViewModel? UnstoredSecretHeader => Headers.FirstOrDefault(
+            h => h.IsSecret && h.CanBeSecret
+                 && !string.IsNullOrWhiteSpace(h.Name)
+                 && string.IsNullOrWhiteSpace(h.Value)
+                 && !h.HasStoredSecret);
+
         public string KeyHint => "Optional — leave it empty if this endpoint needs no key, or if you authenticate with a header below.";
 
         /// <summary>
@@ -434,6 +464,13 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
+            if (UnstoredSecretHeader is { } unstored)
+            {
+                Problem = $"The {unstored.Name.Trim()} header is marked secret but has no value. "
+                          + "Paste one, or clear the mark to keep it in the settings file.";
+                return;
+            }
+
             var inputs = Inputs
                 .Where(i => i.IsVisible && !string.IsNullOrWhiteSpace(i.Value))
                 .ToDictionary(i => i.Key, i => i.Value.Trim(), StringComparer.Ordinal);
@@ -452,7 +489,9 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
-            StoreKey(result.Connection?.Id ?? _existingId ?? Id.Trim());
+            var savedId = result.Connection?.Id ?? _existingId ?? Id.Trim();
+            StoreKey(savedId);
+            StoreHeaderSecrets(savedId);
             _close(true);
         }
 
@@ -489,6 +528,39 @@ namespace CST.Avalonia.ViewModels
 
             _credentials.Set(connectionId, AiCredentialNames.Primary, ApiKeyEntry.Trim());
             ApiKeyEntry = "";
+        }
+
+        /// <summary>
+        /// Files each secret header's value, and sweeps the ones that are no longer secret. (#771)
+        ///
+        /// <para><b>The sweep runs first and by name.</b> A header that was renamed, unmarked or deleted leaves
+        /// a credential under its old name, and an orphan in the keychain is invisible by definition — nothing
+        /// reads it, so nothing reports it. Comparing what the sheet opened with against what it is saving is
+        /// the only place that difference is known.</para>
+        ///
+        /// <para>A row whose value box is empty keeps what is stored rather than clearing it: the box is empty
+        /// on every edit, because a stored secret is never read back into a screen.</para>
+        /// </summary>
+        private void StoreHeaderSecrets(string connectionId)
+        {
+            if (_credentials is null) return;
+
+            var keeping = Headers
+                .Where(h => h.IsSecret && h.CanBeSecret && !string.IsNullOrWhiteSpace(h.Name))
+                .Select(h => AiCredentialNames.Header(h.Name.Trim()))
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var gone in _secretHeadersAtOpen.Where(name => !keeping.Contains(name)))
+                _credentials.Delete(connectionId, gone);
+
+            foreach (var row in Headers.Where(
+                         h => h.IsSecret && h.CanBeSecret
+                              && !string.IsNullOrWhiteSpace(h.Name)
+                              && !string.IsNullOrWhiteSpace(h.Value)))
+            {
+                _credentials.Set(connectionId, AiCredentialNames.Header(row.Name.Trim()), row.Value.Trim());
+                row.Value = "";
+            }
         }
 
         /// <summary>
@@ -551,7 +623,13 @@ namespace CST.Avalonia.ViewModels
             TypedModels(),
             Headers
                 .Where(h => !string.IsNullOrWhiteSpace(h.Name))
-                .ToDictionary(h => h.Name.Trim(), h => h.Value.Trim(), StringComparer.Ordinal),
+                // A secret row's value is deliberately dropped here rather than carried: the draft is what
+                // reaches settings.json, and the secret goes to the credential store on its own path (#771).
+                .Select(h => new AiHeader(
+                    h.Name.Trim(),
+                    h.IsSecret && h.CanBeSecret ? null : h.Value.Trim(),
+                    h.IsSecret && h.CanBeSecret))
+                .ToList(),
             inputs,
             _authHeaderName,
             _authScheme);
@@ -650,10 +728,12 @@ namespace CST.Avalonia.ViewModels
         private readonly ObservableCollection<AiHeaderRowViewModel> _owner;
         private string _name = "";
         private string _value = "";
+        private bool _isSecret;
 
-        public AiHeaderRowViewModel(ObservableCollection<AiHeaderRowViewModel> owner)
+        public AiHeaderRowViewModel(ObservableCollection<AiHeaderRowViewModel> owner, bool canStoreSecrets = true)
         {
             _owner = owner;
+            CanBeSecret = canStoreSecrets;
             RemoveCommand = ReactiveCommand.Create(() => { _owner.Remove(this); });
         }
 
@@ -668,6 +748,55 @@ namespace CST.Avalonia.ViewModels
             get => _value;
             set => this.RaiseAndSetIfChanged(ref _value, value);
         }
+
+        /// <summary>
+        /// Whether this value is a credential, and so belongs in the OS credential store rather than in
+        /// <c>settings.json</c>. (#771)
+        ///
+        /// <para><b>The reader's call, not ours.</b> The same header name is a routing hint at one provider
+        /// and a token at another, and a guess either way is wrong in a way they cannot see: guessing secret
+        /// hides a value they wanted to read back, and guessing not writes a token to a file that gets
+        /// screenshotted.</para>
+        /// </summary>
+        public bool IsSecret
+        {
+            get => _isSecret;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _isSecret, value);
+                this.RaisePropertyChanged(nameof(ShowStoredNote));
+                this.RaisePropertyChanged(nameof(ValueMask));
+                this.RaisePropertyChanged(nameof(ValueWatermark));
+            }
+        }
+
+        /// <summary>Masks the value box while the row is secret. Escaped rather than a literal bullet, per the
+        /// project rule against non-Latin glyphs in source.</summary>
+        public char ValueMask => IsSecret ? '\u2022' : '\0';
+
+        /// <summary>
+        /// What the empty value box says. A stored secret is never read back into a screen, so on an edit the
+        /// box is empty for a header that is in fact configured — without this it reads as missing, and the
+        /// reader retypes a credential they did not need to.
+        /// </summary>
+        public string ValueWatermark => ShowStoredNote ? "stored \u2014 type to replace" : "value";
+
+        /// <summary>False where there is nowhere to put a secret — Linux, or a Windows profile whose data
+        /// folder cannot be written. The row still works; its value simply stays in the settings file, which
+        /// the sheet says out loud rather than silently.</summary>
+        public bool CanBeSecret { get; }
+
+        /// <summary>Set when this row arrived with a secret already in the store. The value box stays empty —
+        /// a stored secret is never read back into a screen — so this is what tells the reader the row is
+        /// configured rather than blank.</summary>
+        public bool HasStoredSecret { get; init; }
+
+        /// <summary>The header name this row had when the sheet opened, or null for a row the reader added.
+        /// Renaming a secret header moves its credential, and without this the old one would be orphaned in
+        /// the keychain where nothing can ever reach it.</summary>
+        public string? OriginalName { get; init; }
+
+        public bool ShowStoredNote => IsSecret && HasStoredSecret;
 
         public ReactiveCommand<Unit, Unit> RemoveCommand { get; }
     }

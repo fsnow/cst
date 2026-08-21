@@ -21,23 +21,32 @@ public class ChatProviderResolverTests
     private sealed class FixedKey : IAiCredentialStore
     {
         private readonly string? _key;
+        private readonly IReadOnlyDictionary<string, string>? _byName;
 
-        internal FixedKey(string? key, string? unavailable = null)
+        internal FixedKey(
+            string? key, string? unavailable = null, IReadOnlyDictionary<string, string>? byName = null)
         {
             _key = key;
             Unavailable = unavailable;
+            _byName = byName;
         }
 
         public bool IsAvailable => Unavailable is null;
         public string? Unavailable { get; }
-        public string? Get(string connectionId, string name) => _key;
+
+        /// <summary>Named secrets take precedence, so a test can store a gateway token without also standing in
+        /// for the primary key (#771).</summary>
+        public string? Get(string connectionId, string name) =>
+            _byName is not null && _byName.TryGetValue(name, out var named) ? named
+            : name == AiCredentialNames.Primary ? _key
+            : null;
         public bool Set(string connectionId, string name, string secret) => throw new NotSupportedException();
         public bool Delete(string connectionId, string name) => throw new NotSupportedException();
     }
 
     private static ChatProviderResolver Resolver(
         Action<ChatSettings> configure, string? apiKey = null, bool aiEnabled = true,
-        string? storageUnavailable = null)
+        string? storageUnavailable = null, IReadOnlyDictionary<string, string>? secrets = null)
     {
         var settings = new Settings();
         settings.Ai.Enabled = aiEnabled;
@@ -49,7 +58,9 @@ public class ChatProviderResolverTests
 
         return new ChatProviderResolver(
             service.Object,
-            apiKey is null && storageUnavailable is null ? null : new FixedKey(apiKey, storageUnavailable),
+            apiKey is null && storageUnavailable is null && secrets is null
+                ? null
+                : new FixedKey(apiKey, storageUnavailable, secrets),
             NullLoggerFactory.Instance,
             new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan });
     }
@@ -201,7 +212,7 @@ public class ChatProviderResolverTests
             var conn = Conn(c);
             conn.Kind = "openai-compatible";
             conn.BaseUrl = "https://gateway.example/v1";
-            conn.Headers["cf-aig-authorization"] = "Bearer {gatewayToken}";
+            conn.Headers.Add(new AiHeaderRecord { Name = "cf-aig-authorization", Value = "Bearer {gatewayToken}" });
             c.ActiveModelId = "some-model";
         }, apiKey: "sk-x");
 
@@ -219,7 +230,7 @@ public class ChatProviderResolverTests
             var conn = Conn(c);
             conn.Kind = "openai-compatible";
             conn.BaseUrl = "https://gateway.example/v1";
-            conn.Headers["cf-aig-authorization"] = "Bearer {gatewayToken}";
+            conn.Headers.Add(new AiHeaderRecord { Name = "cf-aig-authorization", Value = "Bearer {gatewayToken}" });
             conn.Inputs["gatewayToken"] = "real-token";
             c.ActiveModelId = "some-model";
         }, apiKey: "sk-x");
@@ -239,11 +250,90 @@ public class ChatProviderResolverTests
         {
             var conn = Conn(c);
             conn.Kind = "anthropic";
-            conn.Headers["X-Title"] = "  ";
+            conn.Headers.Add(new AiHeaderRecord { Name = "X-Title", Value = "  " });
             c.ActiveModelId = "claude-opus-5";
         });
 
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("API key", problem);
+    }
+
+    // ---- secret headers (#771) --------------------------------------------------------------------------
+
+    /// <summary>
+    /// A secret header's value is fetched at the moment the request is built rather than carried on the
+    /// connection, which is what keeps it out of settings.json, out of the UI types and out of a log line.
+    /// </summary>
+    [Fact]
+    public void A_secret_header_is_sent_with_its_stored_value()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers.Add(new AiHeaderRecord { Name = "cf-aig-authorization", Secret = true });
+            c.ActiveModelId = "some-model";
+        },
+        apiKey: "sk-upstream",
+        secrets: new Dictionary<string, string>
+        {
+            [AiCredentialNames.Header("cf-aig-authorization")] = "cf-token-abc",
+        });
+
+        var resolution = resolver.Resolve(out var problem);
+
+        Assert.Null(problem);
+        var options = Assert.IsType<OpenAiCompatibleProvider>(resolution!.Provider).Options;
+        Assert.Equal("cf-token-abc", options.ExtraHeaders!["cf-aig-authorization"]);
+    }
+
+    /// <summary>
+    /// The store was unavailable when it was saved, or the reader deleted the item in Keychain Access. Sent
+    /// empty this comes back as a 401 that reads as a bad API key, sending them to re-paste the wrong thing.
+    /// </summary>
+    [Fact]
+    public void A_secret_header_with_nothing_stored_is_refused_by_name()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers.Add(new AiHeaderRecord { Name = "cf-aig-authorization", Secret = true });
+            c.ActiveModelId = "some-model";
+        }, apiKey: "sk-upstream");
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.Contains("cf-aig-authorization", problem);
+    }
+
+    /// <summary>
+    /// A credential is a literal, never a template. Expanding one would mangle a key that happens to contain
+    /// braces, and there is no legitimate reason for a secret to reference an input.
+    /// </summary>
+    [Fact]
+    public void A_secret_header_value_is_not_expanded_as_a_template()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers.Add(new AiHeaderRecord { Name = "x-token", Secret = true });
+            conn.Inputs["gatewayToken"] = "substituted";
+            c.ActiveModelId = "some-model";
+        },
+        apiKey: "sk-upstream",
+        secrets: new Dictionary<string, string>
+        {
+            [AiCredentialNames.Header("x-token")] = "literal-{gatewayToken}-value",
+        });
+
+        var resolution = resolver.Resolve(out var problem);
+
+        Assert.Null(problem);
+        var options = Assert.IsType<OpenAiCompatibleProvider>(resolution!.Provider).Options;
+        Assert.Equal("literal-{gatewayToken}-value", options.ExtraHeaders!["x-token"]);
     }
 }

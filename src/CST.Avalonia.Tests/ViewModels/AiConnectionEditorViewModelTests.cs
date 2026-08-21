@@ -50,8 +50,12 @@ public class AiConnectionEditorViewModelTests
         /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Stored { get; } = new(StringComparer.Ordinal);
         private static string Account(string connectionId, string name) => connectionId + ":" + name;
-        public bool IsAvailable => true;
-        public string? Unavailable => null;
+
+        /// <summary>Settable so a test can stand where there is nowhere to put a secret — Linux, or a Windows
+        /// profile whose data folder cannot be written.</summary>
+        public bool Available { get; set; } = true;
+        public bool IsAvailable => Available;
+        public string? Unavailable => Available ? null : "Nowhere to store a key in this build.";
         public string? Get(string connectionId, string name) =>
             Stored.GetValueOrDefault(Account(connectionId, name));
         public bool Set(string connectionId, string name, string secret)
@@ -207,7 +211,7 @@ public class AiConnectionEditorViewModelTests
         Assert.Equal("My box", added.DisplayName);
         Assert.Equal("gemma4:12b-mlx", added.Models.Single().Id);
         Assert.Equal("Gemma4 12B MLX", added.Models.Single().DisplayName);
-        Assert.Equal("token", added.Headers["X-Gateway"]);
+        Assert.Equal("token", added.Headers.Single(h => h.Name == "X-Gateway").Value);
     }
 
     /// <summary>Blank rows are the natural state of a repeating form — one is offered on open — so they must
@@ -524,7 +528,7 @@ public class AiConnectionEditorViewModelTests
 
     private static AiConnectionDraft Draft(string name = "My box", string url = "http://localhost:8000/v1") =>
         new(name, ChatProviderKind.OpenAiCompatible, url,
-            new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+            new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>());
 
     // ---- a required key is required (#761) ---------------------------------------------------------------
 
@@ -697,7 +701,7 @@ public class AiConnectionEditorViewModelTests
         h.Service.Update(added.Id, new AiConnectionDraft(
             added.DisplayName, added.Kind, added.BaseUrl,
             new[] { new AiModelEntry("nvidia/nemotron", "Nemotron") },
-            new Dictionary<string, string> { ["X-Gateway"] = "token" },
+            new[] { new AiHeader("X-Gateway", "token") },
             added.Inputs, added.AuthHeaderName, added.AuthScheme));
 
         var edit = h.Existing("openrouter");
@@ -706,7 +710,7 @@ public class AiConnectionEditorViewModelTests
 
         var after = h.Service.Connections.Single();
         Assert.Equal("nvidia/nemotron", after.Models.Single().Id);
-        Assert.Equal("token", after.Headers["X-Gateway"]);
+        Assert.Equal("token", after.Headers.Single(h => h.Name == "X-Gateway").Value);
         Assert.Equal("https://openrouter.ai/api/v1", after.BaseUrl);
         Assert.Equal("sk-replaced", h.Keys.Get("openrouter", AiCredentialNames.Primary));
     }
@@ -864,6 +868,251 @@ public class AiConnectionEditorViewModelTests
         }));
 
         Assert.Equal("Edit", AiConnectionEditorViewModel.EditAction(h.Service, h.Service.Connections.Single()));
+    }
+
+    // ---- secret headers (#771) --------------------------------------------------------------------------
+
+    private static AiHeaderRowViewModel Header(
+        AiConnectionEditorViewModel vm, string name, string value, bool secret)
+    {
+        vm.AddHeaderCommand.Execute().Subscribe();
+        var row = vm.Headers.Last();
+        row.Name = name;
+        row.Value = value;
+        row.IsSecret = secret;
+        return row;
+    }
+
+    /// <summary>
+    /// The whole of #771 in one assertion. Before this, a reader following the sheet's own advice — "a gateway
+    /// token, or a provider's own key header" — wrote a credential to settings.json, a file the credential
+    /// store's doc comment describes as screenshotted and attached to bug reports.
+    /// </summary>
+    [Fact]
+    public void A_secret_header_value_never_reaches_the_connection_record()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+        vm.Id = "gw";
+        vm.BaseUrl = "https://gateway.example/v1";
+        Header(vm, "cf-aig-authorization", "cf-token-abc", secret: true);
+
+        Save(vm);
+
+        var stored = h.Service.Connections.Single().Headers.Single();
+        Assert.Equal("cf-aig-authorization", stored.Name);
+        Assert.True(stored.Secret);
+        Assert.Null(stored.Value);
+    }
+
+    [Fact]
+    public void A_secret_header_value_goes_to_the_credential_store()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+        vm.Id = "gw";
+        vm.BaseUrl = "https://gateway.example/v1";
+        Header(vm, "cf-aig-authorization", "cf-token-abc", secret: true);
+
+        Save(vm);
+
+        Assert.Equal(
+            "cf-token-abc",
+            h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+    }
+
+    /// <summary>The unmarked row is the ordinary case and must be untouched by any of this: a routing hint
+    /// belongs in the settings file, where the reader can see and edit it.</summary>
+    [Fact]
+    public void An_ordinary_header_still_keeps_its_value_in_the_record()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+        vm.Id = "gw";
+        vm.BaseUrl = "https://gateway.example/v1";
+        Header(vm, "X-Title", "CST Reader", secret: false);
+
+        Save(vm);
+
+        var stored = h.Service.Connections.Single().Headers.Single();
+        Assert.Equal("CST Reader", stored.Value);
+        Assert.False(stored.Secret);
+        Assert.Empty(h.Keys.Stored);
+    }
+
+    /// <summary>Same reasoning as #761's refusal on the key box: saved anyway, this is a connection that looks
+    /// configured and 401s on every request, discovered later and from the provider.</summary>
+    [Fact]
+    public void A_secret_header_with_no_value_is_refused()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+        vm.Id = "gw";
+        vm.BaseUrl = "https://gateway.example/v1";
+        Header(vm, "cf-aig-authorization", "", secret: true);
+
+        Save(vm);
+
+        Assert.Contains("cf-aig-authorization", vm.Problem);
+        Assert.Empty(h.Service.Connections);
+        Assert.Null(h.Closed);
+    }
+
+    /// <summary>A stored secret is never read back into a screen, so the box is empty on every edit. Treating
+    /// that as "cleared" would delete a working credential on an unrelated edit.</summary>
+    [Fact]
+    public void An_edit_that_leaves_the_box_empty_keeps_the_stored_secret()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var edit = h.Existing("gw");
+        edit.DisplayName = "Renamed";
+        Save(edit);
+
+        Assert.Equal(
+            "cf-token-abc",
+            h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+        Assert.True(h.Service.Connections.Single().Headers.Single().Secret);
+    }
+
+    [Fact]
+    public void Retyping_a_secret_header_replaces_the_stored_value()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var edit = h.Existing("gw");
+        edit.Headers.Single().Value = "cf-token-rotated";
+        Save(edit);
+
+        Assert.Equal(
+            "cf-token-rotated",
+            h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+    }
+
+    /// <summary>An orphaned credential is invisible by definition — nothing reads it, so nothing reports it.
+    /// The sheet is the only place that knows a header stopped being secret.</summary>
+    [Fact]
+    public void Clearing_the_secret_mark_deletes_the_stored_value()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var edit = h.Existing("gw");
+        var row = edit.Headers.Single();
+        row.IsSecret = false;
+        row.Value = "not-a-secret-any-more";
+        Save(edit);
+
+        Assert.Null(h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+        Assert.Equal("not-a-secret-any-more", h.Service.Connections.Single().Headers.Single().Value);
+    }
+
+    [Fact]
+    public void Removing_a_secret_header_row_deletes_the_stored_value()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var edit = h.Existing("gw");
+        edit.Headers.Single().RemoveCommand.Execute().Subscribe();
+        Save(edit);
+
+        Assert.Null(h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+        Assert.Empty(h.Service.Connections.Single().Headers);
+    }
+
+    /// <summary>Renaming moves the credential. Without the sweep the old name keeps a live secret in the
+    /// keychain that this app can never reach again and the reader has no reason to look for.</summary>
+    [Fact]
+    public void Renaming_a_secret_header_moves_its_stored_value()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var edit = h.Existing("gw");
+        var row = edit.Headers.Single();
+        row.Name = "x-gateway-token";
+        row.Value = "cf-token-abc";
+        Save(edit);
+
+        Assert.Null(h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
+        Assert.Equal("cf-token-abc", h.Keys.Get("gw", AiCredentialNames.Header("x-gateway-token")));
+    }
+
+    /// <summary>
+    /// Where there is nowhere to store a secret, the row cannot be marked one — and the value stays in the
+    /// settings file rather than being dropped. Taking the header away instead would remove the only way to
+    /// configure an authenticated provider on a platform with no credential store, which is Linux today.
+    /// </summary>
+    [Fact]
+    public void With_no_credential_store_a_header_keeps_its_value_in_the_settings_file()
+    {
+        var h = new Harness();
+        h.Keys.Available = false;
+
+        var vm = h.Custom();
+        vm.Id = "gw";
+        vm.BaseUrl = "https://gateway.example/v1";
+        var row = Header(vm, "cf-aig-authorization", "cf-token-abc", secret: true);
+
+        Assert.False(row.CanBeSecret);
+
+        Save(vm);
+
+        var stored = h.Service.Connections.Single().Headers.Single();
+        Assert.False(stored.Secret);
+        Assert.Equal("cf-token-abc", stored.Value);
+    }
+
+    /// <summary>
+    /// The type refuses the state rather than each caller remembering to. Found by mutation: the sheet's own
+    /// drop of the value can be deleted with the whole suite still green, because the service drops it again
+    /// on the way to settings.json — two guards each relying on the other. (fable review method)
+    /// </summary>
+    [Fact]
+    public void A_header_marked_secret_cannot_carry_a_value_at_all()
+    {
+        var header = new AiHeader("cf-aig-authorization", "cf-token-abc", Secret: true);
+
+        Assert.Null(header.Value);
+    }
+
+    /// <summary>The mask is what stops a token standing on screen in a screenshot or over a shoulder; it is
+    /// derived rather than set, so it cannot fall out of step with the mark.</summary>
+    [Fact]
+    public void Marking_a_row_secret_masks_its_value_box()
+    {
+        var h = new Harness();
+        var vm = h.Custom();
+        var row = Header(vm, "cf-aig-authorization", "cf-token-abc", secret: false);
+
+        Assert.Equal('\0', row.ValueMask);
+
+        row.IsSecret = true;
+
+        Assert.NotEqual('\0', row.ValueMask);
     }
 }
 

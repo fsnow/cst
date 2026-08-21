@@ -132,8 +132,11 @@ namespace CST.Avalonia.Models
 
         public List<AiModelRecord> Models { get; set; } = new();
 
-        /// <summary>Extra request headers. Never the credential, which lives in the OS credential store.</summary>
-        public Dictionary<string, string> Headers { get; set; } = new();
+        /// <summary>
+        /// Extra request headers. A value that IS a credential is marked secret and kept in the OS credential
+        /// store rather than here. (#771)
+        /// </summary>
+        public List<AiHeaderRecord> Headers { get; set; } = new();
 
         /// <summary>Answers to the preset's prompts — resource name, account id, region — substituted into
         /// <see cref="BaseUrl"/> and <see cref="Headers"/>.</summary>
@@ -148,6 +151,32 @@ namespace CST.Avalonia.Models
         /// <summary>Prefix before the credential, or null for a bare value. Bearer for almost everything;
         /// null for Azure.</summary>
         public string? AuthScheme { get; set; } = "Bearer";
+    }
+
+    /// <summary>
+    /// One extra request header, as persisted. (#711, #771)
+    ///
+    /// <para><b>Why a record and not a <c>Dictionary&lt;string, string&gt;</c>.</b> A secret header's value
+    /// does not live here, so the shape has to be able to say "this header has a name and no value in this
+    /// file". Expressed as a dictionary plus a parallel list of which names are secret, the two can disagree —
+    /// a name in both would have a plaintext value AND a stored secret, with nothing to say which wins. Here
+    /// that state cannot be written down.</para>
+    /// </summary>
+    public class AiHeaderRecord
+    {
+        public string Name { get; set; } = "";
+
+        /// <summary>
+        /// The header value, or null when <see cref="Secret"/> — in which case it is in the credential store
+        /// under <c>AiCredentialNames.Header(Name)</c> and is never written to this file at any point.
+        /// </summary>
+        public string? Value { get; set; }
+
+        /// <summary>
+        /// Whether the value is a credential. Set by the reader on the row, because only they know: the same
+        /// header name is a routing hint at one provider and a token at another.
+        /// </summary>
+        public bool Secret { get; set; }
     }
 
     /// <summary>One model a connection offers, as persisted.</summary>
