@@ -186,4 +186,64 @@ public class ChatProviderResolverTests
     {
         Assert.False(ChatProviderResolver.TryParseKind(value, out _));
     }
+
+    /// <summary>
+    /// A header template nobody filled in is refused before sending, exactly as an unfilled base URL is.
+    /// Sent, it reaches the wire as the literal text "Bearer {gatewayToken}" and returns a 401 the reader
+    /// reads as a bad key — and in the gateway case that header IS the credential, so an unfinished one is
+    /// an unfinished credential. (Fable review of #764, finding 4)
+    /// </summary>
+    [Fact]
+    public void An_unfilled_header_template_is_refused_and_names_what_is_missing()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers["cf-aig-authorization"] = "Bearer {gatewayToken}";
+            c.ActiveModelId = "some-model";
+        }, apiKey: "sk-x");
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.Contains("gatewayToken", problem);
+    }
+
+    /// <summary>A header whose template WAS filled in resolves normally — the guard must not refuse everything
+    /// with a brace in its history.</summary>
+    [Fact]
+    public void A_filled_header_template_resolves()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers["cf-aig-authorization"] = "Bearer {gatewayToken}";
+            conn.Inputs["gatewayToken"] = "real-token";
+            c.ActiveModelId = "some-model";
+        }, apiKey: "sk-x");
+
+        Assert.NotNull(resolver.Resolve(out var problem));
+        Assert.Null(problem);
+    }
+
+    /// <summary>
+    /// The widening from #711 must not swallow the keyless refusal for a connection that only carries
+    /// something cosmetic. A header that cannot be a credential leaves the actionable message in place.
+    /// </summary>
+    [Fact]
+    public void A_cosmetic_header_does_not_excuse_a_missing_anthropic_key()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "anthropic";
+            conn.Headers["X-Title"] = "  ";
+            c.ActiveModelId = "claude-opus-5";
+        });
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.Contains("API key", problem);
+    }
 }

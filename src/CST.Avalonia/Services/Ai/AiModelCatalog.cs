@@ -244,9 +244,15 @@ namespace CST.Avalonia.Services.Ai
             if (connection.Kind == ChatProviderKind.Anthropic)
             {
                 // Anthropic's shape is fixed by its own adapter rather than carried on the connection, so it
-                // is named here too. The version header is required on every request, key or no key.
-                AiHttp.ApplyAuth(request, key, "x-api-key", null, headers);
-                request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+                // is named here too. The version header is required on every request, key or no key — but
+                // only when the connection did not supply one. TryAddWithoutValidation appends, so adding
+                // ours unconditionally sent TWO values to a gateway that pins its own version, on this path
+                // only. That is precisely the chat-vs-listing divergence the summary above says cannot
+                // happen. (#711)
+                AiHttp.ApplyAuth(request, key, AnthropicOptions.AuthHeader, null, headers);
+                if (!request.Headers.Contains(AnthropicOptions.VersionHeader))
+                    request.Headers.TryAddWithoutValidation(
+                        AnthropicOptions.VersionHeader, AnthropicMessagesProvider.AnthropicVersion);
                 return;
             }
 

@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CST.Avalonia.Models.Ai;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services.Ai;
@@ -14,9 +18,24 @@ namespace CST.Avalonia.Services.Ai;
 /// <summary>Configuration for <see cref="AnthropicMessagesProvider"/>.</summary>
 /// <param name="ApiKey">Required — Anthropic has no anonymous access.</param>
 /// <param name="BaseUrl">Override for a proxy or gateway; defaults to the public API.</param>
-public sealed record AnthropicOptions(string? ApiKey, string? BaseUrl = null)
+/// <param name="ExtraHeaders">
+/// The connection's extra headers. Not a nicety: <c>Kind = Anthropic</c> does not imply
+/// <c>api.anthropic.com</c> — several gateways speak the Messages protocol at their own URL and want a
+/// token of their own alongside the Anthropic key. That is the case this adapter previously could not
+/// serve, because it had nowhere to put a second header. (#711, #689)
+/// </param>
+public sealed record AnthropicOptions(
+    string? ApiKey,
+    string? BaseUrl = null,
+    IReadOnlyDictionary<string, string>? ExtraHeaders = null)
 {
     internal const string DefaultBaseUrl = "https://api.anthropic.com";
+
+    /// <summary>Where the credential goes. Anthropic uses a bare header, not a scheme-prefixed one.</summary>
+    internal const string AuthHeader = "x-api-key";
+
+    /// <summary>The protocol version header, which an extra header may deliberately replace.</summary>
+    internal const string VersionHeader = "anthropic-version";
 }
 
 /// <summary>
@@ -29,7 +48,7 @@ public sealed record AnthropicOptions(string? ApiKey, string? BaseUrl = null)
 /// </summary>
 public sealed class AnthropicMessagesProvider : IChatProvider
 {
-    private const string AnthropicVersion = "2023-06-01";
+    internal const string AnthropicVersion = "2023-06-01";
 
     private readonly HttpClient _http;
     private readonly AnthropicOptions _options;
@@ -53,12 +72,74 @@ public sealed class AnthropicMessagesProvider : IChatProvider
 
     public string Id => "anthropic";
 
+    /// <summary>
+    /// Whether anything on this connection could authenticate a request. (#711)
+    ///
+    /// <para><b>A header only counts if it will actually be sent and carries something.</b> The first version
+    /// of this counted any non-blank header NAME, which let a cosmetic <c>X-Title</c>, an empty value, or a
+    /// name HTTP rejects outright stand in for a credential — so a connection with no key sailed past the
+    /// guard, sent nothing that could authenticate, and got back a 401 reported as "the provider rejected the
+    /// API key" when there was no key to reject. That is a worse outcome than the refusal it replaced, which
+    /// named the actual fix.</para>
+    ///
+    /// <para>This is still a proxy — we cannot know which header a gateway treats as its credential, and
+    /// guessing would be worse. It is only a proxy that cannot be satisfied by nothing.</para>
+    /// </summary>
+    internal static bool HasCredential(AnthropicOptions options) =>
+        !string.IsNullOrWhiteSpace(options.ApiKey)
+        || (options.ExtraHeaders?.Any(IsSendableHeader) ?? false);
+
+    /// <summary>
+    /// A header that will survive to the wire with content in it: a name that is a legal HTTP token, a value
+    /// that is not blank, and no unresolved <c>{placeholder}</c> left in either. A templated name is never
+    /// expanded, so a braced name is unfinished by construction.
+    /// </summary>
+    private static bool IsSendableHeader(KeyValuePair<string, string> header) =>
+        !string.IsNullOrWhiteSpace(header.Key)
+        && !string.IsNullOrWhiteSpace(header.Value)
+        && HeaderNameToken.IsMatch(header.Key)
+        && !AiTemplate.HasUnresolvedPlaceholders(header.Value);
+
+    /// <summary>RFC 9110 field-name: one or more token characters, and nothing else.</summary>
+    private static readonly Regex HeaderNameToken =
+        new(@"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Credential, connection headers, and the protocol version — through the same helper the
+    /// OpenAI-compatible adapter uses, so the two cannot drift on what an extra header is allowed to do.
+    /// (#711)
+    ///
+    /// <para><c>anthropic-version</c> is added only when the connection did not supply one. The reason is
+    /// mechanical rather than a policy about who should win: <see cref="HttpHeaders.TryAddWithoutValidation"/>
+    /// appends, so unconditionally adding ours to a request that already carries one would send
+    /// <c>anthropic-version: 2026-01-01, 2023-06-01</c> — two values, which is worse than either. A gateway
+    /// that pins its own version gets it; everyone else gets ours.</para>
+    /// </summary>
+    private void ApplyHeaders(HttpRequestMessage message)
+    {
+        AiHttp.ApplyAuth(
+            message,
+            _options.ApiKey,
+            AnthropicOptions.AuthHeader,
+            authScheme: null,
+            _options.ExtraHeaders);
+
+        if (!message.Headers.Contains(AnthropicOptions.VersionHeader))
+            message.Headers.TryAddWithoutValidation(AnthropicOptions.VersionHeader, AnthropicVersion);
+    }
+
     public async IAsyncEnumerable<ChatDelta> StreamAsync(
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_options.ApiKey))
-            throw new AiException(new AiError(AiErrorKind.NotConfigured, "No Anthropic API key is configured."));
+        // A key OR a header, not a key unconditionally. Requiring the key made the escape hatch inert on this
+        // adapter: a gateway holding its own Anthropic credential wants a token of ours and no key at all,
+        // and refusing that is refusing the case extra headers exist for. (#711, #689)
+        if (!HasCredential(_options))
+            throw new AiException(new AiError(
+                AiErrorKind.NotConfigured,
+                "No Anthropic API key is configured, and this connection sends no headers that could "
+                + "authenticate in its place."));
         if (string.IsNullOrWhiteSpace(request.Model))
             throw new AiException(new AiError(AiErrorKind.NotConfigured, "No model is configured."));
 
@@ -72,8 +153,7 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         {
             Content = new StringContent(BuildBody(request), Encoding.UTF8, "application/json"),
         };
-        message.Headers.TryAddWithoutValidation("x-api-key", _options.ApiKey);
-        message.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
+        ApplyHeaders(message);
 
         HttpResponseMessage response;
         try
@@ -307,7 +387,7 @@ public sealed class AnthropicMessagesProvider : IChatProvider
 
         return new AiError(
             kind,
-            AiHttp.MessageFor(kind, response.StatusCode, wait),
+            AiHttp.MessageFor(kind, response.StatusCode, wait, !string.IsNullOrWhiteSpace(_options.ApiKey)),
             StatusCode: (int)response.StatusCode,
             ProviderCode: code,
             RetryAfter: wait);

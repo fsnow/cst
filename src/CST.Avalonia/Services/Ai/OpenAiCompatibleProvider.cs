@@ -375,7 +375,7 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
 
         return new AiError(
             kind,
-            AiHttp.MessageFor(kind, response.StatusCode, wait),
+            AiHttp.MessageFor(kind, response.StatusCode, wait, !string.IsNullOrWhiteSpace(_options.ApiKey)),
             StatusCode: (int)response.StatusCode,
             ProviderCode: code,
             RetryAfter: wait);

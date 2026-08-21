@@ -113,6 +113,38 @@ public class OpenAiCompatibleAuthTests
         Assert.Equal("azure-key", Header(m, "api-key"));
     }
 
+    /// <summary>
+    /// The escape hatch #689 promised: "leave the key empty if you manage auth via headers." The guard that
+    /// keeps an extra header from overwriting the credential was skipping <c>Authorization</c>
+    /// unconditionally — so with no key stored there was nothing to overwrite and nothing sent either, and
+    /// the request went out unauthenticated. (#711)
+    /// </summary>
+    [Fact]
+    public void With_no_credential_an_authorization_header_is_the_credential()
+    {
+        var m = Build(new OpenAiCompatibleOptions(
+            "https://gateway.example/v1", ApiKey: null,
+            ExtraHeaders: new Dictionary<string, string> { ["Authorization"] = "Bearer gateway-token" }));
+
+        Assert.Equal("Bearer gateway-token", Header(m, "Authorization"));
+    }
+
+    /// <summary>
+    /// Naming a non-standard auth header says where OUR credential goes. It is not a reason to suppress a
+    /// deliberate <c>Authorization</c> header — a gateway in front of Azure wants both. (#711)
+    /// </summary>
+    [Fact]
+    public void A_named_auth_header_does_not_suppress_a_deliberate_authorization_header()
+    {
+        var m = Build(new OpenAiCompatibleOptions(
+            "https://acme.openai.azure.com/openai/v1", "azure-key",
+            AuthHeaderName: "api-key", AuthScheme: null,
+            ExtraHeaders: new Dictionary<string, string> { ["Authorization"] = "Bearer gateway-token" }));
+
+        Assert.Equal("azure-key", Header(m, "api-key"));
+        Assert.Equal("Bearer gateway-token", Header(m, "Authorization"));
+    }
+
     /// <summary>Defensive: a blank header name falls back to the standard one rather than producing a request
     /// with the credential attached to nothing.</summary>
     [Fact]

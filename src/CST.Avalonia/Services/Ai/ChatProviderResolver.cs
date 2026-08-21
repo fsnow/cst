@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -175,14 +176,35 @@ public sealed class ChatProviderResolver : IChatProviderResolver
             return null;
         }
 
+        // Same guard as the base URL above, for the same reason. An unfilled {placeholder} in a header value
+        // reaches the wire verbatim and comes back as a 401 the reader would read as a bad key - the header
+        // IS the credential in the gateway case, so an unfinished one is an unfinished credential. (#711)
+        var headers = ExpandHeaders(connection);
+        var unfinished = headers
+            .Where(h => CST.Avalonia.Models.Ai.AiTemplate.HasUnresolvedPlaceholders(h.Value))
+            .SelectMany(h => CST.Avalonia.Models.Ai.AiTemplate.PlaceholdersIn(h.Value))
+            .Distinct()
+            .ToList();
+        if (unfinished.Count > 0)
+        {
+            problem = $"This provider still needs: {string.Join(", ", unfinished)}. "
+                      + "Fill it in under Settings \u2192 AI.";
+            return null;
+        }
+
         var apiKey = _credentials?.GetApiKey(connection.Id);
 
         switch (kind)
         {
-            case ChatProviderKind.Anthropic when string.IsNullOrWhiteSpace(apiKey):
+            case ChatProviderKind.Anthropic
+                when string.IsNullOrWhiteSpace(apiKey) && !AnthropicMessagesProvider.HasCredential(
+                    new AnthropicOptions(apiKey, null, headers)):
                 // Two different problems with two different fixes: "you have not entered a key" is solved in
                 // Settings; "this build cannot store one" is not solved there at all, and telling the user to
                 // go and add one would send them somewhere that cannot help. (#579)
+                //
+                // A connection carrying headers is a third case and is NOT refused: the headers may be the
+                // credential, which is what "leave the key empty if you manage auth via headers" means. (#711)
                 problem = _credentials?.Unavailable
                           ?? "No API key is stored for Claude. Add one in Settings.";
                 return null;
@@ -192,7 +214,7 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                 return new ChatProviderResolution(
                     new AnthropicMessagesProvider(
                         _http,
-                        new AnthropicOptions(apiKey, NullIfBlank(baseUrl)),
+                        new AnthropicOptions(apiKey, NullIfBlank(baseUrl), headers),
                         _loggerFactory.CreateLogger<AnthropicMessagesProvider>(),
                         firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());
@@ -214,11 +236,7 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                             NullIfBlank(apiKey),
                             connection.AuthHeaderName,
                             connection.AuthScheme,
-                            // Header VALUES are templates too - Cloudflare and Azure put reader-supplied
-                            // inputs in them, exactly as the base URL does.
-                            connection.Headers.ToDictionary(
-                                h => h.Key,
-                                h => CST.Avalonia.Models.Ai.AiTemplate.Expand(h.Value, connection.Inputs))),
+                            headers),
                         _loggerFactory.CreateLogger<OpenAiCompatibleProvider>(),
                         firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());
@@ -247,4 +265,16 @@ public sealed class ChatProviderResolver : IChatProviderResolver
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>
+    /// A connection's headers, with their values expanded against its inputs.
+    ///
+    /// <para>Header VALUES are templates just as the base URL is — Cloudflare and Azure both put a
+    /// reader-supplied input inside one. Shared by both provider kinds so that neither can quietly stop
+    /// sending them, which is how the Anthropic adapter came to drop every header it was given. (#711)</para>
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ExpandHeaders(AiConnectionRecord connection) =>
+        connection.Headers.ToDictionary(
+            h => h.Key,
+            h => CST.Avalonia.Models.Ai.AiTemplate.Expand(h.Value, connection.Inputs));
 }
