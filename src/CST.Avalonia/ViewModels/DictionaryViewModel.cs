@@ -170,6 +170,17 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         // preferFirstEnabled is deliberately false: an asset arriving must not move the user's selection.
         _assetInstalledHandler = _ => Dispatcher.UIThread.Post(() => RebuildSources());
         _dpdUpdates.AssetInstalled += _assetInstalledHandler;
+
+        // A dictionary that failed to download stays missing for the whole session, because the update check
+        // runs once per launch. So the reader's only route back to DPD or DPPN was to restart — which is the
+        // #563 symptom again, reached by a different mechanism entirely, and just as invisible.
+        //
+        // Retried HERE because opening the dictionary panel is the reader saying they want a dictionary, and
+        // that is a better trigger than any interval we could pick: it costs nothing when everything is
+        // installed (RetryMissingAsync returns without touching the network), and it fires exactly when the
+        // absence matters. Fire-and-forget — the panel must open at once whatever the network is doing, and
+        // AssetInstalled already brings the picker up to date if the retry succeeds. (#773)
+        _ = _dpdUpdates.RetryMissingAsync();
     }
 
     /// <summary>Recompute <see cref="Sources"/> (and the picker-width measurer) from the enable/order

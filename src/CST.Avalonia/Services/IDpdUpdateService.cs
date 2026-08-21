@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,6 +25,33 @@ public interface IDpdUpdateService
 
     /// <summary>Download progress: (bytesSoFar, totalBytes). totalBytes may be 0 if the length is unknown.</summary>
     event Action<long, long>? DownloadProgressChanged;
+
+    /// <summary>
+    /// Raised with the asset id when a dictionary could not be installed this session — a bad checksum, a
+    /// failed usability probe, a dropped connection, an unreachable release. (#773)
+    ///
+    /// <para>A counterpart to <see cref="AssetInstalled"/>, and it exists for the same reason: without it, a
+    /// failed download is indistinguishable from a build that never offered the dictionary at all. The picker
+    /// simply does not list it, which reads as "this app has no DPD" rather than "we could not fetch it".</para>
+    /// </summary>
+    event Action<string>? AssetFailed;
+
+    /// <summary>
+    /// Asset ids that failed this session and are still not installed. A STATE rather than a log line, so a
+    /// caller can say which dictionary is missing and why, and can offer to try again. (#773)
+    /// </summary>
+    IReadOnlyCollection<string> FailedAssetIds { get; }
+
+    /// <summary>
+    /// Re-run the check for dictionaries that are absent or failed, ignoring the ones already installed and
+    /// current. Cheap when nothing is missing — it returns without touching the network. (#773)
+    ///
+    /// <para>Demand-driven rather than timed: <see cref="CheckAndUpdateAsync"/> runs once per launch, so a
+    /// first run that fails leaves the reader without dictionaries until they restart. The moment a reader
+    /// opens the dictionary panel is the moment they have said they want one, and it is a better trigger than
+    /// any interval we could pick.</para>
+    /// </summary>
+    Task RetryMissingAsync(CancellationToken ct = default);
 
     bool IsBusy { get; }
 

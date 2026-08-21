@@ -1,4 +1,6 @@
 using System;
+using System.Threading.Tasks;
+using CST.Avalonia.Services;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -278,6 +280,53 @@ public sealed class DpdUpdateServiceTests : IDisposable
         Assert.False(staged);
         Assert.True(File.Exists(final));
         Assert.False(File.Exists(final + ".pending"));
+    }
+
+    // ---- a failed download is a STATE, not a log line (#773) ----
+
+    [Fact]
+    public async Task RetryMissing_does_not_touch_the_network_when_nothing_is_missing()
+    {
+        // The common case, and it runs every time the dictionary panel opens — so it has to be free. A service
+        // pointed at a repository that does not exist would throw or hang if this reached the network; it must
+        // return before it gets there.
+        var svc = new DpdUpdateService(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DpdUpdateService>.Instance,
+            SettingsWithBothAssetsPresent());
+
+        await svc.RetryMissingAsync();     // must not throw, must not hang
+
+        Assert.Empty(svc.FailedAssetIds);
+    }
+
+    [Fact]
+    public void A_service_that_has_run_nothing_reports_no_failures()
+    {
+        var svc = new DpdUpdateService(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DpdUpdateService>.Instance,
+            SettingsWithBothAssetsPresent());
+
+        // Not "no failures because we have not looked" dressed as "no failures" — an empty set here is the
+        // honest starting state, and the tests above are what make it mean something.
+        Assert.Empty(svc.FailedAssetIds);
+    }
+
+    // A settings service whose asset paths both exist, so RetryMissing has nothing to fetch.
+    private ISettingsService SettingsWithBothAssetsPresent()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(DpdUpdateService.DpdSubsetPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(DpdUpdateService.DppnLexiconPath)!);
+        if (!File.Exists(DpdUpdateService.DpdSubsetPath))
+            BuildMetaFixture(DpdUpdateService.DpdSubsetPath, dpd: "v0", conv: "1");
+        if (!File.Exists(DpdUpdateService.DppnLexiconPath))
+            BuildLexiconDb(DpdUpdateService.DppnLexiconPath, src: "2025-06", conv: "1");
+
+        var mock = new Moq.Mock<ISettingsService>();
+        mock.SetupGet(s => s.Settings).Returns(new CST.Avalonia.Models.Settings
+        {
+            DpdUpdateSettings = new CST.Avalonia.Models.DpdUpdateSettings { EnableAutomaticUpdates = true }
+        });
+        return mock.Object;
     }
 
     [Fact]

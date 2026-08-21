@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -54,7 +55,26 @@ public sealed class DpdUpdateService : IDpdUpdateService
     /// <inheritdoc />
     public event Action<string>? AssetInstalled;
     public event Action<long, long>? DownloadProgressChanged;
+    /// <inheritdoc />
+    public event Action<string>? AssetFailed;
     public bool IsBusy => Volatile.Read(ref _busy) == 1;
+
+    // Failure as a STATE, not just a log line. A reader whose download failed sees exactly what a reader of a
+    // build without DPD sees — nothing in the picker — and nothing distinguishes the two. (#773)
+    private readonly ConcurrentDictionary<string, byte> _failed = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<string> FailedAssetIds => _failed.Keys.ToArray();
+
+    /// <inheritdoc />
+    public async Task RetryMissingAsync(CancellationToken ct = default)
+    {
+        // Nothing missing, nothing to do — and no network touched. This runs whenever the dictionary panel
+        // opens, so the common case has to cost nothing.
+        if (!Descriptors.Any(d => !File.Exists(d.InstallPath)))
+            return;
+        await CheckAndUpdateAsync(ct).ConfigureAwait(false);
+    }
 
     public DpdUpdateService(ILogger<DpdUpdateService> logger, ISettingsService settings)
     {
@@ -150,6 +170,15 @@ public sealed class DpdUpdateService : IDpdUpdateService
             {
                 anyFailed = true;
                 _logger.LogWarning(ex, "Update of dictionary '{Id}' failed (non-fatal; others continue).", desc.Id);
+
+                // Only when the reader has NOTHING: a failed UPDATE leaves a working older asset in place, and
+                // reporting that as a missing dictionary would be false. A failed FIRST download leaves the
+                // picker silent, which is the case worth naming. (#773)
+                if (!File.Exists(desc.InstallPath))
+                {
+                    _failed[desc.Id] = 1;
+                    AssetFailed?.Invoke(desc.Id);
+                }
             }
         }
 
@@ -197,7 +226,10 @@ public sealed class DpdUpdateService : IDpdUpdateService
         // its availability at construction and must be reopened, and the dictionary picker has to re-query
         // the registry. A staged install is deliberately NOT announced — it is not live yet. (#536)
         if (!staged)
+        {
+            _failed.TryRemove(desc.Id, out _);
             AssetInstalled?.Invoke(desc.Id);
+        }
         return true;
     }
 
