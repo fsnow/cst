@@ -231,4 +231,34 @@ public class AiModelCatalogTests
 
         Assert.Equal(expected, Assert.Single(models).SupportsReasoning);
     }
+
+    // ---- whether a listing is everything (#728) -----------------------------------------------------------
+
+    /// <summary>An ordinary listing we could read end to end is complete.</summary>
+    [Fact]
+    public void A_listing_read_end_to_end_is_complete()
+    {
+        Assert.False(AiModelCatalog.HasMore("""{"data":[{"id":"a"},{"id":"b"}]}"""));
+    }
+
+    /// <summary>
+    /// An endpoint that says there is another page is not complete.
+    ///
+    /// <para>Anthropic's <c>GET /v1/models</c> pages at twenty by default. We do not follow the pages yet, but
+    /// reading the flag is what stops a first page being mistaken for the whole catalogue — which would report
+    /// every model after the twentieth as retired (#728).</para>
+    /// </summary>
+    [Fact]
+    public void A_paged_listing_says_there_is_more()
+    {
+        Assert.True(AiModelCatalog.HasMore("""{"data":[{"id":"a"}],"has_more":true,"last_id":"a"}"""));
+    }
+
+    /// <summary>A body we cannot read is not evidence that there is nothing more. Guessing the other way is
+    /// the half of the answer that produces false alarms.</summary>
+    [Fact]
+    public void An_unreadable_body_is_not_taken_as_the_end()
+    {
+        Assert.True(AiModelCatalog.HasMore("{ this is not json"));
+    }
 }

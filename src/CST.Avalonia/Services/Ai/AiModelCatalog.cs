@@ -70,6 +70,15 @@ namespace CST.Avalonia.Services.Ai
     /// <param name="Problem">A finished sentence for the reader. Never null when <paramref name="Ok"/> is
     /// false, and it names the endpoint — "cannot connect" without saying to what is the message that sends
     /// someone looking in the wrong place.</param>
+    /// <param name="Complete">
+    /// Whether this listing is everything the endpoint has, so far as we can tell. (#728)
+    ///
+    /// <para>False when entries were skipped for want of a usable id — observed in the wild, a listing whose
+    /// nine entries yielded two we could read — or when the endpoint says there is another page. <b>A short
+    /// listing is still a listing</b>: it is shown, and every model in it is real. What it cannot support is
+    /// the inference in the other direction, that a model absent from it has been retired, which is why the
+    /// flag exists rather than a failure.</para>
+    /// </param>
     /// <param name="Reachable">
     /// Whether the endpoint answered at all — <b>not</b> whether the listing was useful.
     ///
@@ -78,13 +87,14 @@ namespace CST.Avalonia.Services.Ai
     /// unfinished connection cannot be reported either way.</para>
     /// </param>
     public sealed record AiCatalogResult(
-        bool Ok, string? Problem, IReadOnlyList<AiCatalogModel> Models, bool? Reachable = null)
+        bool Ok, string? Problem, IReadOnlyList<AiCatalogModel> Models, bool? Reachable = null,
+        bool Complete = true)
     {
-        public static AiCatalogResult Success(IReadOnlyList<AiCatalogModel> models) =>
-            new(true, null, models, true);
+        public static AiCatalogResult Success(IReadOnlyList<AiCatalogModel> models, bool complete = true) =>
+            new(true, null, models, true, complete);
 
         public static AiCatalogResult Fail(string problem, bool? reachable = null) =>
-            new(false, problem, Array.Empty<AiCatalogModel>(), reachable);
+            new(false, problem, Array.Empty<AiCatalogModel>(), reachable, false);
     }
 
     /// <summary>
@@ -177,6 +187,7 @@ namespace CST.Avalonia.Services.Ai
                 // and the reader who says "but I know they support more" has no way to tell which, nor did
                 // we, from the log.
                 var listed = CountEntries(body);
+                var complete = listed == models.Count && !HasMore(body);
                 if (listed == models.Count)
                 {
                     _logger.LogInformation(
@@ -189,7 +200,7 @@ namespace CST.Avalonia.Services.Ai
                         + "{Skipped} had no usable id", models.Count, connection.Id, listed, listed - models.Count);
                     _logger.LogDebug("{Connection} listing: {Body}", connection.Id, body);
                 }
-                return AiCatalogResult.Success(models);
+                return AiCatalogResult.Success(models, complete);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -267,6 +278,29 @@ namespace CST.Avalonia.Services.Ai
         /// models in a release nobody read, and rendering it wholesale would adopt that judgment silently. So
         /// each field is pulled by name, and adding one is a deliberate act.</para>
         /// </summary>
+        /// <summary>
+        /// Whether the endpoint says it has another page. (#728)
+        ///
+        /// <para>Anthropic's listing is paged and defaults to twenty per page. We do not follow the pages yet
+        /// — that is its own work — but reading the flag is what stops a first page being mistaken for the
+        /// whole catalogue, which would mark every model after the twentieth as retired.</para>
+        /// </summary>
+        internal static bool HasMore(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                return doc.RootElement.TryGetProperty("has_more", out var more) &&
+                       more.ValueKind == JsonValueKind.True;
+            }
+            catch (JsonException)
+            {
+                // Unparseable here means unparseable in Parse too, which already yields nothing. Saying "no
+                // more pages" about a body we cannot read would be the wrong half of the answer to guess.
+                return true;
+            }
+        }
+
         internal static IReadOnlyList<AiCatalogModel> Parse(string json)
         {
             using var doc = JsonDocument.Parse(json);

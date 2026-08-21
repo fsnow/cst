@@ -741,6 +741,47 @@ public class AiConnectionEditorViewModelTests
         Assert.Equal(h.Service.Presets.Single(p => p.Id == "azure").Prompts!.Single().Message, input.Message);
     }
 
+    /// <summary>
+    /// Correcting a model id does not carry the old id's "no longer listed" mark. (#728)
+    ///
+    /// <para>The path this exists for: the provider renames a model, the reader sees the mark, opens the
+    /// editor and types the new id. Inheriting the mark would leave a corrected model still claiming to be
+    /// gone — across sessions, until the Models tab was next opened and fetched.</para>
+    /// </summary>
+    [Fact]
+    public void Retyping_a_marked_models_id_does_not_carry_the_mark()
+    {
+        var h = new Harness();
+        h.Service.Add("mine", Draft());
+        h.Service.EnableModel("mine", "old-name", "Old name", true);
+        h.Service.MarkListing("mine", new[] { "new-name" });
+
+        var vm = h.Existing("mine");
+        vm.Models.Single(m => m.ModelId == "old-name").ModelId = "new-name";
+        Save(vm);
+
+        var stored = Assert.Single(h.Service.Connections.Single().Models);
+        Assert.Equal("new-name", stored.Id);
+        Assert.False(stored.Missing);
+    }
+
+    /// <summary>A mark survives an edit that leaves the id alone — it is the listing's word about that id,
+    /// not a side effect of opening the sheet.</summary>
+    [Fact]
+    public void An_untouched_marked_model_keeps_its_mark_through_an_edit()
+    {
+        var h = new Harness();
+        h.Service.Add("mine", Draft());
+        h.Service.EnableModel("mine", "retired", "Retired", true);
+        h.Service.MarkListing("mine", new[] { "something-else" });
+
+        var vm = h.Existing("mine");
+        vm.DisplayName = "My box, renamed";
+        Save(vm);
+
+        Assert.True(h.Service.Connections.Single().Models.Single(m => m.Id == "retired").Missing);
+    }
+
     /// <summary>A custom endpoint keeps the whole form: nothing about it comes from a preset.</summary>
     [Fact]
     public void Editing_a_custom_endpoint_still_shows_the_full_form()

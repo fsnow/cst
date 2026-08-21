@@ -193,13 +193,41 @@ public class AiModelsViewModelTests
     [Fact]
     public void A_failed_fetch_marks_nothing()
     {
-        var (vm, service) = Make(new FakeCatalog(AiCatalogResult.Fail("Could not connect to mine.")));
+        // Constructed rather than built with Fail(), which always carries an empty list: that would leave
+        // this passing on MarkListing's empty-listing guard while asserting nothing about the Ok check it
+        // names, and a future Fail that carried the models it got before dying would mark them all.
+        // (fable review, found by mutation)
+        var partial = new AiCatalogResult(
+            false, "Could not connect to mine.",
+            new[] { new AiCatalogModel("something-else", "Something else") }, Reachable: false);
+
+        var (vm, service) = Make(new FakeCatalog(partial));
         service.Add("mine", Draft(new AiModelEntry("mine-model", "Mine")));
 
         Group(vm).IsExpanded = true;
 
         Assert.False(Rows(vm).Single().Missing);
         Assert.False(service.Connections.Single().Models.Single().Missing);
+    }
+
+    /// <summary>
+    /// A listing the endpoint says is incomplete marks nothing.
+    ///
+    /// <para>A first page, or one whose entries we could only partly read, is a fine thing to show — every
+    /// model in it is real. What it cannot support is the inference in the other direction: that a model
+    /// absent from it has been retired. Anthropic's listing pages at twenty by default, so without this the
+    /// twenty-first model onwards would be reported as gone.</para>
+    /// </summary>
+    [Fact]
+    public void An_incomplete_listing_marks_nothing()
+    {
+        var (vm, service) = Make(new FakeCatalog(AiCatalogResult.Success(
+            new[] { new AiCatalogModel("page-one-model", "Page one") }, complete: false)));
+        service.Add("mine", Draft(new AiModelEntry("page-two-model", "Page two")));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.False(service.Connections.Single().Models.Single(m => m.Id == "page-two-model").Missing);
     }
 
     /// <summary>An empty listing marks nothing either: endpoints answer 200 with an empty <c>data[]</c> for

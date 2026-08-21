@@ -401,7 +401,13 @@ namespace CST.Avalonia.ViewModels
                     // reader's stored models has to be written down now or the per-turn picker will go on
                     // describing a model that no longer exists. Suppressed like the toggles, so recording it
                     // does not rebuild the list under the reader. (#728)
-                    if (_owner.Service is { } service)
+                    //
+                    // Only a listing that is complete as far as the endpoint told us. A first page of a paged
+                    // listing, or one whose entries we could only partly read, is a fine thing to SHOW - every
+                    // model in it is real - but it cannot support the inference in the other direction, that
+                    // what is absent has been retired. Marking from it would report a live model as gone,
+                    // which is the false alarm this feature was written to avoid. (fable review)
+                    if (result.Complete && _owner.Service is { } service)
                     {
                         _owner.Suppressed(() => service.MarkListing(
                             Id, _fetched.Select(m => m.Id).ToList()));

@@ -159,7 +159,11 @@
                                 BorderThickness="0,0,0,1"
                                 Background="Transparent"
                                 ToolTip.Tip="{Binding Details}">
-                            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                            <!-- The name in the STAR column, so it trims. In an Auto column the TextBlock
+                                 is measured at infinite width, TextTrimming never engages, and a long id
+                                 pushes the switch off the row - the same trap as the wide answer tables in
+                                 #586. (fable review) -->
+                            <Grid ColumnDefinitions="*,Auto,Auto">
                                 <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
@@ -178,7 +182,7 @@
 
                                 <!-- A switch, never a radio: several models under one connection must be
                                      on at once, which is the entire point of a short list. -->
-                                <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}"
+                                <ToggleSwitch Grid.Column="2" IsChecked="{Binding Enabled}"
                                               OnContent="" OffContent=""
                                               VerticalAlignment="Center"/>
                             </Grid>
