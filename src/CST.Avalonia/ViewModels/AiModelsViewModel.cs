@@ -479,7 +479,20 @@ namespace CST.Avalonia.ViewModels
                         Refresh();
                     }
                 }
-                else FetchProblem = result.Problem;
+                else
+                {
+                    // A cached listing is still on screen behind this. Say so, or the reader sees an error
+                    // line above a full list of models and reasonably concludes the failure did not matter -
+                    // they cannot tell "this is what the provider lists" from "this is what it listed some
+                    // time ago and we could not reach it just now". Absence of a fresh answer must not read
+                    // as confirmation of the old one.
+                    //
+                    // The wording is ModelsDevCatalog's, deliberately: it says exactly this about its own
+                    // cached copy, and a fifth phrasing for the same situation helps nobody. (#790)
+                    FetchProblem = _fetched.Count > 0
+                        ? $"Couldn't reach {DisplayName}. Showing the models it listed last time."
+                        : result.Problem;
+                }
 
                 // Asking a provider for its models IS contacting it, and the answer is the same fact a chat
                 // turn establishes. Without this a reader who had just fetched four hundred models from
