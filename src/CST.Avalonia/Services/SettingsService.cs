@@ -100,6 +100,14 @@ namespace CST.Avalonia.Services
                 }
                 else
                 {
+                    // No primary file is USUALLY a true first run — but not always, and the exception is the
+                    // recovery path's own worst moment. PreserveUnreadable moves the file aside, and if the
+                    // app is force-quit or crashes before the restore is written back, the next launch arrives
+                    // here with backups sitting right there and would have called it a first run: the restore
+                    // evaporates silently and the reader loses everything a second time. (#785, fable)
+                    if (GetBackupFilePaths().Length > 0 && await TryLoadFromBackupAsync().ConfigureAwait(false))
+                        return;
+
                     _logger.Information("No settings file found, using defaults");
                     ApplyFirstRunDefaults();
                 }
@@ -129,14 +137,28 @@ namespace CST.Avalonia.Services
                 // Then try to RECOVER, which is the half that means the reader never learns any of this
                 // happened. ApplicationStateService has done this since it was written; settings never did,
                 // and settings is the file that holds everything a reader configured by hand. (#785)
-                if (TryLoadFromBackup())
+                if (await TryLoadFromBackupAsync().ConfigureAwait(false))
                     return;
 
+                // Nothing to recover from. Defaults, and the unreadable file is already kept beside them.
+                //
+                // This save deliberately does NOT leave a backup. A persisted-type change breaks every backup
+                // at once — the expected case — so defaults would become the NEWEST backup, and the walk stops
+                // at the first readable one. A later recovery would then restore defaults and report that
+                // nothing was lost, with a genuinely configured backup sitting one file below, never reached.
+                // (#785, fable)
                 _settings = new Settings();
                 ApplyFirstRunDefaults();
+                _backupNextSave = false;
                 RequestSave();
             }
         }
+
+        /// <summary>
+        /// Whether the NEXT save should leave a backup. False for exactly one save: the defaults written when
+        /// no backup could be read, which must not become the newest backup. (#785)
+        /// </summary>
+        private bool _backupNextSave = true;
 
         /// <summary>The directory holding timestamped copies of previously-saved settings. (#785)</summary>
         private string BackupDirectory => Path.Combine(_settingsDirectory, "settings-backups");
@@ -146,8 +168,10 @@ namespace CST.Avalonia.Services
         {
             try
             {
+                // UTC: a local clock moved backwards, or a DST fall-back, would otherwise make a newer backup
+                // sort as older — and the walk restores the first one it can read. (fable)
                 return Directory.GetFiles(BackupDirectory, "settings-*.json")
-                    .OrderByDescending(File.GetLastWriteTime)
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
                     .ToArray();
             }
             catch
@@ -198,26 +222,40 @@ namespace CST.Avalonia.Services
         /// the load-what-the-previous-version-wrote fixtures (#787) are its complement rather than its
         /// alternative.</para>
         /// </summary>
-        private bool TryLoadFromBackup()
+        private async Task<bool> TryLoadFromBackupAsync()
         {
             foreach (var path in GetBackupFilePaths())
             {
                 try
                 {
-                    var loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), _jsonOptions);
+                    var loaded = JsonSerializer.Deserialize<Settings>(
+                        await File.ReadAllTextAsync(path).ConfigureAwait(false), _jsonOptions);
                     if (loaded == null) continue;
 
-                    SettingsValidator.Migrate(loaded);
-                    SettingsValidator.Sanitize(loaded);
+                    // The same repairs the primary file gets, and reported the same way. A restore that
+                    // silently dropped connections or models — Sanitize does remove id-less ones — would look
+                    // identical to one that lost nothing. (fable)
+                    foreach (var note in SettingsValidator.Migrate(loaded))
+                        _logger.Information("Settings migration (from backup): {Note}", note);
+                    foreach (var fix in SettingsValidator.Sanitize(loaded))
+                        _logger.Warning("Settings sanitized (from backup): {Fix}", fix);
+
                     _settings = loaded;
                     try { ApplyFirstRunDefaults(); } catch { /* see the load path */ }
 
+                    // The timestamp, and no claim beyond it. The newest READABLE backup can be older than the
+                    // file that failed — a shape change breaks the recent ones first — so "nothing was lost"
+                    // would be a guess stated as a fact. (fable)
                     _logger.Information(
-                        "Settings were restored from the backup taken at {Taken}; nothing was lost.",
+                        "Settings were restored from the backup taken at {Taken}.",
                         File.GetLastWriteTime(path));
 
-                    // Put it back as the primary file, so the next launch is an ordinary one.
-                    RequestSave();
+                    // Written back NOW, not on the debounce timer. Until the primary file exists again the
+                    // recovery is only in memory, and a crash or force-quit in that window sends the next
+                    // launch down the no-file path — which is why that path now checks the backups too, but
+                    // the fix belongs here first: a restore that has to survive a race to count is not a
+                    // restore. (fable)
+                    await SaveSettingsAsync().ConfigureAwait(false);
                     return true;
                 }
                 catch (Exception ex)
@@ -246,7 +284,10 @@ namespace CST.Avalonia.Services
 
                 var kept = Path.Combine(
                     _settingsDirectory,
-                    $"settings.unreadable-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+                    // Milliseconds, matching the backup filenames: two failed loads in the same second would
+                    // otherwise collide, File.Move(overwrite: false) would throw, and the copy holding the
+                    // reader's configuration would be left in place to be overwritten by the next save. (fable)
+                    $"settings.unreadable-{DateTime.Now:yyyyMMdd-HHmmss-fff}.json");
 
                 File.Move(_settingsFilePath, kept, overwrite: false);
 
@@ -313,7 +354,8 @@ namespace CST.Avalonia.Services
 
                 // A copy of what we just wrote, so a later build that cannot read it has something to fall
                 // back to. Best-effort: a failure to keep a backup must never fail the save itself. (#785)
-                await WriteBackupAsync(json).ConfigureAwait(false);
+                if (_backupNextSave) await WriteBackupAsync(json).ConfigureAwait(false);
+                _backupNextSave = true;
             }
             catch (Exception ex)
             {

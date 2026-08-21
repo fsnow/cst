@@ -131,6 +131,63 @@ public sealed class SettingsBackupRecoveryTests : IDisposable
         Assert.Empty(Directory.GetFiles(_dir, "settings.unreadable-*.json"));
     }
 
+    // Fable's lead finding: RequestSave only ARMS a 750ms timer, so after a restore there was a window with
+    // no primary file at all. A crash or force-quit inside it sent the next launch down the no-file branch,
+    // which called it a first run — the recovery evaporating silently, and the reader losing everything a
+    // second time. (#785)
+    [Fact]
+    public async Task A_restore_is_written_back_immediately_not_on_the_debounce_timer()
+    {
+        await WithOneGoodSave("/books");
+        await File.WriteAllTextAsync(SettingsPath, "{ broken");
+
+        await Loaded(_dir);
+
+        // No waiting, no flush: by the time the load returns, the primary file is on disk again.
+        Assert.True(File.Exists(SettingsPath));
+        Assert.Contains("\"/books\"", await File.ReadAllTextAsync(SettingsPath));
+    }
+
+    // And the belt to that braces: even if the write-back never happened, backups are consulted rather than
+    // the launch being treated as a first run.
+    [Fact]
+    public async Task A_missing_primary_file_with_backups_present_is_recovered_not_treated_as_a_first_run()
+    {
+        await WithOneGoodSave("/books");
+        File.Delete(SettingsPath);
+
+        var reopened = await Loaded(_dir);
+
+        Assert.Equal("/books", reopened.Settings.XmlBooksDirectory);
+        Assert.Equal("/idx", reopened.Settings.IndexDirectory);
+    }
+
+    // A genuine first run must still be a first run — the check above must not turn an empty backup directory
+    // into a recovery attempt that reports something it did not do.
+    [Fact]
+    public async Task A_genuine_first_run_is_still_a_first_run()
+    {
+        var svc = await Loaded(_dir);
+
+        Assert.Empty(svc.GetBackupFilePaths());
+        Assert.False(string.IsNullOrEmpty(svc.Settings.XmlBooksDirectory));
+        Assert.Equal("", svc.Settings.IndexDirectory);
+    }
+
+    // Fable's second finding: when the walk finds nothing, the defaults that follow must not become the
+    // NEWEST backup. A persisted-type change breaks every backup at once — the expected case — so defaults
+    // would bury a genuinely configured older backup that the walk stops before ever reaching.
+    [Fact]
+    public async Task Defaults_written_because_nothing_could_be_recovered_do_not_become_a_backup()
+    {
+        await File.WriteAllTextAsync(SettingsPath, "{ broken");
+
+        var svc = await Loaded(_dir);
+        await svc.SaveSettingsAsync();      // the debounced save, brought forward
+
+        Assert.Empty(svc.GetBackupFilePaths());
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
