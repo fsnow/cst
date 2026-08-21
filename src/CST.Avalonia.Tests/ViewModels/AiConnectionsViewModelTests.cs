@@ -762,7 +762,14 @@ public class AiConnectionsViewModelTests
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, ".git"))) dir = dir.Parent;
+        // File OR directory: in a git worktree, .git is a FILE holding a pointer to the real one, so testing
+        // only for a directory walks past every level and yields null. That made two tests fail for a reason
+        // having nothing to do with what they assert - and worktrees are how a review agent is given an
+        // isolated tree, so the false failures land exactly where they are least expected and most costly.
+        while (dir is not null
+               && !Directory.Exists(Path.Combine(dir.FullName, ".git"))
+               && !File.Exists(Path.Combine(dir.FullName, ".git")))
+            dir = dir.Parent;
         Assert.NotNull(dir);
         return dir!.FullName;
     }
