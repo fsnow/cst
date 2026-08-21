@@ -66,6 +66,25 @@ namespace CST.Avalonia.Services
                         _settings = loadedSettings;
                         _logger.Information("Settings loaded successfully from {Path}", _settingsFilePath);
 
+                        // A file that PARSES can still be missing the field. STATE-3 covered the no-file and
+                        // unreadable paths, so a settings.json written before XmlBooksDirectory existed — or
+                        // hand-edited, or produced by a build that did not set it — loaded cleanly and left
+                        // the app running with a blank books directory, which is the exact state STATE-3
+                        // exists to prevent. The call is idempotent: it returns immediately when the
+                        // directory is already set, so an ordinary file costs nothing. (#787)
+                        //
+                        // Guarded, because it CREATES a directory. On a read-only or missing parent that
+                        // throws, and inside the try it would carry a perfectly good parsed file into the
+                        // catch below — which discards it. A valid file must never be lost to a failure to
+                        // create somewhere to put books; the app can run with a blank directory and complain,
+                        // and the load path had never thrown for a parseable file before. (fable)
+                        try { ApplyFirstRunDefaults(); }
+                        catch (Exception ex)
+                        {
+                            _logger.Warning(ex,
+                                "Could not create the default XML books directory; settings were still loaded.");
+                        }
+
                         // Persist the upgraded/repaired settings so the on-disk file is brought up to date.
                         if (notes.Count > 0 || fixes.Count > 0)
                             RequestSave();
@@ -97,9 +116,10 @@ namespace CST.Avalonia.Services
             }
         }
 
-        // Set the default XML books directory (creating it) when it isn't already set. Runs on a true
-        // first run (no file) and whenever the file is empty/corrupt, so the app never operates with a
-        // blank XmlBooksDirectory. (STATE-3)
+        // Set the default XML books directory (creating it) when it isn't already set. Runs on a true first
+        // run (no file), whenever the file is unreadable, and after ANY successful load — a file can parse
+        // perfectly and still not carry the field. The app must never operate with a blank
+        // XmlBooksDirectory. (STATE-3, #787)
         private void ApplyFirstRunDefaults()
         {
             if (!string.IsNullOrEmpty(_settings.XmlBooksDirectory))

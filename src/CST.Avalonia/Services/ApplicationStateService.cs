@@ -22,6 +22,24 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
     private readonly string _stateFilePath;
     private readonly string _backupDirectory;
     private readonly JsonSerializerOptions _jsonOptions;
+
+    /// <summary>
+    /// How application state is read and written. <b>Shared rather than mirrored</b> — a test that re-declares
+    /// these cannot detect drift FROM them, which is the one thing it most needs to detect: change the naming
+    /// policy or drop the enum converter and every real file on disk stops loading while a mirroring test suite
+    /// stays green, because the fixture and the copy moved together. (#787)
+    ///
+    /// <para>The global <see cref="JsonStringEnumConverter"/> is load-bearing beyond the properties that carry
+    /// their own converter attribute: <c>MainWindowState.WindowState</c> and <c>BookWindowState.WindowState</c>
+    /// depend on it alone, and every real state file with a maximized window carries one.</para>
+    /// </summary>
+    internal static JsonSerializerOptions JsonOptions { get; } = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
     private readonly Timer _saveTimer;
     // Serializes concurrent saves (timer tick vs. shutdown ForceSave): they shared one .tmp path, so a
     // half-written tmp could be promoted over good state by File.Replace, and collided on backups. (STATE-2)
@@ -68,14 +86,7 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         _stateFilePath = Path.Combine(appDataPath, "application-state.json");
         _backupDirectory = Path.Combine(appDataPath, "app-state-backups");
 
-        // Configure JSON serialization for readability
-        _jsonOptions = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault,
-            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-        };
+        _jsonOptions = JsonOptions;
 
         Current = new ApplicationState();
         

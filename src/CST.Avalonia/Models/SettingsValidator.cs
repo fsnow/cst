@@ -93,6 +93,55 @@ public static class SettingsValidator
         if (settings.Ai.LocalApi == null) { settings.Ai.LocalApi = new LocalApiSettings(); fixes.Add("ai.localApi settings were null; reset to default"); }
         if (settings.Ai.Chat == null) { settings.Ai.Chat = new ChatSettings(); fixes.Add("ai.chat settings were null; reset to default"); }
 
+        // The same mechanism as #319 above, one level further down — where it was left unfinished twice, here
+        // and in ApplicationStateValidator. The comment above states the rule correctly: an explicit JSON null
+        // overwrites the `= new()` initializer. It was then applied to the SECTIONS and not to the collections
+        // inside them, and a collection is the thing that actually gets enumerated.
+        //
+        // These four are each declared `= new()` and each enumerated with no null check —
+        // AiConnectionService projects Connections, Models and Inputs on nearly every operation. The failure
+        // lands differently from a section null: it is outside SettingsService's try, so nothing is destroyed,
+        // but there is also no catch to make it survivable and the AI settings simply stop working. Headers is
+        // already covered by its converter's HandleNull (#784); coalesced here too so the guarantee is stated
+        // in one place rather than depending on a converter that only exists because the shape changed. (#787)
+        if (settings.Ai.Chat.Connections == null)
+        {
+            settings.Ai.Chat.Connections = new List<AiConnectionRecord>();
+            fixes.Add("ai.chat.connections was null; reset to empty");
+        }
+        foreach (var connection in settings.Ai.Chat.Connections)
+        {
+            if (connection == null) continue;
+            if (connection.Models == null)
+            {
+                connection.Models = new List<AiModelRecord>();
+                fixes.Add($"models list for connection '{connection.Id}' was null; reset to empty");
+            }
+            // A null ENTRY is the same mechanism one level in: AiConnectionService.ToRuntime projects every
+            // model unconditionally, so one null in the list breaks the whole connection. (#787, fable)
+            int badModels = connection.Models.RemoveAll(m => m == null || string.IsNullOrWhiteSpace(m.Id));
+            if (badModels > 0)
+                fixes.Add($"removed {badModels} model(s) with no id from connection '{connection.Id}'");
+            if (connection.Inputs == null)
+            {
+                connection.Inputs = new Dictionary<string, string>();
+                fixes.Add($"inputs for connection '{connection.Id}' were null; reset to empty");
+            }
+            if (connection.Headers == null)
+            {
+                connection.Headers = new List<AiHeaderRecord>();
+                fixes.Add($"headers for connection '{connection.Id}' were null; reset to empty");
+            }
+        }
+        // A null ENTRY in the list is the same hazard as a null list — ToRuntime would dereference it. So is a
+        // connection with no Id: ToRuntime passes it straight to a dictionary lookup, which throws
+        // ArgumentNullException rather than returning nothing, and an id-less connection cannot be selected,
+        // credentialed or reached in any case. (#787, fable)
+        int removedConnections = settings.Ai.Chat.Connections.RemoveAll(
+            c => c == null || string.IsNullOrWhiteSpace(c.Id));
+        if (removedConnections > 0)
+            fixes.Add($"removed {removedConnections} connection(s) with no id");
+
         // (The historical local-API Port/Token scrub is gone with those fields, removed in #280: the port is
         // ephemeral and the token per-session, both held only in local-api.json. A stale value left in an old
         // settings.json is now an unknown property the deserializer ignores.)
