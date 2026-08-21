@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -14,9 +16,24 @@ namespace CST.Avalonia.Services.Ai;
 /// <summary>Configuration for <see cref="AnthropicMessagesProvider"/>.</summary>
 /// <param name="ApiKey">Required — Anthropic has no anonymous access.</param>
 /// <param name="BaseUrl">Override for a proxy or gateway; defaults to the public API.</param>
-public sealed record AnthropicOptions(string? ApiKey, string? BaseUrl = null)
+/// <param name="ExtraHeaders">
+/// The connection's extra headers. Not a nicety: <c>Kind = Anthropic</c> does not imply
+/// <c>api.anthropic.com</c> — several gateways speak the Messages protocol at their own URL and want a
+/// token of their own alongside the Anthropic key. That is the case this adapter previously could not
+/// serve, because it had nowhere to put a second header. (#711, #689)
+/// </param>
+public sealed record AnthropicOptions(
+    string? ApiKey,
+    string? BaseUrl = null,
+    IReadOnlyDictionary<string, string>? ExtraHeaders = null)
 {
     internal const string DefaultBaseUrl = "https://api.anthropic.com";
+
+    /// <summary>Where the credential goes. Anthropic uses a bare header, not a scheme-prefixed one.</summary>
+    internal const string AuthHeader = "x-api-key";
+
+    /// <summary>The protocol version header, which an extra header may deliberately replace.</summary>
+    internal const string VersionHeader = "anthropic-version";
 }
 
 /// <summary>
@@ -53,12 +70,47 @@ public sealed class AnthropicMessagesProvider : IChatProvider
 
     public string Id => "anthropic";
 
+    /// <summary>
+    /// Credential, connection headers, and the protocol version — through the same helper the
+    /// OpenAI-compatible adapter uses, so the two cannot drift on what an extra header is allowed to do.
+    /// (#711)
+    ///
+    /// <para><c>anthropic-version</c> is added only when the connection did not supply one. The reason is
+    /// mechanical rather than a policy about who should win: <see cref="HttpHeaders.TryAddWithoutValidation"/>
+    /// appends, so unconditionally adding ours to a request that already carries one would send
+    /// <c>anthropic-version: 2026-01-01, 2023-06-01</c> — two values, which is worse than either. A gateway
+    /// that pins its own version gets it; everyone else gets ours.</para>
+    /// </summary>
+    /// <summary>Whether anything on this connection could authenticate a request. (#711)</summary>
+    internal static bool HasCredential(AnthropicOptions options) =>
+        !string.IsNullOrWhiteSpace(options.ApiKey)
+        || (options.ExtraHeaders?.Any(h => !string.IsNullOrWhiteSpace(h.Key)) ?? false);
+
+    private void ApplyHeaders(HttpRequestMessage message)
+    {
+        AiHttp.ApplyAuth(
+            message,
+            _options.ApiKey,
+            AnthropicOptions.AuthHeader,
+            authScheme: null,
+            _options.ExtraHeaders);
+
+        if (!message.Headers.Contains(AnthropicOptions.VersionHeader))
+            message.Headers.TryAddWithoutValidation(AnthropicOptions.VersionHeader, AnthropicVersion);
+    }
+
     public async IAsyncEnumerable<ChatDelta> StreamAsync(
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_options.ApiKey))
-            throw new AiException(new AiError(AiErrorKind.NotConfigured, "No Anthropic API key is configured."));
+        // A key OR a header, not a key unconditionally. Requiring the key made the escape hatch inert on this
+        // adapter: a gateway holding its own Anthropic credential wants a token of ours and no key at all,
+        // and refusing that is refusing the case extra headers exist for. (#711, #689)
+        if (!HasCredential(_options))
+            throw new AiException(new AiError(
+                AiErrorKind.NotConfigured,
+                "No Anthropic API key is configured, and this connection sends no headers that could "
+                + "authenticate in its place."));
         if (string.IsNullOrWhiteSpace(request.Model))
             throw new AiException(new AiError(AiErrorKind.NotConfigured, "No model is configured."));
 
@@ -72,8 +124,7 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         {
             Content = new StringContent(BuildBody(request), Encoding.UTF8, "application/json"),
         };
-        message.Headers.TryAddWithoutValidation("x-api-key", _options.ApiKey);
-        message.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
+        ApplyHeaders(message);
 
         HttpResponseMessage response;
         try

@@ -70,6 +70,12 @@ internal static class AiHttp
     /// <c>Authorization</c> mistyped into settings would otherwise silently replace the real key with whatever
     /// the reader pasted.</para>
     ///
+    /// <para><b>The collision guard covers the credential header only, and only when a credential is actually
+    /// being attached.</b> Skipping <c>Authorization</c> unconditionally defeated the case #689 built extra
+    /// headers for — "leave the key empty if you manage auth via headers" — because the header a gateway
+    /// most often wants is the one named <c>Authorization</c>. With no key stored there is nothing to
+    /// overwrite, so there is nothing to guard. (#711)</para>
+    ///
     /// <para><b>Shared deliberately.</b> Chat requests and model-listing requests go to the same endpoint with
     /// the same credential, so they must authenticate identically — two implementations would eventually
     /// disagree, and the symptom would be a provider whose model list loads while its answers 401, which is
@@ -83,19 +89,19 @@ internal static class AiHttp
         IReadOnlyDictionary<string, string>? extraHeaders)
     {
         var header = string.IsNullOrWhiteSpace(authHeaderName) ? "Authorization" : authHeaderName;
+        var attachingCredential = !string.IsNullOrWhiteSpace(apiKey);
 
         if (extraHeaders is { Count: > 0 })
         {
             foreach (var extra in extraHeaders)
             {
                 if (string.IsNullOrWhiteSpace(extra.Key)) continue;
-                if (extra.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)) continue;
-                if (extra.Key.Equals(header, StringComparison.OrdinalIgnoreCase)) continue;
+                if (attachingCredential && extra.Key.Equals(header, StringComparison.OrdinalIgnoreCase)) continue;
                 message.Headers.TryAddWithoutValidation(extra.Key, extra.Value);
             }
         }
 
-        if (string.IsNullOrWhiteSpace(apiKey)) return;   // a local runner needs none
+        if (!attachingCredential) return;   // a local runner needs none
 
         message.Headers.TryAddWithoutValidation(
             header,
