@@ -379,7 +379,13 @@ namespace CST.Avalonia.ViewModels
 
             return new AiModelEntry(
                 published.Id, published.DisplayName, true,
-                published.ContextLength, published.SupportsReasoning, inputs);
+                published.ContextLength, published.SupportsReasoning, inputs,
+                Missing: false,
+                // Captured at the moment the reader promotes the model, for the same reason the rest of these
+                // are: the listing is only fetched while the Models tab is open, and the per-turn picker has
+                // to be able to offer the levels without one. (#671)
+                ReasoningEfforts: published.ReasoningEfforts,
+                DefaultReasoningEffort: published.DefaultReasoningEffort);
         }
 
         private async Task FetchAsync()
@@ -542,6 +548,12 @@ namespace CST.Avalonia.ViewModels
                         : $"${Money(prompt)}/${Money(completion)} per M");
 
                 if (_published.SupportsReasoning == true) facts.Add("reasoning");
+
+                // A separate fact from the one above, and the distinction is the whole point of #671's
+                // correction: "reasoning" means the model RETURNS reasoning content, "effort" means it takes
+                // the knob. 51% of the models that satisfy the first do not satisfy the second, so collapsing
+                // them would tell the reader something the provider never said.
+                if (_published.AcceptsReasoningEffort == true) facts.Add("effort");
 
                 // The id on its own line: it is the string the reader would copy, and burying it in a run of
                 // facts separated by dots makes it hard to pick out.

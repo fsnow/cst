@@ -467,4 +467,179 @@ public class AiModelPickerViewModelTests
         Assert.Equal("not responding", group.Note);
         Assert.Single(group.Models);
     }
+
+    // ---- the effort chip (#671) -------------------------------------------------------------------------
+
+    private static (AiEffortPickerViewModel Picker, AiConnectionService Service, Settings Settings)
+        MakeEffort(params string[] efforts)
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, new FakeCredentialStore());
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[] { new AiModelEntry("m", "M", ReasoningEfforts: efforts.Length == 0 ? null : efforts) },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "m");
+        return (new AiEffortPickerViewModel(service, svc.Object), service, settings);
+    }
+
+    /// <summary>
+    /// Hidden where the model published no levels — which is most models. A chip that is always present but
+    /// empty would imply the app knows something about a model it knows nothing about, and #671 is explicit
+    /// that the alternative to publishing is not guessing: it is saying nothing.
+    /// </summary>
+    [Fact]
+    public void The_effort_chip_is_hidden_when_the_model_publishes_no_levels()
+    {
+        var (picker, _, _) = MakeEffort();
+
+        Assert.False(picker.HasChoices);
+    }
+
+    [Fact]
+    public void The_effort_chip_offers_the_models_own_levels_and_nothing_else()
+    {
+        var (picker, _, _) = MakeEffort("low", "high", "max");
+
+        Assert.True(picker.HasChoices);
+        Assert.Equal(
+            new[] { "Provider default", "low", "high", "max" },
+            picker.Choices.Select(c => c.Label));
+    }
+
+    /// <summary>Provider default is first, sends nothing, and is where an untouched setting sits.</summary>
+    [Fact]
+    public void Provider_default_is_first_and_current_until_something_is_chosen()
+    {
+        var (picker, _, _) = MakeEffort("low", "high");
+
+        var first = picker.Choices.First();
+        Assert.Null(first.Value);
+        Assert.True(first.IsCurrent);
+        Assert.Equal("Effort: default", picker.CurrentLabel);
+    }
+
+    [Fact]
+    public void Choosing_a_level_records_it_and_shows_it_on_the_chip()
+    {
+        var (picker, _, settings) = MakeEffort("low", "high");
+
+        picker.Choices.Single(c => c.Label == "high").ChooseCommand.Execute().Subscribe();
+
+        Assert.Equal("high", settings.Ai.Chat.ReasoningEffort);
+        Assert.Equal("Effort: high", picker.CurrentLabel);
+    }
+
+    [Fact]
+    public void Choosing_provider_default_again_clears_the_setting()
+    {
+        var (picker, _, settings) = MakeEffort("low", "high");
+        picker.Choices.Single(c => c.Label == "high").ChooseCommand.Execute().Subscribe();
+
+        picker.Choices.First().ChooseCommand.Execute().Subscribe();
+
+        Assert.Null(settings.Ai.Chat.ReasoningEffort);
+    }
+
+    /// <summary>
+    /// A choice made on another model is outside this one's vocabulary, so the wire guard drops it and the
+    /// provider applies its own default. The flyout has to say that: keying the default row off "is anything
+    /// stored" left NO row ticked, showing an unmarked list for a setting that does have an effect. The chip
+    /// label and the flyout must agree, because they describe the same fact. (fable review)
+    /// </summary>
+    [Fact]
+    public void A_choice_from_another_models_vocabulary_leaves_provider_default_current()
+    {
+        var (picker, _, settings) = MakeEffort("low", "medium", "high");
+        settings.Ai.Chat.ReasoningEffort = "max";   // real at DeepSeek, absent here
+        picker.Rebuild();
+
+        Assert.True(picker.Choices.First().IsCurrent);
+        Assert.DoesNotContain(picker.Choices.Skip(1), c => c.IsCurrent);
+        Assert.Equal("Effort: default", picker.CurrentLabel);
+    }
+
+    /// <summary>
+    /// The one dynamic behaviour the chip exists for. Every other test here builds the picker after the world
+    /// is already set up, so removing the ConnectionsChanged subscription would leave them all green while
+    /// the chip went stale on every model switch — offering the previous model's levels. (fable review)
+    /// </summary>
+    [Fact]
+    public void The_chip_follows_a_switch_to_a_model_with_different_levels()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, new FakeCredentialStore());
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[]
+            {
+                new AiModelEntry("a", "A", ReasoningEfforts: new[] { "low", "high" }),
+                new AiModelEntry("b", "B", ReasoningEfforts: new[] { "minimal", "medium" }),
+            },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "a");
+
+        var picker = new AiEffortPickerViewModel(service, svc.Object);
+        Assert.Equal(new[] { "Provider default", "low", "high" }, picker.Choices.Select(c => c.Label));
+
+        service.SetActive("mine", "b");
+
+        Assert.Equal(new[] { "Provider default", "minimal", "medium" }, picker.Choices.Select(c => c.Label));
+    }
+
+    /// <summary>And it disappears entirely when the reader switches to a model that published nothing.</summary>
+    [Fact]
+    public void The_chip_hides_itself_on_a_switch_to_a_model_with_no_levels()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, new FakeCredentialStore());
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[]
+            {
+                new AiModelEntry("a", "A", ReasoningEfforts: new[] { "low", "high" }),
+                new AiModelEntry("b", "B"),
+            },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "a");
+
+        var picker = new AiEffortPickerViewModel(service, svc.Object);
+        Assert.True(picker.HasChoices);
+
+        service.SetActive("mine", "b");
+
+        Assert.False(picker.HasChoices);
+    }
+
+    /// <summary>
+    /// The provider's own statement of its default is shown against that position rather than acted on: not
+    /// sending the field already means exactly that, so preselecting a level would send something where
+    /// nothing was asked for.
+    /// </summary>
+    [Fact]
+    public void A_published_default_is_shown_as_a_hint_not_preselected()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, new FakeCredentialStore());
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[] { new AiModelEntry("m", "M", ReasoningEfforts: new[] { "low", "high" },
+                                     DefaultReasoningEffort: "high") },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "m");
+
+        var picker = new AiEffortPickerViewModel(service, svc.Object);
+
+        Assert.Contains("high", picker.Choices.First().Hint);
+        Assert.True(picker.Choices.First().IsCurrent);       // still the default position
+        Assert.Null(settings.Ai.Chat.ReasoningEffort);       // and still sends nothing
+    }
 }

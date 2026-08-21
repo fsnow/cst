@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
 using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
 using ReactiveUI;
 
@@ -339,5 +340,173 @@ namespace CST.Avalonia.ViewModels
 
             return "";
         }
+    }
+
+    /// <summary>
+    /// The per-turn reasoning-effort chip, beside the model chip. (#671)
+    ///
+    /// <para><b>Only the levels the provider published for the model in front of you.</b> Effort support is
+    /// per-model rather than per-provider, and the vocabularies genuinely differ — <c>low/medium/high</c> at
+    /// most providers, <c>minimal/low/medium/high</c> at OpenAI, <c>none/default</c> on Groq's Qwen3,
+    /// <c>low/high/max</c> at DeepSeek, and 130+ distinct published sets across models.dev. There is no
+    /// universal scale to offer, so this offers the model's own list or nothing at all. #671 is explicit that
+    /// the alternative — a table predicting which models take which values — is the curated capability
+    /// registry #670 forbids.</para>
+    ///
+    /// <para><b>"Provider default" is the first position and it is not a placeholder.</b> Omitting the field
+    /// IS the default: the provider then applies its own, so there is nothing to send for that position and
+    /// nothing we have to know. It is also the only correct answer for a reasoning model that publishes no
+    /// levels, and it keeps this app from choosing a level on a model's behalf. Where the provider publishes
+    /// what its default is, the position says so — its word, not our choice.</para>
+    /// </summary>
+    public class AiEffortPickerViewModel : ViewModelBase, IDisposable
+    {
+        private readonly IAiConnectionService? _service;
+        private readonly ISettingsService? _settings;
+        private bool _isOpen;
+
+        public AiEffortPickerViewModel(
+            IAiConnectionService? service, ISettingsService? settings)
+        {
+            _service = service;
+            _settings = settings;
+
+            if (_service is not null)
+            {
+                _service.ConnectionsChanged += OnConnectionsChanged;
+                Rebuild();
+            }
+        }
+
+        public ObservableCollection<AiEffortChoiceViewModel> Choices { get; } = new();
+
+        /// <summary>
+        /// Hidden unless the model in front of the reader published levels to choose between.
+        ///
+        /// <para>A chip that is always present but empty for most models would be worse than absent: it would
+        /// imply the app knows something about a model it knows nothing about.</para>
+        /// </summary>
+        public bool HasChoices => Choices.Count > 1;
+
+        public bool IsOpen
+        {
+            get => _isOpen;
+            set => this.RaiseAndSetIfChanged(ref _isOpen, value);
+        }
+
+        /// <summary>What the chip says at rest. Never bare — "Effort" alone would not say which way it is
+        /// set, and the default position is the one most readers will never move.</summary>
+        public string CurrentLabel =>
+            Choices.FirstOrDefault(c => c.IsCurrent)?.ChipLabel ?? "Effort: default";
+
+        private string? Chosen => _settings?.Settings.Ai.Chat.ReasoningEffort;
+
+        private AiModelEntry? ActiveModel
+        {
+            get
+            {
+                if (_service?.Active is not { } connection) return null;
+                if (_service.ActiveModelId is not { Length: > 0 } id) return null;
+
+                return connection.Models.FirstOrDefault(
+                    m => string.Equals(m.Id, id, StringComparison.Ordinal));
+            }
+        }
+
+        internal void Rebuild()
+        {
+            Choices.Clear();
+
+            var model = ActiveModel;
+            var published = model?.ReasoningEfforts;
+            if (published is not { Count: > 0 })
+            {
+                this.RaisePropertyChanged(nameof(HasChoices));
+                this.RaisePropertyChanged(nameof(CurrentLabel));
+                return;
+            }
+
+            var chosen = Chosen;
+
+            // Current when nothing WILL be sent, which is not the same as nothing being stored. A choice made
+            // on another model - "max" on DeepSeek, then a switch to a model offering low/medium/high - is
+            // outside this model's vocabulary, so the wire guard drops it and the provider applies its own
+            // default. Keying this off "is anything stored" left no row ticked at all, showing the reader an
+            // unmarked list for a setting that does in fact have an effect. This is the same fact the chip
+            // label already told them; the flyout has to agree with it. (fable review)
+            var willSend = !string.IsNullOrWhiteSpace(chosen)
+                           && published.Any(v => string.Equals(v, chosen, StringComparison.Ordinal));
+
+            // The default sits first because it is the position that sends nothing, and because a reader
+            // scanning the list should meet "leave it alone" before any level.
+            Choices.Add(new AiEffortChoiceViewModel(
+                null,
+                "Provider default",
+                model!.DefaultReasoningEffort is { Length: > 0 } theirs ? $"the provider uses {theirs}" : null,
+                !willSend,
+                Choose));
+
+            foreach (var value in published)
+                Choices.Add(new AiEffortChoiceViewModel(
+                    value,
+                    value,
+                    null,
+                    string.Equals(value, chosen, StringComparison.Ordinal),
+                    Choose));
+
+            this.RaisePropertyChanged(nameof(HasChoices));
+            this.RaisePropertyChanged(nameof(CurrentLabel));
+        }
+
+        private void Choose(string? value)
+        {
+            if (_settings is null) return;
+
+            _settings.Settings.Ai.Chat.ReasoningEffort = value;
+            _settings.RequestSave();
+
+            IsOpen = false;
+            Rebuild();
+        }
+
+        private void OnConnectionsChanged(object? sender, EventArgs e) => Rebuild();
+
+        public void Dispose()
+        {
+            if (_service is not null) _service.ConnectionsChanged -= OnConnectionsChanged;
+        }
+    }
+
+    /// <summary>One position in the effort chip.</summary>
+    /// <param name="Value">What goes on the wire, or null for the default position, which sends nothing.</param>
+    public class AiEffortChoiceViewModel : ViewModelBase
+    {
+        private readonly Action<string?> _choose;
+
+        public AiEffortChoiceViewModel(
+            string? value, string label, string? hint, bool isCurrent, Action<string?> choose)
+        {
+            Value = value;
+            Label = label;
+            Hint = hint;
+            IsCurrent = isCurrent;
+            _choose = choose;
+            ChooseCommand = ReactiveCommand.Create(() => _choose(Value));
+        }
+
+        public string? Value { get; }
+        public string Label { get; }
+
+        /// <summary>The provider's own statement of what it does by default, where it makes one. Shown rather
+        /// than acted on: we do not preselect it, because not sending the field already means exactly that.</summary>
+        public string? Hint { get; }
+
+        public bool HasHint => !string.IsNullOrWhiteSpace(Hint);
+        public bool IsCurrent { get; }
+
+        /// <summary>What the chip shows when this position is the current one.</summary>
+        public string ChipLabel => Value is null ? "Effort: default" : $"Effort: {Label}";
+
+        public ReactiveCommand<Unit, Unit> ChooseCommand { get; }
     }
 }

@@ -85,6 +85,39 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     /// </summary>
     private readonly IAiConnectionService? _connections;
 
+    /// <summary>
+    /// The reasoning effort to send, or null to send none. (#671)
+    ///
+    /// <para><b>Read at resolution time, not at send time.</b> Bundling the context is asynchronous and can
+    /// take seconds, and the active connection is mutable throughout — the chip is right there in the
+    /// composer. Reading it afterwards meant validating against whatever connection was active by then while
+    /// sending on the provider resolved at the start, so a reader who switched connections mid-turn could
+    /// have an effort validated against one model and sent to another. Two ordinary reads of mutable state
+    /// seconds apart is all it takes. (fable review)</para>
+    ///
+    /// <para><b>Validated here rather than trusted from the setting</b>, because this is the last point before
+    /// the wire and the only one that knows which model the request is actually going to. A reader who chooses
+    /// "high" on a model that offers it and then switches to one that does not would otherwise send a field
+    /// that model never published — and an unsupported parameter can be a 400 rather than an ignored key. The
+    /// picker not offering it is presentation; this is the part that has to be right.</para>
+    ///
+    /// <para>Matched against what the provider published for THIS model, ordinally: the vocabularies differ
+    /// between providers and a value is only meaningful in the list it came from.</para>
+    /// </summary>
+    private string? ReasoningEffortFor(string model)
+    {
+        var chosen = _settings.Settings.Ai.Chat.ReasoningEffort;
+        if (string.IsNullOrWhiteSpace(chosen)) return null;
+        if (_connections?.Active is not { } connection) return null;
+
+        var entry = connection.Models.FirstOrDefault(
+            m => string.Equals(m.Id, model, StringComparison.Ordinal));
+
+        return entry?.ReasoningEfforts?.Any(v => string.Equals(v, chosen, StringComparison.Ordinal)) == true
+            ? chosen
+            : null;
+    }
+
     public void Stop()
     {
         CancellationTokenSource? running;
@@ -155,6 +188,11 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                 AiErrorKind.NotConfigured, problem ?? "The assistant is not configured yet."));
             yield break;
         }
+
+        // Read here, beside the resolution it is validated against, rather than at send time - see
+        // ReasoningEffortFor. Bundling below is asynchronous, and the chip that changes this sits in the
+        // composer the reader is looking at. (#671)
+        var effort = ReasoningEffortFor(provider.Model);
 
         var language = _settings.Settings.Ai.Chat.AnswerLanguage;
         if (string.IsNullOrWhiteSpace(language)) language = "English";
@@ -238,7 +276,8 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             provider.Model,
             prompt.MaxOutputTokens,
             prompt.System,
-            new[] { new ChatMessage(ChatRole.User, prompt.UserContent) });
+            new[] { new ChatMessage(ChatRole.User, prompt.UserContent) },
+            effort);
 
         var markers = new PaliQuoteFilter();
         int? inputTokens = null, outputTokens = null;

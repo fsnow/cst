@@ -128,10 +128,11 @@ public class AiChatOrchestratorTests
 
     // ---- Fixture ------------------------------------------------------------------------------------------
 
-    private static ISettingsService Settings(string language = "English")
+    private static ISettingsService Settings(string language = "English", string? reasoningEffort = null)
     {
         var settings = new Settings();
         settings.Ai.Chat.AnswerLanguage = language;
+        settings.Ai.Chat.ReasoningEffort = reasoningEffort;
         var mock = new Mock<ISettingsService>();
         mock.SetupGet(s => s.Settings).Returns(settings);
         return mock.Object;
@@ -142,7 +143,8 @@ public class AiChatOrchestratorTests
         string? notConfigured = null,
         IAiContextBundler? bundler = null,
         string language = "English",
-        IAiConnectionService? connections = null)
+        IAiConnectionService? connections = null,
+        string? reasoningEffort = null)
     {
         // A store pointed at a directory that does not exist: no user override can be picked up, so every test
         // runs against the shipped templates.
@@ -154,7 +156,7 @@ public class AiChatOrchestratorTests
             new FixedResolver(provider, notConfigured),
             bundler ?? new StubBundler(),
             new PromptBuilder(templates),
-            Settings(language),
+            Settings(language, reasoningEffort),
             NullLogger<AiChatOrchestrator>.Instance,
             connections);
     }
@@ -598,5 +600,111 @@ public class AiChatOrchestratorTests
         // Including every gathered part, present or absent: an absence is as much a part of what was sent as
         // a presence, and much harder to notice.
         Assert.Contains(sent.Fields, f => f.Name.StartsWith("Part: "));
+    }
+
+    // ---- reasoning effort (#671) ------------------------------------------------------------------------
+
+    /// <summary>A connection whose single model publishes the levels named.</summary>
+    private static (IAiConnectionService Service, string Id) ConnectedOffering(params string[] efforts)
+    {
+        var settings = new CST.Avalonia.Models.Settings();
+        var mock = new Mock<ISettingsService>();
+        mock.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(mock.Object);
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            // The id the FixedResolver reports, deliberately: the guard matches the model the request is
+            // actually going to, so a fixture whose model is named anything else proves nothing.
+            // Empty maps to NULL, which is the state that actually occurs: a provider that published no
+            // parameter list at all - every local runner, and every hosted listing that carries only ids.
+            // The helper used to hand down an empty array instead, so the null branch of the guard was never
+            // exercised and the mutant `== true` -> `!= false` passed every test here. (fable review)
+            new[] { new AiModelEntry("test-model", "M",
+                                     ReasoningEfforts: efforts.Length == 0 ? null : efforts) },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "test-model");
+        return (service, "mine");
+    }
+
+    [Fact]
+    public async Task A_chosen_effort_the_model_publishes_is_sent()
+    {
+        var provider = new FakeProvider();
+        var (connections, _) = ConnectedOffering("low", "high");
+
+        await CollectAsync(Orchestrator(provider, connections: connections, reasoningEffort: "high"));
+
+        Assert.Equal("high", provider.LastRequest!.ReasoningEffort);
+    }
+
+    /// <summary>
+    /// The guard that makes the setting safe to keep. A reader chooses "high" on a model that offers it, then
+    /// switches to one that publishes nothing — the stale choice must not go out, because an unsupported
+    /// parameter can be a 400 rather than an ignored key. The picker hiding the control is presentation; this
+    /// is the part that has to be right, which is why it is checked at the last point before the wire.
+    /// </summary>
+    /// <summary>
+    /// The majority case: the provider published no parameter list at all, so <c>ReasoningEfforts</c> is
+    /// NULL rather than empty. Every local runner is this, and so is every hosted listing that carries only
+    /// ids. Silence is not permission.
+    /// </summary>
+    [Fact]
+    public async Task A_chosen_effort_is_not_sent_to_a_model_whose_provider_published_nothing()
+    {
+        var provider = new FakeProvider();
+        var (connections, _) = ConnectedOffering();   // null, not empty
+
+        await CollectAsync(Orchestrator(provider, connections: connections, reasoningEffort: "high"));
+
+        Assert.Null(provider.LastRequest!.ReasoningEffort);
+    }
+
+    /// <summary>
+    /// And the neighbouring state: a published reasoning capability carrying no levels. models.dev counts
+    /// 1,301 models like this — reasoning models with no knob. Distinct from null in the data and identical
+    /// in what it permits, which is nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_chosen_effort_is_not_sent_to_a_model_publishing_an_empty_level_list()
+    {
+        var provider = new FakeProvider();
+
+        var settings = new CST.Avalonia.Models.Settings();
+        var mock = new Mock<ISettingsService>();
+        mock.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(mock.Object);
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[] { new AiModelEntry("test-model", "M", ReasoningEfforts: Array.Empty<string>()) },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "test-model");
+
+        await CollectAsync(Orchestrator(provider, connections: service, reasoningEffort: "high"));
+
+        Assert.Null(provider.LastRequest!.ReasoningEffort);
+    }
+
+    /// <summary>A value outside the model's published vocabulary is not sent either — "medium" is real at
+    /// most providers and absent at DeepSeek, which offers low/high/max.</summary>
+    [Fact]
+    public async Task An_effort_outside_the_models_vocabulary_is_not_sent()
+    {
+        var provider = new FakeProvider();
+        var (connections, _) = ConnectedOffering("low", "high", "max");
+
+        await CollectAsync(Orchestrator(provider, connections: connections, reasoningEffort: "medium"));
+
+        Assert.Null(provider.LastRequest!.ReasoningEffort);
+    }
+
+    [Fact]
+    public async Task No_effort_chosen_sends_none()
+    {
+        var provider = new FakeProvider();
+        var (connections, _) = ConnectedOffering("low", "high");
+
+        await CollectAsync(Orchestrator(provider, connections: connections));
+
+        Assert.Null(provider.LastRequest!.ReasoningEffort);
     }
 }

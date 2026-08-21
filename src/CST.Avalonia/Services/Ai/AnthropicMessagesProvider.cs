@@ -153,6 +153,14 @@ public sealed class AnthropicMessagesProvider : IChatProvider
         {
             Content = new StringContent(BuildBody(request), Encoding.UTF8, "application/json"),
         };
+        // Not sent: this API takes a `thinking` budget rather than an effort string (#779). Logged rather
+        // than dropped in silence - nothing arms it here today, so if it ever arrives the log is the only
+        // thing that would say why a control the reader can see had no effect. The VALUE is never logged.
+        if (!string.IsNullOrWhiteSpace(request.ReasoningEffort))
+            _logger.LogDebug(
+                "Reasoning effort was set but this adapter does not send one; the Anthropic Messages API "
+                + "expresses it as a thinking budget (#779).");
+
         ApplyHeaders(message);
 
         HttpResponseMessage response;

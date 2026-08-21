@@ -104,6 +104,18 @@ namespace CST.Avalonia.Models
         /// (AI_SURFACE_B.md §9). Not optional in the bundle: "translate" has to mean translate into something.
         /// </summary>
         public string AnswerLanguage { get; set; } = "English";
+
+        /// <summary>
+        /// The reasoning effort the reader has chosen, in the provider's own vocabulary, or null for "let the
+        /// provider apply its default". (#671)
+        ///
+        /// <para>One setting rather than one per model, because it is a preference about how the reader wants
+        /// to trade cost against depth, not a property of any particular model. It is <b>validated against the
+        /// active model's published list at the moment a request is built</b> — so a value left over from a
+        /// model that accepted it is simply not sent to one that did not publish it, rather than becoming a
+        /// 400 the reader cannot attribute.</para>
+        /// </summary>
+        public string? ReasoningEffort { get; set; }
     }
 
     /// <summary>
@@ -207,6 +219,24 @@ namespace CST.Avalonia.Models
         /// <summary>What the model accepts, as the provider words it — "text", "text, image". Null when it
         /// said nothing.</summary>
         public string? Inputs { get; set; }
+
+        /// <summary>
+        /// The reasoning-effort values this model published, in the provider's own words and order. (#671)
+        ///
+        /// <para>Stored for the same reason <see cref="ContextLength"/> is: the listing is fetched only on the
+        /// Models tab and only while that window is open, so anything the per-turn picker needs has to have
+        /// been written down when the reader promoted the model.</para>
+        ///
+        /// <para><b>Null and empty are different.</b> Null is a provider that said nothing — every local
+        /// runner, and every hosted provider whose listing carries only ids. Empty is a provider that
+        /// published a reasoning capability with no effort levels in it. Neither gets a control: there is
+        /// nothing to offer, and inventing low/medium/high would be this app deciding what the levels are.</para>
+        /// </summary>
+        public List<string>? ReasoningEfforts { get; set; }
+
+        /// <summary>The value the provider says it applies when none is sent, or null where it does not say.
+        /// Shown as a label on the "Provider default" position — its word, not a choice of ours. (#671)</summary>
+        public string? DefaultReasoningEffort { get; set; }
 
         /// <summary>
         /// Whether the provider's listing no longer carries this model. (#728)

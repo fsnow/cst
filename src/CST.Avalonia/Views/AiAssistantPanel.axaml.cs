@@ -18,6 +18,8 @@ public partial class AiAssistantPanel : UserControl
     private AiModelPickerViewModel? _picker;
 
     private bool _syncingFlyout;
+    private AiEffortPickerViewModel? _effort;
+    private bool _syncingEffortFlyout;
 
     public AiAssistantPanel()
     {
@@ -37,6 +39,17 @@ public partial class AiAssistantPanel : UserControl
             flyout.Opened += (_, _) => SetOpen(true);
             flyout.Closed += (_, _) => SetOpen(false);
         }
+
+        // The same wiring for the effort chip (#671). It is not optional decoration: a Flyout owns its own
+        // open state, so without this, choosing a level leaves the list sitting over the composer and the
+        // reader's next act is to dismiss a popup rather than ask the question they opened it for. The effort
+        // picker had the IsOpen state and nothing observing it, which is the same bug this block already
+        // exists to prevent — it just had not been extended to the second chip. (fable review)
+        if (EffortChip.Flyout is { } effortFlyout)
+        {
+            effortFlyout.Opened += (_, _) => SetEffortOpen(true);
+            effortFlyout.Closed += (_, _) => SetEffortOpen(false);
+        }
     }
 
     private void SetOpen(bool open)
@@ -47,11 +60,32 @@ public partial class AiAssistantPanel : UserControl
         finally { _syncingFlyout = false; }
     }
 
+    private void SetEffortOpen(bool open)
+    {
+        if (_effort is null) return;
+        _syncingEffortFlyout = true;
+        try { _effort.IsOpen = open; }
+        finally { _syncingEffortFlyout = false; }
+    }
+
     private void OnDataContextChanged(object? sender, System.EventArgs e)
     {
         if (_picker is not null) _picker.PropertyChanged -= OnPickerChanged;
         _picker = (DataContext as AiAssistantViewModel)?.ModelPicker;
         if (_picker is not null) _picker.PropertyChanged += OnPickerChanged;
+
+        if (_effort is not null) _effort.PropertyChanged -= OnEffortChanged;
+        _effort = (DataContext as AiAssistantViewModel)?.EffortPicker;
+        if (_effort is not null) _effort.PropertyChanged += OnEffortChanged;
+    }
+
+    /// <summary>Closes the effort flyout once a level is chosen — see <see cref="OnPickerChanged"/> for why
+    /// this cannot be a binding. (#671)</summary>
+    private void OnEffortChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (_syncingEffortFlyout) return;
+        if (e.PropertyName != nameof(AiEffortPickerViewModel.IsOpen)) return;
+        if (_effort?.IsOpen == false) EffortChip.Flyout?.Hide();
     }
 
     /// <summary>

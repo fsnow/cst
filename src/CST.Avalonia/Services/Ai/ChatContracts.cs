@@ -48,11 +48,37 @@ public sealed record ChatMessage(ChatRole Role, string Content);
 /// </param>
 /// <param name="System">System prompt, or null. Anthropic carries it in a top-level field; the
 /// OpenAI-compatible shape carries it as a leading message, which the adapter handles.</param>
+/// <param name="ReasoningEffort">
+/// How hard the model should think before answering, in the provider's own vocabulary, or null to say nothing
+/// and let the provider apply its default. (#671)
+///
+/// <para><b>Null is the ordinary case, and sending nothing is not the same as sending a default.</b> Support is
+/// per-model rather than per-provider, and an unknown field can be a 400 rather than an ignored key — the same
+/// failure mode as the sampling parameters that are the reason there is no temperature control. So this is
+/// written only when the reader has explicitly chosen a value.</para>
+///
+/// <para><b>A string, not an enum.</b> The vocabulary is the model's: <c>low/medium/high</c> at most providers,
+/// <c>minimal/low/medium/high</c> at OpenAI, <c>none/default</c> on Groq's Qwen3, <c>low/high/max</c> at
+/// DeepSeek — 130+ distinct published sets. An enum here would be this app deciding what the levels are, which
+/// is the shape #670 forbids, and it would be wrong within a month besides. What reaches this field came from
+/// a list the provider published for that model.</para>
+///
+/// <para><b>Honoured by the OpenAI-compatible adapter only.</b> The Anthropic Messages API expresses this as
+/// a <c>thinking</c> object with a token budget rather than an effort string, and mapping one onto the other
+/// means choosing numbers — deferred to #779 rather than guessed. Nothing arms this field for an Anthropic
+/// connection today, because the levels come from a listing field that adapter's models do not publish; if one
+/// ever arrives non-null there it is logged rather than silently dropped.</para>
+///
+/// <para><b>This is the control that replaced the one #601 removed.</b> Output caps could not govern a
+/// reasoning model, because reasoning and answer share the budget; effort governs the reasoning itself, which
+/// is the quantity that actually varies by an order of magnitude between models.</para>
+/// </param>
 public sealed record ChatRequest(
     string Model,
     int? MaxTokens,
     string? System,
-    IReadOnlyList<ChatMessage> Messages);
+    IReadOnlyList<ChatMessage> Messages,
+    string? ReasoningEffort = null);
 
 /// <summary>What a <see cref="ChatDelta"/> carries.</summary>
 public enum ChatDeltaKind
@@ -128,6 +154,21 @@ public enum AiErrorKind
 
     /// <summary>The request exceeded the model's context window. Actionable: the caller can trim and retry.</summary>
     ContextTooLong,
+
+    /// <summary>
+    /// The model rejected a parameter the reader chose — today, reasoning effort. (#671)
+    ///
+    /// <para><b>Separate because the fix is a setting the reader can see, and no other kind points at it.</b>
+    /// Support for effort is per-model rather than per-provider, and an unsupported field can be a 400 rather
+    /// than an ignored key. Left as a bare <see cref="Provider"/> error the reader is told "the provider
+    /// rejected the request (HTTP 400)" about a request that worked yesterday on a different model, with
+    /// nothing connecting it to the control they changed.</para>
+    ///
+    /// <para>This is #671's stated alternative to predicting support: <i>report</i> a rejection rather than
+    /// maintain a list of which models will reject, which would be the curated capability table #670
+    /// forbids.</para>
+    /// </summary>
+    UnsupportedParameter,
 
     /// <summary>
     /// The app could not assemble what the model needs — no passage at the reference, a book whose XML never
