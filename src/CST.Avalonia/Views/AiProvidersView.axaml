@@ -336,12 +336,22 @@
                             <ItemsControl ItemsSource="{Binding Headers}" Margin="0,0,0,4">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:AiHeaderRowViewModel">
-                                        <Grid ColumnDefinitions="240,240,Auto" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="240,240,Auto,Auto" Margin="0,0,0,4">
                                             <TextBox Grid.Column="0" Text="{Binding Name}"
                                                      Watermark="Header-Name" Margin="0,0,6,0"/>
+                                            <!-- PasswordChar rather than a separate control: the box has to
+                                                 stay the same box, or toggling Secret would lose what the
+                                                 reader has already typed into it. -->
                                             <TextBox Grid.Column="1" Text="{Binding Value}"
-                                                     Watermark="value" Margin="0,0,6,0"/>
-                                            <Button Grid.Column="2" Content="Remove" Classes="Link"
+                                                     PasswordChar="{Binding ValueMask}"
+                                                     Watermark="{Binding ValueWatermark}"
+                                                     Margin="0,0,6,0"/>
+                                            <CheckBox Grid.Column="2" Content="Secret"
+                                                      IsChecked="{Binding IsSecret}"
+                                                      IsEnabled="{Binding CanBeSecret}"
+                                                      ToolTip.Tip="Keep this value in the system keychain instead of the settings file."
+                                                      Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="3" Content="Remove" Classes="Link"
                                                     Command="{Binding RemoveCommand}"
                                                     VerticalAlignment="Center"/>
                                         </Grid>
@@ -351,8 +361,17 @@
                             <Button Content="+ Add header" Classes="Link"
                                     Command="{Binding AddHeaderCommand}"
                                     HorizontalAlignment="Left"/>
-                            <TextBlock Text="For endpoints that authenticate with something other than a bearer key — a gateway token, or a provider's own key header."
+                            <TextBlock Text="For endpoints that authenticate with something other than a bearer key — a gateway token, or a provider's own key header. Mark such a value Secret: it then goes to the system keychain, and only the header's name is written to the settings file."
                                        Classes="SettingDescription" Margin="0,6,0,15"/>
+                            <!-- Where there is nowhere to store a secret the checkbox is disabled, so the
+                                 reader is told what that means rather than left to wonder why (#771). -->
+                            <TextBlock Text="{Binding KeyUnavailable}" IsVisible="{Binding !CanStoreKeys}"
+                                       Classes="SettingDescription Caution" TextWrapping="Wrap" MaxWidth="480"
+                                       HorizontalAlignment="Left" Margin="0,4,0,0"/>
+                            <TextBlock Text="Until then a header value is stored in the settings file as typed."
+                                       IsVisible="{Binding !CanStoreKeys}"
+                                       Classes="SettingDescription Caution" TextWrapping="Wrap" MaxWidth="480"
+                                       HorizontalAlignment="Left" Margin="0,0,0,0"/>
                         </StackPanel>
 
                         <!-- The key is asked for HERE, on the sheet that already knows whose it is. A single

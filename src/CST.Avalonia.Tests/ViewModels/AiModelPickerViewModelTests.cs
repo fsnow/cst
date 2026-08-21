@@ -45,7 +45,7 @@ public class AiModelPickerViewModelTests
 
     private static AiConnectionDraft Draft(string name, params AiModelEntry[] models) =>
         new(name, ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
-            models, new Dictionary<string, string>(), new Dictionary<string, string>());
+            models, Array.Empty<AiHeader>(), new Dictionary<string, string>());
 
     private static IEnumerable<AiPickerModelViewModel> AllModels(AiModelPickerViewModel picker) =>
         picker.Groups.SelectMany(g => g.Models);
@@ -441,7 +441,7 @@ public class AiModelPickerViewModelTests
             "Half-built", ChatProviderKind.OpenAiCompatible,
             "https://{resourceName}.openai.azure.com/openai/v1",
             new[] { new AiModelEntry("a", "A") },
-            new Dictionary<string, string>(), new Dictionary<string, string>()));
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
 
         var model = AllModels(picker).Single();
         Assert.False(model.IsUsable);

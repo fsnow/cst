@@ -296,7 +296,7 @@ public class AiModelCatalogTests
             Kind: ChatProviderKind.Anthropic,
             BaseUrl: "https://gateway.example",
             Models: new List<AiModelEntry>(),
-            Headers: new Dictionary<string, string> { ["anthropic-version"] = "2026-01-01" },
+            Headers: new[] { new AiHeader("anthropic-version", "2026-01-01") },
             Inputs: new Dictionary<string, string>()));
 
         var sent = handler.LastRequest!;
@@ -321,9 +321,128 @@ public class AiModelCatalogTests
             Kind: ChatProviderKind.Anthropic,
             BaseUrl: "https://api.anthropic.com",
             Models: new List<AiModelEntry>(),
-            Headers: new Dictionary<string, string>(),
+            Headers: Array.Empty<AiHeader>(),
             Inputs: new Dictionary<string, string>()));
 
         Assert.Equal(new[] { "2023-06-01" }, handler.LastRequest!.Headers.GetValues("anthropic-version"));
+    }
+
+    /// <summary>An in-memory store keyed by the joined account, so a test that asks for the wrong name misses
+    /// rather than being handed the only secret there is.</summary>
+    private sealed class NamedKeys : IAiCredentialStore
+    {
+        private readonly Dictionary<string, string> _byAccount = new(StringComparer.Ordinal);
+        public bool IsAvailable => true;
+        public string? Unavailable => null;
+        public string? Get(string connectionId, string name) =>
+            _byAccount.GetValueOrDefault(connectionId + ":" + name);
+        public bool Set(string connectionId, string name, string secret)
+        { _byAccount[connectionId + ":" + name] = secret; return true; }
+        public bool Delete(string connectionId, string name) => _byAccount.Remove(connectionId + ":" + name);
+    }
+
+    /// <summary>
+    /// The listing sends a secret header exactly as the chat path does. (#771)
+    ///
+    /// <para>The two surfaces send the same credentials, so they have to authenticate identically — the
+    /// symptom of them diverging is a provider whose model list loads while its answers 401, which is the
+    /// contradiction #673 exists to prevent and is close to undiagnosable from a bug report.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_listing_sends_a_secret_header_from_the_credential_store()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"some-model"}]}"""),
+        });
+
+        var keys = new NamedKeys();
+        keys.Set("gw", AiCredentialNames.Header("cf-aig-authorization"), "cf-token-abc");
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), keys, NullLogger<AiModelCatalog>.Instance);
+
+        await catalog.FetchAsync(new AiConnection(
+            Id: "gw",
+            DisplayName: "Gateway",
+            Kind: ChatProviderKind.OpenAiCompatible,
+            BaseUrl: "https://gateway.example/v1",
+            Models: new List<AiModelEntry>(),
+            Headers: new[] { new AiHeader("cf-aig-authorization", null, Secret: true) },
+            Inputs: new Dictionary<string, string>()));
+
+        Assert.Equal(
+            new[] { "cf-token-abc" },
+            handler.LastRequest!.Headers.GetValues("cf-aig-authorization"));
+    }
+
+    /// <summary>
+    /// A secret with nothing stored is refused here exactly as the chat path refuses it. A listing that loads
+    /// while the chat refuses is the surface split #673 exists to prevent, pointing the other way — and a
+    /// blank header dropped at the wire comes back as a 401 naming nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_listing_refuses_a_secret_header_with_nothing_stored()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"some-model"}]}"""),
+        });
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), new NamedKeys(), NullLogger<AiModelCatalog>.Instance);
+
+        var result = await catalog.FetchAsync(new AiConnection(
+            Id: "gw",
+            DisplayName: "Gateway",
+            Kind: ChatProviderKind.OpenAiCompatible,
+            BaseUrl: "https://gateway.example/v1",
+            Models: new List<AiModelEntry>(),
+            Headers: new[] { new AiHeader("cf-aig-authorization", null, Secret: true) },
+            Inputs: new Dictionary<string, string>()));
+
+        Assert.False(result.Ok);
+        Assert.Contains("cf-aig-authorization", result.Problem);
+        Assert.Null(handler.LastRequest);   // refused before anything went out
+    }
+
+    /// <summary>
+    /// The case that could not exist before #771: the ONLY credential is a secret header. Anthropic, no API
+    /// key stored, authenticating entirely by a header whose value is in the credential store.
+    ///
+    /// <para>This is #689's "leave the key empty if you manage auth via headers" escape hatch, and it is the
+    /// one most at risk from this change — <c>IsSendableHeader</c> requires a non-blank VALUE (that was #764's
+    /// fix, after a cosmetic X-Title let a keyless connection through and its 401 surfaced as "the provider
+    /// rejected the API key"). A secret header is blank in settings.json, so if the value were fetched after
+    /// the credential check rather than before it, this connection would be refused by the very feature built
+    /// to make it safe. (raised in review by the session that landed #711/#764)</para>
+    /// </summary>
+    [Fact]
+    public async Task A_listing_authenticates_by_a_secret_header_alone()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"claude-opus-5"}]}"""),
+        });
+
+        var keys = new NamedKeys();
+        keys.Set("gw", AiCredentialNames.Header("x-api-key"), "secret-only-credential");
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), keys, NullLogger<AiModelCatalog>.Instance);
+
+        var result = await catalog.FetchAsync(new AiConnection(
+            Id: "gw",
+            DisplayName: "Gateway",
+            Kind: ChatProviderKind.Anthropic,
+            BaseUrl: "https://gateway.example",
+            Models: new List<AiModelEntry>(),
+            Headers: new[] { new AiHeader("x-api-key", null, Secret: true) },
+            Inputs: new Dictionary<string, string>()));
+
+        Assert.True(result.Ok);
+        Assert.Equal(
+            new[] { "secret-only-credential" },
+            handler.LastRequest!.Headers.GetValues("x-api-key"));
     }
 }

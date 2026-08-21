@@ -52,7 +52,7 @@ public class AiModelsViewModelTests
 
     private static AiConnectionDraft Draft(params AiModelEntry[] models) =>
         new("My box", ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
-            models, new Dictionary<string, string>(), new Dictionary<string, string>());
+            models, Array.Empty<AiHeader>(), new Dictionary<string, string>());
 
     private static AiModelGroupViewModel Group(AiModelsViewModel vm) => vm.Groups.Single();
 

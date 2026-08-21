@@ -114,7 +114,7 @@ public class AiConnectionsViewModelTests
 
     private static AiConnectionDraft Draft(string name = "My box", string url = "http://localhost:8000/v1") =>
         new(name, ChatProviderKind.OpenAiCompatible, url,
-            new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+            new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>());
 
     // ---- the two sections ------------------------------------------------------------------------------
 
@@ -224,7 +224,7 @@ public class AiConnectionsViewModelTests
     {
         var connection = new AiConnection(
             "local", "Local Ollama", ChatProviderKind.OpenAiCompatible, baseUrl,
-            new List<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>(),
+            new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>(),
             source, state);
         return new AiConnectionRowViewModel(new AiConnectionsViewModel(null, null), connection);
     }
@@ -950,7 +950,7 @@ public class AiConnectionRowLogoTests
 
         service.Add("anthropic-work", new AiConnectionDraft(
             "Anthropic (work)", ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
-            Array.Empty<AiModelEntry>(), new Dictionary<string, string>(), new Dictionary<string, string>()));
+            Array.Empty<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>()));
         var row = vm.Connections.Single();
         await row.LogoLoad!;
 

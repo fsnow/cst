@@ -142,6 +142,29 @@ namespace CST.Avalonia.Services.Ai
                 return AiCatalogResult.Fail(
                     $"{connection.DisplayName} is not finished being set up, so it cannot be asked for a list.");
 
+            // A header marked secret with nothing stored, refused here for the same reason the chat path
+            // refuses it: sent blank it is dropped at the wire and comes back as a 401 naming nothing, which
+            // is the #711 complaint arriving from a third direction. Refused in BOTH places or not at all -
+            // a listing that loads while the chat refuses is the surface split #673 exists to prevent, just
+            // pointing the other way. (#771)
+            var duplicate = connection.Headers
+                .Where(h => !string.IsNullOrWhiteSpace(h.Name))
+                .GroupBy(h => h.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(g => g.Count() > 1);
+            if (duplicate is not null)
+                return AiCatalogResult.Fail(
+                    $"This connection has two {duplicate.Key} headers. Remove one under Settings \u2192 AI.");
+
+            var missingSecrets = connection.Headers
+                .Where(h => h.Secret
+                            && string.IsNullOrEmpty(_credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name))))
+                .Select(h => h.Name)
+                .ToList();
+            if (missingSecrets.Count > 0)
+                return AiCatalogResult.Fail(
+                    $"No stored value for the {string.Join(", ", missingSecrets)} header. "
+                    + "Re-enter it under Settings \u2192 AI.");
+
             Uri url;
             try
             {
@@ -238,8 +261,14 @@ namespace CST.Avalonia.Services.Ai
         private void Authenticate(HttpRequestMessage request, AiConnection connection)
         {
             var key = _credentials?.Get(connection.Id, AiCredentialNames.Primary);
-            var headers = connection.Headers.ToDictionary(
-                h => h.Key, h => AiTemplate.Expand(h.Value, connection.Inputs));
+            // Same rule as the chat path, for the same reason the summary above gives: the two surfaces send
+            // the same credentials, so a secret header must resolve identically here or a provider's model
+            // list would load while its answers 401. A secret is a literal, never a template. (#771)
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var header in connection.Headers)
+                headers[header.Name] = header.Secret
+                    ? _credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) ?? string.Empty
+                    : AiTemplate.Expand(header.Value ?? string.Empty, connection.Inputs);
 
             if (connection.Kind == ChatProviderKind.Anthropic)
             {
