@@ -256,10 +256,14 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         // Content at Debug only — the prompt carries corpus text and the user's question. (§10)
         _logger.LogDebug("AI turn prompt for {Task}:\n{System}\n---\n{User}",
             request.Task, prompt.System, prompt.UserContent);
+        // Estimated over the RENDERED PROMPT — the strings that actually go on the wire — rather than over the
+        // bundle, which is a subset of them. The bundle figure omitted the system prompt, the preset's template
+        // and the reader's own question, all of which are sent. (#672)
+        var estimatedTokens = AiTokens.Estimate(prompt.System, prompt.UserContent);
         _logger.LogInformation(
             "AI turn: {Task} on {BookId} via {Provider}/{Model}, ~{Tokens} context tokens, {Notices} notice(s)",
             request.Task, request.BookId, provider.Provider.Id, provider.Model,
-            bundle.Budget.ApproximateTokens, prompt.Notices.Count);
+            estimatedTokens, prompt.Notices.Count);
 
         // Read off the budget report rather than off the notice wording: the panel raises its partial-passage
         // badge from this, and a badge that depends on how a sentence is phrased stops working the first time
@@ -435,7 +439,10 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             new("Book", bundle.Book.Name),
             new("Book id", bundle.Book.BookId),
             new("Reference", bundle.Citation.NormalizedReference),
-            new("Estimated context", $"~{bundle.Budget.ApproximateTokens:N0} tokens"),
+            // Over the rendered prompt, which is what was sent. Reading this off the bundle omitted the system
+            // prompt, the preset template and the reader's own question — a figure captioned as the context
+            // that measured a subset of it. (#672)
+            new("Estimated context", $"~{AiTokens.Estimate(prompt.System, prompt.UserContent):N0} tokens"),
         };
 
         if (bundle.Budget.ParagraphsCovered is int covered)

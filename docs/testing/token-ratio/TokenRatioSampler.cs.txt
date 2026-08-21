@@ -1,0 +1,47 @@
+using System;
+using System.IO;
+using System.Linq;
+using CST.Conversion;
+using CST.Navigation;
+using CST.Search;
+using Xunit;
+
+namespace CST.Avalonia.Tests.Search;
+
+// TEMPORARY instrument for #672: dumps real Latin-script passage windows so an external tokenizer can measure
+// the corpus's actual characters-per-token. Not a test; deleted before the PR.
+public sealed class TokenRatioSampler
+{
+    [Fact]
+    public void Dump()
+    {
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Application Support", "CSTReader", "xml");
+        var files = Directory.GetFiles(dir, "*.xml").OrderBy(f => f).ToList();
+        var outPath = Path.Combine(Path.GetTempPath(), "pali-windows.txt");
+        using var w = new StreamWriter(outPath);
+        int written = 0;
+        // Every 3rd book, several windows each: mula, atthakatha and tika all get represented.
+        for (int i = 0; i < files.Count; i += 3)
+        {
+            string xml;
+            try { xml = File.ReadAllText(files[i], System.Text.Encoding.Unicode); } catch { continue; }
+            var markers = BookMarkers.Build(xml);
+            for (int k = 1; k <= 4; k++)
+            {
+                int pos = (int)(xml.Length * (k / 5.0));
+                try
+                {
+                    var win = TeiPassageReader.ReadWindowAroundSelection(
+                        xml, pos, pos + 40, maxChars: 20_000, includeVariants: false,
+                        outputScript: Script.Latin, markers, structuredNotes: true);
+                    var t = win.Text?.Replace("\n", " ").Trim();
+                    if (!string.IsNullOrWhiteSpace(t) && t.Length > 80) { w.WriteLine(t); written++; }
+                }
+                catch { }
+            }
+        }
+        w.Flush();
+        Console.WriteLine($"wrote {written} windows to {outPath}");
+    }
+}
