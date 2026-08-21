@@ -67,6 +67,8 @@ public partial class SimpleTabbedWindow : Window
         AddSettingsMenuItemOffMacOS();
         // #746: same story for About, which macOS keeps in the application menu.
         AddHelpMenuOffMacOS();
+        // #778: and Exit, which macOS keeps there as Quit.
+        AddExitMenuItemOffMacOS();
 
         // #621 Feed C: record which document owns whatever just took focus, so a command pressed after a
         // detour through a tool still targets the pane the user was working in. Bubbling and passive — it
@@ -875,6 +877,81 @@ public partial class SimpleTabbedWindow : Window
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to add the Settings menu item");
+        }
+    }
+
+    /// <summary>
+    /// The File menu's header, as declared in <c>SimpleTabbedWindow.axaml</c>. (#778)
+    ///
+    /// <para>XAML cannot reference a C# const, so the markup carries the string literally and
+    /// <see cref="AddExitMenuItemOffMacOS"/> matches against this. Reword the markup and the lookup finds
+    /// nothing: Exit silently stops being added, and the only trace is a warning in a log nobody reads.
+    /// <c>SimpleTabbedWindowMenuTests</c> is what keeps the two in step - the same treatment
+    /// <c>App.AboutMenuHeader</c> gets for the same reason.</para>
+    /// </summary>
+    internal const string FileMenuHeader = "File";
+
+    /// <summary>
+    /// Adds File &gt; Exit on Windows/Linux. (#778)
+    ///
+    /// <para>Third in the family with <see cref="AddSettingsMenuItemOffMacOS"/> and
+    /// <see cref="AddHelpMenuOffMacOS"/>, for the same underlying reason: macOS keeps quitting in the
+    /// APPLICATION menu (CST Reader &gt; Quit, supplied by the OS), and Avalonia only ever realises that menu
+    /// on macOS. Off macOS the in-window menu bar shows the window's menu, where nothing offered a way out -
+    /// the File menu ended at Close Tab, which is an easy thing to reach for by mistake when what you wanted
+    /// was to leave.</para>
+    ///
+    /// <para>Built here rather than in SimpleTabbedWindow.axaml because an item declared there would also
+    /// appear on macOS, duplicating Quit and putting it somewhere the platform does not use.</para>
+    ///
+    /// <para><b>Routed through <c>TryShutdown</c>, never <c>Shutdown</c> or <c>Close</c>.</b> Only
+    /// TryShutdown raises ShutdownRequested, which is where the graceful sequence lives - await the state
+    /// save, then dispose services. App.axaml.cs records what the shortcut costs: the old path fired the save
+    /// and hard-shutdown on top of it, racing the write against process exit (XCUT-1). An Exit that skipped
+    /// that would drop layout, open tabs and reading positions intermittently, and would present as "it
+    /// sometimes forgets where I was" rather than as anything to do with this menu.</para>
+    /// </summary>
+    private void AddExitMenuItemOffMacOS()
+    {
+        if (OperatingSystem.IsMacOS()) return;
+
+        try
+        {
+            var fileMenu = NativeMenu.GetMenu(this)?
+                .Items.OfType<NativeMenuItem>()
+                .FirstOrDefault(i => i.Header?.ToString() == FileMenuHeader)?.Menu;
+
+            if (fileMenu == null)
+            {
+                _logger.Warning("File menu not found - Exit will be reachable only via the window close button");
+                return;
+            }
+
+            var exitItem = new NativeMenuItem
+            {
+                Header = "Exit",
+                // Display only, and true: the window manager provides Alt+F4, and this being the main window
+                // means closing it shuts the application down (ShutdownMode.OnMainWindowClose). Nothing is
+                // bound here - NativeMenuBar gestures are decorative off macOS anyway.
+                Gesture = new KeyGesture(Key.F4, KeyModifiers.Alt),
+            };
+            exitItem.Click += (_, _) =>
+            {
+                _logger.Information("Exit chosen from the File menu");
+                // Fully qualified to match the four other lifetime checks in this file, which avoid a
+                // using for it.
+                if (global::Avalonia.Application.Current?.ApplicationLifetime
+                    is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    desktop.TryShutdown();
+            };
+
+            fileMenu.Add(new NativeMenuItemSeparator());
+            fileMenu.Add(exitItem);
+            _logger.Information("Added File > Exit (macOS quits from the application menu instead)");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to add the Exit menu item");
         }
     }
 
