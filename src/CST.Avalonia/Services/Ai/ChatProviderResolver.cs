@@ -176,13 +176,29 @@ public sealed class ChatProviderResolver : IChatProviderResolver
             return null;
         }
 
+        // Same guard as the base URL above, for the same reason. An unfilled {placeholder} in a header value
+        // reaches the wire verbatim and comes back as a 401 the reader would read as a bad key - the header
+        // IS the credential in the gateway case, so an unfinished one is an unfinished credential. (#711)
+        var headers = ExpandHeaders(connection);
+        var unfinished = headers
+            .Where(h => CST.Avalonia.Models.Ai.AiTemplate.HasUnresolvedPlaceholders(h.Value))
+            .SelectMany(h => CST.Avalonia.Models.Ai.AiTemplate.PlaceholdersIn(h.Value))
+            .Distinct()
+            .ToList();
+        if (unfinished.Count > 0)
+        {
+            problem = $"This provider still needs: {string.Join(", ", unfinished)}. "
+                      + "Fill it in under Settings \u2192 AI.";
+            return null;
+        }
+
         var apiKey = _credentials?.GetApiKey(connection.Id);
 
         switch (kind)
         {
             case ChatProviderKind.Anthropic
                 when string.IsNullOrWhiteSpace(apiKey) && !AnthropicMessagesProvider.HasCredential(
-                    new AnthropicOptions(apiKey, null, ExpandHeaders(connection))):
+                    new AnthropicOptions(apiKey, null, headers)):
                 // Two different problems with two different fixes: "you have not entered a key" is solved in
                 // Settings; "this build cannot store one" is not solved there at all, and telling the user to
                 // go and add one would send them somewhere that cannot help. (#579)
@@ -198,7 +214,7 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                 return new ChatProviderResolution(
                     new AnthropicMessagesProvider(
                         _http,
-                        new AnthropicOptions(apiKey, NullIfBlank(baseUrl), ExpandHeaders(connection)),
+                        new AnthropicOptions(apiKey, NullIfBlank(baseUrl), headers),
                         _loggerFactory.CreateLogger<AnthropicMessagesProvider>(),
                         firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());
@@ -220,7 +236,7 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                             NullIfBlank(apiKey),
                             connection.AuthHeaderName,
                             connection.AuthScheme,
-                            ExpandHeaders(connection)),
+                            headers),
                         _loggerFactory.CreateLogger<OpenAiCompatibleProvider>(),
                         firstEventTimeout: AiEndpoint.FirstEventTimeoutFor(baseUrl)),
                     chat.ActiveModelId!.Trim());

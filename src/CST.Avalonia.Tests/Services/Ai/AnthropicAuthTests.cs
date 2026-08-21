@@ -127,4 +127,69 @@ public class AnthropicAuthTests
         Assert.Equal("2026-01-01", Header(sent, "anthropic-version"));
         Assert.Equal(1, Count(sent, "anthropic-version"));
     }
+
+    // ---- what counts as "this connection can authenticate" (Fable review of #764) --------------------
+
+    /// <summary>
+    /// The widened guard must not be satisfiable by nothing. A cosmetic header, an empty value, a name HTTP
+    /// rejects, and a template nobody filled in are all things that either never reach the wire or carry
+    /// nothing when they do — and each one, counted as a credential, sends an unauthenticated request whose
+    /// 401 is then reported as a rejected key that does not exist.
+    /// </summary>
+    [Theory]
+    [InlineData("X-Title", "CST Reader")]              // cosmetic, but sendable - see the counter-case below
+    [InlineData("Authorization", "  ")]                // blank value carries nothing
+    [InlineData("bad name", "Bearer t")]               // space: not a legal field-name token
+    [InlineData("{token}", "Bearer t")]                // header NAMES are never template-expanded
+    [InlineData("cf-aig-authorization", "Bearer {gw}")] // value template nobody filled in
+    public void Only_a_header_that_can_carry_a_credential_counts_as_one(string name, string value)
+    {
+        var options = new AnthropicOptions(
+            ApiKey: null, BaseUrl: null,
+            ExtraHeaders: new Dictionary<string, string> { [name] = value });
+
+        // X-Title is genuinely sendable, so it is the one case that DOES count. The point of listing it is
+        // that "sendable" is the line being drawn, not "looks like a credential" - we cannot know which
+        // header a gateway treats as its credential, and guessing which names are credential-ish would be
+        // the curation mistake in a different costume.
+        var expected = name == "X-Title";
+        Assert.Equal(expected, AnthropicMessagesProvider.HasCredential(options));
+    }
+
+    /// <summary>A real gateway header still counts, or the fix for #711 would be undone.</summary>
+    [Fact]
+    public void A_sendable_gateway_header_counts_as_a_credential()
+    {
+        Assert.True(AnthropicMessagesProvider.HasCredential(new AnthropicOptions(
+            ApiKey: null, BaseUrl: null,
+            ExtraHeaders: new Dictionary<string, string> { ["cf-aig-authorization"] = "Bearer gw" })));
+    }
+
+    /// <summary>
+    /// A 401 on a connection that sent no key must not say the key was rejected. There is no key; the
+    /// sentence names a thing that does not exist and sends the reader to Settings to re-paste nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_401_without_a_stored_key_does_not_blame_the_key()
+    {
+        var handler = StubHttpMessageHandler.Error(
+            System.Net.HttpStatusCode.Unauthorized, """{"error":{"message":"no"}}""");
+        var provider = new AnthropicMessagesProvider(
+            new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan },
+            new AnthropicOptions(ApiKey: null, BaseUrl: null,
+                ExtraHeaders: new Dictionary<string, string> { ["cf-aig-authorization"] = "Bearer gw" }),
+            NullLogger<AnthropicMessagesProvider>.Instance);
+
+        var request = new ChatRequest(
+            "claude-opus-5", 1024, null, new[] { new ChatMessage(ChatRole.User, "Explain this passage.") });
+
+        var error = await Assert.ThrowsAsync<AiException>(async () =>
+        {
+            await foreach (var _ in provider.StreamAsync(request, CancellationToken.None)) { }
+        });
+
+        Assert.Equal(AiErrorKind.Unauthorized, error.Error.Kind);
+        Assert.Contains("sends no API key", error.Error.Message);
+        Assert.DoesNotContain("rejected the API key", error.Error.Message);
+    }
 }

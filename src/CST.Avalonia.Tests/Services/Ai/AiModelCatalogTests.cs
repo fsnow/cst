@@ -1,5 +1,12 @@
+using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services.Ai;
@@ -260,5 +267,63 @@ public class AiModelCatalogTests
     public void An_unreadable_body_is_not_taken_as_the_end()
     {
         Assert.True(AiModelCatalog.HasMore("{ this is not json"));
+    }
+
+    // ---- the listing request must authenticate exactly as a chat request does ----------------------------
+
+    /// <summary>
+    /// The listing path and the chat path must not disagree about <c>anthropic-version</c>. The catalog added
+    /// it unconditionally while the adapter added it only when absent, so a gateway pinning its own version
+    /// got one value on a chat request and TWO on a model listing — <c>2026-01-01, 2023-06-01</c>, because
+    /// TryAddWithoutValidation appends. That is the "list loads while answers fail" contradiction the shared
+    /// auth helper exists to prevent, arriving through the one header the helper does not own.
+    /// (Fable review of #764, finding 1)
+    /// </summary>
+    [Fact]
+    public async Task A_listing_sends_one_protocol_version_when_the_connection_pins_its_own()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"claude-opus-5"}]}"""),
+        });
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), credentials: null, NullLogger<AiModelCatalog>.Instance);
+
+        await catalog.FetchAsync(new AiConnection(
+            Id: "gw",
+            DisplayName: "Gateway",
+            Kind: ChatProviderKind.Anthropic,
+            BaseUrl: "https://gateway.example",
+            Models: new List<AiModelEntry>(),
+            Headers: new Dictionary<string, string> { ["anthropic-version"] = "2026-01-01" },
+            Inputs: new Dictionary<string, string>()));
+
+        var sent = handler.LastRequest!;
+        Assert.Equal(new[] { "2026-01-01" }, sent.Headers.GetValues("anthropic-version"));
+    }
+
+    /// <summary>And the default still goes out when the connection pins nothing.</summary>
+    [Fact]
+    public async Task A_listing_sends_the_default_protocol_version_when_the_connection_pins_none()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[]}"""),
+        });
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), credentials: null, NullLogger<AiModelCatalog>.Instance);
+
+        await catalog.FetchAsync(new AiConnection(
+            Id: "anthropic",
+            DisplayName: "Claude",
+            Kind: ChatProviderKind.Anthropic,
+            BaseUrl: "https://api.anthropic.com",
+            Models: new List<AiModelEntry>(),
+            Headers: new Dictionary<string, string>(),
+            Inputs: new Dictionary<string, string>()));
+
+        Assert.Equal(new[] { "2023-06-01" }, handler.LastRequest!.Headers.GetValues("anthropic-version"));
     }
 }

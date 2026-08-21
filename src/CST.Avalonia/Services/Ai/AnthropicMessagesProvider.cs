@@ -7,8 +7,10 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CST.Avalonia.Models.Ai;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services.Ai;
@@ -46,7 +48,7 @@ public sealed record AnthropicOptions(
 /// </summary>
 public sealed class AnthropicMessagesProvider : IChatProvider
 {
-    private const string AnthropicVersion = "2023-06-01";
+    internal const string AnthropicVersion = "2023-06-01";
 
     private readonly HttpClient _http;
     private readonly AnthropicOptions _options;
@@ -71,6 +73,38 @@ public sealed class AnthropicMessagesProvider : IChatProvider
     public string Id => "anthropic";
 
     /// <summary>
+    /// Whether anything on this connection could authenticate a request. (#711)
+    ///
+    /// <para><b>A header only counts if it will actually be sent and carries something.</b> The first version
+    /// of this counted any non-blank header NAME, which let a cosmetic <c>X-Title</c>, an empty value, or a
+    /// name HTTP rejects outright stand in for a credential — so a connection with no key sailed past the
+    /// guard, sent nothing that could authenticate, and got back a 401 reported as "the provider rejected the
+    /// API key" when there was no key to reject. That is a worse outcome than the refusal it replaced, which
+    /// named the actual fix.</para>
+    ///
+    /// <para>This is still a proxy — we cannot know which header a gateway treats as its credential, and
+    /// guessing would be worse. It is only a proxy that cannot be satisfied by nothing.</para>
+    /// </summary>
+    internal static bool HasCredential(AnthropicOptions options) =>
+        !string.IsNullOrWhiteSpace(options.ApiKey)
+        || (options.ExtraHeaders?.Any(IsSendableHeader) ?? false);
+
+    /// <summary>
+    /// A header that will survive to the wire with content in it: a name that is a legal HTTP token, a value
+    /// that is not blank, and no unresolved <c>{placeholder}</c> left in either. A templated name is never
+    /// expanded, so a braced name is unfinished by construction.
+    /// </summary>
+    private static bool IsSendableHeader(KeyValuePair<string, string> header) =>
+        !string.IsNullOrWhiteSpace(header.Key)
+        && !string.IsNullOrWhiteSpace(header.Value)
+        && HeaderNameToken.IsMatch(header.Key)
+        && !AiTemplate.HasUnresolvedPlaceholders(header.Value);
+
+    /// <summary>RFC 9110 field-name: one or more token characters, and nothing else.</summary>
+    private static readonly Regex HeaderNameToken =
+        new(@"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z", RegexOptions.Compiled);
+
+    /// <summary>
     /// Credential, connection headers, and the protocol version — through the same helper the
     /// OpenAI-compatible adapter uses, so the two cannot drift on what an extra header is allowed to do.
     /// (#711)
@@ -81,11 +115,6 @@ public sealed class AnthropicMessagesProvider : IChatProvider
     /// <c>anthropic-version: 2026-01-01, 2023-06-01</c> — two values, which is worse than either. A gateway
     /// that pins its own version gets it; everyone else gets ours.</para>
     /// </summary>
-    /// <summary>Whether anything on this connection could authenticate a request. (#711)</summary>
-    internal static bool HasCredential(AnthropicOptions options) =>
-        !string.IsNullOrWhiteSpace(options.ApiKey)
-        || (options.ExtraHeaders?.Any(h => !string.IsNullOrWhiteSpace(h.Key)) ?? false);
-
     private void ApplyHeaders(HttpRequestMessage message)
     {
         AiHttp.ApplyAuth(
@@ -358,7 +387,7 @@ public sealed class AnthropicMessagesProvider : IChatProvider
 
         return new AiError(
             kind,
-            AiHttp.MessageFor(kind, response.StatusCode, wait),
+            AiHttp.MessageFor(kind, response.StatusCode, wait, !string.IsNullOrWhiteSpace(_options.ApiKey)),
             StatusCode: (int)response.StatusCode,
             ProviderCode: code,
             RetryAfter: wait);
