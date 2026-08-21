@@ -90,7 +90,7 @@ public class AiModelsViewModelTests
 
         Assert.False(Group(vm).IsExpanded);
         Assert.Empty(Rows(vm));
-        Assert.Equal("2 models saved", Group(vm).CountText);   // collapsed: nothing fetched yet
+        Assert.Equal("2 models", Group(vm).CountText);
     }
 
     /// <summary>Several models under one connection must be on at once — the whole point of a short list you
@@ -337,7 +337,7 @@ public class AiModelsViewModelTests
 
         Rows(vm).Single(r => r.ModelId == "a").Enabled = true;
 
-        Assert.Equal("1 of 3 models listed", Group(vm).CountText);
+        Assert.Equal("1 of 3 models", Group(vm).CountText);
     }
 
     /// <summary>Fetched once, on first expand — not on every expand, and not on every keystroke in the search
@@ -411,7 +411,7 @@ public class AiModelsViewModelTests
 
         Rows(vm).Single(r => r.ModelId == "a").Enabled = true;
 
-        Assert.Equal("1 of 2 models listed", Group(vm).CountText);
+        Assert.Equal("1 of 2 models", Group(vm).CountText);
     }
 
     /// <summary>
@@ -932,53 +932,31 @@ public class AiModelsViewModelTests
         Assert.Equal(new[] { "Apollo", "mercury", "Zephyr" }, Rows(vm).Select(r => r.DisplayName));
     }
 
-    // ---- what the count is counting (#785) --------------------------------------------------------------
+    // ---- the count reads plainly (#786) -----------------------------------------------------------------
 
-    /// <summary>
-    /// The listing is fetched only when the group is first expanded, so before that the rows are the reader's
-    /// OWN saved models. "2 of 3" then reads as "this provider has 3 models", which is a different claim from
-    /// the one the number supports — and it sent a reader looking for models that were never missing, three
-    /// times in one sitting.
-    /// </summary>
+    /// <summary>"2 of 13 models", not "2 of 13 models on": the shape already says which number is enabled.</summary>
     [Fact]
-    public void Before_a_fetch_the_count_says_the_models_are_the_readers_own()
+    public void The_count_names_no_state_and_carries_no_trailing_word()
     {
         var (vm, service) = Make(new FakeCatalog(
             new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B"), new AiCatalogModel("c", "C")));
         service.Add("mine", Draft(
             new AiModelEntry("a", "A"), new AiModelEntry("b", "B", Enabled: false)));
 
-        Assert.Equal("1 of 2 models saved", Group(vm).CountText);
-    }
-
-    /// <summary>And once the provider has answered, the same words would mean something else, so they change.</summary>
-    [Fact]
-    public void After_a_fetch_the_count_says_it_is_the_providers_listing()
-    {
-        var (vm, service) = Make(new FakeCatalog(
-            new AiCatalogModel("a", "A"), new AiCatalogModel("b", "B"), new AiCatalogModel("c", "C")));
-        service.Add("mine", Draft(
-            new AiModelEntry("a", "A"), new AiModelEntry("b", "B", Enabled: false)));
+        Assert.Equal("1 of 2 models", Group(vm).CountText);
 
         Group(vm).IsExpanded = true;
 
-        Assert.Equal("1 of 3 models listed", Group(vm).CountText);
+        Assert.Equal("1 of 3 models", Group(vm).CountText);
     }
 
-    /// <summary>A narrowed view is a third meaning again: neither what the reader has nor what the provider
-    /// offers, and indistinguishable from a short listing without saying so.</summary>
+    /// <summary>All of them on reads as the bare count rather than "3 of 3".</summary>
     [Fact]
-    public void While_searching_the_count_says_it_is_showing_matches()
+    public void With_everything_on_the_count_is_the_bare_number()
     {
-        var (vm, service) = Make(new FakeCatalog(
-            new AiCatalogModel("alpha", "Alpha"),
-            new AiCatalogModel("beta", "Beta"),
-            new AiCatalogModel("alpine", "Alpine")));
-        service.Add("mine", Draft());
-        Group(vm).IsExpanded = true;
+        var (vm, service) = Make();
+        service.Add("mine", Draft(new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
 
-        vm.Search = "alp";
-
-        Assert.Equal("0 of 2 models matching", Group(vm).CountText);
+        Assert.Equal("2 models", Group(vm).CountText);
     }
 }

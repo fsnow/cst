@@ -283,21 +283,16 @@ namespace CST.Avalonia.ViewModels
                 var on = Visible.Count(r => r.Enabled);
                 if (total == 0) return _hasFetched ? "no models" : "no models yet";
 
-                // WHAT the number counts, not just the number. The same words meant three different things
-                // in one sitting: the reader's own saved models before the listing arrives, a subset while a
-                // search narrows the view, and the provider's full listing after a fetch. "2 of 3" read as
-                // "Groq has 3 models" every time, and sent them looking for models that were never missing.
+                // Plain: "2 models", or "2 of 13 models". The trailing "on" said which of the two numbers was
+                // the enabled one, which the shape "2 of 13" already says.
                 //
-                // The listing is only fetched when the group is first expanded, so the pre-fetch state is
-                // ordinary rather than a corner: it is what every reader sees for the first second, and what
-                // they keep seeing if they never expand.
-                var noun = !_hasFetched ? "saved"
-                    : _filtered ? "matching"
-                    : "listed";
-
-                return on == total
-                    ? $"{Plural(total)} {noun}"
-                    : $"{on} of {Plural(total)} {noun}";
+                // An earlier cut qualified the noun - saved / listed / matching - because the same words meant
+                // three different things depending on whether the provider's listing had been fetched yet.
+                // That was solving the wrong half. The reason a reader ever saw their own saved count is that
+                // the listing lived in memory for one window and was discarded; caching it (#790) makes the
+                // number the listing from the first paint, and a label explaining which set you are looking at
+                // then explains a distinction that no longer exists. (#786)
+                return on == total ? Plural(total) : $"{on} of {Plural(total)}";
             }
         }
 
@@ -350,13 +345,8 @@ namespace CST.Avalonia.ViewModels
         /// hiding one behind a price filter would look like it had been lost. Fetched models the reader has
         /// not touched are subject to both the search and the price filter.</para>
         /// </summary>
-        /// <summary>True while the rows are a narrowed view rather than everything this group has, so the
-        /// count can say which it is showing.</summary>
-        private bool _filtered;
-
         internal void ApplyFilter(string search, bool freeOnly, bool searching)
         {
-            _filtered = !string.IsNullOrWhiteSpace(search) || freeOnly;
 
             var stored = _connection.Models.ToDictionary(m => m.Id, StringComparer.Ordinal);
             var rows = new List<AiCatalogRowViewModel>();
