@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CST;
 using CST.Avalonia.Services.Tools;
+using CST.Search;
 using CST.Conversion;
 using CST.Tools;
 using Microsoft.Extensions.Logging;
@@ -139,10 +140,18 @@ public sealed class AiContextBundler : IAiContextBundler
                 $"({passage.NormalizedReference}).");
         }
 
+        // TrimmedForBudget, not Included, when the reader's selection was cut. This is what raises the
+        // partial-passage badge (AI_SURFACE_B.md §6) — and until #672 nothing ever wrote it, so the badge
+        // could not fire at all: the passage part was hardcoded Included on every path. An answer about part
+        // of a selection, captioned as being about the whole of it, is the one outcome this bundle exists to
+        // prevent. (#672, fable)
         parts.Add(new BundlePart(
             BundlePartNames.Passage,
-            BundlePartState.Included,
-            $"reading window from {passage.NormalizedReference}"));
+            passage.SelectionTruncated ? BundlePartState.TrimmedForBudget : BundlePartState.Included,
+            passage.SelectionTruncated
+                ? $"reading window from {passage.NormalizedReference} \u2014 your selection was longer than "
+                  + $"{TeiPassageReader.MaxSelectionChars:N0} characters and was cut to fit"
+                : $"reading window from {passage.NormalizedReference}"));
 
         parts.Add(new BundlePart(
             BundlePartNames.Apparatus,

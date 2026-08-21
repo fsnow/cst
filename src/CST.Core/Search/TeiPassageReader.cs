@@ -58,7 +58,8 @@ namespace CST.Search
         /// </summary>
         private static PassageWindow Materialize(
             string xml, int readStart, int end, int maxChars, bool includeVariants, Script outputScript,
-            BookMarkers markers, bool structuredNotes)
+            BookMarkers markers, bool structuredNotes,
+            bool selectionTruncated = false)
         {
             IReadOnlyList<ApparatusNote> notes = System.Array.Empty<ApparatusNote>();
             string text;
@@ -107,7 +108,8 @@ namespace CST.Search
             // itself already sits in the NEXT paragraph and would overstate the span by one.
             var (endNum, endCode, _) = markers.RefsAt(Math.Max(readStart, end - 1));
 
-            return new PassageWindow(text, prev, next, num, code, pages, noteCount, notes, endNum, endCode);
+            return new PassageWindow(text, prev, next, num, code, pages, noteCount, notes, endNum, endCode,
+                selectionTruncated);
         }
 
         /// <summary>
@@ -160,8 +162,12 @@ namespace CST.Search
             //
             // Clamped from the START of the selection, so what survives is what the reader selected first
             // rather than an arbitrary middle. Reported through the ordinary trimmed path, never silently.
+            bool selectionTruncated = false;
             if (selectionCap > 0 && RenderedLength(xml, selectionStart, selectionEnd, includeNotes: true) > selectionCap)
-                selectionEnd = RawForwardCap(xml, selectionStart, selectionCap, xml.Length);
+            {
+                selectionEnd = RawForwardCap(xml, selectionStart, selectionCap, selectionEnd);
+                selectionTruncated = true;
+            }
 
             // Each direction is bounded by the section at ITS OWN end of the selection, not by one section
             // chosen for the whole window.
@@ -199,7 +205,8 @@ namespace CST.Search
             start = WalkBackSentences(xml, selectionStart, contextSentences, sectionStart, includeNotes);
             end = WalkForwardSentences(xml, selectionEnd, contextSentences, sectionEnd, includeNotes);
 
-            return Materialize(xml, start, end, maxChars, includeVariants, outputScript, markers, structuredNotes);
+            return Materialize(xml, start, end, maxChars, includeVariants, outputScript, markers, structuredNotes,
+                selectionTruncated);
         }
 
         /// <summary>
@@ -381,7 +388,7 @@ namespace CST.Search
                 // has no danda in front of it, so a selection in the second sentence would get no context at
                 // all despite a whole sentence sitting right there. Falling back to the scan floor keeps that
                 // sentence and still bounds the front-matter case the cap exists for. (#672)
-                if (found < 0) return Math.Min(start, SkipMarkupForward(xml, floor, start));
+                if (found < 0) return Math.Min(start, AdvanceToParagraph(xml, floor, start));
                 boundary = found;
                 at = found;
             }
@@ -409,16 +416,35 @@ namespace CST.Search
         }
 
         /// <summary>
-        /// Advance past any markup at <paramref name="from"/> so a window begins on a text character.
+        /// Move a fallback window start forward to the first paragraph at or after <paramref name="from"/>,
+        /// stopping at <paramref name="limit"/>.
         ///
-        /// <para>The scan-floor fallback lands wherever the section begins, which is immediately before the
-        /// element tags that open it. A window starting there carries no text it did not already have, but it
-        /// starts OUTSIDE the paragraph — and the citation is resolved from the paragraph the window starts in,
-        /// so the passage came back describing itself as belonging to no paragraph at all. (#672)</para>
+        /// <para>The scan-floor fallback lands where the section begins, which is before the tags that open it
+        /// — and in the real corpus before the section's <c>&lt;head&gt;</c> as well, whose TEXT precedes the
+        /// first <c>&lt;p n=…&gt;</c> marker. A window starting there is cited from the last paragraph marker
+        /// BEHIND it, which belongs to the previous sutta: the passage comes back citing a range that opens in
+        /// a section it contains none of. Skipping tags alone cannot fix that, because a head is text, not
+        /// markup — so this walks to the paragraph instead.</para>
+        ///
+        /// <para>The section heading is lost from the window, which is the right trade: a heading is a title,
+        /// not the sentence context the expansion was asked for, and a wrong citation is worse than a missing
+        /// one — "confidently the previous sutta" is a harder error to notice than "no paragraph". (#672, fable)</para>
         /// </summary>
-        private static int SkipMarkupForward(string xml, int from, int limit)
+        private static int AdvanceToParagraph(string xml, int from, int limit)
         {
             int i = Math.Max(0, from);
+            if (i >= limit) return Math.Min(i, limit);
+
+            // The next paragraph marker at or after the fallback point, if one opens before the window would.
+            int p = xml.IndexOf("<p ", i, StringComparison.Ordinal);
+            if (p >= 0 && p < limit)
+            {
+                int gt = xml.IndexOf('>', p);
+                if (gt >= 0 && gt < limit) return gt + 1;
+            }
+
+            // No paragraph opens between here and the selection — the window is already inside one. Fall back
+            // to skipping the tags at this position so it at least begins on text.
             while (i < limit && xml[i] == '<')
             {
                 int gt = xml.IndexOf('>', i);
@@ -442,7 +468,17 @@ namespace CST.Search
                 }
                 else { rendered++; i++; }
             }
-            return Math.Min(i, limit);
+            i = Math.Min(i, limit);
+
+            // Never stop INSIDE a note. A cap is a character count and lands wherever it lands, so without
+            // this it can cut a <note> in half: the rendered text then carries an unbalanced brace, the note's
+            // tail reads as base text, and the apparatus list loses the note entirely — and the dandas in that
+            // tail are read as base-text sentence ends by everything downstream, because NoteRegions only sees
+            // notes that START inside the range it is given. Retreat to the note's opening. (#310/#355, #672)
+            foreach (var (s0, e0) in TeiText.NoteRegions(xml, start, i))
+                if (i > s0 && i < e0)
+                    return Math.Max(start, s0);
+            return i;
         }
 
         /// <summary>
@@ -661,7 +697,11 @@ namespace CST.Search
         int NoteCount,
         IReadOnlyList<ApparatusNote> Notes,
         int? EndParagraphNumber = null,
-        string? EndParagraphBookCode = null);
+        string? EndParagraphBookCode = null,
+        /// <summary>The SELECTION was longer than the cap and was cut. Reported so the caller can say so —
+        /// an answer about part of a selection captioned as being about all of it is the failure this
+        /// window is written to avoid everywhere else. (#672)</summary>
+        bool SelectionTruncated = false);
 
     /// <summary>One apparatus note (a digitized print footnote — usually a variant reading) as structured data:
     /// its character <paramref name="Offset"/> into the returned brace-free <c>Text</c>, its full converted

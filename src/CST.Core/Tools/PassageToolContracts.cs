@@ -79,5 +79,7 @@ namespace CST.Tools
         int NoteCount,
         IReadOnlyList<ApparatusNote> Notes,
         int? EndParagraphNumber = null,
-        string? EndParagraphBookCode = null);
+        string? EndParagraphBookCode = null,
+        /// <summary>The selection was longer than the cap and was cut. (#672)</summary>
+        bool SelectionTruncated = false);
 }
