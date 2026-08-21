@@ -57,13 +57,27 @@ namespace CST.Avalonia.Models.Ai
     /// <param name="ContextLength">What the provider published when this model was added, or null. Kept on
     /// the record because the listing is only fetched while the Models tab is open, and the per-turn picker
     /// (#693) has to be able to say it without asking again.</param>
+    /// <param name="Missing">
+    /// Set when the provider's own listing, fetched successfully, did not carry this model. (#728)
+    ///
+    /// <para><b>Only ever written from a listing we can trust</b>: a fetch that failed marks nothing, an empty
+    /// listing marks nothing, and an endpoint that publishes no listing at all can never mark anything. The
+    /// alternative — treating absence of evidence as evidence — turns one offline moment into a screen of
+    /// false alarms, which is the same reasoning that makes <see cref="Reachability.Configured"/> a third
+    /// state rather than a synonym for unreachable.</para>
+    ///
+    /// <para><b>A mark, never a removal.</b> The reader chose this model; a provider's listing is not
+    /// authority over their configuration, and an endpoint that publishes an incomplete one would otherwise
+    /// silently delete valid entries. It stays enabled, stays pickable, and says what it is.</para>
+    /// </param>
     public sealed record AiModelEntry(
         string Id,
         string DisplayName,
         bool Enabled = true,
         int? ContextLength = null,
         bool? SupportsReasoning = null,
-        string? Inputs = null);
+        string? Inputs = null,
+        bool Missing = false);
 
     /// <summary>
     /// One configured endpoint: where to send a request, how to authenticate, and which models it offers.

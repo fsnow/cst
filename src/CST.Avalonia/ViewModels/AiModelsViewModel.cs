@@ -344,7 +344,7 @@ namespace CST.Avalonia.ViewModels
                 rows.Add(new AiCatalogRowViewModel(
                     this, model.Id, model.DisplayName,
                     _fetched.FirstOrDefault(f => string.Equals(f.Id, model.Id, StringComparison.Ordinal)),
-                    model.Enabled));
+                    model.Enabled, model.Missing));
 
             foreach (var model in _fetched)
             {
@@ -393,7 +393,27 @@ namespace CST.Avalonia.ViewModels
                 var result = await _owner.Catalog.FetchAsync(_connection).ConfigureAwait(true);
                 _hasFetched = true;
 
-                if (result.Ok) _fetched = result.Models;
+                if (result.Ok)
+                {
+                    _fetched = result.Models;
+
+                    // The listing is in memory only while this tab is open, so what it says about the
+                    // reader's stored models has to be written down now or the per-turn picker will go on
+                    // describing a model that no longer exists. Suppressed like the toggles, so recording it
+                    // does not rebuild the list under the reader. (#728)
+                    //
+                    // Only a listing that is complete as far as the endpoint told us. A first page of a paged
+                    // listing, or one whose entries we could only partly read, is a fine thing to SHOW - every
+                    // model in it is real - but it cannot support the inference in the other direction, that
+                    // what is absent has been retired. Marking from it would report a live model as gone,
+                    // which is the false alarm this feature was written to avoid. (fable review)
+                    if (result.Complete && _owner.Service is { } service)
+                    {
+                        _owner.Suppressed(() => service.MarkListing(
+                            Id, _fetched.Select(m => m.Id).ToList()));
+                        Refresh();
+                    }
+                }
                 else FetchProblem = result.Problem;
 
                 // Asking a provider for its models IS contacting it, and the answer is the same fact a chat
@@ -438,12 +458,18 @@ namespace CST.Avalonia.ViewModels
             var facts = Facts(modelId);
 
             _owner.Suppressed(() => service.EnableModel(Id, modelId, displayName, enabled, facts));
-
-            if (service.Connections.FirstOrDefault(
-                    c => string.Equals(c.Id, Id, StringComparison.Ordinal)) is { } fresh)
-                _connection = fresh;
+            Refresh();
 
             this.RaisePropertyChanged(nameof(CountText));
+        }
+
+        /// <summary>Re-reads the connection after a suppressed write. Without it the next genuine rebuild
+        /// would rebuild from a record taken before the write and silently undo it on screen.</summary>
+        private void Refresh()
+        {
+            if (_owner.Service?.Connections.FirstOrDefault(
+                    c => string.Equals(c.Id, Id, StringComparison.Ordinal)) is { } fresh)
+                _connection = fresh;
         }
     }
 
@@ -456,7 +482,7 @@ namespace CST.Avalonia.ViewModels
 
         public AiCatalogRowViewModel(
             AiModelGroupViewModel group, string id, string displayName, AiCatalogModel? published,
-            bool enabled)
+            bool enabled, bool missing = false)
         {
             _group = group;
             _published = published;
@@ -464,11 +490,22 @@ namespace CST.Avalonia.ViewModels
 
             ModelId = id;
             DisplayName = displayName;
+            Missing = missing;
         }
 
         public string ModelId { get; }
 
         public string DisplayName { get; }
+
+        /// <summary>
+        /// The provider's listing no longer carries this model. (#728)
+        ///
+        /// <para>Said in the row rather than left to be discovered as a 404 at send time. Marked, never
+        /// removed or switched off: the reader put it there, a listing is not authority over their
+        /// configuration, and a provider that publishes an incomplete one would otherwise delete valid
+        /// entries on their behalf.</para>
+        /// </summary>
+        public bool Missing { get; }
 
         /// <summary>
         /// The provider's own facts about the model — the wire id, context window, price per million tokens,
@@ -487,7 +524,11 @@ namespace CST.Avalonia.ViewModels
         {
             get
             {
-                if (_published is null) return ModelId;
+                // What was published about a model the listing has dropped is no longer a description of
+                // anything the provider offers. Showing a context window and a price for it would be the app
+                // describing something that does not exist - the specific harm in #728 - so the row falls
+                // back to the id.
+                if (_published is null || Missing) return ModelId;
 
                 var facts = new List<string>();
 

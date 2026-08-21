@@ -186,6 +186,18 @@
                                                                                        FontSize="11"
                                                                                        Margin="6,0,0,0"
                                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                            <!-- Still selectable: a listing
+                                                                                 is not authority over the
+                                                                                 reader's configuration, and
+                                                                                 whether the request works
+                                                                                 is the provider's answer to
+                                                                                 give. (#728) -->
+                                                                            <TextBlock Grid.Column="1"
+                                                                                       Text="no longer listed"
+                                                                                       IsVisible="{Binding ShowMissingNote}"
+                                                                                       FontSize="11"
+                                                                                       Margin="6,0,0,0"
+                                                                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
                                                                             <TextBlock Grid.Column="2"
                                                                                        Text="✓"
                                                                                        IsVisible="{Binding IsCurrent}"

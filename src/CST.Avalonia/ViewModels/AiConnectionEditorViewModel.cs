@@ -521,6 +521,14 @@ namespace CST.Avalonia.ViewModels
             .Select(m => (m.Published ?? new AiModelEntry(m.ModelId.Trim(), m.ModelId.Trim())) with
             {
                 Id = m.ModelId.Trim(),
+
+                // A retyped id is a different model, so it does not inherit the old one's mark. Without this,
+                // a reader who saw "no longer listed" and corrected the id to the provider's new name got a
+                // corrected model still claiming to be gone, across sessions, until the Models tab was next
+                // opened. (#728, fable review)
+                Missing = m.Published is { } published
+                    && string.Equals(published.Id, m.ModelId.Trim(), StringComparison.Ordinal)
+                    && published.Missing,
                 DisplayName = string.IsNullOrWhiteSpace(m.DisplayName)
                     ? m.ModelId.Trim()
                     : m.DisplayName.Trim(),

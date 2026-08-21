@@ -412,4 +412,72 @@ public class AiConnectionServiceTests
         Assert.DoesNotContain("Unreachable", json);
         Assert.DoesNotContain("Reachab", json);
     }
+
+    private static AiConnectionDraft WithModels(params AiModelEntry[] models) =>
+        Draft() with { Models = models };
+
+    // ---- recording what a listing carried (#728) ---------------------------------------------------------
+
+    /// <summary>The mark follows the last good listing in both directions: set for what it dropped, cleared
+    /// for what it carries again.</summary>
+    [Fact]
+    public void Marking_a_listing_sets_and_clears_in_step_with_it()
+    {
+        var (service, _) = Make();
+        service.Add("box", WithModels(new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
+
+        service.MarkListing("box", new[] { "a" });
+        Assert.True(service.Connections.Single().Models.Single(m => m.Id == "b").Missing);
+
+        service.MarkListing("box", new[] { "a", "b" });
+        Assert.False(service.Connections.Single().Models.Single(m => m.Id == "b").Missing);
+    }
+
+    /// <summary>
+    /// Recording a listing that says nothing new writes nothing and tells nobody.
+    ///
+    /// <para>The Models tab records the listing on every successful fetch, which happens whenever the tab is
+    /// opened. Saving unconditionally would rewrite <c>settings.json</c> and rebuild the list the reader is
+    /// looking at, every time, to say exactly what it said before.</para>
+    /// </summary>
+    [Fact]
+    public void Recording_the_same_listing_twice_changes_nothing()
+    {
+        var (service, _) = Make();
+        service.Add("box", WithModels(new AiModelEntry("a", "A"), new AiModelEntry("b", "B")));
+        service.MarkListing("box", new[] { "a" });
+
+        var raised = 0;
+        service.ConnectionsChanged += (_, _) => raised++;
+        service.MarkListing("box", new[] { "a" });
+
+        Assert.Equal(0, raised);
+    }
+
+    /// <summary>An empty listing is no evidence, not total removal — a key without listing scope, or a
+    /// gateway with no upstream configured, would otherwise mark every model the reader has.</summary>
+    [Fact]
+    public void An_empty_listing_marks_nothing()
+    {
+        var (service, _) = Make();
+        service.Add("box", WithModels(new AiModelEntry("a", "A")));
+
+        service.MarkListing("box", Array.Empty<string>());
+
+        Assert.False(service.Connections.Single().Models.Single().Missing);
+    }
+
+    /// <summary>Promoting a model from a listing that carries it clears the mark too, so the two paths that
+    /// write it cannot disagree.</summary>
+    [Fact]
+    public void Promoting_a_model_from_the_listing_clears_its_mark()
+    {
+        var (service, _) = Make();
+        service.Add("box", WithModels(new AiModelEntry("a", "A")));
+        service.MarkListing("box", new[] { "other" });
+
+        service.EnableModel("box", "a", "A", true, new AiModelEntry("a", "A", ContextLength: 8192));
+
+        Assert.False(service.Connections.Single().Models.Single().Missing);
+    }
 }

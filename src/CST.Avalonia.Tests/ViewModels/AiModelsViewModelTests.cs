@@ -159,6 +159,137 @@ public class AiModelsViewModelTests
         Assert.Empty(service.Connections.Single().Models);
     }
 
+    // ---- a model the provider dropped (#728) -----------------------------------------------------------
+
+    /// <summary>
+    /// A stored model the fetched listing does not carry is marked.
+    ///
+    /// <para>Providers retire and rename models routinely, free ones especially. Until this, the app went on
+    /// showing one as an ordinary row — enabled, pickable, indistinguishable — and the reader found out as a
+    /// 404 at the moment they asked a question.</para>
+    /// </summary>
+    [Fact]
+    public void A_stored_model_the_listing_no_longer_carries_is_marked()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel("kept", "Kept")));
+        service.Add("mine", Draft(
+            new AiModelEntry("kept", "Kept"),
+            new AiModelEntry("retired", "Retired")));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.True(Rows(vm).Single(r => r.ModelId == "retired").Missing);
+        Assert.False(Rows(vm).Single(r => r.ModelId == "kept").Missing);
+        Assert.True(service.Connections.Single().Models.Single(m => m.Id == "retired").Missing);
+    }
+
+    /// <summary>
+    /// A fetch that failed marks nothing.
+    ///
+    /// <para>An offline moment, a local runner that is not started, a 401 — each would otherwise flag every
+    /// model the reader has, turning a transient problem into a screen of false alarms. Absence of evidence
+    /// is not evidence, which is the same reason <c>Reachability.Configured</c> is a third state.</para>
+    /// </summary>
+    [Fact]
+    public void A_failed_fetch_marks_nothing()
+    {
+        // Constructed rather than built with Fail(), which always carries an empty list: that would leave
+        // this passing on MarkListing's empty-listing guard while asserting nothing about the Ok check it
+        // names, and a future Fail that carried the models it got before dying would mark them all.
+        // (fable review, found by mutation)
+        var partial = new AiCatalogResult(
+            false, "Could not connect to mine.",
+            new[] { new AiCatalogModel("something-else", "Something else") }, Reachable: false);
+
+        var (vm, service) = Make(new FakeCatalog(partial));
+        service.Add("mine", Draft(new AiModelEntry("mine-model", "Mine")));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.False(Rows(vm).Single().Missing);
+        Assert.False(service.Connections.Single().Models.Single().Missing);
+    }
+
+    /// <summary>
+    /// A listing the endpoint says is incomplete marks nothing.
+    ///
+    /// <para>A first page, or one whose entries we could only partly read, is a fine thing to show — every
+    /// model in it is real. What it cannot support is the inference in the other direction: that a model
+    /// absent from it has been retired. Anthropic's listing pages at twenty by default, so without this the
+    /// twenty-first model onwards would be reported as gone.</para>
+    /// </summary>
+    [Fact]
+    public void An_incomplete_listing_marks_nothing()
+    {
+        var (vm, service) = Make(new FakeCatalog(AiCatalogResult.Success(
+            new[] { new AiCatalogModel("page-one-model", "Page one") }, complete: false)));
+        service.Add("mine", Draft(new AiModelEntry("page-two-model", "Page two")));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.False(service.Connections.Single().Models.Single(m => m.Id == "page-two-model").Missing);
+    }
+
+    /// <summary>An empty listing marks nothing either: endpoints answer 200 with an empty <c>data[]</c> for
+    /// reasons that have nothing to do with the reader's models, and that would be the loudest possible way
+    /// to say nothing.</summary>
+    [Fact]
+    public void An_empty_listing_marks_nothing()
+    {
+        var (vm, service) = Make(new FakeCatalog());
+        service.Add("mine", Draft(new AiModelEntry("mine-model", "Mine")));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.False(service.Connections.Single().Models.Single().Missing);
+    }
+
+    /// <summary>A model that comes back — renamed away and restored, or a listing that was briefly partial —
+    /// loses the mark. The mark is a reading of the last good listing, not a verdict.</summary>
+    [Fact]
+    public void A_model_the_listing_carries_again_is_unmarked()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel("back", "Back")));
+        service.Add("mine", Draft(new AiModelEntry("back", "Back", Missing: true)));
+
+        Group(vm).IsExpanded = true;
+
+        Assert.False(service.Connections.Single().Models.Single().Missing);
+    }
+
+    /// <summary>Marked, never removed or switched off. The reader chose it, a listing is not authority over
+    /// their configuration, and an endpoint publishing an incomplete one would otherwise delete valid entries
+    /// on their behalf.</summary>
+    [Fact]
+    public void A_marked_model_is_neither_removed_nor_disabled()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel("kept", "Kept")));
+        service.Add("mine", Draft(new AiModelEntry("retired", "Retired", Enabled: true)));
+
+        Group(vm).IsExpanded = true;
+
+        var stored = Assert.Single(service.Connections.Single().Models);
+        Assert.Equal("retired", stored.Id);
+        Assert.True(stored.Enabled);
+        Assert.True(Rows(vm).Single(r => r.ModelId == "retired").Enabled);
+    }
+
+    /// <summary>The row stops repeating what the provider once published about it. A context window and a
+    /// price describe something on offer; this is not one.</summary>
+    [Fact]
+    public void A_marked_model_no_longer_carries_its_published_facts()
+    {
+        var (vm, service) = Make(new FakeCatalog(new AiCatalogModel("kept", "Kept")));
+        service.Add("mine", Draft(
+            new AiModelEntry("retired", "Retired", true, ContextLength: 128_000)));
+
+        Group(vm).IsExpanded = true;
+
+        var row = Rows(vm).Single(r => r.ModelId == "retired");
+        Assert.Equal("retired", row.Details);
+        Assert.DoesNotContain("context", row.Details, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Promoting one adds it to the reader's stored list, with the provider's display name.</summary>
     [Fact]
     public void Promoting_a_fetched_model_stores_it()

@@ -159,14 +159,30 @@
                                 BorderThickness="0,0,0,1"
                                 Background="Transparent"
                                 ToolTip.Tip="{Binding Details}">
-                            <Grid ColumnDefinitions="*,Auto">
+                            <!-- The name in the STAR column, so it trims. In an Auto column the TextBlock
+                                 is measured at infinite width, TextTrimming never engages, and a long id
+                                 pushes the switch off the row - the same trap as the wide answer tables in
+                                 #586. (fable review) -->
+                            <Grid ColumnDefinitions="*,Auto,Auto">
                                 <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
                                            TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
 
+                                <!-- Marked, never removed or switched off: the reader put this model there,
+                                     and a provider's listing is not authority over their configuration.
+                                     Caution rather than error - nothing has failed yet. (#728) -->
+                                <Border Grid.Column="1" IsVisible="{Binding Missing}"
+                                        Margin="8,0,0,0" Padding="6,1" CornerRadius="4"
+                                        VerticalAlignment="Center"
+                                        Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                                        ToolTip.Tip="The provider's model list no longer carries this id. It may have been renamed or retired. Requests to it will probably fail.">
+                                    <TextBlock Text="no longer listed" FontSize="11"
+                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                </Border>
+
                                 <!-- A switch, never a radio: several models under one connection must be
                                      on at once, which is the entire point of a short list. -->
-                                <ToggleSwitch Grid.Column="1" IsChecked="{Binding Enabled}"
+                                <ToggleSwitch Grid.Column="2" IsChecked="{Binding Enabled}"
                                               OnContent="" OffContent=""
                                               VerticalAlignment="Center"/>
                             </Grid>
