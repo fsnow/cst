@@ -247,6 +247,39 @@ public sealed class DpdUpdateServiceTests : IDisposable
 
     // ---- per-asset version reads ----
 
+    // #563 / #536: a FIRST run cannot stage, structurally. Staging only happens in the catch below a failed
+    // in-place replace, and that catch requires `File.Exists(finalPath)` — so with nothing installed there is
+    // nothing to lock and nothing to fail. That matters because UpdateOneAsync announces AssetInstalled only
+    // when `!staged`: if a first install could ever stage, the dictionaries would stay invisible until the
+    // next launch, which is exactly the reported symptom.
+    [Fact]
+    public void InstallFromGzip_into_an_empty_directory_reports_the_asset_live_not_staged()
+    {
+        var final = Path.Combine(_dir, "first-run", "dpd-cst-subset.db");
+        var gz = Gzip(BuildAssetDbBytes("v0.4.20260531", "3"));
+
+        var staged = DpdUpdateService.InstallFromGzip(gz, Sha(gz), final, DpdUpdateService.ProbeDpdUsable);
+
+        Assert.False(staged);                                    // → AssetInstalled fires
+        Assert.True(File.Exists(final));                         // → and the asset really is live
+        Assert.False(File.Exists(final + ".pending"));
+    }
+
+    // The same guarantee for the lexicon asset, because Antonio saw DPPN and DPD behave differently and the
+    // two travel through separate descriptors.
+    [Fact]
+    public void InstallFromGzip_of_a_first_lexicon_reports_the_asset_live_not_staged()
+    {
+        var final = Path.Combine(_dir, "first-run", "dppn.db");
+        var gz = Gzip(BuildLexiconDbBytes("2025-06", "1"));
+
+        var staged = DpdUpdateService.InstallFromGzip(gz, Sha(gz), final, DpdUpdateService.ProbeLexiconUsable);
+
+        Assert.False(staged);
+        Assert.True(File.Exists(final));
+        Assert.False(File.Exists(final + ".pending"));
+    }
+
     [Fact]
     public void ReadDpdVersion_reads_versions_from_a_real_asset()
     {

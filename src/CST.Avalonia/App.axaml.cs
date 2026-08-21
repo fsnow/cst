@@ -206,6 +206,20 @@ public partial class App : Application
         if (DpdUpdateService.ApplyPendingInstall())
             Log.Information("Applied one or more staged dictionary-asset updates on launch.");
 
+        // Bind the lemma provider's reopen to AssetInstalled HERE, before any view model exists. (#563)
+        //
+        // Order is the whole point. DictionaryViewModel subscribes to the same event to rebuild its picker,
+        // and it is constructed a few lines below with the layout — so if this subscription were made later
+        // (it used to be made during the background update check) the picker handler would run FIRST. It
+        // posts to the UI thread and returns, so a rebuild could be dequeued while Reopen was still opening
+        // the database, read DpdDictionarySource.IsAvailable as false, and leave DPD out of the picker with
+        // nothing left to rebuild it. That is the reported symptom (#563) arriving by a second route.
+        //
+        // Subscribing before the layout makes this handler first in the multicast list, and it swaps
+        // synchronously — so the provider is live before the picker is ever asked to look. (fable)
+        SubscribeLemmaReopen();
+
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Avoid duplicate validations from both Avalonia and the CommunityToolkit.
@@ -633,6 +647,58 @@ public partial class App : Application
             // Don't fail the app startup if indexing fails
         }
     }
+
+    /// <summary>
+    /// Bind the DPD lemma provider's reopen to the asset-install event. Called at startup, before the layout
+    /// (and so before <c>DictionaryViewModel</c>) subscribes to the same event. (#536/#563)
+    /// </summary>
+    private void SubscribeLemmaReopen()
+    {
+        var updates = ServiceProvider?.GetService<IDpdUpdateService>();
+        if (updates is null)
+            return;
+        var provider = ServiceProvider?.GetService<CST.Lemma.ILemmaProvider>();
+        BindLemmaReopen(updates, provider);
+    }
+
+    /// <summary>
+    /// The binding itself, split out so it can be tested without an app instance. (#563)
+    ///
+    /// <para>It logs loudly when the registered provider is not reopenable rather than quietly doing nothing.
+    /// The DI registration and this handler are edited in different places and years apart; a registration
+    /// changed back to a bare <c>SqliteLemmaProvider</c> would otherwise revive #536 with no error, no log and
+    /// no failing test — the asset installs, the event fires, and DPD stays dark until the next launch. (fable)</para>
+    /// </summary>
+    /// <returns>true when the reopen was bound; false when the registered provider cannot be reopened.</returns>
+    internal static bool BindLemmaReopen(IDpdUpdateService updates, CST.Lemma.ILemmaProvider? provider)
+    {
+        if (provider is not Services.ReopenableLemmaProvider reopenable)
+        {
+            Log.Error(
+                "The lemma provider is registered as {Type}, which cannot be reopened. A dpd asset installed "
+                + "mid-session will not become available until the next launch (#536). Register "
+                + "ReopenableLemmaProvider instead.",
+                provider?.GetType().Name ?? "nothing");
+            return false;
+        }
+
+        // An asset that lands mid-session must become usable WITHOUT a restart (#536). The registry already
+        // evaluates IsAvailable live, so the only thing that cannot notice on its own is the DPD lemma
+        // provider, which binds availability at construction. The dictionary panel rebuilds its own picker off
+        // this same event.
+        updates.AssetInstalled += id =>
+        {
+            if (!string.Equals(id, DpdAssetId, StringComparison.OrdinalIgnoreCase))
+                return;
+            reopenable.Reopen();
+            Log.Information("Reopened the lemma provider after the {Id} asset was installed; available={Available}",
+                id, reopenable.IsAvailable);
+        };
+        return true;
+    }
+
+    /// <summary>The manifest id of the DPD asset — the only one the lemma provider reads.</summary>
+    internal const string DpdAssetId = "dpd";
     
     /// <summary>
     /// Check for XML data updates from GitHub repository
@@ -693,21 +759,9 @@ public partial class App : Application
             if (dpdUpdateService != null)
             {
                 dpdUpdateService.StatusChanged += message => Log.Information("DPD Asset Status: {Message}", message);
-                // An asset that lands mid-session must become usable WITHOUT a restart (#536). The registry
-                // already evaluates IsAvailable live, so the only thing that cannot notice on its own is the
-                // DPD lemma provider, which binds availability at construction — reopen it here. The dictionary
-                // panel rebuilds its own picker off this same event.
-                dpdUpdateService.AssetInstalled += id =>
-                {
-                    if (!string.Equals(id, "dpd", StringComparison.OrdinalIgnoreCase))
-                        return;
-                    if (ServiceProvider?.GetService<CST.Lemma.ILemmaProvider>() is Services.ReopenableLemmaProvider reopenable)
-                    {
-                        reopenable.Reopen();
-                        Log.Information("Reopened the lemma provider after the {Id} asset was installed; available={Available}",
-                            id, reopenable.IsAvailable);
-                    }
-                };
+                // The AssetInstalled -> Reopen binding is NOT made here. It has to be established before the
+                // dictionary panel subscribes to the same event, which happens when the layout is built long
+                // before this runs — see SubscribeLemmaReopen at startup. (#536/#563)
                 _ = Task.Run(() => dpdUpdateService.CheckAndUpdateAsync());
             }
         }
