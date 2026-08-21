@@ -50,6 +50,12 @@ public sealed class OlderSettingsFilesLoadTests : IDisposable
     }
 
     // ---- the shape that actually broke ----
+    //
+    // The converter's own fixtures live in AiHeaderRecordListConverterTests (#784) and go deeper into the
+    // shape itself. What is here is deliberately the OTHER question: not "does the converter read both
+    // shapes" but "does a whole settings file written by the previous build still load, and does the rest of
+    // it survive" — which is the assertion that failed in the field, and it failed for XmlBooksDirectory as
+    // much as for the connection. Extend the converter tests for shape questions; extend these for file ones.
 
     // Headers as a JSON OBJECT, which is what every build before #771 wrote.
     [Fact]
@@ -94,6 +100,57 @@ public sealed class OlderSettingsFilesLoadTests : IDisposable
         var connection = Assert.Single(settings.Ai.Chat.Connections);
         Assert.NotNull(connection.Headers);          // the next thing to enumerate it must not throw
         Assert.Empty(connection.Headers);
+    }
+
+    // Four collections declared "= new()" on the model and enumerated with no null check. The initializer
+    // runs at construction and an explicit JSON null overwrites it, so it guarantees nothing. #319 identified
+    // this mechanism exactly and applied it to the SECTIONS only — a section null bricks the Settings window,
+    // which is what it was chasing, but a collection null is what AiConnectionService actually enumerates.
+    // Found by kestrel-cst-2 while reading this work. (#787)
+    [Fact]
+    public async Task Null_collections_anywhere_in_the_AI_section_load_as_empty()
+    {
+        var settings = await Load("""
+        {
+          "XmlBooksDirectory": "/books",
+          "Ai": { "Enabled": true, "Chat": { "Connections": [ {
+            "Id": "c1", "Kind": "openai-compatible", "BaseUrl": "https://example.invalid/v1",
+            "Models": null, "Inputs": null, "Headers": null } ] } }
+        }
+        """);
+
+        var connection = Assert.Single(settings.Ai.Chat.Connections);
+        Assert.NotNull(connection.Models);
+        Assert.NotNull(connection.Inputs);
+        Assert.NotNull(connection.Headers);
+    }
+
+    [Fact]
+    public async Task A_null_connections_list_loads_as_empty_rather_than_null()
+    {
+        var settings = await Load("""
+        { "XmlBooksDirectory": "/books", "Ai": { "Chat": { "Connections": null } } }
+        """);
+
+        Assert.NotNull(settings.Ai.Chat.Connections);
+        Assert.Empty(settings.Ai.Chat.Connections);
+    }
+
+    [Fact]
+    public async Task A_null_entry_in_the_connections_list_is_dropped()
+    {
+        // Same hazard as a null list, one level in: ToRuntime dereferences each entry.
+        var settings = await Load("""
+        {
+          "XmlBooksDirectory": "/books",
+          "Ai": { "Chat": { "Connections": [
+            null,
+            { "Id": "c1", "Kind": "openai-compatible", "BaseUrl": "https://example.invalid/v1" } ] } }
+        }
+        """);
+
+        var connection = Assert.Single(settings.Ai.Chat.Connections);
+        Assert.Equal("c1", connection.Id);
     }
 
     // ---- files older than the AI work entirely ----
