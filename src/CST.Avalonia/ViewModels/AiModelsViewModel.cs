@@ -281,8 +281,23 @@ namespace CST.Avalonia.ViewModels
             {
                 var total = Visible.Count;
                 var on = Visible.Count(r => r.Enabled);
-                if (total == 0) return "no models yet";
-                return on == total ? Plural(total) : $"{on} of {Plural(total)} on";
+                if (total == 0) return _hasFetched ? "no models" : "no models yet";
+
+                // WHAT the number counts, not just the number. The same words meant three different things
+                // in one sitting: the reader's own saved models before the listing arrives, a subset while a
+                // search narrows the view, and the provider's full listing after a fetch. "2 of 3" read as
+                // "Groq has 3 models" every time, and sent them looking for models that were never missing.
+                //
+                // The listing is only fetched when the group is first expanded, so the pre-fetch state is
+                // ordinary rather than a corner: it is what every reader sees for the first second, and what
+                // they keep seeing if they never expand.
+                var noun = !_hasFetched ? "saved"
+                    : _filtered ? "matching"
+                    : "listed";
+
+                return on == total
+                    ? $"{Plural(total)} {noun}"
+                    : $"{on} of {Plural(total)} {noun}";
             }
         }
 
@@ -335,8 +350,14 @@ namespace CST.Avalonia.ViewModels
         /// hiding one behind a price filter would look like it had been lost. Fetched models the reader has
         /// not touched are subject to both the search and the price filter.</para>
         /// </summary>
+        /// <summary>True while the rows are a narrowed view rather than everything this group has, so the
+        /// count can say which it is showing.</summary>
+        private bool _filtered;
+
         internal void ApplyFilter(string search, bool freeOnly, bool searching)
         {
+            _filtered = !string.IsNullOrWhiteSpace(search) || freeOnly;
+
             var stored = _connection.Models.ToDictionary(m => m.Id, StringComparer.Ordinal);
             var rows = new List<AiCatalogRowViewModel>();
 
