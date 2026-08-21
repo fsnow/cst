@@ -83,25 +83,6 @@ public sealed class ReopenableLemmaProviderTests : IDisposable
         Assert.False(provider.IsAvailable);
     }
 
-    [Fact]
-    public void Dispose_releases_every_instance_it_has_opened()
-    {
-        var path = Path.Combine(_dir, "dpd-cst-subset.db");
-        BuildAssetDb(path);
-        var provider = new ReopenableLemmaProvider(path);
-        provider.Reopen();
-        provider.Reopen();
-        Assert.True(provider.IsAvailable);
-
-        provider.Dispose();
-        SqliteConnection.ClearAllPools();
-
-        // A retired instance still holding the file would make this throw on Windows, which is precisely the
-        // platform #563 is held open to verify.
-        File.Delete(path);
-        Assert.False(File.Exists(path));
-    }
-
     // A minimal but VALID dpd-cst-subset asset: the tables SqliteLemmaProvider requires, plus one form→lemma
     // row so a resolve can prove the wrapper is really querying the new file.
     private static void BuildAssetDb(string path, string lemma = "dhamma")

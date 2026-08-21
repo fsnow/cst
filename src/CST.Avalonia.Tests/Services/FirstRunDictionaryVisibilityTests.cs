@@ -111,7 +111,10 @@ public sealed class FirstRunDictionaryVisibilityTests : IDisposable
 
         var after = PickerIds(prefs);
         Assert.Equal(defaultBefore, after.First());
-        Assert.Equal(new[] { "dpd", "dppn" }, after.Skip(2).ToArray());
+        // Appended, not interleaved — but without pinning the factory's own registration order between the
+        // two new sources, which is not what this test is about.
+        Assert.Equal(new[] { "en", "hi" }, after.Take(2).ToArray());
+        Assert.Equal(new[] { "dpd", "dppn" }, after.Skip(2).OrderBy(id => id).ToArray());
     }
 
     // A reader who disabled a source before it was ever installed must not have that undone by the install.
@@ -131,6 +134,75 @@ public sealed class FirstRunDictionaryVisibilityTests : IDisposable
         // And the choice is recorded, so it survives the restart that used to be the workaround.
         Assert.Contains(state.DictionaryDialog.SourceOrder, p =>
             string.Equals(p.Id, "dppn", StringComparison.OrdinalIgnoreCase) && !p.Enabled);
+    }
+
+    // ---- the notification layer: what tells the app an asset landed ----
+
+    // The sharpest regression fable found: App.BindLemmaReopen pattern-matches the registered provider, so a
+    // DI registration changed back to a bare SqliteLemmaProvider would make the reopen SILENTLY do nothing —
+    // no error, no failing test, and #536 returns. The binding now reports that, and this pins it.
+    [Fact]
+    public void Binding_the_reopen_to_a_provider_that_cannot_reopen_is_reported_not_ignored()
+    {
+        var updates = new FakeUpdates();
+        using var raw = new SqliteLemmaProvider(_dpdPath);
+
+        Assert.False(App.BindLemmaReopen(updates, raw));
+        Assert.Equal(0, updates.SubscriberCount);
+    }
+
+    [Fact]
+    public void Binding_the_reopen_survives_a_missing_provider()
+    {
+        var updates = new FakeUpdates();
+        Assert.False(App.BindLemmaReopen(updates, null));
+        Assert.Equal(0, updates.SubscriberCount);
+    }
+
+    // The bound handler is what actually reopens on a first run.
+    [Fact]
+    public void The_bound_handler_reopens_the_provider_when_the_dpd_asset_lands()
+    {
+        var (lemma, prefs) = BuildApp();
+        var updates = new FakeUpdates();
+        Assert.True(App.BindLemmaReopen(updates, lemma));
+
+        BuildDpdAsset(_dpdPath);
+        Assert.DoesNotContain("dpd", PickerIds(prefs));
+
+        updates.RaiseAssetInstalled(App.DpdAssetId);
+
+        Assert.Contains("dpd", PickerIds(prefs));
+    }
+
+    // A lexicon install must not reopen the lemma provider — it is a different asset, and reopening on every
+    // event would retire a live inner provider for nothing.
+    [Fact]
+    public void The_bound_handler_ignores_an_asset_that_is_not_dpd()
+    {
+        var (lemma, _) = BuildApp();
+        var updates = new FakeUpdates();
+        Assert.True(App.BindLemmaReopen(updates, lemma));
+
+        BuildDpdAsset(_dpdPath);
+        updates.RaiseAssetInstalled("dppn");
+
+        Assert.False(lemma.IsAvailable);   // not reopened
+    }
+
+    private sealed class FakeUpdates : IDpdUpdateService
+    {
+        public event Action<string>? StatusChanged;
+        public event Action<string>? AssetInstalled;
+        public event Action<long, long>? DownloadProgressChanged;
+        public bool IsBusy => false;
+        public Task CheckAndUpdateAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public int SubscriberCount => AssetInstalled?.GetInvocationList().Length ?? 0;
+        public void RaiseAssetInstalled(string id) => AssetInstalled?.Invoke(id);
+
+        // Silences the unused-event warnings without changing behaviour.
+        internal void Unused() { StatusChanged?.Invoke(""); DownloadProgressChanged?.Invoke(0, 0); }
     }
 
     // ---- the app's own wiring, assembled ----
