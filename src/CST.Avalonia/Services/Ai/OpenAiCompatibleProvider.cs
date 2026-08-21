@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -118,7 +119,8 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
         using (response)
         {
             if (!response.IsSuccessStatusCode)
-                throw new AiException(await ClassifyAsync(response, ct).ConfigureAwait(false));
+                throw new AiException(
+                    await ClassifyAsync(response, request.ReasoningEffort, ct).ConfigureAwait(false));
 
             var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             var think = new ThinkTagFilter();
@@ -206,6 +208,17 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
             // Optional here, unlike Anthropic — omitting it is the honest expression of "no cap", and it lets
             // a reasoning model spend what it needs on reasoning without starving the answer (#601).
             if (request.MaxTokens is { } maxTokens) json.WriteNumber("max_tokens", maxTokens);
+
+            // Written ONLY when the reader chose a value (#671). Omitted, the provider applies its own default,
+            // which is the honest meaning of "Provider default" in the picker - there is nothing to send for
+            // it, and inventing a value to send would be this app choosing a level on the model's behalf.
+            //
+            // Sent as the reader's chosen string, verbatim from a list the provider published for that model.
+            // A provider that does not know the field may 400 rather than ignore it, which is why nothing is
+            // sent unasked; a rejection is reported with the field named rather than surfacing as a bare 400.
+            if (!string.IsNullOrWhiteSpace(request.ReasoningEffort))
+                json.WriteString("reasoning_effort", request.ReasoningEffort);
+
             json.WriteBoolean("stream", true);
 
             // Ask for usage on the final chunk. Providers that do not know the option ignore it.
@@ -336,7 +349,13 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
     /// bounded: <c>error.code</c> is a short token and is kept (after sanitizing), while <c>error.message</c> can
     /// quote the request back and is discarded.
     /// </summary>
-    private async Task<AiError> ClassifyAsync(HttpResponseMessage response, CancellationToken ct)
+    /// <param name="sentEffort">
+    /// The reasoning effort this request carried, or null. Needed because a rejection of it is otherwise
+    /// indistinguishable from any other 400, and the reader is told "the provider rejected the request" about
+    /// a control they can see and change. (#671)
+    /// </param>
+    private async Task<AiError> ClassifyAsync(
+        HttpResponseMessage response, string? sentEffort, CancellationToken ct)
     {
         var kind = AiHttp.KindFor(response.StatusCode);
         string? code = null;
@@ -357,6 +376,17 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
 
                     if (string.Equals(code, "context_length_exceeded", StringComparison.OrdinalIgnoreCase))
                         kind = AiErrorKind.ContextTooLong;
+
+                    // Only when we actually sent one: a 400 naming the field on a request that did not carry
+                    // it would be about something else entirely. Codes first, since OpenAI publishes them;
+                    // the body-substring fallback covers providers that put the reason in prose, and it only
+                    // TESTS the text - provider prose never reaches AiError.Message. (#671)
+                    if (!string.IsNullOrWhiteSpace(sentEffort)
+                        && response.StatusCode == HttpStatusCode.BadRequest
+                        && (code is "unsupported_parameter" or "unsupported_value" or "invalid_request_error"
+                            || body.Contains("reasoning_effort", StringComparison.OrdinalIgnoreCase))
+                        && body.Contains("reasoning", StringComparison.OrdinalIgnoreCase))
+                        kind = AiErrorKind.UnsupportedParameter;
                 }
             }
             catch (JsonException)

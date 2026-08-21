@@ -353,6 +353,8 @@ internal static class AiHttp
         AiErrorKind.RateLimited => RateLimitMessage(wait),
         AiErrorKind.ContextTooLong =>
             "The request was longer than the model's context window. Try a smaller passage or fewer glosses.",
+        AiErrorKind.UnsupportedParameter =>
+            "This model did not accept the reasoning effort you chose. Set it back to Provider default.",
         _ => $"The provider rejected the request (HTTP {(int)status}).",
     };
 
