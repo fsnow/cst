@@ -464,7 +464,6 @@ public class AiModelCatalogTests
         var model = Assert.Single(models);
         Assert.Equal(new[] { "low", "high", "max" }, model.ReasoningEfforts);
         Assert.Equal("high", model.DefaultReasoningEffort);
-        Assert.False(model.ReasoningIsMandatory);
     }
 
     /// <summary>

@@ -753,6 +753,86 @@ public class OpenAiCompatibleProviderTests
         Assert.Contains("reasoning effort", error.Error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>The code arm alone, with the field named nowhere in the prose.</summary>
+    [Fact]
+    public async Task A_rejection_is_recognised_from_the_code_without_naming_the_field()
+    {
+        var handler = StubHttpMessageHandler.Error(
+            HttpStatusCode.BadRequest,
+            """{"error":{"code":"unsupported_value","message":"reasoning is not available on this model"}}""");
+
+        var error = await Assert.ThrowsAsync<AiException>(
+            () => CollectAsync(Provider(handler), Request() with { ReasoningEffort = "high" }));
+
+        Assert.Equal(AiErrorKind.UnsupportedParameter, error.Error.Kind);
+    }
+
+    /// <summary>The prose arm alone, with a code we do not list — many compatible providers put their reason
+    /// in the message rather than in a machine-readable field.</summary>
+    [Fact]
+    public async Task A_rejection_is_recognised_from_prose_naming_the_field()
+    {
+        var handler = StubHttpMessageHandler.Error(
+            HttpStatusCode.BadRequest,
+            """{"error":{"code":"invalid_params","message":"reasoning_effort must be one of low, high"}}""");
+
+        var error = await Assert.ThrowsAsync<AiException>(
+            () => CollectAsync(Provider(handler), Request() with { ReasoningEffort = "medium" }));
+
+        Assert.Equal(AiErrorKind.UnsupportedParameter, error.Error.Kind);
+    }
+
+    /// <summary>
+    /// A listed code on a 400 about something else entirely. Without the reasoning conjunct the reader is
+    /// told to change the effort control because an unrelated parameter was rejected.
+    /// </summary>
+    [Fact]
+    public async Task A_rejection_of_some_other_parameter_is_not_blamed_on_effort()
+    {
+        var handler = StubHttpMessageHandler.Error(
+            HttpStatusCode.BadRequest,
+            """{"error":{"code":"unsupported_parameter","message":"Unsupported parameter: 'temperature'"}}""");
+
+        var error = await Assert.ThrowsAsync<AiException>(
+            () => CollectAsync(Provider(handler), Request() with { ReasoningEffort = "high" }));
+
+        Assert.NotEqual(AiErrorKind.UnsupportedParameter, error.Error.Kind);
+    }
+
+    /// <summary>
+    /// The generic type OpenAI puts on nearly every 400, on a body that mentions reasoning for an unrelated
+    /// reason — 32+ OpenRouter models publish mandatory reasoning, and such refusals say so in prose. Treating
+    /// this as an effort rejection sends the reader to change the one control they recently touched while the
+    /// real cause persists. (fable review)
+    /// </summary>
+    [Fact]
+    public async Task A_generic_bad_request_mentioning_reasoning_is_not_blamed_on_effort()
+    {
+        var handler = StubHttpMessageHandler.Error(
+            HttpStatusCode.BadRequest,
+            """{"error":{"type":"invalid_request_error","message":"this reasoning model requires max_tokens above the thinking budget"}}""");
+
+        var error = await Assert.ThrowsAsync<AiException>(
+            () => CollectAsync(Provider(handler), Request() with { ReasoningEffort = "high" }));
+
+        Assert.NotEqual(AiErrorKind.UnsupportedParameter, error.Error.Kind);
+    }
+
+    /// <summary>Not a 400 at all: a 429 whose body happens to name the field is a rate limit, and telling the
+    /// reader to change a setting would be wrong in a way that wastes their next hour.</summary>
+    [Fact]
+    public async Task A_rate_limit_mentioning_the_field_stays_a_rate_limit()
+    {
+        var handler = StubHttpMessageHandler.Error(
+            HttpStatusCode.TooManyRequests,
+            """{"error":{"code":"unsupported_parameter","message":"reasoning_effort quota exceeded"}}""");
+
+        var error = await Assert.ThrowsAsync<AiException>(
+            () => CollectAsync(Provider(handler), Request() with { ReasoningEffort = "high" }));
+
+        Assert.Equal(AiErrorKind.RateLimited, error.Error.Kind);
+    }
+
     /// <summary>
     /// The same 400 on a request that carried no effort is NOT attributed to effort. Without the guard, every
     /// unrelated bad request would tell the reader to change a setting they never touched.

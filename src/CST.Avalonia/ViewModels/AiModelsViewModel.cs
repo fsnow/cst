@@ -549,6 +549,12 @@ namespace CST.Avalonia.ViewModels
 
                 if (_published.SupportsReasoning == true) facts.Add("reasoning");
 
+                // A separate fact from the one above, and the distinction is the whole point of #671's
+                // correction: "reasoning" means the model RETURNS reasoning content, "effort" means it takes
+                // the knob. 51% of the models that satisfy the first do not satisfy the second, so collapsing
+                // them would tell the reader something the provider never said.
+                if (_published.AcceptsReasoningEffort == true) facts.Add("effort");
+
                 // The id on its own line: it is the string the reader would copy, and burying it in a run of
                 // facts separated by dots makes it hard to pick out.
                 return facts.Count == 0 ? ModelId : ModelId + "\n" + string.Join("  ·  ", facts);

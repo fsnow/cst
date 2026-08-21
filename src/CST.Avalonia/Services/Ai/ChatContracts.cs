@@ -63,6 +63,12 @@ public sealed record ChatMessage(ChatRole Role, string Content);
 /// is the shape #670 forbids, and it would be wrong within a month besides. What reaches this field came from
 /// a list the provider published for that model.</para>
 ///
+/// <para><b>Honoured by the OpenAI-compatible adapter only.</b> The Anthropic Messages API expresses this as
+/// a <c>thinking</c> object with a token budget rather than an effort string, and mapping one onto the other
+/// means choosing numbers — deferred to #779 rather than guessed. Nothing arms this field for an Anthropic
+/// connection today, because the levels come from a listing field that adapter's models do not publish; if one
+/// ever arrives non-null there it is logged rather than silently dropped.</para>
+///
 /// <para><b>This is the control that replaced the one #601 removed.</b> Output caps could not govern a
 /// reasoning model, because reasoning and answer share the budget; effort governs the reasoning itself, which
 /// is the quantity that actually varies by an order of magnitude between models.</para>

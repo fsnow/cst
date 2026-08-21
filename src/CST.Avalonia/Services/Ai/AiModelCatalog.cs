@@ -35,8 +35,7 @@ namespace CST.Avalonia.Services.Ai
         IReadOnlyList<string>? OutputModalities = null,
         IReadOnlyList<string>? SupportedParameters = null,
         IReadOnlyList<string>? ReasoningEfforts = null,
-        string? DefaultReasoningEffort = null,
-        bool? ReasoningIsMandatory = null)
+        string? DefaultReasoningEffort = null)
     {
         /// <summary>
         /// Whether the provider publishes a price above zero for this model.
@@ -396,8 +395,7 @@ namespace CST.Avalonia.Services.Ai
                     // provider-published, so it passes the letter of "a published capability is fine" while
                     // being unambiguously a score. It is NOT read here and must not be: #670/#681.
                     Strings(reasoning, "supported_efforts"),
-                    Text(reasoning, "default_effort"),
-                    Bool(reasoning, "mandatory")));
+                    Text(reasoning, "default_effort")));
             }
 
             // Alphabetical by the name the provider published. Mechanical, and the only ordering allowed:
@@ -440,14 +438,6 @@ namespace CST.Avalonia.Services.Ai
             parent is { } p && p.ValueKind == JsonValueKind.Object &&
             p.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
                 ? value.GetString()
-                : null;
-
-        /// <summary>Null when the field is absent or is not a boolean — silence, not false. (#671)</summary>
-        private static bool? Bool(JsonElement? parent, string name) =>
-            parent is { } p && p.ValueKind == JsonValueKind.Object &&
-            p.TryGetProperty(name, out var value)
-            && value.ValueKind is JsonValueKind.True or JsonValueKind.False
-                ? value.GetBoolean()
                 : null;
 
         private static int? Int(JsonElement? parent, string name) =>

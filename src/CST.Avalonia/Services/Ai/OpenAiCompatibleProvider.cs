@@ -381,9 +381,16 @@ public sealed class OpenAiCompatibleProvider : IChatProvider
                     // it would be about something else entirely. Codes first, since OpenAI publishes them;
                     // the body-substring fallback covers providers that put the reason in prose, and it only
                     // TESTS the text - provider prose never reaches AiError.Message. (#671)
+                    //
+                    // `invalid_request_error` deliberately NOT in the list, though it looks like a sibling.
+                    // It is OpenAI's generic TYPE for nearly every 400, and this method falls back to `type`
+                    // when `code` is absent - so including it collapsed the whole condition to "any 400 whose
+                    // body mentions reasoning". Mandatory-reasoning models and budget conflicts produce
+                    // exactly that prose, and the reader would be sent to change the one control they had
+                    // recently touched while the real cause persisted. (fable review)
                     if (!string.IsNullOrWhiteSpace(sentEffort)
                         && response.StatusCode == HttpStatusCode.BadRequest
-                        && (code is "unsupported_parameter" or "unsupported_value" or "invalid_request_error"
+                        && (code is "unsupported_parameter" or "unsupported_value"
                             || body.Contains("reasoning_effort", StringComparison.OrdinalIgnoreCase))
                         && body.Contains("reasoning", StringComparison.OrdinalIgnoreCase))
                         kind = AiErrorKind.UnsupportedParameter;

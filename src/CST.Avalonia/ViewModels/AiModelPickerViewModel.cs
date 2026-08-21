@@ -428,13 +428,22 @@ namespace CST.Avalonia.ViewModels
 
             var chosen = Chosen;
 
+            // Current when nothing WILL be sent, which is not the same as nothing being stored. A choice made
+            // on another model - "max" on DeepSeek, then a switch to a model offering low/medium/high - is
+            // outside this model's vocabulary, so the wire guard drops it and the provider applies its own
+            // default. Keying this off "is anything stored" left no row ticked at all, showing the reader an
+            // unmarked list for a setting that does in fact have an effect. This is the same fact the chip
+            // label already told them; the flyout has to agree with it. (fable review)
+            var willSend = !string.IsNullOrWhiteSpace(chosen)
+                           && published.Any(v => string.Equals(v, chosen, StringComparison.Ordinal));
+
             // The default sits first because it is the position that sends nothing, and because a reader
             // scanning the list should meet "leave it alone" before any level.
             Choices.Add(new AiEffortChoiceViewModel(
                 null,
                 "Provider default",
                 model!.DefaultReasoningEffort is { Length: > 0 } theirs ? $"the provider uses {theirs}" : null,
-                string.IsNullOrWhiteSpace(chosen),
+                !willSend,
                 Choose));
 
             foreach (var value in published)

@@ -615,7 +615,12 @@ public class AiChatOrchestratorTests
             "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
             // The id the FixedResolver reports, deliberately: the guard matches the model the request is
             // actually going to, so a fixture whose model is named anything else proves nothing.
-            new[] { new AiModelEntry("test-model", "M", ReasoningEfforts: efforts) },
+            // Empty maps to NULL, which is the state that actually occurs: a provider that published no
+            // parameter list at all - every local runner, and every hosted listing that carries only ids.
+            // The helper used to hand down an empty array instead, so the null branch of the guard was never
+            // exercised and the mutant `== true` -> `!= false` passed every test here. (fable review)
+            new[] { new AiModelEntry("test-model", "M",
+                                     ReasoningEfforts: efforts.Length == 0 ? null : efforts) },
             Array.Empty<AiHeader>(), new Dictionary<string, string>()));
         service.SetActive("mine", "test-model");
         return (service, "mine");
@@ -638,13 +643,43 @@ public class AiChatOrchestratorTests
     /// parameter can be a 400 rather than an ignored key. The picker hiding the control is presentation; this
     /// is the part that has to be right, which is why it is checked at the last point before the wire.
     /// </summary>
+    /// <summary>
+    /// The majority case: the provider published no parameter list at all, so <c>ReasoningEfforts</c> is
+    /// NULL rather than empty. Every local runner is this, and so is every hosted listing that carries only
+    /// ids. Silence is not permission.
+    /// </summary>
     [Fact]
-    public async Task A_chosen_effort_the_model_does_not_publish_is_not_sent()
+    public async Task A_chosen_effort_is_not_sent_to_a_model_whose_provider_published_nothing()
     {
         var provider = new FakeProvider();
-        var (connections, _) = ConnectedOffering();   // publishes no levels at all
+        var (connections, _) = ConnectedOffering();   // null, not empty
 
         await CollectAsync(Orchestrator(provider, connections: connections, reasoningEffort: "high"));
+
+        Assert.Null(provider.LastRequest!.ReasoningEffort);
+    }
+
+    /// <summary>
+    /// And the neighbouring state: a published reasoning capability carrying no levels. models.dev counts
+    /// 1,301 models like this — reasoning models with no knob. Distinct from null in the data and identical
+    /// in what it permits, which is nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_chosen_effort_is_not_sent_to_a_model_publishing_an_empty_level_list()
+    {
+        var provider = new FakeProvider();
+
+        var settings = new CST.Avalonia.Models.Settings();
+        var mock = new Mock<ISettingsService>();
+        mock.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(mock.Object);
+        service.Add("mine", new AiConnectionDraft(
+            "Mine", ChatProviderKind.OpenAiCompatible, "https://example.test/v1",
+            new[] { new AiModelEntry("test-model", "M", ReasoningEfforts: Array.Empty<string>()) },
+            Array.Empty<AiHeader>(), new Dictionary<string, string>()));
+        service.SetActive("mine", "test-model");
+
+        await CollectAsync(Orchestrator(provider, connections: service, reasoningEffort: "high"));
 
         Assert.Null(provider.LastRequest!.ReasoningEffort);
     }
