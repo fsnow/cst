@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CST.Avalonia.Constants;
@@ -99,6 +100,14 @@ namespace CST.Avalonia.Services
                 }
                 else
                 {
+                    // No primary file is USUALLY a true first run — but not always, and the exception is the
+                    // recovery path's own worst moment. PreserveUnreadable moves the file aside, and if the
+                    // app is force-quit or crashes before the restore is written back, the next launch arrives
+                    // here with backups sitting right there and would have called it a first run: the restore
+                    // evaporates silently and the reader loses everything a second time. (#785, fable)
+                    if (GetBackupFilePaths().Length > 0 && await TryLoadFromBackupAsync().ConfigureAwait(false))
+                        return;
+
                     _logger.Information("No settings file found, using defaults");
                     ApplyFirstRunDefaults();
                 }
@@ -108,11 +117,189 @@ namespace CST.Avalonia.Services
                 // A corrupt/torn settings.json lands here. Previously we only logged and returned, so the
                 // app ran with an EMPTY XmlBooksDirectory (the default was set only in the no-file branch)
                 // — changing update/indexing behavior. Fall through to first-run defaulting instead, and
-                // persist it (the atomic save replaces the corrupt file). (STATE-3)
+                // persist it. (STATE-3)
                 _logger.Error(ex, "Failed to load settings from {Path} - reverting to defaults", _settingsFilePath);
+
+                // Keep the file we could not read, BEFORE the save below writes defaults over it. (#785)
+                //
+                // That save used to replace it, deliberately — "the atomic save replaces the corrupt file".
+                // The defaulting is right; the replacing is not, and the difference is everything: it turns
+                // "your configuration is unavailable this session" into "your configuration is gone", where
+                // even diagnosing the cause afterwards cannot bring it back. It has already cost a reader a
+                // hand-built model list — the file was readable JSON that one property of ours had outgrown,
+                // and it was destroyed rather than set aside.
+                //
+                // "Corrupt" is the rarer case anyway. The likelier one, and the observed one, is a file this
+                // build does not understand YET: written by a newer version, restored from a backup, or
+                // holding a shape we changed. None of those deserve deletion.
+                PreserveUnreadable();
+
+                // Then try to RECOVER, which is the half that means the reader never learns any of this
+                // happened. ApplicationStateService has done this since it was written; settings never did,
+                // and settings is the file that holds everything a reader configured by hand. (#785)
+                if (await TryLoadFromBackupAsync().ConfigureAwait(false))
+                    return;
+
+                // Nothing to recover from. Defaults, and the unreadable file is already kept beside them.
+                //
+                // This save deliberately does NOT leave a backup. A persisted-type change breaks every backup
+                // at once — the expected case — so defaults would become the NEWEST backup, and the walk stops
+                // at the first readable one. A later recovery would then restore defaults and report that
+                // nothing was lost, with a genuinely configured backup sitting one file below, never reached.
+                // (#785, fable)
                 _settings = new Settings();
                 ApplyFirstRunDefaults();
+                _backupNextSave = false;
                 RequestSave();
+            }
+        }
+
+        /// <summary>
+        /// Whether the NEXT save should leave a backup. False for exactly one save: the defaults written when
+        /// no backup could be read, which must not become the newest backup. (#785)
+        /// </summary>
+        private bool _backupNextSave = true;
+
+        /// <summary>The directory holding timestamped copies of previously-saved settings. (#785)</summary>
+        private string BackupDirectory => Path.Combine(_settingsDirectory, "settings-backups");
+
+        /// <summary>Backups, newest first. Empty when there are none or the directory cannot be read.</summary>
+        internal string[] GetBackupFilePaths()
+        {
+            try
+            {
+                // UTC: a local clock moved backwards, or a DST fall-back, would otherwise make a newer backup
+                // sort as older — and the walk restores the first one it can read. (fable)
+                return Directory.GetFiles(BackupDirectory, "settings-*.json")
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        /// <summary>
+        /// Keep a timestamped copy of a successful save, and prune old ones. Best-effort throughout: losing a
+        /// backup is a smaller failure than losing the save it was taken from. (#785)
+        /// </summary>
+        private async Task WriteBackupAsync(string json)
+        {
+            try
+            {
+                Directory.CreateDirectory(BackupDirectory);
+                var path = Path.Combine(
+                    BackupDirectory, $"settings-{DateTime.Now:yyyyMMdd-HHmmss-fff}.json");
+                await File.WriteAllTextAsync(path, json).ConfigureAwait(false);
+
+                var kept = GetBackupFilePaths()
+                    .Select(p => (path: p, when: File.GetLastWriteTime(p)))
+                    .ToList();
+                foreach (var stale in ApplicationStateService.SelectBackupsToDelete(kept))
+                {
+                    try { File.Delete(stale); } catch { /* best effort */ }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Could not write a settings backup");
+            }
+        }
+
+        /// <summary>
+        /// Walk the backups newest-first and load the first one that reads, migrating and sanitizing it
+        /// exactly as the primary file would be. (#785)
+        ///
+        /// <para><b>This is the half that actually fixes #785.</b> Moving the unreadable file aside stops the
+        /// destruction, but a file named <c>settings.unreadable-...json</c> in the application support
+        /// directory is a rescue only someone who wrote this code would ever find — by the time a reader
+        /// thought to look they would have rebuilt their configuration by hand, which is exactly what
+        /// happened. Recovering automatically means they never learn the word.</para>
+        ///
+        /// <para>A backup is written in the same shape as the primary file, so a persisted-TYPE change breaks
+        /// every one of them at once and this walk finds nothing. That is not a reason to skip it — it is why
+        /// the load-what-the-previous-version-wrote fixtures (#787) are its complement rather than its
+        /// alternative.</para>
+        /// </summary>
+        private async Task<bool> TryLoadFromBackupAsync()
+        {
+            foreach (var path in GetBackupFilePaths())
+            {
+                try
+                {
+                    var loaded = JsonSerializer.Deserialize<Settings>(
+                        await File.ReadAllTextAsync(path).ConfigureAwait(false), _jsonOptions);
+                    if (loaded == null) continue;
+
+                    // The same repairs the primary file gets, and reported the same way. A restore that
+                    // silently dropped connections or models — Sanitize does remove id-less ones — would look
+                    // identical to one that lost nothing. (fable)
+                    foreach (var note in SettingsValidator.Migrate(loaded))
+                        _logger.Information("Settings migration (from backup): {Note}", note);
+                    foreach (var fix in SettingsValidator.Sanitize(loaded))
+                        _logger.Warning("Settings sanitized (from backup): {Fix}", fix);
+
+                    _settings = loaded;
+                    try { ApplyFirstRunDefaults(); } catch { /* see the load path */ }
+
+                    // The timestamp, and no claim beyond it. The newest READABLE backup can be older than the
+                    // file that failed — a shape change breaks the recent ones first — so "nothing was lost"
+                    // would be a guess stated as a fact. (fable)
+                    _logger.Information(
+                        "Settings were restored from the backup taken at {Taken}.",
+                        File.GetLastWriteTime(path));
+
+                    // Written back NOW, not on the debounce timer. Until the primary file exists again the
+                    // recovery is only in memory, and a crash or force-quit in that window sends the next
+                    // launch down the no-file path — which is why that path now checks the backups too, but
+                    // the fix belongs here first: a restore that has to survive a race to count is not a
+                    // restore. (fable)
+                    await SaveSettingsAsync().ConfigureAwait(false);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "Settings backup at {Path} could not be read either; trying the next", path);
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Moves an unreadable settings file aside so the defaults written next cannot destroy it. (#785)
+        ///
+        /// <para>Timestamped rather than a single <c>.bak</c>: a second failed start would otherwise overwrite
+        /// the copy holding the reader's real configuration with a copy of the defaults that replaced it,
+        /// which is the same loss one step removed.</para>
+        ///
+        /// <para>Never throws. It runs inside the load's catch, and a failure to preserve must not become a
+        /// failure to start — the reader would then have neither their settings nor an application.</para>
+        /// </summary>
+        private void PreserveUnreadable()
+        {
+            try
+            {
+                if (!File.Exists(_settingsFilePath)) return;
+
+                var kept = Path.Combine(
+                    _settingsDirectory,
+                    // Milliseconds, matching the backup filenames: two failed loads in the same second would
+                    // otherwise collide, File.Move(overwrite: false) would throw, and the copy holding the
+                    // reader's configuration would be left in place to be overwritten by the next save. (fable)
+                    $"settings.unreadable-{DateTime.Now:yyyyMMdd-HHmmss-fff}.json");
+
+                File.Move(_settingsFilePath, kept, overwrite: false);
+
+                // At Error, beside the failure itself: a reader who has just lost their configuration is
+                // reading this line, and it is the one that tells them it is recoverable.
+                _logger.Error(
+                    "The previous settings file could not be read and has been kept at {Path}. "
+                    + "Defaults are in use; nothing from it was deleted.", kept);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Could not preserve the unreadable settings file");
             }
         }
 
@@ -164,6 +351,11 @@ namespace CST.Avalonia.Services
                 }
 
                 _logger.Information("Settings saved successfully to {Path}", _settingsFilePath);
+
+                // A copy of what we just wrote, so a later build that cannot read it has something to fall
+                // back to. Best-effort: a failure to keep a backup must never fail the save itself. (#785)
+                if (_backupNextSave) await WriteBackupAsync(json).ConfigureAwait(false);
+                _backupNextSave = true;
             }
             catch (Exception ex)
             {
