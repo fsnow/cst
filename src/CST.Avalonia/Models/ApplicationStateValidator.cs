@@ -111,6 +111,15 @@ public static class ApplicationStateValidator
         sd.SelectedTerms ??= new List<string>();
         dd.SourceOrder ??= new List<DictionarySourcePreference>();
 
+        // And the ENTRIES, which coalescing the list does nothing for. `[null]` and `[{"id": null}]` both
+        // reach DictionarySourcePreferenceService.GetRows, which dereferences pref.Id and then hands it to a
+        // dictionary lookup — an NRE and an ArgumentNullException respectively, in the dictionary picker.
+        // Same mechanism as the list itself, one level in. (#787, fable)
+        ob.ExpandedNodeKeys.RemoveAll(string.IsNullOrEmpty);
+        sd.SelectedTerms.RemoveAll(string.IsNullOrEmpty);
+        int badPrefs = dd.SourceOrder.RemoveAll(p => p == null || string.IsNullOrWhiteSpace(p.Id));
+        if (badPrefs > 0) fixes.Add($"removed {badPrefs} dictionary source preference(s) with no id");
+
         // Book windows
         state.BookWindows ??= new List<BookWindowState>();
         int removed = state.BookWindows.RemoveAll(w => w == null || w.BookIndex < 0);
@@ -121,6 +130,8 @@ public static class ApplicationStateValidator
             if (IsBadSize(w.Height)) { w.Height = BookH; fixes.Add($"book window '{w.BookFileName}' height -> {BookH}"); }
             w.SearchTerms ??= new List<string>();
             w.SearchPositions ??= new List<TermPosition>();
+            w.SearchTerms.RemoveAll(string.IsNullOrEmpty);
+            w.SearchPositions.RemoveAll(p => p == null);
             if (IsBadCoord(w.X)) w.X = null;
             if (IsBadCoord(w.Y)) w.Y = null;
             if (string.IsNullOrEmpty(w.WindowId)) { w.WindowId = Guid.NewGuid().ToString(); fixes.Add("book window assigned a new id"); }

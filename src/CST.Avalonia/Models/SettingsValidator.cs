@@ -117,6 +117,11 @@ public static class SettingsValidator
                 connection.Models = new List<AiModelRecord>();
                 fixes.Add($"models list for connection '{connection.Id}' was null; reset to empty");
             }
+            // A null ENTRY is the same mechanism one level in: AiConnectionService.ToRuntime projects every
+            // model unconditionally, so one null in the list breaks the whole connection. (#787, fable)
+            int badModels = connection.Models.RemoveAll(m => m == null || string.IsNullOrWhiteSpace(m.Id));
+            if (badModels > 0)
+                fixes.Add($"removed {badModels} model(s) with no id from connection '{connection.Id}'");
             if (connection.Inputs == null)
             {
                 connection.Inputs = new Dictionary<string, string>();
@@ -128,10 +133,14 @@ public static class SettingsValidator
                 fixes.Add($"headers for connection '{connection.Id}' were null; reset to empty");
             }
         }
-        // A null ENTRY in the list is the same hazard as a null list — ToRuntime would dereference it.
-        int removedConnections = settings.Ai.Chat.Connections.RemoveAll(c => c == null);
+        // A null ENTRY in the list is the same hazard as a null list — ToRuntime would dereference it. So is a
+        // connection with no Id: ToRuntime passes it straight to a dictionary lookup, which throws
+        // ArgumentNullException rather than returning nothing, and an id-less connection cannot be selected,
+        // credentialed or reached in any case. (#787, fable)
+        int removedConnections = settings.Ai.Chat.Connections.RemoveAll(
+            c => c == null || string.IsNullOrWhiteSpace(c.Id));
         if (removedConnections > 0)
-            fixes.Add($"removed {removedConnections} null connection entr(ies)");
+            fixes.Add($"removed {removedConnections} connection(s) with no id");
 
         // (The historical local-API Port/Token scrub is gone with those fields, removed in #280: the port is
         // ephemeral and the token per-session, both held only in local-api.json. A stale value left in an old

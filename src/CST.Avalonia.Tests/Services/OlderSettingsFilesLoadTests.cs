@@ -153,6 +153,27 @@ public sealed class OlderSettingsFilesLoadTests : IDisposable
         Assert.Equal("c1", connection.Id);
     }
 
+    [Fact]
+    public async Task Null_entries_and_id_less_records_are_dropped_rather_than_projected()
+    {
+        // ToRuntime projects every connection and every model unconditionally, and hands each id to a
+        // dictionary lookup — so one null entry, or one record with no id, breaks the whole AI settings page
+        // rather than itself. (#787, fable)
+        var settings = await Load("""
+        {
+          "XmlBooksDirectory": "/books",
+          "Ai": { "Chat": { "Connections": [
+            { "Id": null, "Kind": "openai-compatible", "BaseUrl": "https://example.invalid/v1" },
+            { "Id": "c1", "Kind": "openai-compatible", "BaseUrl": "https://example.invalid/v1",
+              "Models": [ null, { "Id": null }, { "Id": "llama-3.1-8b" } ] } ] } }
+        }
+        """);
+
+        var connection = Assert.Single(settings.Ai.Chat.Connections);
+        Assert.Equal("c1", connection.Id);
+        Assert.Equal("llama-3.1-8b", Assert.Single(connection.Models).Id);
+    }
+
     // ---- files older than the AI work entirely ----
 
     // Beta 5 shipped before any of the AI configuration existed, so its file has no Ai section at all. A
@@ -178,8 +199,13 @@ public sealed class OlderSettingsFilesLoadTests : IDisposable
     [Fact]
     public async Task A_nearly_empty_file_loads_rather_than_being_discarded()
     {
-        var settings = await Load("""{ "Version": "1.0" }""");
+        var settings = await Load("""{ "Version": "1.0", "IndexDirectory": "/idx" }""");
 
+        // A distinctive value, because every other assertion here is also true of a DISCARDED file: defaults
+        // plus first-run defaulting produce a non-null FontSettings, a non-null Ai and a filled
+        // XmlBooksDirectory too. Without this the test could not fail through the path its name denounces.
+        // (fable)
+        Assert.Equal("/idx", settings.IndexDirectory);
         Assert.NotNull(settings.FontSettings);
         Assert.NotNull(settings.Ai);
         // ApplyFirstRunDefaults must still have run: an empty XmlBooksDirectory changes update and indexing

@@ -72,7 +72,18 @@ namespace CST.Avalonia.Services
                         // the app running with a blank books directory, which is the exact state STATE-3
                         // exists to prevent. The call is idempotent: it returns immediately when the
                         // directory is already set, so an ordinary file costs nothing. (#787)
-                        ApplyFirstRunDefaults();
+                        //
+                        // Guarded, because it CREATES a directory. On a read-only or missing parent that
+                        // throws, and inside the try it would carry a perfectly good parsed file into the
+                        // catch below — which discards it. A valid file must never be lost to a failure to
+                        // create somewhere to put books; the app can run with a blank directory and complain,
+                        // and the load path had never thrown for a parseable file before. (fable)
+                        try { ApplyFirstRunDefaults(); }
+                        catch (Exception ex)
+                        {
+                            _logger.Warning(ex,
+                                "Could not create the default XML books directory; settings were still loaded.");
+                        }
 
                         // Persist the upgraded/repaired settings so the on-disk file is brought up to date.
                         if (notes.Count > 0 || fixes.Count > 0)
