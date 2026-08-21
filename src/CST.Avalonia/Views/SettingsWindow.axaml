@@ -518,6 +518,33 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- The in-app assistant — surface B (#585).
+                                     FIRST after the master switch, and above the agent surfaces: it is the
+                                     one most readers will use, and the two tabs beside it are its
+                                     configuration. Deliberately NO temperature control — current Claude
+                                     models reject sampling parameters with a 400. -->
+                                <Border Classes="SettingGroup">
+                                    <StackPanel>
+                                        <TextBlock Text="Assistant" Classes="SettingLabel"/>
+
+                                        <CheckBox IsChecked="{Binding ChatEnabled}"
+                                                 IsEnabled="{Binding SubPermissionsEnabled}"
+                                                 Content="Enable the assistant"
+                                                 Margin="0,10,0,0"/>
+
+                                        <!-- The protocol, the address, the model list and the key all moved to
+                                             the Providers and Models tabs, where they belong to a connection
+                                             rather than to the app (#691/#692/#693). What is left here is what
+                                             is genuinely one-per-app. -->
+                                        <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
+                                        <AutoCompleteBox Text="{Binding AnswerLanguage}"
+                                                        ItemsSource="{Binding AnswerLanguageSuggestions}"
+                                                        IsEnabled="{Binding AssistantFieldsEnabled}"
+                                                        FilterMode="StartsWith"
+                                                        Width="320" HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Access for AI Clients" Classes="SettingLabel"/>
@@ -568,61 +595,15 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- The in-app assistant — surface B (#585).
-                                     Sits under the same master switch as the agent surfaces above: this is a
-                                     third way in, not a separate feature area. Deliberately NO temperature
-                                     control — current Claude models reject sampling parameters with a 400. -->
-                                <Border Classes="SettingGroup">
-                                    <StackPanel>
-                                        <TextBlock Text="Assistant" Classes="SettingLabel"/>
-                                        <TextBlock Text="Ask about the passage you are reading — an explanation, a translation, a grammatical breakdown — answered by a model you choose. Answers are generated text, shown separately from the canonical text, and can be wrong."
-                                                  Classes="SettingDescription"/>
-
-                                        <CheckBox IsChecked="{Binding ChatEnabled}"
-                                                 IsEnabled="{Binding SubPermissionsEnabled}"
-                                                 Content="Enable the assistant"
-                                                 Margin="0,10,0,0"/>
-
-                                        <!-- The protocol and the address moved to the Providers tab, where
-                                             they belong to a connection rather than to the app (#691). What
-                                             is left here is what is still genuinely one-per-app. -->
-                                        <!-- The Model box, the shared API-key box and the per-model Pāli note
-                                             lived here while the assistant had exactly one provider. The
-                                             Providers tab replaced all three (#691/#692/#693), and leaving
-                                             them meant two screens editing the same records by different
-                                             routes: this one wrote settings directly, bypassing validation
-                                             and the change event, and filed keys under whichever connection
-                                             happened to be active - the very mis-filing #678 fixed. Removed
-                                             rather than hidden. (fable review) -->
-
-                                        <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
-                                        <AutoCompleteBox Text="{Binding AnswerLanguage}"
-                                                        ItemsSource="{Binding AnswerLanguageSuggestions}"
-                                                        IsEnabled="{Binding AssistantFieldsEnabled}"
-                                                        FilterMode="StartsWith"
-                                                        Width="320" HorizontalAlignment="Left"/>
-                                        <TextBlock Text="{Binding PaliScriptNote}" Classes="SettingDescription"/>
-
-                                        <!-- §10: state plainly what leaves the machine, on the screen where
-                                             the user decides — not only in the documentation. -->
-                                        <TextBlock Text="What is sent" Classes="SettingLabel" Margin="0,14,0,0"/>
-                                        <TextBlock Text="{Binding PrivacyNote}" Classes="SettingDescription"/>
-
-                                        <TextBlock Text="{Binding ReadinessText}"
-                                                  Classes="SettingDescription"
-                                                  FontWeight="SemiBold"
-                                                  Margin="0,12,0,0"/>
-                                    </StackPanel>
-                                </Border>
                                 </StackPanel>
                               </TabItem>
 
-                              <TabItem Header="Providers">
+                              <TabItem Header="Providers" IsVisible="{Binding ShowConnectionTabs}">
                                 <views:AiProvidersView DataContext="{Binding Connections}"
                                                        Margin="0,12,0,0"/>
                               </TabItem>
 
-                              <TabItem Header="Models">
+                              <TabItem Header="Models" IsVisible="{Binding ShowConnectionTabs}">
                                 <views:AiModelsView DataContext="{Binding Models}"
                                                     Margin="0,12,0,0"/>
                               </TabItem>
