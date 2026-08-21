@@ -2,7 +2,7 @@
 
 **Status:** Living. Seeded 2026-08-10.
 **Owned by:** #587 (surface B evaluation harness). Cited by #584 (model registry and fidelity advisory).
-**Design context:** [AI_SURFACE_B.md](../features/planned/AI_SURFACE_B.md) §7, §13; AI_INTEGRATION.md §11.1.
+**Design context:** [AI_SURFACE_B.md](../features/in-progress/AI_SURFACE_B.md) §7, §13; AI_INTEGRATION.md §11.1.
 
 A set of Pāli questions with authoritative answers, used to evaluate what models actually produce over this
 corpus. It is the fixed eval set #587 runs across model releases, and the evidence base for #584's tier

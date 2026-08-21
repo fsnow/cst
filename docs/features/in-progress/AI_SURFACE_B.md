@@ -1,12 +1,26 @@
-# Surface B — the in-app model, v1 by context injection (Planned)
+# Surface B — the in-app Assistant, v1 by context injection (In progress)
 
-**Status:** In progress. Shipped: B1 (#578, provider layer), B3 (#580, context bundler), B3a (#581, selection
-pipeline), B4 (#582, presets and the grounding contract), B5 (#583, orchestrator), B6 (#584, model registry),
-B9 (#587, evaluation harness), B2 (#579, key storage — **macOS only**), plus the reader-state read path and
-`POST /v1/ai/context-preview` (#593). **The chain now runs end to end** — a live Translate turn against the real
-corpus and a real model works — but nothing is user-visible until the Settings UI (B7, #585) and the panel
-(B8, #586) exist.
-**Parent:** [AI_INTEGRATION.md](AI_INTEGRATION.md) — the design of record for the A–E surface map. §11.1 there
+**Status:** In progress, and **the headline feature of beta 6**. The whole B1–B9 chain has shipped and is
+user-visible: provider layer (#578), key storage (#579, macOS **and** Windows), context bundler (#580),
+selection pipeline (#581), presets and the grounding contract (#582), orchestrator (#583), evaluation
+harness (#587), **Settings UI (#585)** and **the Assistant panel (#586)**, plus the reader-state read path
+and `POST /v1/ai/context-preview` (#593).
+
+**Two things this document's older status paragraph got wrong, kept here because they are easy to re-derive
+incorrectly from the section numbering below:**
+
+- **B6, the model registry (#584), was built and then deliberately removed** (#670). Pāli ability is
+  emergent and not predicted by benchmarks or model size, so a table of our own model judgements was the
+  wrong artifact at any level of care. Provider-published capability shown verbatim replaced it.
+- **The scalar provider model B7 shipped with is gone.** #689 replaced one provider / one base URL / one
+  model / one credential with a list of **connections**, a per-connection model list, and a per-turn picker
+  (#678, #691, #692, #693, #674), fed by the models.dev catalogue (#736, #737, #739, #740).
+
+**Open against this surface for beta 6:** #711 (connection headers), #742 (base-URL versioning), #728
+(models removed by a provider), #759 (credential storage format), #671 (reasoning effort), #672 (context
+budget). The verification gap — #676, #677, #675, #651 — is tracked separately and is not beta 6 scope.
+
+**Parent:** [AI_INTEGRATION.md](../planned/AI_INTEGRATION.md) — the design of record for the A–E surface map. §11.1 there
 states the decided model-access *policy*; this document is the *implementation plan* for B.
 **Tracker:** epic #186 → children #578–#587 (filed 2026-08-09; the per-item numbers are in §12).
 **Prompted by:** Antonio's July 2026 question — *"do you have any plans to support DeepSeek as an AI provider
