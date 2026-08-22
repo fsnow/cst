@@ -411,8 +411,14 @@ hold-back filter — the same hazard as the think-tag filter, and the same failu
   discarded as it is read. Nothing is written to disk, and the log records a count, never a name and never a
   value. An ordinary launch — no AI features, no adopted connection — runs no shell at all.
 
+  A checkbox on the Providers tab controls this, on by default and absent on Windows (#820). Unticking it
+  releases the snapshot rather than merely ceasing to consult it, so re-ticking reads the shell again — which
+  also gives a reader who has just edited their profile a way to pick it up without relaunching. Beside it, a
+  line saying what the last look found: how many keys, or that the shell is one we cannot read, or that the
+  profile took too long. Those used to be indistinguishable from having no keys at all.
+
   It is a session snapshot, like the process environment has always been: editing a shell profile takes effect
-  at the next launch. Where the probe cannot run — Windows, which does not need it; `nu`, `csh` and `tcsh`,
+  at the next launch, or at the next tick of that box. Where the probe cannot run — Windows, which does not need it; `nu`, `csh` and `tcsh`,
   whose flags do not mean what this needs; or a profile slow enough to hit the five-second timeout — behaviour
   falls back to reading this process's own environment, and the two workarounds are `launchctl setenv NAME
   value` (which publishes the value to every process in the login session, worth knowing before using it) or

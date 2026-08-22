@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
 using CST.Avalonia.Services.Ai.Credentials;
 using ReactiveUI;
@@ -38,6 +39,8 @@ namespace CST.Avalonia.ViewModels
         private readonly IAiProviderLogos? _logos;
         private readonly IAiEnvironmentKeys? _environmentKeys;
         private readonly IShellEnvironment? _shellEnvironment;
+        private readonly ISettingsService? _settings;
+        private bool _readLoginShellEnvironment = true;
         private AiConnectionEditorViewModel? _editor;
         private bool _disposed;
         private string? _problem;
@@ -49,13 +52,16 @@ namespace CST.Avalonia.ViewModels
             IAiCredentialStore? credentials = null,
             IAiProviderLogos? logos = null,
             IAiEnvironmentKeys? environmentKeys = null,
-            IShellEnvironment? shellEnvironment = null)
+            IShellEnvironment? shellEnvironment = null,
+            ISettingsService? settings = null)
         {
             _service = service;
             _credentials = credentials;
             _logos = logos;
             _environmentKeys = environmentKeys;
             _shellEnvironment = shellEnvironment;
+            _settings = settings;
+            _readLoginShellEnvironment = settings?.Settings?.Ai?.ReadLoginShellEnvironment ?? true;
 
             AddCustomCommand = ReactiveCommand.Create(AddCustom);
             RetryCatalogueCommand = ReactiveCommand.CreateFromTask(RetryCatalogueAsync);
@@ -71,14 +77,97 @@ namespace CST.Avalonia.ViewModels
             // idempotent, so the common case where startup already primed costs a field read. (#817)
             if (_shellEnvironment is not null)
             {
-                _shellEnvironment.Prime();
-
                 // Progressive disclosure, the same shape the catalogue already uses: rows appear when the
-                // probe lands rather than the window waiting for it. Fire-and-forget by design — Completion
-                // never faults, and there is nothing to report if it finds nothing.
-                _shellEnvironment.Completion.ContinueWith(
-                    _ => Dispatcher.UIThread.Post(() => { if (!_disposed) Rebind(); }),
-                    TaskScheduler.Default);
+                // probe lands rather than the window waiting for it.
+                //
+                // The event rather than a continuation on Completion (#820): a continuation is bound to one
+                // probe, and the reader can now retire that probe and start another by toggling the control.
+                _shellEnvironment.Probed += OnShellProbed;
+
+                if (_readLoginShellEnvironment) _shellEnvironment.Prime();
+            }
+        }
+
+        private void OnShellProbed(object? sender, EventArgs e) =>
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_disposed) return;
+                Rebind();
+                this.RaisePropertyChanged(nameof(ShellEnvironmentStatusText));
+            });
+
+        /// <summary>
+        /// Whether to read API keys from the login shell. (#820)
+        ///
+        /// <para><b>Turning it off releases the snapshot; turning it back on reads the shell again.</b> There
+        /// is deliberately nothing kept to restore — keeping a reader's keys in memory after being told to
+        /// stop reading them would obey the instruction and miss its point — so the cost of a toggle is one
+        /// login shell, which is the right price for a deliberate act.</para>
+        /// </summary>
+        public bool ReadLoginShellEnvironment
+        {
+            get => _readLoginShellEnvironment;
+            set
+            {
+                if (_readLoginShellEnvironment == value) return;
+                this.RaiseAndSetIfChanged(ref _readLoginShellEnvironment, value);
+
+                if (_settings?.Settings?.Ai is { } ai)
+                {
+                    ai.ReadLoginShellEnvironment = value;
+                    _settings.RequestSave();
+                }
+
+                if (value) _shellEnvironment?.Prime();
+                else _shellEnvironment?.Forget();
+
+                // Forget raises Probed too, so the rows and the sentence both follow from the same signal.
+                this.RaisePropertyChanged(nameof(ShellEnvironmentStatusText));
+            }
+        }
+
+        /// <summary>
+        /// Hidden on Windows rather than shown disabled: Windows inherits its environment normally, so the
+        /// lookup is unnecessary there rather than unavailable, and a greyed control invites the reader to
+        /// ask why they cannot turn it on. (#820)
+        /// </summary>
+        public bool ShowShellEnvironmentControl =>
+            _shellEnvironment is not null && !OperatingSystem.IsWindows();
+
+        /// <summary>
+        /// What happened when the login shell was consulted, in a sentence. (#820)
+        ///
+        /// <para>This exists because until now the probe had nowhere to report itself: a shell skipped by
+        /// name, a profile that timed out and an environment holding no provider key all showed the reader
+        /// the same empty section. Each of these is something they can act on.</para>
+        /// </summary>
+        public string ShellEnvironmentStatusText
+        {
+            get
+            {
+                if (_shellEnvironment is null || !_readLoginShellEnvironment) return "";
+
+                var status = _shellEnvironment.Status;
+                var shell = string.IsNullOrWhiteSpace(status.ShellName) ? "your login shell" : status.ShellName;
+
+                return status.State switch
+                {
+                    ShellEnvironmentState.Running => "Looking in your login shell…",
+                    ShellEnvironmentState.ShellNotSupported =>
+                        $"Your shell ({shell}) isn't supported here, so keys exported from your profile "
+                        + "can't be seen.",
+                    ShellEnvironmentState.TimedOut =>
+                        "Your shell profile took too long to load, so it was skipped.",
+                    ShellEnvironmentState.Failed =>
+                        "Your login shell couldn't be read, so keys exported from your profile can't be seen.",
+                    ShellEnvironmentState.Completed when status.RetainedCount == 1 =>
+                        $"Looked in your login shell ({shell}) — found 1 key.",
+                    ShellEnvironmentState.Completed when status.RetainedCount > 1 =>
+                        $"Looked in your login shell ({shell}) — found {status.RetainedCount} keys.",
+                    ShellEnvironmentState.Completed =>
+                        $"Looked in your login shell ({shell}) — no provider keys there.",
+                    _ => "",
+                };
             }
         }
 
@@ -445,6 +534,7 @@ namespace CST.Avalonia.ViewModels
             // window comes back to life holding a dead service. (#817)
             _disposed = true;
             if (_service is not null) _service.ConnectionsChanged -= OnConnectionsChanged;
+            if (_shellEnvironment is not null) _shellEnvironment.Probed -= OnShellProbed;
         }
 
         /// <summary>
