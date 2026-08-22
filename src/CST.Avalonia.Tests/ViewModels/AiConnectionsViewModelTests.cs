@@ -8,6 +8,7 @@ using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using CST.Avalonia.ViewModels;
 using Moq;
 using Xunit;
@@ -801,6 +802,194 @@ public class AiConnectionsViewModelTests
             Assert.InRange(tone, 0, AiMonogram.ToneCount - 1);
             Assert.Equal(tone, AiMonogram.ToneFor(id));
         }
+    }
+
+    // ---- keys the environment already holds (#714) -------------------------------------------------------
+
+    /// <summary>An environment holding exactly the variables a test names.</summary>
+    private static IAiEnvironmentKeys Env(params string[] set)
+    {
+        var present = new HashSet<string>(set, StringComparer.Ordinal);
+        return new AiEnvironmentKeys(name => present.Contains(name) ? "sk-not-rendered-anywhere" : null);
+    }
+
+    private static AiProviderPreset EnvPreset(
+        string id, string display, string[] variables, IReadOnlyList<AiInputPrompt>? prompts = null) =>
+        new(id, display, ChatProviderKind.OpenAiCompatible, "https://" + id + ".example/v1",
+            new List<AiCredentialMethod> { new AiCredentialMethod.Env(variables) },
+            Prompts: prompts);
+
+    private static (AiConnectionsViewModel Vm, AiConnectionService Service) MakeWithEnv(
+        IAiEnvironmentKeys env, params AiProviderPreset[] presets)
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var keys = new FakeCredentialStore();
+        var source = new StubPresets(AiPresetState.Ready, null, presets);
+        var service = new AiConnectionService(svc.Object, keys, source, env);
+        return (new AiConnectionsViewModel(service, keys, null, env), service);
+    }
+
+    /// <summary>A provider whose variable is set is offered — by NAME, and with nothing adopted yet.</summary>
+    [Fact]
+    public void A_provider_whose_variable_is_set_is_offered_but_not_adopted()
+    {
+        var (vm, service) = MakeWithEnv(
+            Env("OPENAI_API_KEY"), EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }));
+
+        var row = Assert.Single(vm.FoundKeys);
+        Assert.True(vm.HasFoundKeys);
+        Assert.Equal("OpenAI", row.DisplayName);
+        Assert.Equal("Key in OPENAI_API_KEY", row.VariableText);
+
+        // Discovery alone creates nothing. This is the whole difference from the behaviour that prompted the
+        // issue: a provider connected without the reader ever choosing it.
+        Assert.Empty(service.Connections);
+    }
+
+    /// <summary>The value never reaches the row. The variable's name is the whole of what is carried.</summary>
+    [Fact]
+    public void The_key_itself_is_never_carried_into_the_row()
+    {
+        var (vm, _) = MakeWithEnv(
+            Env("OPENAI_API_KEY"), EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }));
+
+        var row = Assert.Single(vm.FoundKeys);
+        var rendered = string.Join("|", row.DisplayName, row.VariableName, row.VariableText, row.Monogram);
+        Assert.DoesNotContain("sk-not-rendered-anywhere", rendered, StringComparison.Ordinal);
+    }
+
+    /// <summary>Nothing set, nothing offered — and no empty section explaining an absence.</summary>
+    [Fact]
+    public void An_environment_holding_nothing_offers_nothing()
+    {
+        var (vm, _) = MakeWithEnv(Env(), EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }));
+
+        Assert.Empty(vm.FoundKeys);
+        Assert.False(vm.HasFoundKeys);
+    }
+
+    /// <summary>
+    /// Absence of a variable is never rendered as absence of a credential. Bedrock authenticates through the
+    /// whole AWS chain — ~/.aws/credentials, SSO, instance roles — so "no key found" would be confidently
+    /// wrong exactly where it is most likely to be in use (#702). The section can only ADD a row for
+    /// something present, so there is no shape in which it can say that.
+    /// </summary>
+    [Fact]
+    public void A_provider_with_no_variable_set_gets_no_row_at_all_rather_than_a_negative_one()
+    {
+        var (vm, _) = MakeWithEnv(
+            Env("OPENAI_API_KEY"),
+            EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }),
+            EnvPreset("amazon-bedrock", "Amazon Bedrock", new[] { "AWS_ACCESS_KEY_ID" }));
+
+        var row = Assert.Single(vm.FoundKeys);
+        Assert.Equal("openai", row.Id);
+    }
+
+    /// <summary>Pressing the button is what adopts it — and the opt-in is what gets recorded.</summary>
+    [Fact]
+    public void Using_a_found_key_adopts_it_and_records_the_opt_in()
+    {
+        var (vm, service) = MakeWithEnv(
+            Env("OPENAI_API_KEY"), EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }));
+
+        Assert.Single(vm.FoundKeys).UseCommand.Execute().Subscribe();
+
+        var connection = Assert.Single(service.Connections);
+        Assert.Equal("openai", connection.Id);
+        Assert.Equal(CredentialSource.Environment, connection.KeySource);
+
+        // The variable the reader was SHOWN is the one recorded. Re-deriving it from the preset on each
+        // request would let a models.dev reordering change which credential a recorded connection uses,
+        // months later and with no second consent — the very thing this feature exists to prevent, arriving
+        // late instead of at the start. (fable, on #813)
+        Assert.Equal("OPENAI_API_KEY", connection.EnvironmentVariable);
+
+        // And it leaves the offer list, because it is no longer an available preset.
+        Assert.Empty(vm.FoundKeys);
+    }
+
+    /// <summary>
+    /// A preset that needs an answer cannot be adopted in one click, so it opens the sheet rather than
+    /// failing. Azure wants a resource name and Cloudflare an account id, and both declare environment
+    /// variables — adopting either without asking would create a connection whose address still has a hole
+    /// in it.
+    /// </summary>
+    [Fact]
+    public void A_provider_that_needs_an_answer_opens_the_sheet_instead_of_adopting_blind()
+    {
+        var (vm, service) = MakeWithEnv(
+            Env("AZURE_API_KEY"),
+            EnvPreset("azure", "Azure", new[] { "AZURE_API_KEY" },
+                new List<AiInputPrompt> { new("resourceName", "Resource name") }));
+
+        Assert.Single(vm.FoundKeys).UseCommand.Execute().Subscribe();
+
+        Assert.NotNull(vm.Editor);
+        Assert.Empty(service.Connections);
+        Assert.Null(vm.Problem);
+    }
+
+    /// <summary>
+    /// A provider the reader has already configured is not offered, whatever their environment holds. That
+    /// decision is made, and re-offering it would be the nagging this section is shaped to avoid.
+    /// </summary>
+    [Fact]
+    public void An_already_configured_provider_is_not_offered()
+    {
+        var (vm, service) = MakeWithEnv(
+            Env("OPENAI_API_KEY"), EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }));
+
+        // No manual refresh: adding raises ConnectionsChanged, which is what the tab binds to.
+        service.AddFromPreset("openai", new Dictionary<string, string>());
+
+        Assert.Empty(vm.FoundKeys);
+    }
+
+    /// <summary>
+    /// The section is not filtered by the catalogue search. Typing to find a provider must not take away the
+    /// block that says a key for it is already on the machine.
+    /// </summary>
+    [Fact]
+    public void Searching_the_catalogue_does_not_hide_a_found_key()
+    {
+        var (vm, _) = MakeWithEnv(
+            Env("OPENAI_API_KEY"), EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }));
+
+        vm.PresetSearch = "something that matches no provider";
+
+        Assert.Single(vm.FoundKeys);
+        Assert.True(vm.HasFoundKeys);
+    }
+
+    /// <summary>
+    /// A variable unset between one look and the next stops being offered, rather than lingering from a
+    /// cached answer. Reading the environment fresh on every rebind is what makes that true.
+    /// </summary>
+    [Fact]
+    public void A_variable_that_disappears_stops_being_offered()
+    {
+        var present = new HashSet<string>(StringComparer.Ordinal) { "OPENAI_API_KEY" };
+        var env = new AiEnvironmentKeys(name => present.Contains(name) ? "sk-x" : null);
+
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var keys = new FakeCredentialStore();
+        var service = new AiConnectionService(
+            svc.Object, keys,
+            new StubPresets(AiPresetState.Ready, null, EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" })),
+            env);
+        var vm = new AiConnectionsViewModel(service, keys, null, env);
+
+        Assert.Single(vm.FoundKeys);
+
+        present.Clear();
+        vm.PresetSearch = " ";   // any rebind will do; this is one a reader can cause
+
+        Assert.Empty(vm.FoundKeys);
     }
 }
 

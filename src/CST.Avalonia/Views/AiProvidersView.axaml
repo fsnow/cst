@@ -177,6 +177,53 @@
 
             <!-- Add a provider -->
             <TextBlock Text="Add a provider" Classes="SettingLabel" FontWeight="SemiBold"/>
+            <!-- Keys this machine already holds. Above the search box on purpose: the reader this exists for
+                 is the one who does NOT know the variable is set, and they will never search for it. Shown
+                 only when something was found, so a reader with a clean environment sees nothing at all
+                 rather than an empty section explaining an absence. (#714) -->
+            <StackPanel IsVisible="{Binding HasFoundKeys}" Margin="0,0,0,16">
+                <TextBlock Text="Found in your environment" Classes="SettingLabel"/>
+                <TextBlock Text="These providers can use a key your machine already has. Nothing uses one until you say so, and the key stays where it is — it is never copied into this app."
+                           Classes="SettingDescription" Margin="0,2,0,8"/>
+
+                <Border Classes="SettingGroup" Padding="0">
+                    <ItemsControl ItemsSource="{Binding FoundKeys}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AiEnvironmentRowViewModel">
+                                <Border Classes="Row">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+
+                                        <Panel Grid.Column="0" Width="28" Height="28" Margin="0,1,12,0"
+                                               VerticalAlignment="Top">
+                                            <Border Classes="Tile" Margin="0"
+                                                    IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}, ConverterParameter=invert}"
+                                                    Background="{Binding MonogramTone,
+                                                        Converter={x:Static conv:MonogramToneConverter.Instance}}">
+                                                <TextBlock Text="{Binding Monogram}"/>
+                                            </Border>
+                                            <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
+                                                   Source="{Binding LogoPath,
+                                                       Converter={x:Static conv:ProviderLogoConverter.Instance}}"
+                                                   Stretch="Uniform" Margin="2"/>
+                                        </Panel>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                            <!-- The variable's NAME. Never its value. -->
+                                            <TextBlock Text="{Binding VariableText}" Classes="Secondary"/>
+                                        </StackPanel>
+
+                                        <Button Grid.Column="2" Content="Use it"
+                                                Command="{Binding UseCommand}"
+                                                VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </StackPanel>
+
             <!-- The hosted catalogue. Named when it is missing rather than rendered as an empty section: an
                  empty list reads as a broken feature, a sentence with a Retry reads as weather. -->
             <StackPanel IsVisible="{Binding HasCatalogueProblem}" Margin="0,0,0,16">
