@@ -212,8 +212,11 @@ namespace CST.Avalonia.Services.Ai
             // Adopted from the environment, and the variable still holds something. When it does not — unset
             // between sessions, or renamed — this falls through to None, which reads as "no key" rather than
             // as an error, because that is what it is.
+            // IdMatches, not Ordinal — one rule for id comparison in this file. The split it avoids is the
+            // mechanism behind #805, where the resolver comparing Ordinal against this service's
+            // OrdinalIgnoreCase sends a model to the wrong connection. (kestrel-cst-2)
             var record = Chat.Connections.FirstOrDefault(
-                r => r is not null && string.Equals(r.Id, connectionId, StringComparison.Ordinal));
+                r => r is not null && IdMatches(r.Id, connectionId));
             if (record is { UsesEnvironmentKey: true } && EnvironmentKeyFor(record) is not null)
                 return CredentialSource.Environment;
 
