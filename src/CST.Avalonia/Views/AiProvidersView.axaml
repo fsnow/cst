@@ -177,6 +177,28 @@
 
             <!-- Add a provider -->
             <TextBlock Text="Add a provider" Classes="SettingLabel" FontWeight="SemiBold"/>
+            <!-- Where discovery is allowed to look, and what it found. (#820)
+
+                 A SIBLING of the found-keys block below, never nested inside it. That block hides when it is
+                 empty, and the sentence here is at its most useful in exactly that case — a shell skipped by
+                 name, a profile that timed out, an environment holding no provider key. Nested, the one
+                 state worth explaining could never be shown, which is #817's own complaint one layer up.
+
+                 Hidden on Windows rather than shown disabled: Windows inherits its environment normally, so
+                 the lookup is unnecessary there rather than unavailable. -->
+            <StackPanel IsVisible="{Binding ShowShellEnvironmentControl}" Margin="0,0,0,16">
+                <CheckBox IsChecked="{Binding ReadLoginShellEnvironment}"
+                          Content="Look for API keys in your login shell"/>
+                <!-- The consent is for the action, not the mechanism, so the description leads with what it
+                     does to the reader's machine. The last sentence answers the question the toggle raises
+                     and would otherwise answer later, as a connection failing for no visible reason. -->
+                <TextBlock Text="Apps opened from Finder don't inherit the environment your shell sets up, so keys exported from ~/.zshrc or ~/.bash_profile are invisible. Runs your shell profile once at startup. Connections using a key found this way stop working while this is off."
+                           Classes="SettingDescription" Margin="0,2,0,0"/>
+                <TextBlock Text="{Binding ShellEnvironmentStatusText}"
+                           IsVisible="{Binding ShellEnvironmentStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Classes="SettingDescription" Margin="0,6,0,0"/>
+            </StackPanel>
+
             <!-- Keys this machine already holds. Above the search box on purpose: the reader this exists for
                  is the one who does NOT know the variable is set, and they will never search for it. Shown
                  only when something was found, so a reader with a clean environment sees nothing at all
