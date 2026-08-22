@@ -31,11 +31,29 @@ public sealed class DictionaryRetryTests : IDisposable
 {
     private readonly string _root;
 
+    // The real install paths, sampled around EVERY test in this class.
+    //
+    // A per-test assertion would only have covered the test that wrote it, and the incident this guards
+    // against was a shared fixture helper — the one place a per-test check does not look. Sampling in the
+    // constructor and verifying in Dispose means any test here that reaches the real user data directory, by
+    // any route, fails the class. (#773, fable)
+    private static readonly string[] RealPaths =
+        { DpdUpdateService.DpdSubsetPath, DpdUpdateService.DppnLexiconPath };
+
+    private readonly string[] _realBefore;
+
     public DictionaryRetryTests()
     {
         _root = Path.Combine(Path.GetTempPath(), $"dict-retry-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_root);
+        _realBefore = RealPaths.Select(Snapshot).ToArray();
     }
+
+    // Existence, size and last-write time: enough to catch a file created, replaced or truncated.
+    private static string Snapshot(string path) =>
+        File.Exists(path)
+            ? $"{path}|{File.GetLastWriteTimeUtc(path):O}|{new FileInfo(path).Length}"
+            : $"{path}|absent";
 
     private DpdUpdateService Service(bool automaticUpdates = true, string? repositoryOwner = null)
     {
@@ -45,13 +63,20 @@ public sealed class DictionaryRetryTests : IDisposable
             DpdUpdateSettings = new DpdUpdateSettings
             {
                 EnableAutomaticUpdates = automaticUpdates,
-                // An address that cannot resolve, so a run that DOES reach the network fails fast and
-                // locally — no real request, and nothing that could install anything.
-                RepositoryOwner = repositoryOwner ?? "invalid.invalid",
+                RepositoryOwner = repositoryOwner ?? "no-such-owner",
                 RepositoryName = "no-such-repository",
             }
         });
-        return new DpdUpdateService(NullLogger<DpdUpdateService>.Instance, settings.Object, _root);
+        // Pointed at a closed local port, so no test here reaches the network.
+        //
+        // The previous version used a repository owner of "invalid.invalid" and a comment claiming that could
+        // not resolve. It is a PATH SEGMENT, not a host: Octokit still called api.github.com and took a 404,
+        // six times per suite run, against a shared unauthenticated rate limit. The tests were green and the
+        // isolation claim was false — which is worse than being obviously online, because nobody looks again.
+        // (fable)
+        return new DpdUpdateService(
+            NullLogger<DpdUpdateService>.Instance, settings.Object, _root,
+            gitHubBaseAddress: new Uri("http://127.0.0.1:1/"));
     }
 
     // ---- the retry ----
@@ -62,15 +87,17 @@ public sealed class DictionaryRetryTests : IDisposable
         BuildDpd();
         BuildDppn();
         var svc = Service();
+        var status = new System.Collections.Concurrent.ConcurrentBag<string>();
+        svc.StatusChanged += m => status.Add(m);
 
         await svc.RetryMissingAsync();
 
-        // A run would have reconciled and recorded nothing (both files exist), so the failure set cannot
-        // distinguish the two. IsBusy would; but the real evidence is that a run against an unresolvable host
-        // takes network time, and this returns synchronously fast. Assert the observable consequence instead:
-        // nothing was attempted, so nothing is reported as failed and no work is in flight.
-        Assert.False(svc.IsBusy);
-        Assert.Empty(svc.FailedAssetIds);
+        // StatusChanged is the discriminator, and it has to be: with both files present a run that DID happen
+        // would reconcile and record nothing, so the failure set cannot tell the two apart, and IsBusy is
+        // false after the await either way. The first thing a run does is announce "Checking for dictionary
+        // data updates..." — so silence is proof the early return fired. The previous version asserted those
+        // two proxies and passed under exactly the mutation it existed to catch. (fable)
+        Assert.Empty(status);
     }
 
     // The heart of #773: a missing asset means the retry DOES run — and a run that fails records the failure.
@@ -154,19 +181,6 @@ public sealed class DictionaryRetryTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_root, "dpd-cst-subset", "dpd-cst-subset.db")));
     }
 
-    [Fact]
-    public void Nothing_is_written_outside_the_root_it_was_given()
-    {
-        // The failure this replaces was a fixture planting fake dictionaries in a real user's data directory,
-        // where an empty-but-openable database becomes a source the picker lists and which answers nothing.
-        BuildDpd();
-        BuildDppn();
-
-        var written = Directory.GetFiles(_root, "*.db", SearchOption.AllDirectories);
-        Assert.Equal(2, written.Length);
-        Assert.All(written, f => Assert.StartsWith(_root, f, StringComparison.Ordinal));
-    }
-
     // ---- fixtures, all under _root ----
 
     private void BuildDpd()
@@ -210,5 +224,9 @@ public sealed class DictionaryRetryTests : IDisposable
     {
         SqliteConnection.ClearAllPools();
         try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
+
+        // Fails the test that just ran if anything here touched a real dictionary — created, replaced or
+        // truncated. After the temp cleanup, so a failure does not leak the temp dir too.
+        Assert.Equal(_realBefore, RealPaths.Select(Snapshot).ToArray());
     }
 }

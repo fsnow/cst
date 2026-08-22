@@ -37,10 +37,17 @@ public sealed class DpdUpdateService : IDpdUpdateService
     // The installed asset paths (must match the DI wiring in App.axaml.cs). Every dictionary — the bundled
     // flat-file ones and these downloaded derived assets alike — lives under <data>/dictionaries/, so the
     // user data directory has one place to look for dictionary content rather than three.
-    public static string DpdSubsetPath =>
-        Path.Combine(AppConstants.DataDirectory, DictionariesDirectoryName, "dpd-cst-subset", "dpd-cst-subset.db");
-    public static string DppnLexiconPath =>
-        Path.Combine(AppConstants.DataDirectory, DictionariesDirectoryName, "dppn", "dppn.db");
+    public static string DpdSubsetPath => RealPath(DpdFolder, DpdFile);
+    public static string DppnLexiconPath => RealPath(DppnFolder, DppnFile);
+
+    // Spelled once. The static paths above and the instance Descriptors below both need them, and if the two
+    // drifted the service would install to one place while the app opened another — a split no compiler can
+    // catch and no test would notice, because each half would be self-consistent. (#773, fable)
+    private const string DpdFolder = "dpd-cst-subset", DpdFile = "dpd-cst-subset.db";
+    private const string DppnFolder = "dppn", DppnFile = "dppn.db";
+
+    private static string RealPath(string folder, string file) =>
+        Path.Combine(AppConstants.DataDirectory, DictionariesDirectoryName, folder, file);
 
     /// <summary>The single root every dictionary lives under, shared with <see cref="DictionaryService"/>.</summary>
     internal const string DictionariesDirectoryName = "dictionaries";
@@ -130,12 +137,19 @@ public sealed class DpdUpdateService : IDpdUpdateService
     /// able to do that. (#773)</para>
     /// </summary>
     internal DpdUpdateService(
-        ILogger<DpdUpdateService> logger, ISettingsService settings, string? dictionariesRoot)
+        ILogger<DpdUpdateService> logger, ISettingsService settings, string? dictionariesRoot,
+        Uri? gitHubBaseAddress = null)
     {
         _dictionariesRoot = dictionariesRoot;
         _logger = logger;
         _settings = settings;
-        _github = new GitHubClient(new ProductHeaderValue(AppConstants.UserAgent));
+        // A test that wants no network needs somewhere unreachable to point at, and a bad REPOSITORY name is
+        // not that: the owner and name are path segments, so Octokit still resolves api.github.com and issues
+        // a real request that happens to 404. The tests looked isolated and were spending a shared rate limit.
+        // (#773, fable)
+        _github = gitHubBaseAddress is null
+            ? new GitHubClient(new ProductHeaderValue(AppConstants.UserAgent))
+            : new GitHubClient(new ProductHeaderValue(AppConstants.UserAgent), gitHubBaseAddress);
         _http = new HttpClient();
         _http.DefaultRequestHeaders.Add("User-Agent", AppConstants.UserAgent);
     }
@@ -145,14 +159,12 @@ public sealed class DpdUpdateService : IDpdUpdateService
     // gzip). Reading the version differs per asset (DPD's lemma db vs a lexicon), which is why it's a descriptor.
     private IReadOnlyList<AssetDescriptor> Descriptors => new[]
     {
-        new AssetDescriptor("dpd", PathFor("dpd-cst-subset", "dpd-cst-subset.db"), ReadDpdVersion, ProbeDpdUsable),
-        new AssetDescriptor("dppn", PathFor("dppn", "dppn.db"), ReadLexiconVersion, ProbeLexiconUsable),
+        new AssetDescriptor("dpd", PathFor(DpdFolder, DpdFile), ReadDpdVersion, ProbeDpdUsable),
+        new AssetDescriptor("dppn", PathFor(DppnFolder, DppnFile), ReadLexiconVersion, ProbeLexiconUsable),
     };
 
     private string PathFor(string folder, string file) =>
-        _dictionariesRoot is null
-            ? Path.Combine(AppConstants.DataDirectory, DictionariesDirectoryName, folder, file)
-            : Path.Combine(_dictionariesRoot, folder, file);
+        _dictionariesRoot is null ? RealPath(folder, file) : Path.Combine(_dictionariesRoot, folder, file);
 
     public async Task CheckAndUpdateAsync(CancellationToken ct = default)
     {
