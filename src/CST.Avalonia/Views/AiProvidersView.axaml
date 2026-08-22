@@ -189,14 +189,9 @@
             <StackPanel IsVisible="{Binding ShowShellEnvironmentControl}" Margin="0,0,0,16">
                 <CheckBox IsChecked="{Binding ReadLoginShellEnvironment}"
                           Content="Look for API keys in your login shell"/>
-                <!-- The consent is for the action, not the mechanism, so the description leads with what it
-                     does to the reader's machine. The last sentence answers the question the toggle raises
-                     and would otherwise answer later, as a connection failing for no visible reason. -->
-                <TextBlock Text="Apps opened from Finder don't inherit the environment your shell sets up, so keys exported from ~/.zshrc or ~/.bash_profile are invisible. Runs your shell profile once at startup. Connections using a key found this way stop working while this is off."
-                           Classes="SettingDescription" Margin="0,2,0,0"/>
                 <TextBlock Text="{Binding ShellEnvironmentStatusText}"
                            IsVisible="{Binding ShellEnvironmentStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Classes="SettingDescription" Margin="0,6,0,0"/>
+                           Classes="SettingDescription" Margin="0,4,0,0"/>
             </StackPanel>
 
             <!-- Keys this machine already holds. Above the search box on purpose: the reader this exists for
