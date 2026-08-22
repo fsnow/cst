@@ -315,6 +315,16 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
 
     private async Task LookupAsync(string query)
     {
+        // The other place a reader says they want a dictionary. Opening the panel is the obvious signal and it
+        // is not the only one: a reader whose saved layout keeps this panel docked — the default — never
+        // generates a show request at all, and clicking its tab does not either. They are the readers most
+        // attached to the dictionary and the least likely to trigger the retry, which is a poor thing for a
+        // fix to be true of. Typing a word is unambiguous. (#773, fable)
+        //
+        // Free when nothing is missing: two File.Exists calls, and _busy collapses repeated keystrokes during
+        // a slow failing check into the one run already in flight.
+        _ = _dpdUpdates.RetryMissingAsync();
+
         var source = SelectedSource;   // capture: results are only valid if these still hold on completion
         try
         {
