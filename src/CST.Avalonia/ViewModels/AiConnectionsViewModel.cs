@@ -267,7 +267,10 @@ namespace CST.Avalonia.ViewModels
         /// discovers the gap later and has to find Edit. OpenCode opens a sheet on every Connect.</para>
         /// </summary>
         private AiProviderPreset? PresetFor(string presetId) =>
-            _service?.Presets.FirstOrDefault(p => string.Equals(p.Id, presetId, StringComparison.Ordinal));
+            // OrdinalIgnoreCase, matching the service's one rule for connection ids. Harmless here today,
+            // since these ids round-trip from the same objects — but a second rule in this file is exactly
+            // what #805 is about. (fable review)
+            _service?.Presets.FirstOrDefault(p => string.Equals(p.Id, presetId, StringComparison.OrdinalIgnoreCase));
 
         /// <summary>
         /// Adopts the key the environment holds for this provider. (#714)
