@@ -419,6 +419,20 @@ git log v5.0.0-beta.2..v5.0.0-beta.3 --format="%h %s%n%b"
 
 This ensures accurate release notes based on actual changes, not assumptions.
 
+**Then collect the notes that cannot be derived from commits.** A shipped limitation is invisible in a
+commit log — the commit says what was fixed, not what still is not. Anything that needs a sentence in the
+release is labelled `release-note` as the work lands, so it is queried rather than remembered:
+
+```bash
+# Everything flagged for this release's notes, open or closed
+gh issue list --repo fsnow/cst --label release-note --milestone "5.0.0-beta.X" --state all \
+  --json number,title,url --jq '.[] | "#\(.number) \(.title)\n  \(.url)"'
+```
+
+Each such issue carries the wording to use in a comment. **An open issue in the milestone is normal here**:
+a limitation that ships is a known issue precisely because it is not fixed, and it needs re-stating in every
+release until it is. Clear the label once the note has been written and the limitation is gone.
+
 ```markdown
 # CST Reader 5.0.0-beta.X
 
