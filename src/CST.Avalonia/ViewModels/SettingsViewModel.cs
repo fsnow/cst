@@ -1348,6 +1348,18 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
             _credentials = credentials;
             _providerResolver = providerResolver;
 
+            // The third surface that can say "not configured" about a key that is simply not visible yet
+            // (#817). The assistant panel and the Providers tab both refresh when a shell probe lands; this
+            // one is computed from the resolver on demand, so without a nudge it keeps the old answer until
+            // some unrelated property changes.
+            var environmentKeys = App.TryGetService<Services.Ai.Credentials.IAiEnvironmentKeys>();
+            if (environmentKeys is not null)
+                environmentKeys.Changed += (_, _) => Dispatcher.UIThread.Post(() =>
+                {
+                    this.RaisePropertyChanged(nameof(ReadinessText));
+                    this.RaisePropertyChanged(nameof(IsReady));
+                });
+
             var ai = _settingsService.Settings.Ai;
             _aiEnabled = ai.Enabled;
             _localApiEnabled = ai.LocalApi.Enabled;
@@ -1371,7 +1383,8 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
             var connectionService = App.TryGetService<Services.Ai.IAiConnectionService>();
             Connections = new AiConnectionsViewModel(
                 connectionService, credentials, App.TryGetService<Services.Ai.IAiProviderLogos>(),
-                App.TryGetService<Services.Ai.Credentials.IAiEnvironmentKeys>());
+                App.TryGetService<Services.Ai.Credentials.IAiEnvironmentKeys>(),
+                App.TryGetService<Services.Ai.Credentials.IShellEnvironment>());
             Models = new AiModelsViewModel(
                 connectionService,
                 App.TryGetService<Services.Ai.IAiModelCatalog>(),

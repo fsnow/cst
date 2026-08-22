@@ -193,6 +193,14 @@ namespace CST.Avalonia.Services.Ai
                 return AiCatalogResult.Fail(
                     $"{connection.DisplayName} is not finished being set up, so it cannot be asked for a list.");
 
+            // Settled before authenticating, never before deciding what to show. Already-complete unless a
+            // shell probe is genuinely in flight (#817), so this is a no-op on Windows and on every launch
+            // that did not prime one. Without it, a connection adopted from a shell-profile variable reports
+            // "the provider rejected the key" for the first listing after a relaunch and works on the second
+            // — an intermittent authentication failure decided by a race, which is unreportable as a bug.
+            if (_environmentKeys is not null && connection.UsesEnvironmentKey)
+                await _environmentKeys.Ready.ConfigureAwait(false);
+
             // A header marked secret with nothing stored, refused here for the same reason the chat path
             // refuses it: sent blank it is dropped at the wire and comes back as a 401 naming nothing, which
             // is the #711 complaint arriving from a third direction. Refused in BOTH places or not at all -

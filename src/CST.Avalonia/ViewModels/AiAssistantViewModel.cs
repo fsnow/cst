@@ -78,7 +78,8 @@ public class AiAssistantViewModel : ReactiveTool
         IReaderStateService? readerState,
         IChatProviderResolver? resolver,
         ISettingsService? settings,
-        IAiConnectionService? connections = null)
+        IAiConnectionService? connections = null,
+        Services.Ai.Credentials.IAiEnvironmentKeys? environmentKeys = null)
     {
         _orchestrator = orchestrator;
         _readerState = readerState;
@@ -118,7 +119,16 @@ public class AiAssistantViewModel : ReactiveTool
 
         // Asked once at construction so the panel can say it is not configured before anything is pressed.
         RefreshReadiness();
+
+        // A key exported from a shell profile arrives seconds after launch, not at it (#817). Without this
+        // the panel opens saying the assistant is not configured and keeps saying it until something else
+        // happens to re-ask — for a reader whose key IS set, in the variable the app is about to use.
+        _environmentKeys = environmentKeys;
+        if (_environmentKeys is not null)
+            _environmentKeys.Changed += (_, _) => Dispatcher.UIThread.Post(RefreshReadiness);
     }
+
+    private readonly Services.Ai.Credentials.IAiEnvironmentKeys? _environmentKeys;
 
     /// <summary>The per-turn model chip and its list. (#693)</summary>
     public AiModelPickerViewModel ModelPicker { get; }
@@ -296,6 +306,13 @@ public class AiAssistantViewModel : ReactiveTool
             Status = "The assistant is not available in this build.";
             return;
         }
+
+        // Settled before asking the resolver anything (#817). Already-complete unless a shell probe is in
+        // flight, so this changes nothing for anyone whose key is in the process environment; for the reader
+        // whose key is in a shell profile it is the difference between "not configured" on the first send of
+        // the session and an answer.
+        if (_environmentKeys is not null)
+            await _environmentKeys.Ready.ConfigureAwait(true);
 
         // Checked BEFORE touching the reader, so an unconfigured user is told what to set rather than being
         // asked to wait while the app assembles a bundle it cannot send.
