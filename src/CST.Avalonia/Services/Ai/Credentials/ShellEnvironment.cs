@@ -44,6 +44,52 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 /// persisted — a probe result on disk is a credential on disk. The log line records a count, never a name and
 /// never a value.</para>
 /// </summary>
+/// <summary>
+/// What happened the last time the login shell was consulted. (#820)
+///
+/// <para>Exists because until now the probe had nowhere to report itself. A shell skipped by name, a profile
+/// that timed out, and an environment that genuinely holds no provider key all produced the same thing on
+/// screen — an empty "found in your environment" section — which is #817's own complaint (absence rendered as
+/// absence) one layer up. Every one of these states is something a reader can act on, and none of them was
+/// distinguishable before.</para>
+/// </summary>
+public enum ShellEnvironmentState
+{
+    /// <summary>Nothing has asked for a probe, or the reader has turned the feature off.</summary>
+    NotRun,
+
+    /// <summary>Windows, where the environment is inherited normally and there is nothing to look for.</summary>
+    Unsupported,
+
+    /// <summary>A probe is in flight. Reads answer null until it lands.</summary>
+    Running,
+
+    /// <summary>The reader's shell is one whose flags do not mean what this needs — <c>nu</c>, <c>csh</c>,
+    /// <c>tcsh</c>. Worth saying out loud, because it is the one failure the reader can do something about.</summary>
+    ShellNotSupported,
+
+    /// <summary>The shell did not finish inside the budget, so the probe gave up rather than retry.</summary>
+    TimedOut,
+
+    /// <summary>The shell would not answer: no such shell, refused to run, or a nonzero exit both times.</summary>
+    Failed,
+
+    /// <summary>The shell answered. <see cref="ShellEnvironmentStatus.RetainedCount"/> may still be zero,
+    /// which is the honest and useful answer "your shell exports none of the variables we know about".</summary>
+    Completed,
+}
+
+/// <summary>The reportable outcome of the last probe, and enough detail to say something specific.</summary>
+/// <param name="ShellName">The shell's basename — <c>zsh</c>, never the full path.</param>
+/// <param name="RetainedCount">How many variables of interest were found. Never which ones.</param>
+public sealed record ShellEnvironmentStatus(
+    ShellEnvironmentState State, string? ShellName = null, int RetainedCount = 0)
+{
+    public static readonly ShellEnvironmentStatus NotRun = new(ShellEnvironmentState.NotRun);
+    public static readonly ShellEnvironmentStatus Unsupported = new(ShellEnvironmentState.Unsupported);
+    public static readonly ShellEnvironmentStatus Running = new(ShellEnvironmentState.Running);
+}
+
 public interface IShellEnvironment
 {
     /// <summary>
@@ -76,6 +122,19 @@ public interface IShellEnvironment
     /// construction is not ordered against startup, and it is the surface that says "not configured".</para>
     /// </summary>
     event EventHandler? Probed;
+
+    /// <summary>
+    /// Drops the snapshot and resets, so a later <see cref="Prime"/> reads the shell again. (#820)
+    ///
+    /// <para>What the reader unticking the control calls. It genuinely releases the values rather than merely
+    /// ceasing to consult them — an app that kept a reader's keys in memory after being told to stop reading
+    /// them would be obeying the letter of the instruction and not the point of it. The cost is that
+    /// re-enabling runs a second shell, since there is deliberately nothing left to restore.</para>
+    /// </summary>
+    void Forget();
+
+    /// <summary>What happened last time, so a surface can say so. Never names a variable. (#820)</summary>
+    ShellEnvironmentStatus Status { get; }
 }
 
 /// <inheritdoc />
@@ -116,7 +175,36 @@ public sealed class ShellEnvironment : IShellEnvironment
     private readonly ILogger? _logger;
     private readonly bool _supported;
     private readonly string? _shellPath;
-    private readonly Lazy<Task<IReadOnlyDictionary<string, string>>> _probe;
+
+    /// <summary>
+    /// The current probe, or null when none has been asked for — replaced wholesale by
+    /// <see cref="Forget"/>. (#820)
+    ///
+    /// <para><b>A generation, not the single <c>Lazy</c> this started as.</b> A <c>Lazy</c> created once in
+    /// the constructor is single-shot by construction, which was exactly the property that made eight
+    /// concurrent <see cref="Prime"/> calls collapse onto one shell. Turning the feature off and on again has
+    /// to run a second shell — because turning it off RELEASES the values, and a release that kept them
+    /// around to restore would make "off" a lie — so the field became a generation. The collapse guarantee
+    /// still holds within one.</para>
+    /// </summary>
+    private Lazy<Task<IReadOnlyDictionary<string, string>>>? _probe;
+
+    private readonly object _gate = new();
+    private ShellEnvironmentStatus _status = ShellEnvironmentStatus.NotRun;
+
+    /// <summary>
+    /// Which generation is current. A probe carries the number it was started under and may only write what
+    /// it learned if that is still the answer. (#820, fable)
+    ///
+    /// <para><b>Nothing can stop a shell that is already running</b> — there is no cancellation through a
+    /// spawned process — so a probe retired by <see cref="Forget"/> keeps going for up to its whole budget and
+    /// then arrives with a verdict about a world that no longer exists. Without this check it stamps that
+    /// verdict over the live one, and the failure is the exact thing this feature was built to stop: the
+    /// screen saying "your shell profile took too long to load" beside a list of the keys a later probe
+    /// found, and saying it permanently, because the newer generation has already written and will not write
+    /// again.</para>
+    /// </summary>
+    private long _generation;
 
     private static readonly IReadOnlyDictionary<string, string> Empty =
         new Dictionary<string, string>(StringComparer.Ordinal);
@@ -149,44 +237,119 @@ public sealed class ShellEnvironment : IShellEnvironment
         _supported = supported;
         _shellPath = shellPath;
 
-        // ExecutionAndPublication so that two callers priming at once run one shell between them, not two.
-        _probe = new Lazy<Task<IReadOnlyDictionary<string, string>>>(
-            () => Task.Run(async () =>
-            {
-                var snapshot = await ProbeAsync().ConfigureAwait(false);
-                // Raised after the result is in hand, so a handler that reads immediately sees it.
-                try { Probed?.Invoke(this, EventArgs.Empty); } catch { /* a handler's problem, not ours */ }
-                return snapshot;
-            }),
-            LazyThreadSafetyMode.ExecutionAndPublication);
+        if (!_supported) _status = ShellEnvironmentStatus.Unsupported;
     }
 
     /// <inheritdoc />
     public event EventHandler? Probed;
 
     /// <inheritdoc />
-    public void Prime()
+    public ShellEnvironmentStatus Status
     {
-        if (!_supported) return;
-        _ = _probe.Value;
+        get { lock (_gate) return _status; }
+    }
+
+    // ExecutionAndPublication so that two callers priming at once run one shell between them, not two.
+    private Lazy<Task<IReadOnlyDictionary<string, string>>> NewProbe(long generation) =>
+        new(() => Task.Run(async () =>
+            {
+                var snapshot = await ProbeAsync(generation).ConfigureAwait(false);
+
+                // Raised after the result is in hand, so a handler that reads immediately sees it — and only
+                // by the generation still in service. A retired probe announcing that it landed tells every
+                // surface to go and look at a snapshot that was thrown away.
+                if (IsCurrent(generation))
+                {
+                    try { Probed?.Invoke(this, EventArgs.Empty); } catch { /* a handler's problem, not ours */ }
+                }
+                return snapshot;
+            }),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private bool IsCurrent(long generation)
+    {
+        lock (_gate) return generation == _generation;
     }
 
     /// <inheritdoc />
-    public Task Completion => _probe.IsValueCreated ? _probe.Value : Task.CompletedTask;
+    public void Prime()
+    {
+        if (!_supported) return;
+
+        lock (_gate)
+        {
+            if (_probe is null)
+            {
+                _probe = NewProbe(++_generation);
+                if (_status.State == ShellEnvironmentState.NotRun)
+                    _status = ShellEnvironmentStatus.Running;
+            }
+
+            // Materialised INSIDE the gate. The factory only hands off to the thread pool, so it cannot
+            // block on anything, and doing it outside leaves a window in which a Forget retires the
+            // generation between the read and the start — launching a shell the reader has just said they
+            // do not want. (fable)
+            _ = _probe.Value;
+        }
+    }
+
+    /// <inheritdoc />
+    public void Forget()
+    {
+        lock (_gate)
+        {
+            // Dropping the generation drops this object's only reference to the snapshot, which is what makes
+            // "off" true rather than merely obeyed. Keeping it to restore later would leave the reader's keys
+            // in the heap of an app they have just told to stop reading them.
+            _probe = null;
+
+            // Retires whatever is in flight as well as what has landed. The running shell cannot be stopped,
+            // but its verdict can be refused when it finally arrives.
+            _generation++;
+            _status = _supported ? ShellEnvironmentStatus.NotRun : ShellEnvironmentStatus.Unsupported;
+        }
+
+        // Surfaces that showed rows from the snapshot need to stop showing them, and this is the same signal
+        // that told them to start.
+        try { Probed?.Invoke(this, EventArgs.Empty); } catch { /* a handler's problem, not ours */ }
+    }
+
+    /// <inheritdoc />
+    public Task Completion
+    {
+        get
+        {
+            Lazy<Task<IReadOnlyDictionary<string, string>>>? probe;
+            lock (_gate) probe = _probe;
+            return probe is { IsValueCreated: true } ? probe.Value : Task.CompletedTask;
+        }
+    }
 
     /// <inheritdoc />
     public string? TryRead(string variableName)
     {
         if (string.IsNullOrWhiteSpace(variableName)) return null;
 
-        // IsValueCreated first: reading must never be what starts a shell. A caller that wants the probe says
-        // so by calling Prime.
-        if (!_probe.IsValueCreated) return null;
+        Lazy<Task<IReadOnlyDictionary<string, string>>>? probe;
+        lock (_gate) probe = _probe;
 
-        var task = _probe.Value;
+        // IsValueCreated first: reading must never be what starts a shell. A caller that wants the probe says
+        // so by calling Prime. A null generation is a probe that has been forgotten, or never asked for.
+        if (probe is not { IsValueCreated: true }) return null;
+
+        var task = probe.Value;
         if (!task.IsCompletedSuccessfully) return null;
 
         return task.Result.TryGetValue(variableName, out var value) ? value : null;
+    }
+
+    private void SetStatus(long generation, ShellEnvironmentStatus status)
+    {
+        lock (_gate)
+        {
+            if (generation != _generation) return;
+            _status = status;
+        }
     }
 
     /// <summary>
@@ -194,7 +357,7 @@ public sealed class ShellEnvironment : IShellEnvironment
     /// awaited by <see cref="Completion"/>, and letting an exception escape would turn every later await into
     /// a throw — inside the chat send path, which would report a shell problem as a provider problem.
     /// </summary>
-    private async Task<IReadOnlyDictionary<string, string>> ProbeAsync()
+    private async Task<IReadOnlyDictionary<string, string>> ProbeAsync(long generation)
     {
         try
         {
@@ -204,6 +367,7 @@ public sealed class ShellEnvironment : IShellEnvironment
             if (SkippedShells.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
                 _logger?.LogDebug("Shell environment probe skipped: {Shell} is not supported", name);
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.ShellNotSupported, name));
                 return Empty;
             }
 
@@ -216,10 +380,17 @@ public sealed class ShellEnvironment : IShellEnvironment
             catch (Exception ex)
             {
                 _logger?.LogDebug(ex, "Shell environment probe skipped: the variables of interest are unknown");
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Failed, name));
                 return Empty;
             }
 
-            if (keep.Count == 0) return Empty;
+            if (keep.Count == 0)
+            {
+                // Nothing to look for is not a failure of the shell, and reporting it as one would send a
+                // reader off to debug a profile that is fine.
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Completed, name));
+                return Empty;
+            }
             var wanted = new HashSet<string>(keep, StringComparer.Ordinal);
 
             var started = Stopwatch.StartNew();
@@ -238,6 +409,7 @@ public sealed class ShellEnvironment : IShellEnvironment
                 // Deliberately no retry. A profile that hangs once hangs twice, and the second attempt buys
                 // nothing but another five seconds of a shell this app has already decided to give up on.
                 _logger?.LogDebug("Shell environment probe timed out: {Shell}", name);
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.TimedOut, name));
                 return Empty;
             }
             else
@@ -248,6 +420,7 @@ public sealed class ShellEnvironment : IShellEnvironment
                 if (!result.Succeeded)
                 {
                     _logger?.LogDebug("Shell environment probe found nothing: {Shell}", name);
+                    SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Failed, name));
                     return Empty;
                 }
             }
@@ -261,11 +434,15 @@ public sealed class ShellEnvironment : IShellEnvironment
                 "Shell environment probe: {Shell}, {Elapsed}ms, {Retained} of {Wanted} variables retained",
                 name, started.ElapsedMilliseconds, snapshot.Count, wanted.Count);
 
+            SetStatus(generation, new ShellEnvironmentStatus(
+                ShellEnvironmentState.Completed, name, snapshot.Count));
+
             return snapshot;
         }
         catch (Exception ex)
         {
             _logger?.LogDebug(ex, "Shell environment probe failed");
+            SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Failed));
             return Empty;
         }
     }

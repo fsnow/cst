@@ -40,6 +40,20 @@ namespace CST.Avalonia.Models
         /// <summary>Master switch — "Enable AI Features". Default OFF (opt-in); nothing AI-related runs while false.</summary>
         public bool Enabled { get; set; } = false;
 
+        /// <summary>
+        /// Whether to read API keys from the login shell's environment. Default ON, and non-Windows only in
+        /// effect. (#820)
+        ///
+        /// <para><b>On rather than off, deliberately.</b> The reader this serves does not know their key is
+        /// invisible — that is the bug (#817) — so a default of off would require them to find a checkbox in
+        /// order to discover a problem they cannot see, which rebuilds the bug with an extra step.</para>
+        ///
+        /// <para>It governs the LOGIN SHELL lookup only. This process's own environment is read regardless,
+        /// so a reader who used <c>launchctl setenv</c>, or launched from a terminal, still has their keys
+        /// found with this off.</para>
+        /// </summary>
+        public bool ReadLoginShellEnvironment { get; set; } = true;
+
         public LocalApiSettings LocalApi { get; set; } = new();
 
         /// <summary>Surface B — the assistant inside the reader. Off until configured.</summary>

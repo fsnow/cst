@@ -734,6 +734,12 @@ public partial class App : Application
     internal static bool ShouldPrimeShellEnvironment(Models.Settings? settings)
     {
         if (settings?.Ai is not { } ai) return false;
+
+        // The reader's own switch, and it ANDs rather than replaces (#820). Proportionality still applies:
+        // leaving this on — which is the default — must not make an ordinary launch of a text reader spawn a
+        // login shell for a feature nobody on this machine uses.
+        if (!ai.ReadLoginShellEnvironment) return false;
+
         if (ai.Enabled) return true;
 
         return ai.Chat?.Connections?.Any(

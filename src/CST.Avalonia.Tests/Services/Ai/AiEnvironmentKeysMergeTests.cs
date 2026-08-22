@@ -34,6 +34,9 @@ public sealed class AiEnvironmentKeysMergeTests
             _values.TryGetValue(variableName, out var v) ? v : null;
         public event EventHandler? Probed;
         public void RaiseProbed() => Probed?.Invoke(this, EventArgs.Empty);
+        public void Forget() { _values.Clear(); RaiseProbed(); }
+        public ShellEnvironmentStatus Status { get; } =
+            new(ShellEnvironmentState.Completed, "zsh", 1);
     }
 
     /// <summary>A probe that has not answered yet, which is what every read sees for the first seconds.</summary>
@@ -45,6 +48,8 @@ public sealed class AiEnvironmentKeysMergeTests
         public string? TryRead(string variableName) => null;
         public event EventHandler? Probed;
         public void Finish() { _tcs.SetResult(); Probed?.Invoke(this, EventArgs.Empty); }
+        public void Forget() { }
+        public ShellEnvironmentStatus Status { get; } = ShellEnvironmentStatus.Running;
     }
 
     private static AiProviderPreset Preset(string id, params string[] envNames) =>
