@@ -418,7 +418,8 @@ hold-back filter — the same hazard as the think-tag filter, and the same failu
   profile took too long. Those used to be indistinguishable from having no keys at all.
 
   It is a session snapshot, like the process environment has always been: editing a shell profile takes effect
-  at the next launch, or at the next tick of that box. Where the probe cannot run — Windows, which does not need it; `nu`, `csh` and `tcsh`,
+  at the next launch, or at the next tick of that box. Where the probe cannot run — Windows, which does not
+  need it; `nu`, `csh` and `tcsh`,
   whose flags do not mean what this needs; or a profile slow enough to hit the five-second timeout — behaviour
   falls back to reading this process's own environment, and the two workarounds are `launchctl setenv NAME
   value` (which publishes the value to every process in the login session, worth knowing before using it) or

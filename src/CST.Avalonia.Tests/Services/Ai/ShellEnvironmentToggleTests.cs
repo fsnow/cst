@@ -196,6 +196,110 @@ public sealed class ShellEnvironmentToggleTests
         Assert.DoesNotContain("APPLE_APP_PASSWORD", rendered);
     }
 
+    // ---- generations, which is where a probe can lie about a world that no longer exists --------------
+
+    /// <summary>A runner held open until a test releases it, so a probe can be in flight across a toggle.</summary>
+    private sealed class HeldRunner : IShellProbeRunner
+    {
+        private readonly System.Threading.ManualResetEventSlim _held = new(false);
+        private readonly Func<int, ShellProbeResult> _answer;
+        private int _runs;
+
+        /// <summary>
+        /// Set once the FIRST probe is inside the runner and blocked.
+        ///
+        /// <para>The test must wait on this before retiring that probe. Without it both generations race for
+        /// the runner and either may take the "first call" slot — which fails by describing generation 2 as
+        /// the timed-out one, an artefact of the fake rather than anything the product did.</para>
+        /// </summary>
+        public System.Threading.ManualResetEventSlim Entered { get; } = new(false);
+
+        public HeldRunner(Func<int, ShellProbeResult> answer) => _answer = answer;
+
+        public ShellProbeResult Run(ShellProbeAttempt attempt)
+        {
+            var run = System.Threading.Interlocked.Increment(ref _runs);
+            if (run == 1)
+            {
+                Entered.Set();
+                _held.Wait(TimeSpan.FromSeconds(10));
+            }
+            return _answer(run);
+        }
+
+        public void Release() => _held.Set();
+    }
+
+    [Fact]
+    public async Task A_retired_probe_cannot_overwrite_what_the_live_one_found()
+    {
+        // The first shell is slow and heads for a timeout; the reader toggles off and on while it runs; the
+        // second answers quickly. Nothing stops a shell already running, so the first arrives afterwards with
+        // a verdict about a world that has been thrown away.
+        var runner = new HeldRunner(run => run == 1
+            ? ShellProbeResult.Timeout()
+            : ShellProbeResult.Ok(Encoding.UTF8.GetBytes("\0OPENAI_API_KEY=sk-live\0")));
+        var shell = Probe(runner);
+
+        shell.Prime();                       // generation 1
+        runner.Entered.Wait(TimeSpan.FromSeconds(5));   // ...confirmed inside the runner and blocked
+        shell.Forget();                      // retires it
+        shell.Prime();                       // generation 2
+        await shell.Completion;              // which finishes at once
+
+        Assert.Equal(ShellEnvironmentState.Completed, shell.Status.State);
+        Assert.Equal(1, shell.Status.RetainedCount);
+
+        runner.Release();                    // generation 1 finally lands, with TimedOut
+        await Task.Delay(200);
+
+        // Without the generation check the screen ends up saying "your shell profile took too long to load"
+        // beside the very keys the live probe found — and saying it permanently, because generation 2 has
+        // already written and will not write again. That is this feature's own failure mode turned against
+        // it: a sentence that is confidently wrong is worse than the empty section it replaced. (fable)
+        Assert.Equal(ShellEnvironmentState.Completed, shell.Status.State);
+        Assert.Equal("sk-live", shell.TryRead("OPENAI_API_KEY"));
+    }
+
+    [Fact]
+    public async Task A_retired_probe_does_not_announce_that_it_landed()
+    {
+        var runner = new HeldRunner(_ => ShellProbeResult.Ok(
+            Encoding.UTF8.GetBytes("\0OPENAI_API_KEY=sk\0")));
+        var shell = Probe(runner);
+
+        shell.Prime();
+        runner.Entered.Wait(TimeSpan.FromSeconds(5));
+        shell.Forget();
+
+        var toldAfterForget = 0;
+        shell.Probed += (_, _) => toldAfterForget++;
+
+        runner.Release();
+        await Task.Delay(200);
+
+        // Surfaces treat Probed as "go and look again". A retired generation raising it sends them to a
+        // snapshot that no longer exists.
+        Assert.Equal(0, toldAfterForget);
+    }
+
+    [Fact]
+    public async Task A_forget_while_a_probe_runs_leaves_nothing_readable()
+    {
+        var runner = new HeldRunner(_ => ShellProbeResult.Ok(
+            Encoding.UTF8.GetBytes("\0OPENAI_API_KEY=sk-inflight\0")));
+        var shell = Probe(runner);
+
+        shell.Prime();
+        runner.Entered.Wait(TimeSpan.FromSeconds(5));
+        shell.Forget();
+        runner.Release();
+        await Task.Delay(200);
+
+        Assert.Null(shell.TryRead("OPENAI_API_KEY"));
+        Assert.Equal(ShellEnvironmentState.NotRun, shell.Status.State);
+    }
+
     // ---- the gate ------------------------------------------------------------------------------------
 
     [Fact]

@@ -192,6 +192,20 @@ public sealed class ShellEnvironment : IShellEnvironment
     private readonly object _gate = new();
     private ShellEnvironmentStatus _status = ShellEnvironmentStatus.NotRun;
 
+    /// <summary>
+    /// Which generation is current. A probe carries the number it was started under and may only write what
+    /// it learned if that is still the answer. (#820, fable)
+    ///
+    /// <para><b>Nothing can stop a shell that is already running</b> — there is no cancellation through a
+    /// spawned process — so a probe retired by <see cref="Forget"/> keeps going for up to its whole budget and
+    /// then arrives with a verdict about a world that no longer exists. Without this check it stamps that
+    /// verdict over the live one, and the failure is the exact thing this feature was built to stop: the
+    /// screen saying "your shell profile took too long to load" beside a list of the keys a later probe
+    /// found, and saying it permanently, because the newer generation has already written and will not write
+    /// again.</para>
+    /// </summary>
+    private long _generation;
+
     private static readonly IReadOnlyDictionary<string, string> Empty =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -236,33 +250,47 @@ public sealed class ShellEnvironment : IShellEnvironment
     }
 
     // ExecutionAndPublication so that two callers priming at once run one shell between them, not two.
-    private Lazy<Task<IReadOnlyDictionary<string, string>>> NewProbe() =>
+    private Lazy<Task<IReadOnlyDictionary<string, string>>> NewProbe(long generation) =>
         new(() => Task.Run(async () =>
             {
-                var snapshot = await ProbeAsync().ConfigureAwait(false);
-                // Raised after the result is in hand, so a handler that reads immediately sees it.
-                try { Probed?.Invoke(this, EventArgs.Empty); } catch { /* a handler's problem, not ours */ }
+                var snapshot = await ProbeAsync(generation).ConfigureAwait(false);
+
+                // Raised after the result is in hand, so a handler that reads immediately sees it — and only
+                // by the generation still in service. A retired probe announcing that it landed tells every
+                // surface to go and look at a snapshot that was thrown away.
+                if (IsCurrent(generation))
+                {
+                    try { Probed?.Invoke(this, EventArgs.Empty); } catch { /* a handler's problem, not ours */ }
+                }
                 return snapshot;
             }),
             LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private bool IsCurrent(long generation)
+    {
+        lock (_gate) return generation == _generation;
+    }
 
     /// <inheritdoc />
     public void Prime()
     {
         if (!_supported) return;
 
-        Lazy<Task<IReadOnlyDictionary<string, string>>> probe;
         lock (_gate)
         {
-            _probe ??= NewProbe();
-            probe = _probe;
-            if (_status.State == ShellEnvironmentState.NotRun)
-                _status = ShellEnvironmentStatus.Running;
-        }
+            if (_probe is null)
+            {
+                _probe = NewProbe(++_generation);
+                if (_status.State == ShellEnvironmentState.NotRun)
+                    _status = ShellEnvironmentStatus.Running;
+            }
 
-        // Outside the lock: the factory hands off to the thread pool, but nothing about this needs the gate
-        // held while it does.
-        _ = probe.Value;
+            // Materialised INSIDE the gate. The factory only hands off to the thread pool, so it cannot
+            // block on anything, and doing it outside leaves a window in which a Forget retires the
+            // generation between the read and the start — launching a shell the reader has just said they
+            // do not want. (fable)
+            _ = _probe.Value;
+        }
     }
 
     /// <inheritdoc />
@@ -274,6 +302,10 @@ public sealed class ShellEnvironment : IShellEnvironment
             // "off" true rather than merely obeyed. Keeping it to restore later would leave the reader's keys
             // in the heap of an app they have just told to stop reading them.
             _probe = null;
+
+            // Retires whatever is in flight as well as what has landed. The running shell cannot be stopped,
+            // but its verdict can be refused when it finally arrives.
+            _generation++;
             _status = _supported ? ShellEnvironmentStatus.NotRun : ShellEnvironmentStatus.Unsupported;
         }
 
@@ -311,9 +343,13 @@ public sealed class ShellEnvironment : IShellEnvironment
         return task.Result.TryGetValue(variableName, out var value) ? value : null;
     }
 
-    private void SetStatus(ShellEnvironmentStatus status)
+    private void SetStatus(long generation, ShellEnvironmentStatus status)
     {
-        lock (_gate) _status = status;
+        lock (_gate)
+        {
+            if (generation != _generation) return;
+            _status = status;
+        }
     }
 
     /// <summary>
@@ -321,7 +357,7 @@ public sealed class ShellEnvironment : IShellEnvironment
     /// awaited by <see cref="Completion"/>, and letting an exception escape would turn every later await into
     /// a throw — inside the chat send path, which would report a shell problem as a provider problem.
     /// </summary>
-    private async Task<IReadOnlyDictionary<string, string>> ProbeAsync()
+    private async Task<IReadOnlyDictionary<string, string>> ProbeAsync(long generation)
     {
         try
         {
@@ -331,7 +367,7 @@ public sealed class ShellEnvironment : IShellEnvironment
             if (SkippedShells.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
                 _logger?.LogDebug("Shell environment probe skipped: {Shell} is not supported", name);
-                SetStatus(new ShellEnvironmentStatus(ShellEnvironmentState.ShellNotSupported, name));
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.ShellNotSupported, name));
                 return Empty;
             }
 
@@ -344,7 +380,7 @@ public sealed class ShellEnvironment : IShellEnvironment
             catch (Exception ex)
             {
                 _logger?.LogDebug(ex, "Shell environment probe skipped: the variables of interest are unknown");
-                SetStatus(new ShellEnvironmentStatus(ShellEnvironmentState.Failed, name));
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Failed, name));
                 return Empty;
             }
 
@@ -352,7 +388,7 @@ public sealed class ShellEnvironment : IShellEnvironment
             {
                 // Nothing to look for is not a failure of the shell, and reporting it as one would send a
                 // reader off to debug a profile that is fine.
-                SetStatus(new ShellEnvironmentStatus(ShellEnvironmentState.Completed, name));
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Completed, name));
                 return Empty;
             }
             var wanted = new HashSet<string>(keep, StringComparer.Ordinal);
@@ -373,7 +409,7 @@ public sealed class ShellEnvironment : IShellEnvironment
                 // Deliberately no retry. A profile that hangs once hangs twice, and the second attempt buys
                 // nothing but another five seconds of a shell this app has already decided to give up on.
                 _logger?.LogDebug("Shell environment probe timed out: {Shell}", name);
-                SetStatus(new ShellEnvironmentStatus(ShellEnvironmentState.TimedOut, name));
+                SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.TimedOut, name));
                 return Empty;
             }
             else
@@ -384,7 +420,7 @@ public sealed class ShellEnvironment : IShellEnvironment
                 if (!result.Succeeded)
                 {
                     _logger?.LogDebug("Shell environment probe found nothing: {Shell}", name);
-                    SetStatus(new ShellEnvironmentStatus(ShellEnvironmentState.Failed, name));
+                    SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Failed, name));
                     return Empty;
                 }
             }
@@ -398,7 +434,7 @@ public sealed class ShellEnvironment : IShellEnvironment
                 "Shell environment probe: {Shell}, {Elapsed}ms, {Retained} of {Wanted} variables retained",
                 name, started.ElapsedMilliseconds, snapshot.Count, wanted.Count);
 
-            SetStatus(new ShellEnvironmentStatus(
+            SetStatus(generation, new ShellEnvironmentStatus(
                 ShellEnvironmentState.Completed, name, snapshot.Count));
 
             return snapshot;
@@ -406,7 +442,7 @@ public sealed class ShellEnvironment : IShellEnvironment
         catch (Exception ex)
         {
             _logger?.LogDebug(ex, "Shell environment probe failed");
-            SetStatus(new ShellEnvironmentStatus(ShellEnvironmentState.Failed));
+            SetStatus(generation, new ShellEnvironmentStatus(ShellEnvironmentState.Failed));
             return Empty;
         }
     }

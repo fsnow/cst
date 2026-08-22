@@ -104,22 +104,33 @@ namespace CST.Avalonia.ViewModels
         /// stop reading them would obey the instruction and miss its point — so the cost of a toggle is one
         /// login shell, which is the right price for a deliberate act.</para>
         /// </summary>
+        /// <remarks>
+        /// This property is the ONLY place the stored setting and the running service are kept in step. That
+        /// is fine while the settings window is the only thing that writes it, and it is the reason to move
+        /// this to a service method the moment anything else can — an import, or an API surface, would change
+        /// the setting and leave the probe running, or not running, until the next launch. (fable)
+        /// </remarks>
         public bool ReadLoginShellEnvironment
         {
             get => _readLoginShellEnvironment;
             set
             {
-                if (_readLoginShellEnvironment == value) return;
+                if (_disposed || _readLoginShellEnvironment == value) return;
                 this.RaiseAndSetIfChanged(ref _readLoginShellEnvironment, value);
+
+                // THE SERVICE FIRST, THEN THE SETTING. If persistence throws, the box reads unticked and the
+                // setting saves as off while the snapshot is still held — the "off is a lie" state this
+                // property exists to prevent, arrived at by the failure of something unrelated to it.
+                // RequestSave only arms a timer and is effectively non-throwing today, which is exactly the
+                // kind of "today" that stops being true without anyone revisiting this line. (fable)
+                if (value) _shellEnvironment?.Prime();
+                else _shellEnvironment?.Forget();
 
                 if (_settings?.Settings?.Ai is { } ai)
                 {
                     ai.ReadLoginShellEnvironment = value;
                     _settings.RequestSave();
                 }
-
-                if (value) _shellEnvironment?.Prime();
-                else _shellEnvironment?.Forget();
 
                 // Forget raises Probed too, so the rows and the sentence both follow from the same signal.
                 this.RaisePropertyChanged(nameof(ShellEnvironmentStatusText));
