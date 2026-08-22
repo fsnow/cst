@@ -209,7 +209,10 @@ public sealed class AiContextBundler : IAiContextBundler
             parts.Add(new BundlePart(
                 BundlePartNames.Selection,
                 BundlePartState.Unavailable,
-                "the reader could not read the selection (the page was not ready, or the request timed out)"));
+                // No speculative cause. This reaches the model, and the two causes it used to name were
+                // guesses that #824 and #827 both found to be wrong in the case at hand; a third (the title
+                // cap) was not among them. What the model needs is that the selection is absent. (#827)
+                "the reader could not read the selection"));
             return new SelectionContext(null, SelectionState.Unavailable);
         }
 

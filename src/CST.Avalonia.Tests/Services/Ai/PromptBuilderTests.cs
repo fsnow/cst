@@ -228,6 +228,48 @@ public class PromptBuilderTests : IDisposable
         Assert.DoesNotContain(prompt.Notices, n => n.Contains("not found in the passage window"));
     }
 
+    [Fact]
+    public void An_unreadable_selection_produces_exactly_one_notice()
+    {
+        // #831: the reader saw "2 notes about this request" for a single fact — a generic one from the
+        // parts loop and the specific one from the switch below it. Two notices read as two things having
+        // gone wrong, and the generic one was the worse of the pair: it said "could not be gathered", which
+        // is the bundler's vocabulary, and named a cause ("the page was not ready, or the request timed
+        // out") that #824 and #827 both showed was not what had happened.
+        //
+        // Asserted as a COUNT plus the surviving wording. Asserting only that the good one is present would
+        // pass with both, which is the state being fixed.
+        var prompt = _builder.Build(Bundle(
+            selection: new SelectionContext(null, SelectionState.Unavailable),
+            parts: new[]
+            {
+                new BundlePart(BundlePartNames.Passage, BundlePartState.Included, "a window"),
+                new BundlePart(BundlePartNames.Selection, BundlePartState.Unavailable,
+                    "the reader could not read the selection"),
+            }));
+
+        Assert.Single(prompt.Notices);
+        Assert.Contains("the answer covers the whole passage", prompt.Notices[0]);
+        Assert.DoesNotContain("could not be gathered", prompt.Notices[0]);
+    }
+
+    [Fact]
+    public void Another_unavailable_part_still_gets_the_generic_notice()
+    {
+        // The exclusion in #831 is for the selection alone. Word analysis and the rest have no sentence of
+        // their own, so silencing the generic notice for everything would trade two notices for none — and
+        // a missing part nobody is told about is where this whole family of defects started.
+        var prompt = _builder.Build(Bundle(
+            task: AiTask.WordByWord,
+            parts: new[]
+            {
+                new BundlePart(BundlePartNames.Passage, BundlePartState.Included, "a window"),
+                new BundlePart(BundlePartNames.Lemmas, BundlePartState.Unavailable, "the dictionary is still downloading"),
+            }));
+
+        Assert.Contains(prompt.Notices, n => n.Contains("could not be gathered"));
+    }
+
     // ---- The selection is the subject of the request -----------------------------------------------
 
     [Fact]
