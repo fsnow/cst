@@ -1447,7 +1447,8 @@ public partial class App : Application
         services.AddSingleton<Services.Ai.IAiModelCatalog>(sp => new Services.Ai.AiModelCatalog(
             new System.Net.Http.HttpClient(),
             sp.GetService<Services.Ai.IAiCredentialStore>(),
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger<Services.Ai.AiModelCatalog>()));
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<Services.Ai.AiModelCatalog>(),
+            sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>()));
 
         // Each connection's last model listing, so the Models tab opens on the provider's list rather than
         // on whatever the reader had saved. Beside models-dev.json rather than in settings.json: provider

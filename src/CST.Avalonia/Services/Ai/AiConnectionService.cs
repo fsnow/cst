@@ -217,30 +217,14 @@ namespace CST.Avalonia.Services.Ai
             // OrdinalIgnoreCase sends a model to the wrong connection. (kestrel-cst-2)
             var record = Chat.Connections.FirstOrDefault(
                 r => r is not null && IdMatches(r.Id, connectionId));
-            if (record is { UsesEnvironmentKey: true } && EnvironmentKeyFor(record) is not null)
+            if (record is not null
+                && AiEnvironmentCredential.For(
+                    record.UsesEnvironmentKey, record.EnvironmentVariable, _environmentKeys) is not null)
                 return CredentialSource.Environment;
 
             return CredentialSource.None;
         }
 
-        /// <summary>
-        /// The environment key a connection adopted, read at the moment of use, or null. (#714)
-        ///
-        /// <para>Never copied into the credential store. It belongs to the environment; a duplicate in our
-        /// keychain would survive the reader changing or unsetting the variable, so the app would go on
-        /// authenticating with a credential they believe they have revoked — and would offer no way to remove
-        /// it, since a row sourced from the environment shows no remove action (#691).</para>
-        /// </summary>
-        internal string? EnvironmentKeyFor(AiConnectionRecord record)
-        {
-            if (_environmentKeys is null || !record.UsesEnvironmentKey) return null;
-            // The recorded origin, never a guess from the id — #766's whole point. A custom endpoint records
-            // "" and must not be matched against a catalogue slug it happens to resemble, which is exactly how
-            // a reader's own connection would come to authenticate with someone else's environment key.
-            if (string.IsNullOrEmpty(record.PresetId)) return null;
-            var preset = Presets.FirstOrDefault(p => IdMatches(p.Id, record.PresetId));
-            return preset is null ? null : _environmentKeys.ValueFor(preset);
-        }
 
         public IReadOnlyList<AiProviderPreset> Presets =>
             _presets?.Presets ?? AiPresetSource.SnapshotDefaults;
@@ -709,7 +693,9 @@ namespace CST.Avalonia.Services.Ai
             SourceFor(r.Id),
             ReachabilityOf(r.Id),
             r.AuthHeaderName,
-            r.AuthScheme);
+            r.AuthScheme,
+            r.UsesEnvironmentKey,
+            r.EnvironmentVariable);
 
         /// <summary>
         /// Every credential name this connection could have filed a secret under. (#759)

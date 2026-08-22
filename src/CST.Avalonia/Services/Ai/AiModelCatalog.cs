@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services.Ai
@@ -173,13 +174,17 @@ namespace CST.Avalonia.Services.Ai
 
         private readonly HttpClient _http;
         private readonly IAiCredentialStore? _credentials;
+        private readonly IAiEnvironmentKeys? _environmentKeys;
         private readonly ILogger<AiModelCatalog> _logger;
 
-        public AiModelCatalog(HttpClient http, IAiCredentialStore? credentials, ILogger<AiModelCatalog> logger)
+        public AiModelCatalog(
+            HttpClient http, IAiCredentialStore? credentials, ILogger<AiModelCatalog> logger,
+            IAiEnvironmentKeys? environmentKeys = null)
         {
             _http = http;
             _credentials = credentials;
             _logger = logger;
+            _environmentKeys = environmentKeys;
         }
 
         public async Task<AiCatalogResult> FetchAsync(AiConnection connection, CancellationToken ct = default)
@@ -396,7 +401,13 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         private void Authenticate(HttpRequestMessage request, AiConnection connection)
         {
-            var key = _credentials?.Get(connection.Id, AiCredentialNames.Primary);
+            // Stored, then the environment — the SAME rule the chat path applies, through the same helper.
+            // Reading only the store here is the contradiction the summary above forbids: an adopted
+            // connection would answer a question and then fail to list its models, reporting "the provider
+            // rejected the stored key" for a connection that has no stored key. (#714, fable)
+            var key = _credentials?.Get(connection.Id, AiCredentialNames.Primary)
+                      ?? AiEnvironmentCredential.For(
+                          connection.UsesEnvironmentKey, connection.EnvironmentVariable, _environmentKeys);
             // Same rule as the chat path, for the same reason the summary above gives: the two surfaces send
             // the same credentials, so a secret header must resolve identically here or a provider's model
             // list would load while its answers 401. A secret is a literal, never a template. (#771)

@@ -307,7 +307,8 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         // effect on the next request. Nothing is copied into the credential store — a duplicate there would
         // outlive the variable, and the row it came from offers no remove action to undo that with (#691).
         var apiKey = _credentials?.Get(connection.Id, AiCredentialNames.Primary)
-                     ?? EnvironmentKeyFor(connection);
+                     ?? AiEnvironmentCredential.For(
+                         connection.UsesEnvironmentKey, connection.EnvironmentVariable, _environmentKeys);
 
         switch (kind)
         {
@@ -377,24 +378,6 @@ public sealed class ChatProviderResolver : IChatProviderResolver
                 kind = default;
                 return false;
         }
-    }
-
-    /// <summary>
-    /// The key an environment-adopted connection authenticates with, or null. (#714)
-    ///
-    /// <para>Requires BOTH the reader's recorded opt-in and a preset origin that was recorded rather than
-    /// guessed: a custom endpoint records an empty origin and must never be matched against a catalogue slug
-    /// it happens to resemble, which is how a reader's own connection would come to authenticate with someone
-    /// else's key (#766).</para>
-    /// </summary>
-    private string? EnvironmentKeyFor(AiConnectionRecord connection)
-    {
-        if (_environmentKeys is null || !connection.UsesEnvironmentKey) return null;
-        if (string.IsNullOrEmpty(connection.PresetId)) return null;
-
-        var preset = _presets?.Presets.FirstOrDefault(
-            p => string.Equals(p.Id, connection.PresetId, StringComparison.OrdinalIgnoreCase));
-        return preset is null ? null : NullIfBlank(_environmentKeys.ValueFor(preset));
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

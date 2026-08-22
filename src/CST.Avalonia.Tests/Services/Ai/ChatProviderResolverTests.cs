@@ -98,21 +98,36 @@ public class ChatProviderResolverTests
         new AiEnvironmentKeys(n => n == name ? value : null);
 
     [Fact]
-    public void A_connection_that_opted_in_authenticates_with_the_environment_key()
+    public async Task A_connection_that_opted_in_authenticates_with_the_environment_key()
     {
+        // Asserted on the wire, and on the ANTHROPIC kind, which requires a key. The first version used
+        // openai-compatible — for which a key is deliberately optional — and asserted only that resolution
+        // succeeded, so it passed with the whole environment fallback deleted. The feature's one positive
+        // path had no test at all. (fable)
+        var handler = StubHttpMessageHandler.Sse(
+            "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n");
+
         var resolver = Resolver(chat =>
         {
             var c = Conn(chat);
-            c.PresetId = "openai";
+            c.PresetId = "anthropic";
             c.UsesEnvironmentKey = true;
-            c.Kind = "openai-compatible";
-            c.BaseUrl = "https://example.invalid/v1";
-            chat.ActiveModelId = "gpt-4";
-        }, environmentKeys: Env("OPENAI_API_KEY", "sk-from-env"),
-           presets: new FakePresets(EnvPreset("openai", "OPENAI_API_KEY")));
+            c.EnvironmentVariable = "ANTHROPIC_API_KEY";
+            c.Kind = "anthropic";
+            chat.ActiveModelId = "claude-opus-5";
+        }, environmentKeys: Env("ANTHROPIC_API_KEY", "sk-from-env"),
+           presets: new FakePresets(EnvPreset("anthropic", "ANTHROPIC_API_KEY")),
+           handler: handler);
 
-        Assert.NotNull(resolver.Resolve(out var problem));
+        var resolution = resolver.Resolve(out var problem);
+        Assert.NotNull(resolution);
         Assert.Null(problem);
+
+        await foreach (var _ in resolution!.Provider.StreamAsync(
+            new ChatRequest("claude-opus-5", 256, null,
+                new[] { new ChatMessage(ChatRole.User, "hello") }), CancellationToken.None)) { }
+
+        Assert.Equal("sk-from-env", string.Join(",", handler.LastRequest!.Headers.GetValues("x-api-key")));
     }
 
     // The opt-in is the whole feature. Discovery must never authenticate on its own — that is the difference
@@ -190,24 +205,36 @@ public class ChatProviderResolverTests
     // A custom endpoint records "" as its origin (#766). Matching that against a catalogue slug it happens to
     // resemble is how a reader's own connection would come to authenticate with someone else's key.
     [Fact]
-    public void A_custom_connection_never_borrows_a_presets_environment_key()
+    public async Task A_custom_connection_never_borrows_a_presets_environment_key()
     {
+        var handler = StubHttpMessageHandler.Sse("data: [DONE]\n\n");
         var resolver = Resolver(chat =>
         {
             var c = Conn(chat);
             c.Id = "openai";               // an id that LOOKS like the preset
             c.PresetId = "";               // recorded as custom
             c.UsesEnvironmentKey = true;
+            c.EnvironmentVariable = null;  // nothing was ever consented to
             c.Kind = "openai-compatible";
             c.BaseUrl = "https://my-own-gateway.invalid/v1";
             chat.ActiveConnectionId = "openai";
             chat.ActiveModelId = "gpt-4";
         }, environmentKeys: Env("OPENAI_API_KEY", "sk-from-env"),
-           presets: new FakePresets(EnvPreset("openai", "OPENAI_API_KEY")));
+           presets: new FakePresets(EnvPreset("openai", "OPENAI_API_KEY")),
+           handler: handler);
 
-        // Resolves (OpenAI-compatible needs no key) but must NOT have picked up the environment credential.
+        // Asserted on the ABSENCE of a credential on the wire. Non-null resolution proves nothing here:
+        // OpenAI-compatible resolves with or without a key, so a version that borrowed the preset's key
+        // would have passed this test while sending someone else's credential to the reader's own gateway.
+        // (fable)
         var resolution = resolver.Resolve(out _);
         Assert.NotNull(resolution);
+
+        await foreach (var _ in resolution!.Provider.StreamAsync(
+            new ChatRequest("gpt-4", 256, null,
+                new[] { new ChatMessage(ChatRole.User, "hello") }), CancellationToken.None)) { }
+
+        Assert.False(handler.LastRequest!.Headers.Contains("Authorization"));
     }
 
     /// <summary>

@@ -771,4 +771,66 @@ public class AiModelCatalogTests
         Assert.Null(AiModelCatalog.LastEntryId("""{"data":[]}"""));
         Assert.Null(AiModelCatalog.LastEntryId("not json"));
     }
+
+    // #714: the listing authenticates exactly as chat does, INCLUDING from an adopted environment key.
+    //
+    // The first version of that work wired the environment into the chat resolver and left this path reading
+    // the credential store alone. An adopted connection would answer a question and then fail to list its
+    // models, reporting "the provider rejected the stored key" for a connection that has no stored key — the
+    // two-surfaces-disagreeing failure #673 exists to prevent, and which Authenticate's own summary forbids
+    // two lines above the code that had it. Untested is how it went missing. (fable)
+    [Fact]
+    public async Task An_adopted_environment_key_authenticates_the_listing_too()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"claude-opus-5"}]}"""),
+        });
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), credentials: null, NullLogger<AiModelCatalog>.Instance,
+            new CST.Avalonia.Services.Ai.Credentials.AiEnvironmentKeys(
+                n => n == "ANTHROPIC_API_KEY" ? "sk-from-env" : null));
+
+        await catalog.FetchAsync(new AiConnection(
+            Id: "claude",
+            DisplayName: "Claude",
+            Kind: ChatProviderKind.Anthropic,
+            BaseUrl: "https://api.anthropic.com",
+            Models: new List<AiModelEntry>(),
+            Headers: System.Array.Empty<AiHeader>(),
+            Inputs: new Dictionary<string, string>(),
+            UsesEnvironmentKey: true,
+            EnvironmentVariable: "ANTHROPIC_API_KEY"));
+
+        Assert.Equal("sk-from-env", string.Join(",", handler.LastRequest!.Headers.GetValues("x-api-key")));
+    }
+
+    // And a connection that never opted in does not borrow it here either.
+    [Fact]
+    public async Task A_listing_does_not_use_an_environment_key_without_the_opt_in()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"claude-opus-5"}]}"""),
+        });
+
+        var catalog = new AiModelCatalog(
+            new HttpClient(handler), credentials: null, NullLogger<AiModelCatalog>.Instance,
+            new CST.Avalonia.Services.Ai.Credentials.AiEnvironmentKeys(
+                n => n == "ANTHROPIC_API_KEY" ? "sk-from-env" : null));
+
+        await catalog.FetchAsync(new AiConnection(
+            Id: "claude",
+            DisplayName: "Claude",
+            Kind: ChatProviderKind.Anthropic,
+            BaseUrl: "https://api.anthropic.com",
+            Models: new List<AiModelEntry>(),
+            Headers: System.Array.Empty<AiHeader>(),
+            Inputs: new Dictionary<string, string>(),
+            UsesEnvironmentKey: false,
+            EnvironmentVariable: "ANTHROPIC_API_KEY"));
+
+        Assert.False(handler.LastRequest!.Headers.Contains("x-api-key"));
+    }
 }

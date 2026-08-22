@@ -180,6 +180,16 @@ namespace CST.Avalonia.Models
         /// </summary>
         public bool UsesEnvironmentKey { get; set; }
 
+        /// <summary>
+        /// The environment variable the reader adopted, recorded at the moment they adopted it. (#714)
+        ///
+        /// <para>Pinned rather than re-derived. The preset's variable list comes from models.dev and is
+        /// refreshed: a reordering, or an alias added upstream that the reader happens to have set for
+        /// something else, would change which credential goes to this endpoint with no second consent — the
+        /// exact silent adoption this feature exists to prevent, arriving later instead of at the start.</para>
+        /// </summary>
+        public string? EnvironmentVariable { get; set; }
+
         public string DisplayName { get; set; } = "";
 
         /// <summary><c>anthropic</c> or <c>openai-compatible</c>. A string rather than the enum so a rename

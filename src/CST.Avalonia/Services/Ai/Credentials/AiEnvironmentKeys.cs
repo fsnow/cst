@@ -47,6 +47,17 @@ public interface IAiEnvironmentKeys
 
     /// <summary>Every preset whose declared variables are satisfied right now.</summary>
     IReadOnlyList<AiEnvironmentKey> Discover(IEnumerable<AiProviderPreset> presets);
+
+    /// <summary>
+    /// The value of one named variable, or null when it is unset or empty. (#714)
+    ///
+    /// <para>This is what an adopted connection reads, and it takes the NAME the reader consented to rather
+    /// than re-deriving it from the preset. The catalogue's <c>env</c> lists are refreshed from models.dev:
+    /// a reordering, or a newly added alias the reader happens to have set for something else entirely, would
+    /// otherwise change which credential goes to the recorded endpoint — silently, with no second consent,
+    /// which is the precise property this feature exists to prevent. (fable)</para>
+    /// </summary>
+    string? Read(string variableName);
 }
 
 /// <inheritdoc />
@@ -60,6 +71,10 @@ public sealed class AiEnvironmentKeys : IAiEnvironmentKeys
     internal AiEnvironmentKeys(Func<string, string?> read) => _read = read;
 
     /// <inheritdoc />
+    public string? Read(string variableName) =>
+        string.IsNullOrWhiteSpace(variableName) ? null : ReadRaw(variableName);
+
+    /// <inheritdoc />
     public string? VariableFor(AiProviderPreset preset)
     {
         if (preset is null) return null;
@@ -70,7 +85,7 @@ public sealed class AiEnvironmentKeys : IAiEnvironmentKeys
         foreach (var name in preset.EnvironmentVariables)
         {
             if (string.IsNullOrWhiteSpace(name)) continue;
-            if (!string.IsNullOrWhiteSpace(Read(name))) return name;
+            if (!string.IsNullOrWhiteSpace(ReadRaw(name))) return name;
         }
         return null;
     }
@@ -79,7 +94,7 @@ public sealed class AiEnvironmentKeys : IAiEnvironmentKeys
     public string? ValueFor(AiProviderPreset preset)
     {
         var name = VariableFor(preset);
-        return name is null ? null : Read(name);
+        return name is null ? null : ReadRaw(name);
     }
 
     /// <inheritdoc />
@@ -95,7 +110,7 @@ public sealed class AiEnvironmentKeys : IAiEnvironmentKeys
     // or a CI runner that defines every name it knows — would otherwise read as a key that is present, and
     // offering to connect with it produces an authentication failure the reader cannot explain, from a
     // variable they did not know they had.
-    private string? Read(string name)
+    private string? ReadRaw(string name)
     {
         try
         {
