@@ -47,11 +47,15 @@ namespace CST.Avalonia.Services
 
         public async Task LoadSettingsAsync()
         {
+            // Held outside the try so the catch can attempt a tolerant read of the same bytes rather than
+            // going back to disk, where a file being rewritten underneath us would give a different answer
+            // than the one that failed. (#803)
+            string? json = null;
             try
             {
                 if (File.Exists(_settingsFilePath))
                 {
-                    var json = await File.ReadAllTextAsync(_settingsFilePath);
+                    json = await File.ReadAllTextAsync(_settingsFilePath);
                     var loadedSettings = JsonSerializer.Deserialize<Settings>(json, _jsonOptions);
                     
                     if (loadedSettings != null)
@@ -132,6 +136,19 @@ namespace CST.Avalonia.Services
                 // "Corrupt" is the rarer case anyway. The likelier one, and the observed one, is a file this
                 // build does not understand YET: written by a newer version, restored from a backup, or
                 // holding a shape we changed. None of those deserve deletion.
+                // Keep what parses, BEFORE falling back to an older copy. (#803)
+                //
+                // The two answers are not equivalent and the order matters: a backup is a previous save, so
+                // recovering from one loses everything the reader changed since, while this loses only the
+                // part we genuinely cannot read. The incident that produced all of this — one property whose
+                // type had changed — should have cost a header, not a session's work.
+                //
+                // Only reached once a strict read has already failed. An ordinary file never comes through
+                // here, which is deliberate: tolerance on every load would hide a shape change from everyone
+                // until it had hidden it for a year.
+                if (await TryLoadTolerantlyAsync(json).ConfigureAwait(false))
+                    return;
+
                 PreserveUnreadable();
 
                 // Then try to RECOVER, which is the half that means the reader never learns any of this
@@ -159,6 +176,60 @@ namespace CST.Avalonia.Services
         /// no backup could be read, which must not become the newest backup. (#785)
         /// </summary>
         private bool _backupNextSave = true;
+
+        /// <summary>
+        /// Rebuild the settings from a file a strict read refused, keeping every part that parses. (#803)
+        /// </summary>
+        private async Task<bool> TryLoadTolerantlyAsync(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return false;
+
+            try
+            {
+                var salvaged = TolerantSettingsReader.Read<Settings>(json!, _jsonOptions, out var dropped);
+                if (salvaged is null) return false;
+
+                // Nothing dropped means the strict read failed for a reason this cannot see. Do not claim a
+                // salvage that did not happen — fall through to the backups, which is the stronger answer.
+                if (dropped.Count == 0) return false;
+
+                foreach (var note in SettingsValidator.Migrate(salvaged))
+                    _logger.Information("Settings migration (partial read): {Note}", note);
+                foreach (var fix in SettingsValidator.Sanitize(salvaged))
+                    _logger.Warning("Settings sanitized (partial read): {Fix}", fix);
+
+                _settings = salvaged;
+                try { ApplyFirstRunDefaults(); } catch { /* see the load path */ }
+
+                // At Error, listing every path, because this is the one message that says what the reader
+                // lost. A partial load reported as a success is the defect one level down.
+                _logger.Error(
+                    "Settings could not be read in full. Kept everything that parsed; these were reset to "
+                    + "their defaults: {Dropped}", string.Join(", ", dropped));
+
+                // A COPY of the original kept beside it, before the salvage is written over it.
+                //
+                // The salvage path is only reached when at least one node was dropped — so part of the file
+                // was NOT read, and saving replaces its only copy. The dropped paths are named in the log;
+                // their CONTENT would survive only in a #785 backup, and only if the app itself had once
+                // saved it. A connection or model list the reader added since the last save would be
+                // destroyed outright, where the behaviour this replaces at least kept the whole file. A copy
+                // costs nothing and keeps that guarantee. (fable)
+                PreserveUnreadable(copy: true);
+
+                // AWAITED, not fired and forgotten — the same defect #785's review caught in the backup
+                // restore, which I reproduced here in a new place. Until the primary file is readable again
+                // a crash or force-quit sends the next launch down a path that knows nothing about this
+                // salvage, and the reader loses it having been silently rescued in between.
+                await SaveSettingsAsync().ConfigureAwait(false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Could not read the settings file even partially");
+                return false;
+            }
+        }
 
         /// <summary>The directory holding timestamped copies of previously-saved settings. (#785)</summary>
         private string BackupDirectory => Path.Combine(_settingsDirectory, "settings-backups");
@@ -276,7 +347,11 @@ namespace CST.Avalonia.Services
         /// <para>Never throws. It runs inside the load's catch, and a failure to preserve must not become a
         /// failure to start — the reader would then have neither their settings nor an application.</para>
         /// </summary>
-        private void PreserveUnreadable()
+        /// <param name="copy">
+        /// Keep the original in place as well. True on the salvage path, where the file is still the primary
+        /// and is about to be rewritten; false when the file is being abandoned entirely.
+        /// </param>
+        private void PreserveUnreadable(bool copy = false)
         {
             try
             {
@@ -289,13 +364,14 @@ namespace CST.Avalonia.Services
                     // reader's configuration would be left in place to be overwritten by the next save. (fable)
                     $"settings.unreadable-{DateTime.Now:yyyyMMdd-HHmmss-fff}.json");
 
-                File.Move(_settingsFilePath, kept, overwrite: false);
+                if (copy) File.Copy(_settingsFilePath, kept, overwrite: false);
+                else File.Move(_settingsFilePath, kept, overwrite: false);
 
                 // At Error, beside the failure itself: a reader who has just lost their configuration is
                 // reading this line, and it is the one that tells them it is recoverable.
                 _logger.Error(
-                    "The previous settings file could not be read and has been kept at {Path}. "
-                    + "Defaults are in use; nothing from it was deleted.", kept);
+                    "The previous settings file could not be read in full and has been kept at {Path}. "
+                    + "Nothing from it was deleted.", kept);
             }
             catch (Exception ex)
             {

@@ -67,14 +67,41 @@ public sealed class SettingsBackupRecoveryTests : IDisposable
     {
         await WithOneGoodSave("/books");
 
-        // Exactly the shape of the real failure: valid JSON, one property this build cannot convert.
-        await File.WriteAllTextAsync(SettingsPath,
-            """{ "Version": "1.0", "XmlBooksDirectory": "/books", "FontSettings": 12345 }""");
+        // Unreadable as a DOCUMENT, so there is nothing to salvage and the backup is the only answer.
+        //
+        // This test used to write valid JSON with one unconvertible property, which is the incident's own
+        // shape — and #803 now keeps such a file rather than replacing it with a previous save, which is the
+        // better outcome and is asserted in TolerantSettingsLoadTests. The backup path is for what tolerance
+        // cannot reach, and the fixture has to be that.
+        await File.WriteAllTextAsync(SettingsPath, "{ torn write, not json");
 
         var reopened = await Loaded(_dir);
 
         Assert.Equal("/books", reopened.Settings.XmlBooksDirectory);
         Assert.Equal("/idx", reopened.Settings.IndexDirectory);
+    }
+
+    // The routing between the two, stated once: a file that can be partly read is partly read, and only what
+    // cannot be read at all falls back to an older copy. The order matters because a backup is a PREVIOUS
+    // save — recovering from one loses everything changed since, while keeping what parses loses only the
+    // part genuinely unreadable. (#803)
+    [Fact]
+    public async Task A_partly_readable_file_is_kept_rather_than_replaced_by_an_older_backup()
+    {
+        await WithOneGoodSave("/books");
+
+        // Everything the reader has now, plus one property this build cannot convert.
+        await File.WriteAllTextAsync(SettingsPath,
+            """
+            { "Version": "1.0", "XmlBooksDirectory": "/new-books", "IndexDirectory": "/new-idx",
+              "FontSettings": 12345 }
+            """);
+
+        var reopened = await Loaded(_dir);
+
+        // The CURRENT values, not the backup's — the reader's recent changes survive.
+        Assert.Equal("/new-books", reopened.Settings.XmlBooksDirectory);
+        Assert.Equal("/new-idx", reopened.Settings.IndexDirectory);
     }
 
     [Fact]
