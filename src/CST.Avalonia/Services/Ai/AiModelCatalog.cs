@@ -96,10 +96,23 @@ namespace CST.Avalonia.Services.Ai
     /// Whether this listing is everything the endpoint has, so far as we can tell. (#728)
     ///
     /// <para>False when entries were skipped for want of a usable id — observed in the wild, a listing whose
-    /// nine entries yielded two we could read — or when the endpoint says there is another page. <b>A short
-    /// listing is still a listing</b>: it is shown, and every model in it is real. What it cannot support is
-    /// the inference in the other direction, that a model absent from it has been retired, which is why the
-    /// flag exists rather than a failure.</para>
+    /// nine entries yielded two we could read — or when the endpoint still says there is another page after
+    /// we stopped asking. <b>A short listing is still a listing</b>: it is shown, and every model in it is
+    /// real. What it cannot support is the inference in the other direction, that a model absent from it has
+    /// been retired, which is why the flag exists rather than a failure.</para>
+    ///
+    /// <para>Pages are now followed (#769), so the ordinary paged catalogue comes back complete. This stays
+    /// false for the cases where following them did not finish: an endpoint that claims another page but
+    /// gives no cursor to ask for it, one that ignores the cursor and repeats itself, a page that failed
+    /// after earlier pages had already been read, and the page cap.</para>
+    /// </param>
+    /// <param name="Skipped">
+    /// How many entries across every page carried no usable id, and so are not in <paramref name="Models"/>.
+    /// (#769)
+    ///
+    /// <para>Counted rather than only logged. A reader looking at a short list has no way to tell "this
+    /// provider offers three models" from "this provider listed nine and we understood three", and the log
+    /// line that knew the difference is not somewhere they will ever look.</para>
     /// </param>
     /// <param name="Reachable">
     /// Whether the endpoint answered at all — <b>not</b> whether the listing was useful.
@@ -110,10 +123,11 @@ namespace CST.Avalonia.Services.Ai
     /// </param>
     public sealed record AiCatalogResult(
         bool Ok, string? Problem, IReadOnlyList<AiCatalogModel> Models, bool? Reachable = null,
-        bool Complete = true)
+        bool Complete = true, int Skipped = 0)
     {
-        public static AiCatalogResult Success(IReadOnlyList<AiCatalogModel> models, bool complete = true) =>
-            new(true, null, models, true, complete);
+        public static AiCatalogResult Success(
+            IReadOnlyList<AiCatalogModel> models, bool complete = true, int skipped = 0) =>
+            new(true, null, models, true, complete, skipped);
 
         public static AiCatalogResult Fail(string problem, bool? reachable = null) =>
             new(false, problem, Array.Empty<AiCatalogModel>(), reachable, false);
@@ -146,6 +160,16 @@ namespace CST.Avalonia.Services.Ai
         /// This is a directory lookup, not a generation — none of the patience #673 grants a local runner
         /// applies.</summary>
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
+
+        /// <summary>
+        /// How many pages to follow before stopping and saying the listing is partial. (#769)
+        ///
+        /// <para>Anthropic's listing defaults to twenty entries a page, so this reaches five hundred models —
+        /// comfortably past any real catalogue, and OpenRouter's four hundred and twenty arrive on one page
+        /// because that protocol does not page at all. It is a backstop against an endpoint that always says
+        /// there is more, not an opinion about how many models a provider may have.</para>
+        /// </summary>
+        private const int MaxPages = 25;
 
         private readonly HttpClient _http;
         private readonly IAiCredentialStore? _credentials;
@@ -201,72 +225,162 @@ namespace CST.Avalonia.Services.Ai
                 return AiCatalogResult.Fail(ex.Error.Message);
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            Authenticate(request, connection);
-
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(Timeout);
 
+            var models = new List<AiCatalogModel>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var skipped = 0;
+            var complete = true;
+            string? cursor = null;
+
             try
             {
-                using var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
-
-                // Answered, even if the answer was no. A rejected key and a missing listing both prove the
-                // endpoint is there, which is the fact this reports - it says nothing about whether the
-                // listing was any use.
-                if (!response.IsSuccessStatusCode)
-                    return AiCatalogResult.Fail(
-                        Explain(response.StatusCode, connection, url), reachable: true);
-
-                var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
-                var models = Parse(body);
-
-                // A 200 carrying no models is not an error, but it is not a success the UI should silently
-                // present as an empty list either - the reader would read it as "this provider has none".
-                if (models.Count == 0)
-                    return AiCatalogResult.Fail($"{url} answered, but listed no models.", reachable: true);
-
-                // Both numbers, because one of them cannot answer the question that gets asked of this line.
-                // "Fetched 2 models from cerebras" reads as a fact about the provider, and is equally
-                // consistent with the provider having sent two and with our having understood two of nine -
-                // and the reader who says "but I know they support more" has no way to tell which, nor did
-                // we, from the log.
-                var listed = CountEntries(body);
-                var complete = listed == models.Count && !HasMore(body);
-                if (listed == models.Count)
+                for (var page = 1; ; page++)
                 {
-                    _logger.LogInformation(
-                        "Fetched {Count} models from {Connection}", models.Count, connection.Id);
+                    var pageUrl = cursor is null ? url : After(url, cursor);
+                    using var request = new HttpRequestMessage(HttpMethod.Get, pageUrl);
+                    Authenticate(request, connection);
+
+                    using var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
+
+                    // Answered, even if the answer was no. A rejected key and a missing listing both prove the
+                    // endpoint is there, which is the fact this reports - it says nothing about whether the
+                    // listing was any use.
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        if (page == 1)
+                            return AiCatalogResult.Fail(
+                                Explain(response.StatusCode, connection, url), reachable: true);
+
+                        // A later page failing costs the REST of the listing, not the part already in hand.
+                        // Throwing away twenty real models because the twenty-first page 500'd would turn a
+                        // partial answer into no answer, and the reader can use what arrived.
+                        _logger.LogWarning(
+                            "Listing {Connection}: page {Page} answered {Status}; keeping {Count} models "
+                            + "already read", connection.Id, page, (int)response.StatusCode, models.Count);
+                        complete = false;
+                        break;
+                    }
+
+                    var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+                    var pageModels = Parse(body);
+
+                    // Both numbers, because one of them cannot answer the question that gets asked of this
+                    // line. "Fetched 2 models from cerebras" reads as a fact about the provider, and is
+                    // equally consistent with the provider having sent two and with our having understood two
+                    // of nine - and the reader who says "but I know they support more" has no way to tell
+                    // which, nor did we, from the log.
+                    //
+                    // Accumulated per page rather than derived at the end from a total, because a gateway that
+                    // ignores the cursor sends the same page twice: the ids dedupe, the entry counts do not,
+                    // and a subtraction would report entries as unreadable that we read perfectly well.
+                    var listed = CountEntries(body);
+                    skipped += Math.Max(0, listed - pageModels.Count);
+                    if (listed != pageModels.Count)
+                        _logger.LogDebug("{Connection} listing page {Page}: {Body}", connection.Id, page, body);
+
+                    var added = 0;
+                    foreach (var model in pageModels)
+                        if (seen.Add(model.Id))
+                        {
+                            models.Add(model);
+                            added++;
+                        }
+
+                    // The end of the listing, and the ordinary exit.
+                    if (!HasMore(body)) break;
+
+                    // It says there is more. Ask for it by the last entry the endpoint itself listed - in
+                    // DOCUMENT order, which is not the order Parse returns: Parse sorts alphabetically, so
+                    // the last model in `pageModels` is generally not the last entry on the page, and paging
+                    // from it would skip whatever lies between.
+                    var next = LastEntryId(body);
+
+                    if (next is null || string.Equals(next, cursor, StringComparison.Ordinal) || added == 0)
+                    {
+                        // Three ways an endpoint can promise another page and not deliver one: no cursor to
+                        // ask with, the same cursor it gave last time, or a page whose every id we already
+                        // hold - which is what an OpenAI-compatible gateway that invents `has_more` but
+                        // ignores `after_id` produces. Each would loop forever if followed. (#769)
+                        _logger.LogWarning(
+                            "Listing {Connection}: page {Page} says there is more but did not advance; "
+                            + "keeping {Count} models", connection.Id, page, models.Count);
+                        complete = false;
+                        break;
+                    }
+
+                    cursor = next;
+
+                    if (page >= MaxPages)
+                    {
+                        // A bound, not a judgment about how many models a provider may have. Without it a
+                        // misbehaving endpoint that always says `has_more` and always advances would page
+                        // until the 20-second budget ran out, and report nothing at all.
+                        _logger.LogWarning(
+                            "Listing {Connection}: stopped at the {Max}-page limit with {Count} models",
+                            connection.Id, MaxPages, models.Count);
+                        complete = false;
+                        break;
+                    }
                 }
-                else
-                {
-                    _logger.LogWarning(
-                        "Fetched {Count} models from {Connection}, but its listing had {Listed} entries - "
-                        + "{Skipped} had no usable id", models.Count, connection.Id, listed, listed - models.Count);
-                    _logger.LogDebug("{Connection} listing: {Body}", connection.Id, body);
-                }
-                return AiCatalogResult.Success(models, complete);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (models.Count == 0)
             {
                 return AiCatalogResult.Fail(
                     $"No answer from {url} within {Timeout.TotalSeconds:0} seconds.", reachable: false);
             }
-            catch (HttpRequestException ex)
+            catch (HttpRequestException ex) when (models.Count == 0)
             {
                 // The endpoint is named on purpose. "Cannot connect to API" is the sentence OpenCode writes
                 // and the reason its users cannot diagnose a stopped local runner.
                 _logger.LogDebug(ex, "Model listing failed for {Connection}", connection.Id);
                 return AiCatalogResult.Fail($"No response from {url} — is the endpoint running?", reachable: false);
             }
-            catch (JsonException)
+            catch (JsonException) when (models.Count == 0)
             {
                 return AiCatalogResult.Fail($"{url} answered, but not with a model listing.", reachable: true);
             }
+            catch (Exception ex) when (
+                ex is OperationCanceledException or HttpRequestException or JsonException)
+            {
+                // Same three failures, but pages had already been read. The guards above carry `models.Count
+                // == 0` so that the FIRST page still produces its own named sentence; past that point the
+                // models in hand are worth more than the sentence, and the flag says they are not everything.
+                _logger.LogWarning(ex, "Listing {Connection}: stopped after {Count} models", connection.Id, models.Count);
+                complete = false;
+            }
+
+            // A 200 carrying no models is not an error, but it is not a success the UI should silently
+            // present as an empty list either - the reader would read it as "this provider has none".
+            if (models.Count == 0)
+                return AiCatalogResult.Fail($"{url} answered, but listed no models.", reachable: true);
+
+            // An entry we could not read is a HOLE in a listing, not a short listing, and the two want
+            // different sentences: "there may be more models" sends a reader to look for models that are not
+            // there, when the truth is that one of the entries is malformed. Both still clear Complete,
+            // because its one job is to gate the inference that a model absent from the listing has been
+            // retired - and a skipped entry is exactly a model that is absent without being retired.
+            // (egret, on #769)
+            if (skipped > 0) complete = false;
+
+            // Re-sorted across pages: Parse orders each page on its own, so concatenating two of them
+            // interleaves nothing and leaves the second page's A after the first page's Z.
+            models.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
+
+            if (skipped == 0)
+                _logger.LogInformation("Fetched {Count} models from {Connection}", models.Count, connection.Id);
+            else
+                _logger.LogWarning(
+                    "Fetched {Count} models from {Connection}, but its listing had {Listed} entries - "
+                    + "{Skipped} had no usable id",
+                    models.Count, connection.Id, models.Count + skipped, skipped);
+
+            return AiCatalogResult.Success(models, complete, skipped);
         }
 
         /// <summary>
@@ -329,18 +443,67 @@ namespace CST.Avalonia.Services.Ai
         };
 
         /// <summary>
-        /// Reads the fields we name, and only those.
+        /// The same listing URL, asking for what comes after <paramref name="cursor"/>. (#769)
         ///
-        /// <para><b>Never "whatever the source says".</b> A listing can gain a field that ranks or scores
-        /// models in a release nobody read, and rendering it wholesale would adopt that judgment silently. So
-        /// each field is pulled by name, and adding one is a deliberate act.</para>
+        /// <para>Built through <see cref="UriBuilder"/> and not by string concatenation, because the base URL
+        /// may already carry a query — an Azure-style endpoint pins <c>api-version</c> there — and appending
+        /// a second <c>?</c> produces a URL the endpoint rejects with a message about the wrong thing.</para>
         /// </summary>
+        internal static Uri After(Uri url, string cursor)
+        {
+            var builder = new UriBuilder(url);
+            var existing = builder.Query.TrimStart('?');
+            var pair = "after_id=" + Uri.EscapeDataString(cursor);
+            builder.Query = existing.Length == 0 ? pair : existing + "&" + pair;
+            return builder.Uri;
+        }
+
+        /// <summary>
+        /// The id of the last entry the listing carried, in the order the endpoint wrote them. (#769)
+        ///
+        /// <para><b>Document order, deliberately.</b> <see cref="Parse"/> sorts alphabetically for display, so
+        /// its last element is not the endpoint's last entry, and paging from that one would ask the endpoint
+        /// to continue after a model in the middle — silently losing everything between. Anthropic publishes
+        /// <c>last_id</c> for exactly this, and it is preferred where it exists; the walk is the fallback for
+        /// a gateway that pages without publishing one.</para>
+        /// </summary>
+        internal static string? LastEntryId(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+
+                if (doc.RootElement.TryGetProperty("last_id", out var last) &&
+                    last.ValueKind == JsonValueKind.String &&
+                    last.GetString() is { Length: > 0 } published)
+                    return published;
+
+                if (!doc.RootElement.TryGetProperty("data", out var data) ||
+                    data.ValueKind != JsonValueKind.Array)
+                    return null;
+
+                string? id = null;
+                foreach (var item in data.EnumerateArray())
+                    if (item.ValueKind == JsonValueKind.Object &&
+                        item.TryGetProperty("id", out var value) &&
+                        value.ValueKind == JsonValueKind.String &&
+                        value.GetString() is { Length: > 0 } entry)
+                        id = entry;
+
+                return id;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
         /// <summary>
         /// Whether the endpoint says it has another page. (#728)
         ///
-        /// <para>Anthropic's listing is paged and defaults to twenty per page. We do not follow the pages yet
-        /// — that is its own work — but reading the flag is what stops a first page being mistaken for the
-        /// whole catalogue, which would mark every model after the twentieth as retired.</para>
+        /// <para>Anthropic's listing is paged and defaults to twenty per page. Since #769 the pages ARE
+        /// followed, and this is what drives the walk; before that it existed only to stop a first page being
+        /// mistaken for the whole catalogue, which would mark every model after the twentieth as retired.</para>
         /// </summary>
         internal static bool HasMore(string json)
         {
@@ -358,6 +521,13 @@ namespace CST.Avalonia.Services.Ai
             }
         }
 
+        /// <summary>
+        /// Reads the fields we name, and only those.
+        ///
+        /// <para><b>Never "whatever the source says".</b> A listing can gain a field that ranks or scores
+        /// models in a release nobody read, and rendering it wholesale would adopt that judgment silently. So
+        /// each field is pulled by name, and adding one is a deliberate act.</para>
+        /// </summary>
         internal static IReadOnlyList<AiCatalogModel> Parse(string json)
         {
             using var doc = JsonDocument.Parse(json);

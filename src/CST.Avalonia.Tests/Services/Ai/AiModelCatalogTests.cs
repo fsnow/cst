@@ -525,4 +525,250 @@ public class AiModelCatalogTests
         Assert.DoesNotContain("59.5", serialised, StringComparison.Ordinal);
         Assert.DoesNotContain("intelligence", serialised, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ---- following the pages (#769) ---------------------------------------------------------------------
+
+    /// <summary>An Anthropic-shaped connection, for the paging tests.</summary>
+    private static AiConnection Paged() => new(
+        Id: "anthropic",
+        DisplayName: "Claude",
+        Kind: ChatProviderKind.Anthropic,
+        BaseUrl: "https://api.anthropic.com",
+        Models: new List<AiModelEntry>(),
+        Headers: System.Array.Empty<AiHeader>(),
+        Inputs: new Dictionary<string, string>());
+
+    private static AiModelCatalog CatalogOver(StubHttpMessageHandler handler) =>
+        new(new HttpClient(handler), credentials: null, NullLogger<AiModelCatalog>.Instance);
+
+    /// <summary>
+    /// The listing is read to the end, not one page deep. Before #769 an Anthropic-protocol connection with
+    /// more than twenty models showed the first twenty — and, because the flag said the listing was partial,
+    /// #728's retired-model marking never ran for it at all.
+    /// </summary>
+    [Fact]
+    public async Task A_paged_listing_is_followed_to_its_end()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    request.RequestUri!.Query.Contains("after_id=", StringComparison.Ordinal)
+                        ? """{"data":[{"id":"claude-sonnet"}],"has_more":false}"""
+                        : """{"data":[{"id":"claude-opus"}],"has_more":true,"last_id":"claude-opus"}"""),
+            });
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.True(result.Ok);
+        Assert.Equal(new[] { "claude-opus", "claude-sonnet" }, result.Models.Select(m => m.Id));
+
+        // Complete, so #728's marking may run from it — the point of following the pages at all.
+        Assert.True(result.Complete);
+        Assert.Equal(2, handler.RequestedUrls.Count);
+        Assert.Contains("after_id=claude-opus", handler.RequestedUrls[1].Query, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The cursor is the endpoint's LAST entry in document order, not the last of what Parse returns — Parse
+    /// sorts alphabetically, so paging from its tail would ask the provider to continue after a model in the
+    /// middle of the page and silently lose everything between.
+    /// </summary>
+    [Fact]
+    public async Task Paging_continues_from_the_endpoints_own_last_entry_not_the_alphabetical_one()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    request.RequestUri!.Query.Contains("after_id=", StringComparison.Ordinal)
+                        ? """{"data":[{"id":"m-last"}],"has_more":false}"""
+                        // Document order zebra, alpha — and no last_id, so the walk has to find it.
+                        : """{"data":[{"id":"zebra"},{"id":"alpha"}],"has_more":true}"""),
+            });
+
+        await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.Contains("after_id=alpha", handler.RequestedUrls[1].Query, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A gateway that invents <c>has_more</c> but ignores <c>after_id</c> hands back the same page for ever.
+    /// The walk stops the moment a page adds nothing, rather than looping until the timeout — and says the
+    /// listing is partial, because the endpoint is still claiming there is more.
+    /// </summary>
+    [Fact]
+    public async Task An_endpoint_that_promises_more_and_repeats_itself_is_not_followed_for_ever()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"only"}],"has_more":true,"last_id":"only"}"""),
+        });
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.True(result.Ok);
+        Assert.Equal("only", Assert.Single(result.Models).Id);
+        Assert.False(result.Complete);
+
+        // Two: the first page, and one attempt to advance that came back with nothing new.
+        Assert.Equal(2, handler.RequestedUrls.Count);
+    }
+
+    /// <summary>
+    /// A later page failing costs the rest of the listing, not the part already in hand. Throwing twenty real
+    /// models away because the twenty-first page answered 500 turns a partial answer into no answer.
+    /// </summary>
+    [Fact]
+    public async Task A_page_that_fails_after_the_first_keeps_what_was_already_read()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+            request.RequestUri!.Query.Contains("after_id=", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        """{"data":[{"id":"kept"}],"has_more":true,"last_id":"kept"}"""),
+                });
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.True(result.Ok);
+        Assert.Equal("kept", Assert.Single(result.Models).Id);
+        Assert.False(result.Complete);
+    }
+
+    /// <summary>The FIRST page failing still produces its own named sentence, rather than an empty success.</summary>
+    [Fact]
+    public async Task A_first_page_that_fails_still_reports_the_failure()
+    {
+        var handler = new StubHttpMessageHandler(
+            _ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.False(result.Ok);
+        Assert.NotNull(result.Problem);
+        Assert.True(result.Reachable);
+    }
+
+    /// <summary>
+    /// Entries we cannot read are counted, not merely logged. The observed case was a listing whose nine
+    /// entries yielded two — and the reader saw "2 models" with no way to tell that from a provider that
+    /// offers two.
+    /// </summary>
+    [Fact]
+    public async Task Unreadable_entries_are_counted_for_the_reader()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"data":[{"id":"good"},{"name":"no id"},{"name":"nor here"}],"has_more":false}"""),
+        });
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.True(result.Ok);
+        Assert.Equal("good", Assert.Single(result.Models).Id);
+        Assert.Equal(2, result.Skipped);
+
+        // A hole in the listing still bars #728's marking: a skipped entry is precisely a model that is
+        // absent from what we parsed without having been retired.
+        Assert.False(result.Complete);
+    }
+
+    /// <summary>
+    /// A gateway repeating a page must not have its entries counted twice as unreadable. Deriving the skipped
+    /// count by subtracting at the end would do exactly that — the ids dedupe, the entry counts do not.
+    /// </summary>
+    [Fact]
+    public async Task A_repeated_page_does_not_invent_unreadable_entries()
+    {
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"data":[{"id":"a"},{"id":"b"}],"has_more":true,"last_id":"b"}"""),
+        });
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.Equal(2, result.Models.Count);
+        Assert.Equal(0, result.Skipped);
+        Assert.False(result.Complete);
+    }
+
+    /// <summary>Models stay alphabetical across a page boundary, not merely within each page.</summary>
+    [Fact]
+    public async Task Models_from_several_pages_are_sorted_together()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    request.RequestUri!.Query.Contains("after_id=", StringComparison.Ordinal)
+                        ? """{"data":[{"id":"a-model"}],"has_more":false}"""
+                        : """{"data":[{"id":"z-model"}],"has_more":true,"last_id":"z-model"}"""),
+            });
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.Equal(new[] { "a-model", "z-model" }, result.Models.Select(m => m.Id));
+    }
+
+    /// <summary>
+    /// The cursor is added to a base URL that already carries a query without producing a second '?' — an
+    /// Azure-style endpoint pins api-version there, and the malformed URL would be rejected with a message
+    /// about the wrong thing entirely.
+    /// </summary>
+    [Fact]
+    public void The_cursor_is_added_to_a_url_that_already_has_a_query()
+    {
+        var next = AiModelCatalog.After(
+            new System.Uri("https://x.example/openai/v1/models?api-version=2026-01-01"), "m/1");
+
+        Assert.Equal("https", next.Scheme);
+        Assert.Equal("/openai/v1/models", next.AbsolutePath);
+        Assert.Contains("api-version=2026-01-01", next.Query, StringComparison.Ordinal);
+        Assert.Contains("after_id=m%2F1", next.Query, StringComparison.Ordinal);
+        Assert.Equal(1, next.Query.Count(c => c == '?'));
+    }
+
+    /// <summary>
+    /// An endpoint that always says there is more AND always advances is bounded by the page cap rather than
+    /// by the 20-second budget. Without the cap it would page until the timeout and then report nothing at
+    /// all — the worst of both, since every page it did read was real.
+    /// </summary>
+    [Fact]
+    public async Task An_endpoint_that_never_ends_is_stopped_by_the_page_cap()
+    {
+        var page = 0;
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            var id = $"m{page++}";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    $$"""{"data":[{"id":"{{id}}"}],"has_more":true,"last_id":"{{id}}"}"""),
+            };
+        });
+
+        var result = await CatalogOver(handler).FetchAsync(Paged());
+
+        Assert.True(result.Ok);
+        Assert.Equal(25, handler.RequestedUrls.Count);
+        Assert.Equal(25, result.Models.Count);
+        Assert.False(result.Complete);
+        Assert.Equal(0, result.Skipped);
+    }
+
+    /// <summary>The published cursor wins over the walk, and the walk covers a gateway that publishes none.</summary>
+    [Fact]
+    public void The_last_entry_is_read_from_last_id_when_the_endpoint_publishes_one()
+    {
+        Assert.Equal("published", AiModelCatalog.LastEntryId(
+            """{"data":[{"id":"a"},{"id":"b"}],"last_id":"published"}"""));
+
+        Assert.Equal("b", AiModelCatalog.LastEntryId("""{"data":[{"id":"a"},{"id":"b"}]}"""));
+        Assert.Null(AiModelCatalog.LastEntryId("""{"data":[]}"""));
+        Assert.Null(AiModelCatalog.LastEntryId("not json"));
+    }
 }
