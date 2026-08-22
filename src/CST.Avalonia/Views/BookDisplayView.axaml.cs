@@ -284,8 +284,17 @@ public partial class BookDisplayView : UserControl
     /// </returns>
     public async Task<(string? Text, int? Paragraph)> GetWebViewSelectionWithParagraphAsync()
     {
+        // EVERY WAY THIS CAN FAIL NOW SAYS WHICH ONE IT WAS. Two of the three returned a bare null, so a
+        // reader who was told "the page was not ready, or the request timed out" could not learn which, and
+        // neither could anyone reading the log: the sentence names two causes because nothing distinguished
+        // them. Same shape of defect as #817 and #824 — a failure with nowhere to report itself.
         if (_webView == null || !_isBrowserInitialized)
+        {
+            _logger.Information(
+                "AI selection unavailable: webView={HasWebView} browserInitialized={Initialized} tab={Tab}",
+                _webView != null, _isBrowserInitialized, _tabId);
             return (null, null);
+        }
         try
         {
             var tcs = new TaskCompletionSource<(string? Text, int? Paragraph)>();
@@ -335,24 +344,56 @@ public partial class BookDisplayView : UserControl
                             para = t;
                         }
                     }
-                    document.title = 'CST_AI_SEL:' + encodeURIComponent(text) + '|PARA=' + para + '|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                    var b64 = '';
+                    try {
+                        var bytes = new TextEncoder().encode(text), raw = '';
+                        for (var bi = 0; bi < bytes.length; bi++) raw += String.fromCharCode(bytes[bi]);
+                        b64 = btoa(raw);
+                    } catch (be) { b64 = ''; }
+                    document.title = 'CST_AI_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1) + '|PARA=' + para + '|LEN=' + b64.length + '|B64:' + b64;
                 } catch (e) {
-                    document.title = 'CST_AI_SEL:|PARA=|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                    document.title = 'CST_AI_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1) + '|PARA=|LEN=0|B64:';
                 }
                 })();";
             script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
             _webView.ExecuteScript(script);
 
-            var done = await Task.WhenAny(tcs.Task, Task.Delay(700));
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(AiSelectionTimeout));
             _aiSelectionTcs = null;
-            return done == tcs.Task ? await tcs.Task : (null, null);
+            watch.Stop();
+
+            if (done != tcs.Task)
+            {
+                // The title channel is shared — status updates and the dictionary lookup write it too — so a
+                // response that never arrives is worth recording rather than reporting as a generic timeout.
+                _logger.Information(
+                    "AI selection timed out after {Elapsed}ms waiting on the title channel, tab={Tab}",
+                    watch.ElapsedMilliseconds, _tabId);
+                return (null, null);
+            }
+
+            var answer = await tcs.Task;
+            _logger.Debug(
+                "AI selection read in {Elapsed}ms: {Length} char(s), paragraph {Paragraph}, tab={Tab}",
+                watch.ElapsedMilliseconds, answer.Text?.Length ?? 0, answer.Paragraph, _tabId);
+            return answer;
         }
         catch (Exception ex)
         {
-            _logger.Information(ex, "GetWebViewSelectionWithParagraph failed");
+            _logger.Information(ex, "GetWebViewSelectionWithParagraph failed, tab={Tab}", _tabId);
             return (null, null);
         }
     }
+
+    /// <summary>
+    /// How long to wait for the book WebView to answer with the current selection.
+    ///
+    /// <para>Named rather than inline so the number is arguable. It is a round trip through
+    /// <c>ExecuteScript</c> and back out through <c>document.title</c>, and the channel is shared with status
+    /// updates and the dictionary lookup, so the wait is not really "how long does the script take".</para>
+    /// </summary>
+    private static readonly TimeSpan AiSelectionTimeout = TimeSpan.FromMilliseconds(700);
 
     /// <summary>
     /// Returns the text the user has selected inside the book WebView (or null/empty if none). Used by
@@ -378,20 +419,41 @@ public partial class BookDisplayView : UserControl
             var script = @"
                 try {
                     var sel = window.getSelection ? window.getSelection().toString() : '';
-                    document.title = 'CST_LOOKUP_SEL:' + encodeURIComponent(sel) + '|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                    var lb64 = '';
+                    try {
+                        var lbytes = new TextEncoder().encode(sel), lraw = '';
+                        for (var li = 0; li < lbytes.length; li++) lraw += String.fromCharCode(lbytes[li]);
+                        lb64 = btoa(lraw);
+                    } catch (lbe) { lb64 = ''; }
+                    document.title = 'CST_LOOKUP_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1) + '|LEN=' + lb64.length + '|B64:' + lb64;
                 } catch (e) {
-                    document.title = 'CST_LOOKUP_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1);
+                    document.title = 'CST_LOOKUP_SEL:|TAB:__TAB_ID_PLACEHOLDER__' + '|SEQ:' + (window.__cstTitleSeq = (window.__cstTitleSeq || 0) + 1) + '|LEN=0|B64:';
                 }";
             script = script.Replace("__TAB_ID_PLACEHOLDER__", _tabId);
             _webView.ExecuteScript(script);
 
-            var done = await Task.WhenAny(tcs.Task, Task.Delay(700));
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(AiSelectionTimeout));
             _lookupSelectionTcs = null;
-            return done == tcs.Task ? await tcs.Task : null;
+
+            if (done != tcs.Task)
+            {
+                // WORTH SAYING BECAUSE NOTHING ELSE WILL. Both callers treat a null as "nothing selected":
+                // Cmd+D does nothing, and Cmd+Shift+F opens corpus search with no term prefilled, which is
+                // a supported state — you get exactly what you would get having selected nothing. So a
+                // selection lost to the title cap degrades into a case the design tolerates, and leaves no
+                // trace anywhere. That is why it could have been happening unnoticed. (#827)
+                _logger.Information(
+                    "Lookup selection timed out after {Elapsed}ms waiting on the title channel — the "
+                    + "caller will see this as no selection, tab={Tab}",
+                    AiSelectionTimeout.TotalMilliseconds, _tabId);
+                return null;
+            }
+
+            return await tcs.Task;
         }
         catch (Exception ex)
         {
-            _logger.Information(ex, "GetSelectionForLookup failed");
+            _logger.Information(ex, "GetSelectionForLookup failed, tab={Tab}", _tabId);
             return null;
         }
     }
@@ -2686,21 +2748,58 @@ public partial class BookDisplayView : UserControl
         {
             try
             {
+                // ROUTING BEFORE PAYLOAD, and the order is the whole of this. Chromium caps document.title
+                // at 4096 characters and truncates the tail; the selection used to come first, so a long one
+                // pushed |TAB: off the end, the tab check below rejected its own answer, and the request sat
+                // there until it timed out. Every observed failure had a title of exactly 4096 and no TAB.
+                // Myanmar percent-encodes to nine characters apiece, so ~455 characters were enough to do it
+                // — which is why it looked intermittent and script-dependent. (#827)
                 var data = title.Substring("CST_AI_SEL:".Length);
-                var parts = data.Split('|');
+
+                // Split only the routing half: base64 contains no '|', but taking the payload by index keeps
+                // that from being a thing anyone has to remember.
+                var payloadAt = data.IndexOf("|B64:", StringComparison.Ordinal);
+                var routing = (payloadAt >= 0 ? data.Substring(0, payloadAt) : data).Split('|');
+
                 string messageTabId = "";
-                foreach (var p in parts)
+                foreach (var p in routing)
                     if (p.StartsWith("TAB:")) { messageTabId = p.Substring(4); break; }
                 if (messageTabId != _tabId)
                     return;   // not for this tab
 
-                var encoded = parts.Length > 0 ? parts[0] : "";
-                string sel;
-                try { sel = Uri.UnescapeDataString(encoded); } catch { sel = encoded; }
-
                 int? para = null;
-                foreach (var p in parts)
+                foreach (var p in routing)
                     if (p.StartsWith("PARA=") && int.TryParse(p.Substring(5), out var n)) { para = n; break; }
+
+                var declaredLength = -1;
+                foreach (var p in routing)
+                    if (p.StartsWith("LEN=") && int.TryParse(p.Substring(4), out var l)) { declaredLength = l; break; }
+
+                var encoded = payloadAt >= 0 ? data.Substring(payloadAt + "|B64:".Length) : "";
+
+                // The payload can still be cut at the cap; base64 buys roughly 2.25x over percent-encoding
+                // for Myanmar but does not remove the ceiling. Say so rather than hand the model a half
+                // sentence — a silently shortened selection is a worse answer than an admitted failure,
+                // because nothing downstream can tell it apart from what the reader meant. Chunking is the
+                // real fix and is its own issue.
+                if (declaredLength >= 0 && encoded.Length != declaredLength)
+                {
+                    _logger.Warning(
+                        "CST_AI_SEL truncated by the title cap: {Got} of {Declared} base64 char(s), "
+                        + "title length {TitleLength}, tab={Tab}",
+                        encoded.Length, declaredLength, title.Length, _tabId);
+                    _aiSelectionTcs?.TrySetResult((null, null));
+                    return;
+                }
+
+                string sel;
+                try { sel = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded)); }
+                catch (Exception decodeEx)
+                {
+                    _logger.Warning(decodeEx, "CST_AI_SEL payload did not decode, tab={Tab}", _tabId);
+                    _aiSelectionTcs?.TrySetResult((null, null));
+                    return;
+                }
 
                 _logger.Information(
                     "CST_AI_SEL: {Length} char(s) selected, paragraph {Para}",
@@ -2720,16 +2819,46 @@ public partial class BookDisplayView : UserControl
         {
             try
             {
+                // Same layout as CST_AI_SEL and for the same reason — routing ahead of the payload, so the
+                // title cap costs selection characters rather than the ability to route the answer. Less
+                // likely to bite here, since a lookup is a word and a search is a phrase, but #827 wants
+                // searching a few sentences to be workable and that is the length where it starts to.
                 var data = title.Substring("CST_LOOKUP_SEL:".Length);
-                var parts = data.Split('|');
+
+                var payloadAt = data.IndexOf("|B64:", StringComparison.Ordinal);
+                var routing = (payloadAt >= 0 ? data.Substring(0, payloadAt) : data).Split('|');
+
                 string messageTabId = "";
-                foreach (var p in parts)
+                foreach (var p in routing)
                     if (p.StartsWith("TAB:")) { messageTabId = p.Substring(4); break; }
                 if (messageTabId != _tabId)
                     return;   // not for this tab
-                var encoded = parts.Length > 0 ? parts[0] : "";
+
+                var declaredLength = -1;
+                foreach (var p in routing)
+                    if (p.StartsWith("LEN=") && int.TryParse(p.Substring(4), out var l)) { declaredLength = l; break; }
+
+                var encoded = payloadAt >= 0 ? data.Substring(payloadAt + "|B64:".Length) : "";
+
+                if (declaredLength >= 0 && encoded.Length != declaredLength)
+                {
+                    _logger.Warning(
+                        "CST_LOOKUP_SEL truncated by the title cap: {Got} of {Declared} base64 char(s), "
+                        + "title length {TitleLength}, tab={Tab}",
+                        encoded.Length, declaredLength, title.Length, _tabId);
+                    _lookupSelectionTcs?.TrySetResult(null);
+                    return;
+                }
+
                 string sel;
-                try { sel = Uri.UnescapeDataString(encoded); } catch { sel = encoded; }
+                try { sel = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded)); }
+                catch (Exception decodeEx)
+                {
+                    _logger.Warning(decodeEx, "CST_LOOKUP_SEL payload did not decode, tab={Tab}", _tabId);
+                    _lookupSelectionTcs?.TrySetResult(null);
+                    return;
+                }
+
                 _lookupSelectionTcs?.TrySetResult(sel);
             }
             catch (Exception ex)
