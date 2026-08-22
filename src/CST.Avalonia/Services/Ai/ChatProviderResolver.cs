@@ -78,6 +78,16 @@ public static class AiCredentialNames
     public static string Header(string headerName) => "header-" + Slug(headerName);
 
     /// <summary>
+    /// The name a secret prompt answer is filed under. (#777)
+    ///
+    /// <para>Prefixed distinctly from <see cref="Header"/> because the two namespaces are independent: a
+    /// provider may well want a <c>token</c> input and an <c>X-Token</c> header on the same connection, and
+    /// folding both to one account name would have the second silently overwrite the first — the collision
+    /// #771 documents, arriving from a direction that check does not cover.</para>
+    /// </summary>
+    public static string Input(string inputKey) => "input-" + Slug(inputKey);
+
+    /// <summary>
     /// The character folding every part of an account name goes through, defined here so that the code which
     /// checks two names for collision and the code which stores under them cannot disagree.
     ///
@@ -376,12 +386,42 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         // Indexer assignment rather than ToDictionary: a duplicate name is refused before this runs, so this
         // cannot be reached with one - and if a later edit moves the guard, the reader should get a wrong
         // header rather than an exception surfacing as "Something went wrong running that request".
+        var substitutions = Substitutions(connection);
+
         var headers = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var header in connection.Headers)
             headers[header.Name] = header.Secret
                 ? _credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) ?? string.Empty
-                : CST.Avalonia.Models.Ai.AiTemplate.Expand(header.Value ?? string.Empty, connection.Inputs);
+                : CST.Avalonia.Models.Ai.AiTemplate.Expand(header.Value ?? string.Empty, substitutions);
 
         return headers;
+    }
+
+    /// <summary>
+    /// The inputs a header template may substitute: the plaintext answers, plus any secret answer fetched
+    /// from the credential store at this moment. (#777)
+    ///
+    /// <para>A header template is the one legitimate destination for a secret prompt — Cloudflare's gateway
+    /// token is the case in view — so the value has to arrive somewhere, and here is the latest possible
+    /// moment. It is not written back to <see cref="AiConnectionRecord.Inputs"/>: that object is what the
+    /// save path persists, and putting the secret in it even briefly is the leak this routing exists to
+    /// prevent.</para>
+    ///
+    /// <para><b>A secret with nothing stored is left unexpanded rather than filled with an empty string.</b>
+    /// The placeholder then survives into the header value, where <c>IsSendableHeader</c> already refuses it
+    /// — so the reader gets the refusal that names the unfinished field, instead of a header sent with a hole
+    /// in it and a 401 that names nothing. (#711)</para>
+    /// </summary>
+    private IReadOnlyDictionary<string, string> Substitutions(AiConnectionRecord connection)
+    {
+        if (connection.SecretInputs is not { Count: > 0 } secretKeys)
+            return connection.Inputs;
+
+        var substitutions = new Dictionary<string, string>(connection.Inputs, StringComparer.Ordinal);
+        foreach (var key in secretKeys)
+            if (_credentials?.Get(connection.Id, AiCredentialNames.Input(key)) is { Length: > 0 } value)
+                substitutions[key] = value;
+
+        return substitutions;
     }
 }

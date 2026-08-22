@@ -435,9 +435,16 @@
                                 <DataTemplate x:DataType="vm:AiInputRowViewModel">
                                     <StackPanel IsVisible="{Binding IsVisible}">
                                         <TextBlock Text="{Binding Message}" Classes="SettingLabel"/>
+                                        <!-- PasswordChar is the whole of the mask: Avalonia reads NUL as
+                                             "show the text", so a non-secret row binds '\0' and looks
+                                             exactly as it did. The watermark says "Stored — type to
+                                             replace" where a credential is already filed, because the box
+                                             is empty on every edit and would otherwise read as never
+                                             filled in. (#777) -->
                                         <TextBox Text="{Binding Value}"
                                                  IsVisible="{Binding IsFreeText}"
-                                                 Watermark="{Binding Placeholder}"
+                                                 PasswordChar="{Binding ValueMask}"
+                                                 Watermark="{Binding ValueWatermark}"
                                                  Width="320" HorizontalAlignment="Left"
                                                  Margin="0,0,0,15"/>
                                         <ComboBox ItemsSource="{Binding Options}"

@@ -243,6 +243,17 @@ namespace CST.Avalonia.ViewModels
                         ?? new AiInputPrompt(input.Key, input.Key),
                     vm.OnInputChanged) { Value = input.Value });
 
+            // A secret answer is not in Inputs — that is the point of it — so without this it would have no
+            // row at all, and a reader whose gateway token was rotated would have no way to enter the new one
+            // short of deleting the connection. The row opens EMPTY and says so, exactly as a secret header's
+            // does: a stored credential is never read back into a screen. (#777)
+            foreach (var key in connection.SecretInputs ?? Array.Empty<string>())
+                vm.Inputs.Add(new AiInputRowViewModel(
+                    preset?.Prompts?.FirstOrDefault(p => p.Key == key)
+                        ?? new AiInputPrompt(key, key, Secret: true),
+                    vm.OnInputChanged,
+                    hasStoredSecret: true));
+
             if (vm.Models.Count == 0) vm.Models.Add(new AiModelRowViewModel(vm.Models));
             vm.RefreshInputVisibility();
             return vm;
@@ -510,16 +521,25 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
-            var inputs = Inputs
+            var typed = Inputs
                 .Where(i => i.IsVisible && !string.IsNullOrWhiteSpace(i.Value))
                 .ToDictionary(i => i.Key, i => i.Value.Trim(), StringComparer.Ordinal);
+
+            // The draft's dictionary becomes `record.Inputs` verbatim, and `record.Inputs` is written to
+            // settings.json - so a secret answer must not be in it. `typed` keeps them for AddFromPreset,
+            // which is the one caller allowed to see them, and files them in the credential store itself.
+            // (#777)
+            var inputs = typed
+                .Where(pair => !Inputs.Any(i =>
+                    i.IsSecret && string.Equals(i.Key, pair.Key, StringComparison.Ordinal)))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 
             // Order matters: an edit updates even when it carries a preset, or saving one would try to add a
             // second connection under an id that is already taken.
             var result = _existingId is not null
                 ? _service.Update(_existingId, BuildDraft(inputs))
                 : _preset is not null
-                    ? AddPreset(inputs)
+                    ? AddPreset(typed)
                     : _service.Add(Id.Trim(), BuildDraft(inputs));
 
             if (!result.Ok)
@@ -531,6 +551,7 @@ namespace CST.Avalonia.ViewModels
             var savedId = result.Connection?.Id ?? _existingId ?? Id.Trim();
             StoreKey(savedId);
             StoreHeaderSecrets(savedId);
+            StoreInputSecrets(savedId, typed);
             _close(true);
         }
 
@@ -561,6 +582,29 @@ namespace CST.Avalonia.ViewModels
 
         /// <summary>Hands the key over once the connection it belongs to exists, so it is filed under an id
         /// that is already real.</summary>
+        /// <summary>
+        /// Files a secret prompt answer the reader typed on this sheet. (#777)
+        ///
+        /// <para>Runs on the EDIT path. The add path does not need it — <c>AddFromPreset</c> is handed the
+        /// secrets and files them itself, because it is also the code that decides which keys are secret and
+        /// records them on the connection, and splitting that decision across two objects is how the two come
+        /// to disagree.</para>
+        ///
+        /// <para>An empty box keeps what is stored rather than clearing it: the box is empty on every edit by
+        /// design, since a stored secret is never read back into a screen. There is no sweep to match
+        /// <c>StoreHeaderSecrets</c>' because an input key comes from the preset's own prompt list and cannot
+        /// be renamed or removed on this sheet — if that ever changes, the orphan it would leave is the same
+        /// invisible one, and this is where the sweep belongs.</para>
+        /// </summary>
+        private void StoreInputSecrets(string connectionId, IReadOnlyDictionary<string, string> typed)
+        {
+            if (_credentials is null) return;
+
+            foreach (var row in Inputs.Where(i => i.IsSecret))
+                if (typed.TryGetValue(row.Key, out var value) && !string.IsNullOrWhiteSpace(value))
+                    _credentials.Set(connectionId, AiCredentialNames.Input(row.Key), value);
+        }
+
         private void StoreKey(string connectionId)
         {
             if (_credentials is null || string.IsNullOrWhiteSpace(ApiKeyEntry)) return;
@@ -884,15 +928,38 @@ namespace CST.Avalonia.ViewModels
         private string _value = "";
         private bool _isVisible = true;
 
-        public AiInputRowViewModel(AiInputPrompt prompt, Action changed)
+        public AiInputRowViewModel(AiInputPrompt prompt, Action changed, bool hasStoredSecret = false)
         {
             _prompt = prompt;
             _changed = changed;
+            HasStoredSecret = hasStoredSecret;
         }
 
         public string Key => _prompt.Key;
 
         public string Message => _prompt.Message;
+
+        /// <summary>Whether this answer is a credential, and so is never persisted to the settings file or
+        /// read back into this screen. (#777)</summary>
+        public bool IsSecret => _prompt.Secret;
+
+        /// <summary>Whether the credential store already holds an answer for this prompt.</summary>
+        public bool HasStoredSecret { get; }
+
+        /// <summary>
+        /// The masking character, or <c>'\0'</c> for none — Avalonia reads NUL as "show the text", so this
+        /// is the whole of the mask rather than a separate flag. (#777)
+        /// </summary>
+        public char ValueMask => IsSecret ? '\u2022' : '\0';
+
+        /// <summary>
+        /// What the empty box says. A stored secret is never read back, so on an edit the box is empty for a
+        /// prompt that HAS an answer — and an empty box with the ordinary placeholder under it reads as "this
+        /// was never filled in", which invites a reader to retype a credential they did not need to.
+        /// </summary>
+        public string? ValueWatermark => IsSecret && HasStoredSecret
+            ? "Stored — type to replace"
+            : _prompt.Placeholder;
 
         public string? Placeholder => _prompt.Placeholder;
 

@@ -185,6 +185,21 @@ namespace CST.Avalonia.Models
         public Dictionary<string, string> Inputs { get; set; } = new();
 
         /// <summary>
+        /// Which prompt answers are credentials, and so live in the OS credential store rather than here.
+        /// (#777)
+        ///
+        /// <para>The key is recorded and the value is not, exactly as a secret header records its name and not
+        /// its value (#771). A key listed here is absent from <see cref="Inputs"/>; it is fetched under
+        /// <c>AiCredentialNames.Input(key)</c> when a header template needs it.</para>
+        ///
+        /// <para><b>Nullable rather than <c>= new()</c>.</b> A property initializer is overwritten by an
+        /// explicit <c>null</c> in the JSON, so the initializer is not the guarantee it looks like — and
+        /// every read here treats absent and empty alike, which is the honest reading for a file written
+        /// before this field existed.</para>
+        /// </summary>
+        public List<string>? SecretInputs { get; set; }
+
+        /// <summary>
         /// Which header carries the credential. Azure uses <c>api-key</c> and expects <c>Authorization</c> to
         /// be ABSENT rather than also present, so this REPLACES the auth header rather than adding one.
         /// </summary>

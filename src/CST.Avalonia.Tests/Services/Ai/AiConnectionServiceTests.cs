@@ -638,4 +638,215 @@ public class AiConnectionServiceTests
         Assert.True(service.Add("mine", Draft()).Ok);
         Assert.True(service.Update("mine", Draft("Renamed")).Ok);
     }
+
+    // ---- a secret prompt answer (#777) ------------------------------------------------------------------
+
+    /// <summary>A preset source holding exactly the presets a test names.</summary>
+    private sealed class Presets : IAiPresetSource
+    {
+        public Presets(params AiProviderPreset[] presets) => Presets_ = presets;
+        private AiProviderPreset[] Presets_ { get; }
+        IReadOnlyList<AiProviderPreset> IAiPresetSource.Presets => Presets_;
+        public AiPresetState State => AiPresetState.Ready;
+        public string? Problem => null;
+        public event System.EventHandler? PresetsChanged;
+        public System.Threading.Tasks.Task EnsureLoadedAsync(System.Threading.CancellationToken ct = default)
+            => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task RefreshAsync(System.Threading.CancellationToken ct = default)
+        {
+            PresetsChanged?.Invoke(this, System.EventArgs.Empty);
+            return System.Threading.Tasks.Task.CompletedTask;
+        }
+    }
+
+    /// <summary>A gateway that wants a token in a HEADER — the legitimate destination for a secret.</summary>
+    private static AiProviderPreset GatewayPreset() => new(
+        Id: "gateway",
+        DisplayName: "Gateway",
+        Kind: ChatProviderKind.OpenAiCompatible,
+        BaseUrl: "https://gateway.example/v1",
+        Methods: new List<AiCredentialMethod> { new AiCredentialMethod.Key() },
+        Prompts: new List<AiInputPrompt>
+        {
+            new("accountId", "Account id"),
+            new("gatewayToken", "Gateway token", Secret: true),
+        },
+        Headers: new Dictionary<string, string> { ["cf-aig-authorization"] = "Bearer {gatewayToken}" });
+
+    private static (AiConnectionService Service, Settings Settings, Keys Keys) MakeWith(AiProviderPreset preset)
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var keys = new Keys();
+        return (new AiConnectionService(svc.Object, keys, new Presets(preset)), settings, keys);
+    }
+
+    /// <summary>
+    /// The defect #777 exists for. Every prompt answer used to go to <c>Inputs</c>, which is written to
+    /// settings.json in the clear — so the moment a preset asked for a secret, the easy route leaked it.
+    /// </summary>
+    [Fact]
+    public void A_secret_prompt_answer_goes_to_the_credential_store_and_not_the_settings_file()
+    {
+        var (service, settings, keys) = MakeWith(GatewayPreset());
+
+        var result = service.AddFromPreset("gateway", new Dictionary<string, string>
+        {
+            ["accountId"] = "acct-123",
+            ["gatewayToken"] = "sk-secret-value",
+        });
+
+        Assert.True(result.Ok);
+        var record = Assert.Single(settings.Ai.Chat.Connections);
+
+        // The identifier is in the file, as it should be.
+        Assert.Equal("acct-123", record.Inputs["accountId"]);
+
+        // The secret is NOT, under any key.
+        Assert.DoesNotContain("gatewayToken", record.Inputs.Keys);
+        Assert.DoesNotContain("sk-secret-value", record.Inputs.Values);
+
+        // It is in the store, and the record says which key to look under.
+        Assert.Equal("sk-secret-value", keys.Get("gateway", AiCredentialNames.Input("gatewayToken")));
+        Assert.Equal(new[] { "gatewayToken" }, record.SecretInputs);
+    }
+
+    /// <summary>
+    /// Removing a connection must take its input secret with it. An orphan in the keychain is invisible by
+    /// definition — nothing reads it, so nothing reports it — and would be silently re-adopted by a later
+    /// connection created under the same id. (#759)
+    /// </summary>
+    [Fact]
+    public void Removing_a_connection_deletes_its_input_secret_too()
+    {
+        var (service, _, keys) = MakeWith(GatewayPreset());
+        service.AddFromPreset("gateway", new Dictionary<string, string>
+        {
+            ["accountId"] = "acct-123",
+            ["gatewayToken"] = "sk-secret-value",
+        });
+
+        service.Remove("gateway");
+
+        Assert.Null(keys.Get("gateway", AiCredentialNames.Input("gatewayToken")));
+    }
+
+    /// <summary>
+    /// A secret must not be substituted into a base URL. A URL reaches the provider's access logs, every
+    /// proxy between, the Providers list, and the error sentences this code is careful to make name the
+    /// endpoint — so refusing at the seam makes it unreachable rather than discouraged.
+    /// </summary>
+    [Fact]
+    public void A_preset_that_would_put_a_secret_in_its_address_is_refused()
+    {
+        var leaky = new AiProviderPreset(
+            Id: "leaky",
+            DisplayName: "Leaky",
+            Kind: ChatProviderKind.OpenAiCompatible,
+            BaseUrl: "https://leaky.example/{gatewayToken}/v1",
+            Methods: new List<AiCredentialMethod> { new AiCredentialMethod.Key() },
+            Prompts: new List<AiInputPrompt> { new("gatewayToken", "Gateway token", Secret: true) });
+
+        var (service, settings, keys) = MakeWith(leaky);
+
+        var result = service.AddFromPreset("leaky", new Dictionary<string, string>
+        {
+            ["gatewayToken"] = "sk-secret-value",
+        });
+
+        Assert.False(result.Ok);
+        Assert.Contains("must not go in a URL", result.Problem);
+
+        // Refused means nothing was created and nothing was filed.
+        Assert.Empty(settings.Ai.Chat.Connections);
+        Assert.Null(keys.Get("leaky", AiCredentialNames.Input("gatewayToken")));
+    }
+
+    /// <summary>
+    /// Where there is nowhere to store a secret, say so. Writing it to the plaintext file "for now" is the
+    /// leak; doing that without telling the reader is the worse half. (#771's call, unchanged.)
+    /// </summary>
+    [Fact]
+    public void A_secret_prompt_is_refused_where_there_is_no_credential_store()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var service = new AiConnectionService(svc.Object, credentials: null, new Presets(GatewayPreset()));
+
+        var result = service.AddFromPreset("gateway", new Dictionary<string, string>
+        {
+            ["accountId"] = "acct-123",
+            ["gatewayToken"] = "sk-secret-value",
+        });
+
+        Assert.False(result.Ok);
+        Assert.Contains("no credential store", result.Problem);
+        Assert.Empty(settings.Ai.Chat.Connections);
+    }
+
+    /// <summary>A preset with no secret prompt is unaffected, credential store or not.</summary>
+    [Fact]
+    public void A_plain_prompt_answer_still_goes_to_the_settings_file()
+    {
+        var (service, settings, _) = MakeWith(new AiProviderPreset(
+            Id: "azure-like",
+            DisplayName: "Azure-like",
+            Kind: ChatProviderKind.OpenAiCompatible,
+            BaseUrl: "https://{resourceName}.example/v1",
+            Methods: new List<AiCredentialMethod> { new AiCredentialMethod.Key() },
+            Prompts: new List<AiInputPrompt> { new("resourceName", "Resource name") }));
+
+        var result = service.AddFromPreset(
+            "azure-like", new Dictionary<string, string> { ["resourceName"] = "mybox" });
+
+        Assert.True(result.Ok);
+        var record = Assert.Single(settings.Ai.Chat.Connections);
+        Assert.Equal("mybox", record.Inputs["resourceName"]);
+        Assert.Null(record.SecretInputs);
+    }
+
+    /// <summary>
+    /// No preset this build ships puts a secret prompt in its address. (#777)
+    ///
+    /// <para>The service refuses one at the point of save, which is what makes it unreachable for a reader.
+    /// This is the other half: it fails the BUILD, so the mistake is caught by whoever writes the preset
+    /// rather than by whoever tries to add it. The presets are hand-kept in one file and the fetched
+    /// catalogue constructs no prompts at all, so this is a foot-gun we would hand ourselves — the kind worth
+    /// nailing shut rather than remembering.</para>
+    /// </summary>
+    [Fact]
+    public void No_shipped_preset_would_put_a_secret_in_its_address()
+    {
+        foreach (var preset in AiProviderPresets.All)
+        {
+            var secrets = (preset.Prompts ?? Array.Empty<AiInputPrompt>())
+                .Where(prompt => prompt.Secret)
+                .Select(prompt => prompt.Key)
+                .ToHashSet(StringComparer.Ordinal);
+
+            if (secrets.Count == 0) continue;
+
+            foreach (var placeholder in AiTemplate.PlaceholdersIn(preset.BaseUrl))
+                Assert.False(
+                    secrets.Contains(placeholder),
+                    $"{preset.Id} substitutes the secret '{placeholder}' into its base URL. A URL reaches "
+                    + "access logs, the Providers list and every error that names the endpoint. Put it in a "
+                    + "header template instead.");
+        }
+    }
+
+    /// <summary>
+    /// An input secret and a header secret of the same name occupy different accounts. A provider wanting a
+    /// `token` input and an `X-Token` header on one connection is not exotic, and folding both to one name
+    /// would have the second silently overwrite the first — the #771 collision from a direction that check
+    /// does not cover.
+    /// </summary>
+    [Fact]
+    public void An_input_secret_and_a_header_secret_of_the_same_name_do_not_collide()
+    {
+        Assert.NotEqual(AiCredentialNames.Input("token"), AiCredentialNames.Header("token"));
+        Assert.NotEqual(AiCredentialNames.Input("token"), AiCredentialNames.Primary);
+    }
 }
