@@ -220,6 +220,17 @@ namespace CST.Avalonia.ViewModels
                 // (fable review)
                 _authHeaderName = connection.AuthHeaderName,
                 _authScheme = connection.AuthScheme,
+
+                // The adoption has to survive an edit too, and for the same reason the auth shape does.
+                // Without it the sheet forgets this connection authenticates from the environment, decides a
+                // required key is missing, and REFUSES TO SAVE — telling a reader whose credential works
+                // perfectly that the provider needs an API key. Their only ways out were pasting the
+                // environment's key into the keychain, which is the copy the adoption promises never to make,
+                // or deleting and re-adding, which destroys the model list this edit path exists to preserve.
+                // (#714, fable review)
+                _adoptEnvironmentVariable = connection.UsesEnvironmentKey
+                    ? connection.EnvironmentVariable
+                    : null,
             };
 
             foreach (var model in connection.Models)
@@ -391,7 +402,12 @@ namespace CST.Avalonia.ViewModels
             ? "Stored in the operating system's credential store, never in settings."
             : HasStoredKey
                 ? $"A key is stored for {_displayName}. Paste a new one to replace it."
-                : $"No key is stored for {_displayName}.";
+                // "No key is stored" is true and reads as "you have no key", which on an adopted connection is
+                // false — it authenticates from the environment, and saying otherwise sends the reader to
+                // paste one they do not need. (#714, fable review)
+                : _adoptEnvironmentVariable is { } variable
+                    ? $"{_displayName} uses the key in {variable}. Paste one here only to use a different key."
+                    : $"No key is stored for {_displayName}.";
 
         /// <summary>
         /// Whether the "optional" line under the key box applies.
@@ -437,8 +453,8 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public string? EnvironmentKeyNote => _adoptEnvironmentVariable is null
             ? null
-            : $"This connection will use the key in {_adoptEnvironmentVariable}. "
-              + "It stays in your environment — nothing is copied here.";
+            : $"This connection uses the key in {_adoptEnvironmentVariable}. It stays in your environment — "
+              + "nothing is copied here, and you do not need to paste a key below.";
 
         public bool HasEnvironmentKeyNote => EnvironmentKeyNote is not null;
 

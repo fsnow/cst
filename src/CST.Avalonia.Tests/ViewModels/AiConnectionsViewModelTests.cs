@@ -933,6 +933,82 @@ public class AiConnectionsViewModelTests
     }
 
     /// <summary>
+    /// The sheet path, end to end — the half that had no enforcement at all.
+    ///
+    /// <para>Three mutations survived the whole suite before this existed: dropping the variable name on the
+    /// way into the sheet, dropping it again on the way out, and deleting the required-key suppression. Each
+    /// silently turns adoption into an ordinary add that then demands a typed key. This test fails on all
+    /// three. (fable review of #814)</para>
+    /// </summary>
+    [Fact]
+    public void A_prompted_provider_adopted_through_the_sheet_records_the_variable_and_needs_no_key()
+    {
+        var (vm, service) = MakeWithEnv(
+            Env("AZURE_API_KEY"),
+            EnvPreset("azure", "Azure", new[] { "AZURE_API_KEY" },
+                new List<AiInputPrompt> { new("resourceName", "Resource name") }));
+
+        Assert.Single(vm.FoundKeys).UseCommand.Execute().Subscribe();
+
+        var editor = Assert.IsType<AiConnectionEditorViewModel>(vm.Editor);
+
+        // The sheet says which variable it is carrying. It was bound to nothing before this.
+        Assert.True(editor.HasEnvironmentKeyNote);
+        Assert.Contains("AZURE_API_KEY", editor.EnvironmentKeyNote!, StringComparison.Ordinal);
+
+        editor.Inputs.Single(i => i.Key == "resourceName").Value = "mybox";
+
+        // Saving with the key box EMPTY has to succeed: demanding a key here would refuse the very thing the
+        // button offered to do.
+        editor.SaveCommand.Execute().Subscribe();
+
+        var connection = Assert.Single(service.Connections);
+        Assert.Equal(CredentialSource.Environment, connection.KeySource);
+        Assert.Equal("AZURE_API_KEY", connection.EnvironmentVariable);
+    }
+
+    /// <summary>
+    /// Editing an adopted connection must not demand a key it was promised it would never need.
+    ///
+    /// <para>The sheet forgot the adoption on the edit path, so <c>MissingRequiredKey</c> fired and Save was
+    /// refused with "needs an API key" — on a connection whose credential works. The only ways out were
+    /// pasting the environment's key into the keychain, which is the copy adoption exists to avoid, or
+    /// delete-and-re-add, which destroys the model list the edit path exists to preserve. (fable review of
+    /// #814)</para>
+    /// </summary>
+    [Fact]
+    public void An_adopted_connection_can_be_edited_without_pasting_a_key()
+    {
+        var (vm, service) = MakeWithEnv(
+            Env("AZURE_API_KEY"),
+            EnvPreset("azure", "Azure", new[] { "AZURE_API_KEY" },
+                new List<AiInputPrompt> { new("resourceName", "Resource name") }));
+
+        Assert.Single(vm.FoundKeys).UseCommand.Execute().Subscribe();
+        var adding = Assert.IsType<AiConnectionEditorViewModel>(vm.Editor);
+        adding.Inputs.Single(i => i.Key == "resourceName").Value = "mybox";
+        adding.SaveCommand.Execute().Subscribe();
+
+        // Now reopen it, change the resource name, and save — with nothing in the key box.
+        var row = vm.Connections.Single(r => r.Id == "azure");
+        row.EditCommand.Execute().Subscribe();
+        var editing = Assert.IsType<AiConnectionEditorViewModel>(vm.Editor);
+
+        editing.Inputs.Single(i => i.Key == "resourceName").Value = "renamed";
+        editing.SaveCommand.Execute().Subscribe();
+
+        Assert.Null(vm.Problem);
+        Assert.Null(editing.Problem);
+
+        var connection = Assert.Single(service.Connections);
+        Assert.Equal("renamed", connection.Inputs["resourceName"]);
+
+        // And the adoption survived the edit rather than being silently dropped or conferred.
+        Assert.Equal("AZURE_API_KEY", connection.EnvironmentVariable);
+        Assert.Equal(CredentialSource.Environment, connection.KeySource);
+    }
+
+    /// <summary>
     /// A provider the reader has already configured is not offered, whatever their environment holds. That
     /// decision is made, and re-offering it would be the nagging this section is shaped to avoid.
     /// </summary>
@@ -941,6 +1017,10 @@ public class AiConnectionsViewModelTests
     {
         var (vm, service) = MakeWithEnv(
             Env("OPENAI_API_KEY"), EnvPreset("openai", "OpenAI", new[] { "OPENAI_API_KEY" }));
+
+        // Asserted BEFORE, or this passes with discovery deleted entirely — it would be checking that an
+        // empty list is still empty. (fable review of #814)
+        Assert.Single(vm.FoundKeys);
 
         // No manual refresh: adding raises ConnectionsChanged, which is what the tab binds to.
         service.AddFromPreset("openai", new Dictionary<string, string>());

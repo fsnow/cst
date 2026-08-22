@@ -425,6 +425,17 @@
                              shared key box elsewhere in Settings cannot say which connection it belongs to,
                              so a reader pasting an OpenRouter key while some other endpoint happens to be
                              active files it under that one — #678's collision with a new cause. -->
+                        <!-- The consent this sheet was opened to carry. Without it the reader who pressed a
+                             button naming their environment variable lands on a screen that says "Enter your
+                             API key" and mentions the variable nowhere — so they paste the very key the
+                             adoption exists to avoid copying, or they conclude the button did nothing.
+                             The property existed and was bound to nothing. (#714, fable review) -->
+                        <TextBlock Text="{Binding EnvironmentKeyNote}"
+                                   IsVisible="{Binding HasEnvironmentKeyNote}"
+                                   Classes="SettingDescription"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"/>
+
                         <StackPanel IsVisible="{Binding ShowKeyField}">
                             <TextBlock Text="API key" Classes="SettingLabel"/>
                             <StackPanel Orientation="Horizontal" Spacing="6">
