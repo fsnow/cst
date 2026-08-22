@@ -448,6 +448,15 @@ public sealed class PromptBuilder : IPromptBuilder
         // Explain answer, which never asks for one, is a nag about something that did not affect the answer.
         foreach (var part in bundle.Budget.Parts.Where(p => IsShown(p, shown)))
         {
+            // THE SELECTION IS EXCLUDED BECAUSE IT HAS ITS OWN SENTENCE BELOW, and without this it got both.
+            // The reader saw "2 notes about this request": the generic one naming a cause, then the specific
+            // one saying what actually happened to their answer. Two notices for one fact reads as two
+            // things having gone wrong, and the generic one was the worse of the pair — it named a cause
+            // ("the page was not ready, or the request timed out") that #824 and #827 showed was not what
+            // happened, and said "could not be gathered", which is the bundler's vocabulary, not a reader's.
+            if (string.Equals(part.Name, BundlePartNames.Selection, System.StringComparison.Ordinal))
+                continue;
+
             if (part.State == BundlePartState.Unavailable)
                 notices.Add($"The {PartLabel(part.Name)} could not be gathered: {part.Detail ?? "not available"}.");
             else if (part.State == BundlePartState.TrimmedForBudget)
