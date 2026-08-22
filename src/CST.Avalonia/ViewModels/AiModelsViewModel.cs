@@ -478,6 +478,25 @@ namespace CST.Avalonia.ViewModels
                             Id, _fetched.Select(m => m.Id).ToList()));
                         Refresh();
                     }
+
+                    // A fetch can succeed and still not be the whole listing, and the two ways that happens
+                    // are different facts that must not share a sentence. An entry we could not read is a
+                    // HOLE - the models around it are all here, one is malformed - while a walk that stopped
+                    // early means there are more models we never saw. Telling the first reader "there may be
+                    // more" sends them looking for models that do not exist; telling the second "one entry
+                    // was unreadable" understates it. (#769, egret)
+                    //
+                    // Said at all because until now it was said only to the log: the count read "3 models"
+                    // whether the provider offered three or offered nine and we understood three, and the
+                    // reader who knew better had no way to tell which. (#769)
+                    FetchProblem = result.Skipped switch
+                    {
+                        0 when result.Complete => null,
+                        0 => $"This is part of {DisplayName}'s listing — it did not send the rest.",
+                        1 => $"One entry in {DisplayName}'s listing could not be read, so it is not shown.",
+                        var n => $"{n} entries in {DisplayName}'s listing could not be read, "
+                                 + "so they are not shown.",
+                    };
                 }
                 else
                 {
