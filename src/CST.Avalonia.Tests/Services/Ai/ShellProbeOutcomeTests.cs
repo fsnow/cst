@@ -34,14 +34,14 @@ public class ShellProbeOutcomeTests
     [Fact]
     public void Output_that_arrived_is_kept_even_when_the_exit_was_never_observed()
     {
-        Assert.True(ProcessShellProbeRunner.Decide(payloadLength: 2553, exitCode: null));
+        Assert.True(ProcessShellProbeRunner.Decide(payloadLength: 2553, wellFormed: true, exitCode: null));
     }
 
     /// <summary>The ordinary case, unchanged: the shell exited cleanly and wrote something.</summary>
     [Fact]
     public void A_clean_exit_with_output_is_a_success()
     {
-        Assert.True(ProcessShellProbeRunner.Decide(payloadLength: 2553, exitCode: 0));
+        Assert.True(ProcessShellProbeRunner.Decide(payloadLength: 2553, wellFormed: true, exitCode: 0));
     }
 
     /// <summary>
@@ -53,7 +53,7 @@ public class ShellProbeOutcomeTests
     [Fact]
     public void A_failing_exit_code_is_still_a_failure()
     {
-        Assert.False(ProcessShellProbeRunner.Decide(payloadLength: 2553, exitCode: 1));
+        Assert.False(ProcessShellProbeRunner.Decide(payloadLength: 2553, wellFormed: true, exitCode: 1));
     }
 
     /// <summary>
@@ -69,6 +69,60 @@ public class ShellProbeOutcomeTests
     [InlineData(1)]
     public void An_empty_payload_is_never_a_success(int? exitCode)
     {
-        Assert.False(ProcessShellProbeRunner.Decide(payloadLength: 0, exitCode));
+        Assert.False(ProcessShellProbeRunner.Decide(payloadLength: 0, wellFormed: false, exitCode));
+    }
+
+    /// <summary>
+    /// A payload that does not end where <c>env -0</c> would end it is refused when there is no exit code to
+    /// consult. (#824, review)
+    ///
+    /// <para>The case: a profile that mangles PATH until <c>env</c> cannot be found leaves nothing behind but
+    /// the sentinel, and the first version of this fix accepted it because one byte is more than zero. It
+    /// reached the reader as "your login shell exports none of the variables we know about", and — being a
+    /// success — stopped the ladder retrying with <c>-l</c>, which is where the keys were.</para>
+    /// </summary>
+    [Fact]
+    public void A_payload_that_does_not_end_cleanly_is_refused_when_no_exit_code_is_available()
+    {
+        Assert.False(ProcessShellProbeRunner.Decide(payloadLength: 1, wellFormed: false, exitCode: null));
+    }
+
+    /// <summary>
+    /// An observed clean exit still carries a payload that ended mid-entry.
+    ///
+    /// <para>Deliberate: where the runtime saw the shell exit cleanly there is real evidence the write
+    /// finished, and this branch must not become a second, stricter gate on the ordinary path.</para>
+    /// </summary>
+    [Fact]
+    public void A_clean_observed_exit_does_not_need_the_payload_to_vouch_for_itself()
+    {
+        Assert.True(ProcessShellProbeRunner.Decide(payloadLength: 2553, wellFormed: false, exitCode: 0));
+    }
+
+    /// <summary>What <see cref="ProcessShellProbeRunner.WellFormed"/> accepts, and what it must not.</summary>
+    [Theory]
+    [InlineData(new byte[] { 0x41, 0x3d, 0x31, 0x00 }, true)]   // A=1\0 — a complete entry
+    [InlineData(new byte[] { 0x00, 0x41, 0x3d, 0x31 }, false)]  // truncated mid-entry
+    [InlineData(new byte[] { 0x00 }, false)]                    // sentinel alone: env never ran
+    [InlineData(new byte[0], false)]
+    public void Only_a_payload_that_ends_where_env_would_end_it_is_well_formed(byte[] payload, bool expected)
+    {
+        Assert.Equal(expected, ProcessShellProbeRunner.WellFormed(payload));
+    }
+
+    /// <summary>
+    /// Chatter before the sentinel is still well formed.
+    ///
+    /// <para>The review proposed requiring a LEADING NUL as well. That would have been wrong: a profile's
+    /// banners reach stdout before the probe command runs, so the first byte is usually theirs. The sentinel
+    /// exists to survive exactly that, and testing for it at position zero would reject every chatty
+    /// profile.</para>
+    /// </summary>
+    [Fact]
+    public void A_banner_before_the_sentinel_does_not_make_a_payload_malformed()
+    {
+        // "hi" NUL "A=1" NUL
+        var payload = new byte[] { 0x68, 0x69, 0x00, 0x41, 0x3d, 0x31, 0x00 };
+        Assert.True(ProcessShellProbeRunner.WellFormed(payload));
     }
 }

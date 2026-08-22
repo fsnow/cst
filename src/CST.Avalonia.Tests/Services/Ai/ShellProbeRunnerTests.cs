@@ -144,4 +144,55 @@ public sealed class ShellProbeRunnerTests
         Assert.True(result.Stdout.Length <= ProcessShellProbeRunner.MaxStdoutBytes);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10));
     }
+
+    /// <summary>
+    /// A shell that printed something and then failed is still a failure. (#824, review)
+    ///
+    /// <para>Found by adversarial review of the first version of the #824 fix, which snapshotted the exit at
+    /// the moment either signal arrived. End-of-stream wins that race almost always — including with nothing
+    /// interfering — so the exit code was discarded on nearly every probe and this returned success. The
+    /// ladder above then took the empty parse as an answer and never retried with <c>-l</c>, which is the
+    /// rung that finds keys in a profile the interactive shell bailed out of.</para>
+    /// </summary>
+    [UnixFact]
+    public void A_shell_that_printed_and_then_failed_is_not_a_success()
+    {
+        var result = Run("echo 'restricted account, contact IT'; exit 3");
+
+        Assert.False(result.Succeeded);
+    }
+
+    /// <summary>
+    /// The sentinel on its own is not an environment. (#824, review)
+    ///
+    /// <para>The shape of a profile that mangles PATH until <c>env</c> is no longer findable: the probe
+    /// writes its NUL and nothing follows. One byte passed the first version's length test, and reached the
+    /// reader as a shell that exports nothing we recognise rather than a shell we failed to read.</para>
+    /// </summary>
+    [UnixFact]
+    public void The_sentinel_alone_is_not_an_environment()
+    {
+        var result = Run("printf '\\0'; exit 127");
+
+        Assert.False(result.Succeeded);
+    }
+
+    /// <summary>
+    /// A shell that wrote a COMPLETE payload and then failed is still a failure. (#824, review)
+    ///
+    /// <para>This is the one that needs the exit-observation grace, and the reason the grace exists as
+    /// something separate from the well-formedness check. A banner-and-exit-3 shell is caught by the payload
+    /// not ending where <c>env -0</c> would end it; this one's payload is impeccable, so the only thing left
+    /// to object with is the exit code — and end-of-stream beats the runtime's notice of the exit almost
+    /// every time, so without a moment's grace there would be no exit code to object with.</para>
+    ///
+    /// <para>Confirmed by mutation: removing the grace makes this the only test that fails.</para>
+    /// </summary>
+    [UnixFact]
+    public void A_complete_payload_from_a_failing_shell_is_still_refused()
+    {
+        var result = Run("printf 'A=1\\0'; exit 3");
+
+        Assert.False(result.Succeeded);
+    }
 }
