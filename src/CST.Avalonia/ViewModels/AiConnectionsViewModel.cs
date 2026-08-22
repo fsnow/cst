@@ -37,7 +37,9 @@ namespace CST.Avalonia.ViewModels
         private readonly IAiCredentialStore? _credentials;
         private readonly IAiProviderLogos? _logos;
         private readonly IAiEnvironmentKeys? _environmentKeys;
+        private readonly IShellEnvironment? _shellEnvironment;
         private AiConnectionEditorViewModel? _editor;
+        private bool _disposed;
         private string? _problem;
         private string _presetSearch = "";
         private int _catalogueTotal;
@@ -46,12 +48,14 @@ namespace CST.Avalonia.ViewModels
             IAiConnectionService? service,
             IAiCredentialStore? credentials = null,
             IAiProviderLogos? logos = null,
-            IAiEnvironmentKeys? environmentKeys = null)
+            IAiEnvironmentKeys? environmentKeys = null,
+            IShellEnvironment? shellEnvironment = null)
         {
             _service = service;
             _credentials = credentials;
             _logos = logos;
             _environmentKeys = environmentKeys;
+            _shellEnvironment = shellEnvironment;
 
             AddCustomCommand = ReactiveCommand.Create(AddCustom);
             RetryCatalogueCommand = ReactiveCommand.CreateFromTask(RetryCatalogueAsync);
@@ -60,6 +64,21 @@ namespace CST.Avalonia.ViewModels
             {
                 _service.ConnectionsChanged += OnConnectionsChanged;
                 Rebind();
+            }
+
+            // This tab IS the discovery surface, so opening it is the strongest signal that the probe is
+            // wanted — a reader who has just enabled AI has never been through the startup gate. Prime is
+            // idempotent, so the common case where startup already primed costs a field read. (#817)
+            if (_shellEnvironment is not null)
+            {
+                _shellEnvironment.Prime();
+
+                // Progressive disclosure, the same shape the catalogue already uses: rows appear when the
+                // probe lands rather than the window waiting for it. Fire-and-forget by design — Completion
+                // never faults, and there is nothing to report if it finds nothing.
+                _shellEnvironment.Completion.ContinueWith(
+                    _ => Dispatcher.UIThread.Post(() => { if (!_disposed) Rebind(); }),
+                    TaskScheduler.Default);
             }
         }
 
@@ -421,6 +440,10 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public void Dispose()
         {
+            // Set before unsubscribing: the shell probe's continuation is scheduled on the pool and may
+            // already be on its way to the UI thread, and rebinding a disposed tab is how a closed Settings
+            // window comes back to life holding a dead service. (#817)
+            _disposed = true;
             if (_service is not null) _service.ConnectionsChanged -= OnConnectionsChanged;
         }
 
@@ -459,8 +482,14 @@ namespace CST.Avalonia.ViewModels
             // moment they type would take it away exactly when they are looking for the provider it is
             // about. (#714)
             //
-            // Re-read on every rebind rather than cached: the environment can change between one open of
-            // this tab and the next, and a variable the reader has just unset should stop being offered.
+            // Re-read on every rebind rather than cached — with one honest qualification. The process
+            // environment is genuinely re-read here, so a variable set or unset with `launchctl setenv`, or
+            // inherited from a terminal launch, behaves exactly as this always claimed.
+            //
+            // The shell snapshot (#817) is read once per launch, because reading it costs a login shell and
+            // Rebind runs on every keystroke in the search box. That is not a new staleness: the process
+            // environment is itself a snapshot taken at exec, so editing ~/.zshrc has never affected a
+            // running instance either. A profile edit takes effect at next launch, and the docs say so.
             var found = _environmentKeys is null
                 ? new List<AiEnvironmentKey>()
                 : _environmentKeys.Discover(_service.AvailablePresets).ToList();

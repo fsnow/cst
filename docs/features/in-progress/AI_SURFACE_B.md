@@ -403,6 +403,22 @@ hold-back filter — the same hazard as the think-tag filter, and the same failu
   configured provider. State this in Settings in plain language. The **fully local option is real**: a local
   runner through the OpenAI-compatible adapter sends nothing off the machine.
 - **Prompt logging** — bundle contents and responses contain the user's question. Do not log them above Debug.
+- **Reading your shell's environment** — when an AI feature is enabled, or a connection has been set to use a
+  variable, CST Reader runs your login shell once per launch and asks it for its environment. This is what
+  makes a key exported from `~/.zshrc` or `~/.bash_profile` visible at all: an app launched from Finder, the
+  Dock or Spotlight is started by launchd and inherits launchd's environment, not your shell's (#817). Only
+  variables the provider catalogue or one of your connections actually names are kept; everything else is
+  discarded as it is read. Nothing is written to disk, and the log records a count, never a name and never a
+  value. An ordinary launch — no AI features, no adopted connection — runs no shell at all.
+
+  It is a session snapshot, like the process environment has always been: editing a shell profile takes effect
+  at the next launch. Where the probe cannot run — Windows, which does not need it; `nu`, `csh` and `tcsh`,
+  whose flags do not mean what this needs; or a profile slow enough to hit the five-second timeout — behaviour
+  falls back to reading this process's own environment, and the two workarounds are `launchctl setenv NAME
+  value` (which publishes the value to every process in the login session, worth knowing before using it) or
+  launching the binary from a shell that already has the variable:
+  `"/Applications/CST Reader.app/Contents/MacOS/CST Reader"`. Note that `open -a "CST Reader"` does **not**
+  work — `open` hands the request to launchd, which supplies its own environment.
 - **House terminology in generated output — do not post-filter.** String surgery on model prose produces worse
   artifacts than the term it removes, cannot handle inflected or compounded forms, and blurs the line the plan
   correctly draws: output is *labeled generated*, and the project's own scoping of the rule governs our prose

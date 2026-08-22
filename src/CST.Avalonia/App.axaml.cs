@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -439,6 +440,14 @@ public partial class App : Application
                 // silently absent for a reader who HAD enabled it, and ticking an already-ticked box changed
                 // nothing and so brought nothing back. Reconciled once, here, where the values are real. (#667)
                 ReconcileAssistantPanel(settingsService);
+
+                // Here for the reason the paragraph above gives, and it is the same bug one feature later.
+                // SettingsService starts with `new Settings()` — master switch off, no connections — so a
+                // gate consulted before this point reads the defaults, decides there is no AI on this
+                // machine, and never probes on any launch ever. Placed INSIDE this method rather than after
+                // the call to it, so the ordering is a property of the code rather than of where somebody
+                // happened to put a line. (#817, fable)
+                PrimeShellEnvironment();
             }
         }
         catch (Exception ex)
@@ -652,6 +661,85 @@ public partial class App : Application
     /// Bind the DPD lemma provider's reopen to the asset-install event. Called at startup, before the layout
     /// (and so before <c>DictionaryViewModel</c>) subscribes to the same event. (#536/#563)
     /// </summary>
+    /// <summary>
+    /// The only variables the shell probe is allowed to keep. (#817)
+    ///
+    /// <para>Resolved when the probe runs, not when the container is built. The provider catalogue loads
+    /// asynchronously, and a set captured at registration would be empty — which would filter out every name
+    /// the reader is about to ask about and make the whole feature silently inert. Awaiting the catalogue
+    /// costs nothing here because this already runs on the thread pool, behind everything the reader can
+    /// see.</para>
+    ///
+    /// <para>Two sources, and both are needed. The catalogue covers discovery — offering a key the reader has
+    /// not connected yet. The stored connections cover the moment of use: a reader who adopted a variable last
+    /// session must still authenticate with it after a relaunch, and that name is in settings whether or not
+    /// the catalogue ever loads.</para>
+    /// </summary>
+    private static async Task<IReadOnlyCollection<string>> ShellVariablesOfInterestAsync(
+        IServiceProvider services, CancellationToken ct)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        var presets = services.GetService<Services.Ai.IAiPresetSource>();
+        if (presets is not null)
+        {
+            // Best effort, and time-boxed. EnsureLoadedAsync serialises behind the models.dev fetch, whose
+            // HttpClient allows 30 seconds — and Completion is awaited on the chat send path, so an
+            // unreachable network would stall a request for half a minute on behalf of a shell probe that
+            // takes milliseconds. Presets are already seeded from the bundled snapshot in the constructor;
+            // what the fetch adds is newly listed providers, which is not worth a send-path stall. (fable)
+            using var catalogue = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            catalogue.CancelAfter(TimeSpan.FromSeconds(3));
+            try { await presets.EnsureLoadedAsync(catalogue.Token); }
+            catch { /* the bundled snapshot, or the stored connections below, or nothing */ }
+
+            foreach (var preset in presets.Presets)
+                foreach (var name in preset.EnvironmentVariables)
+                    if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
+        }
+
+        var settings = services.GetService<ISettingsService>()?.Settings;
+        foreach (var connection in settings?.Ai?.Chat?.Connections ?? new List<Models.AiConnectionRecord>())
+            if (connection is { UsesEnvironmentKey: true, EnvironmentVariable: { } variable }
+                && !string.IsNullOrWhiteSpace(variable))
+                names.Add(variable);
+
+        return names;
+    }
+
+    /// <summary>
+    /// Runs the shell probe, but only for readers an AI feature is actually live for. (#817)
+    ///
+    /// <para>CST Reader opens Pāli texts; the AI master switch ships off, and most launches never touch any of
+    /// this. Spawning a login shell on every launch to serve a feature most readers have not enabled fails the
+    /// proportionality test twice over — it costs everyone for the few, and it puts a <c>zsh -il</c> in the
+    /// process list of a text reader, which a reader auditing their machine would be right to ask about.</para>
+    /// </summary>
+    private void PrimeShellEnvironment()
+    {
+        var settings = ServiceProvider?.GetService<ISettingsService>()?.Settings;
+        if (!ShouldPrimeShellEnvironment(settings)) return;
+
+        ServiceProvider?.GetService<Services.Ai.Credentials.IShellEnvironment>()?.Prime();
+    }
+
+    /// <summary>
+    /// Whether a launch should probe. Split out to be testable without an app instance. (#817)
+    ///
+    /// <para>The second arm is the one that matters and the one easy to leave out. A reader can hold a
+    /// connection adopted from the environment while the chat surface itself is off, and turning chat back on
+    /// does not go through here. Priming on a stored environment-key connection is what stops that reader's
+    /// first request of the session losing a race with the probe.</para>
+    /// </summary>
+    internal static bool ShouldPrimeShellEnvironment(Models.Settings? settings)
+    {
+        if (settings?.Ai is not { } ai) return false;
+        if (ai.Enabled) return true;
+
+        return ai.Chat?.Connections?.Any(
+            c => c is { UsesEnvironmentKey: true } && !string.IsNullOrWhiteSpace(c.EnvironmentVariable)) == true;
+    }
+
     private void SubscribeLemmaReopen()
     {
         var updates = ServiceProvider?.GetService<IDpdUpdateService>();
@@ -1417,9 +1505,19 @@ public partial class App : Application
             sp.GetService<Services.Ai.IAiPresetSource>(),
             sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>()));
 
+        // The reader's login-shell environment (#817). A GUI launch inherits launchd's environment, not the
+        // login shell's, so a key exported from a shell profile is invisible to the process; this runs the
+        // shell once to see it. Registered unconditionally, primed conditionally — see PrimeShellEnvironment.
+        services.AddSingleton<Services.Ai.Credentials.IShellEnvironment>(sp =>
+            new Services.Ai.Credentials.ShellEnvironment(
+                ct => ShellVariablesOfInterestAsync(sp, ct),
+                sp.GetService<ILoggerFactory>()?.CreateLogger<Services.Ai.Credentials.ShellEnvironment>()));
+
         // Vendor API keys the reader's environment already holds (#714). Discovery only — nothing here adopts
         // a key; that is the reader's click, recorded on the connection.
-        services.AddSingleton<Services.Ai.Credentials.IAiEnvironmentKeys, Services.Ai.Credentials.AiEnvironmentKeys>();
+        services.AddSingleton<Services.Ai.Credentials.IAiEnvironmentKeys>(sp =>
+            new Services.Ai.Credentials.AiEnvironmentKeys(
+                sp.GetService<Services.Ai.Credentials.IShellEnvironment>()));
 
         // The models.dev provider catalogue (#736). Singleton because it caches the document in memory and
         // holds the fetch gate; nothing user-visible depends on it yet (#737 turns it into presets).
@@ -1508,7 +1606,8 @@ public partial class App : Application
             sp.GetService<Services.Ai.IReaderStateService>(),
             sp.GetService<Services.Ai.IChatProviderResolver>(),
             sp.GetService<ISettingsService>(),
-            sp.GetService<Services.Ai.IAiConnectionService>()));
+            sp.GetService<Services.Ai.IAiConnectionService>(),
+            sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>()));
         // services.AddTransient<MainWindowViewModel>();
     }
 
