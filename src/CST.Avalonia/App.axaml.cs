@@ -1399,7 +1399,9 @@ public partial class App : Application
         services.AddSingleton<Services.Ai.IChatProviderResolver>(sp => new Services.Ai.ChatProviderResolver(
             sp.GetRequiredService<ISettingsService>(),
             sp.GetService<Services.Ai.IAiCredentialStore>(),
-            sp.GetRequiredService<ILoggerFactory>()));
+            sp.GetRequiredService<ILoggerFactory>(),
+            sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>(),
+            sp.GetService<Services.Ai.IAiPresetSource>()));
         services.AddSingleton<Services.Ai.IAiChatOrchestrator, Services.Ai.AiChatOrchestrator>();
 
         // Key storage (#579). Registered unconditionally: the store itself reports whether the platform has
@@ -1409,7 +1411,15 @@ public partial class App : Application
 
         // Endpoints the reader has configured (#689). Singleton because the UI binds to its ConnectionsChanged
         // event and every consumer must see the same list.
-        services.AddSingleton<Services.Ai.IAiConnectionService, Services.Ai.AiConnectionService>();
+        services.AddSingleton<Services.Ai.IAiConnectionService>(sp => new Services.Ai.AiConnectionService(
+            sp.GetRequiredService<ISettingsService>(),
+            sp.GetService<Services.Ai.IAiCredentialStore>(),
+            sp.GetService<Services.Ai.IAiPresetSource>(),
+            sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>()));
+
+        // Vendor API keys the reader's environment already holds (#714). Discovery only — nothing here adopts
+        // a key; that is the reader's click, recorded on the connection.
+        services.AddSingleton<Services.Ai.Credentials.IAiEnvironmentKeys, Services.Ai.Credentials.AiEnvironmentKeys>();
 
         // The models.dev provider catalogue (#736). Singleton because it caches the document in memory and
         // holds the fetch gate; nothing user-visible depends on it yet (#737 turns it into presets).

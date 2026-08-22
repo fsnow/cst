@@ -1,8 +1,14 @@
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using CST.Avalonia.Models.Ai;
 using System.Net.Http;
+using CST.Avalonia.Tests.TestSupport;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System.Linq;
@@ -46,7 +52,9 @@ public class ChatProviderResolverTests
 
     private static ChatProviderResolver Resolver(
         Action<ChatSettings> configure, string? apiKey = null, bool aiEnabled = true,
-        string? storageUnavailable = null, IReadOnlyDictionary<string, string>? secrets = null)
+        string? storageUnavailable = null, IReadOnlyDictionary<string, string>? secrets = null,
+        IAiEnvironmentKeys? environmentKeys = null, IAiPresetSource? presets = null,
+        HttpMessageHandler? handler = null)
     {
         var settings = new Settings();
         settings.Ai.Enabled = aiEnabled;
@@ -62,7 +70,144 @@ public class ChatProviderResolverTests
                 ? null
                 : new FixedKey(apiKey, storageUnavailable, secrets),
             NullLoggerFactory.Instance,
-            new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan });
+            handler is null
+                ? new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan }
+                : new HttpClient(handler) { Timeout = System.Threading.Timeout.InfiniteTimeSpan },
+            environmentKeys,
+            presets);
+    }
+
+    // ---- environment keys (#714) ----
+
+    private sealed class FakePresets : IAiPresetSource
+    {
+        public IReadOnlyList<AiProviderPreset> Presets { get; }
+        public AiPresetState State => AiPresetState.Ready;
+        public string? Problem => null;
+        public event EventHandler? PresetsChanged { add { } remove { } }
+        public Task EnsureLoadedAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public FakePresets(params AiProviderPreset[] presets) => Presets = presets;
+    }
+
+    private static AiProviderPreset EnvPreset(string id, params string[] names) =>
+        new(id, id.ToUpperInvariant(), ChatProviderKind.OpenAiCompatible, "https://example.invalid/v1",
+            new AiCredentialMethod[] { new AiCredentialMethod.Env(names) }, Array.Empty<AiInputPrompt>());
+
+    private static IAiEnvironmentKeys Env(string name, string? value) =>
+        new AiEnvironmentKeys(n => n == name ? value : null);
+
+    [Fact]
+    public void A_connection_that_opted_in_authenticates_with_the_environment_key()
+    {
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.PresetId = "openai";
+            c.UsesEnvironmentKey = true;
+            c.Kind = "openai-compatible";
+            c.BaseUrl = "https://example.invalid/v1";
+            chat.ActiveModelId = "gpt-4";
+        }, environmentKeys: Env("OPENAI_API_KEY", "sk-from-env"),
+           presets: new FakePresets(EnvPreset("openai", "OPENAI_API_KEY")));
+
+        Assert.NotNull(resolver.Resolve(out var problem));
+        Assert.Null(problem);
+    }
+
+    // The opt-in is the whole feature. Discovery must never authenticate on its own — that is the difference
+    // between this and an app that adopts a forgotten variable and spends the reader's money.
+    [Fact]
+    public void A_connection_that_did_not_opt_in_does_not_use_the_environment_key()
+    {
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.PresetId = "anthropic";
+            c.UsesEnvironmentKey = false;          // discovered, not adopted
+            c.Kind = "anthropic";
+            chat.ActiveModelId = "claude-opus-5";
+        }, environmentKeys: Env("ANTHROPIC_API_KEY", "sk-from-env"),
+           presets: new FakePresets(EnvPreset("anthropic", "ANTHROPIC_API_KEY")));
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.NotNull(problem);
+    }
+
+    // Entering a key is a deliberate act; a variable is often forgotten. A reader who typed one must not find
+    // the app quietly authenticating with something else.
+    [Fact]
+    public async Task A_stored_key_wins_over_one_in_the_environment()
+    {
+        // Asserted on the CREDENTIAL THAT REACHES THE ENDPOINT, not on the resolution succeeding. Both keys
+        // resolve, so a non-null check cannot tell which was used — an earlier version of this test asserted
+        // exactly that and passed with the precedence reversed, which is the failure it exists to catch.
+        var handler = StubHttpMessageHandler.Sse(
+            "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n");
+
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.PresetId = "anthropic";
+            c.UsesEnvironmentKey = true;
+            c.Kind = "anthropic";
+            chat.ActiveModelId = "claude-opus-5";
+        }, apiKey: "sk-stored",
+           environmentKeys: Env("ANTHROPIC_API_KEY", "sk-from-env"),
+           presets: new FakePresets(EnvPreset("anthropic", "ANTHROPIC_API_KEY")),
+           handler: handler);
+
+        var resolution = resolver.Resolve(out var problem);
+        Assert.NotNull(resolution);
+        Assert.Null(problem);
+
+        await foreach (var _ in resolution!.Provider.StreamAsync(
+            new ChatRequest("claude-opus-5", 256, null,
+                new[] { new ChatMessage(ChatRole.User, "hello") }), CancellationToken.None)) { }
+
+        Assert.Equal("sk-stored", string.Join(",", handler.LastRequest!.Headers.GetValues("x-api-key")));
+    }
+
+    // The reader unset it, which they are allowed to do. That reads as "no key", not as an error.
+    [Fact]
+    public void A_variable_that_disappeared_reads_as_no_key_rather_than_a_fault()
+    {
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.PresetId = "anthropic";
+            c.UsesEnvironmentKey = true;
+            c.Kind = "anthropic";
+            chat.ActiveModelId = "claude-opus-5";
+        }, environmentKeys: Env("ANTHROPIC_API_KEY", null),
+           presets: new FakePresets(EnvPreset("anthropic", "ANTHROPIC_API_KEY")));
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.NotNull(problem);
+        Assert.Contains("key", problem!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // A custom endpoint records "" as its origin (#766). Matching that against a catalogue slug it happens to
+    // resemble is how a reader's own connection would come to authenticate with someone else's key.
+    [Fact]
+    public void A_custom_connection_never_borrows_a_presets_environment_key()
+    {
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.Id = "openai";               // an id that LOOKS like the preset
+            c.PresetId = "";               // recorded as custom
+            c.UsesEnvironmentKey = true;
+            c.Kind = "openai-compatible";
+            c.BaseUrl = "https://my-own-gateway.invalid/v1";
+            chat.ActiveConnectionId = "openai";
+            chat.ActiveModelId = "gpt-4";
+        }, environmentKeys: Env("OPENAI_API_KEY", "sk-from-env"),
+           presets: new FakePresets(EnvPreset("openai", "OPENAI_API_KEY")));
+
+        // Resolves (OpenAI-compatible needs no key) but must NOT have picked up the environment credential.
+        var resolution = resolver.Resolve(out _);
+        Assert.NotNull(resolution);
     }
 
     /// <summary>

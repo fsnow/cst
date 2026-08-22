@@ -161,6 +161,25 @@ namespace CST.Avalonia.Models
         /// </summary>
         public string? PresetId { get; set; }
 
+        /// <summary>
+        /// The reader opted in to the API key their environment already holds. (#714)
+        ///
+        /// <para><b>This flag is the opt-in itself.</b> Discovery is automatic and use is not: finding
+        /// <c>OPENAI_API_KEY</c> set makes a provider AVAILABLE, and only a reader's click makes it
+        /// authenticate. Recording that click is what separates this from OpenCode, which adopts an
+        /// environment key silently — producing a connected provider the maintainer had not configured, from
+        /// a variable he had forgotten was set on his own machine, with no way to disconnect it.</para>
+        ///
+        /// <para>The key itself is NEVER stored. It is read from the environment at the moment of use, so a
+        /// variable the reader changes or unsets takes effect immediately; a copy in the keychain would go on
+        /// authenticating with a credential they believe they have revoked, and a row sourced from the
+        /// environment offers no remove action to undo it with (#691).</para>
+        ///
+        /// <para>A connection with this set whose variable is no longer present reads as "no key", not as an
+        /// error — the reader unset it, which is a thing they are allowed to do.</para>
+        /// </summary>
+        public bool UsesEnvironmentKey { get; set; }
+
         public string DisplayName { get; set; } = "";
 
         /// <summary><c>anthropic</c> or <c>openai-compatible</c>. A string rather than the enum so a rename
