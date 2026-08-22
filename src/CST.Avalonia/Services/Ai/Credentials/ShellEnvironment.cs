@@ -522,16 +522,45 @@ internal sealed class ProcessShellProbeRunner : IShellProbeRunner
                 try { process.StandardError.BaseStream.CopyTo(Stream.Null); } catch { /* closing is enough */ }
             });
 
-            if (!process.WaitForExit((int)attempt.Timeout.TotalMilliseconds))
+            // TWO INDEPENDENT SIGNALS THAT THE SHELL IS DONE, and waiting for whichever arrives first is
+            // the whole of #824. Exit alone is not trustworthy: inside this app the child's exit status is
+            // consumed before the runtime's own SIGCHLD bookkeeping sees it — CEF/Chromium installs POSIX
+            // signal handlers and reaps children — so WaitForExit could never return true however long it
+            // waited. Measured: the shell wrote its entire environment and stdout reached EOF, while
+            // HasExited was still false at the five-second budget. Every macOS probe reported a timeout,
+            // and the reader was told their shell profile was slow.
+            //
+            // EOF is the stronger signal for the same reason it is the more dangerous one to wait for
+            // ALONE (see the grace below): the write end closing requires the shell and everything holding
+            // that descriptor to be gone.
+            using var budget = new CancellationTokenSource(attempt.Timeout);
+            var exited = process.WaitForExitAsync(budget.Token);
+
+            // Never throws, and cancellation at the budget is what releases it if neither signal arrives.
+            Task.WhenAny(reading, exited).Wait();
+
+            // Cancellation does not raise UnobservedTaskException, but a fault would; this keeps either from
+            // depending on which one won the race.
+            _ = exited.ContinueWith(static t => _ = t.Exception, TaskScheduler.Default);
+
+            // Completed is not enough: the reader also finishes early at the cap and when stopped, and
+            // neither says anything about the shell. Only its RESULT distinguishes end-of-stream.
+            var reachedEof = reading.IsCompletedSuccessfully && reading.Result;
+            var exitObserved = exited.IsCompletedSuccessfully;
+
+            if (!reachedEof && !exitObserved)
             {
                 // entireProcessTree, because the thing that hangs is rarely the shell itself: a profile that
                 // execs a version manager, or blocks on a keychain prompt, leaves the subtree behind and the
                 // pipe open when only the parent is killed.
+                //
+                // Only on a REAL timeout. Killing after EOF would be aiming at a pid the runtime believes is
+                // live and the kernel has already freed — which, once reaped, may name somebody else.
                 KillTree(process);
                 return ShellProbeResult.Timeout();
             }
 
-            // A GRACE, NOT A WAIT FOR EOF, and the distinction is the whole of this method. If the profile
+            // A GRACE, NOT A WAIT FOR EOF, and the distinction is the whole of this branch. If the profile
             // started anything in the background — `some-updater &` — that grandchild inherited the stdout
             // pipe and holds the write end open after the shell exits. Waiting for end-of-stream would then
             // block forever on a probe that has ALREADY SUCCEEDED: its output is sitting in the buffer. The
@@ -539,7 +568,10 @@ internal sealed class ProcessShellProbeRunner : IShellProbeRunner
             // a timeout, which per the ladder means give up permanently; a read thread parked for the life of
             // the app; and that thread holding the raw, unfiltered environment, which is the one allocation
             // this whole design exists to prevent. (fable)
-            reading.Wait(DrainGrace);
+            //
+            // Reached only when the exit was observed but the stream is still open; EOF needs no grace,
+            // because EOF is the end.
+            if (!reachedEof) reading.Wait(DrainGrace);
 
             var bytes = reader.Bytes();
 
@@ -547,9 +579,10 @@ internal sealed class ProcessShellProbeRunner : IShellProbeRunner
             // keep-set outlives this call even in the inherited-pipe case.
             reader.Stop();
 
-            return process.ExitCode == 0
-                ? ShellProbeResult.Ok(bytes)
-                : ShellProbeResult.Failed();
+            // ExitCode is only readable where the runtime observed the exit. Where it did not, the complete
+            // payload IS the evidence, and demanding a status we cannot obtain is what broke this.
+            int? exitCode = exitObserved ? SafeExitCode(process) : null;
+            return Decide(bytes.Length, exitCode) ? ShellProbeResult.Ok(bytes) : ShellProbeResult.Failed();
         }
         catch
         {
@@ -562,6 +595,26 @@ internal sealed class ProcessShellProbeRunner : IShellProbeRunner
             reader?.Stop();
             process?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Whether a probe that produced <paramref name="payloadLength"/> bytes counts as a success. (#824)
+    ///
+    /// <para>Split out so the policy can be tested. The defect it exists to prevent is a later refactor
+    /// quietly reinstating "exit code zero or nothing", which is what made every macOS probe report a
+    /// timeout: where the runtime never observed the exit there IS no exit code, and insisting on one
+    /// discards a payload that arrived in full.</para>
+    /// </summary>
+    /// <param name="exitCode">Null when the exit was never observed — not an error, and not a zero.</param>
+    internal static bool Decide(int payloadLength, int? exitCode)
+    {
+        if (payloadLength <= 0) return false;
+        return exitCode is null or 0;
+    }
+
+    private static int? SafeExitCode(Process process)
+    {
+        try { return process.ExitCode; } catch { return null; }
     }
 
     private static void KillTree(Process process)
@@ -584,7 +637,19 @@ internal sealed class ProcessShellProbeRunner : IShellProbeRunner
 
         public BoundedReader(Stream stream, int cap) { _stream = stream; _cap = cap; }
 
-        public Task Start() => Task.Run(() =>
+        /// <summary>
+        /// Reads until the stream ends. <b>The result says whether it ended, not whether reading stopped</b>,
+        /// and the two are different in three of the four ways this loop exits. (#824)
+        ///
+        /// <para>End-of-stream is the only one that means the writer is gone, and #824 turns on being able
+        /// to tell it apart: an earlier version of that fix treated the task merely COMPLETING as
+        /// end-of-stream, which made a runaway profile — the reader bailing at the cap while the shell sat
+        /// blocked on a write it could never finish — look exactly like a shell that had finished tidily,
+        /// and accepted four megabytes of <c>/dev/zero</c> as an environment.</para>
+        /// </summary>
+        /// <returns>True only on end-of-stream; false when the cap was hit, when stopped, or on a read
+        /// error.</returns>
+        public Task<bool> Start() => Task.Run(() =>
         {
             try
             {
@@ -594,15 +659,19 @@ internal sealed class ProcessShellProbeRunner : IShellProbeRunner
                 {
                     lock (_buffer)
                     {
-                        if (_stopped) return;
-                        if (_buffer.Length + read > _cap) return;
+                        if (_stopped) return false;
+                        if (_buffer.Length + read > _cap) return false;
                         _buffer.Write(chunk, 0, read);
                     }
                 }
+
+                // Read returned zero: the write end is closed and everything holding it is gone.
+                return true;
             }
             catch
             {
                 // A closed or broken pipe is the ordinary way this ends.
+                return false;
             }
         });
 
