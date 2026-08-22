@@ -178,17 +178,103 @@ public sealed class TolerantSettingsLoadTests : IDisposable
         Assert.Equal("/books", reread!.XmlBooksDirectory);
     }
 
-    // A salvage keeps the file, so the reader has not lost their configuration AND the cause is still
-    // diagnosable — unlike the original behaviour, which overwrote it with defaults.
+    // The bytes that could NOT be read are kept, because the salvage overwrites the only copy of them.
+    //
+    // An earlier version of this test asserted the opposite — that nothing was preserved, "because the file
+    // was READ, not discarded". That was wrong by the salvage's own arithmetic: this path is reached only
+    // when at least one node was dropped, so part of the file was not read, and saving destroyed it. Their
+    // paths are in the log; their content was nowhere. (fable)
     [Fact]
-    public async Task A_salvaged_file_is_not_destroyed()
+    public async Task The_part_that_could_not_be_read_is_kept_before_the_salvage_overwrites_it()
     {
         await Load("""
         { "XmlBooksDirectory": "/books", "FontSettings": 12345 }
         """);
 
-        // Nothing was preserved-aside, because nothing was lost: the file was READ, not discarded.
-        Assert.Empty(Directory.GetFiles(_dir, "settings.unreadable-*.json"));
+        var kept = Directory.GetFiles(_dir, "settings.unreadable-*.json");
+        Assert.Single(kept);
+        Assert.Contains("12345", await File.ReadAllTextAsync(kept[0]));
+
+        // A COPY: the primary file is still there, salvaged, and is what the next launch reads.
+        Assert.True(File.Exists(Path.Combine(_dir, "settings.json")));
+    }
+
+    // Azure's connections store AuthScheme as null — "a bare credential, no scheme" — and the initializer is
+    // "Bearer". Skipping an explicit null replaced the stored value with the initializer and wrote it back,
+    // so the connection would send `api-key: Bearer <key>` and fail with nothing on screen to explain it.
+    [Fact]
+    public async Task An_explicit_null_that_is_a_stored_value_survives_the_salvage()
+    {
+        var settings = await Load("""
+        {
+          "XmlBooksDirectory": "/books",
+          "Ai": { "Chat": { "Connections": [
+            { "Id": "azure", "Kind": "openai-compatible", "BaseUrl": "https://x.invalid",
+              "AuthHeaderName": "api-key", "AuthScheme": null,
+              "Models": "this should be a list" }
+          ] } }
+        }
+        """);
+
+        var connection = settings.Ai.Chat.Connections.Single();
+        Assert.Null(connection.AuthScheme);
+        Assert.Equal("api-key", connection.AuthHeaderName);
+    }
+
+    // One unreadable entry should cost that entry, not the dictionary. Emptying it takes the reader's other
+    // inputs with it — and Azure's resourceName lives in one of these.
+    [Fact]
+    public async Task One_bad_dictionary_entry_does_not_empty_the_dictionary()
+    {
+        var settings = await Load("""
+        {
+          "XmlBooksDirectory": "/books",
+          "Ai": { "Chat": { "Connections": [
+            { "Id": "azure", "Kind": "openai-compatible", "BaseUrl": "https://x.invalid",
+              "Inputs": { "resourceName": "my-resource", "region": 5 } }
+          ] } }
+        }
+        """);
+
+        var inputs = settings.Ai.Chat.Connections.Single().Inputs;
+        Assert.Equal("my-resource", inputs["resourceName"]);
+    }
+
+    // A collection written as the wrong JSON kind must be DROPPED and reported, never salvaged as an object.
+    // Dictionary and List both have parameterless constructors, so they were handed to the property-by-
+    // property salvage, which iterated Comparer/Count/Keys and returned them empty with nothing recorded.
+    [Fact]
+    public async Task A_connection_list_written_as_an_object_is_reported_not_silently_emptied()
+    {
+        var settings = await Load("""
+        {
+          "XmlBooksDirectory": "/books",
+          "Ai": { "Chat": { "Connections": { "not": "a list" } } }
+        }
+        """);
+
+        // The books directory survives, the connections are empty — and the file that held them was kept,
+        // which is the difference between a reported loss and a silent one.
+        Assert.Equal("/books", settings.XmlBooksDirectory);
+        Assert.Empty(settings.Ai.Chat.Connections);
+        Assert.Single(Directory.GetFiles(_dir, "settings.unreadable-*.json"));
+    }
+
+    // Fable's sharpest: the zero-drop guard threw away a file the salvage had FULLY repaired.
+    //
+    // An explicit null on a non-nullable scalar — a plausible hand-edit, and hand-edited files are this
+    // code's stated common case — fails a strict read. The salvage handled it perfectly and recorded nothing,
+    // so the guard concluded "the strict read failed for a reason we cannot see" and fell through to the
+    // backups. With none, the reader lost a books directory from a file that was entirely recoverable: the
+    // exact disproportion this whole change argues against.
+    [Fact]
+    public async Task A_file_repaired_by_the_salvage_is_kept_even_though_nothing_was_lost()
+    {
+        var settings = await Load("""
+        { "XmlBooksDirectory": "/books", "UseHardwareAcceleration": null }
+        """);
+
+        Assert.Equal("/books", settings.XmlBooksDirectory);
     }
 
     public void Dispose()

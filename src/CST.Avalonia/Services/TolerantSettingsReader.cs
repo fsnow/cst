@@ -74,6 +74,23 @@ internal static class TolerantSettingsReader
         if (element.ValueKind == JsonValueKind.Array && ListElementType(type) is { } itemType)
             return SalvageList(element, type, itemType, path, options, dropped);
 
+        if (element.ValueKind == JsonValueKind.Object && DictionaryValueType(type) is { } valueType)
+            return SalvageDictionary(element, type, valueType, path, options, dropped);
+
+        // A collection this cannot take apart entry-by-entry is DROPPED, never handed to SalvageObject.
+        //
+        // Dictionary and List both have parameterless constructors, so without this they were salvaged as
+        // ordinary objects — iterating their CLR properties (Comparer, Count, Keys), none of which is
+        // writable — and came back EMPTY with nothing recorded. A settings file whose Connections was written
+        // as an object lost every connection, silently, and the mutilated result was then saved over the only
+        // copy. That is the incident this whole feature exists to prevent, reproduced inside the mechanism
+        // meant to prevent it. (fable)
+        if (IsCollection(type))
+        {
+            dropped.Add(path);
+            return null;
+        }
+
         if (element.ValueKind == JsonValueKind.Object && HasParameterlessConstructor(type))
             return SalvageObject(element, type, path, options, dropped);
 
@@ -99,6 +116,22 @@ internal static class TolerantSettingsReader
         return list;
     }
 
+    // Entry by entry, for the same reason a list is salvaged element by element: one unreadable value should
+    // cost that value. Emptying the dictionary would take the reader's other inputs with it — and Azure's
+    // resourceName lives in one of these. (fable)
+    private static object SalvageDictionary(
+        JsonElement element, Type dictionaryType, Type valueType, string path,
+        JsonSerializerOptions options, List<string> dropped)
+    {
+        var dictionary = (IDictionary)Activator.CreateInstance(dictionaryType)!;
+        foreach (var entry in element.EnumerateObject())
+        {
+            var value = Node(entry.Value, valueType, $"{path}.{entry.Name}", options, dropped);
+            if (value is not null) dictionary[entry.Name] = value;
+        }
+        return dictionary;
+    }
+
     // Property by property, so a bad Ai section costs the AI settings and not the books directory.
     private static object SalvageObject(
         JsonElement element, Type type, string path, JsonSerializerOptions options, List<string> dropped)
@@ -109,10 +142,27 @@ internal static class TolerantSettingsReader
             if (!property.CanWrite || property.GetIndexParameters().Length > 0) continue;
             if (!TryGetProperty(element, property.Name, out var json)) continue;
 
-            // An explicit null is a value, and leaving the initializer in place is the RIGHT answer for it —
-            // the same reasoning as #787's null-coalescing, from the other side: the model's `= new()` is
-            // what the reader gets, rather than a null nothing downstream checks for.
-            if (json.ValueKind == JsonValueKind.Null) continue;
+            if (json.ValueKind == JsonValueKind.Null)
+            {
+                // An explicit null needs three answers, not one.
+                //
+                // For a COLLECTION, keeping the initializer is right — the same reasoning as #787's
+                // null-coalescing from the other side: the model's `= new()` is what the reader gets, rather
+                // than a null nothing downstream checks for.
+                //
+                // For anything else nullable, the null is a STORED VALUE and must be preserved. Skipping it
+                // silently replaced AiConnectionRecord.AuthScheme's null — which means "a bare credential,
+                // no scheme", and is exactly what a saved Azure connection holds — with its "Bearer"
+                // initializer, then wrote that back. The connection would send `api-key: Bearer <key>` and
+                // fail to authenticate with nothing on screen to explain it. (fable)
+                //
+                // For a non-nullable value type, a null is unreadable: record it rather than pretending the
+                // initializer was what the file said.
+                if (IsCollection(property.PropertyType)) continue;
+                if (IsNullable(property.PropertyType)) { property.SetValue(instance, null); continue; }
+                dropped.Add($"{path}.{property.Name}");
+                continue;
+            }
 
             var value = Node(json, property.PropertyType, $"{path}.{property.Name}", options, dropped);
             if (value is not null) property.SetValue(instance, value);
@@ -140,6 +190,19 @@ internal static class TolerantSettingsReader
         type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>)
             ? type.GetGenericArguments()[0]
             : null;
+
+    private static Type? DictionaryValueType(Type type) =>
+        type.IsGenericType
+        && type.GetGenericTypeDefinition() == typeof(Dictionary<,>)
+        && type.GetGenericArguments()[0] == typeof(string)
+            ? type.GetGenericArguments()[1]
+            : null;
+
+    private static bool IsCollection(Type type) =>
+        type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
+
+    private static bool IsNullable(Type type) =>
+        !type.IsValueType || Nullable.GetUnderlyingType(type) is not null;
 
     private static bool HasParameterlessConstructor(Type type) =>
         !type.IsAbstract && type.GetConstructor(Type.EmptyTypes) is not null;

@@ -207,6 +207,16 @@ namespace CST.Avalonia.Services
                     "Settings could not be read in full. Kept everything that parsed; these were reset to "
                     + "their defaults: {Dropped}", string.Join(", ", dropped));
 
+                // A COPY of the original kept beside it, before the salvage is written over it.
+                //
+                // The salvage path is only reached when at least one node was dropped — so part of the file
+                // was NOT read, and saving replaces its only copy. The dropped paths are named in the log;
+                // their CONTENT would survive only in a #785 backup, and only if the app itself had once
+                // saved it. A connection or model list the reader added since the last save would be
+                // destroyed outright, where the behaviour this replaces at least kept the whole file. A copy
+                // costs nothing and keeps that guarantee. (fable)
+                PreserveUnreadable(copy: true);
+
                 // AWAITED, not fired and forgotten — the same defect #785's review caught in the backup
                 // restore, which I reproduced here in a new place. Until the primary file is readable again
                 // a crash or force-quit sends the next launch down a path that knows nothing about this
@@ -337,7 +347,11 @@ namespace CST.Avalonia.Services
         /// <para>Never throws. It runs inside the load's catch, and a failure to preserve must not become a
         /// failure to start — the reader would then have neither their settings nor an application.</para>
         /// </summary>
-        private void PreserveUnreadable()
+        /// <param name="copy">
+        /// Keep the original in place as well. True on the salvage path, where the file is still the primary
+        /// and is about to be rewritten; false when the file is being abandoned entirely.
+        /// </param>
+        private void PreserveUnreadable(bool copy = false)
         {
             try
             {
@@ -350,13 +364,14 @@ namespace CST.Avalonia.Services
                     // reader's configuration would be left in place to be overwritten by the next save. (fable)
                     $"settings.unreadable-{DateTime.Now:yyyyMMdd-HHmmss-fff}.json");
 
-                File.Move(_settingsFilePath, kept, overwrite: false);
+                if (copy) File.Copy(_settingsFilePath, kept, overwrite: false);
+                else File.Move(_settingsFilePath, kept, overwrite: false);
 
                 // At Error, beside the failure itself: a reader who has just lost their configuration is
                 // reading this line, and it is the one that tells them it is recoverable.
                 _logger.Error(
-                    "The previous settings file could not be read and has been kept at {Path}. "
-                    + "Defaults are in use; nothing from it was deleted.", kept);
+                    "The previous settings file could not be read in full and has been kept at {Path}. "
+                    + "Nothing from it was deleted.", kept);
             }
             catch (Exception ex)
             {
