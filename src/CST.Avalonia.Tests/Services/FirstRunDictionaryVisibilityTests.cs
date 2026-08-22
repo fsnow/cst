@@ -195,14 +195,17 @@ public sealed class FirstRunDictionaryVisibilityTests : IDisposable
         public event Action<string>? StatusChanged;
         public event Action<string>? AssetInstalled;
         public event Action<long, long>? DownloadProgressChanged;
+        public event Action<string>? AssetFailed;
         public bool IsBusy => false;
+        public IReadOnlyCollection<string> FailedAssetIds => System.Array.Empty<string>();
         public Task CheckAndUpdateAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task RetryMissingAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         public int SubscriberCount => AssetInstalled?.GetInvocationList().Length ?? 0;
         public void RaiseAssetInstalled(string id) => AssetInstalled?.Invoke(id);
 
         // Silences the unused-event warnings without changing behaviour.
-        internal void Unused() { StatusChanged?.Invoke(""); DownloadProgressChanged?.Invoke(0, 0); }
+        internal void Unused() { StatusChanged?.Invoke(""); DownloadProgressChanged?.Invoke(0, 0); AssetFailed?.Invoke(""); }
     }
 
     // ---- the app's own wiring, assembled ----

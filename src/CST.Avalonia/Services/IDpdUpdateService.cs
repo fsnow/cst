@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,6 +25,38 @@ public interface IDpdUpdateService
 
     /// <summary>Download progress: (bytesSoFar, totalBytes). totalBytes may be 0 if the length is unknown.</summary>
     event Action<long, long>? DownloadProgressChanged;
+
+    /// <summary>
+    /// Raised with the asset id when a dictionary is still absent after an attempted update run — whatever
+    /// went wrong: an unreachable release, a manifest that would not parse, a bad checksum, a failed usability
+    /// probe, a dropped connection, a timeout. (#773)
+    ///
+    /// <para>A counterpart to <see cref="AssetInstalled"/>, and it exists for the same reason: without it a
+    /// failed download is indistinguishable from a build that never offered the dictionary at all. The picker
+    /// simply does not list it, which reads as "this app has no DPD" rather than "we could not fetch it".</para>
+    ///
+    /// <para>Raised on a background thread. A UI subscriber must marshal.</para>
+    ///
+    /// <para>Not raised when automatic updates are switched off — an absent asset is then the reader's choice,
+    /// not a failure.</para>
+    /// </summary>
+    event Action<string>? AssetFailed;
+
+    /// <summary>
+    /// Asset ids that were attempted and are still absent. A STATE rather than a log line, so a caller can say
+    /// which dictionary is missing and offer to try again. Filtered by presence at read time, so an asset that
+    /// later appears — dropped in by hand, or applied from a staged install — stops being a failure without
+    /// anything having to notice. (#773)
+    /// </summary>
+    IReadOnlyCollection<string> FailedAssetIds { get; }
+
+    /// <summary>
+    /// Re-run the check when a dictionary is absent; return immediately when none is. Cheap enough to call
+    /// whenever the reader opens the dictionary panel, which is the point — <see cref="CheckAndUpdateAsync"/>
+    /// runs once per launch, so a first run that fails leaves the reader without dictionaries until they
+    /// restart, and opening the panel is the reader saying they want one. (#773)
+    /// </summary>
+    Task RetryMissingAsync(CancellationToken ct = default);
 
     bool IsBusy { get; }
 

@@ -294,9 +294,26 @@ namespace CST.Avalonia.ViewModels
 
         // Recreate-on-demand so the View menu toggle and Cmd+D (Look Up in Dictionary) can reopen a closed
         // pane — LookUpInDictionaryAsync calls this then immediately proceeds, so it must stay synchronous. (#466)
-        public void ShowDictionaryPanel() =>
+        public void ShowDictionaryPanel()
+        {
+            // A dictionary that failed to download stays missing for the whole session: the update check runs
+            // once per launch, so the reader's only route back to DPD or DPPN was to restart. That is #563's
+            // symptom reached by a different mechanism, and just as invisible.
+            //
+            // Here, and NOT in DictionaryViewModel's constructor, which is where this was first put. The view
+            // model is a DI singleton — its constructor runs once during the startup layout build, and every
+            // reopen resolves that same instance — so the retry fired once at startup beside the check that
+            // already runs there and never again. It looked like a per-open trigger and was not. This method
+            // is called on every show request, after settings are loaded, which is also what keeps it from
+            // ignoring the reader's automatic-update setting. (#773)
+            //
+            // Fire-and-forget: the panel must open at once whatever the network is doing, and AssetInstalled
+            // already rebuilds the picker if the retry succeeds. Free when nothing is missing.
+            _ = App.ServiceProvider?.GetService<IDpdUpdateService>()?.RetryMissingAsync();
+
             ShowToolPanel("DictionaryTool", () => App.ServiceProvider?.GetRequiredService<DictionaryViewModel>(),
                 () => IsDictionaryPanelVisible = true, "Dictionary");
+        }
 
         public void HideDictionaryPanel() =>
             HideToolPanel("DictionaryTool", () => IsDictionaryPanelVisible = false, "Dictionary");

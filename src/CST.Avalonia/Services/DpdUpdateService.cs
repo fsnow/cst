@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -44,6 +45,9 @@ public sealed class DpdUpdateService : IDpdUpdateService
     /// <summary>The single root every dictionary lives under, shared with <see cref="DictionaryService"/>.</summary>
     internal const string DictionariesDirectoryName = "dictionaries";
 
+    // Null means the real user data directory. Only tests pass anything else. (#773)
+    private readonly string? _dictionariesRoot;
+
     private readonly ILogger<DpdUpdateService> _logger;
     private readonly ISettingsService _settings;
     private readonly GitHubClient _github;
@@ -54,10 +58,81 @@ public sealed class DpdUpdateService : IDpdUpdateService
     /// <inheritdoc />
     public event Action<string>? AssetInstalled;
     public event Action<long, long>? DownloadProgressChanged;
+    /// <inheritdoc />
+    public event Action<string>? AssetFailed;
     public bool IsBusy => Volatile.Read(ref _busy) == 1;
 
-    public DpdUpdateService(ILogger<DpdUpdateService> logger, ISettingsService settings)
+    // Failure as a STATE, not just a log line: a reader whose download failed sees exactly what a reader of a
+    // build without DPD sees — nothing in the picker — and nothing distinguishes the two. (#773)
+    private readonly ConcurrentDictionary<string, byte> _failed = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Filtered by presence at read time, so it cannot go stale. An asset dropped in by hand, or applied from
+    /// a staged install at the next launch, stops being a failure without anything having to notice.
+    /// </remarks>
+    public IReadOnlyCollection<string> FailedAssetIds =>
+        Descriptors.Where(d => _failed.ContainsKey(d.Id) && !File.Exists(d.InstallPath))
+                   .Select(d => d.Id)
+                   .ToArray();
+
+    /// <inheritdoc />
+    public async Task RetryMissingAsync(CancellationToken ct = default)
     {
+        // Nothing missing, nothing to do — and no network touched. This runs every time the reader opens the
+        // dictionary panel, so the ordinary case has to cost two File.Exists calls and nothing else.
+        if (Descriptors.All(d => File.Exists(d.InstallPath)))
+            return;
+        await CheckAndUpdateAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// After an attempted run, every asset still absent is a failure — however the run failed.
+    ///
+    /// <para>Recording this only in the per-asset catch was wrong in the case that matters most: offline at
+    /// launch never reaches an asset at all. It dies at the release lookup, so the per-asset handler never
+    /// runs, and the failure set stayed empty at precisely the moment a reader most needs to be told
+    /// something. Reconciling here covers the release lookup, the manifest download, the parse, the timeout
+    /// and the per-asset failures with one rule. (#773, fable)</para>
+    ///
+    /// <para>Only called when a run was actually ATTEMPTED. An asset absent because automatic updates are
+    /// switched off is a choice, not a failure, and reporting it as one would be a lie about the reader's own
+    /// setting.</para>
+    /// </summary>
+    private void ReconcileFailures()
+    {
+        foreach (var desc in Descriptors)
+        {
+            if (File.Exists(desc.InstallPath))
+            {
+                _failed.TryRemove(desc.Id, out _);
+            }
+            else if (_failed.TryAdd(desc.Id, 1))
+            {
+                AssetFailed?.Invoke(desc.Id);
+            }
+        }
+    }
+
+    public DpdUpdateService(ILogger<DpdUpdateService> logger, ISettingsService settings)
+        : this(logger, settings, dictionariesRoot: null)
+    {
+    }
+
+    /// <summary>
+    /// Test seam: install into <paramref name="dictionariesRoot"/> instead of the real user data directory.
+    ///
+    /// <para>Added because there was no way to test this class without writing into
+    /// <c>&lt;app-support&gt;/CSTReader/dictionaries</c> — the install paths were static absolutes. A test that
+    /// did so on a machine with no dictionaries installed would plant an openable but EMPTY database: a source
+    /// the picker lists and which answers nothing, and, for the lexicon, one stamped closely enough to the
+    /// shipped version that the updater could treat the fake as current indefinitely. A test suite must not be
+    /// able to do that. (#773)</para>
+    /// </summary>
+    internal DpdUpdateService(
+        ILogger<DpdUpdateService> logger, ISettingsService settings, string? dictionariesRoot)
+    {
+        _dictionariesRoot = dictionariesRoot;
         _logger = logger;
         _settings = settings;
         _github = new GitHubClient(new ProductHeaderValue(AppConstants.UserAgent));
@@ -68,15 +143,21 @@ public sealed class DpdUpdateService : IDpdUpdateService
     // The dictionaries this build knows how to install: id (matches a manifest entry), install path, how to read
     // the installed version stamps, and how to probe that a decompressed file is a usable asset (not just valid
     // gzip). Reading the version differs per asset (DPD's lemma db vs a lexicon), which is why it's a descriptor.
-    private static IReadOnlyList<AssetDescriptor> Descriptors => new[]
+    private IReadOnlyList<AssetDescriptor> Descriptors => new[]
     {
-        new AssetDescriptor("dpd", DpdSubsetPath, ReadDpdVersion, ProbeDpdUsable),
-        new AssetDescriptor("dppn", DppnLexiconPath, ReadLexiconVersion, ProbeLexiconUsable),
+        new AssetDescriptor("dpd", PathFor("dpd-cst-subset", "dpd-cst-subset.db"), ReadDpdVersion, ProbeDpdUsable),
+        new AssetDescriptor("dppn", PathFor("dppn", "dppn.db"), ReadLexiconVersion, ProbeLexiconUsable),
     };
+
+    private string PathFor(string folder, string file) =>
+        _dictionariesRoot is null
+            ? Path.Combine(AppConstants.DataDirectory, DictionariesDirectoryName, folder, file)
+            : Path.Combine(_dictionariesRoot, folder, file);
 
     public async Task CheckAndUpdateAsync(CancellationToken ct = default)
     {
         if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0) return; // already running
+        bool attempted = false;
         try
         {
             var cfg = _settings.Settings.DpdUpdateSettings ?? new DpdUpdateSettings();
@@ -85,6 +166,8 @@ public sealed class DpdUpdateService : IDpdUpdateService
                 _logger.LogInformation("dictionary-asset automatic updates disabled; skipping update check (present files still work).");
                 return;
             }
+            // Past the opt-out: from here an absent asset is a failure rather than a choice.
+            attempted = true;
             // Hard bound on the WHOLE check+download (HttpClient.Timeout doesn't cover a streamed body). (fable)
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromMinutes(10));
@@ -101,7 +184,16 @@ public sealed class DpdUpdateService : IDpdUpdateService
             _logger.LogWarning(ex, "dictionary-asset update check failed (non-fatal; features degrade to asset-absent).");
             StatusChanged?.Invoke("Could not check for dictionary data updates.");
         }
-        finally { Volatile.Write(ref _busy, 0); }
+        finally
+        {
+            // After the run, whatever became of it. Inside the finally so a timeout or an unexpected throw
+            // records the same thing a clean failure does.
+            // Only when a run was actually attempted — the finally runs on the opt-out path too, and marking
+            // assets failed there would report the reader's own setting back to them as a fault.
+            if (attempted)
+                try { ReconcileFailures(); } catch { /* reporting must never fail the run */ }
+            Volatile.Write(ref _busy, 0);
+        }
     }
 
     private async Task RunAsync(DpdUpdateSettings cfg, CancellationToken ct)
@@ -426,9 +518,11 @@ public sealed class DpdUpdateService : IDpdUpdateService
     /// </summary>
     public static bool ApplyPendingInstall()
     {
+        // The REAL install paths, not a service instance's: this runs at startup before anything is resolved,
+        // and it must act on the files the app will actually open. (#773 seam)
         bool any = false;
-        foreach (var desc in Descriptors)
-            any |= ApplyPendingInstall(desc.InstallPath);
+        foreach (var path in new[] { DpdSubsetPath, DppnLexiconPath })
+            any |= ApplyPendingInstall(path);
         return any;
     }
 }
