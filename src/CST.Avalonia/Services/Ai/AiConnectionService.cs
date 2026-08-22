@@ -246,6 +246,22 @@ namespace CST.Avalonia.Services.Ai
                     return AiConnectionResult.Fail(
                         $"{preset.DisplayName} needs {PromptLabel(preset, key)} before it can be added.");
 
+            if (SecretInUrl(preset) is { } inUrl) return AiConnectionResult.Fail(inUrl);
+
+            var secretKeys = (preset.Prompts ?? Array.Empty<AiInputPrompt>())
+                .Where(p => p.Secret)
+                .Select(p => p.Key)
+                .Where(k => inputs.ContainsKey(k) && !string.IsNullOrWhiteSpace(inputs[k]))
+                .ToList();
+
+            // Nowhere to put a secret is a refusal, not a silent downgrade to the plaintext file. #771 made
+            // that call for headers and the reasoning is unchanged: writing the credential to settings.json
+            // "for now" is the leak, and doing it without telling the reader is the worse half.
+            if (secretKeys.Count > 0 && _credentials?.IsAvailable != true)
+                return AiConnectionResult.Fail(
+                    $"{preset.DisplayName} needs {PromptLabel(preset, secretKeys[0])} stored securely, and "
+                    + "this machine has no credential store available.");
+
             var record = new AiConnectionRecord
             {
                 Id = preset.Id,
@@ -259,10 +275,23 @@ namespace CST.Avalonia.Services.Ai
                 Headers = (preset.Headers ?? new Dictionary<string, string>())
                     .Select(h => new AiHeaderRecord { Name = h.Key, Value = h.Value })
                     .ToList(),
-                Inputs = new Dictionary<string, string>(inputs),
+                // Every answer EXCEPT the secret ones. This is the line that keeps a credential out of the
+                // settings file, so it is written as a filter rather than as a later removal: a copy-then-
+                // delete would put the secret in the object that the save path reads, and correctness would
+                // depend on the order of two statements. (#777)
+                Inputs = inputs
+                    .Where(pair => !secretKeys.Contains(pair.Key, StringComparer.Ordinal))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                SecretInputs = secretKeys.Count > 0 ? secretKeys : null,
                 AuthHeaderName = preset.AuthHeaderName,
                 AuthScheme = preset.AuthScheme,
             };
+
+            // Filed BEFORE the record is added, so a store that refuses cannot leave a connection behind that
+            // claims to hold a secret nothing can fetch.
+            foreach (var key in secretKeys)
+                _credentials?.Set(record.Id, AiCredentialNames.Input(key), inputs[key]);
+
             Chat.Connections.Add(record);
             Chat.ActiveConnectionId ??= record.Id;
 
@@ -626,6 +655,7 @@ namespace CST.Avalonia.Services.Ai
             r.Headers.Select(h => new AiHeader(h.Name, h.Secret ? null : h.Value, h.Secret)).ToList(),
             new Dictionary<string, string>(r.Inputs),
             r.PresetId,
+            r.SecretInputs?.ToList(),
             SourceFor(r.Id),
             ReachabilityOf(r.Id),
             r.AuthHeaderName,
@@ -638,12 +668,50 @@ namespace CST.Avalonia.Services.Ai
         /// a list in the settings file would be one more thing to keep true, and the failure mode of it being
         /// stale is an orphaned credential nobody can see.</para>
         /// </summary>
+        /// <summary>
+        /// A preset whose base URL substitutes a secret prompt, or null when none does. (#777)
+        ///
+        /// <para><b>Refused rather than discouraged.</b> A base URL is not a private place: it is written to
+        /// the provider's own access logs and to any proxy between, it is shown in the Providers list and in
+        /// the editor, and it is named in most of the error sentences this code is careful to produce — the
+        /// #678 lesson about naming the endpoint works directly against keeping anything in it quiet. A
+        /// header template is the legitimate destination for a secret, which is where Cloudflare's gateway
+        /// token goes.</para>
+        ///
+        /// <para>Checked at the point of save rather than only where presets are authored, because the preset
+        /// list is generated from a fetched catalogue (#733/#737) and this is the seam every connection goes
+        /// through. Nothing in the catalogue can set <c>Secret</c> today — <c>ModelsDevCatalog</c> constructs
+        /// no prompts at all — so this guards a foot-gun we would hand ourselves, which is exactly the kind
+        /// worth making unreachable rather than remembering.</para>
+        /// </summary>
+        private static string? SecretInUrl(AiProviderPreset preset)
+        {
+            var secrets = (preset.Prompts ?? Array.Empty<AiInputPrompt>())
+                .Where(p => p.Secret)
+                .Select(p => p.Key)
+                .ToHashSet(StringComparer.Ordinal);
+
+            if (secrets.Count == 0) return null;
+
+            foreach (var key in AiTemplate.PlaceholdersIn(preset.BaseUrl))
+                if (secrets.Contains(key))
+                    return $"{preset.DisplayName} cannot be added: its address would contain the "
+                        + $"{PromptLabel(preset, key)}, and a secret must not go in a URL.";
+
+            return null;
+        }
+
         private static IEnumerable<string> CredentialNamesOf(AiConnectionRecord record)
         {
             yield return AiCredentialNames.Primary;
 
             foreach (var header in record.Headers.Where(h => h.Secret))
                 yield return AiCredentialNames.Header(header.Name);
+
+            // A secret prompt answer is filed here too, and an orphan is invisible precisely because nothing
+            // reads it - the reason this method exists at all. (#777)
+            foreach (var key in record.SecretInputs ?? Enumerable.Empty<string>())
+                yield return AiCredentialNames.Input(key);
         }
 
         /// <summary>

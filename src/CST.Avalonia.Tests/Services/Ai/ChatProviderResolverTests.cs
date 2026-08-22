@@ -387,4 +387,104 @@ public class ChatProviderResolverTests
         Assert.Null(resolver.Resolve(out var problem));
         Assert.Contains("x-api-key", problem);
     }
+
+    // ---- a secret prompt answer reaching a header template (#777) ---------------------------------------
+
+    /// <summary>
+    /// The legitimate destination for a secret prompt: a header template. Cloudflare's gateway token is the
+    /// case in view — the value lives in the credential store, the key lives in <c>SecretInputs</c>, and it is
+    /// substituted at the last possible moment rather than being written back into <c>Inputs</c>, which is
+    /// what the save path persists.
+    /// </summary>
+    [Fact]
+    public void A_header_template_substitutes_a_secret_input_from_the_credential_store()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers.Add(new AiHeaderRecord
+            {
+                Name = "cf-aig-authorization",
+                Value = "Bearer {gatewayToken}",
+            });
+            conn.Inputs["accountId"] = "acct-123";
+            conn.SecretInputs = new List<string> { "gatewayToken" };
+            c.ActiveModelId = "some-model";
+        },
+        apiKey: "sk-upstream",
+        secrets: new Dictionary<string, string>
+        {
+            [AiCredentialNames.Input("gatewayToken")] = "tok-live",
+        });
+
+        var resolution = resolver.Resolve(out var problem);
+
+        Assert.Null(problem);
+        var options = Assert.IsType<OpenAiCompatibleProvider>(resolution!.Provider).Options;
+        Assert.Equal("Bearer tok-live", options.ExtraHeaders!["cf-aig-authorization"]);
+    }
+
+    /// <summary>
+    /// A secret input with nothing stored leaves its placeholder in the header rather than filling it with an
+    /// empty string — and the refusal that already guards unfinished header templates then names the field.
+    ///
+    /// <para>That naming is the whole reason for leaving it unexpanded. Substituting an empty string would
+    /// send <c>Bearer </c> on the wire and come back a 401 that reads as a bad credential, which is the #711
+    /// complaint arriving from a new direction; the reader would be sent to re-paste a key that was never the
+    /// problem. This asserts the message, not just the header, because the message is the feature.</para>
+    /// </summary>
+    [Fact]
+    public void A_secret_input_with_nothing_stored_leaves_the_placeholder_rather_than_blanking_it()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers.Add(new AiHeaderRecord
+            {
+                Name = "cf-aig-authorization",
+                Value = "Bearer {gatewayToken}",
+            });
+            conn.SecretInputs = new List<string> { "gatewayToken" };
+            c.ActiveModelId = "some-model";
+        },
+        apiKey: "sk-upstream",
+        secrets: new Dictionary<string, string>());
+
+        var resolution = resolver.Resolve(out var problem);
+
+        Assert.Null(resolution);
+        Assert.NotNull(problem);
+
+        // Named, so the reader knows WHICH field is unfilled rather than being told the provider said no.
+        Assert.Contains("gatewayToken", problem);
+    }
+
+    /// <summary>
+    /// A connection with no secret inputs behaves exactly as before — the substitution dictionary is the
+    /// plain <c>Inputs</c> object, not a copy, so nothing about the ordinary path changed.
+    /// </summary>
+    [Fact]
+    public void A_plain_input_still_substitutes_into_a_header_template()
+    {
+        var resolver = Resolver(c =>
+        {
+            var conn = Conn(c);
+            conn.Kind = "openai-compatible";
+            conn.BaseUrl = "https://gateway.example/v1";
+            conn.Headers.Add(new AiHeaderRecord { Name = "x-account", Value = "{accountId}" });
+            conn.Inputs["accountId"] = "acct-123";
+            c.ActiveModelId = "some-model";
+        },
+        apiKey: "sk-upstream");
+
+        var resolution = resolver.Resolve(out var problem);
+
+        Assert.Null(problem);
+        var options = Assert.IsType<OpenAiCompatibleProvider>(resolution!.Provider).Options;
+        Assert.Equal("acct-123", options.ExtraHeaders!["x-account"]);
+    }
 }

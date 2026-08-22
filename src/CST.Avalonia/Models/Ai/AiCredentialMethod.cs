@@ -49,12 +49,32 @@ namespace CST.Avalonia.Models.Ai
     /// substitutes.</param>
     /// <param name="When">Ask only when another input has (or has not) a given value. Azure needs this: it
     /// wants a resource name <i>or</i> an explicit base URL, and asking for both is wrong.</param>
+    /// <param name="Secret">
+    /// Whether the answer is a credential, and so must never reach <c>settings.json</c>. (#777)
+    ///
+    /// <para><b>Nothing in the catalogue sets this today</b> — the two prompts that exist are Azure's resource
+    /// name and Cloudflare's account id, both identifiers rather than secrets, and both correctly stored in
+    /// the clear. The flag exists because the hazard is structural: the moment a provider needs a second
+    /// secret, the prompt mechanism is the path of least resistance and it writes to a plaintext file. An AWS
+    /// secret access key reaching <c>settings.json</c> that way would be a real leak taken by the easy route,
+    /// and without this flag nothing in the types would object.</para>
+    ///
+    /// <para>A secret answer is filed in the OS credential store under
+    /// <c>AiCredentialNames.Input(key)</c> and its key recorded in <c>AiConnectionRecord.SecretInputs</c> —
+    /// the same name-here/value-there routing a secret header uses (#771), reused rather than reinvented.</para>
+    ///
+    /// <para><b>A secret may not be substituted into a base URL.</b> A URL reaches server logs, the Providers
+    /// list, and every error message that names the endpoint. Refused at the point of save rather than
+    /// discouraged in a comment — see <c>AiConnectionService.SecretInUrl</c>. A header template is the
+    /// legitimate destination.</para>
+    /// </param>
     public sealed record AiInputPrompt(
         string Key,
         string Message,
         string? Placeholder = null,
         IReadOnlyList<AiPromptOption>? Options = null,
-        AiPromptCondition? When = null);
+        AiPromptCondition? When = null,
+        bool Secret = false);
 
     /// <summary>One choice in a select-style prompt.</summary>
     public sealed record AiPromptOption(string Label, string Value, string? Hint = null);

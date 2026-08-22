@@ -148,6 +148,7 @@ namespace CST.Avalonia.Models.Ai
         IReadOnlyList<AiHeader> Headers,
         IReadOnlyDictionary<string, string> Inputs,
         string? PresetId = null,
+        IReadOnlyList<string>? SecretInputs = null,
         CredentialSource KeySource = CredentialSource.None,
         Reachability State = Reachability.Configured,
         string AuthHeaderName = "Authorization",
@@ -159,6 +160,16 @@ namespace CST.Avalonia.Models.Ai
         /// <summary>True when an input the URL needs has not been supplied, so this connection cannot be used
         /// yet. Checked before sending rather than discovered as a DNS failure naming nothing.</summary>
         public bool IsIncomplete => AiTemplate.HasUnresolvedPlaceholders(ResolvedBaseUrl);
+
+        /// <summary>
+        /// Whether <paramref name="key"/> names a prompt answer kept in the credential store. (#777)
+        ///
+        /// <para>Ordinal, because an input key is a template token matched character for character by
+        /// <see cref="AiTemplate"/> — folding case here would claim to hold a secret for a placeholder the
+        /// expander will never fill.</para>
+        /// </summary>
+        public bool IsSecretInput(string key) =>
+            SecretInputs is { } keys && keys.Contains(key, System.StringComparer.Ordinal);
     }
 
     /// <summary>
