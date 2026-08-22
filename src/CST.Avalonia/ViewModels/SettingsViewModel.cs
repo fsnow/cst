@@ -1370,7 +1370,8 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
             // parameterless constructor used by the designer needs.
             var connectionService = App.TryGetService<Services.Ai.IAiConnectionService>();
             Connections = new AiConnectionsViewModel(
-                connectionService, credentials, App.TryGetService<Services.Ai.IAiProviderLogos>());
+                connectionService, credentials, App.TryGetService<Services.Ai.IAiProviderLogos>(),
+                App.TryGetService<Services.Ai.Credentials.IAiEnvironmentKeys>());
             Models = new AiModelsViewModel(
                 connectionService,
                 App.TryGetService<Services.Ai.IAiModelCatalog>(),

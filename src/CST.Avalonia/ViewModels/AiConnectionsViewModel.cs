@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using ReactiveUI;
 
 namespace CST.Avalonia.ViewModels
@@ -35,6 +36,7 @@ namespace CST.Avalonia.ViewModels
         private readonly IAiConnectionService? _service;
         private readonly IAiCredentialStore? _credentials;
         private readonly IAiProviderLogos? _logos;
+        private readonly IAiEnvironmentKeys? _environmentKeys;
         private AiConnectionEditorViewModel? _editor;
         private string? _problem;
         private string _presetSearch = "";
@@ -43,11 +45,13 @@ namespace CST.Avalonia.ViewModels
         public AiConnectionsViewModel(
             IAiConnectionService? service,
             IAiCredentialStore? credentials = null,
-            IAiProviderLogos? logos = null)
+            IAiProviderLogos? logos = null,
+            IAiEnvironmentKeys? environmentKeys = null)
         {
             _service = service;
             _credentials = credentials;
             _logos = logos;
+            _environmentKeys = environmentKeys;
 
             AddCustomCommand = ReactiveCommand.Create(AddCustom);
             RetryCatalogueCommand = ReactiveCommand.CreateFromTask(RetryCatalogueAsync);
@@ -81,6 +85,29 @@ namespace CST.Avalonia.ViewModels
         /// provider.</para>
         /// </summary>
         public ObservableCollection<AiPresetRowViewModel> AvailablePresets { get; } = new();
+
+        /// <summary>
+        /// Providers this machine already holds a key for, and has not been told to use. (#714)
+        ///
+        /// <para><b>Its own section rather than a note on a catalogue row.</b> The catalogue is a search box
+        /// over more than a hundred and sixty providers, so a line on a row is only ever read by someone who
+        /// already went looking — which is precisely not the reader this exists for: the one who does not
+        /// know the variable is set. That reader was the case in view. Above the search box, it is seen
+        /// without being asked for.</para>
+        ///
+        /// <para><b>And nothing more than a list with a button.</b> No banner, no badge, no dismissal. There
+        /// is nothing to decline because nothing is being pressed on the reader: it states what is on their
+        /// machine and offers to use it, on a settings tab they opened deliberately. A "not now" would need
+        /// somewhere to be stored, a way back, and an answer to what happens when the variable changes — all
+        /// to suppress a two-line block nobody has to act on.</para>
+        ///
+        /// <para>Drawn from <see cref="IAiConnectionService.AvailablePresets"/>, so a provider the reader has
+        /// already configured never appears here — whatever their environment holds, that decision is made.
+        /// </para>
+        /// </summary>
+        public ObservableCollection<AiEnvironmentRowViewModel> FoundKeys { get; } = new();
+
+        public bool HasFoundKeys => FoundKeys.Count > 0;
 
         /// <summary>True while nothing is configured, so the empty state can say so rather than showing a
         /// blank area above a catalogue and leaving the reader to infer it.</summary>
@@ -239,6 +266,39 @@ namespace CST.Avalonia.ViewModels
         /// and a provider added with neither a key nor a model id cannot answer a question, so the reader
         /// discovers the gap later and has to find Edit. OpenCode opens a sheet on every Connect.</para>
         /// </summary>
+        private AiProviderPreset? PresetFor(string presetId) =>
+            _service?.Presets.FirstOrDefault(p => string.Equals(p.Id, presetId, StringComparison.Ordinal));
+
+        /// <summary>
+        /// Adopts the key the environment holds for this provider. (#714)
+        ///
+        /// <para><b>One click where one click is honest, a sheet where it is not.</b> A catalogue preset needs
+        /// nothing beyond the reader's consent, so pressing the button that names the variable is the whole
+        /// act. Azure and Cloudflare declare environment variables AND need a prompt answered — a resource
+        /// name, an account id — so adopting them in one click is not possible; those open the ordinary sheet
+        /// carrying the choice already made, rather than asking for it twice.</para>
+        /// </summary>
+        internal void UseEnvironmentKey(string presetId, string variableName)
+        {
+            if (_service is null) return;
+            Problem = null;
+
+            if (PresetFor(presetId) is not { } preset) return;
+
+            if (preset.Prompts is { Count: > 0 })
+            {
+                Editor = AiConnectionEditorViewModel.ForPreset(
+                    _service, _credentials, preset, CloseEditor, adoptEnvironmentKey: variableName);
+                return;
+            }
+
+            // The variable NAME the row displayed, not one re-derived from the preset: it is the one the
+            // reader consented to, and it is what the connection records. (#714, fable on #813)
+            var result = _service.AddFromPreset(
+                presetId, new Dictionary<string, string>(), environmentVariable: variableName);
+            Problem = result.Ok ? null : result.Problem;
+        }
+
         internal void AddPreset(string presetId)
         {
             if (_service is null) return;
@@ -391,6 +451,24 @@ namespace CST.Avalonia.ViewModels
                 p => new AiPresetRowViewModel(this, p),
                 (row, p) => row.Update(p));
 
+            // Deliberately NOT filtered by the search box. The search is for finding a provider in the
+            // catalogue; this section answers a question the reader has not asked yet, and hiding it the
+            // moment they type would take it away exactly when they are looking for the provider it is
+            // about. (#714)
+            //
+            // Re-read on every rebind rather than cached: the environment can change between one open of
+            // this tab and the next, and a variable the reader has just unset should stop being offered.
+            var found = _environmentKeys is null
+                ? new List<AiEnvironmentKey>()
+                : _environmentKeys.Discover(_service.AvailablePresets).ToList();
+
+            Sync(FoundKeys, found,
+                k => k.PresetId,
+                r => r.Id,
+                k => new AiEnvironmentRowViewModel(this, k, PresetFor(k.PresetId)),
+                (row, k) => row.Update(k, PresetFor(k.PresetId)));
+
+            this.RaisePropertyChanged(nameof(HasFoundKeys));
             this.RaisePropertyChanged(nameof(HasNoConnections));
             this.RaisePropertyChanged(nameof(HasAvailablePresets));
             this.RaisePropertyChanged(nameof(CatalogueCount));
@@ -784,6 +862,68 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(Monogram));
             this.RaisePropertyChanged(nameof(MonogramTone));
             this.RaisePropertyChanged(nameof(RequirementText));
+        }
+    }
+
+    /// <summary>
+    /// One provider whose API key is already sitting in this machine's environment. (#714)
+    ///
+    /// <para><b>The variable's NAME, never its value.</b> The value is not carried into this object, not
+    /// rendered, and not logged: the name is the whole of what a reader needs in order to recognise the key
+    /// — or to realise they had forgotten it was set, which is the case this feature exists for.</para>
+    /// </summary>
+    public class AiEnvironmentRowViewModel : AiLogoRowViewModel
+    {
+        private readonly AiConnectionsViewModel _owner;
+        private AiEnvironmentKey _key;
+        private AiProviderPreset? _preset;
+
+        public AiEnvironmentRowViewModel(
+            AiConnectionsViewModel owner, AiEnvironmentKey key, AiProviderPreset? preset)
+        {
+            _owner = owner;
+            _key = key;
+            _preset = preset;
+
+            UseCommand = ReactiveCommand.Create(() => _owner.UseEnvironmentKey(Id, VariableName));
+
+            LoadLogo(owner.Logos);
+        }
+
+        public string Id => _key.PresetId;
+
+        protected override string? ProviderId => _key.PresetId;
+
+        public string VariableName => _key.VariableName;
+
+        /// <summary>The provider's own name where the catalogue is loaded, and the id otherwise — a row that
+        /// says "openai" is still a row the reader can act on, where no row at all is not.</summary>
+        public string DisplayName => _preset?.DisplayName ?? _key.PresetId;
+
+        public override string Monogram => AiMonogram.For(DisplayName);
+
+        public override int MonogramTone => AiMonogram.ToneFor(Id);
+
+        /// <summary>
+        /// What the row says beneath the provider's name.
+        ///
+        /// <para>A statement of fact rather than a recommendation. It does not say the key is valid — nothing
+        /// here has tried it — only that the variable is set, which is the one thing that has been
+        /// established.</para>
+        /// </summary>
+        public string VariableText => $"Key in {VariableName}";
+
+        public ReactiveCommand<Unit, Unit> UseCommand { get; }
+
+        internal void Update(AiEnvironmentKey key, AiProviderPreset? preset)
+        {
+            _key = key;
+            _preset = preset;
+            this.RaisePropertyChanged(nameof(VariableName));
+            this.RaisePropertyChanged(nameof(VariableText));
+            this.RaisePropertyChanged(nameof(DisplayName));
+            this.RaisePropertyChanged(nameof(Monogram));
+            this.RaisePropertyChanged(nameof(MonogramTone));
         }
     }
 

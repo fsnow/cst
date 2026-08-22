@@ -43,6 +43,10 @@ namespace CST.Avalonia.ViewModels
         private readonly IAiCredentialStore? _credentials;
         private readonly Action<bool> _close;
         private readonly AiProviderPreset? _preset;
+
+        /// <summary>The environment variable this connection was opened to adopt, or null. Name only — the
+        /// value is never read here, never rendered and never stored. (#714)</summary>
+        private string? _adoptEnvironmentVariable;
         private readonly string? _existingId;
         private readonly bool _keyRequired;
 
@@ -152,12 +156,22 @@ namespace CST.Avalonia.ViewModels
         /// is one form driven by data rather than a hand-written dialog per provider. A provider arriving in a
         /// later upstream sync needing a field we have never heard of gets a working dialog for free.</para>
         /// </summary>
+        /// <param name="adoptEnvironmentKey">
+        /// Opened from the "Found in your environment" section, so this connection will authenticate with the
+        /// variable the reader's machine already holds. (#714)
+        ///
+        /// <para>Azure and Cloudflare are why this path exists at all: both declare environment variables AND
+        /// need a prompt answered, so neither can be adopted in one click. The sheet asks for what is missing
+        /// and carries the reader's choice through to the save — it does not re-ask it, because they made it
+        /// by pressing a button that named the variable.</para>
+        /// </param>
         public static AiConnectionEditorViewModel ForPreset(
             IAiConnectionService service, IAiCredentialStore? credentials, AiProviderPreset preset,
-            Action<bool> close)
+            Action<bool> close, string? adoptEnvironmentKey = null)
         {
             var vm = new AiConnectionEditorViewModel(service, credentials, close, preset, null)
             {
+                _adoptEnvironmentVariable = adoptEnvironmentKey,
                 _id = preset.Id,
                 _displayName = preset.DisplayName,
                 _baseUrl = preset.BaseUrl,
@@ -407,8 +421,26 @@ namespace CST.Avalonia.ViewModels
         /// and no key can be filed by any route on that machine, so a refusal on top of the explanation would
         /// leave the reader nowhere to go — a row that cannot answer is the lesser evil there.</para>
         /// </summary>
+        /// <para><b>Nor where the reader is adopting the key their environment already holds.</b> They have a
+        /// key; it simply is not one we store. Demanding a typed one here would refuse the very thing the
+        /// button they pressed offered to do. (#714)</para>
         private bool MissingRequiredKey =>
-            _keyRequired && CanStoreKeys && string.IsNullOrWhiteSpace(ApiKeyEntry) && !HasStoredKey;
+            _keyRequired && CanStoreKeys && _adoptEnvironmentVariable is null
+            && string.IsNullOrWhiteSpace(ApiKeyEntry) && !HasStoredKey;
+
+        /// <summary>
+        /// The variable this sheet was opened to adopt, named for the reader. (#714)
+        ///
+        /// <para>The NAME, never the value. A settings screen that prints a credential is the last thing this
+        /// app should grow, and the name is the whole of what the reader needs in order to recognise — or
+        /// disown — the key that is about to be used.</para>
+        /// </summary>
+        public string? EnvironmentKeyNote => _adoptEnvironmentVariable is null
+            ? null
+            : $"This connection will use the key in {_adoptEnvironmentVariable}. "
+              + "It stays in your environment — nothing is copied here.";
+
+        public bool HasEnvironmentKeyNote => EnvironmentKeyNote is not null;
 
         /// <summary>
         /// A header marked secret with nothing to store and nothing already stored. (#771)
@@ -565,7 +597,9 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         private AiConnectionResult AddPreset(IReadOnlyDictionary<string, string> inputs)
         {
-            var added = _service.AddFromPreset(_preset!.Id, inputs);
+            // The name the reader was shown on the row they pressed, carried through the sheet unchanged.
+            var added = _service.AddFromPreset(
+                _preset!.Id, inputs, environmentVariable: _adoptEnvironmentVariable);
             if (!added.Ok || added.Connection is not { } created) return added;
 
             var models = TypedModels();

@@ -76,7 +76,27 @@ namespace CST.Avalonia.Services.Ai
         /// <summary>Creates a connection from a preset, with its base URL, kind and headers pre-filled.</summary>
         /// <param name="inputs">Answers to the preset's <see cref="AiProviderPreset.Prompts"/> — resource
         /// name, account id and so on. Pass an empty dictionary when the preset asks for nothing.</param>
-        AiConnectionResult AddFromPreset(string presetId, IReadOnlyDictionary<string, string> inputs);
+        /// <param name="environmentVariable">
+        /// The environment variable the reader chose to authenticate with, or null for the ordinary path.
+        /// (#714)
+        ///
+        /// <para><b>The NAME is the opt-in, not a flag beside it.</b> Discovery is automatic and adoption is
+        /// not: finding a variable set makes a provider available, and only this — passed from a click — makes
+        /// anything authenticate with it. Carrying the name rather than a boolean means a consent with nothing
+        /// recorded cannot be expressed at all, where a flag-plus-name pair can be half-set and has to be
+        /// defended against downstream.</para>
+        ///
+        /// <para>It is the name the reader was SHOWN, passed down from the row they pressed — not one
+        /// re-derived from the preset here. The preset's variable list is refreshed from models.dev, so
+        /// re-deriving it would let a reordering upstream change which credential a recorded connection uses,
+        /// months later and with no second consent. That is the property this feature exists to prevent,
+        /// arriving late instead of at the start. (fable, on #813)</para>
+        ///
+        /// <para>Defaulted null so every existing caller keeps the behaviour it had, and so adopting is
+        /// something a caller has to say rather than something it can fall into.</para>
+        /// </param>
+        AiConnectionResult AddFromPreset(
+            string presetId, IReadOnlyDictionary<string, string> inputs, string? environmentVariable = null);
 
         /// <summary>Edits everything except the id, which is immutable because the credential is filed under it.</summary>
         AiConnectionResult Update(string id, AiConnectionDraft draft);
@@ -265,7 +285,8 @@ namespace CST.Avalonia.Services.Ai
             return Saved(record);
         }
 
-        public AiConnectionResult AddFromPreset(string presetId, IReadOnlyDictionary<string, string> inputs)
+        public AiConnectionResult AddFromPreset(
+            string presetId, IReadOnlyDictionary<string, string> inputs, string? environmentVariable = null)
         {
             var preset = Presets.FirstOrDefault(p => IdMatches(p.Id, presetId));
             if (preset is null) return AiConnectionResult.Fail($"'{presetId}' is not a known provider.");
@@ -317,6 +338,11 @@ namespace CST.Avalonia.Services.Ai
                     .Where(pair => !secretKeys.Contains(pair.Key, StringComparer.Ordinal))
                     .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
                 SecretInputs = secretKeys.Count > 0 ? secretKeys : null,
+                // Recorded only where the caller asked for it, and the two fields are set from ONE value so
+                // they cannot disagree. Nothing here consults the environment: this stores the reader's
+                // decision, and the decision is the feature. (#714)
+                UsesEnvironmentKey = environmentVariable is not null,
+                EnvironmentVariable = environmentVariable,
                 AuthHeaderName = preset.AuthHeaderName,
                 AuthScheme = preset.AuthScheme,
             };
