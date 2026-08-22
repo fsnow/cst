@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CST.Avalonia.Models;
+using CST.Avalonia.Services.Ai.Credentials;
 using CST.Avalonia.Models.Ai;
 
 namespace CST.Avalonia.Services.Ai
@@ -133,6 +134,7 @@ namespace CST.Avalonia.Services.Ai
         private readonly ISettingsService _settings;
         private readonly IAiCredentialStore? _credentials;
         private readonly IAiPresetSource? _presets;
+        private readonly IAiEnvironmentKeys? _environmentKeys;
 
         /// <summary>
         /// Last-known reachability, in memory only.
@@ -153,11 +155,13 @@ namespace CST.Avalonia.Services.Ai
         public AiConnectionService(
             ISettingsService settings,
             IAiCredentialStore? credentials = null,
-            IAiPresetSource? presets = null)
+            IAiPresetSource? presets = null,
+            IAiEnvironmentKeys? environmentKeys = null)
         {
             _settings = settings;
             _credentials = credentials;
             _presets = presets;
+            _environmentKeys = environmentKeys;
 
             // The preset list changing is a change to what this service reports, so it reaches the UI on the
             // one event it already binds to rather than through a second channel.
@@ -187,10 +191,40 @@ namespace CST.Avalonia.Services.Ai
                 return _reachability.TryGetValue(connectionId, out var state) ? state : Reachability.Configured;
         }
 
-        private CredentialSource SourceFor(string connectionId) =>
-            _credentials?.Get(connectionId, AiCredentialNames.Primary) is not null
-                ? CredentialSource.Keychain
-                : CredentialSource.None;
+        /// <summary>
+        /// Where this connection's credential comes from. (#689, #714)
+        ///
+        /// <para><b>Stored wins.</b> Entering a key is a deliberate act and a variable in the environment is
+        /// often forgotten — the maintainer was surprised by one on his own machine — so a reader who typed a
+        /// key must not find the app quietly using something else instead. The reverse order would also make
+        /// the stored key unreachable without unsetting a variable, which is not something the app can offer
+        /// to do.</para>
+        ///
+        /// <para>A discovered credential counts only for a connection that was ADOPTED from the environment.
+        /// Discovery alone never makes a connection authenticated: that is the opt-in step, and this method
+        /// reports state rather than creating it.</para>
+        /// </summary>
+        private CredentialSource SourceFor(string connectionId)
+        {
+            if (_credentials?.Get(connectionId, AiCredentialNames.Primary) is not null)
+                return CredentialSource.Keychain;
+
+            // Adopted from the environment, and the variable still holds something. When it does not — unset
+            // between sessions, or renamed — this falls through to None, which reads as "no key" rather than
+            // as an error, because that is what it is.
+            // IdMatches, not Ordinal — one rule for id comparison in this file. The split it avoids is the
+            // mechanism behind #805, where the resolver comparing Ordinal against this service's
+            // OrdinalIgnoreCase sends a model to the wrong connection. (kestrel-cst-2)
+            var record = Chat.Connections.FirstOrDefault(
+                r => r is not null && IdMatches(r.Id, connectionId));
+            if (record is not null
+                && AiEnvironmentCredential.For(
+                    record.UsesEnvironmentKey, record.EnvironmentVariable, _environmentKeys) is not null)
+                return CredentialSource.Environment;
+
+            return CredentialSource.None;
+        }
+
 
         public IReadOnlyList<AiProviderPreset> Presets =>
             _presets?.Presets ?? AiPresetSource.SnapshotDefaults;
@@ -659,7 +693,9 @@ namespace CST.Avalonia.Services.Ai
             SourceFor(r.Id),
             ReachabilityOf(r.Id),
             r.AuthHeaderName,
-            r.AuthScheme);
+            r.AuthScheme,
+            r.UsesEnvironmentKey,
+            r.EnvironmentVariable);
 
         /// <summary>
         /// Every credential name this connection could have filed a secret under. (#759)

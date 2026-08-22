@@ -4,6 +4,8 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using CST.Avalonia.Models;
+using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using Microsoft.Extensions.Logging;
 
 namespace CST.Avalonia.Services.Ai;
@@ -144,12 +146,16 @@ public sealed class ChatProviderResolver : IChatProviderResolver
     private readonly IAiCredentialStore? _credentials;
     private readonly ILoggerFactory _loggerFactory;
     private readonly HttpClient _http;
+    private readonly IAiEnvironmentKeys? _environmentKeys;
+    private readonly IAiPresetSource? _presets;
 
     public ChatProviderResolver(
         ISettingsService settings,
         IAiCredentialStore? credentials,
-        ILoggerFactory loggerFactory)
-        : this(settings, credentials, loggerFactory, CreateHttpClient())
+        ILoggerFactory loggerFactory,
+        IAiEnvironmentKeys? environmentKeys = null,
+        IAiPresetSource? presets = null)
+        : this(settings, credentials, loggerFactory, CreateHttpClient(), environmentKeys, presets)
     {
     }
 
@@ -158,12 +164,16 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         ISettingsService settings,
         IAiCredentialStore? credentials,
         ILoggerFactory loggerFactory,
-        HttpClient http)
+        HttpClient http,
+        IAiEnvironmentKeys? environmentKeys = null,
+        IAiPresetSource? presets = null)
     {
         _settings = settings;
         _credentials = credentials;
         _loggerFactory = loggerFactory;
         _http = http;
+        _environmentKeys = environmentKeys;
+        _presets = presets;
     }
 
     /// <summary>
@@ -289,7 +299,16 @@ public sealed class ChatProviderResolver : IChatProviderResolver
             return null;
         }
 
-        var apiKey = _credentials?.Get(connection.Id, AiCredentialNames.Primary);
+        // Stored first, then the environment. Order matters and is not arbitrary: entering a key is a
+        // deliberate act, a variable is often forgotten, and a reader who typed one must not find the app
+        // quietly authenticating with something else. (#714)
+        //
+        // Read at the moment of use rather than cached, so a variable the reader changes or unsets takes
+        // effect on the next request. Nothing is copied into the credential store — a duplicate there would
+        // outlive the variable, and the row it came from offers no remove action to undo that with (#691).
+        var apiKey = _credentials?.Get(connection.Id, AiCredentialNames.Primary)
+                     ?? AiEnvironmentCredential.For(
+                         connection.UsesEnvironmentKey, connection.EnvironmentVariable, _environmentKeys);
 
         switch (kind)
         {
