@@ -2,15 +2,30 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** August 2, 2026
+**Last Updated:** August 22, 2026
 **Current Version:** 5.0.0-beta.6 (in development; Beta 5 released 2026-07)
 
-> **Clean-start status for Beta 6: NOT required from Beta 5.** No on-disk format change is expected
-> between Beta 5 and Beta 6, so Beta 5 users upgrade in place. Only users coming from **Beta 4 or
-> earlier** must delete the data directory (`~/Library/Application Support/CSTReader/` on macOS,
-> `%APPDATA%\CSTReader\` on Windows) — the Beta 5 index-offset change (#53) is what they are crossing.
-> **Re-confirm this before publishing:** if anything lands during Beta 6 development that changes the
-> tokenizer, index format, or an on-disk layout, this flips to a mandatory clean start.
+> **Clean-start status for Beta 6: NOT required from Beta 5.** Beta 5 users upgrade in place —
+> **not because nothing on disk changed**, which is false, but because Beta 6 was built to absorb what
+> did. `settings.json` gained the whole AI connections surface, and the shape of a connection's headers
+> changed (#771); Beta 6 reads either shape (#784) rather than discarding the file. Two data-directory
+> migrations run on first launch: the superseded en/hi dictionary directories (#569) and the user XSL
+> directory (#616). And loading itself became recoverable — a backup is consulted when the file will not
+> parse (#785), a single bad property no longer costs the rest of it (#803), and a test asserts this build
+> reads what earlier builds wrote (#787).
+>
+> Only users coming from **Beta 4 or earlier** must delete the data directory
+> (`~/Library/Application Support/CSTReader/` on macOS, `%APPDATA%\CSTReader\` on Windows) — the Beta 5
+> index-offset change (#53) is what they are crossing.
+>
+> **What to verify before publishing** is therefore not "did anything change" but "does the upgrade path
+> still work": launch the new build on a real Beta 5 data directory and confirm settings, layout and open
+> books survive. Section 3 of the validation runbook covers it. A tokenizer or index-format change is
+> still the thing that flips this to a mandatory clean start, because no migration can absorb that one.
+>
+> **Going backwards is the direction that bites.** Beta 6 writes state a Beta 5 install did not expect,
+> and Beta 5 lacks the tolerant loading that Beta 6 added. #616's migration is marked `Recurring`
+> precisely because a still-installed Beta 5 recreates the directory it removes.
 >
 > General rule: whenever the tokenizer or index format changes, the clean-start instruction goes FIRST
 > in the release notes — not buried in "Upgrade Notes." When it is *not* required, say so explicitly,
@@ -20,20 +35,41 @@ This document describes the complete process for releasing a new version of CST 
 
 ## Overview
 
-The release process consists of six main steps:
-1. **Build packages** — macOS (build + notarize on Caracara) and Windows (build on a Windows machine)
-2. **Create a git tag** for the release
-3. **Create the GitHub release AS A DRAFT**, with release notes
-4. **Attach binaries** to the draft, then **publish** it (flip draft → published)
+The release process consists of six main steps, **in this order**:
+1. **Create the GitHub release AS A DRAFT**, with release notes — before anything is built
+2. **Build packages and attach each one to the draft as it is produced** — macOS (build + notarize on
+   Caracara), Windows (build on a Windows machine)
+3. **Download from the draft onto each test machine** and run the validation pass
+4. **Tag the tested commit**, then **publish** the release (flip draft → published)
 5. **Post-publish: update `welcome-updates.json`** to notify users
 6. **Post-publish: update `README.md`** to the newly released version
 
+### Why the draft comes first
+
+The draft is the distribution channel for testing, not just the container the release ends up in. Four
+builds have to reach four machines — Kestrel/Egret, Caracara, Merlin, Kingfisher — and a draft release
+gives every one of them the same one-line pull:
+
+```bash
+gh release download v5.0.0-beta.X --dir ~/Downloads
+```
+
+Draft releases and their assets are visible to anyone with write access and invisible to everyone else,
+so this costs nothing in exposure. The alternative — copying 250 MB installers between machines by hand,
+or over a share — is how a machine ends up testing yesterday's build.
+
+**The tag is created late, deliberately.** It marks the commit that was tested, so it cannot be written
+until testing has passed. Tagging first and finding a blocker means deleting and re-pushing a tag that
+someone may already have fetched.
+
 ### The draft → attach → publish order is load-bearing
 
-Create the release as a **draft**, attach every artifact, and only then flip it to published. Two things
+Create the release as a **draft**, attach every artifact, and only then flip it to published. Three things
 depend on that order:
 
 - A published release with missing assets is visible to users, and the download links 404.
+- **Testing needs the artifacts before the release is public**, which is only possible while it is a draft.
+  That is what makes "draft first" an ordering of the whole process rather than a detail of the last step.
 - **Nothing that points users at the release may be pushed before the release exists.**
   `welcome-updates.json` is fetched live by every running copy of the app, and its `downloadUrl` points at
   the release page. Push it while the release is still a draft and you have announced a release that
@@ -194,201 +230,22 @@ the cycle's actual changes are known — and check the clean-start notice agains
 this document.
 
 ---
-
-## Step 1a: Build, Notarize, and Staple macOS Packages (Caracara)
-
-**Machine:** Caracara (macOS build machine with notarization credentials)
-
-### Pull Latest Code
-
-```bash
-# Ensure Caracara has latest code
-git checkout main
-git pull
-```
-
-### Build Packages
-
-Build both Apple Silicon and Intel DMG installers:
-
-```bash
-# Build Apple Silicon package
-./package-macos.sh arm64
-
-# Build Intel package
-./package-macos.sh x64
-```
-
-Packages are created in the `dist/` directory:
-- `dist/CST-Reader-arm64.dmg`
-- `dist/CST-Reader-x64.dmg`
-
-### Notarize and Staple
-
-After building, run the notarization script:
-
-```bash
-# Notarize and staple both DMG files
-./notarize-macos.sh arm64
-./notarize-macos.sh x64
-```
-
-**What this does:**
-1. **Code signs** the DMG with Apple Developer ID
-2. **Uploads** DMG to Apple's notarization service
-3. **Waits** for Apple to scan and approve (~2-5 minutes)
-4. **Staples** the notarization ticket to the DMG
-
-**Important:** This step requires:
-- Apple Developer ID certificate installed on Caracara
-- App-specific password for notarization API
-- Network connectivity to Apple's servers
-
-### Verify Notarization
-
-After stapling completes, verify:
-
-```bash
-# Check notarization status
-spctl -a -vv -t install dist/CST-Reader-arm64.dmg
-spctl -a -vv -t install dist/CST-Reader-x64.dmg
-```
-
-Should show: `accepted` and `source=Notarized Developer ID`
-
-### Test Installation
-
-Test both DMGs on Caracara (or Egret for arm64):
-
-```bash
-# Mount the DMG
-open dist/CST-Reader-arm64.dmg
-
-# Drag to Applications and launch
-# Should open without security warnings
-```
-
-**If you see "damaged" or security warnings:**
-- Notarization failed or wasn't stapled correctly
-- Check notarization logs: `xcrun notarytool log <submission-id>`
-- Re-run notarization script
-
 ---
 
-## Step 1b: Build Windows Packages
-
-**Machine:** any Windows machine — Placid (the Windows 10 x64 VM on Caracara) builds **both**
-architectures. Run the script once per architecture on that one host; it does not need to match the
-target. See the shipping matrix above for why, and for what still has to be tested natively.
-
-### Pull Latest Code
-
-```powershell
-git checkout main
-git pull
-```
-
-### Build
-
-```powershell
-cd src\CST.Avalonia
-
-# Both, on the same machine — the host's own architecture does not matter
-.\package-windows.ps1              # -Arch x64 is the default
-.\package-windows.ps1 -Arch arm64
-```
-
-Add `-NoInstaller` to produce only the portable zip (useful when Inno Setup isn't installed).
-
-**What the script does:**
-1. Reads `<Version>` from `CST.Avalonia.csproj` (aborts if absent, rather than mislabeling a release)
-2. Cleans and runs `dotnet publish -c Release -r win-<arch> --self-contained`
-3. Stages `xsl/` and `dictionaries/` beside the exe (the app seeds `%APPDATA%\CSTReader` from these on first run)
-4. **Asserts `libcef.dll` is present** — this is the packaging failure that matters most; see the warning
-   in the shipping matrix above
-5. Writes a portable `.zip` (forward-slash entry names, streamed so the 178–205 MB `libcef.dll` isn't
-   buffered in memory)
-6. Runs Inno Setup to produce `setup.exe`, and prints its SHA256 for the WinGet manifest (#410)
-
-Artifacts land in `src\CST.Avalonia\dist\`:
-- `CST-Reader-<version>-win-<arch>-portable.zip` (~218 MB arm64 / ~230 MB x64)
-- `CST-Reader-<version>-win-<arch>-setup.exe`
-
-Save the printed **SHA256** of each `setup.exe` — you need both for the WinGet manifest.
-
-### Test Installation
-
-**Each installer must be tested on a machine of its own architecture** — this is the step that does not
-cross-build. The arm64 installer will refuse to run on Placid (`ArchitecturesAllowed=arm64`), so test it
-on Merlin; test the x64 one on Kingfisher or Placid itself.
-
-There is no notarization to verify, so the smoke test is the whole check:
-
-1. Run `setup.exe`. It is a per-user install (`PrivilegesRequired=lowest`), so there should be **no UAC
-   prompt**; it installs to `%LOCALAPPDATA%\Programs\CST Reader`.
-2. Expect a SmartScreen warning on first run — "More info" → "Run anyway". This is normal for unsigned
-   beta builds.
-3. Launch and confirm **a book actually opens**. This is the CEF check: if `libcef.dll` is missing or is
-   the wrong architecture, the app window appears but every book view fails. Watch
-   `%APPDATA%\CSTReader\logs\cst-avalonia-<date>.log` for `WebView initialized event fired`.
-4. On first launch the app downloads the 217 XML books and builds the Lucene index — allow a few minutes
-   before the app is usable.
-5. Uninstall via Settings → Apps to confirm the uninstall entry works.
-
-**ARM64 note:** the x64 installer is marked `x64compatible`, so it will also install on an ARM64 machine
-and run under emulation. Both installers share an `AppId`, so installing the native arm64 build over an
-emulated x64 install upgrades it in place.
-
-**ARM64 development note:** `dotnet build` / `dotnet run` work normally on an ARM64 Windows box — no
-`-r` needed. This is not automatic, though: `CefGlue.Common.props` hardcodes
-`CefGlueTargetPlatform=win-x64` for *any* RID-less Windows build (it only honours `Platform=ARM64`,
-which the SDK leaves at `AnyCPU`), which would wire x64 CEF paths into an arm64 process.
-`src/CST.Avalonia/Directory.Build.props` compensates by pinning `RuntimeIdentifier=win-arm64` on ARM64
-Windows hosts, early enough that CefGlue sees it. Note that dev output therefore lands in
-`bin\<Config>\net10.0\win-arm64\`. An explicit `-r` always wins, so packaging is unaffected.
-
----
-
-## Step 2: Create Git Tag
-
-**Machine:** Any (Kestrel, Caracara, or local)
-
-Tags mark specific points in repository history as release versions.
-
-### Create and Push Tag
-
-```bash
-# Ensure you're on main branch with latest changes
-git checkout main
-git pull
-
-# Create annotated tag (replace X with version)
-git tag -a v5.0.0-beta.X -m "Release Beta X"
-
-# Push tag to GitHub
-git push origin v5.0.0-beta.X
-```
-
-### Verify Tag
-
-Check that the tag appears on GitHub:
-- Navigate to: `https://github.com/fsnow/cst/tags`
-- Verify your new tag is listed
-
-**Note:** Use annotated tags (`-a`) rather than lightweight tags for releases, as they include tagger information and date.
-
----
-
-## Step 3: Create GitHub Release
+## Step 1: Create the GitHub Release as a Draft
 
 Releases on GitHub provide user-friendly download pages and release notes.
+
+**Nothing is built yet, and that is the point** — the draft is what the build artifacts get attached
+to, and what the test machines download from.
 
 ### Using GitHub Web Interface
 
 1. Navigate to: `https://github.com/fsnow/cst/releases`
 2. Click **"Draft a new release"**
 3. Fill in release information:
-   - **Tag:** Select the tag you just created (e.g., `v5.0.0-beta.3`)
+   - **Tag:** type the tag name (e.g., `v5.0.0-beta.6`). **The tag does not exist yet** — GitHub will
+     offer to create it on publish. Do not create it in git now; see Step 4.
    - **Release title:** "CST Reader 5.0.0-beta.3" (or appropriate version)
    - **Description:** Write release notes (see template below)
    - **Pre-release:** Check this box for beta releases
@@ -397,7 +254,7 @@ Releases on GitHub provide user-friendly download pages and release notes.
 ### Using GitHub CLI (Alternative)
 
 ```bash
-# Create draft release
+# Create the draft. The tag name is reserved here; the git tag is pushed in Step 4.
 gh release create v5.0.0-beta.X \
   --title "CST Reader 5.0.0-beta.X" \
   --notes-file RELEASE_NOTES.md \
@@ -514,69 +371,278 @@ Found a bug or have a suggestion?
 ```
 
 ---
+---
 
-## Step 4: Attach Binary Files
+## Step 2a: Build, Notarize, and Staple macOS Packages (Caracara)
 
-Upload the macOS and Windows installers to the release. The Windows artifacts are produced on
-different machines than the DMGs, so collect them all in one place first.
+**Machine:** Caracara (macOS build machine with notarization credentials)
 
-### Using GitHub Web Interface
-
-1. In the draft release page, scroll to **"Attach binaries by dropping them here or selecting them"**
-2. Drag and drop or select all six files:
-   - `CST-Reader-arm64.dmg` (macOS, Apple Silicon)
-   - `CST-Reader-x64.dmg` (macOS, Intel)
-   - `CST-Reader-5.0.0-beta.X-win-x64-setup.exe`
-   - `CST-Reader-5.0.0-beta.X-win-arm64-setup.exe`
-   - `CST-Reader-5.0.0-beta.X-win-x64-portable.zip`
-   - `CST-Reader-5.0.0-beta.X-win-arm64-portable.zip`
-3. Wait for uploads to complete (the Windows artifacts are ~200–250 MB each)
-4. Verify checksums if desired
-5. Click **"Publish release"**
-
-### Using GitHub CLI (Alternative)
+### Pull Latest Code
 
 ```bash
-# Attach binaries to draft release
+# Ensure Caracara has latest code
+git checkout main
+git pull
+```
+
+### Build Packages
+
+Build both Apple Silicon and Intel DMG installers:
+
+```bash
+# Build Apple Silicon package
+./package-macos.sh arm64
+
+# Build Intel package
+./package-macos.sh x64
+```
+
+Packages are created in the `dist/` directory:
+- `dist/CST-Reader-arm64.dmg`
+- `dist/CST-Reader-x64.dmg`
+
+### Notarize and Staple
+
+After building, run the notarization script:
+
+```bash
+# Notarize and staple both DMG files
+./notarize-macos.sh arm64
+./notarize-macos.sh x64
+```
+
+**What this does:**
+1. **Code signs** the DMG with Apple Developer ID
+2. **Uploads** DMG to Apple's notarization service
+3. **Waits** for Apple to scan and approve (~2-5 minutes)
+4. **Staples** the notarization ticket to the DMG
+
+**Important:** This step requires:
+- Apple Developer ID certificate installed on Caracara
+- App-specific password for notarization API
+- Network connectivity to Apple's servers
+
+### Verify Notarization
+
+After stapling completes, verify:
+
+```bash
+# Check notarization status
+spctl -a -vv -t install dist/CST-Reader-arm64.dmg
+spctl -a -vv -t install dist/CST-Reader-x64.dmg
+```
+
+Should show: `accepted` and `source=Notarized Developer ID`
+
+### Test Installation
+
+Test both DMGs on Caracara (or Egret for arm64):
+
+```bash
+# Mount the DMG
+open dist/CST-Reader-arm64.dmg
+
+# Drag to Applications and launch
+# Should open without security warnings
+```
+
+**If you see "damaged" or security warnings:**
+- Notarization failed or wasn't stapled correctly
+- Check notarization logs: `xcrun notarytool log <submission-id>`
+- Re-run notarization script
+
+---
+
+### Attach to the draft, now — not at the end
+
+```bash
 gh release upload v5.0.0-beta.X \
   dist/CST-Reader-arm64.dmg \
-  dist/CST-Reader-x64.dmg \
-  dist/CST-Reader-5.0.0-beta.X-win-x64-setup.exe \
-  dist/CST-Reader-5.0.0-beta.X-win-arm64-setup.exe \
-  dist/CST-Reader-5.0.0-beta.X-win-x64-portable.zip \
-  dist/CST-Reader-5.0.0-beta.X-win-arm64-portable.zip
+  dist/CST-Reader-x64.dmg --clobber
+```
 
-# Publish the release
+Both DMGs must be **notarized and stapled before uploading**, not after. A stapled ticket travels inside
+the file; re-stapling a copy that has already been downloaded elsewhere fixes nothing. `--clobber` so a
+rebuild replaces cleanly rather than erroring or appending a second asset with a mangled name.
+
+---
+
+## Step 2b: Build Windows Packages
+
+**Machine:** any Windows machine — Placid (the Windows 10 x64 VM on Caracara) builds **both**
+architectures. Run the script once per architecture on that one host; it does not need to match the
+target. See the shipping matrix above for why, and for what still has to be tested natively.
+
+### Pull Latest Code
+
+```powershell
+git checkout main
+git pull
+```
+
+### Build
+
+```powershell
+cd src\CST.Avalonia
+
+# Both, on the same machine — the host's own architecture does not matter
+.\package-windows.ps1              # -Arch x64 is the default
+.\package-windows.ps1 -Arch arm64
+```
+
+Add `-NoInstaller` to produce only the portable zip (useful when Inno Setup isn't installed).
+
+**What the script does:**
+1. Reads `<Version>` from `CST.Avalonia.csproj` (aborts if absent, rather than mislabeling a release)
+2. Cleans and runs `dotnet publish -c Release -r win-<arch> --self-contained`
+3. Stages `xsl/` and `dictionaries/` beside the exe (the app seeds `%APPDATA%\CSTReader` from these on first run)
+4. **Asserts `libcef.dll` is present** — this is the packaging failure that matters most; see the warning
+   in the shipping matrix above
+5. Writes a portable `.zip` (forward-slash entry names, streamed so the 178–205 MB `libcef.dll` isn't
+   buffered in memory)
+6. Runs Inno Setup to produce `setup.exe`, and prints its SHA256 for the WinGet manifest (#410)
+
+Artifacts land in `src\CST.Avalonia\dist\`:
+- `CST-Reader-<version>-win-<arch>-portable.zip` (~218 MB arm64 / ~230 MB x64)
+- `CST-Reader-<version>-win-<arch>-setup.exe`
+
+Save the printed **SHA256** of each `setup.exe` — you need both for the WinGet manifest.
+
+### Test Installation
+
+**Each installer must be tested on a machine of its own architecture** — this is the step that does not
+cross-build. The arm64 installer will refuse to run on Placid (`ArchitecturesAllowed=arm64`), so test it
+on Merlin; test the x64 one on Kingfisher or Placid itself.
+
+There is no notarization to verify, so the smoke test is the whole check:
+
+1. Run `setup.exe`. It is a per-user install (`PrivilegesRequired=lowest`), so there should be **no UAC
+   prompt**; it installs to `%LOCALAPPDATA%\Programs\CST Reader`.
+2. Expect a SmartScreen warning on first run — "More info" → "Run anyway". This is normal for unsigned
+   beta builds.
+3. Launch and confirm **a book actually opens**. This is the CEF check: if `libcef.dll` is missing or is
+   the wrong architecture, the app window appears but every book view fails. Watch
+   `%APPDATA%\CSTReader\logs\cst-avalonia-<date>.log` for `WebView initialized event fired`.
+4. On first launch the app downloads the 217 XML books and builds the Lucene index — allow a few minutes
+   before the app is usable.
+5. Uninstall via Settings → Apps to confirm the uninstall entry works.
+
+**ARM64 note:** the x64 installer is marked `x64compatible`, so it will also install on an ARM64 machine
+and run under emulation. Both installers share an `AppId`, so installing the native arm64 build over an
+emulated x64 install upgrades it in place.
+
+**ARM64 development note:** `dotnet build` / `dotnet run` work normally on an ARM64 Windows box — no
+`-r` needed. This is not automatic, though: `CefGlue.Common.props` hardcodes
+`CefGlueTargetPlatform=win-x64` for *any* RID-less Windows build (it only honours `Platform=ARM64`,
+which the SDK leaves at `AnyCPU`), which would wire x64 CEF paths into an arm64 process.
+`src/CST.Avalonia/Directory.Build.props` compensates by pinning `RuntimeIdentifier=win-arm64` on ARM64
+Windows hosts, early enough that CefGlue sees it. Note that dev output therefore lands in
+`bin\<Config>\net10.0\win-arm64\`. An explicit `-r` always wins, so packaging is unaffected.
+
+---
+
+### Attach to the draft
+
+```powershell
+gh release upload v5.0.0-beta.X `
+  dist\CST-Reader-5.0.0-beta.X-win-x64-setup.exe `
+  dist\CST-Reader-5.0.0-beta.X-win-arm64-setup.exe `
+  dist\CST-Reader-5.0.0-beta.X-win-x64-portable.zip `
+  dist\CST-Reader-5.0.0-beta.X-win-arm64-portable.zip --clobber
+```
+
+Six assets are on the draft once both platforms are up. Confirm with `gh release view v5.0.0-beta.X`
+before moving on — a missing asset discovered on a test machine costs a round trip.
+
+---
+
+## Step 3: Download onto the Test Machines and Validate
+
+**Machines:** Kestrel or Egret (macOS arm64), Caracara (macOS x64), Merlin (Windows arm64),
+Kingfisher or Placid (Windows x64).
+
+Every machine pulls the same artifacts from the draft, so all four test what will actually ship rather
+than a local build that happens to be lying around.
+
+```bash
+# macOS — one machine per architecture
+gh release download v5.0.0-beta.X --pattern '*arm64.dmg' --dir ~/Downloads
+gh release download v5.0.0-beta.X --pattern '*x64.dmg'   --dir ~/Downloads
+```
+
+```powershell
+# Windows — installer and portable zip for this machine's architecture
+gh release download v5.0.0-beta.X -p '*win-arm64-*' -D $HOME\Downloads
+```
+
+`gh auth status` must show a logged-in account with write access on each machine: **a draft release is
+invisible without it**, and `gh release download` will report the release as not found rather than as
+forbidden.
+
+### Validate
+
+Run the validation runbook top to bottom on each machine. It is a four-column sheet — one column per
+machine — so a check nobody performed is visible as an empty box rather than assumed.
+
+The macOS Gatekeeper check is only meaningful on a DMG **downloaded from the release**: a locally built
+DMG carries no quarantine attribute, so it opens cleanly whether or not notarization actually worked.
+This is the reason downloading beats copying.
+
+**If validation fails**, fix, rebuild, and re-upload with `--clobber`. No tag exists yet and the draft is
+invisible to users, so nothing needs unwinding.
+
+---
+
+## Step 4: Tag the Tested Commit, then Publish
+
+**Machine:** Any (Kestrel, Caracara, or local)
+
+Tags mark specific points in repository history as release versions.
+
+### Create and Push Tag
+
+```bash
+# Ensure you're on main branch with latest changes
+git checkout main
+git pull
+
+# Create annotated tag (replace X with version)
+git tag -a v5.0.0-beta.X -m "Release Beta X"
+
+# Push tag to GitHub
+git push origin v5.0.0-beta.X
+```
+
+### Verify Tag
+
+Check that the tag appears on GitHub:
+- Navigate to: `https://github.com/fsnow/cst/tags`
+- Verify your new tag is listed
+
+**Note:** Use annotated tags (`-a`) rather than lightweight tags for releases, as they include tagger information and date.
+
+---
+
+### Verify the assets, then publish
+
+```bash
+# Six assets, correct names and plausible sizes
+gh release view v5.0.0-beta.X --json assets \
+  --jq '.assets[] | "\(.name)  \(.size/1048576 | floor) MB"'
+
+# Flip draft -> published
 gh release edit v5.0.0-beta.X --draft=false
 ```
 
-### Verify Release
+Then confirm on the release page:
 
-1. Visit the release page: `https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.X`
-2. Verify:
-   - All four platform builds are attached (2 DMG + 2 Windows installers, plus the portable zips)
-   - Release notes are correct
-   - Pre-release badge is shown (for betas)
-   - Download links work
+- All six artifacts attached (2 DMG + 2 Windows installers + 2 portable zips)
+- Release notes correct, including the **Known Issues** collected by label above
+- Pre-release badge shown, for betas
+- Download links work **while signed out** — a draft's links work for you and 404 for everyone else, and
+  that difference is invisible until the release is published
 
-### Update the WinGet Manifest (#410)
-
-Windows distribution also goes through WinGet (`fsnow.CSTReader`). The manifest needs one `Installers`
-entry per architecture, each with the `InstallerUrl` pointing at the published GitHub release asset and
-the `InstallerSha256` printed by `package-windows.ps1`:
-
-```yaml
-Installers:
-  - Architecture: x64
-    InstallerUrl: https://github.com/fsnow/cst/releases/download/v5.0.0-beta.X/CST-Reader-5.0.0-beta.X-win-x64-setup.exe
-    InstallerSha256: <sha printed by package-windows.ps1 -Arch x64>
-  - Architecture: arm64
-    InstallerUrl: https://github.com/fsnow/cst/releases/download/v5.0.0-beta.X/CST-Reader-5.0.0-beta.X-win-arm64-setup.exe
-    InstallerSha256: <sha printed by package-windows.ps1 -Arch arm64>
-```
-
-WinGet picks the right one per machine. The `ProductCode` is the Inno Setup `AppId` + `_is1` and must
-stay stable across releases.
+Only now are Steps 5 and 6 unblocked: both point users at a release that must already exist.
 
 ---
 
