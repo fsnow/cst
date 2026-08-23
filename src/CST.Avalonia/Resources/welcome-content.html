@@ -343,8 +343,9 @@
     </div>
 
     <div class="beta-notice">
-        <strong>⚠️ Please start clean</strong>
-        <p>If you tested any earlier version, delete your CST Reader data directory before running Beta 5 &mdash; several on-disk layouts changed and the beta line carries no migration.</p>
+        <strong>Upgrading from Beta 5? Nothing to do.</strong>
+        <p>Install over the top. Your settings, layout, open books and downloaded dictionaries carry across.</p>
+        <p style="margin-top: 8px;"><strong>Coming from Beta 4 or earlier:</strong> delete your CST Reader data directory first &mdash; the search index changed in Beta 5 and an older one will not be read correctly.</p>
         <p style="margin-top: 8px;"><strong>macOS:</strong> <code>~/Library/Application Support/CSTReader/</code> &nbsp;&bull;&nbsp; <strong>Windows:</strong> <code>%APPDATA%\CSTReader\</code></p>
     </div>
 
@@ -353,46 +354,47 @@
         <p>Thank you for testing CST Reader! Your feedback will help shape the final release.</p>
 
         <h3 style="margin-top: 24px; margin-bottom: 16px;">Focus Areas</h3>
-        <p>Beta 5 is the first release at feature parity with CST4. These areas are new or changed, so feedback on them is especially valuable:</p>
+        <p>Beta 5 reached feature parity with CST4. Beta 6 adds a great deal on top of it, and these areas are the newest &mdash; feedback on them is especially valuable:</p>
 
         <div class="focus-item">
-            <strong>Windows &mdash; brand new in this release</strong>
+            <strong>The Assistant &mdash; brand new</strong>
             <ul>
+                <li>Select a passage and ask for a translation, a word-by-word breakdown, or an explanation</li>
+                <li>Turn it on under Settings &rsaquo; Assistant, and add a provider you have an account with under Providers</li>
+                <li>Your API key goes to the macOS Keychain or Windows Credential store &mdash; never into the app's settings file</li>
+                <li>If a key is already in your environment, the Providers tab offers it; nothing connects until you say so</li>
+                <li>Every answer shows what was actually sent to the model &mdash; is it the passage you meant?</li>
+            </ul>
+            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">This is the least-tested part of the release. Anything that looks wrong is worth reporting.</p>
+        </div>
+
+        <div class="focus-item">
+            <strong>Windows on ARM &mdash; brand new</strong>
+            <ul>
+                <li>A native arm64 build, alongside the existing x64 one</li>
                 <li>Install and first launch: does the text download and index build complete?</li>
-                <li>Everyday reading, searching and dictionary lookups</li>
-                <li>Keyboard shortcuts: Ctrl+O, Ctrl+G, Ctrl+D, Ctrl+F, Ctrl+P, Ctrl+, for Settings</li>
                 <li>If book text appears blank, turn off hardware acceleration in Settings and restart</li>
             </ul>
-            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">This is the least-tested part of the release. Anything at all that looks wrong is worth reporting.</p>
         </div>
 
         <div class="focus-item">
-            <strong>Dictionaries</strong>
+            <strong>Reading</strong>
             <ul>
-                <li>Switch between sources with the picker: the VRI dictionaries, the Digital Pāḷi Dictionary, and the Dictionary of Pāḷi Proper Names</li>
-                <li>Choose which dictionaries appear, and in what order, under Settings &rsaquo; Dictionary</li>
-                <li>The extra dictionaries download on first run &mdash; did that complete without trouble?</li>
-            </ul>
-        </div>
-
-        <div class="focus-item">
-            <strong>Printing</strong>
-            <ul>
-                <li>Print a whole book, and print a selection (&#8984;P / Ctrl+P, &#8679;&#8984;P / Ctrl+Shift+P)</li>
-                <li>Check that search highlights remain legible on paper</li>
+                <li><strong>Find in Page</strong> &mdash; &#8984;F / Ctrl+F searches within the book you are reading</li>
+                <li><strong>Text zoom</strong> &mdash; &#8984;/Ctrl with +, &minus; and 0, or the percentage control in the book toolbar</li>
+                <li><strong>Book fonts</strong> &mdash; choose a face for each script under Settings &rsaquo; Fonts</li>
+                <li>Does your reading position survive zooming, switching tabs and restarting?</li>
             </ul>
         </div>
 
         <div class="focus-item">
             <strong>Windows and tabs</strong>
             <ul>
-                <li><strong>Float a book by dragging its tab out</strong> of the main window, and drag it back to re-dock (the old Float and Dock buttons are gone)</li>
-                <li>Drag the book tree and search panel out and back &mdash; watch for the drop-target indicators</li>
-                <li>Reorder book tabs, and split the reading area</li>
+                <li>Float a book by dragging its tab out of the main window, and drag it back to re-dock</li>
+                <li>Split the reading area, and move a book between splits</li>
+                <li>Books that were floated or moved should all reopen when you restart</li>
             </ul>
-            <p style="margin-top: 12px; font-size: 14px; color: #4c566a;">Does your reading position survive floating, re-docking and restarting?</p>
         </div>
-    </div>
 
     <div class="quick-start">
         <h3>🚀 Quick Start</h3>
@@ -437,8 +439,8 @@
         <ul>
             <li>The texts are presented in Pāli only &mdash; CST Reader does not include translations. The built-in dictionaries give the meaning of individual words.</li>
             <li>Menus and dialogs are English only. CST4 offers 24 interface languages; that work is still ahead.</li>
-            <li>Book content fonts not yet customizable (UI fonts for each script are customizable in Settings)</li>
-            <li>macOS: Elevated CPU usage (~30% idle) is an Avalonia framework limitation, not specific to CST Reader</li>
+            <li>macOS: idle CPU is higher than it should be, from a framework-level timer amplified by the text view. Beta 6 reduces how often that timer fires; the underlying issue is not ours to fix and is not yet closed</li>
+            <li>The Assistant can read a selection of roughly 1,100 characters in Devanāgarī, Myanmar and other non-Latin scripts, or about 2,900 in Latin. Beyond that the answer covers the surrounding passage instead, and says so</li>
         </ul>
     </div>
 
