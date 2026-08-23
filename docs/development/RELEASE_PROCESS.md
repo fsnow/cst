@@ -146,13 +146,26 @@ pre-1.0 follow-up (#28).
 
 ## Pre-Release Checklist (Kestrel)
 
-Before starting the release process, verify on Kestrel:
+Before starting the release process, verify on Kestrel.
+
+**The first two items are the ones that get missed**, because nothing downstream fails when they are wrong —
+the build succeeds, the tests pass, and the mistake ships. Both were missed in Beta 6 and caught by hand.
+
+- [ ] **In-app welcome page rewritten for this release** — `src/CST.Avalonia/Resources/welcome-content.html`.
+      This is BUNDLED INTO THE BUILD, so it must be correct before anything is packaged; it is not the same
+      file as `welcome-updates.json`, which is live-fetched and updated post-publish in Step 5. Three parts go
+      stale every cycle and none of them fail a test:
+      - the **upgrade notice** — whether a clean start is required, and from which version. Beta 5's said
+        "delete your data directory", which would have been wrong advice for every Beta 5 upgrader;
+      - the **focus areas** — they should name what is new *in this release*, not the last one;
+      - the **known limitations** — delete the ones that were fixed. Beta 6 still listed book fonts as
+        not customizable, which #42 had shipped.
+- [ ] **Version strings updated and consistent** (bucket A) — see **Version strings: two timing buckets**
+      below. Bumped at the *start* of the cycle, so verify rather than discover. These all drifted before
+      Beta 4.
 
 - [ ] .NET 10 SDK present (`dotnet --list-sdks` shows 10.0.x) — see Toolchain Requirements
 
-- [ ] All version strings updated and consistent — see **Version strings: two timing buckets** below.
-      By release time, bucket A should already be done (it is bumped at the *start* of the cycle);
-      verify it rather than discovering it here. These all drifted before Beta 4.
 - [ ] Provider catalogue snapshot refreshed: `./src/CST.Avalonia/refresh-models-snapshot.sh`, then
       **read the diff** before committing — it shows which providers appeared or disappeared since the last
       release, and that review is the point of committing the file rather than fetching it at build time.
