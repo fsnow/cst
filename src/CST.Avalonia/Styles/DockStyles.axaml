@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dock="using:Dock.Avalonia.Controls">
+        xmlns:dock="using:Dock.Avalonia.Controls"
+        xmlns:vm="using:CST.Avalonia.ViewModels">
 
     <!-- Position scrollbar below tabs using transform -->
     <Style Selector="dock|DockControl ScrollBar:horizontal">
@@ -85,6 +86,26 @@
         <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
         <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <!-- The book tab's title is Pāli, so it needs the script's font like every other control that
+         shows Pāli. (#836)
+
+         It was the only one without it. BookDisplayView binds FontHelper.DynamicFontFamily on the
+         chapter dropdown and the status line, and OpenBookPanel, SearchPanel and DictionaryPanel do
+         the same; the tab strip styled colours and never a font, so titles rendered in the theme's UI
+         font. That font has no Gurmukhi, and Avalonia does not fall back to a family that does the way
+         native text rendering would — so a Gurmukhi title came out as a row of tofu while the dropdown
+         beside it, holding the same string, was fine.
+
+         Bound to the document's own CurrentScriptFontFamily rather than the global script setting: a tab
+         shows the script ITS book is displayed in, which is not necessarily the one the toolbar names.
+         The property already raises change notifications when a book is re-scripted, so the tab follows.
+
+         Non-book tabs — Welcome — have no such property. The binding finds nothing, the setter leaves
+         FontFamily alone, and they keep the theme font, which is what they want anyway. -->
+    <Style Selector="dock|DocumentTabStripItem" x:DataType="vm:BookDisplayViewModel">
+        <Setter Property="FontFamily" Value="{Binding CurrentScriptFontFamily}"/>
     </Style>
 
     <!-- Hover (unselected tool tab): stock theme already sets the accent-med background; add the
