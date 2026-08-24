@@ -1551,10 +1551,17 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         /// <summary>
         /// A prompt a reader can paste into a coding agent to get it talking to the local API.
         ///
-        /// <para><b>It points at <c>/llms.txt</c> rather than listing the endpoints.</b> The server already
-        /// serves a thin index and a full one for exactly this purpose, and a copy of the route list living
-        /// in a settings string is a copy that goes stale the first time a route is added — silently, and in
-        /// the one place nobody thinks to check.</para>
+        /// <para><b>It names no endpoint at all — not even the orientation doc.</b> The handshake file already
+        /// carries a <c>docs</c> field for precisely this reason ("so a client needn't guess",
+        /// <c>LocalApiInfo.Docs</c>), so the prompt sends the agent to the file and the file sends it onward.
+        /// An earlier draft hardcoded <c>/llms.txt</c>, which duplicated a value the app already publishes and
+        /// would have gone quietly wrong the day that value changed. Same argument as not listing the routes,
+        /// one level further up.</para>
+        ///
+        /// <para>Shaped after the cold-agent prompt in <c>docs/testing/ai-prompts/navigate-show-me.md</c>,
+        /// which is re-run against new models to see how well this surface teaches an agent that has never
+        /// met it. Keeping the two aligned means the thing shipped to readers is the thing that gets
+        /// tested.</para>
         ///
         /// <para>The handshake path is computed, not written down, so it names the real file on whichever
         /// platform is asking rather than a macOS path shown to a Windows reader.</para>
@@ -1582,13 +1589,12 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
                     "",
                     "    " + path,
                     "",
-                    "It holds a \"port\" and a \"token\". The server listens on http://127.0.0.1:<port> and",
-                    "every request must carry:",
+                    "It contains a port, a bearer token, and the path to the API's own documentation.",
+                    "Read that documentation before you do anything else, and follow it.",
+                    "",
+                    "The server listens on http://127.0.0.1:<port>, and every request must carry:",
                     "",
                     "    Authorization: Bearer <token>",
-                    "",
-                    "Start by fetching http://127.0.0.1:<port>/llms.txt — it lists what the API offers and",
-                    "how to call it. /llms-full.txt has the detail if you need more.",
                     "",
                     "Read the file each time rather than remembering the port and token: both change every",
                     "time CST Reader starts. The app must be running for any of this to answer.",
