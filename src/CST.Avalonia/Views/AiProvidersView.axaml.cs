@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
@@ -47,6 +48,26 @@ namespace CST.Avalonia.Views
         {
             if (e.PropertyName != nameof(AiConnectionsViewModel.IsListing)) return;
             if (this.FindAncestorOfType<ScrollViewer>() is { } scroll) scroll.Offset = default;
+        }
+
+        /// <summary>
+        /// Focuses the API key box as the editor sheet appears.
+        ///
+        /// <para>Pasting a key is the only reason a provider sheet is open, and reaching the box took a click
+        /// into the field that was already the obvious next move. With Save marked <c>IsDefault</c>, the whole
+        /// interaction becomes paste-and-Enter.</para>
+        ///
+        /// <para><b>Wired to the box's own Loaded rather than driven from the view.</b> It lives inside a
+        /// <c>DataTemplate</c>, so there is no named control for the view to find; and the sheet is created
+        /// fresh each time it opens, so Loaded fires exactly when focus should move. It is also why this
+        /// cannot steal focus mid-edit: a control that is loading is not one the reader is typing in.</para>
+        ///
+        /// <para>Disabled where the credential store is unavailable (<c>CanStoreKeys</c>) — focusing a box
+        /// that cannot be typed in would be worse than leaving focus alone, so that case is skipped.</para>
+        /// </summary>
+        private void OnApiKeyBoxLoaded(object? sender, RoutedEventArgs e)
+        {
+            if (sender is TextBox { IsEnabled: true, IsVisible: true } box) box.Focus();
         }
     }
 }

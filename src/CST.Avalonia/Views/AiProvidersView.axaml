@@ -456,11 +456,17 @@
                         <StackPanel IsVisible="{Binding ShowKeyField}">
                             <TextBlock Text="API key" Classes="SettingLabel"/>
                             <StackPanel Orientation="Horizontal" Spacing="6">
+                                <!-- Focused as it appears, because pasting a key is the only reason this
+                                     sheet is open. Reaching it meant a click into a box that was already the
+                                     obvious next move. Loaded on the box itself rather than a lookup from
+                                     the view: it lives in a DataTemplate, so there is no named control to
+                                     find. -->
                                 <TextBox Text="{Binding ApiKeyEntry}"
                                          PasswordChar="●"
                                          IsEnabled="{Binding CanStoreKeys}"
                                          Watermark="Paste a key"
-                                         Width="320"/>
+                                         Width="320"
+                                         Loaded="OnApiKeyBoxLoaded"/>
                                 <Button Content="Remove stored key" Classes="Link"
                                         IsVisible="{Binding HasStoredKey}"
                                         Command="{Binding RemoveKeyCommand}"
@@ -540,7 +546,11 @@
                         </ItemsControl>
 
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
-                            <Button Content="{Binding SaveText}" Command="{Binding SaveCommand}"/>
+                            <!-- IsDefault so Enter commits from anywhere in the form, which pairs with the
+                                 key box taking focus above: paste, Enter, done, no mouse. A single-line
+                                 TextBox does not handle Enter itself, so it reaches the default button. -->
+                            <Button Content="{Binding SaveText}" Command="{Binding SaveCommand}"
+                                    IsDefault="True"/>
                             <Button Content="Cancel" Classes="Link" Command="{Binding CancelCommand}"/>
                         </StackPanel>
                     </StackPanel>
