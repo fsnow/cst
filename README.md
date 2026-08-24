@@ -61,6 +61,8 @@ Print a whole book, or print the current selection.
 ### AI and Agent Access (optional, off by default)
 An optional loopback HTTP API and **MCP server** let an AI assistant search the corpus, read passages with their apparatus, use the dictionaries, resolve inflected forms to lemmas, and drive the reader's navigation — returning real references rather than recalled text. It binds only to the loopback interface, requires a per-session token, and stays off until enabled in Settings.
 
+**To start:** enable it under **Settings ▸ AI ▸ Access for AI Clients**. That panel carries what a client needs — a ready-made MCP configuration, and a sample prompt for an agent that speaks plain HTTP.
+
 ### Technical Architecture
 - **Stack**: .NET 10, Avalonia UI 11.3, ReactiveUI, Dock.Avalonia, dependency injection
 - **WebView Rendering**: WebViewControl-Avalonia (CEF) for book content and search highlighting
