@@ -565,7 +565,9 @@
                                                         AcceptsReturn="True"
                                                         TextWrapping="NoWrap"
                                                         FontFamily="Consolas,Menlo,Courier New,monospace"
-                                                        MaxHeight="220"
+                                                        MaxHeight="150"
+                                                        Padding="6,4"
+                                                        FontSize="12"
                                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
@@ -596,7 +598,9 @@
                                                         AcceptsReturn="True"
                                                         TextWrapping="NoWrap"
                                                         FontFamily="Consolas,Menlo,Courier New,monospace"
-                                                        MaxHeight="220"
+                                                        MaxHeight="150"
+                                                        Padding="6,4"
+                                                        FontSize="12"
                                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
