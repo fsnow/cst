@@ -1555,6 +1555,61 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         public string McpClientConfigJson => CST.Avalonia.Services.LocalApi.McpClientConfig.ClaudeDesktop(
             System.Environment.ProcessPath ?? "CST Reader") + System.Environment.NewLine;
 
+        /// <summary>
+        /// A prompt a reader can paste into a coding agent to get it talking to the local API.
+        ///
+        /// <para><b>It names no endpoint at all — not even the orientation doc.</b> The handshake file already
+        /// carries a <c>docs</c> field for precisely this reason ("so a client needn't guess",
+        /// <c>LocalApiInfo.Docs</c>), so the prompt sends the agent to the file and the file sends it onward.
+        /// An earlier draft hardcoded <c>/llms.txt</c>, which duplicated a value the app already publishes and
+        /// would have gone quietly wrong the day that value changed. Same argument as not listing the routes,
+        /// one level further up.</para>
+        ///
+        /// <para>Shaped after the cold-agent prompt in <c>docs/testing/ai-prompts/navigate-show-me.md</c>,
+        /// which is re-run against new models to see how well this surface teaches an agent that has never
+        /// met it. Keeping the two aligned means the thing shipped to readers is the thing that gets
+        /// tested.</para>
+        ///
+        /// <para>The handshake path is computed, not written down, so it names the real file on whichever
+        /// platform is asking rather than a macOS path shown to a Windows reader.</para>
+        ///
+        /// <para><b>It tells the agent to read the file rather than remember it.</b> Port and token change on
+        /// every start (#278), so an agent that caches them works until the app restarts and then fails in a
+        /// way that looks like the API is broken.</para>
+        /// </summary>
+        public string LocalApiSamplePrompt
+        {
+            get
+            {
+                var path = System.IO.Path.Combine(
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
+                    AppConstants.AppDataDirectoryName,
+                    Services.LocalApi.LocalApiInfo.FileName);
+
+                return string.Join(System.Environment.NewLine, new[]
+                {
+                    "CST Reader is running on this machine and exposes a local HTTP API over the",
+                    "Chaṭṭha Saṅgāyana Tipiṭaka — the Pāli canon, its commentaries and sub-commentaries,",
+                    "plus dictionaries and script conversion.",
+                    "",
+                    "Connection details are in this file:",
+                    "",
+                    "    " + path,
+                    "",
+                    "It contains a port, a bearer token, and the path to the API's own documentation.",
+                    "Read that documentation before you do anything else, and follow it.",
+                    "",
+                    "The server listens on http://127.0.0.1:<port>, and every request must carry:",
+                    "",
+                    "    Authorization: Bearer <token>",
+                    "",
+                    "Read the file each time rather than remembering the port and token: both change every",
+                    "time CST Reader starts. The app must be running for any of this to answer.",
+                    "",
+                });
+            }
+        }
+
         /// <summary>The local-API sub-permissions are editable only when the master switch is on.</summary>
         public bool SubPermissionsEnabled => AiEnabled;
 
