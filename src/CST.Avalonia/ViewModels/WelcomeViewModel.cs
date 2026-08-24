@@ -25,50 +25,13 @@ namespace CST.Avalonia.ViewModels
         /// <para>Latin because that is the script "Welcome" is written in — not the reader's current script,
         /// which would ask a Devanāgarī face to render a Latin word.</para>
         /// </summary>
-        private IFontService? _fontService;
-        private bool _fontChangesHooked;
-
-        /// <summary>
-        /// Resolved on demand, NOT in a field initializer.
-        ///
-        /// <para>The dock factory builds this document while the layout is being created, which can be before
-        /// the service provider is populated. A field initializer that ran then captured null for the life of
-        /// the app, and the tab quietly fell back to Helvetica at 12 — indistinguishable from having no font
-        /// binding at all, which is the state this was meant to fix.</para>
-        /// </summary>
-        private IFontService? Fonts
-        {
-            get
-            {
-                _fontService ??= App.TryGetService<IFontService>();
-                if (_fontService is not null && !_fontChangesHooked)
-                {
-                    _fontChangesHooked = true;
-                    HookFontChanges();
-
-                    // AND ASK THE BINDING TO COME BACK. Resolving late is only half the problem: the tab
-                    // strip reads these properties once, while the layout is being built, and a binding
-                    // that has already been given a value never asks again on its own. So the first read
-                    // returned the fallback and the tab stayed at 12 — until something forced a
-                    // re-evaluation, which is why opening Settings "fixed" it and startup did not.
-                    //
-                    // Posted rather than raised inline: this runs INSIDE a binding's own read, and
-                    // notifying a property while it is being read is how a re-entrancy loop starts.
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
-                        this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
-                    }, DispatcherPriority.Loaded);
-                }
-                return _fontService;
-            }
-        }
+        private readonly IFontService? _fontService;
 
         public string CurrentScriptFontFamily =>
-            Fonts?.GetScriptFontFamily(CST.Conversion.Script.Latin) ?? "Helvetica";
+            _fontService?.GetScriptFontFamily(CST.Conversion.Script.Latin) ?? "Helvetica";
 
         public int CurrentScriptFontSize =>
-            Fonts?.GetScriptFontSize(CST.Conversion.Script.Latin) ?? 12;
+            _fontService?.GetScriptFontSize(CST.Conversion.Script.Latin) ?? 12;
 
         /// <summary>
         /// Follows a change to the Latin font, the same way a book follows one for its own script.
@@ -112,7 +75,7 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _startupStatusMessage, value);
         }
 
-        public WelcomeViewModel() : this(new WelcomeUpdateService())
+        public WelcomeViewModel() : this(new WelcomeUpdateService(), App.TryGetService<IFontService>())
         {
         }
 
@@ -122,6 +85,7 @@ namespace CST.Avalonia.ViewModels
         {
             _updateService = updateService;
             _fontService = fontService;
+            HookFontChanges();
 
             // Configure Dock properties
             Id = "WelcomeDocument";

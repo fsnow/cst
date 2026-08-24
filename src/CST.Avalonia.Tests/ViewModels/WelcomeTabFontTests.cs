@@ -71,13 +71,48 @@ public class WelcomeTabFontTests
         Assert.True(vm.CurrentScriptFontSize > 0);
     }
 
+    /// <summary>
+    /// The tab follows a later change to the font settings. (#836)
+    ///
+    /// <para><b>This is the test the reported defect needed and the first version did not have.</b> The tab
+    /// strip reads these properties once, while the layout is built — which at startup is BEFORE settings
+    /// have loaded, so the first read sees the default size. Everything then depends on the view model
+    /// hearing that fonts changed and telling the binding to come back. Without this test, the subscription
+    /// could be deleted and every other test still passed: the values were right, just never re-read.</para>
+    ///
+    /// <para>Asserted as PropertyChanged rather than as a value, because a value read after the change would
+    /// be correct whether or not anything was notified — which is precisely the failure being guarded.</para>
+    /// </summary>
+    [Fact]
+    public void A_later_font_change_is_announced_to_the_binding()
+    {
+        var fonts = new StubFonts(family: "Helvetica", size: 12);
+        var vm = new WelcomeViewModel(new WelcomeUpdateService(), fonts);
+
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        fonts.ChangeTo("Charis SIL", 17);
+
+        Assert.Contains(nameof(WelcomeViewModel.CurrentScriptFontFamily), changed);
+        Assert.Contains(nameof(WelcomeViewModel.CurrentScriptFontSize), changed);
+        Assert.Equal(17, vm.CurrentScriptFontSize);
+    }
+
     private sealed class StubFonts : IFontService
     {
-        private readonly string _family;
-        private readonly int _size;
+        private string _family;
+        private int _size;
         public List<Script> Asked { get; } = new();
 
         public StubFonts(string family, int size) { _family = family; _size = size; }
+
+        /// <summary>Changes what the service reports and announces it, as loading settings does.</summary>
+        public void ChangeTo(string family, int size)
+        {
+            _family = family; _size = size;
+            FontSettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
 
         public string? GetScriptFontFamily(Script script) { Asked.Add(script); return _family; }
         public int GetScriptFontSize(Script script) { Asked.Add(script); return _size; }
@@ -85,7 +120,7 @@ public class WelcomeTabFontTests
         public string GetLocalizationFontFamily() => _family;
         public int GetLocalizationFontSize() => _size;
         public void UpdateFontSettings(FontSettings fontSettings) { }
-        public event EventHandler? FontSettingsChanged { add { } remove { } }
+        public event EventHandler? FontSettingsChanged;
         public Task PreloadFontsForAllScriptsAsync() => Task.CompletedTask;
         public Task<List<string>> GetAvailableFontsForScriptAsync(Script script) =>
             Task.FromResult(new List<string> { _family });

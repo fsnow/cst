@@ -102,8 +102,9 @@
          shows the script ITS book is displayed in, which is not necessarily the one the toolbar names.
          The property already raises change notifications when a book is re-scripted, so the tab follows.
 
-         Non-book tabs — Welcome — have no such property. The binding finds nothing, the setter leaves
-         FontFamily alone, and they keep the theme font, which is what they want anyway. -->
+         Every document tab implements IScriptFontedDocument, including Welcome — which reports Latin,
+         because that is the script its title is written in. A strip where one title is the theme's UI
+         font and the rest are the reader's reads as a mistake. -->
     <Style Selector="dock|DocumentTabStripItem" x:DataType="vm:IScriptFontedDocument">
         <Setter Property="FontFamily" Value="{Binding CurrentScriptFontFamily}"/>
         <!-- Size travels with the family, because everywhere else it does: every control binding
