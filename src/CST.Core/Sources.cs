@@ -571,21 +571,27 @@ public class Sources
 		addSource("e0105n.nrf.xml", SourceType.BurmeseAnya, 2, $"{BurmeseAnyaVisuddhimagga}/{Anya_VisuddhimaggaNidanakatha}");
 
 		// --- Anya groups 2–9 (#418) ---
-		// PATHS are mapped here; page offsets are placeholder 1 pending per-PDF inspection (a separate step).
+		// PATHS are mapped here. START PAGES come from inspecting each scan — a person opening the PDF and
+		// reading where the text actually begins. There is nothing to derive them from. 18 are now real
+		// (a reviewer's survey, #840); the 14 still reading 1 are the ones that survey has not reached, so
+		// a 1 here means "not yet measured", NOT "starts on page 1".
+		//
+		// A wrong start page is silent — the PDF opens, at the wrong place, and looks like a mapping that
+		// works. Each real number below was cross-checked against the mapped PDF's own filename first.
 		// Books whose text has no source PDF in the Anya set are intentionally left unmapped (no button).
 
 		// Saṅgāyana Pucchā-Vissajjanā. Multi-volume texts map to Vol 1 for now (Vol 2 → #76). e0907 has no PDF.
-		addSource("e0901n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/1. Dīghanikāya (Pu-Vi).pdf");
-		addSource("e0902n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/2. Majjhimanikāya (Pu-Vi)_Vol 1.pdf");
-		addSource("e0903n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/3. Saṃyuttanikāya (Pu-Vi)_Vol 1.pdf");
-		addSource("e0904n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/4. Aṅguttaranikāya (Pu-Vi)_Vol 1.pdf");
-		addSource("e0905n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/5. Vinayapiṭaka (Pu-Vi)_Vol 1.pdf");
-		addSource("e0906n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaSangayana}/6. Abhidhammapiṭaka (Pu-Vi).pdf");
+		addSource("e0901n.nrf.xml", SourceType.BurmeseAnya, 18, $"{BurmeseAnyaSangayana}/1. Dīghanikāya (Pu-Vi).pdf");
+		addSource("e0902n.nrf.xml", SourceType.BurmeseAnya, 12, $"{BurmeseAnyaSangayana}/2. Majjhimanikāya (Pu-Vi)_Vol 1.pdf");
+		addSource("e0903n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaSangayana}/3. Saṃyuttanikāya (Pu-Vi)_Vol 1.pdf");
+		addSource("e0904n.nrf.xml", SourceType.BurmeseAnya, 20, $"{BurmeseAnyaSangayana}/4. Aṅguttaranikāya (Pu-Vi)_Vol 1.pdf");
+		addSource("e0905n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaSangayana}/5. Vinayapiṭaka (Pu-Vi)_Vol 1.pdf");
+		addSource("e0906n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaSangayana}/6. Abhidhammapiṭaka (Pu-Vi).pdf");
 
 		// Leḍī Sayāḍo. e0301 (Paramatthadīpanī) has no PDF.
 		addSource("e0201n.nrf.xml", SourceType.BurmeseAnya, 112, $"{BurmeseAnyaLedi}/1. Niruttidīpanī.pdf");
 		addSource("e0401n.nrf.xml", SourceType.BurmeseAnya, 8, $"{BurmeseAnyaLedi}/3. Anudīpanīpāṭha.pdf");
-		addSource("e0501n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaLedi}/4. Paṭṭhānuddesa dīpanīpāṭha_printed.pdf");
+		addSource("e0501n.nrf.xml", SourceType.BurmeseAnya, 176, $"{BurmeseAnyaLedi}/4. Paṭṭhānuddesa dīpanīpāṭha_printed.pdf");
 
 		// Buddha-vandanā. e0603–e0608 have no PDF.
 		addSource("e0601n.nrf.xml", SourceType.BurmeseAnya, 14, $"{BurmeseAnyaBuddhaVandana}/1. Namakkāraṭīkā.pdf");
@@ -597,17 +603,17 @@ public class Sources
 
 		// Byākaraṇa (grammar). e0808/e0809/e0811 share one combined PDF (offsets to distinguish → deferred).
 		// e0812 (Subodhālaṅkāraṭīkā) has no PDF.
-		addSource("e0801n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/2. Moggallānabyākaraṇaṃ.pdf");
-		addSource("e0802n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/1. Kaccāyanabyākaraṇaṃ_1990.pdf");
-		addSource("e0803n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/3. Saddanītippakaraṇaṃ (padamālā).pdf");
-		addSource("e0804n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/4. Saddanītippakaraṇaṃ (dhātumālā).pdf");
-		addSource("e0805n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/6. Padarūpasiddhi.pdf");
-		addSource("e0806n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/7. Moggallānapañcikā.pdf");
-		addSource("e0807n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/8. Payogasiddhipāṭha.pdf");
-		addSource("e0808n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
-		addSource("e0809n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
-		addSource("e0810n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/11. Abhidhānappadīpikāṭīkā.pdf");
-		addSource("e0811n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
+		addSource("e0801n.nrf.xml", SourceType.BurmeseAnya, 17, $"{BurmeseAnyaByakarana}/2. Moggallānabyākaraṇaṃ.pdf");
+		addSource("e0802n.nrf.xml", SourceType.BurmeseAnya, 17, $"{BurmeseAnyaByakarana}/1. Kaccāyanabyākaraṇaṃ_1990.pdf");
+		addSource("e0803n.nrf.xml", SourceType.BurmeseAnya, 5, $"{BurmeseAnyaByakarana}/3. Saddanītippakaraṇaṃ (padamālā).pdf");
+		addSource("e0804n.nrf.xml", SourceType.BurmeseAnya, 15, $"{BurmeseAnyaByakarana}/4. Saddanītippakaraṇaṃ (dhātumālā).pdf");
+		addSource("e0805n.nrf.xml", SourceType.BurmeseAnya, 36, $"{BurmeseAnyaByakarana}/6. Padarūpasiddhi.pdf");
+		addSource("e0806n.nrf.xml", SourceType.BurmeseAnya, 4, $"{BurmeseAnyaByakarana}/7. Moggallānapañcikā.pdf");
+		addSource("e0807n.nrf.xml", SourceType.BurmeseAnya, 17, $"{BurmeseAnyaByakarana}/8. Payogasiddhipāṭha.pdf");
+		addSource("e0808n.nrf.xml", SourceType.BurmeseAnya, 249, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
+		addSource("e0809n.nrf.xml", SourceType.BurmeseAnya, 9, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
+		addSource("e0810n.nrf.xml", SourceType.BurmeseAnya, 21, $"{BurmeseAnyaByakarana}/11. Abhidhānappadīpikāṭīkā.pdf");
+		addSource("e0811n.nrf.xml", SourceType.BurmeseAnya, 213, $"{BurmeseAnyaByakarana}/9. Vuttodaya 10. Abhidhānappadīpikāpātha 12. Subodhālaṅkāro.pdf");
 		addSource("e0813n.nrf.xml", SourceType.BurmeseAnya, 1, $"{BurmeseAnyaByakarana}/14. Bālāvatāra gaṇṭhipadatthavinicchayasāra.pdf");
 
 		// Nīti. e1002 (Nītimañjarī), e1005 (Lokanīti), e1006 (Suttantanīti) have no PDF.
