@@ -1544,9 +1544,16 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         }
 
         /// <summary>Pre-populated Claude Desktop MCP config for the "Copy MCP configuration" button. Emits the
-        /// #278 bridge config (spawn this app with --mcp-bridge); carries no port/token. (#280 reworks the UI.)</summary>
+        /// #278 bridge config (spawn this app with --mcp-bridge); carries no port/token. (#280 reworks the UI.)
+        ///
+        /// <para><b>Trailing newline is deliberate.</b> The box under "Show configuration" scrolls
+        /// horizontally, and its scrollbar sits over the last line — which is the closing brace, making it
+        /// awkward to select. One blank line puts the brace above the scrollbar. It is added here rather than
+        /// in <c>McpClientConfig</c> so that stays a plain JSON emitter, and here it also reaches the Copy
+        /// button, which shares this property — where a file ending in a newline is what you want
+        /// anyway.</para></summary>
         public string McpClientConfigJson => CST.Avalonia.Services.LocalApi.McpClientConfig.ClaudeDesktop(
-            System.Environment.ProcessPath ?? "CST Reader");
+            System.Environment.ProcessPath ?? "CST Reader") + System.Environment.NewLine;
 
         /// <summary>The local-API sub-permissions are editable only when the master switch is on.</summary>
         public bool SubPermissionsEnabled => AiEnabled;
