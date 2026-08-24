@@ -187,6 +187,20 @@ namespace CST.Avalonia.Services.Ai
             // one event it already binds to rather than through a second channel.
             if (_presets is not null)
                 _presets.PresetsChanged += (_, _) => RaiseChanged();
+
+            // AND SO IS THE ENVIRONMENT ANSWERING. SourceFor consults _environmentKeys live, so a connection
+            // adopted from the environment reports Keychain/Environment/None according to what the variable
+            // holds at the moment it is asked — which means the answer CHANGES the instant the login-shell
+            // probe lands, without anything here doing so.
+            //
+            // Nothing was listening. The probe is started at launch (App.axaml.cs PrimeShellEnvironment) and
+            // finishes a few hundred milliseconds later; by then the model picker had already asked, been
+            // told None, and greyed out every model with "no API key stored". Opening Settings > Providers
+            // repaired it only as a side effect of constructing a view model that rebinds. So the Assistant
+            // announced itself unconfigured on every launch to exactly the readers #714 and #817 exist for,
+            // and the cure was to open a tab and change nothing. (#852)
+            if (_environmentKeys is not null)
+                _environmentKeys.Changed += (_, _) => RaiseChanged();
         }
 
         public event EventHandler? ConnectionsChanged;

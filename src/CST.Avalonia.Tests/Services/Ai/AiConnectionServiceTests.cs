@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
 using Moq;
@@ -848,5 +849,52 @@ public class AiConnectionServiceTests
     {
         Assert.NotEqual(AiCredentialNames.Input("token"), AiCredentialNames.Header("token"));
         Assert.NotEqual(AiCredentialNames.Input("token"), AiCredentialNames.Primary);
+    }
+
+    /// <summary>
+    /// The login-shell probe answering is a change to what this service reports, so it must reach the UI.
+    /// (#852)
+    ///
+    /// <para><b>The defect.</b> <c>SourceFor</c> consults the environment live, so an adopted connection's
+    /// KeySource changes the instant the probe lands — and nothing was listening. The probe starts at launch
+    /// and finishes a few hundred milliseconds later; by then the model picker had already asked, been told
+    /// <c>None</c>, and greyed out every model as "no API key stored". Opening Settings &gt; Providers fixed
+    /// it only as a side effect of constructing a view model that rebinds, so the Assistant announced itself
+    /// unconfigured on every launch and the cure was to open a tab and change nothing.</para>
+    ///
+    /// <para>Asserted on the event rather than on KeySource: the value was always going to be right once
+    /// asked again: what was missing was anything telling the UI to ask.</para>
+    /// </summary>
+    [Fact]
+    public void The_environment_answering_later_reaches_the_connections_changed_event()
+    {
+        var settings = new Settings();
+        var svc = new Mock<ISettingsService>();
+        svc.SetupGet(s => s.Settings).Returns(settings);
+        var env = new ChangingKeys();
+
+        var service = new AiConnectionService(svc.Object, environmentKeys: env);
+
+        var raised = 0;
+        service.ConnectionsChanged += (_, _) => raised++;
+
+        env.RaiseChanged();
+
+        Assert.Equal(1, raised);
+    }
+
+    /// <summary>An environment-keys source that can announce that its answer has changed, as the real one
+    /// does when the login-shell probe lands.</summary>
+    private sealed class ChangingKeys : IAiEnvironmentKeys
+    {
+        public event EventHandler? Changed;
+        public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
+        public string? VariableFor(AiProviderPreset preset) => null;
+        public string? ValueFor(AiProviderPreset preset) => null;
+        public string? Read(string variableName) => null;
+        public IReadOnlyList<AiEnvironmentKey> Discover(IEnumerable<AiProviderPreset> presets) =>
+            Array.Empty<AiEnvironmentKey>();
+        public Task Ready => Task.CompletedTask;
     }
 }
