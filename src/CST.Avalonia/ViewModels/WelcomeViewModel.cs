@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
 using CST.Avalonia.ViewModels.Dock;
@@ -44,6 +45,20 @@ namespace CST.Avalonia.ViewModels
                 {
                     _fontChangesHooked = true;
                     HookFontChanges();
+
+                    // AND ASK THE BINDING TO COME BACK. Resolving late is only half the problem: the tab
+                    // strip reads these properties once, while the layout is being built, and a binding
+                    // that has already been given a value never asks again on its own. So the first read
+                    // returned the fallback and the tab stayed at 12 — until something forced a
+                    // re-evaluation, which is why opening Settings "fixed" it and startup did not.
+                    //
+                    // Posted rather than raised inline: this runs INSIDE a binding's own read, and
+                    // notifying a property while it is being read is how a re-entrancy loop starts.
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                        this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+                    }, DispatcherPriority.Loaded);
                 }
                 return _fontService;
             }
