@@ -10,6 +10,15 @@
         WindowStartupLocation="CenterOwner">
     
     <Window.Styles>
+        <!-- The stock Expander header is sized for a section heading, not for a label on a box you open
+             once. Two of them stacked under the AI-client switches read as furniture. Targets the header
+             ToggleButton in the template rather than a named part, so it does not depend on the theme's
+             internal naming. Scoped to this window: Expanders elsewhere keep the default. -->
+        <Style Selector="Expander /template/ ToggleButton">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+
         <Style Selector="TextBlock.SectionTitle">
             <Setter Property="FontSize" Value="18"/>
             <Setter Property="FontWeight" Value="Bold"/>
@@ -565,9 +574,7 @@
                                                         AcceptsReturn="True"
                                                         TextWrapping="NoWrap"
                                                         FontFamily="Consolas,Menlo,Courier New,monospace"
-                                                        MaxHeight="150"
-                                                        Padding="6,4"
-                                                        FontSize="12"
+                                                        MaxHeight="220"
                                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
@@ -598,9 +605,7 @@
                                                         AcceptsReturn="True"
                                                         TextWrapping="NoWrap"
                                                         FontFamily="Consolas,Menlo,Courier New,monospace"
-                                                        MaxHeight="150"
-                                                        Padding="6,4"
-                                                        FontSize="12"
+                                                        MaxHeight="220"
                                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
