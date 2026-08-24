@@ -10,23 +10,6 @@
         WindowStartupLocation="CenterOwner">
     
     <Window.Styles>
-        <!-- The stock Expander header is sized for a section heading, not for a label on a box you open
-             once, and two stacked under the AI-client switches read as furniture.
-
-             32 to match a plain ComboBox — the Pāli script picker sets no height of its own, so it renders
-             at Fluent's standard control height, and a header sitting beside controls of that size should
-             be one of them rather than half again as tall.
-
-             Targets the header ToggleButton inside the template rather than a named part, so it does not
-             depend on the theme's internal naming. Scoped to this window: Expanders elsewhere — the
-             Assistant's reasoning panel among them — keep the default. -->
-        <Style Selector="Expander /template/ ToggleButton">
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Padding" Value="8,0"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-
         <Style Selector="TextBlock.SectionTitle">
             <Setter Property="FontSize" Value="18"/>
             <Setter Property="FontWeight" Value="Bold"/>
