@@ -1548,6 +1548,55 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         public string McpClientConfigJson => CST.Avalonia.Services.LocalApi.McpClientConfig.ClaudeDesktop(
             System.Environment.ProcessPath ?? "CST Reader");
 
+        /// <summary>
+        /// A prompt a reader can paste into a coding agent to get it talking to the local API.
+        ///
+        /// <para><b>It points at <c>/llms.txt</c> rather than listing the endpoints.</b> The server already
+        /// serves a thin index and a full one for exactly this purpose, and a copy of the route list living
+        /// in a settings string is a copy that goes stale the first time a route is added — silently, and in
+        /// the one place nobody thinks to check.</para>
+        ///
+        /// <para>The handshake path is computed, not written down, so it names the real file on whichever
+        /// platform is asking rather than a macOS path shown to a Windows reader.</para>
+        ///
+        /// <para><b>It tells the agent to read the file rather than remember it.</b> Port and token change on
+        /// every start (#278), so an agent that caches them works until the app restarts and then fails in a
+        /// way that looks like the API is broken.</para>
+        /// </summary>
+        public string LocalApiSamplePrompt
+        {
+            get
+            {
+                var path = System.IO.Path.Combine(
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
+                    AppConstants.AppDataDirectoryName,
+                    Services.LocalApi.LocalApiInfo.FileName);
+
+                return string.Join(System.Environment.NewLine, new[]
+                {
+                    "CST Reader is running on this machine and exposes a local HTTP API over the",
+                    "Chaṭṭha Saṅgāyana Tipiṭaka — the Pāli canon, its commentaries and sub-commentaries,",
+                    "plus dictionaries and script conversion.",
+                    "",
+                    "Connection details are in this file:",
+                    "",
+                    "    " + path,
+                    "",
+                    "It holds a \"port\" and a \"token\". The server listens on http://127.0.0.1:<port> and",
+                    "every request must carry:",
+                    "",
+                    "    Authorization: Bearer <token>",
+                    "",
+                    "Start by fetching http://127.0.0.1:<port>/llms.txt — it lists what the API offers and",
+                    "how to call it. /llms-full.txt has the detail if you need more.",
+                    "",
+                    "Read the file each time rather than remembering the port and token: both change every",
+                    "time CST Reader starts. The app must be running for any of this to answer.",
+                    "",
+                });
+            }
+        }
+
         /// <summary>The local-API sub-permissions are editable only when the master switch is on.</summary>
         public bool SubPermissionsEnabled => AiEnabled;
 

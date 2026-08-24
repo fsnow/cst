@@ -592,6 +592,33 @@
                                                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                                         </Expander>
+
+                                        <!-- For an agent that talks HTTP rather than MCP. The prompt names the
+                                             handshake file and sends the agent to /llms.txt; it does not list
+                                             the endpoints, because the server already does and a second copy
+                                             would go stale the first time a route is added. -->
+                                        <Expander Header="Sample prompt" Margin="0,4,0,0">
+                                            <StackPanel>
+                                                <TextBox Text="{Binding LocalApiSamplePrompt, Mode=OneWay}"
+                                                        IsReadOnly="True"
+                                                        AcceptsReturn="True"
+                                                        TextWrapping="NoWrap"
+                                                        FontFamily="Consolas,Menlo,Courier New,monospace"
+                                                        MaxHeight="220"
+                                                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                        ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                    <Button Content="Copy sample prompt"
+                                                            Click="OnCopySamplePrompt"
+                                                            IsEnabled="{Binding SubPermissionsEnabled}"
+                                                            HorizontalAlignment="Left"/>
+                                                    <TextBlock Name="CopySampleConfirm" Text="Copied ✓"
+                                                              Foreground="{DynamicResource DockApplicationAccentBrushLow}"
+                                                              VerticalAlignment="Center" Margin="10,0,0,0"
+                                                              IsVisible="False"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Expander>
                                     </StackPanel>
                                 </Border>
 

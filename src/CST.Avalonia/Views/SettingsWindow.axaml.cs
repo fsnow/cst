@@ -124,6 +124,41 @@ namespace CST.Avalonia.Views
         // in the ViewModel because the clipboard is reached through the window's TopLevel, which the VM
         // has no handle to. The confirmation TextBlock lives inside the AI DataTemplate (a separate
         // namescope from the window), so we find it as a sibling of the button rather than by FindControl.
+        /// <summary>
+        /// Copies the sample prompt — the same shape as <see cref="OnCopyMcpConfig"/>, and here for the same
+        /// reason: the clipboard needs a TopLevel, which the view model has no access to.
+        /// </summary>
+        private async void OnCopySamplePrompt(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is not Button button || button.DataContext is not AiSettingsViewModel ai)
+                    return;
+
+                var clipboard = Clipboard ?? TopLevel.GetTopLevel(this)?.Clipboard;
+                if (clipboard == null)
+                {
+                    _logger.Warning("No clipboard available to copy the sample prompt");
+                    return;
+                }
+
+                await clipboard.SetTextAsync(ai.LocalApiSamplePrompt);
+                _logger.Information("Copied the local-API sample prompt to clipboard");
+
+                if (button.Parent is Panel panel &&
+                    panel.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == "CopySampleConfirm") is { } confirm)
+                {
+                    confirm.IsVisible = true;
+                    await Task.Delay(1500);
+                    confirm.IsVisible = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to copy the sample prompt");
+            }
+        }
+
         private async void OnCopyMcpConfig(object? sender, RoutedEventArgs e)
         {
             try
