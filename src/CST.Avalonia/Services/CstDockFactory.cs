@@ -135,7 +135,11 @@ namespace CST.Avalonia.Services
 
             // Create a permanent welcome document that prevents tab area collapse
             // WelcomeViewModel IS the document - no wrapper needed (ReactiveDocument pattern)
-            var welcomeDocument = new WelcomeViewModel();
+            // Font service injected rather than looked up later: DI is live here (this method already
+            // resolves AiAssistantViewModel from it), and a document that reads a script font wants the
+            // service from the start. (#836)
+            var welcomeDocument = new WelcomeViewModel(
+                new WelcomeUpdateService(), App.TryGetService<IFontService>());
 
             // Bring the Welcome tab forward only while real work runs (a full re-index or an XML download
             // reports progress), so it is visible instead of hidden behind a restored book tab. Routine

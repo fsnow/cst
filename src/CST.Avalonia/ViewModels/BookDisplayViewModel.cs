@@ -30,7 +30,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CST.Avalonia.ViewModels
 {
-    public class BookDisplayViewModel : ReactiveDocument, IDisposable
+    public class BookDisplayViewModel : ReactiveDocument, IDisposable, IScriptFontedDocument
     {
         // Reactive subscriptions owned by this VM; disposed when the tab is permanently closed
         // (or replaced during float/unfloat) to release the FontService subscription that would

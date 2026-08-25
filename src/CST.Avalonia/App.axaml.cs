@@ -278,6 +278,38 @@ public partial class App : Application
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading settings..."));
                 await LoadSettingsAsync();
 
+                // ANNOUNCE THAT THE FONTS ARE REAL NOW. Nothing else does. (#836)
+                //
+                // Chrome that reads a script font is built BEFORE this: the dock layout is created at
+                // startup and MainWindow.Show() has already run, so the tab strip has bound and read its
+                // fonts against the DEFAULT settings object - Latin at size 12 - because FontService is a
+                // pass-through to whatever SettingsService currently holds.
+                //
+                // LoadSettingsAsync swaps that object silently. FontSettingsChanged is raised only from the
+                // Settings dialog's own setters, which is why opening Settings and changing nothing used to
+                // "fix" the Welcome tab: it was the only thing in the app that ever announced fonts.
+                //
+                // Books escape this by accident rather than design - they are opened later in this same
+                // task, after the settings are real. Anything built at layout time needs telling.
+                //
+                // On the UI thread: handlers raise PropertyChanged, and every existing caller of
+                // UpdateFontSettings is a UI-thread setter, so raising from this pool thread would push
+                // binding updates off-thread. (fable review)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        var fonts = ServiceProvider?.GetService<IFontService>();
+                        var settings = ServiceProvider?.GetService<ISettingsService>()?.Settings;
+                        if (fonts is not null && settings?.FontSettings is not null)
+                            fonts.UpdateFontSettings(settings.FontSettings);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "Could not republish font settings after load");
+                    }
+                });
+
                 // Load application state
                 Dispatcher.UIThread.Post(() => welcomeViewModel?.SetStartupStatus("Loading application state..."));
                 await LoadApplicationStateAsync();

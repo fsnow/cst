@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CST.Avalonia.Models;
 using CST.Avalonia.Services;
 using CST.Avalonia.ViewModels.Dock;
@@ -13,9 +14,41 @@ using Serilog;
 
 namespace CST.Avalonia.ViewModels
 {
-    public class WelcomeViewModel : ReactiveDocument
+    public class WelcomeViewModel : ReactiveDocument, IScriptFontedDocument
     {
         private readonly WelcomeUpdateService _updateService;
+
+        /// <summary>
+        /// The Welcome tab sits in the same strip as the books, so its title takes the reader's Latin face
+        /// and size rather than the theme's UI font. (#836)
+        ///
+        /// <para>Latin because that is the script "Welcome" is written in — not the reader's current script,
+        /// which would ask a Devanāgarī face to render a Latin word.</para>
+        /// </summary>
+        private readonly IFontService? _fontService;
+
+        public string CurrentScriptFontFamily =>
+            _fontService?.GetScriptFontFamily(CST.Conversion.Script.Latin) ?? "Helvetica";
+
+        public int CurrentScriptFontSize =>
+            _fontService?.GetScriptFontSize(CST.Conversion.Script.Latin) ?? 12;
+
+        /// <summary>
+        /// Follows a change to the Latin font, the same way a book follows one for its own script.
+        ///
+        /// <para>Not unsubscribed: the Welcome document is created once by the dock factory and lives for the
+        /// application, so there is no close to unhook from — unlike a book, which does unsubscribe on
+        /// dispose. If Welcome ever becomes closeable, this needs the same treatment.</para>
+        /// </summary>
+        private void HookFontChanges()
+        {
+            if (_fontService is null) return;
+            _fontService.FontSettingsChanged += (_, _) =>
+            {
+                this.RaisePropertyChanged(nameof(CurrentScriptFontFamily));
+                this.RaisePropertyChanged(nameof(CurrentScriptFontSize));
+            };
+        }
         private string _htmlContent = "";
         private bool _isStartupInProgress = false;
         private string _startupStatusMessage = "";
@@ -42,13 +75,17 @@ namespace CST.Avalonia.ViewModels
             set => this.RaiseAndSetIfChanged(ref _startupStatusMessage, value);
         }
 
-        public WelcomeViewModel() : this(new WelcomeUpdateService())
+        public WelcomeViewModel() : this(new WelcomeUpdateService(), App.TryGetService<IFontService>())
         {
         }
 
-        public WelcomeViewModel(WelcomeUpdateService updateService)
+        /// <param name="fontService">Optional, so a test can supply one. Left null in the app, where it is
+        /// resolved on demand — see <see cref="Fonts"/> for why not at construction.</param>
+        public WelcomeViewModel(WelcomeUpdateService updateService, IFontService? fontService = null)
         {
             _updateService = updateService;
+            _fontService = fontService;
+            HookFontChanges();
 
             // Configure Dock properties
             Id = "WelcomeDocument";
