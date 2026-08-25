@@ -548,56 +548,17 @@
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="Access for AI Clients" Classes="SettingLabel"/>
+                                        <!-- EACH SWITCH OWNS ITS SAMPLE. The two surfaces are alternatives - REST for a coding
+                                             agent, MCP for a chat client - and the sample that serves each sat below both,
+                                             leaving the reader to work out which belonged to what they had just enabled. -->
+
                                         <!-- REST surface (/v1): for code agents. -->
                                         <CheckBox IsChecked="{Binding LocalApiEnabled}"
                                                  IsEnabled="{Binding SubPermissionsEnabled}"
                                                  Content="Run the local API server (Claude Code &amp; tool-calling agents)"
                                                  Margin="0,10,0,0"/>
 
-                                        <!-- MCP surface (/mcp): for chat clients, reached via the app's mcp-bridge relay. #280 -->
-                                        <CheckBox IsChecked="{Binding McpEnabled}"
-                                                 IsEnabled="{Binding SubPermissionsEnabled}"
-                                                 Content="Enable MCP access (Claude Desktop &amp; other chat clients)"
-                                                 Margin="0,5,0,0"/>
-
-                                        <!-- Cross-cutting capability: navigate/highlight is offered over BOTH surfaces, so this
-                                             is enabled whenever either one is on (RemoteControlEnabled). #440 -->
-                                        <CheckBox IsChecked="{Binding AllowRemoteControl}"
-                                                 IsEnabled="{Binding RemoteControlEnabled}"
-                                                 Content="Allow agents to drive the reader (navigate and highlight)"
-                                                 Margin="0,5,0,0"/>
-
-                                        <!-- Copy the ready-made Claude Desktop MCP config: it launches CST Reader's
-                                             mcp-bridge relay and carries no port/token. Clipboard is done in
-                                             code-behind (OnCopyMcpConfig) since the VM has no TopLevel. -->
-                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                            <Button Content="Copy MCP configuration"
-                                                    Click="OnCopyMcpConfig"
-                                                    IsEnabled="{Binding SubPermissionsEnabled}"
-                                                    HorizontalAlignment="Left"/>
-                                            <TextBlock Name="CopyMcpConfirm" Text="Copied ✓"
-                                                      Foreground="{DynamicResource DockApplicationAccentBrushLow}"
-                                                      VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Paste into the Claude Desktop config (~/Library/Application Support/Claude/claude_desktop_config.json) under &quot;mcpServers&quot;. It launches CST Reader's --mcp-bridge relay and embeds no port or token, so you copy it just once — no Node.js needed. Enable MCP access above; CST Reader must be running, and can auto-launch when a client connects."
-                                                  Classes="SettingDescription" Margin="0,4,0,0"/>
-
-                                        <Expander Header="Show configuration" Margin="0,4,0,0">
-                                            <TextBox Text="{Binding McpClientConfigJson, Mode=OneWay}"
-                                                    IsReadOnly="True"
-                                                    AcceptsReturn="True"
-                                                    TextWrapping="NoWrap"
-                                                    FontFamily="Consolas,Menlo,Courier New,monospace"
-                                                    MaxHeight="220"
-                                                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                                    ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-                                        </Expander>
-
-                                        <!-- For an agent that talks HTTP rather than MCP. The prompt names the
-                                             handshake file and sends the agent to /llms.txt; it does not list
-                                             the endpoints, because the server already does and a second copy
-                                             would go stale the first time a route is added. -->
-                                        <Expander Header="Sample prompt" Margin="0,4,0,0">
+                                        <Expander Header="Sample agent prompt" Margin="24,4,0,0">
                                             <StackPanel>
                                                 <TextBox Text="{Binding LocalApiSamplePrompt, Mode=OneWay}"
                                                         IsReadOnly="True"
@@ -614,11 +575,49 @@
                                                             HorizontalAlignment="Left"/>
                                                     <TextBlock Name="CopySampleConfirm" Text="Copied ✓"
                                                               Foreground="{DynamicResource DockApplicationAccentBrushLow}"
-                                                              VerticalAlignment="Center" Margin="10,0,0,0"
-                                                              IsVisible="False"/>
+                                                              VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
                                                 </StackPanel>
                                             </StackPanel>
                                         </Expander>
+
+                                        <!-- MCP surface (/mcp): for chat clients, reached via the app's mcp-bridge relay. #280 -->
+                                        <CheckBox IsChecked="{Binding McpEnabled}"
+                                                 IsEnabled="{Binding SubPermissionsEnabled}"
+                                                 Content="Enable MCP access (Claude Desktop &amp; other chat clients)"
+                                                 Margin="0,10,0,0"/>
+
+                                        <!-- Copy sits at the bottom of the expander, matching the prompt above: the button
+                                             follows the thing it copies rather than preceding a collapsed panel. Clipboard is
+                                             done in code-behind since the view model has no TopLevel. -->
+                                        <Expander Header="Sample MCP configuration" Margin="24,4,0,0">
+                                            <StackPanel>
+                                                <TextBox Text="{Binding McpClientConfigJson, Mode=OneWay}"
+                                                        IsReadOnly="True"
+                                                        AcceptsReturn="True"
+                                                        TextWrapping="NoWrap"
+                                                        FontFamily="Consolas,Menlo,Courier New,monospace"
+                                                        MaxHeight="220"
+                                                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                        ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                    <Button Content="Copy MCP configuration"
+                                                            Click="OnCopyMcpConfig"
+                                                            IsEnabled="{Binding SubPermissionsEnabled}"
+                                                            HorizontalAlignment="Left"/>
+                                                    <TextBlock Name="CopyMcpConfirm" Text="Copied ✓"
+                                                              Foreground="{DynamicResource DockApplicationAccentBrushLow}"
+                                                              VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Expander>
+
+                                        <!-- Cross-cutting capability: navigate/highlight is offered over BOTH surfaces, so this
+                                             is enabled whenever either one is on (RemoteControlEnabled). #440 -->
+                                        <CheckBox IsChecked="{Binding AllowRemoteControl}"
+                                                 IsEnabled="{Binding RemoteControlEnabled}"
+                                                 Content="Allow agents to drive the reader (navigate and highlight)"
+                                                 Margin="0,10,0,0"/>
+
                                     </StackPanel>
                                 </Border>
 
