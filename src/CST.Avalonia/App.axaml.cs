@@ -2408,18 +2408,46 @@ public partial class App : Application
             var settingsService = ServiceProvider?.GetRequiredService<ISettingsService>();
             if (settingsService != null && MainWindow != null)
             {
+                // ONE SETTINGS WINDOW. ⌘, twice used to stack a second dialog on top of the first. (#865)
+                //
+                // Off macOS this could not happen: the menu lives inside the owner window and ShowDialog
+                // disables it, so there is no way to ask twice. On macOS the application menu AND the ⌘,
+                // accelerator both stay live during a window-modal dialog. #746 met this with About, fixed
+                // About, and wrote down that Preferences had the same gap. This is that gap.
+                if (_settingsWindow is { } open)
+                {
+                    // Navigated, not merely raised. ShowSettingsWindow takes a category and tab — the model
+                    // picker's "Manage models" asks for the Models tab (#693) — so reactivating without
+                    // honouring them would show the reader whichever page happened to be open. That is a
+                    // quieter bug than the duplicate window, and therefore a worse one.
+                    if (category is not null && open.DataContext is SettingsViewModel vm)
+                        vm.OpenAt(category, tab);
+                    open.Activate();
+                    return;
+                }
+
                 var sourcePrefs = ServiceProvider!.GetRequiredService<Services.Dictionaries.DictionarySourcePreferenceService>();
                 var settingsViewModel = new SettingsViewModel(settingsService, sourcePrefs);
                 if (category is not null) settingsViewModel.OpenAt(category, tab);
-                var settingsWindow = new SettingsWindow
+                _settingsWindow = new SettingsWindow
                 {
                     DataContext = settingsViewModel
                 };
                 // Before ShowDialog: CenterOwner positions using the size the window has when shown, so a
                 // size applied afterwards leaves it off-centre. (#42, fable review)
-                settingsWindow.ApplySavedSizeBeforeShowing(MainWindow);
+                _settingsWindow.ApplySavedSizeBeforeShowing(MainWindow);
 
-                await settingsWindow.ShowDialog(MainWindow);
+                try
+                {
+                    await _settingsWindow.ShowDialog(MainWindow);
+                }
+                finally
+                {
+                    // In a finally, so a dialog that throws on close cannot leave the guard stuck and make
+                    // Settings unopenable for the rest of the session — worse than the duplicate it
+                    // prevents. Same reasoning as the About guard below.
+                    _settingsWindow = null;
+                }
             }
         }
         catch (Exception ex)
@@ -2441,8 +2469,8 @@ public partial class App : Application
     /// <para>Shown as a dialog, like Settings. That makes it single-instance off macOS, where the menu lives
     /// inside the owner window and <c>ShowDialog</c> disables it — but <b>not</b> on macOS, where About sits
     /// in the application-level menu that Avalonia leaves enabled during a window-modal dialog. Hence the
-    /// explicit guard: without it, App menu -> About twice stacks two dialogs. (Preferences has the same
-    /// gap; this fixes only its own.)</para>
+    /// explicit guard: without it, App menu -> About twice stacks two dialogs. (Preferences had the same
+    /// gap, noted here and left open by #746; closed in #865, which copies this guard.)</para>
     ///
     /// <para>Its view model takes no services deliberately — see AboutViewModel. That means this can still
     /// show the version when whatever the reporter is reporting has left the rest of the app unhappy.</para>
@@ -2485,6 +2513,8 @@ public partial class App : Application
 
     /// <summary>The open About dialog, or null. UI-thread only, which is the only place the menu handlers
     /// run.</summary>
+    private static SettingsWindow? _settingsWindow;
+
     private static AboutWindow? _aboutWindow;
 
     private void OnGoToMenuItemClickFromFloatingWindow(Window floatingWindow)
