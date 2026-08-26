@@ -9,6 +9,29 @@
         MinWidth="700" MinHeight="400"
         WindowStartupLocation="CenterOwner">
     
+    <!-- Expander sizing is set through the theme's own resource keys, NOT by styling the header. (#863)
+
+         The header is a ToggleButton whose MinHeight is {TemplateBinding MinHeight} on the Expander, and the
+         Expander's theme binds that to ExpanderMinHeight = 48. A Style setter loses to that: template
+         bindings outrank style setters, so MinHeight="0" never applied — and Height="32" did apply and was
+         then clamped back up by the MinHeight it could not change. Which is why an earlier attempt looked
+         inert and was removed.
+
+         The chevron box has to come down too: at its default 32 (+2px border) it would out-vote a 32
+         MinHeight on its own.
+
+         32 and a 12pt left padding are the Fluent ComboBox defaults, so these headers match the script and
+         chapter pickers they sit beside and already resemble.
+
+         Scoped to this window. DynamicResource lookup stops at the nearest definition, so the Assistant
+         panel keeps its own tighter overrides and every other Expander keeps the Fluent default. Same
+         technique as AiAssistantPanel.axaml, which found this first. -->
+    <Window.Resources>
+        <x:Double x:Key="ExpanderMinHeight">32</x:Double>
+        <x:Double x:Key="ExpanderChevronButtonSize">24</x:Double>
+        <Thickness x:Key="ExpanderHeaderPadding">12,0,0,0</Thickness>
+    </Window.Resources>
+
     <Window.Styles>
         <Style Selector="TextBlock.SectionTitle">
             <Setter Property="FontSize" Value="18"/>
