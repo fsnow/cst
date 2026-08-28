@@ -175,6 +175,42 @@ public sealed class FirstRunDictionaryVisibilityTests : IDisposable
         Assert.Contains("dpd", PickerIds(prefs));
     }
 
+    /// <summary>
+    /// The dossier cache is cleared alongside the reopen.
+    ///
+    /// <para>A lemma report is assembled from the asset's glosses and corpus counts and stamped with its
+    /// version, and up to 32 are held. Reopening the provider without clearing them left the reader looking
+    /// at the superseded asset's report — footer version and all — for every lemma they had already visited:
+    /// the same staleness as #869 one layer up, and it would have survived that fix untouched.
+    /// <c>InvalidateCache</c> was written for this and had no callers anywhere in the tree. (#869)</para>
+    /// </summary>
+    [Fact]
+    public void The_bound_handler_clears_the_report_cache_when_the_dpd_asset_lands()
+    {
+        var (lemma, _) = BuildApp();
+        var updates = new FakeUpdates();
+        var reports = new CountingReports();
+        Assert.True(App.BindLemmaReopen(updates, lemma, reports));
+
+        BuildDpdAsset(_dpdPath);
+        updates.RaiseAssetInstalled(App.DpdAssetId);
+
+        Assert.Equal(1, reports.Invalidations);
+
+        // And not for somebody else's asset, which does not reopen the provider either.
+        updates.RaiseAssetInstalled("dppn");
+        Assert.Equal(1, reports.Invalidations);
+    }
+
+    private sealed class CountingReports : ILemmaReportService
+    {
+        public int Invalidations { get; private set; }
+        public bool IsAvailable => true;
+        public void InvalidateCache() => Invalidations++;
+        public Task<LemmaReport?> BuildAsync(long lemmaId, CancellationToken ct = default) =>
+            Task.FromResult<LemmaReport?>(null);
+    }
+
     // A lexicon install must not reopen the lemma provider — it is a different asset, and reopening on every
     // event would retire a live inner provider for nothing.
     [Fact]

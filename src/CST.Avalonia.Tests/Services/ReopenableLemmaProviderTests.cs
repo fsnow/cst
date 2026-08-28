@@ -83,9 +83,80 @@ public sealed class ReopenableLemmaProviderTests : IDisposable
         Assert.False(provider.IsAvailable);
     }
 
+    // ---- an asset REPLACED mid-session, not merely installed (#869) ------------------------------------
+
+    /// <summary>
+    /// After an update replaces the asset in place, the provider serves the new file.
+    ///
+    /// <para>#536's case was a first install, where there is no pool yet and nothing can go wrong. An
+    /// <b>update</b> is the hard one: <c>File.Move(overwrite: true)</c> on macOS and Linux is a rename that
+    /// succeeds over open handles, so the replacement provider used to build the same connection string, be
+    /// handed a pooled handle still bound to the replaced file's old inode, and go on answering from the
+    /// superseded asset — while the log said the new one was active. Until the next launch.</para>
+    ///
+    /// <para>Note what this test does NOT do: clear the pools. The fixture used to, unconditionally, which is
+    /// why this class had four passing tests and the bug shipped anyway.</para>
+    /// </summary>
+    [Fact]
+    public void An_asset_replaced_mid_session_is_served_from_the_new_file()
+    {
+        var path = Path.Combine(_dir, "dpd-cst-subset.db");
+        BuildAssetDb(path, "dhamma");
+
+        using var provider = new ReopenableLemmaProvider(path);
+        Assert.NotNull(provider.ResolveForm("dhammaṃ"));      // pools a handle on the file as it stands now
+
+        // What DpdUpdateService.InstallFromGzip does: build beside it, then rename over the live file.
+        var replacement = path + ".new";
+        BuildAssetDb(replacement, "citta", clearPools: false);
+        File.Move(replacement, path, overwrite: true);
+
+        provider.Reopen();
+
+        Assert.NotNull(provider.ResolveForm("cittaṃ"));
+        Assert.Null(provider.ResolveForm("dhammaṃ"));
+    }
+
+    /// <summary>
+    /// A live connection on the same path cannot pin the replaced file either.
+    ///
+    /// <para>The pool was one of two things holding the old inode. <c>Cache=Shared</c> was the other, and it
+    /// works independently: a shared cache is keyed by file PATH, so while any connection holds one open, a
+    /// brand-new connection on that path joins it and reads through the surviving pager — the replaced
+    /// file's. Clearing the pool does not touch that. The connection here stands in for the ordinary case of
+    /// a GUI lookup in flight while the install completes.</para>
+    /// </summary>
+    [Fact]
+    public void A_shared_cache_connection_held_open_across_the_replacement_does_not_pin_it()
+    {
+        var path = Path.Combine(_dir, "dpd-cst-subset.db");
+        BuildAssetDb(path, "dhamma");
+
+        using var provider = new ReopenableLemmaProvider(path);
+        Assert.NotNull(provider.ResolveForm("dhammaṃ"));
+
+        using var pinned = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path, Mode = SqliteOpenMode.ReadOnly, Cache = SqliteCacheMode.Shared,
+        }.ToString());
+        pinned.Open();
+
+        var replacement = path + ".new";
+        BuildAssetDb(replacement, "citta", clearPools: false);
+        File.Move(replacement, path, overwrite: true);
+
+        provider.Reopen();
+
+        Assert.NotNull(provider.ResolveForm("cittaṃ"));
+        Assert.Null(provider.ResolveForm("dhammaṃ"));
+    }
+
     // A minimal but VALID dpd-cst-subset asset: the tables SqliteLemmaProvider requires, plus one form→lemma
     // row so a resolve can prove the wrapper is really querying the new file.
-    private static void BuildAssetDb(string path, string lemma = "dhamma")
+    /// <param name="clearPools">Left true for setup. A test reproducing #869 must pass false: clearing every
+    /// pool is exactly what masked the bug here for a release — the pooled handle on the replaced file is the
+    /// whole mechanism, and a fixture that empties the pool tests a state the app is never in.</param>
+    private static void BuildAssetDb(string path, string lemma = "dhamma", bool clearPools = true)
     {
         using (var c = new SqliteConnection($"Data Source={path}"))
         {
@@ -102,7 +173,7 @@ public sealed class ReopenableLemmaProviderTests : IDisposable
             cmd.Parameters.AddWithValue("$form", lemma + "ṃ");   // -ṃ, an accusative singular
             cmd.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
+        if (clearPools) SqliteConnection.ClearAllPools();
     }
 
     public void Dispose()

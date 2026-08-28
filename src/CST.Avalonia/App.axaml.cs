@@ -784,7 +784,7 @@ public partial class App : Application
         if (updates is null)
             return;
         var provider = ServiceProvider?.GetService<CST.Lemma.ILemmaProvider>();
-        BindLemmaReopen(updates, provider);
+        BindLemmaReopen(updates, provider, ServiceProvider?.GetService<Services.ILemmaReportService>());
     }
 
     /// <summary>
@@ -796,7 +796,11 @@ public partial class App : Application
     /// no failing test — the asset installs, the event fires, and DPD stays dark until the next launch. (fable)</para>
     /// </summary>
     /// <returns>true when the reopen was bound; false when the registered provider cannot be reopened.</returns>
-    internal static bool BindLemmaReopen(IDpdUpdateService updates, CST.Lemma.ILemmaProvider? provider)
+    /// <param name="reports">The dossier cache, cleared alongside the reopen. Optional so the provider half
+    /// can still be tested on its own.</param>
+    internal static bool BindLemmaReopen(
+        IDpdUpdateService updates, CST.Lemma.ILemmaProvider? provider,
+        Services.ILemmaReportService? reports = null)
     {
         if (provider is not Services.ReopenableLemmaProvider reopenable)
         {
@@ -817,6 +821,14 @@ public partial class App : Application
             if (!string.Equals(id, DpdAssetId, StringComparison.OrdinalIgnoreCase))
                 return;
             reopenable.Reopen();
+
+            // A dossier is assembled from this asset's glosses and counts and stamped with its version, and
+            // up to 32 of them are held. Reopening the provider without clearing them leaves the reader
+            // looking at the superseded asset's report — footer version and all — for every lemma they had
+            // already visited, which is the same staleness #869 fixes one layer down and would have survived
+            // the fix. InvalidateCache existed for exactly this and had no callers. (#869, R13-3)
+            reports?.InvalidateCache();
+
             Log.Information("Reopened the lemma provider after the {Id} asset was installed; available={Available}",
                 id, reopenable.IsAvailable);
         };
