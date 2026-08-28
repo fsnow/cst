@@ -560,7 +560,12 @@ namespace CST.Avalonia.Services.Ai
             foreach (var item in data.EnumerateArray())
             {
                 if (item.ValueKind != JsonValueKind.Object) continue;
-                if (Text(item, "id") is not { Length: > 0 } id) continue;
+                // Trimmed here, at the one place a listing id enters, so every later ordinal join
+                // agrees on it. A gateway that pads its ids used to have a stored model and its own
+                // listing entry miss each other: two rows for one model, published facts that never
+                // reattached, and a completed fetch marking the reader's enabled model "no longer
+                // listed". (#870, fable review)
+                if (Text(item, "id")?.Trim() is not { Length: > 0 } id) continue;
 
                 var architecture = Object(item, "architecture");
                 var pricing = Object(item, "pricing");

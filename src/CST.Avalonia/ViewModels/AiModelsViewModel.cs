@@ -389,11 +389,12 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         internal void ApplyFilter(string search, bool freeOnly, bool searching)
         {
-            // First-wins over the stored list rather than one row per record. Two records CAN share an id —
-            // the seams that write them now refuse it, but a settings.json written before they did still
-            // holds the pair, and this method runs inside the AiSettingsViewModel constructor: throwing here
-            // (ToDictionary did) locks the reader out of the entire Settings window, with no way back in to
-            // remove the duplicate that closed it. First-wins also matches what a toggle acts on, since
+            // First-wins over the stored list rather than one row per record, and never a throw. The pair
+            // this guards against is repaired at load (SettingsValidator) and refused on the way in
+            // (AiConnectionService.DuplicateModel), so nothing should reach here — but this method runs
+            // inside the AiSettingsViewModel constructor, where an ArgumentException (ToDictionary threw
+            // one) is not a bad row: it locks the reader out of the entire Settings window, with no way
+            // back in to remove whatever closed it. First-wins also matches what a toggle acts on, since
             // EnableModel/SetModelEnabled resolve an id by FirstOrDefault. (#870)
             var stored = new HashSet<string>(StringComparer.Ordinal);
             var rows = new List<AiCatalogRowViewModel>();

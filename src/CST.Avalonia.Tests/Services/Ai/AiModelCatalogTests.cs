@@ -22,6 +22,26 @@ public class AiModelCatalogTests
 {
     // ---- the three shapes one parser has to serve ------------------------------------------------------
 
+    /// <summary>
+    /// A padded id is trimmed at the parse seam, so every later ordinal join agrees on it.
+    ///
+    /// <para>Untrimmed, a gateway that pads its ids gave the reader a stored model and its own listing entry
+    /// that could never match each other: two rows for one model on the Models tab, published facts that
+    /// never reattached to the stored row, and a completed fetch marking the model they had just enabled "no
+    /// longer listed". (#870)</para>
+    /// </summary>
+    [Fact]
+    public void A_padded_listing_id_is_trimmed()
+    {
+        var models = AiModelCatalog.Parse("""
+        {"data":[{"id":"  gpt-4o  "},{"id":"   "}]}
+        """);
+
+        var model = Assert.Single(models);
+        Assert.Equal("gpt-4o", model.Id);
+        Assert.Equal("gpt-4o", model.DisplayName);   // the name falls back to the id, trimmed too
+    }
+
     /// <summary>OpenRouter: everything published at once. The fields are pulled by name — never "whatever
     /// the source says" — because a listing can gain a ranking field in a release nobody read.</summary>
     [Fact]
