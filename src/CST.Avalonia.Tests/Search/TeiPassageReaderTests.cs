@@ -837,5 +837,137 @@ namespace CST.Avalonia.Tests.Search
             Assert.Equal(5, window.ParagraphNumber);
             Assert.Contains(window.Pages, p => p.Edition == PageEdition.Vri && p.Number == 1);
         }
+    
+        // ---- akṣara-aware cuts (#871) -------------------------------------------------------------------
+
+        /// <summary>
+        /// One Devanagari word in a paragraph with no danda, so the count-based cuts are the only ones that
+        /// can fire. Rendered whole this is "ka buddhīkakakaka"; cut between the conjunct and its vowel sign
+        /// it reads "ka buddha", which is why this bug is worth a test at all.
+        /// </summary>
+        private const string NoDanda =
+            "<body><div id=\"dn1\" type=\"book\">" +
+            "<p rend=\"bodytext\" n=\"5\">" +
+            // ka + space + b-u-d-virama-dh-ii, then four more ka.
+            "\u0915 \u092C\u0941\u0926\u094D\u0927\u0940\u0915\u0915\u0915\u0915</p>" +
+            "</div></body>";
+
+        /// <summary>Where the paragraph's TEXT begins. The paragraph marker points at the opening tag, which
+        /// is zero-width forwards but not a position to do character arithmetic from.</summary>
+        private static int TextStart(string xml) => xml.IndexOf('\u0915');
+
+        /// <summary>
+        /// The hard cap backs off a half-cut akṣara instead of inventing a word.
+        ///
+        /// <para>The budget ran out between the <c>dh</c> (U+0927) and its <c>ī</c> sign (U+0940), leaving a
+        /// bare consonant that <c>Deva2Latn</c> then gave its inherent 'a' — so the window ended "…buddha"
+        /// where the text says "buddhī". Not visible damage: a different, entirely plausible Pāli word, in
+        /// the surface an agent quotes the corpus from.</para>
+        /// </summary>
+        [Fact]
+        public void The_hard_cap_does_not_cut_an_aksara_in_half()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+
+            // maxChars 5 puts the hard cap (maxChars + maxChars/2) exactly on the vowel sign.
+            var w = TeiPassageReader.ReadWindow(NoDanda, TextStart(NoDanda), maxChars: 5,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            Assert.Equal("ka bu", w.Text);
+            Assert.DoesNotContain("buddha", w.Text);
+        }
+
+        /// <summary>
+        /// Paging across the cut stitches back to the text, which is the reason the fix retreats rather than
+        /// advances: the window end IS the next window's cursor, so moving it back puts the whole akṣara at
+        /// the head of the next page. Left where the count landed, page two opened on an orphaned vowel sign
+        /// ("īkakakaka") and no amount of stitching recovered "buddhī".
+        /// </summary>
+        [Fact]
+        public void Paging_across_a_half_cut_aksara_stitches_back_to_the_word()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+
+            var w1 = TeiPassageReader.ReadWindow(NoDanda, TextStart(NoDanda), maxChars: 5,
+                includeVariants: false, outputScript: Script.Latin, markers);
+            var w2 = TeiPassageReader.ReadWindow(NoDanda, w1.NextCursor!.Value, maxChars: 50,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            Assert.StartsWith("ddhī", w2.Text);
+            Assert.Equal("ka buddhīkakakaka", w1.Text + w2.Text);
+        }
+
+        /// <summary>
+        /// A window narrower than the akṣara it starts on keeps the raw cut rather than coming back empty.
+        ///
+        /// <para>Retreating to nothing would make the window's end its own <c>NextCursor</c>, and a client
+        /// paging forward would never advance — a hang is worse than the boundary letter this fix exists to
+        /// get right.</para>
+        /// </summary>
+        [Fact]
+        public void A_window_narrower_than_one_aksara_still_advances()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+            int start = TextStart(NoDanda) + 4;             // onto the d of the d-virama-dh conjunct
+
+            var w = TeiPassageReader.ReadWindow(NoDanda, start, maxChars: 1, includeVariants: false,
+                outputScript: Script.Latin, markers);
+
+            Assert.NotEmpty(w.Text);
+            Assert.True(w.NextCursor > start);
+        }
+
+        /// <summary>
+        /// The previous-page cursor opens on an akṣara start too. With no sentence boundary behind it the
+        /// backward walk falls back to a raw character count, which used to open the previous page on the
+        /// orphaned vowel sign ("īkakakaka").
+        /// </summary>
+        [Fact]
+        public void The_previous_page_cursor_does_not_open_mid_aksara()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+
+            var w = TeiPassageReader.ReadWindow(NoDanda, TextStart(NoDanda) + 11, maxChars: 4,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            var prev = TeiPassageReader.ReadWindow(NoDanda, w.PrevCursor!.Value, maxChars: 50,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            Assert.StartsWith("ddhī", prev.Text);
+            Assert.False(prev.Text.StartsWith("ī"));        // the stranded matra
+        }
+
+        /// <summary>
+        /// The selection path's cut is akṣara-aware as well.
+        ///
+        /// <para>It is <c>ExtendToSentenceEnd</c> that has to do this, not the selection clamp: every
+        /// selection end is passed through the sentence extension, so the clamp's own cut never ends a
+        /// window. Where a danda is near, the extension lands on it and there was never a problem; where none
+        /// is — front matter, headings, a verse index, the danda-free text this reader already documents
+        /// having to cope with — the extension gives up on its 4,000-character cap, and that cap is a raw
+        /// count like any other.</para>
+        /// </summary>
+        [Fact]
+        public void The_sentence_extension_cap_does_not_cut_an_aksara_in_half()
+        {
+            // Filler so the 4,000-char extension cap lands exactly on the vowel sign, and no danda anywhere
+            // for it to prefer.
+            const int Cap = 4000;
+            string filler = new string('\u0915', Cap - 4);
+            string xml =
+                "<body><p rend=\"bodytext\" n=\"1\">"
+                + filler + "\u092C\u0941\u0926\u094D\u0927\u0940" + new string('\u0915', 20)
+                + "</p></body>";
+
+            var markers = BookMarkers.Build(xml);
+            int from = TextStart(xml);
+
+            var w = TeiPassageReader.ReadWindowAroundSelection(
+                xml, from, from + 1, maxChars: 100000, includeVariants: false,
+                outputScript: Script.Latin, markers, contextSentences: 0);
+
+            Assert.EndsWith("kabu", w.Text);
+            Assert.DoesNotContain("buddha", w.Text);
+        }
     }
 }
