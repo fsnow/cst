@@ -137,8 +137,12 @@ public sealed class LemmaSearchServiceTests : IDisposable
     // dictionary panel and reported "no lemma resolves this form" here — the same silent-negative class
     // as #868 itself. The fixture stores `paññaṃ` with U+1E43. (fable review)
     [Theory]
-    [InlineData("pa\u00F1\u00F1a\u1E43")] // ṃ, as stored
-    [InlineData("pa\u00F1\u00F1a\u1E41")] // ṁ, the other spelling
+    [InlineData("pa\u00F1\u00F1a\u1E43")]        // ṃ, as stored
+    [InlineData("pa\u00F1\u00F1a\u1E41")]        // ṁ, the other spelling
+    [InlineData("pa\u00F1\u00F1am\u0323")]       // ṃ decomposed
+    [InlineData("pa\u00F1\u00F1am\u0307")]       // ṁ decomposed — missed until composition moved ahead
+                                                   // of conversion; the converters only map precomposed
+                                                   // characters, so `m` + U+0307 never reached the fold
     public void ResolveWord_folds_both_spellings_of_niggahita(string word)
     {
         var svc = NewService(new FakeSearchService());

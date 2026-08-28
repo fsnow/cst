@@ -66,19 +66,27 @@ public sealed class LemmaSearchService : ILemmaSearchService
     /// </summary>
     private static string ToLookupKey(string word, Script sourceScript)
     {
-        // Joiners and surrounding space first. Every converter already drops ZWJ/ZWNJ, so stripping them
-        // here only changes the Latin branch — but doing it once keeps the two branches identical.
-        var stripped = MultiWordSearch.StripJoiners(word).Trim();
+        // Joiners, surrounding space, and COMPOSITION first. Composing before conversion rather than after
+        // is not a stylistic choice: the converters map precomposed characters, so decomposed input reaches
+        // them as pieces they do not recognise. `n` + U+0303 converts as IPE *dental* n followed by a loose
+        // combining tilde, where `ñ` converts as IPE U+00D2, the palatal — a different letter. Composing
+        // afterwards repairs the Latin spelling on the way out and hides that, but the IPE in between is
+        // still the wrong word, so anything keyed off it is wrong too: decomposed `paññaṁ` came out as
+        // U+1E41 instead of folding to U+1E43, and missed the lookup exactly as #868 described. Compose
+        // first and the converters see characters they can map. (Frank, reviewing the first fix)
+        var normalized = MultiWordSearch.StripJoiners(word).Trim().Normalize(NormalizationForm.FormC);
 
         var latin = sourceScript == Script.Latin
-            ? stripped
-            : ScriptConverter.Convert(stripped, sourceScript, Script.Latin);
+            ? normalized
+            : ScriptConverter.Convert(normalized, sourceScript, Script.Latin);
 
-        // Now it is Latin, so folding is safe. Fold before Any2Ipe: Latn2Ipe maps lower-case forms.
+        // Now it is certainly Latin, so folding is safe. Before Any2Ipe: Latn2Ipe maps lower-case forms.
         latin = latin.ToLowerInvariant();
 
-        return ScriptConverter.Convert(Any2Ipe.Convert(latin), Script.Ipe, Script.Latin)
-            .Normalize(NormalizationForm.FormC);
+        // No trailing Normalize: Ipe2Latn emits precomposed characters by construction (U+0101 for aa, and
+        // so on), so given composed input the result is composed. Re-normalizing here would be dead code
+        // that looked load-bearing — and while it WAS load-bearing, it was masking the bug above.
+        return ScriptConverter.Convert(Any2Ipe.Convert(latin), Script.Ipe, Script.Latin);
     }
 
     public FormResolution? ResolveWord(string word, Script sourceScript = Script.Ipe)
