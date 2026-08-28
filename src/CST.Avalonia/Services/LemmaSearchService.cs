@@ -35,18 +35,50 @@ public sealed class LemmaSearchService : ILemmaSearchService
 
     public DpdLemmaMeta? Meta => _lemma.Meta;
 
+    /// <summary>
+    /// The IAST key to look a word up by. DPD stores forms lower-case NFC, and the lookup is a byte-exact
+    /// SQL comparison under BINARY collation — so anything this misses is reported as "no lemma resolves this
+    /// form", which is indistinguishable from a word DPD genuinely does not cover. (#868)
+    ///
+    /// <para>The Latin branch used to hand the word straight through, on the reasoning that Latin input is
+    /// already IAST. It is not already <b>normalized</b> IAST: <c>Dhammā</c> — sentence-initial Pāli, or any
+    /// caller echoing a capitalised form — resolved nothing where <c>dhammā</c> resolved seventeen ways, and
+    /// NFD-decomposed input missed the same way. Latin is the REST and MCP default, so that was the common
+    /// path, not an exotic one.</para>
+    ///
+    /// <para>Case, and only case. Latin display is capitalized <b>algorithmically</b>, so the app itself
+    /// puts capitalized Pāli on the screen that a reader can select and paste straight back into a lookup —
+    /// the input is our own output, not a hypothetical. Other input variants (decomposed codepoints, stray
+    /// joiners, the <c>ŋ</c> niggahita of the Rhys Davids dictionary) are deliberately NOT handled here:
+    /// none of them turned up in twenty years of CST4 in the wild, and chasing them adds machinery whose
+    /// own bugs are likelier than the inputs it guards against. (fsnow)</para>
+    ///
+    /// <para><b>Fold case AFTER conversion, never before.</b> <see cref="Script.Ipe"/> is this interface's
+    /// declared default, and IPE encodes Pāli letters in the Latin-1 <i>uppercase</i> block from U+00C0
+    /// (<c>Ipe2Latn</c>) — so <c>ToLowerInvariant</c> on IPE shifts every letter onto a <i>different IPE
+    /// letter</i> or onto nothing, and IPE "dhammā" reads out as "übhmmm". An earlier draft folded first,
+    /// on the reasoning that it mirrored <c>DpdDictionarySource</c>; that sibling folds <i>user text</i> on
+    /// its way INTO IPE and never folds IPE itself. (fable review)</para>
+    /// </summary>
+    private static string ToLookupKey(string word, Script sourceScript)
+    {
+        var latin = sourceScript == Script.Latin
+            ? word
+            : ScriptConverter.Convert(word, sourceScript, Script.Latin);
+
+        return latin.ToLowerInvariant();
+    }
+
     public FormResolution? ResolveWord(string word, Script sourceScript = Script.Ipe)
     {
         if (!IsAvailable || string.IsNullOrWhiteSpace(word)) return null;
-        // DPD keys are IAST (Latin); normalize the input for the lookup.
-        string iast = sourceScript == Script.Latin ? word : ScriptConverter.Convert(word, sourceScript, Script.Latin);
-        return _lemma.ResolveForm(iast);
+        return _lemma.ResolveForm(ToLookupKey(word, sourceScript));
     }
 
     public WordDeconstruction? Deconstruct(string word, Script sourceScript = Script.Ipe)
     {
         if (!IsAvailable || string.IsNullOrWhiteSpace(word)) return null;
-        string iast = sourceScript == Script.Latin ? word : ScriptConverter.Convert(word, sourceScript, Script.Latin);
+        string iast = ToLookupKey(word, sourceScript);
         var fd = _lemma.Deconstruct(iast);
         if (fd is null) return null;
         return new WordDeconstruction(iast, fd.DirectLemmas, ParseSplits(fd.Deconstructor), _lemma.Meta?.Scope);

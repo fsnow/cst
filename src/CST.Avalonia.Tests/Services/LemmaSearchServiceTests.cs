@@ -68,6 +68,71 @@ public sealed class LemmaSearchServiceTests : IDisposable
         Assert.True(r!.Candidates.Count > 1); // homograph
     }
 
+    // #868: DPD stores forms lower-case and matches them byte-exact under BINARY collation, so a capitalized
+    // word came back as "no lemma resolves this form" — indistinguishable from a word DPD does not cover.
+    // `Dhammā` resolved nothing against the shipped asset while `dhammā` resolved 17 ways.
+    //
+    // This is our OWN output coming back at us, which is what makes it worth fixing: Latin display is
+    // capitalized algorithmically, so the app puts capitalized Pāli on screen for a reader to select and
+    // paste into a lookup. Latin is also the REST and MCP default. Other input variants are deliberately
+    // out of scope — see ToLookupKey.
+    [Theory]
+    [InlineData("pa\u00F1\u00F1\u0101ya")] // as stored
+    [InlineData("Pa\u00F1\u00F1\u0101ya")] // as the app itself displays it
+    [InlineData("PA\u00D1\u00D1\u0100YA")] // all caps
+    public void ResolveWord_case_folds_Latin_input_before_the_byte_exact_lookup(string word)
+    {
+        var svc = NewService(new FakeSearchService());
+
+        var r = svc.ResolveWord(word, Script.Latin);
+
+        Assert.NotNull(r);
+        Assert.True(r!.Candidates.Count > 1); // the same homograph the stored spelling resolves to
+    }
+
+    // The other half of #868: both branches normalize through one method, so a fix to one cannot leave the
+    // other behind. Round-trips through the converter rather than hard-coding Devanagari, so this keeps
+    // testing the service if the converter's output ever changes.
+    [Fact]
+    public void ResolveWord_still_resolves_a_non_Latin_script()
+    {
+        var svc = NewService(new FakeSearchService());
+        var deva = ScriptConverter.Convert("pa\u00F1\u00F1\u0101ya", Script.Latin, Script.Devanagari);
+
+        var r = svc.ResolveWord(deva, Script.Devanagari);
+
+        Assert.NotNull(r);
+        Assert.True(r!.Candidates.Count > 1);
+    }
+
+    // A word the asset genuinely does not carry must still answer "not found" — the fix must widen what
+    // resolves, not make everything resolve.
+    [Fact]
+    public void ResolveWord_still_returns_nothing_for_a_form_the_asset_does_not_carry()
+    {
+        var svc = NewService(new FakeSearchService());
+
+        Assert.Null(svc.ResolveWord("Nota\u00F1\u00F1word", Script.Latin));
+    }
+
+    // The regression the first draft of #868 introduced, caught in review. Script.Ipe is this interface's
+    // DECLARED DEFAULT, and IPE encodes Pāli letters in the Latin-1 *uppercase* block from U+00C0 — so
+    // case-folding before conversion shifts every letter onto a different IPE letter or onto nothing
+    // ("dhammā" read out as "übhmmm"). No production caller reaches the default today (REST rejects Ipe,
+    // MCP coerces it to Latin), which is exactly why the suite stayed green while the default path was
+    // broken. Derived through the converter rather than hard-coded, so this cannot drift from IPE itself.
+    [Fact]
+    public void ResolveWord_resolves_IPE_input_on_the_interfaces_default_script()
+    {
+        var svc = NewService(new FakeSearchService());
+        var ipe = ScriptConverter.Convert("pa\u00F1\u00F1\u0101ya", Script.Latin, Script.Ipe);
+
+        var r = svc.ResolveWord(ipe); // no sourceScript: the Script.Ipe default
+
+        Assert.NotNull(r);
+        Assert.True(r!.Candidates.Count > 1);
+    }
+
     [Fact]
     public async Task ExpandAndSearch_builds_regex_alternation_and_maps_counts()
     {
