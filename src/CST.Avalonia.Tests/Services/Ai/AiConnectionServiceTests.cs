@@ -44,6 +44,83 @@ public class AiConnectionServiceTests
         Assert.Contains("already", second.Problem);
     }
 
+    // ---- duplicate model ids (#870) --------------------------------------------------------------------
+
+    private static AiConnectionDraft DraftWith(params AiModelEntry[] models) =>
+        new("My box", ChatProviderKind.OpenAiCompatible, "http://localhost:8000/v1",
+            models, Array.Empty<AiHeader>(), new Dictionary<string, string>());
+
+    /// <summary>
+    /// Two rows with one id are refused on the way in, the way two headers with one name already were.
+    ///
+    /// <para>Nothing used to stop them: the sheet let a reader paste an id twice, the draft was copied
+    /// verbatim into the record, and the models tab then threw <c>ArgumentException</c> keying its stored
+    /// list — inside the Settings window's own construction, so the window would not open again. (#870)</para>
+    /// </summary>
+    [Fact]
+    public void Two_models_with_one_id_are_refused_on_add()
+    {
+        var (service, settings) = Make();
+
+        var result = service.Add("mine", DraftWith(
+            new AiModelEntry("llama3.1:8b", "Llama"), new AiModelEntry("llama3.1:8b", "Llama again")));
+
+        Assert.False(result.Ok);
+        Assert.Contains("llama3.1:8b", result.Problem);
+        Assert.Empty(settings.Ai.Chat.Connections);
+    }
+
+    /// <summary>The same refusal on the edit path — where it is likelier, since the sheet opens with the
+    /// existing rows and a reader adds one more.</summary>
+    [Fact]
+    public void Two_models_with_one_id_are_refused_on_update()
+    {
+        var (service, settings) = Make();
+        Assert.True(service.Add("mine", DraftWith(new AiModelEntry("a", "A"))).Ok);
+
+        var result = service.Update("mine", DraftWith(
+            new AiModelEntry("a", "A"), new AiModelEntry("a", "A again")));
+
+        Assert.False(result.Ok);
+        Assert.Single(settings.Ai.Chat.Connections.Single().Models);
+    }
+
+    /// <summary>Whitespace is what makes the pair, so it is trimmed before the comparison rather than after —
+    /// the record stores trimmed ids, so an untrimmed match would let the pair through to the same crash.
+    /// </summary>
+    [Fact]
+    public void A_padded_repeat_of_a_model_id_is_refused()
+    {
+        var (service, _) = Make();
+
+        var result = service.Add("mine", DraftWith(
+            new AiModelEntry("a", "A"), new AiModelEntry(" a ", "A padded")));
+
+        Assert.False(result.Ok);
+    }
+
+    /// <summary>
+    /// A listing id carrying whitespace does not append a second record on every toggle.
+    ///
+    /// <para><c>EnableModel</c> looked the id up untrimmed and stored it trimmed, so the padded id never
+    /// matched what the previous toggle had written and each pass added another record under the same
+    /// trimmed id — the editor's guard cannot see this route at all, since nobody typed it. (#870)</para>
+    /// </summary>
+    [Fact]
+    public void A_padded_listing_id_does_not_append_a_second_model()
+    {
+        var (service, settings) = Make();
+        Assert.True(service.Add("mine", DraftWith()).Ok);
+
+        service.EnableModel("mine", " gpt-4o ", "GPT-4o", enabled: true);
+        service.EnableModel("mine", " gpt-4o ", "GPT-4o", enabled: false);
+        service.EnableModel("mine", " gpt-4o ", "GPT-4o", enabled: true);
+
+        var model = Assert.Single(settings.Ai.Chat.Connections.Single().Models);
+        Assert.Equal("gpt-4o", model.Id);
+        Assert.True(model.Enabled);
+    }
+
     /// <summary>Preset ids are reserved: taking one by hand would collide with the built-in the reader might
     /// add later, and the collision would be a credential mix-up rather than a visible error.</summary>
     [Fact]

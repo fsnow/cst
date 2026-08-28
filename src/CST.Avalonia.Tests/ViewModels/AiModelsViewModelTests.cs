@@ -42,9 +42,9 @@ public class AiModelsViewModelTests
 
     private static (AiModelsViewModel Vm, AiConnectionService Service) Make(
         IAiModelCatalog? catalog = null, IAiProviderLogos? logos = null,
-        IAiModelListingCache? listings = null)
+        IAiModelListingCache? listings = null, Settings? settings = null)
     {
-        var settings = new Settings();
+        settings ??= new Settings();
         var svc = new Mock<ISettingsService>();
         svc.SetupGet(s => s.Settings).Returns(settings);
         var service = new AiConnectionService(svc.Object);
@@ -1121,5 +1121,44 @@ public class AiModelsViewModelTests
         service.Add("mine", Draft());   // "later" is not here yet
 
         Assert.Single(listings.Get("later"));
+    }
+
+    // ---- opening over a file that already carries duplicates (#870) -------------------------------------
+
+    /// <summary>
+    /// A settings.json holding two model records with one id opens, showing the id once.
+    ///
+    /// <para>This half of #870 is the way back in. Keying the stored list with <c>ToDictionary</c> threw
+    /// <c>ArgumentException</c> on the pair, and this method runs from the <c>AiSettingsViewModel</c>
+    /// constructor — so a file that already held duplicates crashed the Settings window on every open, and
+    /// the only screen that could have removed the duplicate was the one that would not open. Refusing new
+    /// duplicates at the service does nothing for a reader whose file already has a pair, which is why the
+    /// tolerance is not redundant with the guard.</para>
+    ///
+    /// <para>First wins, and that is the row a toggle acts on: <c>EnableModel</c>/<c>SetModelEnabled</c>
+    /// resolve an id by <c>FirstOrDefault</c>.</para>
+    /// </summary>
+    [Fact]
+    public void A_stored_list_that_already_holds_a_duplicate_id_still_opens()
+    {
+        var settings = new Settings();
+        settings.Ai.Chat.Connections.Add(new AiConnectionRecord
+        {
+            Id = "mine",
+            DisplayName = "My box",
+            BaseUrl = "http://localhost:8000/v1",
+            Models =
+            {
+                new AiModelRecord { Id = "llama3.1:8b", DisplayName = "Llama", Enabled = true },
+                new AiModelRecord { Id = "llama3.1:8b", DisplayName = "Llama again", Enabled = false },
+            },
+        });
+
+        var (vm, _) = Make(settings: settings);
+        Group(vm).IsExpanded = true;
+
+        var row = Assert.Single(Rows(vm));
+        Assert.Equal("Llama", row.DisplayName);
+        Assert.True(row.Enabled);
     }
 }

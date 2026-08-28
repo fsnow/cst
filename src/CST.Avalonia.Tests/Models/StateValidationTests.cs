@@ -383,6 +383,37 @@ public class StateValidationTests
     }
 
     [Fact]
+    public void Settings_Sanitize_trims_and_collapses_repeated_model_ids()
+    {
+        // #870: two records with one id used to throw ArgumentException out of the models tab — inside the
+        // Settings window's construction, so the window would not reopen. Repaired at load rather than
+        // tolerated per-screen: the per-turn picker has no dedupe either, and with BOTH records enabled (the
+        // shape both real routes produce) it listed the model twice, while a toggle reached only the first —
+        // so switching it off left the twin on and answering.
+        var s = new Settings();
+        s.Ai.Chat.Connections.Add(new AiConnectionRecord
+        {
+            Id = "mine",
+            Models =
+            {
+                new AiModelRecord { Id = "gpt-4o", DisplayName = "GPT-4o", Enabled = true },
+                new AiModelRecord { Id = " gpt-4o ", DisplayName = "GPT-4o again", Enabled = true },
+                new AiModelRecord { Id = "claude-opus-5", DisplayName = "Opus", Enabled = true },
+            },
+        });
+
+        var fixes = SettingsValidator.Sanitize(s);
+
+        var models = s.Ai.Chat.Connections.Single().Models;
+        Assert.Equal(new[] { "gpt-4o", "claude-opus-5" }, models.Select(m => m.Id));
+        Assert.Equal("GPT-4o", models[0].DisplayName);           // first wins, the row a toggle acts on
+        Assert.Contains(fixes, f => f.Contains("repeated model id"));
+
+        // Idempotent, like every other repair here.
+        Assert.DoesNotContain(SettingsValidator.Sanitize(s), f => f.Contains("repeated model id"));
+    }
+
+    [Fact]
     public void Settings_Sanitize_ClampsNonPositiveFontSizes()
     {
         var s = new Settings();

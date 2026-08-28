@@ -122,6 +122,22 @@ public static class SettingsValidator
             int badModels = connection.Models.RemoveAll(m => m == null || string.IsNullOrWhiteSpace(m.Id));
             if (badModels > 0)
                 fixes.Add($"removed {badModels} model(s) with no id from connection '{connection.Id}'");
+
+            // Trim, then collapse repeats. Every consumer compares a model id ordinally against what the
+            // record holds, so a padded id is a model nothing can match and a repeated one is a model two
+            // rows claim: the picker listed both and a toggle only ever reached the first, so switching a
+            // model off left its twin on and answering. This is the file-level repair for #870 — the
+            // service now refuses to write either shape, but a file written before it did still holds them,
+            // and repairing here fixes the picker, the models tab and the edit sheet at once rather than
+            // each learning to tolerate the pair. Self-heals: the next save writes the collapsed list.
+            foreach (var model in connection.Models)
+                model.Id = model.Id.Trim();
+
+            var seenModels = new HashSet<string>(StringComparer.Ordinal);
+            int repeatedModels = connection.Models.RemoveAll(m => !seenModels.Add(m.Id));
+            if (repeatedModels > 0)
+                fixes.Add($"removed {repeatedModels} repeated model id(s) from connection '{connection.Id}'");
+
             if (connection.Inputs == null)
             {
                 connection.Inputs = new Dictionary<string, string>();

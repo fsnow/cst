@@ -389,19 +389,28 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         internal void ApplyFilter(string search, bool freeOnly, bool searching)
         {
-
-            var stored = _connection.Models.ToDictionary(m => m.Id, StringComparer.Ordinal);
+            // First-wins over the stored list rather than one row per record, and never a throw. The pair
+            // this guards against is repaired at load (SettingsValidator) and refused on the way in
+            // (AiConnectionService.DuplicateModel), so nothing should reach here — but this method runs
+            // inside the AiSettingsViewModel constructor, where an ArgumentException (ToDictionary threw
+            // one) is not a bad row: it locks the reader out of the entire Settings window, with no way
+            // back in to remove whatever closed it. First-wins also matches what a toggle acts on, since
+            // EnableModel/SetModelEnabled resolve an id by FirstOrDefault. (#870)
+            var stored = new HashSet<string>(StringComparer.Ordinal);
             var rows = new List<AiCatalogRowViewModel>();
 
             foreach (var model in _connection.Models)
+            {
+                if (!stored.Add(model.Id)) continue;
                 rows.Add(new AiCatalogRowViewModel(
                     this, model.Id, model.DisplayName,
                     _fetched.FirstOrDefault(f => string.Equals(f.Id, model.Id, StringComparison.Ordinal)),
                     model.Enabled, model.Missing));
+            }
 
             foreach (var model in _fetched)
             {
-                if (stored.ContainsKey(model.Id)) continue;
+                if (stored.Contains(model.Id)) continue;
                 if (freeOnly && model.CostsMoney) continue;
                 rows.Add(new AiCatalogRowViewModel(
                     this, model.Id, model.DisplayName, model, enabled: false));
