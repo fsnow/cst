@@ -388,7 +388,13 @@ namespace CST.Search
                 // has no danda in front of it, so a selection in the second sentence would get no context at
                 // all despite a whole sentence sitting right there. Falling back to the scan floor keeps that
                 // sentence and still bounds the front-matter case the cap exists for. (#672)
-                if (found < 0) return Math.Min(start, AdvanceToParagraph(xml, floor, start));
+                // The scan floor is a raw character count like the forward caps, so it can open a window
+                // mid-akṣara — the same orphaned vowel sign #871 fixes at the other three cuts. Reachable:
+                // 14 books carry danda-free runs past this cap, the longest 19,010 characters. Aligned
+                // against the SECTION start, not the floor, so the retreat cannot leave the section.
+                // (#871, fable review)
+                if (found < 0)
+                    return Math.Min(start, ClusterStart(xml, AdvanceToParagraph(xml, floor, start), limit));
                 boundary = found;
                 at = found;
             }
@@ -515,6 +521,13 @@ namespace CST.Search
                 seen++;
             }
 
+            // Falling out of the loop means the 4,000-char cap or the section ran out before any danda did,
+            // so this return is a raw count like the hard cap — and on the selection path it is the cut that
+            // actually ends the window, since every selection end is passed through here. Back off a half-cut
+            // akṣara, but never below where we started: returning less than `from` would shorten the
+            // selection the caller asked to keep whole. (#871)
+            if (i > from) i = Math.Max(ClusterStart(xml, i, from), from);
+
             return Math.Min(i, limit);
         }
 
@@ -598,6 +611,65 @@ namespace CST.Search
             return 0;
         }
 
+        /// <summary>
+        /// Retreat a raw cut position to the start of the akṣara it falls inside. (#871)
+        ///
+        /// <para><b>A character count is not a letter count.</b> The corpus is Devanagari at this layer, and
+        /// three of this reader's cuts are pure counts that stop wherever the budget runs out — so a cut can
+        /// land between a consonant and its dependent vowel sign, or just after a virama. What comes back is
+        /// not visible damage: <c>Deva2Latn</c> gives a bare consonant its inherent 'a', so a window cut
+        /// inside <c>\u092C\u0941\u0926\u094D\u0927\u0940</c> ("buddhī") ends "…buddha" — a different,
+        /// entirely plausible Pāli word, with nothing to tell a reader or an agent that it was cut. This is
+        /// the citation path, so subtly wrong Pāli is the worst output the reader can produce.</para>
+        ///
+        /// <para><b>Retreat rather than advance, because the cut is also the next page's cursor.</b> Moving
+        /// it back to the cluster start puts the whole akṣara at the head of the next window, so paging
+        /// through stitches back to the original text; advancing past the cluster would drop it from both.
+        /// </para>
+        ///
+        /// <para>Two rules, applied until neither fires: a combining mark AT the cut belongs to the character
+        /// before it, and a virama immediately BEFORE the cut binds to the consonant that follows. Marks are
+        /// recognised by Unicode category rather than by a Devanagari range, so a conjunct of any depth
+        /// unwinds without a table to keep current — and the virama is itself a mark, so a cut landing ON one
+        /// is already covered by the first rule.</para>
+        ///
+        /// <para><b>Never across markup.</b> The retreat crosses text characters only; it stops at a tag's
+        /// <c>&gt;</c> rather than stepping onto it. That is what keeps it from moving a cut across a note
+        /// boundary, and the alternative is worse than the bug: 23 places in the corpus carry a mark
+        /// immediately after a close tag (<c>&lt;hi rend="bold"&gt;…&lt;/hi&gt;</c> + niggahita), and one
+        /// opens a paragraph with a vowel sign, so stepping back would return a position INSIDE the tag and
+        /// the window would render the markup's own text. At those points the mark is left stranded, which is
+        /// what this reader did before. (fable review)</para>
+        /// </summary>
+        /// <param name="floor">Never retreat below this. The result may equal it; callers cutting a window
+        /// must reject that themselves, since an empty window makes nextCursor point at its own start.</param>
+        private static int ClusterStart(string xml, int cut, int floor)
+        {
+            while (cut > floor)
+            {
+                if (cut < xml.Length && IsCombining(xml[cut]) && xml[cut - 1] != '>') { cut--; continue; }
+                if (xml[cut - 1] == Virama) { cut--; continue; }
+
+                // The same bond written in the corpus's open form. A ZWJ between the virama and the consonant
+                // asks for the half-form rather than the stacked ligature, and it is not a rarity to reason
+                // about hypothetically: it sits in 15% of the corpus's viramas, concentrated in exactly the
+                // danda-free runs where these count-based cuts fire. (fable review)
+                if (xml[cut - 1] == Zwj && cut - 2 >= floor && xml[cut - 2] == Virama) { cut -= 2; continue; }
+
+                break;
+            }
+
+            return cut;
+        }
+
+        private const char Virama = '\u094D';
+        private const char Zwj = '\u200D';
+
+        private static bool IsCombining(char c) =>
+            System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) is
+                System.Globalization.UnicodeCategory.NonSpacingMark or
+                System.Globalization.UnicodeCategory.SpacingCombiningMark;
+
         // Raw end position after accumulating ~maxChars rendered chars, then extending to the next sentence
         // boundary (capped) so we never cut mid-sentence. Tags and stripped subtrees cost zero budget.
         private static int WalkForward(string xml, int start, int maxChars, bool includeNotes, int limit)
@@ -632,7 +704,13 @@ namespace CST.Search
                     rendered++;
                     i++;
                     if (rendered >= maxChars) budgetReached = true;
-                    if (rendered >= hardCap) return i;                          // no boundary found: hard cap
+                    if (rendered >= hardCap)
+                    {
+                        // No boundary found: hard cap. Back off any half-cut akṣara — but not to nothing, or
+                        // this window's end becomes its own nextCursor and the caller pages forever. (#871)
+                        int cut = ClusterStart(xml, i, start);
+                        return cut > start ? cut : i;
+                    }
                 }
             }
             return i;
@@ -679,7 +757,10 @@ namespace CST.Search
             // No boundary found: the raw fallback can land mid-note, so the previous page would render that note's
             // tail as base text (and Clean from mid-note emits an unbalanced brace). Snap out to the enclosing note's
             // start so the cursor sits on a clean (base-text) boundary. (#355)
-            int fallback = Math.Max(i + 1, limit);
+            // A start position, so there is no empty window to guard against: retreating merely begins the
+            // previous page a letter earlier. Left where the count landed, that page opened on an orphaned
+            // vowel sign. (#871)
+            int fallback = ClusterStart(xml, Math.Max(i + 1, limit), limit);
             foreach (var (s, e) in notes)
                 if (fallback > s && fallback < e) { fallback = Math.Max(s, limit); break; }
             return fallback;

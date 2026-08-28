@@ -837,5 +837,249 @@ namespace CST.Avalonia.Tests.Search
             Assert.Equal(5, window.ParagraphNumber);
             Assert.Contains(window.Pages, p => p.Edition == PageEdition.Vri && p.Number == 1);
         }
+    
+        // ---- akṣara-aware cuts (#871) -------------------------------------------------------------------
+
+        /// <summary>
+        /// One Devanagari word in a paragraph with no danda, so the count-based cuts are the only ones that
+        /// can fire. Rendered whole this is "ka buddhīkakakaka"; cut between the conjunct and its vowel sign
+        /// it reads "ka buddha", which is why this bug is worth a test at all.
+        /// </summary>
+        private const string NoDanda =
+            "<body><div id=\"dn1\" type=\"book\">" +
+            "<p rend=\"bodytext\" n=\"5\">" +
+            // ka + space + b-u-d-virama-dh-ii, then four more ka.
+            "\u0915 \u092C\u0941\u0926\u094D\u0927\u0940\u0915\u0915\u0915\u0915</p>" +
+            "</div></body>";
+
+        /// <summary>Where the paragraph's TEXT begins. The paragraph marker points at the opening tag, which
+        /// is zero-width forwards but not a position to do character arithmetic from.</summary>
+        private static int TextStart(string xml) => xml.IndexOf('\u0915');
+
+        /// <summary>
+        /// The hard cap backs off a half-cut akṣara instead of inventing a word.
+        ///
+        /// <para>The budget ran out between the <c>dh</c> (U+0927) and its <c>ī</c> sign (U+0940), leaving a
+        /// bare consonant that <c>Deva2Latn</c> then gave its inherent 'a' — so the window ended "…buddha"
+        /// where the text says "buddhī". Not visible damage: a different, entirely plausible Pāli word, in
+        /// the surface an agent quotes the corpus from.</para>
+        /// </summary>
+        [Fact]
+        public void The_hard_cap_does_not_cut_an_aksara_in_half()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+
+            // maxChars 5 puts the hard cap (maxChars + maxChars/2) exactly on the vowel sign.
+            var w = TeiPassageReader.ReadWindow(NoDanda, TextStart(NoDanda), maxChars: 5,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            Assert.Equal("ka bu", w.Text);
+            Assert.DoesNotContain("buddha", w.Text);
+        }
+
+        /// <summary>
+        /// Paging across the cut stitches back to the text, which is the reason the fix retreats rather than
+        /// advances: the window end IS the next window's cursor, so moving it back puts the whole akṣara at
+        /// the head of the next page. Left where the count landed, page two opened on an orphaned vowel sign
+        /// ("īkakakaka") and no amount of stitching recovered "buddhī".
+        /// </summary>
+        [Fact]
+        public void Paging_across_a_half_cut_aksara_stitches_back_to_the_word()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+
+            var w1 = TeiPassageReader.ReadWindow(NoDanda, TextStart(NoDanda), maxChars: 5,
+                includeVariants: false, outputScript: Script.Latin, markers);
+            var w2 = TeiPassageReader.ReadWindow(NoDanda, w1.NextCursor!.Value, maxChars: 50,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            Assert.StartsWith("ddhī", w2.Text);
+            Assert.Equal("ka buddhīkakakaka", w1.Text + w2.Text);
+        }
+
+        /// <summary>
+        /// A window narrower than the akṣara it starts on keeps the raw cut rather than coming back empty.
+        ///
+        /// <para>Retreating to nothing would make the window's end its own <c>NextCursor</c>, and a client
+        /// paging forward would never advance — a hang is worse than the boundary letter this fix exists to
+        /// get right.</para>
+        /// </summary>
+        [Fact]
+        public void A_window_narrower_than_one_aksara_still_advances()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+            int start = TextStart(NoDanda) + 4;             // onto the d of the d-virama-dh conjunct
+
+            var w = TeiPassageReader.ReadWindow(NoDanda, start, maxChars: 1, includeVariants: false,
+                outputScript: Script.Latin, markers);
+
+            Assert.NotEmpty(w.Text);
+            Assert.True(w.NextCursor > start);
+        }
+
+        /// <summary>
+        /// The previous-page cursor opens on an akṣara start too. With no sentence boundary behind it the
+        /// backward walk falls back to a raw character count, which used to open the previous page on the
+        /// orphaned vowel sign ("īkakakaka").
+        /// </summary>
+        [Fact]
+        public void The_previous_page_cursor_does_not_open_mid_aksara()
+        {
+            var markers = BookMarkers.Build(NoDanda);
+
+            var w = TeiPassageReader.ReadWindow(NoDanda, TextStart(NoDanda) + 11, maxChars: 4,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            var prev = TeiPassageReader.ReadWindow(NoDanda, w.PrevCursor!.Value, maxChars: 50,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            Assert.StartsWith("ddhī", prev.Text);
+            Assert.False(prev.Text.StartsWith("ī"));        // the stranded matra
+        }
+
+        /// <summary>
+        /// The selection path's cut is akṣara-aware as well.
+        ///
+        /// <para>It is <c>ExtendToSentenceEnd</c> that has to do this, not the selection clamp: every
+        /// selection end is passed through the sentence extension, so the clamp's own cut never ends a
+        /// window. Where a danda is near, the extension lands on it and there was never a problem; where none
+        /// is — front matter, headings, a verse index, the danda-free text this reader already documents
+        /// having to cope with — the extension gives up on its 4,000-character cap, and that cap is a raw
+        /// count like any other.</para>
+        /// </summary>
+        [Fact]
+        public void The_sentence_extension_cap_does_not_cut_an_aksara_in_half()
+        {
+            // Filler so the 4,000-char extension cap lands exactly on the vowel sign, and no danda anywhere
+            // for it to prefer.
+            const int Cap = 4000;
+            string filler = new string('\u0915', Cap - 4);
+            string xml =
+                "<body><p rend=\"bodytext\" n=\"1\">"
+                + filler + "\u092C\u0941\u0926\u094D\u0927\u0940" + new string('\u0915', 20)
+                + "</p></body>";
+
+            var markers = BookMarkers.Build(xml);
+            int from = TextStart(xml);
+
+            var w = TeiPassageReader.ReadWindowAroundSelection(
+                xml, from, from + 1, maxChars: 100000, includeVariants: false,
+                outputScript: Script.Latin, markers, contextSentences: 0);
+
+            Assert.EndsWith("kabu", w.Text);
+            Assert.DoesNotContain("buddha", w.Text);
+        }
+
+        /// <summary>
+        /// The retreat stops at markup rather than stepping into it.
+        ///
+        /// <para>The corpus carries a niggahita immediately after a close tag in 23 places
+        /// (<c>&lt;hi rend="bold"&gt;…&lt;/hi&gt;</c> + U+0902) and opens one paragraph with a vowel sign, so
+        /// the mark's base sits on the far side of the markup. Stepping back onto the <c>&gt;</c> would hand
+        /// back a cursor INSIDE the tag, and the previous page would open by rendering the tag's own text —
+        /// a markup leak where there had only been a stranded mark. The mark stays stranded at those points,
+        /// which is what this reader did before #871. (fable review)</para>
+        /// </summary>
+        [Fact]
+        public void The_retreat_does_not_step_into_a_tag()
+        {
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\"><p rend=\"bodytext\" n=\"7\">"
+                // kakaka <hi>nesa</hi> niggahita, then six more ka. No danda anywhere.
+                + "\u0915\u0915\u0915<hi rend=\"bold\">\u0928\u0947\u0938</hi>\u0902"
+                + "\u0915\u0915\u0915\u0915\u0915\u0915"
+                + "</p></div></body>";
+
+            var markers = BookMarkers.Build(xml);
+            int mark = xml.IndexOf('\u0902');
+
+            var w = TeiPassageReader.ReadWindow(xml, mark + 4, maxChars: 4, includeVariants: false,
+                outputScript: Script.Latin, markers);
+            var prev = TeiPassageReader.ReadWindow(xml, w.PrevCursor!.Value, maxChars: 50,
+                includeVariants: false, outputScript: Script.Latin, markers);
+
+            Assert.DoesNotContain(">", prev.Text);
+            Assert.StartsWith("ṃ", prev.Text);        // the stranded niggahita, not the tag
+        }
+
+        /// <summary>
+        /// A conjunct written in the corpus's open form retreats whole.
+        ///
+        /// <para>A ZWJ between the virama and the consonant asks for the half-form rather than the stacked
+        /// ligature, and it is not a curiosity: it sits in 15% of the corpus's viramas, concentrated in the
+        /// same danda-free runs where these count-based cuts fire. Without the joiner rule the retreat stops
+        /// on the far side of it and the window ends "pañ" — a visible cut rather than a wrong word, but not
+        /// the akṣara boundary this is supposed to return. (fable review)</para>
+        /// </summary>
+        [Fact]
+        public void A_conjunct_joined_by_zwj_retreats_whole()
+        {
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\"><p rend=\"bodytext\" n=\"7\">"
+                // pa-nya-virama-ZWJ-nya-aa ("paññā"), then filler.
+                + "\u092A\u091E\u094D\u200D\u091E\u093E\u0915\u0915\u0915\u0915"
+                + "</p></div></body>";
+
+            var markers = BookMarkers.Build(xml);
+
+            var w = TeiPassageReader.ReadWindow(xml, xml.IndexOf('\u092A'), maxChars: 3, includeVariants: false,
+                outputScript: Script.Latin, markers);
+
+            Assert.Equal("pa", w.Text);
+            Assert.DoesNotContain("pañ", w.Text);
+        }
+
+        /// <summary>
+        /// The niggahita is the other silent-wrong-word shape: cut before it, "nesaṃ" reads "nesa" — again a
+        /// real word, again with nothing to say it was cut.
+        /// </summary>
+        [Fact]
+        public void A_cut_before_a_niggahita_does_not_drop_it_silently()
+        {
+            const string xml =
+                "<body><div id=\"dn1\" type=\"book\"><p rend=\"bodytext\" n=\"7\">"
+                + "\u0928\u0947\u0938\u0902\u0915\u0915\u0915\u0915"   // ne-sa-niggahita, then filler
+                + "</p></div></body>";
+
+            var markers = BookMarkers.Build(xml);
+
+            var w = TeiPassageReader.ReadWindow(xml, xml.IndexOf('\u0928'), maxChars: 2, includeVariants: false,
+                outputScript: Script.Latin, markers);
+
+            Assert.Equal("ne", w.Text);
+            Assert.DoesNotContain("nesa", w.Text);
+        }
+
+        /// <summary>
+        /// The backward sentence scan's floor is akṣara-aware too — the fourth count-based cut, and the one
+        /// the issue's list missed.
+        ///
+        /// <para>When no danda lies within the 2,000-character scan cap behind a selection and no paragraph
+        /// opens in the gap, the expansion falls back to the raw scan floor. Fourteen books carry danda-free
+        /// runs past that cap — the Paṭṭhāna mūla files worst, the longest 19,010 characters — so a selection
+        /// inside one opened its window on an orphaned vowel sign. (fable review)</para>
+        /// </summary>
+        [Fact]
+        public void The_backward_scan_floor_does_not_open_mid_aksara()
+        {
+            // The word sits exactly one scan cap (2,000) behind the selection, so the floor lands on its
+            // vowel sign, and there is no danda and no paragraph opening in between.
+            string xml =
+                "<body><p rend=\"bodytext\" n=\"1\">"
+                + new string('\u0915', 2000)
+                + "\u092C\u0941\u0926\u094D\u0927\u0940"
+                + new string('\u0915', 2100)
+                + "</p></body>";
+
+            var markers = BookMarkers.Build(xml);
+            int from = TextStart(xml) + 4005;
+
+            var w = TeiPassageReader.ReadWindowAroundSelection(
+                xml, from, from + 1, maxChars: 100000, includeVariants: false,
+                outputScript: Script.Latin, markers, contextSentences: 1);
+
+            Assert.StartsWith("ddhī", w.Text);
+            Assert.False(w.Text.StartsWith("ī"));          // the stranded matra
+        }
     }
 }
