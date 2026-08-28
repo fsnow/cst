@@ -49,19 +49,35 @@ public sealed class LemmaSearchService : ILemmaSearchService
     /// path, not an exotic one.</para>
     ///
     /// <para>Normalizing BOTH branches through one method is the point: the two used to differ, and a
-    /// per-branch fix would have left them free to differ again. The steps mirror
-    /// <see cref="Dictionaries.DpdDictionarySource"/> and <c>DictionaryService</c>, which have always done
-    /// this — strip joiners (pasted text carries U+200C/U+200D), lower-case, compose.</para>
+    /// per-branch fix would have left them free to differ again.</para>
+    ///
+    /// <para><b>Order matters, and not in the obvious way.</b> Case-folding must happen AFTER conversion,
+    /// never before. <see cref="Script.Ipe"/> is this interface's declared default, and IPE encodes Pāli
+    /// letters in the Latin-1 <i>uppercase</i> block from U+00C0 (<c>Ipe2Latn</c>) — so
+    /// <c>ToLowerInvariant</c> on an IPE string shifts every letter 0x20 onto a <i>different IPE letter</i>
+    /// or onto nothing: IPE "dhammā" case-folded before conversion reads out as "übhmmm". An earlier draft
+    /// of this method folded first, mirroring <c>DpdDictionarySource</c>; that sibling folds <i>user text</i>
+    /// on its way INTO IPE and never folds IPE itself, so the resemblance was misleading. (fable review)</para>
+    ///
+    /// <para>The Latin branch round-trips through IPE rather than being handed straight to the lookup, so it
+    /// picks up the foldings every other Latin-input path already gets — notably <c>ṁ</c> (U+1E41) and
+    /// <c>ṃ</c> (U+1E43), which <c>Latn2Ipe</c> folds together as niggahita. Without it, <c>dhammaṁ</c>
+    /// resolves in the dictionary panel and reports "no lemma resolves this form" here.</para>
     /// </summary>
     private static string ToLookupKey(string word, Script sourceScript)
     {
-        var normalized = MultiWordSearch.StripJoiners(word).ToLowerInvariant().Normalize(NormalizationForm.FormC);
-        if (sourceScript == Script.Latin) return normalized;
+        // Joiners and surrounding space first. Every converter already drops ZWJ/ZWNJ, so stripping them
+        // here only changes the Latin branch — but doing it once keeps the two branches identical.
+        var stripped = MultiWordSearch.StripJoiners(word).Trim();
 
-        // Re-applied after conversion so the postcondition holds whatever a converter emits, rather than
-        // resting on the current converters happening to produce composed lower-case output.
-        return ScriptConverter.Convert(normalized, sourceScript, Script.Latin)
-            .ToLowerInvariant()
+        var latin = sourceScript == Script.Latin
+            ? stripped
+            : ScriptConverter.Convert(stripped, sourceScript, Script.Latin);
+
+        // Now it is Latin, so folding is safe. Fold before Any2Ipe: Latn2Ipe maps lower-case forms.
+        latin = latin.ToLowerInvariant();
+
+        return ScriptConverter.Convert(Any2Ipe.Convert(latin), Script.Ipe, Script.Latin)
             .Normalize(NormalizationForm.FormC);
     }
 

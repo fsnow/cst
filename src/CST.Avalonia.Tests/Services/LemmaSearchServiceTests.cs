@@ -114,6 +114,47 @@ public sealed class LemmaSearchServiceTests : IDisposable
         Assert.Null(svc.ResolveWord("Nota\u00F1\u00F1word", Script.Latin));
     }
 
+    // The regression the first draft of #868 introduced, caught in review. Script.Ipe is this interface's
+    // DECLARED DEFAULT, and IPE encodes Pāli letters in the Latin-1 *uppercase* block from U+00C0 — so
+    // case-folding before conversion shifts every letter onto a different IPE letter or onto nothing
+    // ("dhammā" read out as "übhmmm"). No production caller reaches the default today (REST rejects Ipe,
+    // MCP coerces it to Latin), which is exactly why the suite stayed green while the default path was
+    // broken. Derived through the converter rather than hard-coded, so this cannot drift from IPE itself.
+    [Fact]
+    public void ResolveWord_resolves_IPE_input_on_the_interfaces_default_script()
+    {
+        var svc = NewService(new FakeSearchService());
+        var ipe = ScriptConverter.Convert("pa\u00F1\u00F1\u0101ya", Script.Latin, Script.Ipe);
+
+        var r = svc.ResolveWord(ipe); // no sourceScript: the Script.Ipe default
+
+        Assert.NotNull(r);
+        Assert.True(r!.Candidates.Count > 1);
+    }
+
+    // Latn2Ipe folds ṁ (U+1E41) and ṃ (U+1E43) together as niggahita, so every other Latin-input path
+    // canonicalises them. Before the Latin branch round-tripped through IPE, `dhammaṁ` resolved in the
+    // dictionary panel and reported "no lemma resolves this form" here — the same silent-negative class
+    // as #868 itself. The fixture stores `paññaṃ` with U+1E43. (fable review)
+    [Theory]
+    [InlineData("pa\u00F1\u00F1a\u1E43")] // ṃ, as stored
+    [InlineData("pa\u00F1\u00F1a\u1E41")] // ṁ, the other spelling
+    public void ResolveWord_folds_both_spellings_of_niggahita(string word)
+    {
+        var svc = NewService(new FakeSearchService());
+
+        Assert.NotNull(svc.ResolveWord(word, Script.Latin));
+    }
+
+    // Surrounding whitespace survives IsNullOrWhiteSpace and used to miss the byte-exact lookup.
+    [Fact]
+    public void ResolveWord_ignores_surrounding_whitespace()
+    {
+        var svc = NewService(new FakeSearchService());
+
+        Assert.NotNull(svc.ResolveWord("  pa\u00F1\u00F1\u0101ya\t", Script.Latin));
+    }
+
     [Fact]
     public async Task ExpandAndSearch_builds_regex_alternation_and_maps_counts()
     {
