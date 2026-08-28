@@ -68,6 +68,52 @@ public sealed class LemmaSearchServiceTests : IDisposable
         Assert.True(r!.Candidates.Count > 1); // homograph
     }
 
+    // #868: DPD stores forms lower-case NFC and matches them byte-exact under BINARY collation, so any input
+    // this service fails to normalize comes back as "no lemma resolves this form" — indistinguishable from a
+    // word DPD genuinely does not cover. Latin is the REST and MCP default, so these are the common path, not
+    // an exotic one: `Dhammā` resolved nothing against the shipped asset while `dhammā` resolved 17 ways.
+    // Every case below must reach the same stored form, `paññāya`.
+    [Theory]
+    [InlineData("pa\u00F1\u00F1\u0101ya")]        // as stored: lower-case, NFC
+    [InlineData("Pa\u00F1\u00F1\u0101ya")]        // sentence-initial capital
+    [InlineData("PA\u00D1\u00D1\u0100YA")]        // all caps
+    [InlineData("pan\u0303n\u0303a\u0304ya")]     // NFD: n + combining tilde, a + combining macron
+    [InlineData("pa\u00F1\u00F1\u0101\u200Cya")] // pasted carrying a zero-width non-joiner
+    public void ResolveWord_normalizes_Latin_input_before_the_byte_exact_lookup(string word)
+    {
+        var svc = NewService(new FakeSearchService());
+
+        var r = svc.ResolveWord(word, Script.Latin);
+
+        Assert.NotNull(r);
+        Assert.True(r!.Candidates.Count > 1); // the same homograph the stored spelling resolves to
+    }
+
+    // The other half of #868: both branches normalize through one method, so a fix to one cannot leave the
+    // other behind. Round-trips through the converter rather than hard-coding Devanagari, so this keeps
+    // testing the service if the converter's output ever changes.
+    [Fact]
+    public void ResolveWord_still_resolves_a_non_Latin_script()
+    {
+        var svc = NewService(new FakeSearchService());
+        var deva = ScriptConverter.Convert("pa\u00F1\u00F1\u0101ya", Script.Latin, Script.Devanagari);
+
+        var r = svc.ResolveWord(deva, Script.Devanagari);
+
+        Assert.NotNull(r);
+        Assert.True(r!.Candidates.Count > 1);
+    }
+
+    // A word the asset genuinely does not carry must still answer "not found" — the fix must widen what
+    // resolves, not make everything resolve.
+    [Fact]
+    public void ResolveWord_still_returns_nothing_for_a_form_the_asset_does_not_carry()
+    {
+        var svc = NewService(new FakeSearchService());
+
+        Assert.Null(svc.ResolveWord("Nota\u00F1\u00F1word", Script.Latin));
+    }
+
     [Fact]
     public async Task ExpandAndSearch_builds_regex_alternation_and_maps_counts()
     {
