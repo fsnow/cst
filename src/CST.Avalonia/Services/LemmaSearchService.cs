@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Models;
-using CST.Avalonia.Search;
 using CST.Conversion;
 using CST.Lemma;
 
@@ -48,45 +46,27 @@ public sealed class LemmaSearchService : ILemmaSearchService
     /// NFD-decomposed input missed the same way. Latin is the REST and MCP default, so that was the common
     /// path, not an exotic one.</para>
     ///
-    /// <para>Normalizing BOTH branches through one method is the point: the two used to differ, and a
-    /// per-branch fix would have left them free to differ again.</para>
+    /// <para>Case, and only case. Latin display is capitalized <b>algorithmically</b>, so the app itself
+    /// puts capitalized Pāli on the screen that a reader can select and paste straight back into a lookup —
+    /// the input is our own output, not a hypothetical. Other input variants (decomposed codepoints, stray
+    /// joiners, the <c>ŋ</c> niggahita of the Rhys Davids dictionary) are deliberately NOT handled here:
+    /// none of them turned up in twenty years of CST4 in the wild, and chasing them adds machinery whose
+    /// own bugs are likelier than the inputs it guards against. (fsnow)</para>
     ///
-    /// <para><b>Order matters, and not in the obvious way.</b> Case-folding must happen AFTER conversion,
-    /// never before. <see cref="Script.Ipe"/> is this interface's declared default, and IPE encodes Pāli
-    /// letters in the Latin-1 <i>uppercase</i> block from U+00C0 (<c>Ipe2Latn</c>) — so
-    /// <c>ToLowerInvariant</c> on an IPE string shifts every letter 0x20 onto a <i>different IPE letter</i>
-    /// or onto nothing: IPE "dhammā" case-folded before conversion reads out as "übhmmm". An earlier draft
-    /// of this method folded first, mirroring <c>DpdDictionarySource</c>; that sibling folds <i>user text</i>
-    /// on its way INTO IPE and never folds IPE itself, so the resemblance was misleading. (fable review)</para>
-    ///
-    /// <para>The Latin branch round-trips through IPE rather than being handed straight to the lookup, so it
-    /// picks up the foldings every other Latin-input path already gets — notably <c>ṁ</c> (U+1E41) and
-    /// <c>ṃ</c> (U+1E43), which <c>Latn2Ipe</c> folds together as niggahita. Without it, <c>dhammaṁ</c>
-    /// resolves in the dictionary panel and reports "no lemma resolves this form" here.</para>
+    /// <para><b>Fold case AFTER conversion, never before.</b> <see cref="Script.Ipe"/> is this interface's
+    /// declared default, and IPE encodes Pāli letters in the Latin-1 <i>uppercase</i> block from U+00C0
+    /// (<c>Ipe2Latn</c>) — so <c>ToLowerInvariant</c> on IPE shifts every letter onto a <i>different IPE
+    /// letter</i> or onto nothing, and IPE "dhammā" reads out as "übhmmm". An earlier draft folded first,
+    /// on the reasoning that it mirrored <c>DpdDictionarySource</c>; that sibling folds <i>user text</i> on
+    /// its way INTO IPE and never folds IPE itself. (fable review)</para>
     /// </summary>
     private static string ToLookupKey(string word, Script sourceScript)
     {
-        // Joiners, surrounding space, and COMPOSITION first. Composing before conversion rather than after
-        // is not a stylistic choice: the converters map precomposed characters, so decomposed input reaches
-        // them as pieces they do not recognise. `n` + U+0303 converts as IPE *dental* n followed by a loose
-        // combining tilde, where `ñ` converts as IPE U+00D2, the palatal — a different letter. Composing
-        // afterwards repairs the Latin spelling on the way out and hides that, but the IPE in between is
-        // still the wrong word, so anything keyed off it is wrong too: decomposed `paññaṁ` came out as
-        // U+1E41 instead of folding to U+1E43, and missed the lookup exactly as #868 described. Compose
-        // first and the converters see characters they can map. (Frank, reviewing the first fix)
-        var normalized = MultiWordSearch.StripJoiners(word).Trim().Normalize(NormalizationForm.FormC);
-
         var latin = sourceScript == Script.Latin
-            ? normalized
-            : ScriptConverter.Convert(normalized, sourceScript, Script.Latin);
+            ? word
+            : ScriptConverter.Convert(word, sourceScript, Script.Latin);
 
-        // Now it is certainly Latin, so folding is safe. Before Any2Ipe: Latn2Ipe maps lower-case forms.
-        latin = latin.ToLowerInvariant();
-
-        // No trailing Normalize: Ipe2Latn emits precomposed characters by construction (U+0101 for aa, and
-        // so on), so given composed input the result is composed. Re-normalizing here would be dead code
-        // that looked load-bearing — and while it WAS load-bearing, it was masking the bug above.
-        return ScriptConverter.Convert(Any2Ipe.Convert(latin), Script.Ipe, Script.Latin);
+        return latin.ToLowerInvariant();
     }
 
     public FormResolution? ResolveWord(string word, Script sourceScript = Script.Ipe)

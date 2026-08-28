@@ -68,18 +68,19 @@ public sealed class LemmaSearchServiceTests : IDisposable
         Assert.True(r!.Candidates.Count > 1); // homograph
     }
 
-    // #868: DPD stores forms lower-case NFC and matches them byte-exact under BINARY collation, so any input
-    // this service fails to normalize comes back as "no lemma resolves this form" — indistinguishable from a
-    // word DPD genuinely does not cover. Latin is the REST and MCP default, so these are the common path, not
-    // an exotic one: `Dhammā` resolved nothing against the shipped asset while `dhammā` resolved 17 ways.
-    // Every case below must reach the same stored form, `paññāya`.
+    // #868: DPD stores forms lower-case and matches them byte-exact under BINARY collation, so a capitalized
+    // word came back as "no lemma resolves this form" — indistinguishable from a word DPD does not cover.
+    // `Dhammā` resolved nothing against the shipped asset while `dhammā` resolved 17 ways.
+    //
+    // This is our OWN output coming back at us, which is what makes it worth fixing: Latin display is
+    // capitalized algorithmically, so the app puts capitalized Pāli on screen for a reader to select and
+    // paste into a lookup. Latin is also the REST and MCP default. Other input variants are deliberately
+    // out of scope — see ToLookupKey.
     [Theory]
-    [InlineData("pa\u00F1\u00F1\u0101ya")]        // as stored: lower-case, NFC
-    [InlineData("Pa\u00F1\u00F1\u0101ya")]        // sentence-initial capital
-    [InlineData("PA\u00D1\u00D1\u0100YA")]        // all caps
-    [InlineData("pan\u0303n\u0303a\u0304ya")]     // NFD: n + combining tilde, a + combining macron
-    [InlineData("pa\u00F1\u00F1\u0101\u200Cya")] // pasted carrying a zero-width non-joiner
-    public void ResolveWord_normalizes_Latin_input_before_the_byte_exact_lookup(string word)
+    [InlineData("pa\u00F1\u00F1\u0101ya")] // as stored
+    [InlineData("Pa\u00F1\u00F1\u0101ya")] // as the app itself displays it
+    [InlineData("PA\u00D1\u00D1\u0100YA")] // all caps
+    public void ResolveWord_case_folds_Latin_input_before_the_byte_exact_lookup(string word)
     {
         var svc = NewService(new FakeSearchService());
 
@@ -130,33 +131,6 @@ public sealed class LemmaSearchServiceTests : IDisposable
 
         Assert.NotNull(r);
         Assert.True(r!.Candidates.Count > 1);
-    }
-
-    // Latn2Ipe folds ṁ (U+1E41) and ṃ (U+1E43) together as niggahita, so every other Latin-input path
-    // canonicalises them. Before the Latin branch round-tripped through IPE, `dhammaṁ` resolved in the
-    // dictionary panel and reported "no lemma resolves this form" here — the same silent-negative class
-    // as #868 itself. The fixture stores `paññaṃ` with U+1E43. (fable review)
-    [Theory]
-    [InlineData("pa\u00F1\u00F1a\u1E43")]        // ṃ, as stored
-    [InlineData("pa\u00F1\u00F1a\u1E41")]        // ṁ, the other spelling
-    [InlineData("pa\u00F1\u00F1am\u0323")]       // ṃ decomposed
-    [InlineData("pa\u00F1\u00F1am\u0307")]       // ṁ decomposed — missed until composition moved ahead
-                                                   // of conversion; the converters only map precomposed
-                                                   // characters, so `m` + U+0307 never reached the fold
-    public void ResolveWord_folds_both_spellings_of_niggahita(string word)
-    {
-        var svc = NewService(new FakeSearchService());
-
-        Assert.NotNull(svc.ResolveWord(word, Script.Latin));
-    }
-
-    // Surrounding whitespace survives IsNullOrWhiteSpace and used to miss the byte-exact lookup.
-    [Fact]
-    public void ResolveWord_ignores_surrounding_whitespace()
-    {
-        var svc = NewService(new FakeSearchService());
-
-        Assert.NotNull(svc.ResolveWord("  pa\u00F1\u00F1\u0101ya\t", Script.Latin));
     }
 
     [Fact]
