@@ -388,7 +388,13 @@ namespace CST.Search
                 // has no danda in front of it, so a selection in the second sentence would get no context at
                 // all despite a whole sentence sitting right there. Falling back to the scan floor keeps that
                 // sentence and still bounds the front-matter case the cap exists for. (#672)
-                if (found < 0) return Math.Min(start, AdvanceToParagraph(xml, floor, start));
+                // The scan floor is a raw character count like the forward caps, so it can open a window
+                // mid-akṣara — the same orphaned vowel sign #871 fixes at the other three cuts. Reachable:
+                // 14 books carry danda-free runs past this cap, the longest 19,010 characters. Aligned
+                // against the SECTION start, not the floor, so the retreat cannot leave the section.
+                // (#871, fable review)
+                if (found < 0)
+                    return Math.Min(start, ClusterStart(xml, AdvanceToParagraph(xml, floor, start), limit));
                 boundary = found;
                 at = found;
             }
@@ -624,7 +630,16 @@ namespace CST.Search
         /// <para>Two rules, applied until neither fires: a combining mark AT the cut belongs to the character
         /// before it, and a virama immediately BEFORE the cut binds to the consonant that follows. Marks are
         /// recognised by Unicode category rather than by a Devanagari range, so a conjunct of any depth
-        /// unwinds without a table to keep current.</para>
+        /// unwinds without a table to keep current — and the virama is itself a mark, so a cut landing ON one
+        /// is already covered by the first rule.</para>
+        ///
+        /// <para><b>Never across markup.</b> The retreat crosses text characters only; it stops at a tag's
+        /// <c>&gt;</c> rather than stepping onto it. That is what keeps it from moving a cut across a note
+        /// boundary, and the alternative is worse than the bug: 23 places in the corpus carry a mark
+        /// immediately after a close tag (<c>&lt;hi rend="bold"&gt;…&lt;/hi&gt;</c> + niggahita), and one
+        /// opens a paragraph with a vowel sign, so stepping back would return a position INSIDE the tag and
+        /// the window would render the markup's own text. At those points the mark is left stranded, which is
+        /// what this reader did before. (fable review)</para>
         /// </summary>
         /// <param name="floor">Never retreat below this. The result may equal it; callers cutting a window
         /// must reject that themselves, since an empty window makes nextCursor point at its own start.</param>
@@ -632,8 +647,15 @@ namespace CST.Search
         {
             while (cut > floor)
             {
-                if (cut < xml.Length && IsCombining(xml[cut])) { cut--; continue; }
+                if (cut < xml.Length && IsCombining(xml[cut]) && xml[cut - 1] != '>') { cut--; continue; }
                 if (xml[cut - 1] == Virama) { cut--; continue; }
+
+                // The same bond written in the corpus's open form. A ZWJ between the virama and the consonant
+                // asks for the half-form rather than the stacked ligature, and it is not a rarity to reason
+                // about hypothetically: it sits in 15% of the corpus's viramas, concentrated in exactly the
+                // danda-free runs where these count-based cuts fire. (fable review)
+                if (xml[cut - 1] == Zwj && cut - 2 >= floor && xml[cut - 2] == Virama) { cut -= 2; continue; }
+
                 break;
             }
 
@@ -641,6 +663,7 @@ namespace CST.Search
         }
 
         private const char Virama = '\u094D';
+        private const char Zwj = '\u200D';
 
         private static bool IsCombining(char c) =>
             System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) is
