@@ -286,6 +286,7 @@ namespace CST.Avalonia.Services.Ai
             if (problem is not null) return AiConnectionResult.Fail(problem);
 
             if (DuplicateHeader(draft) is { } duplicate) return AiConnectionResult.Fail(duplicate);
+            if (DuplicateModel(draft) is { } repeated) return AiConnectionResult.Fail(repeated);
             if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
             if (UnfilledInput(id, draft) is { } unfilled) return AiConnectionResult.Fail(unfilled);
 
@@ -377,6 +378,7 @@ namespace CST.Avalonia.Services.Ai
             if (Find(id) is not { } record) return AiConnectionResult.Fail($"No connection called '{id}'.");
 
             if (DuplicateHeader(draft) is { } duplicate) return AiConnectionResult.Fail(duplicate);
+            if (DuplicateModel(draft) is { } repeated) return AiConnectionResult.Fail(repeated);
             if (CollidingSecretHeader(draft) is { } collision) return AiConnectionResult.Fail(collision);
             if (UnfilledInput(id, draft) is { } unfilled) return AiConnectionResult.Fail(unfilled);
 
@@ -449,6 +451,29 @@ namespace CST.Avalonia.Services.Ai
             foreach (var header in draft.Headers.Where(h => !string.IsNullOrWhiteSpace(h.Name)))
                 if (!seen.Add(header.Name.Trim()))
                     return $"There are two {header.Name.Trim()} headers. Remove one.";
+
+            return null;
+        }
+
+        /// <summary>
+        /// Two model rows carrying one id, or null when there are none. (#870)
+        ///
+        /// <para>Ordinal and trimmed, because that is the comparison everything downstream makes: the models
+        /// tab keys its stored list by the id verbatim, and <see cref="EnableModel"/> resolves a toggle by an
+        /// ordinal match. Refused rather than silently collapsed because the reader typed both rows and only
+        /// they know which one they meant — a save that quietly dropped one would look like the sheet had
+        /// lost an edit.</para>
+        ///
+        /// <para>The same shape as <see cref="DuplicateHeader"/>, which the models never got: a repeated id
+        /// used to reach settings.json and then throw out of the models tab on every subsequent Settings
+        /// open, which is a lockout rather than a bad row.</para>
+        /// </summary>
+        private static string? DuplicateModel(AiConnectionDraft draft)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var model in draft.Models.Where(m => !string.IsNullOrWhiteSpace(m.Id)))
+                if (!seen.Add(model.Id.Trim()))
+                    return $"There are two {model.Id.Trim()} models. Remove one.";
 
             return null;
         }
@@ -585,6 +610,12 @@ namespace CST.Avalonia.Services.Ai
             if (string.IsNullOrWhiteSpace(modelId))
                 return AiConnectionResult.Fail("A model needs an id.");
 
+            // Trim ONCE, before the lookup. Looking up the untrimmed id and storing the trimmed one meant a
+            // provider listing whose id carries whitespace never matched what the last toggle had stored, so
+            // every toggle appended another record under the same trimmed id — a duplicate the models tab
+            // then threw on. (#870)
+            modelId = modelId.Trim();
+
             var model = record.Models.FirstOrDefault(
                 m => string.Equals(m.Id, modelId, StringComparison.Ordinal));
 
@@ -592,8 +623,8 @@ namespace CST.Avalonia.Services.Ai
             {
                 model = new AiModelRecord
                 {
-                    Id = modelId.Trim(),
-                    DisplayName = string.IsNullOrWhiteSpace(displayName) ? modelId.Trim() : displayName.Trim(),
+                    Id = modelId,
+                    DisplayName = string.IsNullOrWhiteSpace(displayName) ? modelId : displayName.Trim(),
                 };
                 record.Models.Add(model);
             }
