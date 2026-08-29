@@ -176,6 +176,84 @@ public sealed class ApplicationStateRecoveryTests : IDisposable
         Assert.Equal("mn1.xml", OpenBook(service.Current));
     }
 
+    // ---- the window preserve-aside opens (#877, fable review) ------------------------------------------
+
+    /// <summary>
+    /// A restore is written back to the primary file immediately, not left to the 60s timer.
+    ///
+    /// <para>Preserving the unreadable file is what makes this necessary, so porting preserve-aside without
+    /// it is worse than porting neither. The restore lives only in memory and does not mark the state dirty,
+    /// so nothing was scheduled to write it at all — and the primary file has just been moved away. A crash
+    /// in that window sends the next launch down the no-file path.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_restore_is_written_back_to_the_primary_file_at_once()
+    {
+        Directory.CreateDirectory(_backupDir);
+        File.WriteAllText(Path.Combine(_backupDir, "application-state-2026-08-28-10-00-00-000.json"),
+            StateNaming("sn1.xml"));
+        File.WriteAllText(_statePath, "{ broken");
+
+        using var service = Service();
+        await service.LoadStateAsync();
+
+        Assert.True(File.Exists(_statePath));
+        Assert.Contains("sn1.xml", File.ReadAllText(_statePath));
+    }
+
+    /// <summary>
+    /// No primary file but backups present is a recovery, not a first run.
+    ///
+    /// <para>The belt to the write-back's braces: the crash that lands here has already happened, and calling
+    /// it a first run loses the session a second time — then this process's own first save writes defaults as
+    /// the newest backup, poisoning the walk that would have found it.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_missing_state_file_with_backups_present_is_recovered_not_treated_as_a_first_run()
+    {
+        Directory.CreateDirectory(_backupDir);
+        File.WriteAllText(Path.Combine(_backupDir, "application-state-2026-08-28-10-00-00-000.json"),
+            StateNaming("an1.xml"));
+
+        using var service = Service();
+        await service.LoadStateAsync();
+
+        Assert.Equal("an1.xml", OpenBook(service.Current));
+    }
+
+    /// <summary>A genuine first run is still a first run — the guard above must not turn an empty backup
+    /// directory into a recovery attempt that reports something it did not find.</summary>
+    [Fact]
+    public async Task A_genuine_first_run_is_still_a_first_run()
+    {
+        using var service = Service();
+        await service.LoadStateAsync();
+
+        Assert.Empty(service.Current.BookWindows);
+        Assert.False(File.Exists(_statePath));
+    }
+
+    /// <summary>
+    /// A restored session DOES become the newest backup — only defaults must not.
+    ///
+    /// <para>Without this, hoisting the <c>_backupNextSave = false</c> above the backup walk would pass every
+    /// other test here while quietly suppressing the backup of the one state worth keeping.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_write_back_after_a_restore_does_leave_a_backup()
+    {
+        Directory.CreateDirectory(_backupDir);
+        File.WriteAllText(Path.Combine(_backupDir, "application-state-2026-08-28-10-00-00-000.json"),
+            StateNaming("kn1.xml"));
+        File.WriteAllText(_statePath, "{ broken");
+
+        using var service = Service();
+        await service.LoadStateAsync();
+
+        Assert.Equal(2, Backups().Length);
+        Assert.Contains(Backups(), b => File.ReadAllText(b).Contains("kn1.xml"));
+    }
+
     // ---- a change landing mid-save (#879) --------------------------------------------------------------
 
     /// <summary>
