@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using CST.Lemma;
 
 namespace CST.Avalonia.Services;
@@ -22,16 +20,6 @@ public sealed class ReopenableLemmaProvider : ILemmaProvider
     private readonly object _gate = new();
     private ILemmaProvider _inner;
 
-    /// <summary>
-    /// Superseded inner providers, disposed only when this wrapper is.
-    ///
-    /// A caller can be mid-query on the previous instance when <see cref="Reopen"/> swaps it — every member
-    /// below reads the reference under the lock and then calls OUTSIDE it, so disposing eagerly would race a
-    /// live query into <c>ObjectDisposedException</c>. Retiring instead of disposing costs one idle SQLite
-    /// connection per reopen, and a reopen happens at most once or twice per session (an asset install).
-    /// </summary>
-    private readonly List<ILemmaProvider> _retired = new();
-
     public ReopenableLemmaProvider(string assetPath)
     {
         _assetPath = assetPath;
@@ -41,15 +29,32 @@ public sealed class ReopenableLemmaProvider : ILemmaProvider
     /// <summary>
     /// Rebuild the inner provider from the asset path — call after the asset has been installed and is live.
     /// Safe to call when the asset is still absent (the new inner is simply unavailable, as before).
+    ///
+    /// <para><b>The outgoing provider is disposed BEFORE the replacement is built, and the order is the fix.
+    /// </b> An update replaces the asset in place, which on macOS and Linux is a rename that succeeds over
+    /// open handles; the replacement provider then builds the same connection string, and Microsoft.Data.
+    /// Sqlite pools by connection string — so its first <c>Open()</c> was handed a pooled handle still bound
+    /// to the replaced file's old inode. The app logged the new asset active and went on serving the
+    /// superseded one, in lemma search and the dictionary panel alike, until the next launch. Clearing the
+    /// pool first means the replacement opens the file that is actually there. (#869)</para>
+    ///
+    /// <para>This used to retire the outgoing provider instead, holding it until the wrapper itself was
+    /// disposed, on the reasoning that a caller mid-query would meet <c>ObjectDisposedException</c>. That
+    /// does not apply to this provider: its <c>Dispose</c> only calls <c>SqliteConnection.ClearPool</c>,
+    /// which by contract leaves connections that are in use alone — they are discarded when they close
+    /// rather than returned to the pool — and the instance stays perfectly usable afterwards, merely
+    /// unpooled. So there was nothing to protect, and the protection was what kept the stale handles
+    /// alive.</para>
     /// </summary>
     public void Reopen()
     {
+        ILemmaProvider outgoing;
+        lock (_gate) outgoing = _inner;
+
+        try { outgoing.Dispose(); } catch { /* best effort — a failed pool clear must not block the swap */ }
+
         var fresh = new SqliteLemmaProvider(_assetPath);
-        lock (_gate)
-        {
-            _retired.Add(_inner);
-            _inner = fresh;
-        }
+        lock (_gate) _inner = fresh;
     }
 
     private ILemmaProvider Current
@@ -67,15 +72,8 @@ public sealed class ReopenableLemmaProvider : ILemmaProvider
 
     public void Dispose()
     {
-        List<ILemmaProvider> toDispose;
-        lock (_gate)
-        {
-            toDispose = new List<ILemmaProvider>(_retired) { _inner };
-            _retired.Clear();
-        }
-        foreach (var p in toDispose)
-        {
-            try { p.Dispose(); } catch { /* best effort — teardown */ }
-        }
+        ILemmaProvider inner;
+        lock (_gate) inner = _inner;
+        try { inner.Dispose(); } catch { /* best effort — teardown */ }
     }
 }

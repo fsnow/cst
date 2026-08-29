@@ -22,11 +22,17 @@ public sealed class SqliteLemmaProvider : ILemmaProvider
         if (string.IsNullOrEmpty(assetPath) || !File.Exists(assetPath))
             return; // IsAvailable stays false
 
+        // No Cache=Shared. A shared cache is keyed by FILE PATH, so after the delivery layer replaces this
+        // asset in place (File.Move over the live file — a POSIX rename, which succeeds over open handles),
+        // a brand-new connection opened on the same path attaches to the surviving shared pager, which is
+        // still bound to the replaced file's old inode. That pinned the superseded DPD data independently of
+        // the connection pool, and no amount of reopening shook it loose before a restart. It bought nothing
+        // here either: connections are short-lived and read-only, and shared cache adds cross-connection
+        // table locking between the GUI and the API for the privilege. (#869)
         var connString = new SqliteConnectionStringBuilder
         {
             DataSource = assetPath,
             Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Shared,
             Pooling = true,
         }.ToString();
 
