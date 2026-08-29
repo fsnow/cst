@@ -427,6 +427,13 @@ namespace CST.Avalonia.Services
         /// </summary>
         private readonly SemaphoreSlim _writeLock = new(1, 1);
 
+        // What this does NOT serialize, deliberately: MUTATION of _settings while a background save
+        // serializes it. A save from the timer, XmlUpdateService or IndexingService can enumerate an AI model
+        // list or ScriptFonts while the UI thread edits it, which throws InvalidOperationException — the save
+        // is lost and logged, the file stays intact, and the next save carries the change. Pre-existing and
+        // not worsened here (UI-initiated saves already serialize on the UI thread); named so it is not
+        // mistaken for something this lock covers. (fable review)
+
         public async Task SaveSettingsAsync()
         {
             await _writeLock.WaitAsync().ConfigureAwait(false);
@@ -509,7 +516,12 @@ namespace CST.Avalonia.Services
                 // Nothing of OURS to write — but a save started by the debounce timer or by a background
                 // flow can still be in flight, and this method is what shutdown awaits before letting the
                 // process exit. Returning here let it exit mid-write. Draining costs nothing when idle.
-                // (#878)
+                //
+                // Not airtight, and the gap is worth stating rather than implying away: a flush that has
+                // already cleared _savePending but not yet acquired the write lock is invisible here, so a
+                // concurrent shutdown drains a free semaphore and exits with that save between flag and
+                // lock. Bounded to that one save — the temp-file-plus-replace write means the file itself
+                // is never torn. (#878, fable review)
                 await _writeLock.WaitAsync().ConfigureAwait(false);
                 _writeLock.Release();
                 return;

@@ -1827,69 +1827,39 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
 
         
         /// <summary>
-        /// Install a new global logger and DISPOSE the one it replaces. (#882)
+        /// Apply a new log level. Moves the one <see cref="App.LogLevelSwitch"/>; builds nothing. (#882)
         ///
-        /// <para>The outgoing pipeline's rolling file sink keeps today's log file open, and Serilog's file
-        /// sink defaults to exclusive access (<c>shared: false</c>) — so on Windows the incoming logger's
-        /// file sink cannot open the same file, and file logging dies silently for the rest of the session
-        /// the moment the reader changes the log level. The Logging panel still looks like it worked,
-        /// because the console sink is unaffected. macOS and Linux take no exclusive lock, which is why
-        /// development never saw it.</para>
+        /// <para>This used to rebuild the global logger, which failed two ways. Serilog's file sink defaults
+        /// to exclusive access, so on Windows the replacement could not open the log file the original still
+        /// held and file logging died silently for the session — with the panel looking like it worked,
+        /// because the console sink was unaffected. Disposing the original to free that handle is worse: an
+        /// <c>ILogger</c> captured at construction is bound to the pipeline it came from, and this app
+        /// captures 20+ of them plus every MEL <c>ILogger&lt;T&gt;</c> the container injects, so disposal
+        /// stops THEIR file output on every platform. Both land the moment the reader changes the log level,
+        /// which is the moment they are trying to gather diagnostics.</para>
         ///
-        /// <para><b>Dispose AFTER the swap, never before.</b> Disposing first leaves a window with no logger
-        /// at all, and Serilog's answer to that is a silent no-op logger rather than an error — so anything
-        /// logged in between would simply not exist. Split out so a test can pin that ordering without
-        /// standing up the whole developer-settings view model.</para>
+        /// <para>A switch has neither problem and does something neither version managed: loggers already
+        /// captured honour the new level at once, rather than keeping the level they were built with.
+        /// (fable review)</para>
         /// </summary>
-        internal static void SwapGlobalLogger(Serilog.ILogger fresh)
+        private void ReconfigureLogger(string logLevel) => ApplyLogLevel(logLevel);
+
+        /// <summary>The whole of it. Split out only so a test can drive the real path rather than the switch
+        /// directly — a test that moves the switch itself passes whatever this method does.</summary>
+        internal static void ApplyLogLevel(string? logLevel) =>
+            App.LogLevelSwitch.MinimumLevel = ParseLogLevel(logLevel);
+
+        /// <summary>The persisted level name as a Serilog level; anything unrecognised reads as Information,
+        /// matching <c>SettingsValidator</c>'s own repair of a bad value.</summary>
+        internal static Serilog.Events.LogEventLevel ParseLogLevel(string? logLevel) => logLevel switch
         {
-            var replaced = Log.Logger;
-            Log.Logger = fresh;
-            (replaced as IDisposable)?.Dispose();
-        }
+            "Debug" => Serilog.Events.LogEventLevel.Debug,
+            "Information" => Serilog.Events.LogEventLevel.Information,
+            "Warning" => Serilog.Events.LogEventLevel.Warning,
+            "Error" => Serilog.Events.LogEventLevel.Error,
+            "Fatal" => Serilog.Events.LogEventLevel.Fatal,
+            _ => Serilog.Events.LogEventLevel.Information
+        };
 
-        private void ReconfigureLogger(string logLevel)
-        {
-            try
-            {
-                // Convert string to Serilog LogEventLevel
-                var serilogLevel = logLevel switch
-                {
-                    "Debug" => Serilog.Events.LogEventLevel.Debug,
-                    "Information" => Serilog.Events.LogEventLevel.Information,
-                    "Warning" => Serilog.Events.LogEventLevel.Warning,
-                    "Error" => Serilog.Events.LogEventLevel.Error,
-                    "Fatal" => Serilog.Events.LogEventLevel.Fatal,
-                    _ => Serilog.Events.LogEventLevel.Information
-                };
-
-                // Get the logs directory
-                var appSupportDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    AppConstants.AppDataDirectoryName);
-                var logsDir = Path.Combine(appSupportDir, "logs");
-                
-                // Ensure logs directory exists
-                if (!Directory.Exists(logsDir))
-                {
-                    Directory.CreateDirectory(logsDir);
-                }
-                
-                var logPath = Path.Combine(logsDir, "cst-avalonia-.log");
-
-                SwapGlobalLogger(new Serilog.LoggerConfiguration()
-                    .MinimumLevel.Is(serilogLevel)
-                    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
-                    .WriteTo.File(logPath, 
-                        rollingInterval: Serilog.RollingInterval.Day,
-                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
-                    .Enrich.FromLogContext()
-                    .CreateLogger());
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to reconfigure logger");
-            }
-        }
     }
 }

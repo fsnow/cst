@@ -28,8 +28,9 @@ public class ApplicationState
     /// member on each of them, and the root is where new sections actually land — so this is the whole of the
     /// cheap half, deliberately, not an oversight.</para>
     ///
-    /// <para>Never written by this build (nothing sets it), so an ordinary file gains nothing. Null when
-    /// empty, and <c>WhenWritingDefault</c> keeps it out of the output.</para>
+    /// <para>Never written by this build (nothing sets it), so an ordinary file gains nothing: a null
+    /// extension-data member is skipped by System.Text.Json itself, independently of any ignore
+    /// condition the options do or do not set.</para>
     /// </summary>
     [System.Text.Json.Serialization.JsonExtensionData]
     public System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>? UnknownProperties { get; set; }

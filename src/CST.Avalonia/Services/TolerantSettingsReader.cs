@@ -138,6 +138,11 @@ internal static class TolerantSettingsReader
         JsonElement element, Type type, string path, JsonSerializerOptions options, List<string> dropped)
     {
         var instance = Activator.CreateInstance(type)!;
+
+        // NOTE: this walks the TYPE's properties, so a [JsonExtensionData] member (#883) is not populated
+        // here — a file from a newer build that also fails a strict read loses its unknown keys on salvage.
+        // Bounded rather than fixed: the original file is copy-preserved before the salvage is written over
+        // it, so the keys still exist on disk. (fable review)
         foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (!property.CanWrite || property.GetIndexParameters().Length > 0) continue;
@@ -184,10 +189,16 @@ internal static class TolerantSettingsReader
                     if (converted is not null) property.SetValue(instance, converted);
                     continue;
                 }
-                catch (JsonException)
+                catch (Exception ex) when (ex is JsonException or NotSupportedException)
                 {
                     // The converter could not read it either. Fall through and take it apart, which is what
                     // this class is for; whatever is then dropped is reported as usual.
+                    //
+                    // NotSupportedException as well as JsonException, matching Node()'s catch for the very
+                    // same Deserialize call one branch below — a converter refusing the shape outright
+                    // throws NSE, and this method's caller catches only JsonException, so letting one
+                    // escape would abort the WHOLE salvage and fall through to the backups. That is worse
+                    // than not having tried the converter at all. (fable review)
                 }
             }
 

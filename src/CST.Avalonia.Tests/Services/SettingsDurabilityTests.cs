@@ -90,6 +90,12 @@ public sealed class SettingsDurabilityTests : IDisposable
             json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }, out var dropped);
 
         Assert.NotNull(salvaged);
+
+        // The premise, asserted rather than assumed: displayName IS what failed, so this record really was
+        // taken apart property-by-property. Without this the test would pass vacuously the day something
+        // makes the whole record deserialize again, pinning nothing. (fable review)
+        Assert.Contains(dropped, d => d.Contains("DisplayName", StringComparison.OrdinalIgnoreCase));
+
         var connection = Assert.Single(salvaged!.Ai.Chat.Connections);
         Assert.Equal(2, connection.Headers.Count);
         Assert.Contains(connection.Headers, h => h.Name == "X-Org" && h.Value == "acme");
@@ -250,59 +256,100 @@ public sealed class SettingsDurabilityTests : IDisposable
         Assert.DoesNotContain("Verbose", File.ReadAllText(SettingsPath));
     }
 
-    // ---- the logger swap (#882) ------------------------------------------------------------------------
-
-    /// <summary>A sink that records its own disposal, and what the global logger was at that moment.</summary>
-    private sealed class DisposeSpySink : Serilog.Core.ILogEventSink, IDisposable
+    /// <summary>
+    /// The state store's twin of the guard above: a newer <c>application-state.json</c> is not marked dirty
+    /// on load, so nothing schedules the rewrite that would shed what the newer build added.
+    /// </summary>
+    [Fact]
+    public async Task A_newer_state_file_is_not_marked_dirty_on_load()
     {
+        var stateDir = Path.Combine(_dir, "state-newer");
+        Directory.CreateDirectory(stateDir);
+        File.WriteAllText(Path.Combine(stateDir, "application-state.json"),
+            """{ "version": "9.9", "mainWindow": { "width": -5 } }""");
+
+        using var service = new ApplicationStateService(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ApplicationStateService>.Instance, stateDir);
+        await service.LoadStateAsync();
+
+        // Sanitize DID repair the impossible width in memory, and that repair is what used to mark it dirty.
+        Assert.True(service.Current.MainWindow.Width > 0);
+        Assert.False(service.IsDirty);
+    }
+
+    // ---- the log level (#882) --------------------------------------------------------------------------
+
+    /// <summary>A sink that records what reached it, and whether it was ever disposed.</summary>
+    private sealed class RecordingSink : Serilog.Core.ILogEventSink, IDisposable
+    {
+        public System.Collections.Generic.List<string> Messages { get; } = new();
         public bool Disposed { get; private set; }
-        public Serilog.ILogger? GlobalLoggerWhenDisposed { get; private set; }
 
-        public void Emit(Serilog.Events.LogEvent logEvent) { }
+        public void Emit(Serilog.Events.LogEvent logEvent) =>
+            Messages.Add(logEvent.RenderMessage());
 
-        public void Dispose()
-        {
-            Disposed = true;
-            GlobalLoggerWhenDisposed = Serilog.Log.Logger;
-        }
+        public void Dispose() => Disposed = true;
     }
 
     /// <summary>
-    /// Replacing the global logger disposes the one it replaces, and does so AFTER the swap.
+    /// Changing the log level keeps every logger already captured working, and applies to them at once.
     ///
-    /// <para>The outgoing pipeline's rolling file sink keeps today's log file open, and Serilog's file sink
-    /// defaults to exclusive access — so on Windows the incoming logger's file sink cannot open the same
-    /// file and file logging dies silently for the rest of the session, the moment the reader changes the
-    /// log level. Disposing releases the handle. This runs on macOS, where the lock does not exist, so what
-    /// it pins is the disposal itself rather than the Windows symptom.</para>
+    /// <para><b>This is the test that would have caught the first attempt at #882.</b> That one rebuilt the
+    /// global logger and disposed the one it replaced — which frees the Windows file handle, but an
+    /// <c>ILogger</c> captured at construction is bound to the pipeline it came from, and this app captures
+    /// 20+ of them plus every MEL <c>ILogger&lt;T&gt;</c> the container injects. Disposing stops THEIR file
+    /// output silently, on every platform, while the console sink goes on working and hides it. The very next
+    /// line of the level-changed handler is written through such a logger.</para>
     ///
-    /// <para>The ordering is the second half and is not decoration: disposing first leaves a window with no
-    /// logger at all, and Serilog answers that with a silent no-op logger rather than an error.</para>
+    /// <para>A level switch has neither the handle problem nor this one, and does something the rebuild never
+    /// could: a captured logger honours the new level immediately instead of keeping the one it was built
+    /// with.</para>
     /// </summary>
     [Fact]
-    public void Swapping_the_global_logger_disposes_the_one_it_replaces_after_the_swap()
+    public void Changing_the_level_reaches_loggers_captured_before_the_change()
     {
-        var spy = new DisposeSpySink();
-        var outgoing = new Serilog.LoggerConfiguration().WriteTo.Sink(spy).CreateLogger();
-        var incoming = new Serilog.LoggerConfiguration().CreateLogger();
-        var saved = Serilog.Log.Logger;
+        var sink = new RecordingSink();
+        var pipeline = new Serilog.LoggerConfiguration()
+            .MinimumLevel.ControlledBy(CST.Avalonia.App.LogLevelSwitch)
+            .WriteTo.Sink(sink)
+            .CreateLogger();
 
+        var saved = Serilog.Log.Logger;
+        var savedLevel = CST.Avalonia.App.LogLevelSwitch.MinimumLevel;
         try
         {
-            Serilog.Log.Logger = outgoing;
+            Serilog.Log.Logger = pipeline;
+            CST.Avalonia.ViewModels.DeveloperSettingsViewModel.ApplyLogLevel("Information");
 
-            CST.Avalonia.ViewModels.DeveloperSettingsViewModel.SwapGlobalLogger(incoming);
+            // Captured BEFORE the change, the way every service's _logger field is.
+            var captured = Serilog.Log.ForContext<SettingsDurabilityTests>();
+            captured.Debug("before");                       // below the level: correctly absent
+            Assert.Empty(sink.Messages);
 
-            Assert.True(spy.Disposed);
-            Assert.Same(incoming, Serilog.Log.Logger);
-            Assert.Same(incoming, spy.GlobalLoggerWhenDisposed);   // swapped first, then disposed
+            CST.Avalonia.ViewModels.DeveloperSettingsViewModel.ApplyLogLevel("Debug");
+
+            captured.Debug("after");
+            Assert.Contains("after", sink.Messages);
+            Assert.False(sink.Disposed);                    // nothing was torn down to achieve it
         }
         finally
         {
+            CST.Avalonia.App.LogLevelSwitch.MinimumLevel = savedLevel;
             Serilog.Log.Logger = saved;
-            incoming.Dispose();
+            pipeline.Dispose();
         }
     }
+
+    /// <summary>The level names the Settings panel offers all map to a real Serilog level, and anything else
+    /// reads as Information — the same repair <c>SettingsValidator</c> makes to a bad stored value.</summary>
+    [Theory]
+    [InlineData("Debug", Serilog.Events.LogEventLevel.Debug)]
+    [InlineData("Warning", Serilog.Events.LogEventLevel.Warning)]
+    [InlineData("Fatal", Serilog.Events.LogEventLevel.Fatal)]
+    [InlineData("Verbose", Serilog.Events.LogEventLevel.Information)]   // not one of ours
+    [InlineData(null, Serilog.Events.LogEventLevel.Information)]
+    public void A_level_name_maps_to_its_serilog_level(string? name, Serilog.Events.LogEventLevel expected) =>
+        Assert.Equal(expected, CST.Avalonia.ViewModels.DeveloperSettingsViewModel.ParseLogLevel(name));
 
     public void Dispose()
     {
