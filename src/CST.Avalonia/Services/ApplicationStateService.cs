@@ -50,6 +50,10 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
     
     private bool _suppressStateChangedEvents = false;
     private bool _isDirty = false;
+
+    /// <summary>Whether there are changes not yet written. Exposed for the tests that pin #879's ordering —
+    /// the flag is cleared when the snapshot is TAKEN, so a change arriving mid-save survives.</summary>
+    internal bool IsDirty { get { lock (_dirtyLock) return _isDirty; } }
     private readonly object _dirtyLock = new object();
     
     public void SetStateChangedEventsSuppression(bool suppress)
@@ -71,15 +75,22 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
     }
 
     public ApplicationStateService(ILogger<ApplicationStateService> logger)
+        : this(logger, Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            AppConstants.AppDataDirectoryName))
+    {
+    }
+
+    /// <summary>
+    /// Test seam: point the service at a temp directory instead of the real state file, the same seam
+    /// <c>SettingsService</c> has had. Its absence is why the load and recovery paths here had no coverage at
+    /// all while the settings side accumulated three suites — the asymmetry in the tests mirrored the
+    /// asymmetry in the code, and hid it. (#877)
+    /// </summary>
+    internal ApplicationStateService(ILogger<ApplicationStateService> logger, string appDataPath)
     {
         _logger = logger;
-        
-        // Use application data directory for state files
-        var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            AppConstants.AppDataDirectoryName
-        );
-        
+
         Directory.CreateDirectory(appDataPath);
         Directory.CreateDirectory(Path.Combine(appDataPath, "app-state-backups"));
         
@@ -128,19 +139,13 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         if (shouldSave)
         {
             _logger.LogDebug("Timer triggered: saving dirty state");
-            var success = await SaveStateAsync();
-            if (success)
-            {
-                lock (_dirtyLock)
-                {
-                    _isDirty = false;
-                }
+            // SaveStateAsync owns the flag now: it clears it when it takes the snapshot and re-sets it if
+            // the write fails. Clearing it again here would undo exactly the fix — a MarkDirty that landed
+            // mid-write would be wiped a second time. (#879)
+            if (await SaveStateAsync())
                 _logger.LogDebug("Timer save completed successfully");
-            }
             else
-            {
                 _logger.LogWarning("Timer save failed - state remains dirty");
-            }
         }
     }
 
@@ -150,6 +155,17 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         {
             if (!File.Exists(_stateFilePath))
             {
+                // No primary file is USUALLY a true first run — but not always, and the exception is the
+                // recovery path's own worst moment. PreserveUnreadable moves the file aside, and if the app
+                // is force-quit or crashes before the restore is written back, the next launch arrives here
+                // with backups sitting right there and would call it a first run: the restore evaporates and
+                // the reader loses the session a second time — then this process's own first save writes
+                // defaults as the newest backup, poisoning the walk that would have found it. Preserving the
+                // file is what opens this window, so porting preserve-aside without this is worse than
+                // neither. The same guard SettingsService has. (#877, fable review)
+                if (GetBackupFilePaths().Length > 0 && await TryLoadFromBackupAsync().ConfigureAwait(false))
+                    return true;
+
                 _logger.LogInformation("No state file found, using default state");
                 return true;
             }
@@ -159,8 +175,13 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
             
             if (state == null)
             {
-                _logger.LogWarning("Failed to deserialize state file, using default state");
-                return false;
+                // Only a file holding the literal token `null` gets here — an empty or whitespace file
+                // THROWS ("The input does not contain any JSON tokens") and has always taken the catch. So
+                // this is not a bug being fixed: nothing writes such a file. It is a divergent path being
+                // removed, because returning here gave up without trying the backups, which no other
+                // unreadable file gets. Both cases are pinned in ApplicationStateRecoveryTests. (#877)
+                _logger.LogWarning("State file deserialized to null");
+                return await RecoverAsync().ConfigureAwait(false);
             }
 
             // Migrate older/missing-version files, then repair any invalid values in place (#78).
@@ -185,16 +206,69 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load application state from {FilePath}", _stateFilePath);
-            
-            // Try to load from backup
-            var backupLoaded = await TryLoadFromBackupAsync();
-            if (!backupLoaded)
-            {
-                _logger.LogWarning("Using default application state");
-                Current = new ApplicationState();
-            }
-            
-            return backupLoaded;
+            return await RecoverAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// What to do with a state file we could not read: keep it, try the backups, and if nothing is
+    /// recoverable install defaults in a way that does not destroy the next attempt. (#877)
+    ///
+    /// <para>Everything here is what <c>SettingsService</c> has done since #785 and this file never
+    /// received. The loss is a session rather than hand-built configuration — open books, reading positions,
+    /// tree expansion — which is why it took longer to matter, not why it does not.</para>
+    /// </summary>
+    private async Task<bool> RecoverAsync()
+    {
+        // Keep the file itself. Nothing else does: the very next save — the 60s timer, or the shutdown
+        // ForceSaveAsync, which saves unconditionally — writes over the only copy, and the reader's session
+        // is gone with no way back even by hand.
+        PreserveUnreadable();
+
+        if (await TryLoadFromBackupAsync().ConfigureAwait(false))
+            return true;
+
+        // Nothing recoverable. Defaults — and this save must NOT leave a backup.
+        //
+        // A backup is written before every save, so without the flag the defaults become the NEWEST backup;
+        // TryLoadFromBackupAsync stops at the first file that deserializes, so from then on defaults win
+        // every launch and the reader's real session — one file below, perfectly readable — is never
+        // reached. The expected trigger is a persisted-type change, which breaks the primary file and the
+        // recent backups together, so this is the ordinary case rather than a corner of it. SettingsService
+        // guards exactly this and names the same trigger. (#877)
+        _logger.LogWarning("Using default application state");
+        Current = new ApplicationState();
+        _backupNextSave = false;
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the NEXT save should leave a backup. False for exactly one save: the defaults written when no
+    /// backup could be read, which must not become the newest backup. (#877)
+    /// </summary>
+    private bool _backupNextSave = true;
+
+    /// <summary>Move an unreadable state file aside under a timestamped name, so a save cannot destroy it.
+    /// Milliseconds, like the backup names: two failed loads in one second must not collide. (#877)</summary>
+    private void PreserveUnreadable()
+    {
+        try
+        {
+            if (!File.Exists(_stateFilePath)) return;
+
+            var kept = Path.Combine(
+                Path.GetDirectoryName(_stateFilePath)!,
+                $"application-state.unreadable-{DateTime.Now:yyyyMMdd-HHmmss-fff}.json");
+
+            File.Move(_stateFilePath, kept, overwrite: false);
+
+            _logger.LogError(
+                "The previous application state could not be read and has been kept at {Path}. "
+                + "Nothing from it was deleted.", kept);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not preserve the unreadable application state file");
         }
     }
 
@@ -237,13 +311,23 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
             return false;
         }
 
+        // The snapshot above is what this save will write, so THIS is the moment the dirty flag describes.
+        // The callers used to clear it after the write returned, which discarded any MarkDirty that landed
+        // in between: that change was not in the snapshot and was no longer marked, so it stayed unsaved
+        // until something else happened to mark the state dirty again. Clearing here instead means a change
+        // arriving mid-write leaves the state dirty and the next timer tick picks it up. Re-set on failure,
+        // so a save that did not happen does not clear anything. (#879)
+        lock (_dirtyLock) _isDirty = false;
+
         // One save at a time. ConfigureAwait(false) throughout so the synchronous shutdown wait
         // (Dispose -> task.Wait) can't deadlock by capturing the UI context. (#62, STATE-2)
         await _saveLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            // Back up the same snapshot we're about to write (no second serialize -> no second race).
-            await WriteBackupAsync(json).ConfigureAwait(false);
+            // Back up the same snapshot we're about to write (no second serialize -> no second race) —
+            // unless this is the defaults save that followed an unreadable file. See _backupNextSave. (#877)
+            if (_backupNextSave) await WriteBackupAsync(json).ConfigureAwait(false);
+            _backupNextSave = true;
 
             // Write to a temp file first, then atomically replace.
             var tempPath = _stateFilePath + ".tmp";
@@ -280,6 +364,8 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
                 _logger.LogWarning(cleanupEx, "Failed to clean up temporary file");
             }
 
+            // Nothing was written, so the state is still unsaved and must stay marked. (#879)
+            lock (_dirtyLock) _isDirty = true;
             return false;
         }
         finally
@@ -537,7 +623,22 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
                         Current = state;
                         FireStateChangedEvent();
 
-                        _logger.LogInformation("Loaded application state from backup: {BackupPath}", backupPath);
+                        // The timestamp, and no claim beyond it: the newest READABLE backup can be older
+                        // than the file that failed, so "nothing was lost" would be a guess stated as fact.
+                        _logger.LogInformation(
+                            "Application state was restored from the backup taken at {Taken} ({BackupPath}).",
+                            File.GetLastWriteTime(backupPath), backupPath);
+
+                        // Written back NOW, not left to the 60s timer. Until a primary file exists again the
+                        // recovery lives only in memory, and the restore does not mark the state dirty — so
+                        // nothing was scheduled to write it at all. A crash in that window sends the next
+                        // launch down the no-file path with the primary already moved aside. A restore that
+                        // has to survive a race to count is not a restore; the guard on that path is the
+                        // belt, this is the braces. (#877, fable review)
+                        //
+                        // _backupNextSave is still true here, correctly: the restored state SHOULD become
+                        // the newest backup. Only defaults must not.
+                        await SaveStateAsync().ConfigureAwait(false);
                         return true;
                     }
                 }
@@ -562,15 +663,8 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
     public async Task<bool> ForceSaveAsync()
     {
         _logger.LogInformation("Force saving application state");
-        var success = await SaveStateAsync();
-        if (success)
-        {
-            lock (_dirtyLock)
-            {
-                _isDirty = false;
-            }
-        }
-        return success;
+        // The flag is cleared inside SaveStateAsync, at the snapshot. See #879.
+        return await SaveStateAsync();
     }
     
     public void Dispose()
@@ -579,7 +673,18 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
         
         // Stop the timer
         _saveTimer?.Stop();
-        
+
+        // Drain a save that is already in flight before deciding anything.
+        //
+        // The dirty flag is now cleared when the snapshot is taken (#879), so an in-flight write no longer
+        // looks dirty — and this method used to drain it only by accident, by starting a redundant second
+        // save whose Wait blocked on the semaphore. Without this the process can tear down mid-write. The
+        // loss is bounded (temp file + File.Replace: an interrupted write loses that snapshot, never the
+        // file), and production force-saves before Dispose anyway — but the drain was real behaviour and
+        // should not disappear as a side effect of the flag fix. (fable review)
+        try { if (_saveLock.Wait(TimeSpan.FromSeconds(5))) _saveLock.Release(); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not drain an in-flight state save"); }
+
         // Force save any dirty state before disposal
         bool shouldSave = false;
         lock (_dirtyLock)
