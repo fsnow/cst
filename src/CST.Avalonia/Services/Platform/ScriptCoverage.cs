@@ -54,6 +54,22 @@ namespace CST.Avalonia.Services.Platform
             foreach (var rune in sample.EnumerateRunes())
             {
                 if (Rune.IsWhiteSpace(rune)) continue;
+
+                // Formatting characters are instructions to the shaper, not glyphs to draw, so a font that
+                // maps none of them can still render this text correctly - a conformant shaper hides a
+                // default-ignorable whether or not the font has a glyph for it. Asking for a cmap entry would
+                // demand more than rendering does, and could only ever exclude a working font.
+                //
+                // Live case: Deva2Sinh maps every virama to al-lakuna + ZWNJ (Deva2Sinh.cs:88), so U+200C
+                // reaches this loop for Sinhala and no other script. Whether ZWJ (U+200D) arrives too is a
+                // property of the probe PHRASE rather than of this code - Deva2Sinh rewrites the joiner
+                // before ya, before ra, and between kk (:158-164), and PaliSample happens to contain none of
+                // those three. That is the reason to filter by category here instead of naming U+200C: the
+                // requirement is derived from a sample, so what it demands must not change when the sample
+                // does. RepresentativeCodepoint already skips Format for its own reasons; this is the same
+                // rule, applied where the requirement is built rather than where one is chosen from it.
+                if (Rune.GetUnicodeCategory(rune) == UnicodeCategory.Format) continue;
+
                 if (!codepoints.Contains(rune.Value)) codepoints.Add(rune.Value);
             }
 

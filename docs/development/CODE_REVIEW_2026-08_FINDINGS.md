@@ -12,7 +12,7 @@ Deleted files are excluded — the CST4/MAUI removal (Aug 2026) accounts for mos
 
 **Status legend:** ✅ verified real · ❓ plausible, needs verification · ✖ rejected on verification
 
-> **What has since been fixed (2026-08-28).** All four HIGHs are merged. Each fix was reviewed by a second
+> **What has since been fixed (updated 2026-08-29).** All four HIGHs are merged, as is the whole of area R11. Each fix was reviewed by a second
 > Fable pass before merge, which found a defect in three of the four — recorded in the PR discussions.
 >
 > | Finding | Issue | Merged | Note |
@@ -22,7 +22,10 @@ Deleted files are excluded — the CST4/MAUI removal (Aug 2026) accounts for mos
 > | R5-1 + R4-3 | [#870](https://github.com/fsnow/cst/issues/870) | `7f721dd` | Guard + trim as prescribed, plus a first-wins repair in `SettingsValidator`: the models tab tolerating the pair repairs only the models tab, and the per-turn picker has no dedupe either. |
 > | R14-2 | [#871](https://github.com/fsnow/cst/issues/871) | `fa3d9e6` | Filed and fixed as HIGH (see the dissent below). **The third cut site named here is wrong:** `RawForwardCap`'s cut never ends a window — every selection end passes through `ExtendToSentenceEnd`, whose 4,000-char cap is the cut that lands. A *fourth* site the list missed, `WalkBackSentences`' scan floor, was fixed too. |
 >
-> **Everything else in this document is as written at review time** — the 26 MED and 51 LOW findings are
+> | R11-1 … R11-7 | [#877](https://github.com/fsnow/cst/issues/877)–[#883](https://github.com/fsnow/cst/issues/883) | `7d50ded`, `eb5eddb` | The whole area, filed as seven issues and fixed across two PRs: application-state recovery (preserve-aside, backup-before-defaults, dirty-flag) then settings durability (write serialization, converter-aware salvage, `ScriptFonts` re-seed, version guard). #882 (R11-6, the Serilog level swap) is **merged but reopened** pending verification on Windows — the symptom cannot be reproduced on macOS. |
+> | R15-1 | — | — | **✖ Rejected on verification.** Scanned every font on macOS and Windows: 0 of 11 Sinhala-capable faces omit U+200C. Fixed anyway as a LOW, for a different reason. See the resolution note in area R15. |
+>
+> **Everything else in this document is as written at review time** — the remaining MED and LOW findings are
 > unfixed and unfiled, and the fix order below is complete only through item 5.
 
 **Regenerate the scope:**
@@ -466,9 +469,48 @@ This area covers per-script font selection and coverage detection (`ScriptFontSe
 
 | # | Sev | File:line | Finding | Status |
 |---|---|---|---|---|
-| R15-1 | MED | `src/CST.Avalonia/Services/Platform/ScriptCoverage.cs:44-62`, `ScriptFontService.cs:154-157` | The Sinhala probe set includes ZWNJ: `Deva2Sinh.cs:88` maps every virama to virama+U+200C, and `CodepointsFor` filters only whitespace, so U+200C (a default-ignorable format control) lands in the required list and `Supports()` then demands a cmap glyph for it from every candidate font. A correct Sinhala font that omits the ZWNJ cmap entry — legal, since shapers render default-ignorables without a glyph — is silently excluded from the Windows/Linux picker, and if no installed font maps it the picker goes empty with "no font can render Sinhala" despite a working font being present; the same check also nulls `GetSystemDefaultFontForScript`. I could not produce a victim font (all three Sinhala-capable fonts on this machine map U+200C, and no test covers the case — `ScriptCoverageTests` asserts only `>= 0x80`, which U+200C passes), hence ❓. Fix: skip `UnicodeCategory.Format` in `CodepointsFor`, exactly as `RepresentativeCodepoint` (lines 76-84) already does. Sinhala is the only affected script — no other converter emits joiners into this sample. | ❓ |
+| R15-1 | MED | `src/CST.Avalonia/Services/Platform/ScriptCoverage.cs:44-62`, `ScriptFontService.cs:154-157` | The Sinhala probe set includes ZWNJ: `Deva2Sinh.cs:88` maps every virama to virama+U+200C, and `CodepointsFor` filters only whitespace, so U+200C (a default-ignorable format control) lands in the required list and `Supports()` then demands a cmap glyph for it from every candidate font. A correct Sinhala font that omits the ZWNJ cmap entry — legal, since shapers render default-ignorables without a glyph — is silently excluded from the Windows/Linux picker, and if no installed font maps it the picker goes empty with "no font can render Sinhala" despite a working font being present; the same check also nulls `GetSystemDefaultFontForScript`. I could not produce a victim font (all three Sinhala-capable fonts on this machine map U+200C, and no test covers the case — `ScriptCoverageTests` asserts only `>= 0x80`, which U+200C passes), hence ❓. Fix: skip `UnicodeCategory.Format` in `CodepointsFor`, exactly as `RepresentativeCodepoint` (lines 76-84) already does. Sinhala is the only affected script — no other converter emits joiners into this sample. **✖ Rejected on verification (2026-08-29) — see the resolution note below.** | ✖ |
 | R15-2 | LOW | `src/CST.Core/Conversion/Deva2Latn.cs:123-146`, `ScriptConverter.cs:112-113` | The #42 stylesheet-PI rewrite (`tipitaka-deva.xsl` → `tipitaka.xsl`) landed identically in twelve converters but not in the other two scripts: `Deva2Latn.ConvertBook` has no rewrite and the Devanagari branch returns the input unchanged, so Latin- and Devanagari-script documents still carry a PI naming a stylesheet that no longer ships while the other twelve now name the real one. Functionally inert today (the app transforms via `BookDisplayViewModel.cs:1464` and never resolves the PI — the change's own comment says so), but the comment's stated rationale ("a document should not name a file that no longer exists") is met for only 12 of 14 scripts, and any future PI consumer would behave differently by script. | ✅ |
 | R15-3 | LOW | `src/CST.Avalonia/Views/OpenBookPanel.axaml.cs:43` | `FocusBookTree` still resolves the tree with null-tolerant `this.FindControl<TreeView>("BookTreeView")` and returns silently on null, while the constructor (lines 21-24) was deliberately switched to the generated `BookTreeView` field with a comment naming exactly this pattern as the #658 failure mode ("a null-tolerant lookup here would silently detach"). A rename of the x:Name now breaks Cmd+O focus/scroll/highlight silently while the Enter handler fails loudly at compile time — the file enforces its own invariant in one of its two places. | ✅ |
+
+**R15-1 resolution (2026-08-29).** The premise — that a real Sinhala font omits U+200C — does not hold, on
+either shipping platform. Every font on both machines was scanned by reading its `cmap` directly (fontTools
+`getBestCmap`, the same test `TryGetGlyph` performs):
+
+| | faces scanned | omit U+200C | Sinhala-capable | of those, omit U+200C |
+|---|---|---|---|---|
+| macOS (Egret) | 784 | 400 (51%) | 5 | **0** |
+| Windows 11 ARM64 (Merlin) | 162 | 91 (56%) | 6 | **0** |
+
+Half of all faces omit ZWNJ and not one Indic-capable face does. There is a mechanism behind that: in Sinhala
+and Devanagari a joiner is not a mere default-ignorable but part of the script's shaping model — ZWNJ is what
+blocks conjunct formation to force the visible al-lakuna — so a vendor shipping Indic coverage maps it as a
+matter of course. The catastrophic branch needs more than one victim font anyway: the picker can only go empty
+if *every* Sinhala face omits ZWNJ, and on a base Windows 11 install the sole Sinhala family is Nirmala (six
+faces, all mapping it). Iskoola Pota is not present on Merlin — it arrives with the Sinhala language pack — so
+it is formally untested, but as a counterexample it could only cost one row in the picker, never empty it.
+Hunting a counterexample further is not worth a machine: a synthetic ZWNJ-less font would only demonstrate the
+code path we can already read, and the claim was about fonts that exist.
+
+**Two corrections to the finding as written**, both of which survive the font question because they are about
+the code rather than any machine:
+
+1. **The exposure is Sinhala-only, and the finding's own scope line is the accurate part.** Devanagari's
+   required list contains no joiner at all — the ZWNJ comes from `Deva2Sinh`'s virama rule, which no other
+   converter has. Any reading that puts Devanagari alongside Sinhala here is wrong; the mutation test on the
+   fix confirms it, failing on Sinhala's theory case and no other script's.
+2. **The requirement is derived from a probe phrase, so what it demands can change without anyone touching
+   the font logic.** `Deva2Sinh.cs:158-164` rewrites the joiner to **ZWJ (U+200D)** before *ya*, before *ra*,
+   and between *kk*; `PaliSample` (`mahāsatipaṭṭhānasuttaṃ`) happens to contain none of those three, so ZWJ has
+   never reached the required list — by accident of the phrase, not by design. Change the phrase and the
+   picker would start demanding a codepoint no survey has checked fonts for.
+
+**Fixed anyway** — `CodepointsFor` now skips `UnicodeCategory.Format`, as `RepresentativeCodepoint` already
+did — but for reason 2 rather than the one the finding gave: the fix makes the requirement independent of the
+sample it is derived from. Regraded **LOW**, and not a beta 6 blocker. Pinned by
+`No_font_is_asked_to_draw_a_formatting_character` (every renderable script, category-based so it catches ZWJ
+if the phrase ever changes) and `Sinhala_requires_its_virama_but_not_the_joiner_that_follows_it` (which also
+asserts the al-lakuna U+0DCA survives — dropping the joiner must not drop the mark).
 
 **Verified-solid (not findings):**
 - **Twelve converters**: `git diff` on all twelve `Deva2*.cs` shows byte-identical changes (same comment, same `Replace("tipitaka-deva.xsl", "tipitaka.xsl")`); changed lines are pure ASCII, complying with the `\uXXXX` rule. The target `src/CST.Avalonia/xsl/tipitaka.xsl` exists in the tree.
@@ -504,7 +546,7 @@ This area covers per-script font selection and coverage detection (`ScriptFontSe
 1. ~~**R13-2**~~ — live, trivially reachable, wrong answers to a reader today. **Done** (`df81e63`).
 2. ~~**R13-1 / R12-1**~~ — one fix; copy the pattern from `LexiconReader` next door. **Done** (`a8f02e7`).
 3. ~~**R5-1 + R4-3**~~ — the only finding that can lock a reader out of the UI that would let them recover. **Done** (`7f721dd`).
-4. **R11-2** — session data loss: defaults become the newest backup and permanently shadow the real state file. **Still open**, and the highest-value thing left in this document.
+4. ~~**R11-2**~~ — session data loss: defaults become the newest backup and permanently shadow the real state file. **Done** (`7d50ded`), with the rest of area R11.
 5. ~~**R14-2**~~ — see the severity dissent below. **Done** (`fa3d9e6`), filed as high.
 
 ### Severity dissent to settle at triage
@@ -545,7 +587,6 @@ Two secondary patterns:
 
 - **R11-6** (Serilog file-sink swap killing file logging) — needs **Placid or Merlin**; cannot be settled on macOS.
 - **R8-1** (Chromium title-length clamp bounding selection size) — needs an empirical test against the shipped CEF build.
-- **R15-1** (ZWNJ in the Sinhala coverage requirement) — needs a Sinhala font whose cmap lacks U+200C; all three on this machine map it.
 
 ### Housekeeping
 
