@@ -370,4 +370,51 @@ public class CstDockFactoryTests
         var middle = 1.0 - 0.25 - assistant.Proportion;
         Assert.True(middle / 2 > assistant.Proportion, "a split book would be narrower than the assistant");
     }
+
+    /// <summary>
+    /// A tool panel is recognised as one. (R9-1, #886)
+    ///
+    /// <para><b>This is the defect.</b> Both guards keeping tools out of the document tab area asked
+    /// <c>is Tool</c> — Dock's Mvvm class — and no panel in this app derives from it. Every one is a
+    /// <c>ReactiveTool</c>: a <c>ReactiveDockableBase</c> implementing <c>ITool</c>. So the guards were dead
+    /// for the exact case they were written for, and centre-dropping Search or the Dictionary onto the
+    /// document tabs docked it there as a tab.</para>
+    ///
+    /// <para>Against the old test this fails, which is the only reason it is worth having.</para>
+    /// </summary>
+    [Fact]
+    public void A_ReactiveTool_is_recognised_as_a_tool()
+    {
+        Assert.True(CstDockFactory.IsToolDockable(new CST.Avalonia.ViewModels.Dock.ReactiveTool()));
+    }
+
+    /// <summary>
+    /// A document is not, so books are untouched by the guards.
+    ///
+    /// <para>The half that must not regress: widening the test to catch tools must never start catching the
+    /// documents the document dock exists to hold. <c>ReactiveDocument</c> implements <c>IDocument</c> only —
+    /// whereas a <c>ReactiveTool</c> implements both, which is why this asks whether a thing IS a tool rather
+    /// than whether it is not a document.</para>
+    /// </summary>
+    [Fact]
+    public void A_ReactiveDocument_is_not_a_tool()
+    {
+        Assert.False(CstDockFactory.IsToolDockable(new CST.Avalonia.ViewModels.Dock.ReactiveDocument()));
+    }
+
+    /// <summary>A dock full of tools counts too — that half of the guard always worked, and must keep
+    /// working.</summary>
+    [Fact]
+    public void A_tool_dock_is_recognised_as_a_tool_dockable()
+    {
+        Assert.True(CstDockFactory.IsToolDockable(new CstDockFactory().CreateToolDock()));
+    }
+
+    /// <summary>Null is not a tool, rather than an exception on the drag path.</summary>
+    [Fact]
+    public void Null_is_not_a_tool()
+    {
+        Assert.False(CstDockFactory.IsToolDockable(null));
+    }
+
 }

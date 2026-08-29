@@ -202,7 +202,12 @@ namespace CST.Avalonia.Services
                             
                             // Prevent Tools and ToolDocks from being added to DocumentDock
                             // This handles the center-drop case that bypasses SplitToDock
-                            if (item is Tool || item is ToolDock)
+                            //
+                            // ITool, not Tool. Every panel here is a ReactiveTool - ReactiveDockableBase
+                            // implementing ITool - and none derives from Dock's Mvvm Tool class, so the
+                            // concrete test never matched and this guard was dead for the exact case it
+                            // was written for. The DOCK-7 rescue below gets this right. (R9-1, #886)
+                            if (IsToolDockable(item as IDockable))
                             {
                                 Log.Warning("*** Tool/ToolDock being added to DocumentDock - preventing tab docking ***");
                                 // Remove it and float it instead
@@ -1144,6 +1149,26 @@ namespace CST.Avalonia.Services
         }
         
         // Override split operations with simplified approach - let framework handle splits, then fix proportions
+        /// <summary>
+        /// Whether a dockable is a tool panel, or a dock full of them — the things this app keeps out of the
+        /// document tab area. (R9-1, #886)
+        ///
+        /// <para><b>Tested by interface, and that is the whole point.</b> Both guards used to ask
+        /// <c>is Tool</c>, meaning Dock's Mvvm <c>Tool</c> class. No panel here derives from it: every one is
+        /// a <see cref="ViewModels.Dock.ReactiveTool"/>, which is a <c>ReactiveDockableBase</c> implementing
+        /// <see cref="ITool"/>. So both guards were dead for exactly the case they existed for, and a
+        /// centre-drop tab-docked Search or the Dictionary into the document dock.</para>
+        ///
+        /// <para><c>ReactiveDocument</c> implements <c>IDocument</c> only, so books never match this. A
+        /// <c>ReactiveTool</c> implements BOTH interfaces — tools are documents too in this layout — which is
+        /// why the test asks specifically whether it is a tool rather than whether it is not a document.</para>
+        ///
+        /// <para>Extracted so it can be tested: the guards themselves end in <c>FloatDockable</c>, which
+        /// needs a host window and cannot run headless.</para>
+        /// </summary>
+        internal static bool IsToolDockable(IDockable? dockable) =>
+            dockable is ITool || dockable is IToolDock;
+
         public override void SplitToDock(IDock dock, IDockable dockable, DockOperation operation)
         {
             // Detailed logging for debugging drag operations
@@ -1155,7 +1180,10 @@ namespace CST.Avalonia.Services
             
             // Prevent Tools and ToolDocks from being docked into DocumentDock as tabbed documents
             // But allow split operations (Left, Right, Top, Bottom)
-            if ((dockable is Tool || dockable is ToolDock) && dock is DocumentDock)
+            // ITool/IToolDock rather than the concrete Mvvm classes - see the note on the
+            // collection-changed guard above. ReactiveDocument implements IDocument only, so books are
+            // untouched by this. (R9-1, #886)
+            if (IsToolDockable(dockable) && dock is IDocumentDock)
             {
                 // Check if this is a split operation (has direction) or tab operation
                 var operationStr = operation.ToString();
