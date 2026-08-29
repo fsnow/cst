@@ -1452,6 +1452,15 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// The one control over how much gets logged, for the life of the process. (#882)
+    ///
+    /// <para>Held here rather than passed around because the Settings panel changes it and the logger is
+    /// built here; a switch is the whole mechanism, so there is nothing else to share.</para>
+    /// </summary>
+    internal static readonly Serilog.Core.LoggingLevelSwitch LogLevelSwitch =
+        new(Serilog.Events.LogEventLevel.Information);
+
     private void ConfigureServices(IServiceCollection services)
     {
         // Configure logging with priority: Environment Variable > Saved Setting > Default.
@@ -1475,8 +1484,21 @@ public partial class App : Application
         
         var logPath = Path.Combine(logsDir, "cst-avalonia-.log");
         
+        // The level is a SWITCH, not a baked-in minimum, so changing it later needs no second logger. (#882)
+        //
+        // Rebuilding was the old answer, and it is wrong twice over. Serilog's file sink defaults to
+        // exclusive access, so on Windows the replacement could not open the log file the original still
+        // held and file logging died silently. Disposing the original to free that handle is worse: every
+        // `Log.ForContext<T>()` captured at construction — 20+ of them, plus every MEL ILogger<T> the DI
+        // container hands out — is bound to the pipeline it was made from, so disposing it silently stops
+        // THEIR file output, on every platform, while the console sink goes on working and hides it. Both
+        // failures land the moment the reader changes the log level, which is the moment they are trying to
+        // gather diagnostics. A switch has neither problem, and unlike either version it applies the new
+        // level to loggers already captured. (fable review)
+        LogLevelSwitch.MinimumLevel = logLevel;
+
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Is(logLevel)
+            .MinimumLevel.ControlledBy(LogLevelSwitch)
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(logPath, 
                 rollingInterval: RollingInterval.Day,

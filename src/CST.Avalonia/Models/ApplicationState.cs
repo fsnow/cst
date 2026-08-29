@@ -16,6 +16,26 @@ public class ApplicationState
     public string Version { get; set; } = "1.0";
     
     /// <summary>
+    /// Top-level properties this build does not know about, carried through a round-trip. (#883)
+    ///
+    /// <para><b>What it prevents:</b> a newer build adds a setting, the reader launches an older build once,
+    /// and the older build's next save rewrites the file without it. Silently — an unknown property is not an
+    /// error to System.Text.Json, it is simply dropped. Frank runs several builds across machines, so a
+    /// downgrade is a routine event rather than an accident.</para>
+    ///
+    /// <para><b>What it does not:</b> extension data is per-object, and this is the root only. A property a
+    /// newer build adds INSIDE a nested section still sheds. Covering every persisted type would mean this
+    /// member on each of them, and the root is where new sections actually land — so this is the whole of the
+    /// cheap half, deliberately, not an oversight.</para>
+    ///
+    /// <para>Never written by this build (nothing sets it), so an ordinary file gains nothing: a null
+    /// extension-data member is skipped by System.Text.Json itself, independently of any ignore
+    /// condition the options do or do not set.</para>
+    /// </summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>? UnknownProperties { get; set; }
+
+    /// <summary>
     /// Timestamp when state was last saved
     /// </summary>
     public DateTime LastSaved { get; set; } = DateTime.UtcNow;

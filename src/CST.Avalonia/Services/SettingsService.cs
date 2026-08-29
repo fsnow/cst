@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using CST.Avalonia.Constants;
 using CST.Avalonia.Models;
@@ -90,8 +91,18 @@ namespace CST.Avalonia.Services
                                 "Could not create the default XML books directory; settings were still loaded.");
                         }
 
-                        // Persist the upgraded/repaired settings so the on-disk file is brought up to date.
-                        if (notes.Count > 0 || fixes.Count > 0)
+                        // Persist the upgraded/repaired settings so the on-disk file is brought up to date —
+                        // unless this file came from a NEWER build, in which case writing it back is how the
+                        // reader loses whatever that build added.
+                        //
+                        // The "reading as-is" note counted toward "something changed", so merely launching an
+                        // older build rewrote the file in the older shape before the reader touched anything.
+                        // The note said as-is; the next line wrote it back reduced. Extension data (#883) now
+                        // carries unknown top-level properties through a round-trip, so a save the reader
+                        // actually asks for is no longer destructive — but a save nobody asked for is still
+                        // not something to do to a file we have just said we do not fully understand. (#883)
+                        if ((notes.Count > 0 || fixes.Count > 0)
+                            && !SettingsValidator.IsNewerThanSupported(_settings))
                             RequestSave();
                     }
                     else
@@ -399,8 +410,33 @@ namespace CST.Avalonia.Services
             _logger.Information("Set default XML directory: {Path}", xmlPath);
         }
 
+        /// <summary>
+        /// One save at a time. (#878)
+        ///
+        /// <para>Distinct from <c>_saveLock</c> below, which guards the debounce FLAG and nothing else — the
+        /// write itself was unserialized. Concurrent callers are ordinary, not hypothetical: the 750ms
+        /// debounce flushes on a pool thread while <c>XmlUpdateService</c> and <c>IndexingService</c> call
+        /// <see cref="SaveSettingsAsync"/> directly from background flows. Both writers used the same
+        /// <c>settings.json.tmp</c>, so A could finish writing the temp file, B truncate and start rewriting
+        /// it, and A's <c>File.Replace</c> promote B's half-written temp over the real file — or, on Windows,
+        /// one writer take an IOException and lose that save silently.</para>
+        ///
+        /// <para>The tolerant reader and the backup walk would recover from that, but they are the last
+        /// resort, not the design. <c>ApplicationStateService</c> has serialized its writes since STATE-2.
+        /// </para>
+        /// </summary>
+        private readonly SemaphoreSlim _writeLock = new(1, 1);
+
+        // What this does NOT serialize, deliberately: MUTATION of _settings while a background save
+        // serializes it. A save from the timer, XmlUpdateService or IndexingService can enumerate an AI model
+        // list or ScriptFonts while the UI thread edits it, which throws InvalidOperationException — the save
+        // is lost and logged, the file stays intact, and the next save carries the change. Pre-existing and
+        // not worsened here (UI-initiated saves already serialize on the UI thread); named so it is not
+        // mistaken for something this lock covers. (fable review)
+
         public async Task SaveSettingsAsync()
         {
+            await _writeLock.WaitAsync().ConfigureAwait(false);
             try
             {
                 // Ensure directory exists
@@ -438,6 +474,10 @@ namespace CST.Avalonia.Services
                 _logger.Error(ex, "Failed to save settings to {Path}", _settingsFilePath);
                 throw;
             }
+            finally
+            {
+                _writeLock.Release();
+            }
         }
 
         // --- Debounced save (#67) -----------------------------------------------------------------
@@ -472,7 +512,20 @@ namespace CST.Avalonia.Services
                 _savePending = false;
             }
             if (!shouldSave)
+            {
+                // Nothing of OURS to write — but a save started by the debounce timer or by a background
+                // flow can still be in flight, and this method is what shutdown awaits before letting the
+                // process exit. Returning here let it exit mid-write. Draining costs nothing when idle.
+                //
+                // Not airtight, and the gap is worth stating rather than implying away: a flush that has
+                // already cleared _savePending but not yet acquired the write lock is invisible here, so a
+                // concurrent shutdown drains a free semaphore and exits with that save between flag and
+                // lock. Bounded to that one save — the temp-file-plus-replace write means the file itself
+                // is never torn. (#878, fable review)
+                await _writeLock.WaitAsync().ConfigureAwait(false);
+                _writeLock.Release();
                 return;
+            }
             try
             {
                 await SaveSettingsAsync();

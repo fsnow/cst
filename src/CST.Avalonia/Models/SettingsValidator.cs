@@ -41,7 +41,7 @@ public static class SettingsValidator
 
         // --- ordered migration steps go here as the schema evolves ---
 
-        if (ApplicationStateValidator.CompareVersions(v, CurrentVersion) > 0)
+        if (IsNewerThanSupported(settings))
         {
             notes.Add($"settings version {v} is newer than supported {CurrentVersion}; reading as-is");
             return notes;
@@ -53,6 +53,18 @@ public static class SettingsValidator
         }
         return notes;
     }
+
+    /// <summary>
+    /// Whether this file was written by a build newer than this one. (#883)
+    ///
+    /// <para>Exposed so the load path can decline to write it back. "Reading as-is" was true of the read and
+    /// false of what followed: the note itself counted toward "something changed", which triggered a save —
+    /// so merely LAUNCHING an older build rewrote the file in the older shape, shedding whatever the newer
+    /// build had added, before the reader touched anything.</para>
+    /// </summary>
+    public static bool IsNewerThanSupported(Settings settings) =>
+        ApplicationStateValidator.CompareVersions(
+            string.IsNullOrWhiteSpace(settings?.Version) ? "0.0" : settings!.Version, CurrentVersion) > 0;
 
     /// <summary>
     /// Repair invalid settings in place (bad paths, unknown log level, non-positive font sizes, stray repo
@@ -193,6 +205,20 @@ public static class SettingsValidator
             fonts.ScriptFonts[key] = new ScriptFontSetting();
             fixes.Add($"script-font '{key}' was null; reset to default");
         }
+        // Put back any canonical script that is MISSING.
+        //
+        // The Appearance panel builds its rows by enumerating this dictionary, so a key dropped by a tolerant
+        // salvage or a hand-edit leaves that script with no font control at all — permanently, with no way
+        // back short of editing settings.json. Rendering itself falls back safely, so nothing looks broken;
+        // the control is simply not there. Seeded from FontSettings.DefaultScriptFonts so the two lists
+        // cannot drift. (#881)
+        foreach (var (key, value) in FontSettings.DefaultScriptFonts())
+        {
+            if (fonts.ScriptFonts.ContainsKey(key)) continue;
+            fonts.ScriptFonts[key] = value;
+            fixes.Add($"restored missing script-font key '{key}'");
+        }
+
         // Clamp non-positive sizes (mutates the value object only, never the dictionary itself).
         foreach (var kvp in fonts.ScriptFonts)
         {
