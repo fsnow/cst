@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using CST.Avalonia.Services.Platform;
 using CST.Conversion;
 using Xunit;
@@ -23,6 +25,13 @@ public class ScriptCoverageTests
     private const int ALongA = 0x0101;      // a with macron
     private const int TUnderdot = 0x1E6D;   // t with dot below
     private const int MUnderdot = 0x1E43;   // m with dot below
+
+    // Sinhala's al-lakuna and the two joiners that can follow it. Deva2Sinh maps every virama to al-lakuna +
+    // ZWNJ, then rewrites that joiner to ZWJ before ya, before ra, and between kk - so which joiner appears in
+    // any given phrase is a property of the phrase.
+    private const int SinhalaAlLakuna = 0x0DCA;
+    private const int Zwnj = 0x200C;
+    private const int Zwj = 0x200D;
 
     [Theory]
     [InlineData(Script.Latin)]
@@ -54,6 +63,48 @@ public class ScriptCoverageTests
         // Unknown is not a script and Ipe is the internal search encoding, never shown to a reader. Filtering
         // a font list for either would be inventing a requirement out of nothing.
         Assert.Empty(ScriptCoverage.CodepointsFor(script));
+    }
+
+    [Theory]
+    [InlineData(Script.Latin)]
+    [InlineData(Script.Devanagari)]
+    [InlineData(Script.Bengali)]
+    [InlineData(Script.Cyrillic)]
+    [InlineData(Script.Gujarati)]
+    [InlineData(Script.Gurmukhi)]
+    [InlineData(Script.Kannada)]
+    [InlineData(Script.Khmer)]
+    [InlineData(Script.Malayalam)]
+    [InlineData(Script.Myanmar)]
+    [InlineData(Script.Sinhala)]
+    [InlineData(Script.Telugu)]
+    [InlineData(Script.Thai)]
+    [InlineData(Script.Tibetan)]
+    public void No_font_is_asked_to_draw_a_formatting_character(Script script)
+    {
+        // A joiner instructs the shaper; it is not a glyph, and a font that omits it from its cmap can still
+        // render the text. Requiring one could only exclude a font that works.
+        //
+        // Written over every script rather than over Sinhala alone because the requirement is derived from the
+        // probe phrase: change PaliSample to something containing a virama before ya or ra, and Sinhala would
+        // start demanding ZWJ instead of ZWNJ - a codepoint no survey has ever checked fonts for. This fails
+        // when that happens, which is the point of testing the category rather than the two known joiners.
+        Assert.All(ScriptCoverage.CodepointsFor(script), cp =>
+            Assert.False(Rune.GetUnicodeCategory(new Rune(cp)) == UnicodeCategory.Format,
+                $"{script} would require U+{cp:X4}, a formatting character no font need draw."));
+    }
+
+    [Fact]
+    public void Sinhala_requires_its_virama_but_not_the_joiner_that_follows_it()
+    {
+        // Sinhala is the only script whose conversion emits a joiner at all, so it is the only one where the
+        // Format filter does any work today. Both halves matter: dropping the joiner must not also drop the
+        // al-lakuna, which is a real mark that a Sinhala font genuinely has to draw.
+        var codepoints = ScriptCoverage.CodepointsFor(Script.Sinhala);
+
+        Assert.Contains(SinhalaAlLakuna, codepoints);
+        Assert.DoesNotContain(Zwnj, codepoints);
+        Assert.DoesNotContain(Zwj, codepoints);
     }
 
     [Fact]
