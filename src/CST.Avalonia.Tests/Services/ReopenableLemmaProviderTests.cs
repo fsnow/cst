@@ -97,7 +97,8 @@ public sealed class ReopenableLemmaProviderTests : IDisposable
     /// <para>Note what this test does NOT do: clear the pools. The fixture used to, unconditionally, which is
     /// why this class had four passing tests and the bug shipped anyway.</para>
     /// </summary>
-    [Fact]
+    [UnixFact("File.Move over an open SQLite handle throws on Windows — which is exactly why the "
+        + "installer stages a .pending file there and does not raise AssetInstalled at all")]
     public void An_asset_replaced_mid_session_is_served_from_the_new_file()
     {
         var path = Path.Combine(_dir, "dpd-cst-subset.db");
@@ -126,7 +127,8 @@ public sealed class ReopenableLemmaProviderTests : IDisposable
     /// file's. Clearing the pool does not touch that. The connection here stands in for the ordinary case of
     /// a GUI lookup in flight while the install completes.</para>
     /// </summary>
-    [Fact]
+    [UnixFact("File.Move over an open SQLite handle throws on Windows — which is exactly why the "
+        + "installer stages a .pending file there and does not raise AssetInstalled at all")]
     public void A_shared_cache_connection_held_open_across_the_replacement_does_not_pin_it()
     {
         var path = Path.Combine(_dir, "dpd-cst-subset.db");

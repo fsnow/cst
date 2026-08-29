@@ -47,8 +47,17 @@ public sealed class LemmaReportService : ILemmaReportService
         if (!IsAvailable) return null;
         lock (_lock) { if (_cache.TryGet(lemmaId, out var hit) && hit is not null) return hit; }
 
+        // Which asset this is being assembled from, checked again before it is kept. Assembly awaits several
+        // corpus searches — seconds, which is the whole reason this cache exists — and an asset install
+        // landing inside that window clears the cache BEFORE this report arrives, so storing it unconditionally
+        // put a dossier built from the superseded asset back in an otherwise clean cache, version footer and
+        // all, until 32 other lemmas evicted it. The caller still gets what it asked for; it simply is not
+        // kept. (#869)
+        var builtFrom = _lemma.Meta?.DpdVersion;
+
         var report = await AssembleAsync(lemmaId, ct).ConfigureAwait(false);
-        if (report is not null) lock (_lock) _cache.Set(lemmaId, report);
+        if (report is not null && string.Equals(_lemma.Meta?.DpdVersion, builtFrom, StringComparison.Ordinal))
+            lock (_lock) _cache.Set(lemmaId, report);
         return report;
     }
 

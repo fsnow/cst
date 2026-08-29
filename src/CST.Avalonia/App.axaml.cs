@@ -784,7 +784,19 @@ public partial class App : Application
         if (updates is null)
             return;
         var provider = ServiceProvider?.GetService<CST.Lemma.ILemmaProvider>();
-        BindLemmaReopen(updates, provider, ServiceProvider?.GetService<Services.ILemmaReportService>());
+
+        // Resolved here rather than left optional, and complained about when it is missing — the same
+        // loudness the provider half already gets below, and for the same reason: this and the DI
+        // registration are edited in different places, and a registration renamed away would drop the
+        // dossier invalidation silently, leaving stale reports after an asset update with nothing to say so.
+        var reports = ServiceProvider?.GetService<Services.ILemmaReportService>();
+        if (reports is null)
+            Log.Error(
+                "No ILemmaReportService is registered, so cached lemma reports will NOT be invalidated when a "
+                + "dpd asset is installed: the reader keeps seeing the superseded asset's glosses and version "
+                + "for every lemma already visited, until restart (#869).");
+
+        BindLemmaReopen(updates, provider, reports);
     }
 
     /// <summary>
