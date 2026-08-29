@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CST.Avalonia.Services;
 
@@ -164,10 +165,47 @@ internal static class TolerantSettingsReader
                 continue;
             }
 
+            // A property with its own [JsonConverter] is read by that converter FIRST.
+            //
+            // Node() takes a Type, so the attribute — which lives on the property, not the type — was lost
+            // the moment we recursed. AiConnectionRecord.Headers is the live case: its converter reads the
+            // legacy dict-shaped form perfectly well on the strict path, but taken apart property-by-property
+            // the node is an object where a List is expected, which lands in the drop-the-collection branch.
+            // The salvage path was therefore strictly WEAKER than the strict path for any property carrying
+            // a converter — in the one mechanism whose whole job is to lose as little as possible, and a trap
+            // set for whoever adds the next converter. (#880)
+            if (ConverterFor(property) is { } converter)
+            {
+                try
+                {
+                    var byConverter = new JsonSerializerOptions(options);
+                    byConverter.Converters.Add(converter);
+                    var converted = json.Deserialize(property.PropertyType, byConverter);
+                    if (converted is not null) property.SetValue(instance, converted);
+                    continue;
+                }
+                catch (JsonException)
+                {
+                    // The converter could not read it either. Fall through and take it apart, which is what
+                    // this class is for; whatever is then dropped is reported as usual.
+                }
+            }
+
             var value = Node(json, property.PropertyType, $"{path}.{property.Name}", options, dropped);
             if (value is not null) property.SetValue(instance, value);
         }
         return instance;
+    }
+
+    /// <summary>The converter a property declares for itself, or null. Instantiated per call — a converter
+    /// added to a shared options instance would apply to the whole graph, not this property. (#880)</summary>
+    private static JsonConverter? ConverterFor(PropertyInfo property)
+    {
+        var attribute = property.GetCustomAttribute<JsonConverterAttribute>();
+        if (attribute?.ConverterType is null) return null;
+
+        try { return Activator.CreateInstance(attribute.ConverterType) as JsonConverter; }
+        catch { return null; }
     }
 
     private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)

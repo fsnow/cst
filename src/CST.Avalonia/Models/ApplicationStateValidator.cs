@@ -26,6 +26,14 @@ public static class ApplicationStateValidator
     private const double BookW = 800, BookH = 600;
 
     /// <summary>
+    /// Whether this file was written by a build newer than this one, so the load path can decline to write
+    /// it back. "Reading as-is" was true of the read and false of what followed. (#883)
+    /// </summary>
+    public static bool IsNewerThanSupported(ApplicationState state) =>
+        CompareVersions(
+            string.IsNullOrWhiteSpace(state?.Version) ? "0.0" : state!.Version, CurrentVersion) > 0;
+
+    /// <summary>
     /// Upgrade an older / missing-version state to <see cref="CurrentVersion"/>. Returns human-readable notes
     /// (for logging). A version newer than we understand is left untouched (forward-compatible read).
     /// </summary>
@@ -45,7 +53,7 @@ public static class ApplicationStateValidator
         // --- ordered migration steps go here as the schema evolves, e.g.:
         //   if (v == "1.0") { /* transform */ v = "1.1"; notes.Add("migrated 1.0 -> 1.1"); }
 
-        if (CompareVersions(v, CurrentVersion) > 0)
+        if (IsNewerThanSupported(state))
         {
             notes.Add($"state version {v} is newer than supported {CurrentVersion}; reading as-is");
             return notes;

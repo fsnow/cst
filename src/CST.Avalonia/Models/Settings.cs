@@ -11,6 +11,25 @@ namespace CST.Avalonia.Models
         /// </summary>
         public string Version { get; set; } = "1.0";
 
+        /// <summary>
+        /// Top-level properties this build does not know about, carried through a round-trip. (#883)
+        ///
+        /// <para><b>What it prevents:</b> a newer build adds a setting, the reader launches an older build once,
+        /// and the older build's next save rewrites the file without it. Silently — an unknown property is not an
+        /// error to System.Text.Json, it is simply dropped. Frank runs several builds across machines, so a
+        /// downgrade is a routine event rather than an accident.</para>
+        ///
+        /// <para><b>What it does not:</b> extension data is per-object, and this is the root only. A property a
+        /// newer build adds INSIDE a nested section still sheds. Covering every persisted type would mean this
+        /// member on each of them, and the root is where new sections actually land — so this is the whole of the
+        /// cheap half, deliberately, not an oversight.</para>
+        ///
+        /// <para>Never written by this build (nothing sets it), so an ordinary file gains nothing. Null when
+        /// empty, and <c>WhenWritingDefault</c> keeps it out of the output.</para>
+        /// </summary>
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>? UnknownProperties { get; set; }
+
         public string XmlBooksDirectory { get; set; } = "";
         public string IndexDirectory { get; set; } = "";  // Empty means use default
         public FontSettings FontSettings { get; set; } = new();
@@ -387,9 +406,20 @@ namespace CST.Avalonia.Models
         
         public FontSettings()
         {
-            // Initialize default font settings for each script
-            // Empty font family means use system default for that script
-            ScriptFonts = new Dictionary<string, ScriptFontSetting>
+            ScriptFonts = DefaultScriptFonts();
+        }
+
+        /// <summary>
+        /// The canonical per-script font defaults — every display script, with the sizes chosen for each.
+        /// Empty font family means use the system default for that script.
+        ///
+        /// <para>A method rather than a constructor body because <see cref="SettingsValidator"/> re-seeds
+        /// missing keys from it. A second hand-written list there would drift from this one, and drift in
+        /// exactly this dictionary is what #881 is: the Appearance panel builds its rows by enumerating it,
+        /// so a key that is absent is a script with no font control at all. (#881)</para>
+        /// </summary>
+        public static Dictionary<string, ScriptFontSetting> DefaultScriptFonts() =>
+            new()
             {
                 ["Latin"] = new ScriptFontSetting { FontFamily = "", FontSize = 12 },
                 ["Devanagari"] = new ScriptFontSetting { FontFamily = "", FontSize = 16 }, // Larger for readability
@@ -406,7 +436,6 @@ namespace CST.Avalonia.Models
                 ["Thai"] = new ScriptFontSetting { FontFamily = "", FontSize = 13 },
                 ["Tibetan"] = new ScriptFontSetting { FontFamily = "", FontSize = 14 }
             };
-        }
 
         /// <summary>
         /// Typed lookup of a script's font setting. Centralizes the <see cref="ScriptKeys"/> mapping so callers

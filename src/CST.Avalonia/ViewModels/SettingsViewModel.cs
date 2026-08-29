@@ -1826,6 +1826,28 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
         }
 
         
+        /// <summary>
+        /// Install a new global logger and DISPOSE the one it replaces. (#882)
+        ///
+        /// <para>The outgoing pipeline's rolling file sink keeps today's log file open, and Serilog's file
+        /// sink defaults to exclusive access (<c>shared: false</c>) — so on Windows the incoming logger's
+        /// file sink cannot open the same file, and file logging dies silently for the rest of the session
+        /// the moment the reader changes the log level. The Logging panel still looks like it worked,
+        /// because the console sink is unaffected. macOS and Linux take no exclusive lock, which is why
+        /// development never saw it.</para>
+        ///
+        /// <para><b>Dispose AFTER the swap, never before.</b> Disposing first leaves a window with no logger
+        /// at all, and Serilog's answer to that is a silent no-op logger rather than an error — so anything
+        /// logged in between would simply not exist. Split out so a test can pin that ordering without
+        /// standing up the whole developer-settings view model.</para>
+        /// </summary>
+        internal static void SwapGlobalLogger(Serilog.ILogger fresh)
+        {
+            var replaced = Log.Logger;
+            Log.Logger = fresh;
+            (replaced as IDisposable)?.Dispose();
+        }
+
         private void ReconfigureLogger(string logLevel)
         {
             try
@@ -1855,15 +1877,14 @@ public class AiSettingsViewModel : ViewModelBase, IDisposable
                 
                 var logPath = Path.Combine(logsDir, "cst-avalonia-.log");
 
-                // Reconfigure the global logger
-                Log.Logger = new Serilog.LoggerConfiguration()
+                SwapGlobalLogger(new Serilog.LoggerConfiguration()
                     .MinimumLevel.Is(serilogLevel)
                     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
                     .WriteTo.File(logPath, 
                         rollingInterval: Serilog.RollingInterval.Day,
                         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
                     .Enrich.FromLogContext()
-                    .CreateLogger();
+                    .CreateLogger());
             }
             catch (Exception ex)
             {

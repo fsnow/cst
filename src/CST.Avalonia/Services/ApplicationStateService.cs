@@ -194,8 +194,11 @@ public class ApplicationStateService : IApplicationStateService, IDisposable
 
             Current = state;
 
-            // If we upgraded or repaired anything, persist it so the on-disk file is brought up to date.
-            if (migrationNotes.Count > 0 || stateFixes.Count > 0)
+            // If we upgraded or repaired anything, persist it so the on-disk file is brought up to date —
+            // unless it came from a NEWER build, where writing it back is how the reader loses what that
+            // build added. The "reading as-is" note counted toward "something changed". (#883)
+            if ((migrationNotes.Count > 0 || stateFixes.Count > 0)
+                && !ApplicationStateValidator.IsNewerThanSupported(state))
                 MarkDirty();
             // Don't fire StateChanged on load to prevent infinite loops
             // Initial state will be handled separately
