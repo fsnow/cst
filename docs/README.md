@@ -89,7 +89,7 @@ Features planned for future implementation (from CST4 analysis):
 Exploratory research and investigations:
 - [Alternative Rendering Engines](research/ALTERNATIVE_RENDERING_ENGINES.md) - Comparison of rendering approaches
 - [Browser Embedding Options](research/BROWSER_EMBEDDING_OPTIONS.md) - WebView alternatives
-- [Button-Based Float Approach](research/BUTTON_BASED_FLOAT_APPROACH.md) - Manual float/unfloat to prevent CEF crashes
+- [Button-Based Float Approach](research/BUTTON_BASED_FLOAT_APPROACH.md) - ⛔ SUPERSEDED by #39 (drag-to-float shipped instead); historical only
 - [DPD Dictionary Integration Spike](research/DPD_DICTIONARY_INTEGRATION_SPIKE.md) - #109 third-party dictionary support: DPD + external-dictionary import format
 - [Git Integration](research/GIT_INTEGRATION.md) - Git-based features
 - [MAUI Blazor POC Plan](research/MAUI_BLAZOR_POC_PLAN.md) - Cross-platform proof of concept planning
