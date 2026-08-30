@@ -46,6 +46,21 @@ Several Claude sessions work this repo (different machines, plus review subagent
 - **"Working as designed" is never a conclusion to post on your own.** It contradicts a human's report, and the maintainer owns intent. Bring the evidence to him first.
 - **Brief a review subagent with the maintainer's verbatim words, not your summary** — and say where you have already been wrong. A reviewer inherits the frame it is given, and your summary is least reliable exactly where you are most mistaken: a #846 brief that opened with the author's inverted premise would have produced a rigorous confirmation of a fix nobody wanted. Tell it to attack the premise, not only the code. A subagent is strong on "is this code correct" and structurally blind to "is this the right thing to build" — that second question is the maintainer's.
 
+## Mark provenance: whose idea is it
+Anything another session will act on — issues, design docs, prompts for other sessions, review briefs — mixes the maintainer's decisions with an agent's reasoning, written in the same confident register. The reader cannot tell them apart, and the next session implements both as rules.
+
+> "we have a pattern here of something I say being embellished or taken out of context. The other half of it is that in implementation it is followed as a rule." — fsnow, 2026-08-18
+
+> "I had to fight with Kestrel today to get the UI implemented as I intended -- as much like OpenCode as possible -- because of embellishments that it found in the issues" — fsnow, same day
+
+Mark every load-bearing claim:
+
+- **[fsnow]** — his decision. **Quote him; never paraphrase into a rule.** Binding.
+- **[suggestion]** — an agent's. Advisory, and say so.
+- **[observed]** — a fact from code, a measurement, or a named source. Cite it.
+
+Unmarked text is context, not instruction. Reserve imperatives ("must", "never") for his decisions and verified constraints; use "I'd suggest" or "this follows if…" for reasoning. **Check the transcript before attributing anything to him.** The failure is rarely an invented quote — it is a real remark attached to an invented conclusion: his note that OpenCode picked up his existing `GOOGLE_API_KEY` became an invented `CST_AI_*` namespace, which then travelled with his remark as its provenance. Uniform confidence is the defect, not any single embellishment.
+
 ## Documentation workflow
 Docs live in `docs/` (`architecture/`, `implementation/`, `features/{planned,in-progress,implemented}`, `research/`, `development/`, `testing/`). Feature docs move planned → in-progress → implemented. **When adding/removing a doc, update [docs/README.md](docs/README.md).** Bugs/features are tracked as GitHub issues, not in markdown backlogs.
 
