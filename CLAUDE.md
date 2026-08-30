@@ -31,6 +31,8 @@ dotnet test src/CST.Avalonia.Tests --filter "FullyQualifiedName~CstDockFactoryTe
 ```
 **Always name the test project.** There is no solution file, so a bare `dotnet test` acts on the project in the current directory — and in `src/CST.Avalonia` that is the app, which is not a test project: it restores, runs nothing, and **exits 0**. A silent green indistinguishable from a passing suite. `CST.Avalonia.Tests` is the only test project in the tree.
 
+Piping the run through `tail` compounds this: you get *tail's* exit code, and the window drops the `[FAIL]` lines. Redirect to a file and echo the real exit code.
+
 macOS packaging/signing/notarization: `src/CST.Avalonia/package-macos.sh {arm64|x64}` then `notarize-macos.sh`. Full steps + the pre-release version-string checklist: [docs/development/RELEASE_PROCESS.md](docs/development/RELEASE_PROCESS.md).
 
 ## macOS code signing & entitlements
@@ -42,10 +44,15 @@ Several Claude sessions work this repo (different machines, plus review subagent
 - **A bug issue needs Expected / Actual / Contrast, plus how it was found.** The contrast case — where the same action *does* work — is the highest-value line, because it is what separates a defect from intended behaviour. Ask for it if it is missing. Without a stated expectation, the next agent infers intent from code comments, which record *past* intent and may be stale.
 - **The issue body is the record, not a transcript.** Edit the body as understanding improves; delete your own wrong comment rather than stacking a retraction on it. Comment only to add something a future reader needs — a decision, a measurement, an outcome.
 - **"Working as designed" is never a conclusion to post on your own.** It contradicts a human's report, and the maintainer owns intent. Bring the evidence to him first.
-- **Read the contract, not just the code.** XML doc comments on the method you are changing often already answer the question — and separate durable facts (dated, attributed) from rationale, which rots. A comment can be right about the fact and wrong about the reason.
+- **Brief a review subagent with the maintainer's verbatim words, not your summary** — and say where you have already been wrong. A reviewer inherits the frame it is given, and your summary is least reliable exactly where you are most mistaken: a #846 brief that opened with the author's inverted premise would have produced a rigorous confirmation of a fix nobody wanted. Tell it to attack the premise, not only the code. A subagent is strong on "is this code correct" and structurally blind to "is this the right thing to build" — that second question is the maintainer's.
 
 ## Documentation workflow
 Docs live in `docs/` (`architecture/`, `implementation/`, `features/{planned,in-progress,implemented}`, `research/`, `development/`, `testing/`). Feature docs move planned → in-progress → implemented. **When adding/removing a doc, update [docs/README.md](docs/README.md).** Bugs/features are tracked as GitHub issues, not in markdown backlogs.
+
+- **A change that supersedes a mechanism must sweep what described it** — this file, the architecture docs, the research doc the idea came from, and the doc comments on the code it replaces. #39 removed the float/unfloat buttons and left four places still teaching the button design, each pointing at the next; the last of them was read as current fifteen months later and sent a whole investigation the wrong way. Nothing was neglected — every one was written when it was true.
+- **Delete superseded material rather than annotating it.** Git is the history; a doc carrying its own obituaries is harder to read and invites the next person to wonder which half applies.
+- **Separate durable facts from rationale.** Facts (dated, attributed — "the source PDFs are scans, confirmed 2026-08-11") stay true; the reasoning wrapped around them rots. A comment that is right about the fact and wrong about the reason is worse than none, because the wrong half discredits the right half.
+- **Cite symbols over line numbers, and re-derive any you write.** Every line number in `DOCK_SUBSYSTEM.md` §5 was wrong by 2026-08, several by more than a thousand lines.
 
 ## TodoWrite
 Use it for multi-step work (3+ steps), multi-cause debugging, or any checklist: create the list immediately, work through every item, mark complete as you go.
