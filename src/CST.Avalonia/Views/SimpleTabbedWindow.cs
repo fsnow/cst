@@ -1065,6 +1065,22 @@ public partial class SimpleTabbedWindow : Window
         book.BookDisplayControl.ShowFindBar();
     }
 
+    /// <summary>
+    /// Opens Find in Page on the active book for a Cmd/Ctrl+F that came from a WebView-hosted view, where
+    /// the menu accelerator never reaches us. (#846)
+    ///
+    /// <para>It delegates to the menu item's own handler rather than resolving a book itself. That is the
+    /// whole point: the complaint was that Cmd+F behaved differently depending on where focus sat, so the
+    /// fix must not introduce a second way of choosing the book. <see cref="FindActiveBookInThisWindow"/>
+    /// re-resolves the active window on every call, so it does not matter that this enters through the main
+    /// window — a floating window holding the focus still wins.</para>
+    /// </summary>
+    internal static void ShowFindInActiveBook()
+    {
+        if (App.MainWindow is SimpleTabbedWindow window)
+            window.OnFindInPageClick(null, EventArgs.Empty);
+    }
+
     private void InvokeZoom(Action<BookDisplayView> action, string what)
     {
         var book = FindActiveBookInThisWindow();
