@@ -158,11 +158,8 @@ namespace CST.Avalonia.ViewModels
         // a ReactiveTool (its Id/Title/flags are set in its constructor), so it's added directly — exactly as
         // CreateLayout does at startup; wrapping it in a generic Tool { Context } renders an empty panel
         // because the view locator resolves by dockable type. (#84)
-        private void ShowToolPanel(string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName)
-            => ShowToolPanel(toolId, resolveVm, markVisible, panelName, right: false);
-
         private void ShowToolPanel(
-            string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName, bool right)
+            string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName)
         {
             Log.Information("[Layout] Show {Panel} panel requested", panelName);
 
@@ -182,8 +179,8 @@ namespace CST.Avalonia.ViewModels
                 return;
             }
 
-            // The assistant lives in its own dock on the right; the other three share the left rail.
-            var toolDock = right ? _factory.EnsureRightToolDock() : _factory.EnsureLeftToolDock();
+            // All four tools share the left rail, the assistant included. (#906)
+            var toolDock = _factory.EnsureLeftToolDock();
             if (toolDock == null)
             {
                 Log.Error("[Layout] Cannot add {Panel} panel - MainDock unavailable.", panelName);
@@ -282,7 +279,7 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public void ShowAssistantPanel() =>
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
-                () => IsAssistantPanelVisible = true, "AI Assistant", right: true);
+                () => IsAssistantPanelVisible = true, "AI Assistant");
 
         public void HideAssistantPanel()
         {
