@@ -41,7 +41,7 @@
                     <NativeMenuItem Header="Open a Book" />
                     <NativeMenuItem Header="Search" />
                     <NativeMenuItem Header="Dictionary" />
-                    <NativeMenuItem Header="Assistant" />
+                    <NativeMenuItem Header="AI Assistant" />
                     <NativeMenuItemSeparator />
                     <!-- #572 book zoom. The menu carries the discoverability: a beta tester asked for a way
                          to enlarge the text and, finding none, invented a copy-a-line-then-search ritual
