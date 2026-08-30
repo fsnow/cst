@@ -33,7 +33,7 @@ public class WebViewShortcutRelayTests
     {
         var script = WebViewShortcutRelay.BuildScript(ViewId);
 
-        Assert.Contains("!event.shiftKey && true) { name = 'FIND_IN_PAGE'", script);
+        Assert.Contains("k === 'f' && !event.shiftKey && true) { name = 'FIND_IN_PAGE'", script);
     }
 
     /// <summary>
@@ -47,13 +47,18 @@ public class WebViewShortcutRelayTests
     {
         var script = WebViewShortcutRelay.BuildScript(ViewId, includeFind: false);
 
-        Assert.Contains("!event.shiftKey && false) { name = 'FIND_IN_PAGE'", script);
+        Assert.Contains("k === 'f' && !event.shiftKey && false) { name = 'FIND_IN_PAGE'", script);
     }
 
     /// <summary>
-    /// The command the script emits has to be the one the handler switches on. A mismatch here is invisible
-    /// at runtime — <see cref="WebViewShortcutRelay.TryHandle"/> would fall to its default arm and log a
-    /// warning, so the key would go on doing nothing and look like the original bug.
+    /// Every message is addressed to one view and carries a sequence number.
+    ///
+    /// <para>An earlier version of this comment claimed the test also guarded the emitted command name
+    /// against the name the handler switches on. It did not, and no test could usefully: nothing in the
+    /// suite calls <see cref="WebViewShortcutRelay.TryHandle"/>, and it returns true even for an unknown
+    /// command, so a rename would stay green while reproducing #846's symptom exactly. That class of
+    /// mistake is now impossible by construction instead — both sides interpolate the same C# constants —
+    /// which is a better answer than a test would have been. (fable review)</para>
     /// </summary>
     [Fact]
     public void The_forwarded_command_is_addressed_to_this_view_and_sequenced()
@@ -86,9 +91,9 @@ public class WebViewShortcutRelayTests
     [Fact]
     public void Shift_F_remains_the_search_shortcut_and_is_gated_the_same_way()
     {
-        Assert.Contains("event.shiftKey && true) { name = 'SEARCH'",
+        Assert.Contains("k === 'f' && event.shiftKey && true) { name = 'SEARCH'",
             WebViewShortcutRelay.BuildScript(ViewId));
-        Assert.Contains("event.shiftKey && false) { name = 'SEARCH'",
+        Assert.Contains("k === 'f' && event.shiftKey && false) { name = 'SEARCH'",
             WebViewShortcutRelay.BuildScript(ViewId, includeFind: false));
     }
 }

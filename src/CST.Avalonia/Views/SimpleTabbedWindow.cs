@@ -1077,8 +1077,18 @@ public partial class SimpleTabbedWindow : Window
     /// </summary>
     internal static void ShowFindInActiveBook()
     {
-        if (App.MainWindow is SimpleTabbedWindow window)
-            window.OnFindInPageClick(null, EventArgs.Empty);
+        // Guarded because this arrives from JavaScript, unlike the menu route: an exception in the layout
+        // walk would surface as an unhandled dispatcher exception rather than a failed click. The three
+        // sibling relay commands all catch internally; this one had nothing. (fable review)
+        try
+        {
+            if (App.MainWindow is SimpleTabbedWindow window)
+                window.OnFindInPageClick(null, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Find in Page from a WebView-hosted view failed");
+        }
     }
 
     private void InvokeZoom(Action<BookDisplayView> action, string what)

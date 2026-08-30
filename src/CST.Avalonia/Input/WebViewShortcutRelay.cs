@@ -28,6 +28,16 @@ public static class WebViewShortcutRelay
 {
     public const string MessagePrefix = "CST_VIEW_SHORTCUT:";
 
+    // The command vocabulary, interpolated into the generated script AND switched on when a message comes
+    // back — so the two can never drift. Naming them separately in the JavaScript and in the handler made a
+    // typo silently equivalent to the bug this class exists to prevent: the message would arrive, fall to
+    // the switch's default arm, log a warning nobody reads, and the key would go on doing nothing. (#846)
+    internal const string CommandSelectBook = "SELECT_BOOK";
+    internal const string CommandDictionary = "DICTIONARY";
+    internal const string CommandFindInPage = "FIND_IN_PAGE";
+    internal const string CommandSearch = "SEARCH";
+    internal const string CommandSettings = "SETTINGS";
+
     /// <summary>
     /// JavaScript to inject once the page has loaded. <paramref name="viewId"/> identifies the view in the
     /// messages it pushes back.
@@ -69,12 +79,12 @@ public static class WebViewShortcutRelay
                 // Deliberately NOT forwarded: e/g/p and shift variants are book commands, and w is
                 // handled per-view where a closable tab exists.
 
-                if (k === 'o' && !event.shiftKey) { name = 'SELECT_BOOK'; }
-                else if (k === 'd' && !event.shiftKey) { name = 'DICTIONARY'; }
+                if (k === 'o' && !event.shiftKey) { name = '" + CommandSelectBook + @"'; }
+                else if (k === 'd' && !event.shiftKey) { name = '" + CommandDictionary + @"'; }
                 // #846: plain F finds in the active BOOK, not in this view. See BuildScript's docs.
-                else if (k === 'f' && !event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = 'FIND_IN_PAGE'; }
-                else if (k === 'f' && event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = 'SEARCH'; }
-                else if (k === ',') { name = 'SETTINGS'; }
+                else if (k === 'f' && !event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = '" + CommandFindInPage + @"'; }
+                else if (k === 'f' && event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = '" + CommandSearch + @"'; }
+                else if (k === ',') { name = '" + CommandSettings + @"'; }
 
                 if (name === null) { return; }
 
@@ -118,10 +128,10 @@ public static class WebViewShortcutRelay
             {
                 switch (command)
                 {
-                    case "SELECT_BOOK":
+                    case CommandSelectBook:
                         SimpleTabbedWindow.RevealSelectBookPanel();
                         break;
-                    case "SETTINGS":
+                    case CommandSettings:
                         _ = App.ShowSettingsWindow();
                         break;
                     // No book is focused in these views, so both simply reveal their tool with no selection.
@@ -131,16 +141,16 @@ public static class WebViewShortcutRelay
                     // to the first split's book" (the #443 wrong-book bug), so ⌘D/⌘F acted on some other
                     // book's selection. Revealing the tool with no selection is the honest answer from a
                     // view that has no book. Not a regression, but not a no-op either. (fable review)
-                    case "DICTIONARY":
+                    case CommandDictionary:
                         _ = SimpleTabbedWindow.LookUpInDictionaryAsync(null);
                         break;
-                    case "SEARCH":
+                    case CommandSearch:
                         _ = SimpleTabbedWindow.SearchForSelectionAsync(null);
                         break;
                     // Unlike the two above, this one is NOT selection-driven and so loses nothing by
                     // arriving from a bookless view: it opens the find bar on the active book, exactly as
                     // the menu item does for every non-WebView focus location. (#846)
-                    case "FIND_IN_PAGE":
+                    case CommandFindInPage:
                         SimpleTabbedWindow.ShowFindInActiveBook();
                         break;
                     default:
