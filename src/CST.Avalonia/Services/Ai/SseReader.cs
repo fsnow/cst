@@ -30,9 +30,12 @@ internal sealed record SseEvent(string? Name, string Data, AiError? Failure = nu
 internal static class SseReader
 {
     /// <summary>
-    /// How long the stream may produce nothing between lines before we call it dead. Note this is per LINE, not
-    /// per byte: a line that trickles in over a long period is fine, and a stream that sends no newline at all
-    /// is not — which matches SSE, where nothing is actionable until a line completes.
+    /// How long the stream may produce nothing between lines before we call it dead. The budget is per LINE,
+    /// not per byte — it is armed once per read and is NOT refreshed by bytes arriving, so a single line that
+    /// takes longer than this to complete is killed and reported as "the model stopped responding" even though
+    /// data was flowing. That matches SSE, where nothing is actionable until a line completes, and a stream
+    /// sending no newline at all must not hang us; it does mean a provider that dribbled one enormous line
+    /// would be cut off, which no provider does today. (R1-4)
     /// </summary>
     internal static readonly TimeSpan DefaultIdleTimeout = TimeSpan.FromSeconds(120);
 
