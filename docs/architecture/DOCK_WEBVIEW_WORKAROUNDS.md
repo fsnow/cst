@@ -23,9 +23,9 @@ candidate to *replace* (not re-add) in the overhaul.
 | What | Where | Works around / why |
 |---|---|---|
 | `TryCreateWebView()` / `DisposeWebView()` manual cycle | BookDisplayView ~160–215 | CEF native handle invalid after a window-context change; must dispose then recreate. |
-| Window-change detection by **reference equality** (3 branches) → dispose+recreate+reload only on real window change | BookDisplayView ~229–303 | Distinguish float/unfloat (recreate) from same-window tab switch (keep, instant). |
-| `OnDetachedFromVisualTree` nulls `_currentWindow` ("CRITICAL FIX") | BookDisplayView ~305–321 | Force window-change detection on a later ControlRecycling reattach; fixed float→unfloat→tab-switch→tab-back crash. |
-| `WebViewLifecycleOperation` state machine (`PrepareForFloat`/`RestoreAfterFloat`/`…Unfloat`) → dispose **before** move, recreate **after** | BookDisplayView ~374–412 | Button float/unfloat = controlled dispose-before-move; the only crash-reliable float path. |
+| Window-change detection by **reference equality** (3 branches) → dispose+recreate+reload only on real window change | BookDisplayView ~550–650 | Distinguish float/unfloat (recreate) from same-window tab switch (keep, instant). |
+| `OnDetachedFromVisualTree` nulls `_currentWindow` ("CRITICAL FIX") | BookDisplayView ~655–670 | Force window-change detection on a later ControlRecycling reattach; fixed float→unfloat→tab-switch→tab-back crash. |
+| Dispose-before-move funnel: `SplitToWindow` + the cross-dock `MoveDockable`/`SwapDockable`/`SplitToDock` overrides call `DisposeAndEvictRecycledView` before the move | CstDockFactory 2045, 1964, 1984, 1172 | No live browser ever crosses a re-parent; the framework builds a fresh one at the destination. Covers books, PDFs and the dictionary (#466). |
 | `LoadHtmlContent` writes HTML to a **temp file** + `LoadUrl(fileUrl)` instead of a data URI | BookDisplayView ~441–516 | CEF data-URI size limits — the largest books (~3.6 MB) exceed them. |
 | PDF tabs mirror the same dispose/recreate + lifecycle-op handling | PdfDisplayView ~31–177 | Same CEF reparent constraint for the PDFium WebView. |
 
@@ -35,7 +35,7 @@ candidate to *replace* (not re-add) in the overhaul.
 |---|---|---|
 | ControlRecycling **enabled** | App.axaml ~43–56 | Preserves scroll/state on same-window tab switch (instant switching). It's the *reason* most CEF kludges exist. |
 | **Unique GUID per BookDisplayViewModel** | BookDisplayViewModel ~126–138 | ControlRecycling caches Views by VM id; duplicate ids → reused View → CEF crash. |
-| `FloatDockableWithoutRecycling` / `UnfloatDockableWithoutRecycling` — create a **fresh VM (new GUID)** at the destination, dispose the old | CstDockFactory ~1295–1538 | Bypass ControlRecycling so a fresh View (fresh browser) is built instead of recycling stale CEF baggage. |
+| `FloatAllDockables` suppressed outright | CstDockFactory 2064 | It bypasses `SplitToWindow`, so it would re-parent several live browsers at once and sweep in the non-floatable Welcome tab. Nothing needs it. |
 | Local drag monitoring **disabled** in BookDisplayView (consolidated to SimpleTabbedWindow) | BookDisplayView ~2329–2335 | Duplicate hide/show from two monitors invalidates CEF handles (the `InitializeWithChildHandle` crash). |
 
 ## C. Drag / airspace
@@ -46,7 +46,7 @@ candidate to *replace* (not re-add) in the overhaul.
 | Drag state machine: 50 ms poll, **150 ms** drag threshold, **100 ms** min-hide, 10 s fallback restore | SimpleTabbedWindow ~33–41, 432–516 | Filter flickering `IsDraggingDock`; prevent WebView flashing; recover if a drag hangs. |
 | Cross-window `DragEnter`/`Drop`/`DragLeave` → hide/restore WebViews | SimpleTabbedWindow ~61–99 | Event-based path for explicit drag-drop (complements the timer). |
 | Drag-time WebView hide/restore has a **single owner** (SimpleTabbedWindow) — no per-view monitor | invariant | A second monitor in BookDisplayView (repeated hide/show during tab switches) invalidated CEF native handles → `InitializeWithChildHandle` null-deref crash. Its long-disabled copy was **deleted in #85**; do not reintroduce per-view drag monitoring. |
-| `CanDrag=true`, `CanFloat=false` on books | CstDockFactory ~511–517 | Allow tab reorder; block drag-to-float (the live-reparent crash) → force the float button. |
+| `CanDrag=true`, `CanFloat=true` on books | CstDockFactory 525, 643 | Books stay draggable AND floatable: the dispose-before-move funnel makes drag-to-float safe, so no capability has to be withheld (#39). |
 
 ## D. Dock structure / Dock.Avalonia gaps
 
