@@ -221,68 +221,8 @@ public class CstDockFactoryTests
         Assert.Equal(before, mainDock.VisibleDockables!.Count);  // nothing inserted
     }
 
-    // ---- The assistant's own container (#656) ----
 
-    [Fact]
-    public void EnsureRightToolDock_RecreatesUnderMainDock_WhenMissing()
-    {
-        // The assistant can be floated into its own window and that window closed, which takes the panel out
-        // of the layout entirely. It is the only tool whose dock is on the right, so it needs its own
-        // recreate path — and since the panel holds the whole session's transcript, having no way back lost
-        // that too.
-        var f = new CstDockFactory();
-        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
-        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc) };
-        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
-        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
-        f._rootDock = root;
-        f._mainDock = mainDock;
 
-        var dock = f.EnsureRightToolDock();
-
-        Assert.NotNull(dock);
-        Assert.Equal("RightToolDock", dock!.Id);
-        Assert.Contains(mainDock.VisibleDockables!, d => d.Id == "RightTools");
-    }
-
-    [Fact]
-    public void EnsureRightToolDock_AppendsAfterTheDocuments()
-    {
-        // Right of the books, not left of them: it is inserted by position, and getting the ends confused
-        // would put the assistant where the book tree lives.
-        var f = new CstDockFactory();
-        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
-        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc) };
-        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
-        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
-        f._rootDock = root;
-        f._mainDock = mainDock;
-
-        f.EnsureRightToolDock();
-
-        var ids = mainDock.VisibleDockables!.Select(d => d.Id).ToList();
-        Assert.True(ids.IndexOf("RightTools") > ids.IndexOf("MainDocumentDock"));
-    }
-
-    [Fact]
-    public void EnsureRightToolDock_ReusesExisting_WhenPresent()
-    {
-        var f = new CstDockFactory();
-        var existing = new ToolDock { Id = "RightToolDock", VisibleDockables = List() };
-        var rightTools = new ProportionalDock { Id = "RightTools", VisibleDockables = List(existing) };
-        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
-        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc, rightTools) };
-        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
-        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
-        f._rootDock = root;
-        f._mainDock = mainDock;
-        var before = mainDock.VisibleDockables!.Count;
-
-        var dock = f.EnsureRightToolDock();
-
-        Assert.Same(existing, dock);
-        Assert.Equal(before, mainDock.VisibleDockables!.Count);
-    }
 
     [Fact]
     public void The_assistant_is_off_when_neither_switch_is_on()
@@ -296,39 +236,14 @@ public class CstDockFactoryTests
         Assert.False(CstDockFactory.AssistantEnabled());
     }
 
-    [Fact]
-    public void A_recreated_assistant_column_gets_a_real_share_of_the_window()
-    {
-        // Reported: reopening it from the View menu brought it back about a quarter of an inch wide -- worse
-        // than not coming back, since a reader who did not know to drag it would think the menu had failed.
-        //
-        // Closing empties the ToolDock, the cleanup pass collapses the wrapper and its splitter, and what is
-        // left no longer sums to one -- so the framework rebalances around it. Re-inserting a dock that says
-        // 0.18 into a row that has already been rebalanced gives it 18% of nothing in particular. The whole
-        // row has to be restated, which is what this asserts.
-        var f = new CstDockFactory();
-        // The drifted state a hide leaves behind: two columns sharing the whole window between them.
-        var doc = new DocumentDock { Id = "MainDocumentDock", Proportion = 0.75, VisibleDockables = List() };
-        var leftTools = new ProportionalDock { Id = "LeftTools", Proportion = 0.25, VisibleDockables = List() };
-        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(leftTools, doc) };
-        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
-        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
-        f._rootDock = root;
-        f._mainDock = mainDock;
-
-        f.EnsureRightToolDock();
-
-        var assistant = mainDock.VisibleDockables!.First(d => d.Id == "RightTools");
-        Assert.True(assistant.Proportion > 0.1, $"came back at {assistant.Proportion}");
-
-        // And the row adds up, so nothing is left for the framework to guess about.
-        var total = leftTools.Proportion + doc.Proportion + assistant.Proportion;
-        Assert.Equal(1.0, total, 3);
-    }
 
     [Fact]
-    public void Hiding_the_assistant_hands_its_width_to_the_documents()
+    public void The_documents_get_every_share_the_tool_rail_does_not_take()
     {
+        // One tool column, so the row is two members and the documents are whatever is left. Before #906 a
+        // second column sat on the right and this sum had three terms; the assertion that matters is the
+        // same either way — the row adds to one, with nothing left for the framework to guess about.
+
         var f = new CstDockFactory();
         var doc = new DocumentDock { Id = "MainDocumentDock", Proportion = 0.57, VisibleDockables = List() };
         var leftTools = new ProportionalDock { Id = "LeftTools", Proportion = 0.25, VisibleDockables = List() };
@@ -338,38 +253,12 @@ public class CstDockFactoryTests
         f._rootDock = root;
         f._mainDock = mainDock;
 
-        // The assistant is already gone, as it is by the time the hide path rebalances.
         f.RebalanceMainDock();
 
         Assert.Equal(0.75, doc.Proportion, 3);
         Assert.Equal(1.0, leftTools.Proportion + doc.Proportion, 3);
     }
 
-    [Fact]
-    public void The_assistant_opens_narrower_than_the_documents()
-    {
-        // Reported: "the default width of the Assistant is too wide — often wider than the book area". Split
-        // the documents into two books side by side and each gets half the middle column, so a quarter-width
-        // assistant is exactly as wide as either book. The middle column has to stay wide enough that a split
-        // book is still the widest thing on screen.
-        var f = new CstDockFactory();
-        f.EnsureRightToolDock();   // no MainDock: just proves the constant is not the old 0.25
-
-        var doc = new DocumentDock { Id = "MainDocumentDock", VisibleDockables = List() };
-        var mainDock = new ProportionalDock { Id = "MainDock", VisibleDockables = List(doc) };
-        var windowLayout = new RootDock { Id = "WindowLayout", VisibleDockables = List(mainDock) };
-        var root = new RootDock { Id = "Root", VisibleDockables = List(windowLayout) };
-        f._rootDock = root;
-        f._mainDock = mainDock;
-
-        f.EnsureRightToolDock();
-        var assistant = mainDock.VisibleDockables!.First(d => d.Id == "RightTools");
-
-        Assert.True(assistant.Proportion < 0.25, $"assistant opens at {assistant.Proportion}");
-        // Half the middle column, which is what a side-by-side book gets, must still beat it.
-        var middle = 1.0 - 0.25 - assistant.Proportion;
-        Assert.True(middle / 2 > assistant.Proportion, "a split book would be narrower than the assistant");
-    }
 
     /// <summary>
     /// A tool panel is recognised as one. (R9-1, #886)

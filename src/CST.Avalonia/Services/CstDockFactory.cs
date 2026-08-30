@@ -37,7 +37,6 @@ namespace CST.Avalonia.Services
         // Misnomer kept for the smaller diff: this is the DOCUMENT dock's proportion, which used to be the
         // rightmost thing in MainDock. Since #586 the assistant sits to its right and has its own field below.
         private double _mainDockRightProportion = 0.50;
-        private double _mainDockAssistantProportion = AssistantProportion;
 
         /// <summary>
         /// How wide the assistant column opens. Narrower than the tool rail on the left: that one holds a
@@ -45,7 +44,6 @@ namespace CST.Avalonia.Services
         /// a narrow measure than a wide one — and every pixel it takes comes off the book. A starting point,
         /// not a verdict; the splitter beside it is the answer to disagreeing.
         /// </summary>
-        private const double AssistantProportion = 0.18;
 
         // Typed references to two spine docks, set in CreateLayout, used to recreate the tool container
         // on demand (see EnsureLeftToolDock). Reference-stable: MainDock is protected and never removed.
@@ -112,7 +110,10 @@ namespace CST.Avalonia.Services
                 Id = "LeftToolDock",
                 Title = "Tools",
                 ActiveDockable = openBookTool,
-                VisibleDockables = CreateList<IDockable>(openBookTool, searchTool, dictionaryTool),
+                // The assistant is the fourth tab when it is switched on. (#906)
+                VisibleDockables = assistantTool is null
+                    ? CreateList<IDockable>(openBookTool, searchTool, dictionaryTool)
+                    : CreateList<IDockable>(openBookTool, searchTool, dictionaryTool, assistantTool),
                 Alignment = Alignment.Left,
                 GripMode = GripMode.Visible,
                 CanDrag = true,
@@ -159,7 +160,7 @@ namespace CST.Avalonia.Services
             {
                 Id = "MainDocumentDock",
                 Title = "Documents",
-                Proportion = 1.0 - 0.25 - AssistantProportion,  // the middle column: tools left, assistant right (#586)
+                Proportion = 1.0 - 0.25,  // everything the tool rail does not take (#906)
                 ActiveDockable = welcomeDocument,
                 VisibleDockables = CreateList<IDockable>(welcomeDocument),
                 CanCreateDocument = false, // Disable "+" button - books opened via "Select a Book" panel
@@ -287,42 +288,15 @@ namespace CST.Avalonia.Services
                 Title = "MainSplitter"
             };
 
-            // The assistant sits on the RIGHT, opposite the tools. (#586)
+            // The assistant is a tab in the LEFT tool dock, not a column of its own. (#906)
             //
-            // It began as a fourth tab in the left tool dock, which was wrong twice over: a generated answer
-            // is prose to be read ALONGSIDE the passage, and the left rail is the narrowest column on screen;
-            // and selecting it cost the reader whichever of Open Book, Search or Dictionary they were using.
-            // On the right it is a second reading column beside the book, and nothing has to be given up to
-            // see it.
-            var rightToolDock = new ToolDock
-            {
-                Id = "RightToolDock",
-                Title = "AI Assistant",
-                ActiveDockable = assistantTool,
-                VisibleDockables = assistantTool is null
-                    ? CreateList<IDockable>()
-                    : CreateList<IDockable>(assistantTool),
-                Alignment = Alignment.Right,
-                GripMode = GripMode.Visible,
-                CanDrag = true,
-                CanDrop = true
-            };
-
-            var rightTools = new ProportionalDock
-            {
-                Id = "RightTools",
-                Proportion = AssistantProportion,
-                Orientation = Orientation.Vertical,
-                IsCollapsable = false,
-                CanDrop = true,
-                VisibleDockables = CreateList<IDockable>(rightToolDock)
-            };
-
-            var rightSplitter = new ProportionalDockSplitter
-            {
-                Id = "RightSplitter",
-                Title = "RightSplitter"
-            };
+            // Moved here 2026-08-30 at the maintainer's request, from using the feature: two tool docks left
+            // the documents at 0.57 of the window, and the books are what the application exists to show.
+            // Four tabs fit the left rail's existing width, so the second column bought nothing. Reading side
+            // by side is still a float or a drag away; it is simply no longer the default.
+            //
+            // Nothing here needs the CEF float protections that guard the book views: the assistant renders
+            // in Avalonia controls, never in a WebView (AiAssistantPanel.axaml).
 
             // Create main proportional dock (horizontal split) with splitter for resizing
             var mainDock = new ProportionalDock
@@ -332,9 +306,7 @@ namespace CST.Avalonia.Services
                 Orientation = Orientation.Horizontal,
                 IsCollapsable = false,  // Like Notepad sample
                 CanDrop = true,  // Allow dropping dockables here
-                VisibleDockables = assistantEnabled
-                    ? CreateList<IDockable>(leftTools, splitter, documentDock, rightSplitter, rightTools)
-                    : CreateList<IDockable>(leftTools, splitter, documentDock)
+                VisibleDockables = CreateList<IDockable>(leftTools, splitter, documentDock)
             };
 
             // Create inner root dock (window layout) with pinned dockables for edge drop indicators
@@ -1707,15 +1679,6 @@ namespace CST.Avalonia.Services
         }
 
         /// <summary>
-        /// The RightToolDock that hosts the assistant, recreating it (and its RightTools wrapper) under the
-        /// protected MainDock if it has been removed. (#656)
-        ///
-        /// <para>The assistant can be floated into its own window, and closing that window takes the panel out
-        /// of the layout entirely. Without this there was no way back: it is the only tool with no View-menu
-        /// entry, so a reader who floated it and closed the window lost it for the rest of the session — and
-        /// since the panel holds the whole transcript, they lost that too.</para>
-        /// </summary>
-        /// <summary>
         /// Whether the assistant is switched on: the AI master switch AND the assistant's own. Read from
         /// settings rather than cached, because Settings toggles it while the app runs. (#667)
         /// </summary>
@@ -1733,71 +1696,6 @@ namespace CST.Avalonia.Services
             }
         }
 
-        internal ToolDock? EnsureRightToolDock()
-        {
-            if (_rootDock != null && FindDockByIdRecursive(_rootDock, "RightToolDock") is ToolDock existing)
-            {
-                return existing;
-            }
-
-            if (_mainDock?.VisibleDockables == null)
-            {
-                Log.Error("*** EnsureRightToolDock: MainDock unavailable - cannot recreate tool container ***");
-                return null;
-            }
-
-            Log.Information("*** EnsureRightToolDock: RightToolDock missing - recreating tool container under MainDock ***");
-
-            var rightToolDock = new ToolDock
-            {
-                Id = "RightToolDock",
-                Title = "AI Assistant",
-                Alignment = Alignment.Right,
-                GripMode = GripMode.Visible,
-                CanDrag = true,
-                CanDrop = true,
-                VisibleDockables = CreateList<IDockable>(),
-                Factory = this
-            };
-
-            var rightTools = new ProportionalDock
-            {
-                Id = "RightTools",
-                Proportion = AssistantProportion,
-                Orientation = Orientation.Vertical,
-                IsCollapsable = false,
-                CanDrop = true,
-                VisibleDockables = CreateList<IDockable>(rightToolDock),
-                Factory = this
-            };
-
-            // Appended at the right of MainDock (mirrors CreateLayout: [... documents, splitter, rightTools]).
-            var splitter = new ProportionalDockSplitter { Id = "RightSplitter", Title = "RightSplitter" };
-            _mainDock.VisibleDockables.Add(splitter);
-            _mainDock.VisibleDockables.Add(rightTools);
-
-            // Owner/Factory wiring, as EnsureLeftToolDock does: without a proper Owner, base.FloatDockable
-            // cannot detach these, so floating a recreated panel would silently no-op.
-            InitDockable(rightTools, _mainDock);
-            InitDockable(rightToolDock, rightTools);
-
-            // A recreated column comes back a quarter of an inch wide without this, which is worse than not
-            // coming back at all: a reader who did not know to drag it would think the menu item had failed.
-            //
-            // Closing the panel empties its ToolDock, and the cleanup pass then collapses the wrapper and its
-            // splitter — so what is left in MainDock no longer sums to one, and the framework rebalances
-            // around it. Re-inserting a dock with a Proportion of 0.18 into a MainDock that has already been
-            // rebalanced does not give it 18% of anything. So the whole row is restated, not just the new
-            // member, and restated again after layout has run, because the framework recomputes proportions
-            // on its own schedule and the last writer wins.
-            _mainDockAssistantProportion = AssistantProportion;
-            ApplyMainDockProportions();
-            Dispatcher.UIThread.Post(ApplyMainDockProportions, DispatcherPriority.Render);
-            Dispatcher.UIThread.Post(ApplyMainDockProportions, DispatcherPriority.Loaded);
-
-            return rightToolDock;
-        }
-        
         // Override to prevent accidental closes during drag operations
         // The app-wide ControlRecycling instance (App.axaml resource, shared by every DockControl).
         private IControlRecycling? GetControlRecycling()
@@ -3197,22 +3095,18 @@ namespace CST.Avalonia.Services
                 var left = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
                            ?? _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
                 var documents = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
-                var assistant = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightTools")
-                                ?? _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightToolDock");
 
                 // Only the columns actually present get a share, so hiding one hands its width to the
                 // documents rather than leaving a gap the framework has to guess about.
                 var leftShare = left != null ? _mainDockLeftProportion : 0;
-                var assistantShare = assistant != null ? _mainDockAssistantProportion : 0;
 
                 if (left != null) left.Proportion = leftShare;
-                if (assistant != null) assistant.Proportion = assistantShare;
-                if (documents != null) documents.Proportion = 1.0 - leftShare - assistantShare;
+                if (documents != null) documents.Proportion = 1.0 - leftShare;
 
-                _mainDockRightProportion = 1.0 - leftShare - assistantShare;
+                _mainDockRightProportion = 1.0 - leftShare;
 
-                Log.Debug("*** ApplyMainDockProportions: left={Left:F3}, documents={Docs:F3}, assistant={Assistant:F3} ***",
-                    leftShare, 1.0 - leftShare - assistantShare, assistantShare);
+                Log.Debug("*** ApplyMainDockProportions: left={Left:F3}, documents={Docs:F3} ***",
+                    leftShare, 1.0 - leftShare);
             }
             catch (Exception ex)
             {
@@ -3251,8 +3145,6 @@ namespace CST.Avalonia.Services
                     var leftDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
                                    ?? mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
                     var documentDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
-                    var assistantDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightTools")
-                                        ?? mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightToolDock");
 
                     if (leftDock != null && documentDock != null)
                     {
@@ -3261,9 +3153,6 @@ namespace CST.Avalonia.Services
 
                         _mainDockLeftProportion = leftDock.Proportion;
                         _mainDockRightProportion = documentDock.Proportion;
-                        // Captured on the same terms as the other two, or opening a book would silently
-                        // resize the assistant column the reader had just set. (#586)
-                        if (assistantDock != null) _mainDockAssistantProportion = assistantDock.Proportion;
 
                         Log.Debug("*** CaptureMainDockProportions: Captured Left={Left:F3} (ID: {LeftId}), Right={Right:F3} (was Left={OldLeft:F3}, Right={OldRight:F3}) ***",
                             _mainDockLeftProportion, leftDock.Id, _mainDockRightProportion, oldLeft, oldRight);
@@ -3325,23 +3214,18 @@ namespace CST.Avalonia.Services
                     var leftDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
                                    ?? mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
                     var documentDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
-                    var assistantDock = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightTools")
-                                        ?? mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "RightToolDock");
 
                     if (leftDock != null && documentDock != null)
                     {
                         var currentLeft = leftDock.Proportion;
                         var currentRight = documentDock.Proportion;
-                        var currentAssistant = assistantDock?.Proportion ?? _mainDockAssistantProportion;
 
                         // Only restore if proportions have changed significantly (framework recalculated)
                         if (Math.Abs(currentLeft - _mainDockLeftProportion) > 0.01 ||
-                            Math.Abs(currentRight - _mainDockRightProportion) > 0.01 ||
-                            Math.Abs(currentAssistant - _mainDockAssistantProportion) > 0.01)
+                            Math.Abs(currentRight - _mainDockRightProportion) > 0.01)
                         {
                             leftDock.Proportion = _mainDockLeftProportion;
                             documentDock.Proportion = _mainDockRightProportion;
-                            if (assistantDock != null) assistantDock.Proportion = _mainDockAssistantProportion;
 
                             Log.Debug("*** RestoreMainDockProportions: Restored proportions from Left={CurrentLeft:F3} (ID: {LeftId}), Right={CurrentRight:F3} to Left={TargetLeft:F3}, Right={TargetRight:F3} ***",
                                 currentLeft, leftDock.Id, currentRight, _mainDockLeftProportion, _mainDockRightProportion);
