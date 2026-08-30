@@ -2,8 +2,22 @@
 
 **Date:** November 10, 2025
 **Branch:** `experimental/cef-controlrecycling-workarounds`
-**Status:** 🧪 **Research / Proof-of-Concept**
+**Status:** ⛔ **SUPERSEDED — historical record only. Do not implement from this document.**
 **Related:** [CONTROL_RECYCLING_CEF_CRASH.md](../implementation/CONTROL_RECYCLING_CEF_CRASH.md)
+
+> **What actually shipped (#39):** drag-to-float, not buttons. This document's central
+> recommendation — `CanFloat = false` on documents, with float driven only by explicit
+> buttons — was **not** adopted. Books, PDFs and the dictionary are freely draggable and
+> floatable. The crash is prevented instead by funnelling every float/move trigger through
+> overrides that dispose and evict the live CEF browser *before* the move and let a fresh
+> one be built: `CstDockFactory.SplitToWindow` and `DisposeAndEvictRecycledView`, with
+> "Float all" blocked outright.
+>
+> The invariant this document was written to protect still holds — **never carry a live
+> WebView across a re-parent** — but every mechanism proposed below is obsolete. See
+> [DOCK_SUBSYSTEM.md](../architecture/DOCK_SUBSYSTEM.md) and
+> [DOCK_WEBVIEW_WORKAROUNDS.md](../architecture/DOCK_WEBVIEW_WORKAROUNDS.md) for the
+> shipped design.
 
 ## Executive Summary
 

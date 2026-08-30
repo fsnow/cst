@@ -2267,8 +2267,25 @@ namespace CST.Avalonia.ViewModels
     }
 
     /// <summary>
-    /// Lifecycle operations for WebView management during float/unfloat
-    /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md Phase 4
+    /// Lifecycle signals for disposing and rebuilding a WebView around a float/unfloat.
+    ///
+    /// <para><b>DORMANT — nothing sets the four float states, and that is intentional. Do not delete them.</b>
+    /// They are scaffolding retained for #419 (float/unfloat for Source-PDF tabs). The float/unfloat buttons
+    /// that used to drive this were removed in #39 when drag-to-float shipped, taking the only writers with
+    /// them (<c>FloatDockableWithoutRecycling</c> / <c>UnfloatDockableWithoutRecycling</c>, both since
+    /// deleted). The enum, the view-model properties and both views' handlers survive; the only assignment
+    /// left in the tree is a reset to <c>None</c> inside the handler that reacts to it. Nothing misbehaves,
+    /// because these states are never entered. (#896)</para>
+    ///
+    /// <para><b>Whoever implements #419: this is probably not the mechanism you want.</b> The shipped float
+    /// path is the dispose-before-move funnel — <c>CstDockFactory.SplitToWindow</c> calling
+    /// <c>DisposeAndEvictRecycledView</c> before the move, so a fresh browser is built at the destination —
+    /// which already covers <c>PdfDisplayViewModel</c>. This enum is the older, button-era approach.</para>
+    ///
+    /// <para>The prior reference here, to <c>docs/research/BUTTON_BASED_FLOAT_APPROACH.md</c> Phase 4, is
+    /// SUPERSEDED: that document recommends <c>CanFloat = false</c> on documents, which is the opposite of
+    /// what shipped. See <c>docs/architecture/DOCK_SUBSYSTEM.md</c> — and #895, since those docs are
+    /// themselves still being corrected.</para>
     /// </summary>
     public enum WebViewLifecycleOperation
     {

@@ -28,23 +28,37 @@ public static class WebViewShortcutRelay
 {
     public const string MessagePrefix = "CST_VIEW_SHORTCUT:";
 
+    // The command vocabulary, interpolated into the generated script AND switched on when a message comes
+    // back — so the two can never drift. Naming them separately in the JavaScript and in the handler made a
+    // typo silently equivalent to the bug this class exists to prevent: the message would arrive, fall to
+    // the switch's default arm, log a warning nobody reads, and the key would go on doing nothing. (#846)
+    internal const string CommandSelectBook = "SELECT_BOOK";
+    internal const string CommandDictionary = "DICTIONARY";
+    internal const string CommandFindInPage = "FIND_IN_PAGE";
+    internal const string CommandSearch = "SEARCH";
+    internal const string CommandSettings = "SETTINGS";
+
     /// <summary>
     /// JavaScript to inject once the page has loaded. <paramref name="viewId"/> identifies the view in the
     /// messages it pushes back.
     ///
-    /// <paramref name="includeFind"/> controls Ctrl/Cmd+SHIFT+F (Search for Selection), and also whether
-    /// plain Ctrl/Cmd+F is swallowed. The PDF viewer passes false, so neither is claimed there and the
-    /// keystroke reaches Chromium's own PDF find.
+    /// <paramref name="includeFind"/> controls both find keys: plain Ctrl/Cmd+F (Find in Page, on the
+    /// active BOOK) and Ctrl/Cmd+Shift+F (Search for Selection). The PDF viewer passes false; every other
+    /// relaying view takes the default.
     ///
-    /// Note that find finds nothing in practice: the source PDFs are page SCANS with no text layer. Leaving
-    /// the key unclaimed is still the right default — it is the standard behaviour for a PDF, and it would
-    /// start working for free if those documents ever gained OCR text — but do not read this as protecting
-    /// a capability that currently exists. (Confirmed by the maintainer, 2026-08-11.)
+    /// <para><b>Why the PDF viewer opts out.</b> The source PDFs are page SCANS with no text layer, so
+    /// there is nothing in them to find, now or ever — and its plugin frame does not deliver the keystroke
+    /// to us in any case. (Confirmed by the maintainer, 2026-08-11 and again 2026-08-29.) Nor is there a
+    /// Chromium find to leave it to: Chrome's find bar is browser chrome, not web content, so CEF ships
+    /// <c>CefBrowserHost.Find</c> with no UI and WebViewControl does not surface even that. Find works in
+    /// book tabs because <c>BookDisplayView.ShowFindBar</c> is ours.</para>
     ///
-    /// #570 moved Search for Selection from Cmd+F to Cmd+Shift+F, because Cmd+F is now Find in Page. Plain
-    /// Cmd+F is deliberately NOT relayed from these views: find-in-page applies to book text, and none of
-    /// the relaying views (Welcome, the dictionary meaning pane, the PDF viewer) is a book. Leaving it
-    /// unclaimed means Chromium's own find still works in the PDF viewer, where it is genuinely useful.
+    /// <para><b>#570, and why plain Cmd+F is relayed after all.</b> #570 moved Search for Selection to
+    /// Cmd+Shift+F and swallowed plain Cmd+F here, reasoning that none of the relaying views is a book.
+    /// True, but find does not act on this view — it acts on the open book, which is what Cmd+F does from
+    /// every other focus location in the window, the dictionary's own word list included. Swallowing it
+    /// made the meaning pane the one place in the app where Cmd+F died (#846). It now forwards to the menu
+    /// item's own handler, so it cannot resolve a different book than the word list does.</para>
     /// </summary>
     public static string BuildScript(string viewId, bool includeFind = true) => @"
         (function() {
@@ -64,21 +78,13 @@ public static class WebViewShortcutRelay
 
                 // Deliberately NOT forwarded: e/g/p and shift variants are book commands, and w is
                 // handled per-view where a closable tab exists.
-                // #570: plain Cmd/Ctrl+F. These views have no book, so find-in-page has nothing to act
-                // on — but on macOS an unconsumed key equivalent bubbles to AppKit, where the native menu's
-                // Find in Page item would fire and open the find bar on whichever book happens to be active
-                // BEHIND this view. Swallowing it here is the honest no-op. The PDF viewer opts out
-                // (includeFind false) because Chromium's own find genuinely works there and is wanted.
-                if (k === 'f' && !event.shiftKey && " + (includeFind ? "true" : "false") + @") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                }
 
-                if (k === 'o' && !event.shiftKey) { name = 'SELECT_BOOK'; }
-                else if (k === 'd' && !event.shiftKey) { name = 'DICTIONARY'; }
-                else if (k === 'f' && event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = 'SEARCH'; }
-                else if (k === ',') { name = 'SETTINGS'; }
+                if (k === 'o' && !event.shiftKey) { name = '" + CommandSelectBook + @"'; }
+                else if (k === 'd' && !event.shiftKey) { name = '" + CommandDictionary + @"'; }
+                // #846: plain F finds in the active BOOK, not in this view. See BuildScript's docs.
+                else if (k === 'f' && !event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = '" + CommandFindInPage + @"'; }
+                else if (k === 'f' && event.shiftKey && " + (includeFind ? "true" : "false") + @") { name = '" + CommandSearch + @"'; }
+                else if (k === ',') { name = '" + CommandSettings + @"'; }
 
                 if (name === null) { return; }
 
@@ -122,10 +128,10 @@ public static class WebViewShortcutRelay
             {
                 switch (command)
                 {
-                    case "SELECT_BOOK":
+                    case CommandSelectBook:
                         SimpleTabbedWindow.RevealSelectBookPanel();
                         break;
-                    case "SETTINGS":
+                    case CommandSettings:
                         _ = App.ShowSettingsWindow();
                         break;
                     // No book is focused in these views, so both simply reveal their tool with no selection.
@@ -135,11 +141,17 @@ public static class WebViewShortcutRelay
                     // to the first split's book" (the #443 wrong-book bug), so ⌘D/⌘F acted on some other
                     // book's selection. Revealing the tool with no selection is the honest answer from a
                     // view that has no book. Not a regression, but not a no-op either. (fable review)
-                    case "DICTIONARY":
+                    case CommandDictionary:
                         _ = SimpleTabbedWindow.LookUpInDictionaryAsync(null);
                         break;
-                    case "SEARCH":
+                    case CommandSearch:
                         _ = SimpleTabbedWindow.SearchForSelectionAsync(null);
+                        break;
+                    // Unlike the two above, this one is NOT selection-driven and so loses nothing by
+                    // arriving from a bookless view: it opens the find bar on the active book, exactly as
+                    // the menu item does for every non-WebView focus location. (#846)
+                    case CommandFindInPage:
+                        SimpleTabbedWindow.ShowFindInActiveBook();
                         break;
                     default:
                         logger.Warning("Unknown view shortcut command: {Command}", command);

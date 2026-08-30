@@ -84,8 +84,15 @@ public partial class PdfDisplayView : UserControl
     {
         try
         {
-            // includeFind: false — leave Ctrl+F to Chromium's find-in-page, which is the shortcut that
-            // actually matters in a PDF. (fable review)
+            // includeFind: false — no find here, for two independent reasons. The source PDFs are page
+            // SCANS with no text layer, so there is nothing in them to find and there never will be; and
+            // the plugin frame below does not deliver the key to us in any case.
+            //
+            // An earlier comment here claimed the opt-out was to leave Ctrl+F to "Chromium's own
+            // find-in-page, which genuinely works there". It does not exist: Chrome's find bar is browser
+            // chrome, not web content, so CEF ships the API (CefBrowserHost.Find) with no UI, and
+            // WebViewControl does not surface even that. Find in the book tabs is our own find bar
+            // (BookDisplayView.ShowFindBar), which is why it works there and only there. (#846)
             _webView?.ExecuteScript(WebViewShortcutRelay.BuildScript(_shortcutViewId, includeFind: false));
             _logger.Debug("PdfDisplayView: shortcut relay injected (view {ViewId})", _shortcutViewId);
         }

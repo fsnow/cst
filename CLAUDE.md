@@ -15,8 +15,9 @@ CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform P
 - **Script-conversion code uses `\uXXXX` escapes** — never paste literal/invisible non-Latin characters into source.
 - **The corpus XML is UTF-16-LE** — byte-level `grep`/`sed` is unreliable; decode first. (Repo *source* files are UTF-8 + LF, enforced by `.gitattributes` — only the corpus is UTF-16.)
 - **The docking UI is non-negotiable** — never remove, replace, or "simplify away" the dock-based interface.
-- **CEF/WebView: never carry a *live* WebView across a re-parent** — it SIGSEGVs on macOS. Float/unfloat go through the controlled button paths (dispose-before-move + fresh browser). See [docs/architecture/DOCK_SUBSYSTEM.md](docs/architecture/DOCK_SUBSYSTEM.md).
-- **Downloaded source PDFs are a preservation mechanism, not an evictable cache** — never propose deleting them.
+- **CEF/WebView: never carry a *live* WebView across a re-parent** — it SIGSEGVs on macOS. Books, PDFs and the dictionary are freely draggable and floatable (#39) *because* every float/move trigger funnels through overrides that dispose and evict the live browser first and let a fresh one be built — `SplitToWindow` (drag release, invalid-target drop, float indicator, tab double-click, context-menu Float) and `DisposeAndEvictRecycledView`; "Float all" is blocked outright. **The hazard now is a new path that re-parents a view without going through that funnel.** See [docs/architecture/DOCK_SUBSYSTEM.md](docs/architecture/DOCK_SUBSYSTEM.md).
+- **Downloaded source PDFs are a preservation mechanism, not an evictable cache** — never propose deleting them. They are page **scans with no text layer**: find, text extraction and selection in the PDF pane are impossible by construction, not merely unimplemented. Don't investigate making them work.
+- **Find is a book feature.** Cmd/Ctrl+F opens the app's own find bar (`BookDisplayView.ShowFindBar`) on the active book, from wherever focus happens to be — never a find over a tool pane's own content. There is no Chromium find to fall back on: Chrome's find bar is browser chrome, not web content, so CEF ships the API without UI and WebViewControl doesn't surface it.
 - **Never suggest pausing, "calling it", or a "stopping point"** — you have no sense of elapsed time, so it is never your call. Finish the task, report the result, and either continue or wait for the next instruction. The user decides when to stop.
 
 ## Build / run / test
@@ -34,6 +35,14 @@ macOS packaging/signing/notarization: `src/CST.Avalonia/package-macos.sh {arm64|
 
 ## macOS code signing & entitlements
 **Notarized apps fail *silently* without the right entitlements** (network calls hang → high CPU from retries, not a clear error). Required (in `package-macos.sh`): `cs.allow-jit`, `cs.allow-unsigned-executable-memory`, `cs.disable-library-validation`, `network.client`. Adding a feature that needs more (camera, mic, server, downloads…)? Add the entitlement and re-verify: `codesign -d --entitlements - "/Applications/CST Reader.app"`.
+
+## Working with issues
+Several Claude sessions work this repo (different machines, plus review subagents) and **share no memory with each other**. Anything that should bind all of them lives here or in `docs/`, never in one session's private notes.
+
+- **A bug issue needs Expected / Actual / Contrast, plus how it was found.** The contrast case — where the same action *does* work — is the highest-value line, because it is what separates a defect from intended behaviour. Ask for it if it is missing. Without a stated expectation, the next agent infers intent from code comments, which record *past* intent and may be stale.
+- **The issue body is the record, not a transcript.** Edit the body as understanding improves; delete your own wrong comment rather than stacking a retraction on it. Comment only to add something a future reader needs — a decision, a measurement, an outcome.
+- **"Working as designed" is never a conclusion to post on your own.** It contradicts a human's report, and the maintainer owns intent. Bring the evidence to him first.
+- **Read the contract, not just the code.** XML doc comments on the method you are changing often already answer the question — and separate durable facts (dated, attributed) from rationale, which rots. A comment can be right about the fact and wrong about the reason.
 
 ## Documentation workflow
 Docs live in `docs/` (`architecture/`, `implementation/`, `features/{planned,in-progress,implemented}`, `research/`, `development/`, `testing/`). Feature docs move planned → in-progress → implemented. **When adding/removing a doc, update [docs/README.md](docs/README.md).** Bugs/features are tracked as GitHub issues, not in markdown backlogs.
