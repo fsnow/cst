@@ -45,6 +45,14 @@ screenshots/
 # Agent worktrees (isolated subagent workspaces) must never be committed
 .claude/worktrees/
 
+# Agent definitions and their accumulated notes are per-contributor tooling, not project
+# source: they encode how one person's assistant works, and go stale silently because
+# nothing builds or tests them. Skills under .claude/skills/ ARE tracked — those encode
+# repeatable project procedure.
+.claude/agents/
+.claude/agent-memory-local/
+.claude/agent-memory/
+
 
 
 docs/.jot-order
