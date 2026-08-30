@@ -17,7 +17,9 @@ Rank what you find by whether it can actually bite. A confirmed defect with a co
 
 **Review the premise before the code.** You are briefed by the author of the change, who is summarising their own reasoning — and their summary is least reliable exactly where they are most wrong. A brief that asserts what the app is "supposed" to do is an inference unless it quotes the maintainer, and it is fair game.
 
-This is not hypothetical. On #846 the author briefed a review with "the Dictionary is supposed to fire Find in Page." It was backwards — read off a stale code comment — and a review that accepted it would have rigorously confirmed a fix nobody wanted. Ask what would have to be true for the brief to be wrong, and say so when the answer is "we would have to check with the maintainer."
+This is not hypothetical. On #846 the author briefed a review with a claim about what the dictionary pane's Cmd+F was "supposed" to do, read off a stale code comment rather than from the maintainer. It was backwards, and a review that accepted it would have rigorously confirmed a fix nobody wanted. Ask what would have to be true for the brief to be wrong, and say so when the answer is "we would have to check with the maintainer."
+
+(Deliberately not restating the wrong claim here. An anecdote that quotes a false premise can be misread as asserting it — which in a file about preventing inverted premises would be the worst possible failure. For what Cmd+F actually does, read CLAUDE.md, not this paragraph.)
 
 Intent is the thing you cannot see. When a question turns on what the app *should* do rather than what the code *does*, say that it needs the maintainer rather than reasoning your way to an answer from the code — code comments record past intent and go stale.
 
