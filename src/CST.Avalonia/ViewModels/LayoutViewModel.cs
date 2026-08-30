@@ -282,11 +282,11 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public void ShowAssistantPanel() =>
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
-                () => IsAssistantPanelVisible = true, "Assistant", right: true);
+                () => IsAssistantPanelVisible = true, "AI Assistant", right: true);
 
         public void HideAssistantPanel()
         {
-            HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "Assistant");
+            HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "AI Assistant");
 
             // Hand the freed width to the documents rather than leaving it unclaimed. (#656)
             if (_factory is CstDockFactory factory) factory.RebalanceMainDock();

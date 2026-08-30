@@ -297,7 +297,7 @@ namespace CST.Avalonia.Services
             var rightToolDock = new ToolDock
             {
                 Id = "RightToolDock",
-                Title = "Assistant",
+                Title = "AI Assistant",
                 ActiveDockable = assistantTool,
                 VisibleDockables = assistantTool is null
                     ? CreateList<IDockable>()
@@ -1751,7 +1751,7 @@ namespace CST.Avalonia.Services
             var rightToolDock = new ToolDock
             {
                 Id = "RightToolDock",
-                Title = "Assistant",
+                Title = "AI Assistant",
                 Alignment = Alignment.Right,
                 GripMode = GripMode.Visible,
                 CanDrag = true,

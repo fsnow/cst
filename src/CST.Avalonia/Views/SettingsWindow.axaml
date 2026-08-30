@@ -548,7 +548,7 @@
                                      models reject sampling parameters with a 400. -->
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
-                                        <TextBlock Text="Assistant" Classes="SettingLabel"/>
+                                        <TextBlock Text="AI Assistant" Classes="SettingLabel"/>
 
                                         <CheckBox IsChecked="{Binding ChatEnabled}"
                                                  IsEnabled="{Binding SubPermissionsEnabled}"

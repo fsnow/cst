@@ -52,7 +52,7 @@
     </UserControl.Styles>
 
     <StackPanel>
-        <TextBlock Text="Choose the models you want to switch between. They are what the Assistant offers when you ask a question."
+        <TextBlock Text="Choose the models you want to switch between. They are what the AI Assistant offers when you ask a question."
                    Classes="SettingDescription"/>
 
         <TextBlock IsVisible="{Binding HasNoConnections}"

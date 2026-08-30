@@ -97,7 +97,7 @@ public class AiAssistantViewModel : ReactiveTool
         EffortPicker = new AiEffortPickerViewModel(connections, settings);
 
         Id = "AiAssistantTool";
-        Title = "Assistant";
+        Title = "AI Assistant";
         CanClose = false;
         CanFloat = true;
         CanPin = false;

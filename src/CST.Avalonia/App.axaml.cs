@@ -1831,7 +1831,7 @@ public partial class App : Application
                                     }
                                     // Must stay in lockstep with the View-menu header in
                                     // SimpleTabbedWindow.axaml: the toggle is wired by matching that string.
-                                    else if (viewSubItem.Header?.ToString() == "Assistant")
+                                    else if (viewSubItem.Header?.ToString() == "AI Assistant")
                                     {
                                         _assistantMenuItems.Add(viewSubItem);
                                         viewSubItem.ToggleType = NativeMenuItemToggleType.CheckBox;
@@ -2066,7 +2066,7 @@ public partial class App : Application
             // Without an entry here a reader who did that from a floating window had no way back to it.
             var assistantItem = new NativeMenuItem
             {
-                Header = "Assistant",
+                Header = "AI Assistant",
                 ToggleType = NativeMenuItemToggleType.CheckBox,
                 IsChecked = layoutViewModel?.IsAssistantPanelVisible ?? false
             };
