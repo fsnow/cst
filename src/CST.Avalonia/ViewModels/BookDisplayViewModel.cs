@@ -656,32 +656,76 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public async Task CaptureCurrentPositionAsync()
         {
-            if (BookDisplayControl != null)
-            {
-                try
-                {
-                    var anchor = await BookDisplayControl.GetCurrentParagraphAnchorAsync();
-                    if (!string.IsNullOrEmpty(anchor) && anchor != "null")
-                    {
-                        _lastCapturedAnchor = anchor;
-                        _logger.Information("Captured final position before shutdown: {Anchor}", anchor);
-                    }
+            // Hoisted ONCE: ControlRecycling nulls BookDisplayControl (View.OnDataContextChanged) when a
+            // drag rebuilds this book's view, and both captures below yield to the same UI-thread
+            // dispatcher that delivers that change. The old shape re-read the property after each await,
+            // threw NRE mid-capture, and left a fresh anchor beside a stale token. (#891)
+            var control = BookDisplayControl;
+            if (control == null) return;
 
-                    // Also refresh the #434 token — it is PREFERRED over _lastCapturedAnchor on restore, so a
-                    // scroll in the final sub-tick window must update the token too, or the fresh anchor above
-                    // would be ignored in favour of an up-to-one-tick-staler token. (Fable cross-run review §2)
-                    var token = await BookDisplayControl.GetCurrentPositionTokenAsync();
-                    if (token != null)
-                    {
-                        _lastPositionToken = token;
-                        _logger.Debug("Captured final reading-position token before shutdown");
-                    }
-                }
-                catch (Exception ex)
+            try
+            {
+                var (token, anchor) = await CaptureFinalPositionCoreAsync(
+                    () => control.GetCurrentPositionTokenAsync(),
+                    () => control.GetCurrentParagraphAnchorAsync(),
+                    hasStoredToken: _lastPositionToken != null);
+
+                if (token != null)
                 {
-                    _logger.Warning(ex, "Failed to capture final position before shutdown");
+                    _lastPositionToken = token;
+                    _logger.Debug("Captured final reading-position token before shutdown");
                 }
+                if (anchor != null)
+                {
+                    _lastCapturedAnchor = anchor;
+                    _logger.Information("Captured final position before shutdown: {Anchor}", anchor);
+                }
+                if (token == null && anchor == null)
+                    _logger.Debug("Final position capture unavailable - keeping the last consistent anchor/token pair");
             }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Failed to capture final position before shutdown");
+            }
+        }
+
+        /// <summary>
+        /// Decides what the final pre-shutdown capture commits, given the two capture calls and whether a
+        /// rolling #434 token is already stored. Policy over injected captures so it is unit-testable
+        /// without a live WebView (InternalsVisibleTo CST.Avalonia.Tests). (#891)
+        ///
+        /// <para>
+        /// The invariant: the stored anchor and token must describe the SAME moment, because restore
+        /// PREFERS the token — a fresh anchor beside a staler token is silently ignored in the token's
+        /// favour, which is exactly the "reopened a bit off" drift of #551/#537. Hence:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item>The token is captured FIRST. If teardown interrupts between the two calls, the partial
+        ///     result is "fresh token + stale anchor" — the token wins on restore, so that is correct —
+        ///     never the reverse.</item>
+        ///   <item>If the token cannot be captured but one is already stored, the anchor is NOT captured
+        ///     either: restore would ignore a fresh anchor anyway, and refreshing it would desynchronize
+        ///     the pair. The stored pair is at most one 200ms status tick stale, both halves from the
+        ///     same tick.</item>
+        ///   <item>If NO token was ever captured (a book closed within its first tick), the anchor is all
+        ///     restore has, so a fresh one is taken.</item>
+        /// </list>
+        /// A null in the result means "leave that field alone". The anchor is normalized: empty or the JS
+        /// literal "null" count as no capture.
+        /// </summary>
+        internal static async Task<(ReadingPositionToken? Token, string? Anchor)> CaptureFinalPositionCoreAsync(
+            Func<Task<ReadingPositionToken?>> captureToken,
+            Func<Task<string?>> captureAnchor,
+            bool hasStoredToken)
+        {
+            var token = await captureToken();
+            if (token == null && hasStoredToken)
+                return (null, null);
+
+            var anchor = await captureAnchor();
+            if (string.IsNullOrEmpty(anchor) || anchor == "null")
+                anchor = null;
+            return (token, anchor);
         }
 
         public string CurrentParagraph
