@@ -12,7 +12,13 @@ namespace CST.Lexicon
     /// </summary>
     public sealed class LexiconReader
     {
-        private readonly LexiconEntry[] _entries;   // sorted by (ipe_key ordinal, homonym, rowid)
+        // Sorted by (ipe_key ordinal, homonym) — the same ordinal comparison the binary search uses.
+        // Ties break ARBITRARILY: rowid is never read (the load is "SELECT headword, body_html FROM entry",
+        // with no ORDER BY and no rowid column) and Array.Sort is unstable, so two rows sharing a key and
+        // homonym may come back in either order, and in a different order after an unrelated data change.
+        // Nothing may rely on their relative order without adding a real tiebreaker to both the sort and
+        // the row load. (R13-6)
+        private readonly LexiconEntry[] _entries;
         public LexiconMeta Meta { get; }
 
         private LexiconReader(LexiconEntry[] entries, LexiconMeta meta)
