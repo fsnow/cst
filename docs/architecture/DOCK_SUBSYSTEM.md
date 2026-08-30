@@ -2,7 +2,7 @@
 
 **Status:** Current-behaviour map, and the foundation for the planned dock-stabilization overhaul.
 
-**Last reconciled against the code: 2026-08-29** (every assertion below was re-checked; line numbers are
+**Last reconciled against the code: 2026-08-30** (every assertion below was re-checked; line numbers are
 from that date and drift — treat them as hints, not addresses). Superseded material is deleted rather than
 annotated: git is the history.
 
@@ -14,7 +14,7 @@ framework that re-parents controls. The docking UI itself is a non-negotiable mu
 
 ## 1. Layout object model
 
-Built once in `CstDockFactory.CreateLayout()` ([87](../../src/CST.Avalonia/Services/CstDockFactory.cs#L87)):
+Built once in `CstDockFactory.CreateLayout()` ([85](../../src/CST.Avalonia/Services/CstDockFactory.cs#L85)):
 
 ```
 Root (RootDock, Id="Root")
@@ -24,30 +24,29 @@ Root (RootDock, Id="Root")
       │  └─ LeftToolDock (ToolDock, Id="LeftToolDock", Alignment.Left)
       │     ├─ OpenBookDialogViewModel   (tool: "Open a Book" tree)
       │     ├─ SearchViewModel           (tool: Search panel)
-      │     └─ DictionaryViewModel       (tool: Dictionary — hosts a CEF WebView, #466)
+      │     ├─ DictionaryViewModel       (tool: Dictionary — hosts a CEF WebView, #466)
+      │     └─ AiAssistantViewModel      (tool: AI Assistant — only when it is enabled, #906)
       ├─ MainSplitter (ProportionalDockSplitter)
-      ├─ MainDocumentDock (DocumentDock, Proportion 1.0 − 0.25 − 0.18)
-      │  └─ WelcomeViewModel (ReactiveDocument, Id="WelcomeDocument") + book/PDF documents
-      ├─ RightSplitter (ProportionalDockSplitter)   ┐ present only when the
-      └─ RightTools (ProportionalDock, Prop 0.18)   │ Assistant is enabled
-         └─ RightToolDock (ToolDock, Alignment.Right)
-            └─ AiAssistantViewModel
+      └─ MainDocumentDock (DocumentDock, Proportion 1.0 − 0.25)
+         └─ WelcomeViewModel (ReactiveDocument, Id="WelcomeDocument") + book/PDF documents
 ```
 
 - Tools and documents **are** the ViewModels (ReactiveTool / ReactiveDocument) — no wrapper objects.
-- **The right column is conditional.** When the Assistant is off, `MainDock` is built with three children
-  (`leftTools, splitter, documentDock`) and neither `RightSplitter` nor `RightTools` exists
-  ([335](../../src/CST.Avalonia/Services/CstDockFactory.cs#L335)). Anything walking `MainDock`'s children
-  must tolerate both shapes.
-- **The Assistant is on the right deliberately** (#586): a generated answer is prose to be read *alongside*
-  the passage, and as a fourth tab in the left rail it both got the narrowest column and cost the reader
-  whichever of Open Book, Search or Dictionary they were using.
+- **`MainDock` always has the same three children** — `leftTools`, the splitter, the document dock. The
+  Assistant's presence changes only how many tabs `LeftToolDock` holds, so nothing walking `MainDock` has
+  to tolerate two shapes.
+- **The Assistant is a fourth left tool** (#906). It previously had a column of its own on the right, which
+  put the documents between two tool docks. In the maintainer's words: *"Two tool docks leave the documents
+  too narrow, and the width the Assistant is taking is not width it needs — the left dock is already a
+  comfortable width and four tabs fit in it without crowding."* The documents went from 0.57 of the width
+  to 0.75. The cost, accepted knowingly, is that opening the Assistant hides whichever of the other three
+  tools was showing.
 - **`WelcomeDocument` is a workaround, not a design preference.** Permanent and non-closeable
   (`CanClose = false`, `WelcomeViewModel.cs:93`) to stop `MainDocumentDock` from going empty and being
   collapsed by cleanup — not because an always-present welcome page is wanted. See §7 Q3: now that the spine
   is explicitly protected, this keep-alive may be retirable.
 - Floating windows are `CstHostWindow`s tracked in `CstDockFactory.HostWindows`
-  ([401](../../src/CST.Avalonia/Services/CstDockFactory.cs#L401)); each has its own `Layout` — an
+  ([373](../../src/CST.Avalonia/Services/CstDockFactory.cs#L373)); each has its own `Layout` — an
   independent dock tree with its own `DocumentDock`. A floating window can hold **multiple books**, and
   dragging one floated window's tab onto another combines them: an **intended grouping feature to preserve**.
 
@@ -59,16 +58,16 @@ Three id conventions coexist, and all three are now deliberate:
 
 | Kind | Examples | Source |
 |---|---|---|
-| **Fixed well-known** | `Root`, `WindowLayout`, `MainDock`, `LeftTools`, `LeftToolDock`, `MainDocumentDock`, `MainSplitter`, `RightTools`, `RightToolDock`, `RightSplitter`, `WelcomeDocument` | Hardcoded in `CreateLayout` |
+| **Fixed well-known** | `Root`, `WindowLayout`, `MainDock`, `LeftTools`, `LeftToolDock`, `MainDocumentDock`, `MainSplitter`, `WelcomeDocument` | Hardcoded in `CreateLayout` |
 | **GUID-based** | book documents (auto GUID), search opens `Search_{file}_{guid:N}`, window ids | Per-instance |
 | **Stamped GUID** | `PDock_{guid}`, `ToolDock_{guid}`, `DocDock_{guid}`, `RootDock_{guid}` | Framework-created docks, stamped by the factory's `Create*` overrides |
 
 **Framework-created docks used to be born with an empty id**, which broke every fixed-id lookup and let
 anonymous structures accumulate and nest during drags. That is fixed: `CreateProportionalDock`
-([1581](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1581)), `CreateToolDock`
-([1591](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1591)), `CreateDocumentDock`
-([1563](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1563)) and `CreateRootDock`
-([1599](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1599)) each stamp a unique id when the framework
+([1553](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1553)), `CreateToolDock`
+([1535](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1535)), `CreateDocumentDock`
+([1535](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1535)) and `CreateRootDock`
+([1571](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1571)) each stamp a unique id when the framework
 leaves one empty. **No dock is anonymous any more.** Keep it that way: a new `Create*` override that forgets
 to stamp reintroduces the whole class.
 
@@ -78,8 +77,8 @@ is normal Dock behaviour and not a defect in itself. The defect was only ever th
 ### The protected spine
 
 The invariant spine is `Root → WindowLayout → MainDock → MainDocumentDock`, registered in `CreateLayout`
-([363](../../src/CST.Avalonia/Services/CstDockFactory.cs#L363)) and honoured by `IsProtectedSpine`
-([2834](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2834)), which `IsEmptyDock`, `FindEmptySplits`
+([335](../../src/CST.Avalonia/Services/CstDockFactory.cs#L335)) and honoured by `IsProtectedSpine`
+([2732](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2732)), which `IsEmptyDock`, `FindEmptySplits`
 and `RemoveEmptySplit` all consult. Spine docks are never treated as empty or redundant, so they survive
 cleanup even when single-child.
 
@@ -87,18 +86,16 @@ cleanup even when single-child.
 (document-area splits produce several docks carrying `MainDocumentDock`'s id), and those clones must *not*
 be protected. Only the four original instances are.
 
-**The tool columns are not spine, and that is the design.** Both `LeftTools`/`LeftToolDock` and
-`RightTools`/`RightToolDock` are variable parts: they may legitimately be emptied, floated out, or
-collapsed, and they come back through recreate-on-demand (`EnsureLeftToolDock`
-[1654](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1654), `EnsureRightToolDock`
-[1736](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1736)) rather than by being pinned in place. The
-Assistant column was added under this rule and required no change to the spine.
+**The tool column is not spine, and that is the design.** `LeftTools`/`LeftToolDock` is a variable part: it
+may legitimately be emptied, floated out, or collapsed, and it comes back through recreate-on-demand
+(`EnsureLeftToolDock`) rather than by being pinned in place. Adding the Assistant as a tool, and later
+removing its separate column (#906), each required no change to the spine — which is the rule working.
 
 ---
 
 ## 3. Component responsibilities
 
-- **`CstDockFactory.cs` (~3760 lines)** — does almost everything: builds the layout; opens books/PDFs;
+- **`CstDockFactory.cs` (~3645 lines)** — does almost everything: builds the layout; opens books/PDFs;
   close/remove; the dispose-before-move overrides (`SplitToWindow`, `SplitToDock`, `SwapDockable`,
   `MoveDockable`); `CleanupEmptySplits`; proportion capture/restore; floating-window lifecycle; the
   document collection-changed handler; `_goToSubscribedBooks`; application-state save/restore of book
@@ -136,13 +133,13 @@ same-window splits, reorders or tab switches.
 Every path that can move a CEF-hosting dockable into a different window disposes and evicts its View first,
 letting the framework build a fresh browser at the destination:
 
-- **`SplitToWindow`** ([2045](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2045)) — every
+- **`SplitToWindow`** ([1943](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1943)) — every
   float-creation trigger passes through here before the View detaches: release over empty space, a drop on
   an invalid target, the "float" drop-indicator, tab double-click, and the tab context menu's Float. The
   view model is kept (no fresh-GUID recreate); reading position rides the queued #434 token.
 - **The cross-dock `MoveDockable` / `SwapDockable` 4-arg overloads and cross-window `SplitToDock`**
-  ([1964](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1964),
-  [1984](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1984)) — same treatment for a drag between
+  ([1862](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1862),
+  [1882](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1882)) — same treatment for a drag between
   existing windows. Same-window tab moves are skipped, so instant tab switching survives.
 - **`FloatAllDockables` is suppressed outright** — it would re-parent several live browsers at once and
   sweep in the non-floatable Welcome tab. Nothing in the app needs it.
@@ -190,29 +187,29 @@ Each is a point-fix for a CEF ↔ Dock.Avalonia ↔ Avalonia-NativeControlHost i
 
 ## 5. Operation flows (entry points)
 
-- **Open book:** `OpenBook` ([425](../../src/CST.Avalonia/Services/CstDockFactory.cs#L425)) /
-  `OpenBookInNewTab` ([466](../../src/CST.Avalonia/Services/CstDockFactory.cs#L466)) / `OpenPdf`
-  ([667](../../src/CST.Avalonia/Services/CstDockFactory.cs#L667)) → `AddDocumentToLayout`
-  ([1065](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1065)). Sets `CanDrag = true` and leaves
+- **Open book:** `OpenBook` ([397](../../src/CST.Avalonia/Services/CstDockFactory.cs#L397)) /
+  `OpenBookInNewTab` ([438](../../src/CST.Avalonia/Services/CstDockFactory.cs#L438)) / `OpenPdf`
+  ([639](../../src/CST.Avalonia/Services/CstDockFactory.cs#L639)) → `AddDocumentToLayout`
+  ([1037](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1037)). Sets `CanDrag = true` and leaves
   `CanFloat = true`; subscribes events; adds to `_goToSubscribedBooks`; captures/restores MainDock
   proportions around the add.
-- **Float (drag):** `SplitToWindow` ([2045](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2045)) —
+- **Float (drag):** `SplitToWindow` ([1943](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1943)) —
   see §4.
-- **Close:** `CloseDockable` ([1881](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1881)) →
+- **Close:** `CloseDockable` ([1779](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1779)) →
   `RemoveBookWindowState` → base → `vm.Dispose()` + `_goToSubscribedBooks.Remove` → `CleanupEmptySplits`.
-- **Drag split/move/swap:** `SplitToDock` ([1172](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1172),
+- **Drag split/move/swap:** `SplitToDock` ([1144](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1144),
   which also prevents tools tab-docking into the DocumentDock),
-  `SwapDockable`/`MoveDockable` ([1964](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1964)) →
+  `SwapDockable`/`MoveDockable` ([1862](../../src/CST.Avalonia/Services/CstDockFactory.cs#L1862)) →
   `CleanupEmptySplits`.
-- **Cleanup:** `CleanupEmptySplits` ([2609](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2609)) →
+- **Cleanup:** `CleanupEmptySplits` ([2507](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2507)) →
   `FindEmptySplits` / `IsEmptyDock` / `RemoveEmptySplit` / `CleanupSplitters`, all of which spare the
   protected spine.
 - **Panel show/hide:** `LayoutViewModel.ShowSearchPanel` / `ShowSelectBookPanel` find the tool by id, else
-  create it; the container itself is rebuilt on demand by `EnsureLeftToolDock` / `EnsureRightToolDock`, so a
-  removed tool column is always recoverable without a restart.
+  create it; the container itself is rebuilt on demand by `EnsureLeftToolDock`, so a removed tool column is
+  always recoverable without a restart.
 - **Save/restore:** book windows + window geometry persisted to `ApplicationState`
-  (`SaveAllBookWindowStatesAsync` [710](../../src/CST.Avalonia/Services/CstDockFactory.cs#L710),
-  `SaveBookWindowState` [840](../../src/CST.Avalonia/Services/CstDockFactory.cs#L840)). **The dock
+  (`SaveAllBookWindowStatesAsync` [682](../../src/CST.Avalonia/Services/CstDockFactory.cs#L682),
+  `SaveBookWindowState` [812](../../src/CST.Avalonia/Services/CstDockFactory.cs#L812)). **The dock
   split-structure itself is not serialized** — only which books are open and where their windows sit.
   Window geometry restore validates against connected screens.
 
@@ -220,18 +217,10 @@ Each is a point-fix for a CEF ↔ Dock.Avalonia ↔ Avalonia-NativeControlHost i
 
 ## 6. Known failure modes
 
-1. **`RightTools` is not excluded from the redundant-single-child collapse, but `LeftTools` is.** The two
-   wrappers are structurally identical — a `ProportionalDock` holding exactly one `ToolDock`, existing to
-   own a proportion — yet the collapse checks skip only `LeftTools`, by id
-   ([2741](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2741),
-   [2900](../../src/CST.Avalonia/Services/CstDockFactory.cs#L2900)). The proportion code reads either shape
-   (`"RightTools" ?? "RightToolDock"`, [3200](../../src/CST.Avalonia/Services/CstDockFactory.cs#L3200)), so
-   a collapsed right column still gets its width — which is why this is not visibly broken. Whether the
-   asymmetry is intended has not been established.
-2. **A floated book's tab title reverting to Devanāgarī** was caused by a recreated view model's title not
+1. **A floated book's tab title reverting to Devanāgarī** was caused by a recreated view model's title not
    being re-applied in the current script. Float now keeps the same view model, so the stated cause is
    gone; whether the symptom is gone has not been re-tested.
-3. **Fixed-id fragility, residually:** id-stamping and the protected spine removed most of it, but lookups
+2. **Fixed-id fragility, residually:** id-stamping and the protected spine removed most of it, but lookups
    like `FindDockByIdRecursive(root, "MainDock")` still assume a well-known dock is present and in a sane
    place. A degraded structure will still misfire proportion capture/restore.
 
@@ -247,7 +236,7 @@ Each is a point-fix for a CEF ↔ Dock.Avalonia ↔ Avalonia-NativeControlHost i
 - **Large-file support is non-negotiable for any embedding alternative** (Q4).
 
 1. **Decompose `CstDockFactory`** into focused services: layout construction, document lifecycle,
-   floating-window management, cleanup/proportions, persistence. At ~3760 lines it is the largest single
+   floating-window management, cleanup/proportions, persistence. At ~3645 lines it is the largest single
    obstacle to reasoning about any of the above.
 2. **Restore robustness:** keep validating restored geometry and layout against the current environment;
    prefer reconstructing sane defaults over faithful replay.
