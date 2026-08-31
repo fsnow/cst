@@ -45,6 +45,43 @@ namespace CST.Avalonia.Tests.Search
             Assert.DoesNotContain("sigla", w.Text);
         }
 
+        // A danda INSIDE the note, positioned so a modest budget runs out while the walk is in the apparatus.
+        private const string DandaInNoteXml =
+            "<body><div id=\"dn1\" type=\"book\">" +
+            "<p rend=\"bodytext\" n=\"5\">alpha bravo charlie<note>one two\u0964 three</note> delta echo\u0964 " +
+            "foxtrot golf\u0964</p>" +
+            "</div></body>";
+
+        [Fact]
+        public void A_danda_inside_a_note_does_not_end_the_window()
+        {
+            var markers = BookMarkers.Build(DandaInNoteXml);
+            int start = markers.PositionOfParagraph(5);
+
+            // Apparatus rendered inline, and a budget that is reached while the walk is inside the note, so
+            // the note's own danda is the first boundary the walk meets after the budget.
+            var w = TeiPassageReader.ReadWindow(DandaInNoteXml, start, maxChars: 22,
+                includeVariants: true, outputScript: Script.Devanagari, markers);
+
+            // Whatever it decides, it must not close BETWEEN the braces.
+            Assert.Equal(w.Text.Split('{').Length, w.Text.Split('}').Length);
+        }
+
+        [Fact]
+        public void The_hard_cap_ends_before_a_note_rather_than_inside_it()
+        {
+            var markers = BookMarkers.Build(LongNoteXml);
+            int start = markers.PositionOfParagraph(5);
+
+            // No danda anywhere before the cap falls, so the walk runs to the hard cap - which the boundary
+            // guard cannot help with, because it is unconditional.
+            var w = TeiPassageReader.ReadWindow(LongNoteXml, start, maxChars: 14,
+                includeVariants: true, outputScript: Script.Devanagari, markers);
+
+            Assert.Equal(w.Text.Split('{').Length, w.Text.Split('}').Length);
+            Assert.Contains("alpha", w.Text);
+        }
+
         private static int InsideTheNote(string xml)
         {
             int open = xml.IndexOf("<note>", StringComparison.Ordinal) + "<note>".Length;

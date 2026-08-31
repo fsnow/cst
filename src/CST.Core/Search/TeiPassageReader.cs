@@ -715,6 +715,14 @@ namespace CST.Search
             int i = start, rendered = 0;
             long hardCap = (long)maxChars + maxChars / 2;
             bool budgetReached = false;
+
+            // How deep in apparatus the walk currently is, and where the outermost open note began. Only ever
+            // non-zero when includeNotes is set: otherwise the branch below strips each note's subtree and the
+            // walk is never inside one. Counted from the tags as they pass rather than scanned up front, which
+            // costs nothing on a path that runs for every window — and is exact, because every caller starts
+            // outside a note (the #913 nudge guarantees it for the one that could not otherwise). (#917)
+            int noteDepth = 0, noteOpenedAt = -1;
+
             while (i < limit)
             {
                 char c = xml[i];
@@ -724,24 +732,45 @@ namespace CST.Search
                     if (gt < 0) break;
                     string tag = xml.Substring(i, gt - i + 1);
                     string name = TeiText.TagName(tag);
-                    if (name == "note" && !includeNotes && !tag.EndsWith("/>", StringComparison.Ordinal))
+                    bool selfClosing = tag.EndsWith("/>", StringComparison.Ordinal);
+                    if (name == "note" && !includeNotes && !selfClosing)
                         // Open <note> strips its subtree; a lone </note> (walk began inside a note) is zero-width,
                         // never a subtree — else SkipSubtree jumps to the next </note>, silently skipping text. (#310 A4-2)
                         i = tag.StartsWith("</", StringComparison.Ordinal)
                             ? gt + 1
                             : TeiText.SkipSubtree(xml, gt + 1, "note", limit);
-                    else if (name == "hi" && TeiText.IsStructuralHi(tag) && !tag.EndsWith("/>", StringComparison.Ordinal))
+                    else if (name == "hi" && TeiText.IsStructuralHi(tag) && !selfClosing)
                         i = TeiText.SkipSubtree(xml, gt + 1, "hi", limit);
-                    else i = gt + 1;
+                    else
+                    {
+                        if (name == "note" && !selfClosing)
+                        {
+                            if (tag.StartsWith("</", StringComparison.Ordinal))
+                            {
+                                if (noteDepth > 0) noteDepth--;
+                            }
+                            else if (noteDepth++ == 0) noteOpenedAt = i;
+                        }
+                        i = gt + 1;
+                    }
                 }
                 else
                 {
-                    if (budgetReached && TeiText.IsBoundary(c)) return i + 1;   // stop just past a sentence end
+                    // A danda inside a <note> is apparatus punctuation, not a base-text sentence end. Stopping
+                    // there would close the window between <note> and </note>, and Clean would emit an opening
+                    // brace with nothing to match it. The other four boundary checks in this file have carried
+                    // this guard since #310; this one did not. (#917)
+                    if (budgetReached && noteDepth == 0 && TeiText.IsBoundary(c)) return i + 1;
                     rendered++;
                     i++;
                     if (rendered >= maxChars) budgetReached = true;
                     if (rendered >= hardCap)
                     {
+                        // The cap is unconditional, so it can fall inside a note where the boundary check now
+                        // cannot. End before the note opened rather than inside it — same reason — but only
+                        // when that still advances, or the window's end becomes its own nextCursor.
+                        if (noteDepth > 0 && noteOpenedAt > start) return noteOpenedAt;
+
                         // No boundary found: hard cap. Back off any half-cut akṣara — but not to nothing, or
                         // this window's end becomes its own nextCursor and the caller pages forever. (#871)
                         int cut = ClusterStart(xml, i, start);
