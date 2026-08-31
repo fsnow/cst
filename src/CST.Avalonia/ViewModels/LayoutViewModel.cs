@@ -158,8 +158,17 @@ namespace CST.Avalonia.ViewModels
         // a ReactiveTool (its Id/Title/flags are set in its constructor), so it's added directly — exactly as
         // CreateLayout does at startup; wrapping it in a generic Tool { Context } renders an empty panel
         // because the view locator resolves by dockable type. (#84)
+        /// <param name="activate">
+        /// Whether to make the panel the active tab. True for anything the reader asked for; false when the
+        /// app is putting the layout in step with itself.
+        ///
+        /// <para>All four tools share one dock (#906), so activating a panel takes the rail's active tab from
+        /// whatever was there — including the one #91 has just restored. Before #906 the assistant went into a
+        /// dock of its own, where activating it could disturb nothing. (#919)</para>
+        /// </param>
         private void ShowToolPanel(
-            string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName)
+            string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName,
+            bool activate = true)
         {
             Log.Information("[Layout] Show {Panel} panel requested", panelName);
 
@@ -189,8 +198,11 @@ namespace CST.Avalonia.ViewModels
 
             tool.Factory = _factory;
             _factory.AddDockable(toolDock, tool);
-            _factory.SetActiveDockable(tool);
-            _factory.SetFocusedDockable(toolDock, tool);
+            if (activate)
+            {
+                _factory.SetActiveDockable(tool);
+                _factory.SetFocusedDockable(toolDock, tool);
+            }
 
             Log.Information("[Layout] {Panel} panel added to {Dock}", panelName, toolDock.Id);
 
@@ -283,9 +295,14 @@ namespace CST.Avalonia.ViewModels
         /// holds the whole session's transcript, losing it lost that too. The view model is a singleton, so
         /// what comes back is the same panel with its turns intact.</para>
         /// </summary>
-        public void ShowAssistantPanel() =>
+        /// <param name="activate">
+        /// False when startup is reconciling the panel against settings that loaded after the layout was
+        /// built — that is the app catching up with itself, not the reader asking for the assistant, and it
+        /// must not take the rail's active tab from the one #91 restored. (#919)
+        /// </param>
+        public void ShowAssistantPanel(bool activate = true) =>
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
-                () => IsAssistantPanelVisible = true, "AI Assistant");
+                () => IsAssistantPanelVisible = true, "AI Assistant", activate);
 
         public void HideAssistantPanel() =>
             HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "AI Assistant");

@@ -507,7 +507,11 @@ public partial class App : Application
                 if (MainWindow?.DataContext is LayoutViewModel layout && !layout.IsAssistantPanelVisible)
                 {
                     Log.Information("Assistant is enabled but its panel was not built at startup; adding it now");
-                    layout.ShowAssistantPanel();
+                    // activate: false — this is the app catching up with settings that loaded after the
+                    // layout was built, not the reader asking for the assistant. Activating here would take
+                    // the rail's active tab from the one #91 restored a moment earlier, and the monitor would
+                    // then persist the assistant as the reader's choice. (#919)
+                    layout.ShowAssistantPanel(activate: false);
                 }
             });
         }
