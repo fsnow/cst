@@ -507,7 +507,19 @@ public partial class App : Application
                 if (MainWindow?.DataContext is LayoutViewModel layout && !layout.IsAssistantPanelVisible)
                 {
                     Log.Information("Assistant is enabled but its panel was not built at startup; adding it now");
-                    layout.ShowAssistantPanel();
+                    // activate: false — this is the app catching up with settings that loaded after the
+                    // layout was built, not the reader asking for the assistant.
+                    //
+                    // It does NOT override the #91 restore; it runs BEFORE it, and corrupts its input.
+                    // Activating fires AttachLeftToolDockMonitor, which cannot tell an app-initiated
+                    // activation from a reader's click — Dock's PropertyChanged carries no provenance — so it
+                    // writes "AiAssistantTool" into Current.ActiveLeftToolId. That write lands after the
+                    // state file has been read into Current and before #91 captures state.ActiveLeftToolId
+                    // (state IS Current, as the capture's own comment notes). #91 then restores faithfully,
+                    // from a value the app wrote a moment earlier, and the reader's saved tab is gone.
+                    // Logged on 2026-08-30: add at 22.864, then "[#91] Restored active left-tool tab:
+                    // AiAssistantTool" at 22.972. Not activating is what stops the write. (#919)
+                    layout.ShowAssistantPanel(activate: false);
                 }
             });
         }

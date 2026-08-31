@@ -158,8 +158,19 @@ namespace CST.Avalonia.ViewModels
         // a ReactiveTool (its Id/Title/flags are set in its constructor), so it's added directly — exactly as
         // CreateLayout does at startup; wrapping it in a generic Tool { Context } renders an empty panel
         // because the view locator resolves by dockable type. (#84)
+        /// <param name="activate">
+        /// Whether to make the panel the active tab. True for anything the reader asked for; false when the
+        /// app is putting the layout in step with itself.
+        ///
+        /// <para>All four tools share one dock (#906), so activating a panel takes the rail's active tab from
+        /// whatever was there. Worse, it is recorded: the dock monitor persists every activation as the
+        /// reader's saved tab, having no way to tell the app's own from a click. An activation during startup
+        /// therefore overwrites the saved preference before #91 has read it. Before #906 the assistant went
+        /// into a dock of its own, where activating it could disturb nothing. (#919)</para>
+        /// </param>
         private void ShowToolPanel(
-            string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName)
+            string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName,
+            bool activate = true)
         {
             Log.Information("[Layout] Show {Panel} panel requested", panelName);
 
@@ -189,8 +200,11 @@ namespace CST.Avalonia.ViewModels
 
             tool.Factory = _factory;
             _factory.AddDockable(toolDock, tool);
-            _factory.SetActiveDockable(tool);
-            _factory.SetFocusedDockable(toolDock, tool);
+            if (activate)
+            {
+                _factory.SetActiveDockable(tool);
+                _factory.SetFocusedDockable(toolDock, tool);
+            }
 
             Log.Information("[Layout] {Panel} panel added to {Dock}", panelName, toolDock.Id);
 
@@ -283,9 +297,15 @@ namespace CST.Avalonia.ViewModels
         /// holds the whole session's transcript, losing it lost that too. The view model is a singleton, so
         /// what comes back is the same panel with its turns intact.</para>
         /// </summary>
-        public void ShowAssistantPanel() =>
+        /// <param name="activate">
+        /// False when startup is reconciling the panel against settings that loaded after the layout was
+        /// built — the app catching up with itself, not the reader asking for the assistant. Activating there
+        /// would be recorded by the dock monitor as the reader's own choice and destroy their saved tab
+        /// before #91 reads it. (#919)
+        /// </param>
+        public void ShowAssistantPanel(bool activate = true) =>
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
-                () => IsAssistantPanelVisible = true, "AI Assistant");
+                () => IsAssistantPanelVisible = true, "AI Assistant", activate);
 
         public void HideAssistantPanel() =>
             HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "AI Assistant");
@@ -354,9 +374,28 @@ namespace CST.Avalonia.ViewModels
                 if (sourceHostWindow != null && tool is DictionaryViewModel && _factory is CstDockFactory cefFactory)
                     cefFactory.DisposeAndEvictRecycledView(tool);
 
+                var wasActive = ReferenceEquals(parentDock.ActiveDockable, tool);
                 parentDock.VisibleDockables.Remove(tool);
-                Log.Information("[Layout] Removed tool {ToolId} from parent dock {ParentId}",
-                    tool.Id, parentDock.Id);
+
+                // Removing straight from the collection does not disturb ActiveDockable, so the dock is left
+                // pointing at a tool it no longer contains — measured, not assumed. Two things follow, and
+                // the second is the damaging one:
+                //
+                //   * the dock has a dangling active dockable for the rest of the session; and
+                //   * no PropertyChanged fires, so AttachLeftToolDockMonitor never hears of it and
+                //     ActiveLeftToolId keeps naming the removed tool.
+                //
+                // Turn the assistant off in Settings while its tab is active and the saved id stays
+                // "AiAssistantTool". Next launch #91 looks for a tool that is not there, finds nothing, and
+                // silently leaves the rail on CreateLayout's default — so the reader loses the tab they were
+                // actually using before they ever opened the assistant. Handing the active tab to a survivor
+                // both fixes the dangling reference and gives the monitor something true to record.
+                // (#919, and the factory's own RemoveDockable does the same for the same reason.)
+                if (wasActive)
+                    parentDock.ActiveDockable = parentDock.VisibleDockables.FirstOrDefault();
+
+                Log.Information("[Layout] Removed tool {ToolId} from parent dock {ParentId} (was active: {WasActive})",
+                    tool.Id, parentDock.Id, wasActive);
 
                 // If the parent dock is now empty, collapse what the removal left behind
                 if (parentDock.VisibleDockables.Count == 0 && _factory is CstDockFactory cstFactory)
