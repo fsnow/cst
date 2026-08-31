@@ -57,6 +57,40 @@ public class AddWithoutActivatingTests
     }
 
     /// <summary>
+    /// Removing a tool straight from the collection leaves the dock pointing at it, silently. (#919)
+    ///
+    /// <para>This is the hazard <c>RemoveToolFromLayout</c> compensates for, pinned because it is the whole
+    /// reason those lines exist. <c>VisibleDockables.Remove</c> is not <c>Factory.RemoveDockable</c>: it does
+    /// not touch <c>ActiveDockable</c> and raises no PropertyChanged, so the dock keeps a dangling active tab
+    /// AND the monitor that persists the reader's tab never hears of it. Turning the assistant off while its
+    /// tab is active would otherwise leave "AiAssistantTool" saved as the reader's choice, and #91 would then
+    /// restore nothing at all — dropping them on the default rather than the tab they had been using.</para>
+    ///
+    /// <para>If a future Dock.Avalonia starts clearing the active tab on removal, this fails and the
+    /// compensation can go.</para>
+    /// </summary>
+    [Fact]
+    public void Raw_removal_leaves_the_active_tab_dangling_and_raises_nothing()
+    {
+        var rail = Rail(Tool("OpenBookTool"), Tool("SearchTool"));
+        var assistant = Tool("AiAssistantTool");
+        rail.VisibleDockables!.Add(assistant);
+        rail.ActiveDockable = assistant;
+
+        var announced = 0;
+        ((System.ComponentModel.INotifyPropertyChanged)rail).PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(rail.ActiveDockable)) announced++;
+        };
+
+        rail.VisibleDockables!.Remove(assistant);
+
+        Assert.Same(assistant, rail.ActiveDockable);                       // still pointing at it
+        Assert.DoesNotContain(assistant, rail.VisibleDockables!);          // though it is gone
+        Assert.Equal(0, announced);                                        // and nothing was announced
+    }
+
+    /// <summary>
     /// And the opposite half, so the test cannot pass by the framework simply never activating anything:
     /// an explicit activation still works. A reader choosing View → AI Assistant must land on it.
     /// </summary>

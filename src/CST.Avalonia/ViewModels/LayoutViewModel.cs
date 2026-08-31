@@ -374,9 +374,28 @@ namespace CST.Avalonia.ViewModels
                 if (sourceHostWindow != null && tool is DictionaryViewModel && _factory is CstDockFactory cefFactory)
                     cefFactory.DisposeAndEvictRecycledView(tool);
 
+                var wasActive = ReferenceEquals(parentDock.ActiveDockable, tool);
                 parentDock.VisibleDockables.Remove(tool);
-                Log.Information("[Layout] Removed tool {ToolId} from parent dock {ParentId}",
-                    tool.Id, parentDock.Id);
+
+                // Removing straight from the collection does not disturb ActiveDockable, so the dock is left
+                // pointing at a tool it no longer contains — measured, not assumed. Two things follow, and
+                // the second is the damaging one:
+                //
+                //   * the dock has a dangling active dockable for the rest of the session; and
+                //   * no PropertyChanged fires, so AttachLeftToolDockMonitor never hears of it and
+                //     ActiveLeftToolId keeps naming the removed tool.
+                //
+                // Turn the assistant off in Settings while its tab is active and the saved id stays
+                // "AiAssistantTool". Next launch #91 looks for a tool that is not there, finds nothing, and
+                // silently leaves the rail on CreateLayout's default — so the reader loses the tab they were
+                // actually using before they ever opened the assistant. Handing the active tab to a survivor
+                // both fixes the dangling reference and gives the monitor something true to record.
+                // (#919, and the factory's own RemoveDockable does the same for the same reason.)
+                if (wasActive)
+                    parentDock.ActiveDockable = parentDock.VisibleDockables.FirstOrDefault();
+
+                Log.Information("[Layout] Removed tool {ToolId} from parent dock {ParentId} (was active: {WasActive})",
+                    tool.Id, parentDock.Id, wasActive);
 
                 // If the parent dock is now empty, collapse what the removal left behind
                 if (parentDock.VisibleDockables.Count == 0 && _factory is CstDockFactory cstFactory)
