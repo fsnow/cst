@@ -245,6 +245,12 @@ namespace CST.Avalonia.ViewModels
 
             RemoveToolFromLayout(tool);
 
+            // Every tool hide, not just the assistant's. Hiding the last one empties the rail, and the width
+            // it freed has to be handed to the documents explicitly or it is left for the framework to
+            // resolve. This lived on HideAssistantPanel alone, which made reclaiming the width depend on
+            // which tool the reader happened to close last. (#910)
+            _factory.RebalanceMainDock();
+
             markHidden();
             PanelVisibilityChanged?.Invoke(this, EventArgs.Empty);
             Log.Information("[Layout] {Panel} panel hidden", panelName);
@@ -281,13 +287,8 @@ namespace CST.Avalonia.ViewModels
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),
                 () => IsAssistantPanelVisible = true, "AI Assistant");
 
-        public void HideAssistantPanel()
-        {
+        public void HideAssistantPanel() =>
             HideToolPanel("AiAssistantTool", () => IsAssistantPanelVisible = false, "AI Assistant");
-
-            // Hand the freed width to the documents rather than leaving it unclaimed. (#656)
-            if (_factory is CstDockFactory factory) factory.RebalanceMainDock();
-        }
 
         // Recreate-on-demand so the View menu toggle and Cmd+D (Look Up in Dictionary) can reopen a closed
         // pane — LookUpInDictionaryAsync calls this then immediately proceeds, so it must stay synchronous. (#466)

@@ -1675,6 +1675,11 @@ namespace CST.Avalonia.Services
             InitDockable(leftTools, _mainDock);
             InitDockable(leftToolDock, leftTools);
 
+            // The rail is born holding 0.25 while the documents still hold whatever they were left with when
+            // it went away - 1.0, if the last tool to be hidden freed the width properly. Restating the row
+            // is what makes the two agree; without it the rail comes back a sliver wide. (#910)
+            RebalanceMainDock();
+
             return leftToolDock;
         }
 
@@ -3081,37 +3086,52 @@ namespace CST.Avalonia.Services
         /// This preserves any user adjustments to the splitter position
         /// </summary>
         /// <summary>
-        /// State the whole MainDock row at once — tools, documents, assistant — so the three always sum to
-        /// one. Unconditional, unlike <see cref="RestoreMainDockProportionsImpl"/>, which only acts when it
+        /// State the whole MainDock row at once — the tool rail and the documents — so the columns always sum
+        /// to one. Unconditional, unlike <see cref="RestoreMainDockProportionsImpl"/>, which only acts when it
         /// sees drift: after a column has been removed and rebuilt there is nothing to compare against, and
         /// the values that need writing are frequently the ones already stored.
+        ///
+        /// <para>The row lost its third column when the assistant moved into the tool rail (#906).</para>
         /// </summary>
         private void ApplyMainDockProportions()
         {
             try
             {
-                if (_mainDock?.VisibleDockables == null) return;
+                if (ApplyMainDockRow(_mainDock, _mainDockLeftProportion) is not { } documentsShare) return;
 
-                var left = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
-                           ?? _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
-                var documents = _mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
-
-                // Only the columns actually present get a share, so hiding one hands its width to the
-                // documents rather than leaving a gap the framework has to guess about.
-                var leftShare = left != null ? _mainDockLeftProportion : 0;
-
-                if (left != null) left.Proportion = leftShare;
-                if (documents != null) documents.Proportion = 1.0 - leftShare;
-
-                _mainDockRightProportion = 1.0 - leftShare;
+                _mainDockRightProportion = documentsShare;
 
                 Log.Debug("*** ApplyMainDockProportions: left={Left:F3}, documents={Docs:F3} ***",
-                    leftShare, 1.0 - leftShare);
+                    1.0 - documentsShare, documentsShare);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "*** Error in ApplyMainDockProportions ***");
             }
+        }
+
+        /// <summary>
+        /// Write the row's shares and answer what the documents ended up with, or null when there is no row to
+        /// state. Split out from <see cref="ApplyMainDockProportions"/> so the arithmetic can be exercised
+        /// without a constructed layout — everything the instance method adds is field access and logging,
+        /// and the layout itself cannot be built in a test until #655 lands headless support.
+        /// </summary>
+        internal static double? ApplyMainDockRow(IDock? mainDock, double leftProportion)
+        {
+            if (mainDock?.VisibleDockables == null) return null;
+
+            var left = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftTools")
+                       ?? mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "LeftToolDock");
+            var documents = mainDock.VisibleDockables.FirstOrDefault(d => d.Id == "MainDocumentDock");
+
+            // Only the columns actually present get a share, so hiding one hands its width to the
+            // documents rather than leaving a gap the framework has to guess about.
+            var leftShare = left != null ? leftProportion : 0;
+
+            if (left != null) left.Proportion = leftShare;
+            if (documents != null) documents.Proportion = 1.0 - leftShare;
+
+            return 1.0 - leftShare;
         }
 
         /// <summary>
