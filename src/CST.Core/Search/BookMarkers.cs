@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -182,6 +183,47 @@ namespace CST.Search
             }
             pages.Sort((a, b) => a.Edition.CompareTo(b.Edition));
             return (number, code, pages);
+        }
+
+        /// <summary>
+        /// Whether the paragraph numbering runs straight through from <paramref name="start"/> to
+        /// <paramref name="end"/>: every entry in document order carrying the same book code as the one
+        /// before it and a number above it. (#914)
+        ///
+        /// <para><b>Why positional and not numeric.</b> Paragraph numbers restart per section in 95 non-Multi
+        /// books, and per sub-book in Multi books, so a window can open at the end of one section and close
+        /// in the next having passed through that section's own low numbers. Compare only the endpoints and
+        /// 55 to 57 looks like an ordinary range; walking the entries between them is what shows it is not.
+        /// The reversed case (289 down to 3) at least reads as wrong. This one does not.</para>
+        ///
+        /// <para>A span covering one paragraph, or none, runs contiguously by definition — there is no seam
+        /// for it to cross.</para>
+        /// </summary>
+        /// <param name="start">Inclusive.</param>
+        /// <param name="end">Inclusive: an entry opening exactly at <paramref name="end"/> is part of the span.</param>
+        public bool ParagraphsRunContiguously(int start, int end)
+        {
+            if (end < start) (start, end) = (end, start);
+
+            // The entry in effect AT start, not the first one after it: a window usually opens mid-paragraph,
+            // and the paragraph it opens inside is the one its citation names.
+            int i = UpperBound(_paras.Count, k => _paras[k].Pos <= start) - 1;
+            if (i < 0) i = 0;
+
+            for (int k = i + 1; k < _paras.Count && _paras[k].Pos <= end; k++)
+            {
+                var prev = _paras[k - 1];
+                var cur = _paras[k];
+
+                if (!string.Equals(prev.BookCode, cur.BookCode, StringComparison.Ordinal)) return false;
+
+                // Against the previous entry's LAST, so a ranged paragraph ("16-26") followed by 27 still
+                // reads as ascending rather than as a jump backwards. (#444 is the model work; this only has
+                // to not be fooled by the shape.)
+                if (cur.First <= prev.Last) return false;
+            }
+
+            return true;
         }
 
         /// <summary>

@@ -43,6 +43,37 @@ namespace CST.Search
                     readStart = candidate;
             }
 
+            // A cursor can point INTO a note — note text is indexed, so such cursors are real — and a window
+            // that opens inside one renders the note's tail as base text: Clean meets only the closing tag,
+            // which is zero-width (#310), so the variant reading and its sigla arrive undelimited. With
+            // structuredNotes the same start leaves an unmatched brace in the text that is documented as
+            // clean and quotable, because SplitBracedNotes never saw the opening one.
+            //
+            // The snippet extractor has always nudged its bounds out of note regions for exactly this
+            // reason; the passage start never did, and the sentence snap above cannot stand in for it — it
+            // is optional, and it declines whenever the base text before the note outruns the budget. (#913)
+            int noteFloor = EnclosingParagraphStart(readStart, markers);
+            foreach (var (noteStart, noteEnd) in TeiText.NoteRegions(xml, noteFloor, readStart + 1))
+            {
+                if (readStart < noteStart || readStart >= noteEnd) continue;
+
+                // The note's START, so what the cursor pointed at is still in the window and is rendered AS
+                // apparatus. Its END only when opening at the start cannot reach past the cursor: a paging
+                // cursor that moved backwards would re-read what it just returned and never advance, the
+                // same loop the sentence snap guards against. The end always advances, since the cursor is
+                // inside the note.
+                // The note's end also when the note does not FIT: WalkForward's boundary check is the one in
+                // this file that is not note-aware, so with the apparatus rendered inline it can stop just
+                // past a danda inside the note. The window would then open at `<note>` and close before
+                // `</note>`, and Clean would emit an opening brace with nothing to close it — the same class
+                // of malformation as the tail this nudge exists to prevent, mirrored. Requiring the whole
+                // note to fit is narrower than making that check note-aware, which would move where every
+                // window ends. (ultrareview; the check itself is #917)
+                int fromNoteStart = WalkForward(xml, noteStart, maxChars, includeVariants && !structuredNotes, xml.Length);
+                readStart = fromNoteStart > startPos && fromNoteStart >= noteEnd ? noteStart : noteEnd;
+                break;
+            }
+
             // When returning structured notes, size the window with notes SKIPPED (never entered), so the end
             // (and thus nextCursor) can't land mid-note and leave an unmatched brace / apparatus in the clean
             // base text — even if includeFootnotes is also set. (#267 review, Defect 2)
@@ -108,8 +139,13 @@ namespace CST.Search
             // itself already sits in the NEXT paragraph and would overstate the span by one.
             var (endNum, endCode, _) = markers.RefsAt(Math.Max(readStart, end - 1));
 
+            // Whether naming the two ends as a range describes what is actually between them. Asked of the
+            // markers positionally, over the same span the window renders, because the numbers alone cannot
+            // tell a straight run from one that crosses a restart. (#914)
+            bool contiguous = markers.ParagraphsRunContiguously(readStart, Math.Max(readStart, end - 1));
+
             return new PassageWindow(text, prev, next, num, code, pages, noteCount, notes, endNum, endCode,
-                selectionTruncated);
+                selectionTruncated, contiguous);
         }
 
         /// <summary>
@@ -782,7 +818,12 @@ namespace CST.Search
         /// <summary>The SELECTION was longer than the cap and was cut. Reported so the caller can say so —
         /// an answer about part of a selection captioned as being about all of it is the failure this
         /// window is written to avoid everywhere else. (#672)</summary>
-        bool SelectionTruncated = false);
+        bool SelectionTruncated = false,
+        /// <summary>The paragraph numbering runs straight through the window, so naming its two ends as a
+        /// range describes what is actually in it. False where the window crosses a numbering restart or a
+        /// sub-book boundary, and a range would name paragraphs the window does not contain — the citation
+        /// says so in words, and this says so to a caller reading the structured fields. (#914)</summary>
+        bool ParagraphsContiguous = true);
 
     /// <summary>One apparatus note (a digitized print footnote — usually a variant reading) as structured data:
     /// its character <paramref name="Offset"/> into the returned brace-free <c>Text</c>, its full converted
