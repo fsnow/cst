@@ -22,6 +22,29 @@ namespace CST.Avalonia.Tests.Search
             "<p rend=\"bodytext\" n=\"5\">alpha bravo<note>variant sigla</note> charlie delta\u0964</p>" +
             "</div></body>";
 
+        // The same shape, but with a note whose body outruns any small budget - and a danda inside it, which
+        // is what lets WalkForward stop mid-note when the apparatus is rendered inline.
+        private const string LongNoteXml =
+            "<body><div id=\"dn1\" type=\"book\">" +
+            "<p rend=\"bodytext\" n=\"5\">alpha bravo<note>one two three\u0964 four five six seven eight " +
+            "nine ten eleven twelve thirteen fourteen sigla</note> charlie delta\u0964</p>" +
+            "</div></body>";
+
+        [Fact]
+        public void A_note_too_long_for_the_budget_is_skipped_rather_than_opened_and_left_unclosed()
+        {
+            var markers = BookMarkers.Build(LongNoteXml);
+            int open = LongNoteXml.IndexOf("<note>", StringComparison.Ordinal) + "<note>".Length;
+
+            // Apparatus rendered inline, budget far smaller than the note: opening at the note start would
+            // close before the note does, leaving a brace with nothing to match it.
+            var w = TeiPassageReader.ReadWindow(LongNoteXml, open + 4, maxChars: 12,
+                includeVariants: true, outputScript: Script.Devanagari, markers);
+
+            Assert.Equal(w.Text.Split('{').Length, w.Text.Split('}').Length);
+            Assert.DoesNotContain("sigla", w.Text);
+        }
+
         private static int InsideTheNote(string xml)
         {
             int open = xml.IndexOf("<note>", StringComparison.Ordinal) + "<note>".Length;
@@ -126,6 +149,19 @@ namespace CST.Avalonia.Tests.Search
             Assert.DoesNotContain("55-57", cite);
             Assert.Contains("paragraph 55 (dn1)", cite);
             Assert.Contains("paragraph 57 (dn2)", cite);
+            Assert.Contains("not a continuous range", cite);
+        }
+
+        [Fact]
+        public void Equal_paragraph_numbers_across_a_sub_book_break_are_not_collapsed_to_one_end()
+        {
+            // Numbering restarts per sub-book, so a Multi-book window can open at para 5 of one and close at
+            // para 5 of the next. Collapsing on the numbers alone would cite "paragraph 5 (an5)" and lose
+            // both the far sub-book and the fact that the two are not the same paragraph. (ultrareview)
+            var cite = PassageTool.Describe(5, "an5", 5, "an6", contiguous: false);
+
+            Assert.Contains("paragraph 5 (an5)", cite);
+            Assert.Contains("paragraph 5 (an6)", cite);
             Assert.Contains("not a continuous range", cite);
         }
 

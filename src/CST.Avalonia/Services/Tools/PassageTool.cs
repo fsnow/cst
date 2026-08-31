@@ -184,16 +184,22 @@ namespace CST.Avalonia.Services.Tools
         {
             if (number is null) return "start of book";
 
-            if (endNumber is not int last || last == number)
-                return Name(number.Value, bookCode);
+            if (endNumber is not int last) return Name(number.Value, bookCode);
 
             // A range is a claim about everything between its ends. It is only true where the numbering runs
             // straight through: paragraph numbers restart per section, so a window can open at 55 near the
             // end of one and close at 57 in the next, having passed through that section's own 1, 2, 3. The
             // reversed case ("paragraphs 289-3") reads as wrong on sight; this one does not, which is why it
             // is the one worth spelling out. (#914)
+            //
+            // Tested BEFORE the two numbers are compared. They can be equal across a break — paragraph
+            // numbering restarts per sub-book, so a Multi-book window can open at para N of one and close at
+            // para N of the next — and collapsing that to one end would drop the far sub-book's code and the
+            // break along with it, which is the very failure this method was rewritten to stop. (ultrareview)
             if (!contiguous)
                 return $"{Name(number.Value, bookCode)} through {Name(last, endBookCode)}, not a continuous range";
+
+            if (last == number) return Name(number.Value, bookCode);
 
             var range = $"paragraphs {number}-{last}";
             return bookCode is null ? range : $"{range} ({bookCode})";

@@ -62,9 +62,15 @@ namespace CST.Search
                 // cursor that moved backwards would re-read what it just returned and never advance, the
                 // same loop the sentence snap guards against. The end always advances, since the cursor is
                 // inside the note.
-                readStart = WalkForward(xml, noteStart, maxChars, includeVariants && !structuredNotes, xml.Length) > startPos
-                    ? noteStart
-                    : noteEnd;
+                // The note's end also when the note does not FIT: WalkForward's boundary check is the one in
+                // this file that is not note-aware, so with the apparatus rendered inline it can stop just
+                // past a danda inside the note. The window would then open at `<note>` and close before
+                // `</note>`, and Clean would emit an opening brace with nothing to close it — the same class
+                // of malformation as the tail this nudge exists to prevent, mirrored. Requiring the whole
+                // note to fit is narrower than making that check note-aware, which would move where every
+                // window ends. (ultrareview; the check itself is #917)
+                int fromNoteStart = WalkForward(xml, noteStart, maxChars, includeVariants && !structuredNotes, xml.Length);
+                readStart = fromNoteStart > startPos && fromNoteStart >= noteEnd ? noteStart : noteEnd;
                 break;
             }
 
