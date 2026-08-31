@@ -163,8 +163,10 @@ namespace CST.Avalonia.ViewModels
         /// app is putting the layout in step with itself.
         ///
         /// <para>All four tools share one dock (#906), so activating a panel takes the rail's active tab from
-        /// whatever was there — including the one #91 has just restored. Before #906 the assistant went into a
-        /// dock of its own, where activating it could disturb nothing. (#919)</para>
+        /// whatever was there. Worse, it is recorded: the dock monitor persists every activation as the
+        /// reader's saved tab, having no way to tell the app's own from a click. An activation during startup
+        /// therefore overwrites the saved preference before #91 has read it. Before #906 the assistant went
+        /// into a dock of its own, where activating it could disturb nothing. (#919)</para>
         /// </param>
         private void ShowToolPanel(
             string toolId, Func<IDockable?> resolveVm, Action markVisible, string panelName,
@@ -297,8 +299,9 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         /// <param name="activate">
         /// False when startup is reconciling the panel against settings that loaded after the layout was
-        /// built — that is the app catching up with itself, not the reader asking for the assistant, and it
-        /// must not take the rail's active tab from the one #91 restored. (#919)
+        /// built — the app catching up with itself, not the reader asking for the assistant. Activating there
+        /// would be recorded by the dock monitor as the reader's own choice and destroy their saved tab
+        /// before #91 reads it. (#919)
         /// </param>
         public void ShowAssistantPanel(bool activate = true) =>
             ShowToolPanel("AiAssistantTool", () => App.ServiceProvider?.GetRequiredService<AiAssistantViewModel>(),

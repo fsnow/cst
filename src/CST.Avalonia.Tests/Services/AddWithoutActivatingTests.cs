@@ -9,12 +9,13 @@ namespace CST.Avalonia.Tests.Services;
 /// <summary>
 /// Adding a tool to a dock must not make it the active tab. (#919)
 ///
-/// <para><b>The defect this pins.</b> All four tools share one rail since #906. Startup builds the layout
-/// about 7ms before settings finish loading, so a reader who has the assistant switched on gets a rail
-/// without it; the reconcile adds it once the settings are real. That add used to activate the panel, which
-/// landed after #91 had restored the reader's saved tab — so the rail always opened on the assistant, and
-/// the monitor then persisted the assistant as the reader's choice, destroying the preference. Before #906
-/// the assistant went into a dock of its own, where activating it could disturb nothing.</para>
+/// <para><b>The defect this pins.</b> All four tools share one rail since #906. The layout is always built
+/// before settings load — deterministically, not as a race — so a reader with the assistant switched on gets
+/// a rail without it, and the reconcile adds it once the settings are real. That add used to activate the
+/// panel, and the dock monitor records every activation as the reader's saved tab, unable to tell the app's
+/// own from a click. The write landed after the state file was read and before #91 captured the saved id, so
+/// #91 restored the assistant faithfully — from a value the app had just written over the reader's. Before
+/// #906 the assistant went into a dock of its own, where activating it could disturb nothing.</para>
 ///
 /// <para><b>Why this test and not the call site.</b> <c>LayoutViewModel</c>'s constructor builds a real
 /// layout and initialises host windows, so the call-site half cannot be tested until #655 lands headless
