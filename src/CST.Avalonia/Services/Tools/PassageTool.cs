@@ -142,7 +142,8 @@ namespace CST.Avalonia.Services.Tools
             return new PassageResult(
                 BookId: request.BookId,
                 NormalizedReference: Describe(
-                    w.ParagraphNumber, w.ParagraphBookCode, w.EndParagraphNumber),
+                    w.ParagraphNumber, w.ParagraphBookCode, w.EndParagraphNumber,
+                    w.EndParagraphBookCode, w.ParagraphsContiguous),
                 Text: w.Text,
                 Pages: w.Pages,
                 ParagraphNumber: w.ParagraphNumber,
@@ -153,7 +154,8 @@ namespace CST.Avalonia.Services.Tools
                 Notes: w.Notes,
                 EndParagraphNumber: w.EndParagraphNumber,
                 EndParagraphBookCode: w.EndParagraphBookCode,
-                SelectionTruncated: w.SelectionTruncated);
+                SelectionTruncated: w.SelectionTruncated,
+                ParagraphsContiguous: w.ParagraphsContiguous);
         }
 
         private static int ResolveStart(NavigationReference? reference, BookMarkers markers) => reference switch
@@ -171,17 +173,37 @@ namespace CST.Avalonia.Services.Tools
         /// modest budget covers many paragraphs: 2,400 characters of Dhammapada is ~30 verses across several
         /// chapters. Naming only the first would understate that badly, and this string is what surface B
         /// renders beside a generated answer as the app's own attestation of scope. (#602)</para>
+        ///
+        /// <para>A range ONLY where the numbering runs straight through — <paramref name="contiguous"/>, which
+        /// the window answers positionally. Where it does not, both ends are named with their own book codes
+        /// and the string says outright that it is not a range, because the alternative is a citation that
+        /// reads perfectly and names text the window does not hold. (#914)</para>
         /// </summary>
-        private static string Describe(int? number, string? bookCode, int? endNumber = null)
+        internal static string Describe(int? number, string? bookCode, int? endNumber = null,
+            string? endBookCode = null, bool contiguous = true)
         {
             if (number is null) return "start of book";
 
-            var where = endNumber is int last && last != number
-                ? $"paragraphs {number}-{last}"
-                : $"paragraph {number}";
+            if (endNumber is not int last || last == number)
+                return Name(number.Value, bookCode);
 
-            return bookCode is null ? where : $"{where} ({bookCode})";
+            // A range is a claim about everything between its ends. It is only true where the numbering runs
+            // straight through: paragraph numbers restart per section, so a window can open at 55 near the
+            // end of one and close at 57 in the next, having passed through that section's own 1, 2, 3. The
+            // reversed case ("paragraphs 289-3") reads as wrong on sight; this one does not, which is why it
+            // is the one worth spelling out. (#914)
+            if (!contiguous)
+                return $"{Name(number.Value, bookCode)} through {Name(last, endBookCode)}, not a continuous range";
+
+            var range = $"paragraphs {number}-{last}";
+            return bookCode is null ? range : $"{range} ({bookCode})";
         }
+
+        // One end of a citation: the number, and the sub-book it belongs to where there is one. Each end
+        // carries its OWN code, because the ends can sit in different sub-books of a Multi book and labelling
+        // the whole span with the start's code was its own small lie.
+        private static string Name(int number, string? bookCode) =>
+            bookCode is null ? $"paragraph {number}" : $"paragraph {number} ({bookCode})";
 
         private static PassageResult Empty(PassageRequest request, string note) =>
             new(request.BookId, note, "", Array.Empty<SnippetPageRef>(), null, null, null, null, 0,

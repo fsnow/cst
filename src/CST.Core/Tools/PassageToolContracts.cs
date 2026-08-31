@@ -94,5 +94,11 @@ namespace CST.Tools
         int? EndParagraphNumber = null,
         string? EndParagraphBookCode = null,
         /// <summary>The selection was longer than the cap and was cut. (#672)</summary>
-        bool SelectionTruncated = false);
+        bool SelectionTruncated = false,
+        /// <summary>The paragraph numbering runs straight through this window, so
+        /// <see cref="ParagraphNumber"/> and <see cref="EndParagraphNumber"/> bound a real range. FALSE where
+        /// the window crosses a numbering restart or a sub-book boundary: the two numbers are still the
+        /// window's true ends, but the paragraphs between them are not the ones the numbers imply. Read it
+        /// before presenting the pair as a range of your own. (#914)</summary>
+        bool ParagraphsContiguous = true);
 }
