@@ -255,11 +255,19 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         private (CredentialSource Source, bool StoredKeyUnreadable) CredentialFor(string connectionId)
         {
-            // Read, not Get (#926). A stored key this build cannot read is a different state from no key.
-            var read = _credentials?.Read(connectionId, AiCredentialNames.Primary);
-            if (read?.State == CredentialState.Found) return (CredentialSource.Keychain, false);
+            // Probe, not Read (#925). This runs for every connection on every refresh - it is where 114
+            // credential reads in one session came from - and it only ever needed to know whether a key is
+            // configured. Read fetches the value, and fetching the value is what raises the macOS
+            // authorization dialog; Probe asks the item's metadata, which the ACL does not guard.
+            //
+            // Found here means PRESENT, not readable. A locked key therefore reports Keychain until
+            // something actually tries to use it, at which point the store remembers the failure and this
+            // reports Unreadable on the next refresh. That is the honest ordering: "a key is stored" is true
+            // throughout, and #926's rule was never to claim a key is ABSENT when it is not.
+            var state = _credentials?.Probe(connectionId, AiCredentialNames.Primary);
+            if (state == CredentialState.Found) return (CredentialSource.Keychain, false);
 
-            var locked = read?.State == CredentialState.Unreadable;
+            var locked = state == CredentialState.Unreadable;
 
             // Adopted from the environment, and the variable still holds something. When it does not — unset
             // between sessions, or renamed — this falls through to None, which reads as "no key" rather than

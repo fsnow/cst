@@ -83,6 +83,17 @@ public class AiConnectionEditorViewModelTests
         /// <summary>Accounts the OS will not delete. (#926)</summary>
         public HashSet<string> Undeletable { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>How many times a caller asked for a VALUE. (#925)</summary>
+        public int ValueReads { get; private set; }
+
+        public CredentialState Probe(string connectionId, string name)
+        {
+            if (!Available) return CredentialState.Unavailable;
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialState.Unreadable;
+            return Stored.ContainsKey(account) ? CredentialState.Found : CredentialState.NotStored;
+        }
+
         public CredentialRead Read(string connectionId, string name) =>
             !Available ? CredentialRead.Unavailable
             : Unreadable.Contains(Account(connectionId, name)) ? CredentialRead.Unreadable

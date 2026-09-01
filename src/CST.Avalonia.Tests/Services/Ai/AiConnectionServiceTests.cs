@@ -346,8 +346,19 @@ public class AiConnectionServiceTests
         public string? Unavailable => null;
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
+        /// <summary>How many times a caller asked for a VALUE. A status query must never move this. (#925)</summary>
+        internal int ValueReads { get; private set; }
+
+        public CredentialState Probe(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialState.Unreadable;
+            return _byAccount.ContainsKey(account) ? CredentialState.Found : CredentialState.NotStored;
+        }
+
         public CredentialRead Read(string connectionId, string name)
         {
+            ValueReads++;
             var account = Account(connectionId, name);
             if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
             return _byAccount.TryGetValue(account, out var k)
@@ -402,6 +413,52 @@ public class AiConnectionServiceTests
     /// an environment-sourced one — offer no remove action rather than a button that would lie.</summary>
     [Fact]
     public void A_connection_reports_whether_a_key_is_stored_for_it()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+
+        Assert.Equal(CredentialSource.None, service.Connections.Single().KeySource);
+
+        keys.Set("box", AiCredentialNames.Primary, "k");
+
+        Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
+    }
+
+    /// <summary>
+    /// Asking about connections never fetches a secret. (#925)
+    ///
+    /// <para><b>This is the whole issue in one assertion.</b> Every status question — the connection list,
+    /// the badges, the model picker — was answered by fetching the value, and on macOS fetching a value is
+    /// what raises the authorization dialog. Measured on the maintainer's machine: <b>114 reads</b> across
+    /// one launch and one Settings window, <b>76 of them for a single account</b>, each able to raise a
+    /// prompt because cancelling one records no decision. He pressed Escape "a good 15 or 20 times".</para>
+    ///
+    /// <para>Asserted as zero rather than as a smaller number: any value fetch on this path can prompt, so
+    /// "fewer" is not the property worth having. Reading the list repeatedly is deliberate — the defect was
+    /// that repetition cost anything at all.</para>
+    /// </summary>
+    [Fact]
+    public void Reading_the_connection_list_never_fetches_a_secret()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+        var before = keys.ValueReads;
+
+        for (var i = 0; i < 20; i++)
+        {
+            var connections = service.Connections;
+            Assert.Equal(CredentialSource.Keychain, connections.Single().KeySource);
+        }
+
+        Assert.Equal(before, keys.ValueReads);
+    }
+
+    /// <summary>
+    /// And a probe still tells a stored key from an absent one, so the silence is not bought with ignorance.
+    /// </summary>
+    [Fact]
+    public void A_probe_still_distinguishes_a_stored_key_from_none()
     {
         var (service, _, keys) = MakeWithKeys();
         service.Add("box", Draft());

@@ -105,6 +105,21 @@ internal static class WindowsDpapiStore
     }
 
     /// <summary>The stored secret, or null when there is none - or when the blob cannot be decrypted.</summary>
+    /// <summary>
+    /// Whether a blob exists, without decrypting it. (#925)
+    ///
+    /// <para>Free here — DPAPI has no equivalent of the macOS prompt, so this exists for the shared seam
+    /// rather than to avoid a dialog. It does buy the same thing macOS gets: a status query stops doing
+    /// cryptography it has no use for.</para>
+    ///
+    /// <para>Presence, not readability: a blob whose master key is gone still exists, and reporting it
+    /// absent is the conflation #926 removed.</para>
+    /// </summary>
+    internal static bool Exists(string service, string account)
+    {
+        lock (Gate) return File.Exists(FileFor(service, account));
+    }
+
     internal static CredentialRead Find(string service, string account)
     {
         var path = FileFor(service, account);

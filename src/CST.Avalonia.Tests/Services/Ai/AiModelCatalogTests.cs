@@ -357,6 +357,11 @@ public class AiModelCatalogTests
         public string? Unavailable => null;
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
+        public CredentialState Probe(string connectionId, string name) =>
+            _byAccount.ContainsKey(connectionId + ":" + name)
+                ? CredentialState.Found
+                : CredentialState.NotStored;
+
         public CredentialRead Read(string connectionId, string name) =>
             _byAccount.TryGetValue(connectionId + ":" + name, out var k)
                 ? CredentialRead.Found(k)

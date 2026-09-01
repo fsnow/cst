@@ -47,6 +47,13 @@ public class ChatProviderResolverTests
         /// <summary>Names the OS holds and will not hand over. (#926)</summary>
         internal HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
 
+        public CredentialState Probe(string connectionId, string name)
+        {
+            if (!IsAvailable) return CredentialState.Unavailable;
+            if (Unreadable.Contains(name)) return CredentialState.Unreadable;
+            return Read(connectionId, name).State;
+        }
+
         public CredentialRead Read(string connectionId, string name)
         {
             if (!IsAvailable) return CredentialRead.Unavailable;

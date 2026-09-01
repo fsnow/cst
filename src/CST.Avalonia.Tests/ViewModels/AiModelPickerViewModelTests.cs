@@ -33,8 +33,18 @@ public class AiModelPickerViewModelTests
         public string? Unavailable => null;
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
+        public int ValueReads { get; private set; }
+
+        public CredentialState Probe(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialState.Unreadable;
+            return Keys.ContainsKey(account) ? CredentialState.Found : CredentialState.NotStored;
+        }
+
         public CredentialRead Read(string connectionId, string name)
         {
+            ValueReads++;
             var account = Account(connectionId, name);
             if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
             return Keys.TryGetValue(account, out var k)

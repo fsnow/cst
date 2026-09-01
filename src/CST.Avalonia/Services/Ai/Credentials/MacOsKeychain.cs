@@ -123,7 +123,7 @@ internal static class MacOsKeychain
 
     private sealed record Constants(
         IntPtr Class, IntPtr GenericPassword, IntPtr Service, IntPtr Account,
-        IntPtr ValueData, IntPtr ReturnData, IntPtr MatchLimit, IntPtr MatchLimitOne,
+        IntPtr ValueData, IntPtr ReturnData, IntPtr ReturnAttributes, IntPtr MatchLimit, IntPtr MatchLimitOne,
         IntPtr True);
 
     private static Constants? LoadConstants()
@@ -149,6 +149,7 @@ internal static class MacOsKeychain
             Deref(security, "kSecAttrAccount"),
             Deref(security, "kSecValueData"),
             Deref(security, "kSecReturnData"),
+            Deref(security, "kSecReturnAttributes"),
             Deref(security, "kSecMatchLimit"),
             Deref(security, "kSecMatchLimitOne"),
             Deref(cf, "kCFBooleanTrue"));
@@ -158,7 +159,8 @@ internal static class MacOsKeychain
         foreach (var value in new[]
                  {
                      constants.Class, constants.GenericPassword, constants.Service, constants.Account,
-                     constants.ValueData, constants.ReturnData, constants.MatchLimit, constants.MatchLimitOne,
+                     constants.ValueData, constants.ReturnData, constants.ReturnAttributes,
+                     constants.MatchLimit, constants.MatchLimitOne,
                      constants.True,
                  })
         {
@@ -191,6 +193,60 @@ internal static class MacOsKeychain
     };
 
     // ---- Operations ----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether an item exists, <b>without asking to read it</b>. (#925)
+    ///
+    /// <para><b>This is the whole fix, and it turns on one flag.</b> The login keychain's per-item ACL
+    /// guards the item's DATA, not its metadata: a query that asks for <c>kSecReturnAttributes</c> and not
+    /// <c>kSecReturnData</c> is answered without any authorization, and therefore without the modal password
+    /// dialog. Demonstrated on the maintainer's machine while the app was prompting eight times for the very
+    /// same items — <c>security find-generic-password -s "CST Reader — AI provider"</c>, with no <c>-w</c>,
+    /// listed all six silently.</para>
+    ///
+    /// <para><b>Why it matters more than caching.</b> Most callers only ever asked "is there a key?" and
+    /// answered it by fetching the secret, so every status refresh was a potential prompt — 114 reads across
+    /// a launch and one Settings window, 76 of them for a single account, each one able to raise a dialog
+    /// because cancelling records no decision. Fetching a value nobody wanted is what made the app
+    /// unusable in this state; caching only reduces how often it does it.</para>
+    ///
+    /// <para><b>It cannot tell you the item is READABLE.</b> That is knowable only by trying, which is what
+    /// prompts — so a probe reports presence and the locked state is discovered at first real use. See
+    /// <see cref="AiCredentialStore.Probe"/>, which is where the two are reconciled.</para>
+    /// </summary>
+    internal static bool Exists(string service, string account)
+    {
+        if (Symbols.Value is not { } k) return false;
+
+        var query = IntPtr.Zero;
+        var result = IntPtr.Zero;
+        var strings = new StringHandles();
+        try
+        {
+            query = CreateDictionary(
+                new[] { k.Class, k.Service, k.Account, k.ReturnAttributes, k.MatchLimit },
+                new[]
+                {
+                    k.GenericPassword,
+                    strings.Add(service),
+                    strings.Add(account),
+                    k.True,
+                    k.MatchLimitOne,
+                });
+            if (query == IntPtr.Zero) return false;
+
+            // Success means an item matched. Every failure - not found, and anything unanticipated - is
+            // reported as "no", because this answer is used to say a key IS present and over-claiming that
+            // would put the app back to describing keys the reader does not have.
+            return SecItemCopyMatching(query, out result) == ErrSecSuccess;
+        }
+        finally
+        {
+            if (result != IntPtr.Zero) CFRelease(result);
+            if (query != IntPtr.Zero) CFRelease(query);
+            strings.Dispose();
+        }
+    }
 
     /// <summary>
     /// One stored secret, and what happened when we asked for it. (#926)
