@@ -326,7 +326,11 @@ public class AiAssistantViewModel : ReactiveTool
             }
         }
 
-        var reader = await _readerState.GetCurrentAsync();
+        // The reader is here, clicking, so the app knows which book they were last in — resolve rather
+        // than refuse (#938). Without this the panel inherited the external agent's blindness: a book
+        // floated beside a docked one made every question ambiguous, and "click into the book you mean" was
+        // advice this path could not act on, since it never consulted focus at all.
+        var reader = await _readerState.GetCurrentAsync(ReaderFocusSignal.LastFocusedBook);
         if (reader.State is not { } state)
         {
             Status = Describe(reader.Problem);

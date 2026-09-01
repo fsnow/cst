@@ -30,6 +30,8 @@ namespace CST.Avalonia.Tests.Integration
         private sealed class HeadlessReaderState : CST.Avalonia.Services.Ai.IReaderStateService
         {
             public Task<CST.Avalonia.Services.Ai.ReaderStateResult> GetCurrentAsync(
+                CST.Avalonia.Services.Ai.ReaderFocusSignal focus =
+                    CST.Avalonia.Services.Ai.ReaderFocusSignal.None,
                 CancellationToken ct = default) =>
                 Task.FromResult(CST.Avalonia.Services.Ai.ReaderStateResult.Fail(
                     CST.Avalonia.Services.Ai.ReaderStateProblem.NoBookOpen));

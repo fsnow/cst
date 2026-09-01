@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using CST.Avalonia.Services;
 using CST.Avalonia.ViewModels;
 using CST.Conversion;
 using Microsoft.Extensions.Logging;
@@ -57,6 +59,34 @@ public sealed record ReaderState(
     bool SelectionUnavailable = false,
     int? SelectionParagraph = null);
 
+/// <summary>
+/// Whether the caller can say which book window the reader means. (#938)
+///
+/// <para><b>The two consumers differ, and only one of them is blind.</b> The Assistant panel is driven by a
+/// person clicking in this app, so the app knows which book they were last in. An HTTP or MCP caller is an
+/// outside agent with no such history — for it, several open book windows genuinely are ambiguous.</para>
+///
+/// <para>Applying the blind caller's rule to the sighted one is #938: with a book floated beside a docked
+/// one, the Assistant refused every question, having never asked the question it could have answered.</para>
+/// </summary>
+public enum ReaderFocusSignal
+{
+    /// <summary>
+    /// The caller is the reader, in this app. Resolve to <b>the last book they were in</b> — [fsnow]'s rule.
+    ///
+    /// <para>The last <i>book</i>, not the last window: reaching the Assistant means clicking into the main
+    /// window, so "last window focused" would answer with the main window's book while the reader meant the
+    /// floated one they had just selected in.</para>
+    /// </summary>
+    LastFocusedBook,
+
+    /// <summary>
+    /// The caller is outside the app and carries no focus history. More than one active book window is an
+    /// honest <see cref="ReaderStateProblem.AmbiguousBookWindow"/>.
+    /// </summary>
+    None,
+}
+
 /// <summary>Success or a named refusal. Never a partial answer.</summary>
 public readonly record struct ReaderStateResult(ReaderState? State, ReaderStateProblem? Problem)
 {
@@ -75,7 +105,14 @@ public interface IReaderStateService
     /// while the app does). In a headless process nothing pumps it and the call would simply not complete, so
     /// tests should substitute this interface rather than exercise the live implementation.</para>
     /// </summary>
-    Task<ReaderStateResult> GetCurrentAsync(CancellationToken ct = default);
+    /// <param name="focus">
+    /// What the caller knows about which window the reader means (#938). Defaulted to
+    /// <see cref="ReaderFocusSignal.None"/> so a caller has to SAY it can resolve — the failure being fixed
+    /// was an interactive caller silently inheriting an external agent's blindness, and a default that
+    /// resolves would hide the same mistake in the other direction.
+    /// </param>
+    Task<ReaderStateResult> GetCurrentAsync(
+        ReaderFocusSignal focus = ReaderFocusSignal.None, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -107,12 +144,13 @@ public sealed class ReaderStateService : IReaderStateService
 
     public ReaderStateService(ILogger<ReaderStateService> logger) => _logger = logger;
 
-    public async Task<ReaderStateResult> GetCurrentAsync(CancellationToken ct = default)
+    public async Task<ReaderStateResult> GetCurrentAsync(
+        ReaderFocusSignal focus = ReaderFocusSignal.None, CancellationToken ct = default)
     {
         // ONE resolution of the active document. An earlier version read the book and then re-resolved it to
         // fetch the selection, which let a tab switch during the selection round-trip (up to 700 ms) attribute
         // one book's selection to another book's paragraph.
-        var (result, document) = await Dispatcher.UIThread.InvokeAsync(ReadActiveBook);
+        var (result, document) = await Dispatcher.UIThread.InvokeAsync(() => ReadActiveBook(focus));
         if (result.State is null || document is null) return result;
 
         ct.ThrowIfCancellationRequested();
@@ -138,7 +176,41 @@ public sealed class ReaderStateService : IReaderStateService
             });
     }
 
-    private (ReaderStateResult Result, BookDisplayViewModel? Document) ReadActiveBook()
+    /// <summary>
+    /// The last book the reader was in, from the app's own interaction history. (#938)
+    ///
+    /// <para><b>The last BOOK, not the last window.</b> Reaching the Assistant means clicking into the main
+    /// window, so a window-level answer would name the main window's book while the reader meant the floated
+    /// one they had just selected in. Walking a history of dockables and keeping only the books skips the
+    /// panel they clicked to ask the question.</para>
+    ///
+    /// <para><b>Selecting text is what puts a book at the head of this list.</b> Selecting requires clicking
+    /// into the book's WebView, which raises the CEF focus callback that feeds the tracker
+    /// (<c>BookDisplayView.OnBrowserGotFocus</c>) — the feed that exists because Avalonia focus goes blind
+    /// inside CEF (#621). So the book whose selection the reader means is already at the front, which is why
+    /// this resolves the reported case without consulting selections at all. Selections carry no timestamp
+    /// and cannot be compared; the act of making one can be.</para>
+    ///
+    /// <para><b>Only among the candidates.</b> The history is app-wide and outlives tabs, so an entry may be
+    /// a book that is no longer any window's active document. Intersecting with the live set keeps this from
+    /// resurrecting one.</para>
+    /// </summary>
+    private static BookDisplayViewModel? LastFocusedBook(IReadOnlyList<BookDisplayViewModel> candidates)
+    {
+        var recent = App.TryGetService<ActiveDocumentTracker>()?.Recent;
+        if (recent is null) return null;
+
+        foreach (var dockable in recent)
+        {
+            if (dockable is BookDisplayViewModel book && candidates.Contains(book))
+                return book;
+        }
+
+        return null;
+    }
+
+    private (ReaderStateResult Result, BookDisplayViewModel? Document) ReadActiveBook(
+        ReaderFocusSignal focus)
     {
         // The dock factory is not in DI — it belongs to the main window's layout, the same lookup the
         // presentation service and the search panel use.
@@ -152,15 +224,32 @@ public sealed class ReaderStateService : IReaderStateService
         if (candidates.Count == 0)
             return (ReaderStateResult.Fail(ReaderStateProblem.NoBookOpen), null);
 
-        // An API caller carries no focus signal, so with a docked book AND a floated one both active there is
-        // no honest way to say which the user is reading. Refuse rather than pick.
-        if (candidates.Count > 1)
+        // Several active book windows - a docked book and a floated one. Whether that is ambiguous depends
+        // entirely on who is asking (#938).
+        //
+        // Resolved here rather than returned early on purpose: the chosen book still has to pass the Multi
+        // volume and position checks below. Answering about a floated book with an unknown paragraph would
+        // trade one wrong answer for another.
+        BookDisplayViewModel document;
+        if (candidates.Count == 1)
         {
+            document = candidates[0];
+        }
+        else if (focus == ReaderFocusSignal.LastFocusedBook && LastFocusedBook(candidates) is { } chosen)
+        {
+            _logger.LogDebug(
+                "Reader state: {Count} active book windows, resolved to the last one focused ({Book})",
+                candidates.Count, chosen.Book?.FileName);
+            document = chosen;
+        }
+        else
+        {
+            // No history to go on, or a caller that never had any. Refuse rather than pick: an outside agent
+            // has no click to remember, and the charter here is that a preview must never describe a passage
+            // the user is not looking at.
             _logger.LogDebug("Reader state is ambiguous: {Count} active book windows", candidates.Count);
             return (ReaderStateResult.Fail(ReaderStateProblem.AmbiguousBookWindow), null);
         }
-
-        var document = candidates[0];
 
         if (document.Book.BookType == BookType.Multi)
         {

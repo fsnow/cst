@@ -52,7 +52,16 @@ public class AiAssistantViewModelTests
         internal ReaderStateResult Result { get; set; } =
             ReaderStateResult.Ok(new ReaderState("s0101m.mul.xml", 12, null));
 
-        public Task<ReaderStateResult> GetCurrentAsync(CancellationToken ct = default) => Task.FromResult(Result);
+        /// <summary>What the caller said it knew about focus. The point of #938 is that the panel says
+        /// it can resolve, so this is asserted rather than ignored.</summary>
+        internal ReaderFocusSignal? AskedWith { get; private set; }
+
+        public Task<ReaderStateResult> GetCurrentAsync(
+            ReaderFocusSignal focus = ReaderFocusSignal.None, CancellationToken ct = default)
+        {
+            AskedWith = focus;
+            return Task.FromResult(Result);
+        }
     }
 
     private sealed class StubResolver : IChatProviderResolver
@@ -82,6 +91,31 @@ public class AiAssistantViewModelTests
             Array.Empty<string>(), false, sent);
 
     // ---- Not configured, and other ordinary refusals ---------------------------------------------
+
+    /// <summary>
+    /// The panel tells the reader-state service that it CAN say which book the reader means. (#938)
+    ///
+    /// <para><b>The whole defect in one assertion.</b> The service refuses when several book windows are
+    /// active, which is right for an HTTP or MCP caller — an outside agent has no click to remember. The
+    /// panel is not that caller: a person is here, clicking, and the app knows which book they were last in.
+    /// Inheriting the blind caller's rule made every question fail with "More than one book window is open"
+    /// the moment a book was floated beside a docked one, and the advice it offered — "click into the book
+    /// you mean" — was something this path could not act on, because it never consulted focus at all.</para>
+    ///
+    /// <para>Asserted on what the panel ASKS rather than on the answer: the resolution itself needs a live
+    /// dock layout and real focus history, which no unit test has. What a test can pin is that the panel
+    /// stops claiming to be blind.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_panel_asks_as_a_caller_that_knows_which_book_was_last_focused()
+    {
+        var reader = new StubReaderState();
+        var vm = new AiAssistantViewModel(new StubOrchestrator(), reader, null, null);
+
+        await vm.AskAsync(AiTask.Explain);
+
+        Assert.Equal(ReaderFocusSignal.LastFocusedBook, reader.AskedWith);
+    }
 
     [Fact]
     public async Task An_unconfigured_assistant_says_what_to_set_and_never_calls_the_model()

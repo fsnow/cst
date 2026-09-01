@@ -700,7 +700,11 @@ namespace CST.Avalonia.Services.LocalApi
                 app.MapPost(v + "/ai/context-preview",
                     async (ContextPreviewRequest req, CancellationToken ct) =>
                 {
-                    var state = await readerState.GetCurrentAsync(ct);
+                    // No focus signal, and stated rather than defaulted (#938). An HTTP or MCP caller is
+                    // an outside agent: it has no click to remember, so several open book windows genuinely
+                    // are ambiguous and AmbiguousBookWindow below is the right answer for it.
+                    var state = await readerState.GetCurrentAsync(
+                        Services.Ai.ReaderFocusSignal.None, ct);
                     if (state.State is not { } reader)
                     {
                         // Refusals, never fallbacks: an unknown position must not read from the book start, or
