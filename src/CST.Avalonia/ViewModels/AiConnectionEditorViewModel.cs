@@ -766,11 +766,31 @@ namespace CST.Avalonia.ViewModels
         /// model list is real user work, and destroying it on an action meant only to stop billing would be
         /// data loss.</para>
         /// </summary>
+        /// <summary>
+        /// Forget the stored key — and say so when the OS refuses. (#926)
+        ///
+        /// <para><b>The return value used to be discarded.</b> Deleting a macOS Keychain item DOES need
+        /// authorization, contrary to what this fix originally assumed: on a locked item the reader is
+        /// prompted, and dismissing the prompt fails the delete. The row then stopped showing the key and the
+        /// sheet said nothing, so the app reported a removal that had not happened — leaving a live
+        /// credential the reader believed they had revoked, which is the one outcome a Remove button must
+        /// never produce. Observed 2026-08-31: <c>Removed a secret for groq/primary: failed</c>, with the
+        /// item still in the keychain afterwards.</para>
+        ///
+        /// <para>Only the sheet is refreshed on success. On failure nothing is cleared, because nothing
+        /// changed, and the reader is told what to do about it.</para>
+        /// </summary>
         private void RemoveKey()
         {
             if (_credentials is null || _existingId is null) return;
 
-            _credentials.Delete(_existingId, AiCredentialNames.Primary);
+            if (!_credentials.Delete(_existingId, AiCredentialNames.Primary))
+            {
+                Problem = CredentialRead.RemovalRefused(_displayName);
+                return;
+            }
+
+            Problem = null;
             ApiKeyEntry = "";
             this.RaisePropertyChanged(nameof(HasStoredKey));
             this.RaisePropertyChanged(nameof(KeyStatus));

@@ -80,6 +80,9 @@ public class AiConnectionEditorViewModelTests
         /// <summary>Accounts the OS holds but will not hand over. (#926)</summary>
         public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Accounts the OS will not delete. (#926)</summary>
+        public HashSet<string> Undeletable { get; } = new(StringComparer.Ordinal);
+
         public CredentialRead Read(string connectionId, string name) =>
             !Available ? CredentialRead.Unavailable
             : Unreadable.Contains(Account(connectionId, name)) ? CredentialRead.Unreadable
@@ -88,7 +91,20 @@ public class AiConnectionEditorViewModelTests
                 : CredentialRead.NotStored;
         public bool Set(string connectionId, string name, string secret)
         { Stored[Account(connectionId, name)] = secret; return true; }
-        public bool Delete(string connectionId, string name) => Stored.Remove(Account(connectionId, name));
+        /// <summary>
+        /// Refuses to delete an account the OS will not let go of. (#926)
+        ///
+        /// <para>Deleting a locked Keychain item needs authorization, so a reader who dismisses the prompt
+        /// cannot delete their way out — observed as <c>Removed a secret for groq/primary: failed</c> with
+        /// the item still present afterwards. A fake that always succeeds could not have caught the caller
+        /// discarding this.</para>
+        /// </summary>
+        public bool Delete(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Undeletable.Contains(account)) return false;
+            return Stored.Remove(account);
+        }
     }
 
     private static void Save(AiConnectionEditorViewModel vm) => vm.SaveCommand.Execute().Subscribe();
@@ -1092,6 +1108,50 @@ public class AiConnectionEditorViewModelTests
     }
 
     /// <summary>
+    /// A removal the OS refuses is reported, not swallowed. (#926)
+    ///
+    /// <para><b>Observed, not theorised.</b> Pressing Remove on a locked key logged
+    /// <c>Removed a secret for groq/primary: failed</c>, the sheet cleared as though it had worked, and the
+    /// item was still in the keychain afterwards — the app reporting a revocation that had not happened.
+    /// Deleting a Keychain item needs authorization too, which this fix originally assumed it did not.</para>
+    ///
+    /// <para>Nothing is cleared on failure, because nothing changed: the key is still stored, and the sheet
+    /// must go on saying so.</para>
+    /// </summary>
+    [Fact]
+    public void A_removal_the_os_refuses_is_reported_and_changes_nothing()
+    {
+        var h = new Harness();
+        h.Service.Add("mine", Draft());
+        h.Keys.Set("mine", AiCredentialNames.Primary, "sk-stored");
+        h.Keys.Undeletable.Add("mine:" + AiCredentialNames.Primary);
+
+        var vm = h.Existing("mine");
+        vm.RemoveKeyCommand.Execute().Subscribe();
+
+        Assert.True(vm.HasProblem);
+        Assert.True(vm.HasStoredKey);                              // still stored, and still says so
+        Assert.Equal("sk-stored", h.Keys.Stored["mine:" + AiCredentialNames.Primary]);
+    }
+
+    /// <summary>A removal the OS allows still clears the sheet, so the guard above is not simply refusing
+    /// everything.</summary>
+    [Fact]
+    public void A_removal_that_succeeds_clears_the_key_and_raises_no_problem()
+    {
+        var h = new Harness();
+        h.Service.Add("mine", Draft());
+        h.Keys.Set("mine", AiCredentialNames.Primary, "sk-stored");
+
+        var vm = h.Existing("mine");
+        vm.RemoveKeyCommand.Execute().Subscribe();
+
+        Assert.False(vm.HasProblem);
+        Assert.False(vm.HasStoredKey);
+        Assert.DoesNotContain("mine:" + AiCredentialNames.Primary, h.Keys.Stored.Keys);
+    }
+
+    /// <summary>
     /// The sheet says a locked key IS stored, and gives the remedy that works. (#926)
     ///
     /// <para><b>This sheet is where the reader acts on being told wrong.</b> The row badged "Key locked" and
@@ -1116,7 +1176,14 @@ public class AiConnectionEditorViewModelTests
         // Not the replace-it sentence either: pasting is what does not work here.
         Assert.DoesNotContain("Paste a new one", locked.KeyStatus, StringComparison.Ordinal);
         if (!OperatingSystem.IsWindows())
-            Assert.Contains("authorize", locked.KeyStatus, StringComparison.OrdinalIgnoreCase);
+        {
+            // "Allow" is the button macOS actually shows.
+            Assert.Contains("Allow", locked.KeyStatus, StringComparison.Ordinal);
+            // And it must say replacing will not help. That write SUCCEEDS - tested 2026-08-31, the item was
+            // modified on disk - and leaves the reader exactly as stuck, because an item's ACL is not its
+            // value. Advice that appears to work is worse than advice that fails.
+            Assert.Contains("will not help", locked.KeyStatus, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>

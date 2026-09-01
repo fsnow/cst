@@ -170,7 +170,7 @@ public class ChatProviderResolverTests
         Assert.DoesNotContain("No API key is stored", problem, StringComparison.Ordinal);
         Assert.Contains("stored", problem, StringComparison.OrdinalIgnoreCase);
         if (!OperatingSystem.IsWindows())
-            Assert.Contains("authorize", problem, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Allow", problem, StringComparison.Ordinal);
     }
 
     /// <summary>

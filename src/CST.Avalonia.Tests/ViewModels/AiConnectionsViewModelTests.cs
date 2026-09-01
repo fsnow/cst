@@ -340,7 +340,7 @@ public class AiConnectionsViewModelTests
         }
         else
         {
-            Assert.Contains("authorize", text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Allow", text, StringComparison.Ordinal);
             Assert.DoesNotContain("decrypt", text, StringComparison.OrdinalIgnoreCase);
         }
     }

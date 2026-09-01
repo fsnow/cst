@@ -64,16 +64,45 @@ public readonly record struct CredentialRead(CredentialState State, string? Secr
     /// What to tell the reader about a named secret that is stored and unreadable. (#926)
     ///
     /// <para><b>One sentence, shared by every surface that reports it.</b> The resolver, the model catalogue
-    /// and the connection editor each phrased "no stored value … re-enter it" separately, which is how they
-    /// came to give advice that cannot work: on macOS the item exists, so re-entering runs
-    /// <c>SecItemAdd</c> → duplicate → <c>SecItemUpdate</c>, which needs the very authorization that was
-    /// just declined. Windows has no such problem — <c>Save</c> writes a fresh file — hence the split.</para>
+    /// and the connection editor each phrased "no stored value … re-enter it" separately, and drifted.</para>
+    ///
+    /// <para><b>On macOS it says AUTHORIZE, and nothing else — because nothing else works.</b> Tested
+    /// 2026-08-31 against a locked item, and both of the obvious remedies failed in different ways:</para>
+    ///
+    /// <list type="bullet">
+    /// <item>Entering a replacement key <b>succeeds and does not help.</b> The write goes through
+    /// (<c>SecItemUpdate</c>, item modified on disk) but an item's ACL is not its value, so the same binary
+    /// still cannot read what it just wrote. Advice that appears to work and changes nothing is worse than
+    /// advice that fails, because the reader stops looking.</item>
+    /// <item>Removing it <b>can fail</b>. Deleting needs authorization too, so a reader who cannot satisfy
+    /// the prompt cannot delete their way out either — see <c>AiConnectionEditorViewModel.RemoveKey</c>,
+    /// which now reports that rather than claiming success.</item>
+    /// </list>
+    ///
+    /// <para>What is left is granting the authorization, or deleting the item in Keychain Access, which is
+    /// trusted for the login keychain in a way this app is not. Windows has neither problem — <c>Save</c>
+    /// there writes a fresh file, so re-entering genuinely fixes it — hence the split.</para>
     /// </summary>
     public static string Advice(string what) =>
         OperatingSystem.IsWindows()
             ? $"{what} is stored but could not be decrypted. Enter it again under Settings \u2192 AI."
-            : $"{what} is stored but CST Reader was not allowed to read it. Authorize it when macOS asks, "
-              + "or remove it under Settings \u2192 AI and enter it again.";
+            : $"{what} is stored, and CST Reader was not allowed to read it. Choose Allow when macOS asks "
+              + "for your login keychain password. Replacing the key will not help; if you cannot allow it, "
+              + "delete the \u201cCST Reader\u201d entry in Keychain Access and add the key again.";
+
+    /// <summary>
+    /// What to tell the reader when the OS refused to delete their stored secret. (#926)
+    ///
+    /// <para>Its own sentence rather than <see cref="Advice"/>: the reader has just pressed Remove, so
+    /// "authorize it" is about a different operation than the one they are attempting, and the fallback is
+    /// the only route left.</para>
+    /// </summary>
+    public static string RemovalRefused(string displayName) =>
+        OperatingSystem.IsWindows()
+            ? $"{displayName}\u2019s stored key could not be removed. It is still stored."
+            : $"{displayName}\u2019s stored key could not be removed \u2014 macOS did not allow it, so it "
+              + "is still stored. Try again and choose Allow, or delete the \u201cCST Reader\u201d entry "
+              + "in Keychain Access.";
 
     /// <summary>The word for a log line. Deliberately says nothing about the value.</summary>
     public string Describe() => State switch

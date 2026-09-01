@@ -850,7 +850,9 @@ namespace CST.Avalonia.ViewModels
                 ? $"The stored key could not be read, so requests are using {_connection.EnvironmentVariable}"
             : OperatingSystem.IsWindows()
                 ? "Stored, but it did not decrypt — enter it again to replace it"
-                : "Stored, but this build was not allowed to read it — authorize it, or remove and re-enter";
+                // Not "remove and re-enter": removing needs authorization too and can fail, and replacing
+                // the key succeeds without helping — an item's ACL is not its value. Both tested 2026-08-31.
+                : "Stored, but this build was not allowed to read it — choose Allow when macOS asks";
 
         /// <summary>
         /// Whether <see cref="KeyProblem"/> is a problem the reader must act on, or merely a statement.
