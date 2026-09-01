@@ -26,7 +26,14 @@ public class ContextPreviewEndpointTests
 
         internal FakeReaderState(ReaderStateResult result) => _result = result;
 
-        public Task<ReaderStateResult> GetCurrentAsync(CancellationToken ct = default) => Task.FromResult(_result);
+        internal ReaderFocusSignal? AskedWith { get; private set; }
+
+        public Task<ReaderStateResult> GetCurrentAsync(
+            ReaderFocusSignal focus = ReaderFocusSignal.None, CancellationToken ct = default)
+        {
+            AskedWith = focus;
+            return Task.FromResult(_result);
+        }
     }
 
     /// <summary>
