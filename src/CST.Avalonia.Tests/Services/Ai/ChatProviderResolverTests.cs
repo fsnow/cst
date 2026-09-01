@@ -44,9 +44,13 @@ public class ChatProviderResolverTests
         /// for the primary key (#771).</summary>
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
+        /// <summary>Names the OS holds and will not hand over. (#926)</summary>
+        internal HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
         public CredentialRead Read(string connectionId, string name)
         {
             if (!IsAvailable) return CredentialRead.Unavailable;
+            if (Unreadable.Contains(name)) return CredentialRead.Unreadable;
             var secret =
                 _byName is not null && _byName.TryGetValue(name, out var named) ? named
                 : name == AiCredentialNames.Primary ? _key
@@ -61,7 +65,7 @@ public class ChatProviderResolverTests
         Action<ChatSettings> configure, string? apiKey = null, bool aiEnabled = true,
         string? storageUnavailable = null, IReadOnlyDictionary<string, string>? secrets = null,
         IAiEnvironmentKeys? environmentKeys = null, IAiPresetSource? presets = null,
-        HttpMessageHandler? handler = null)
+        HttpMessageHandler? handler = null, FixedKey? store = null)
     {
         var settings = new Settings();
         settings.Ai.Enabled = aiEnabled;
@@ -73,9 +77,9 @@ public class ChatProviderResolverTests
 
         return new ChatProviderResolver(
             service.Object,
-            apiKey is null && storageUnavailable is null && secrets is null
+            store ?? (apiKey is null && storageUnavailable is null && secrets is null
                 ? null
-                : new FixedKey(apiKey, storageUnavailable, secrets),
+                : new FixedKey(apiKey, storageUnavailable, secrets)),
             NullLoggerFactory.Instance,
             handler is null
                 ? new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan }
@@ -139,6 +143,65 @@ public class ChatProviderResolverTests
 
     // The opt-in is the whole feature. Discovery must never authenticate on its own — that is the difference
     // between this and an app that adopts a forgotten variable and spends the reader's money.
+    /// <summary>
+    /// A stored key we could not READ, with nothing behind it, is not "you have no key". (#926)
+    ///
+    /// <para><b>The request path was the half of #926 that was missed.</b> The row badged "Key locked" while
+    /// pressing send still said "No API key is stored for Claude. Add one in Settings." — two surfaces
+    /// contradicting, which is the failure class <c>Reachability</c> exists to prevent. Worse, the advice
+    /// cannot work on macOS: the item exists, so re-entering runs SecItemAdd → duplicate → SecItemUpdate and
+    /// needs the very authorization that was just declined. (fable)</para>
+    /// </summary>
+    [Fact]
+    public void A_locked_key_is_not_reported_as_a_missing_one()
+    {
+        var store = new FixedKey("sk-ant-stored");
+        store.Unreadable.Add(AiCredentialNames.Primary);
+
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.Kind = "anthropic";
+            chat.ActiveModelId = "claude-opus-5";
+        }, store: store);
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.NotNull(problem);
+        Assert.DoesNotContain("No API key is stored", problem, StringComparison.Ordinal);
+        Assert.Contains("stored", problem, StringComparison.OrdinalIgnoreCase);
+        if (!OperatingSystem.IsWindows())
+            Assert.Contains("authorize", problem, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A locked stored key with an adopted variable still sends. (#926)
+    ///
+    /// <para>The resolver has always been <c>stored ?? environment</c>, and this asserts the fallback still
+    /// applies when the stored half is unreadable rather than absent — the behaviour Settings now reports
+    /// rather than contradicting. [fsnow: use the env var, and say so]</para>
+    /// </summary>
+    [Fact]
+    public void A_locked_key_still_falls_through_to_an_adopted_environment_variable()
+    {
+        var store = new FixedKey("sk-ant-stored");
+        store.Unreadable.Add(AiCredentialNames.Primary);
+
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.PresetId = "anthropic";
+            c.UsesEnvironmentKey = true;
+            c.EnvironmentVariable = "ANTHROPIC_API_KEY";
+            c.Kind = "anthropic";
+            chat.ActiveModelId = "claude-opus-5";
+        }, environmentKeys: Env("ANTHROPIC_API_KEY", "sk-from-env"),
+           presets: new FakePresets(EnvPreset("anthropic", "ANTHROPIC_API_KEY")),
+           store: store);
+
+        Assert.NotNull(resolver.Resolve(out var problem));
+        Assert.Null(problem);
+    }
+
     [Fact]
     public void A_connection_that_did_not_opt_in_does_not_use_the_environment_key()
     {

@@ -1,3 +1,5 @@
+using System;
+
 namespace CST.Avalonia.Services.Ai.Credentials;
 
 /// <summary>
@@ -57,6 +59,21 @@ public readonly record struct CredentialRead(CredentialState State, string? Secr
     /// <summary>Whether an item exists, whether or not its value could be read. False only when nothing is
     /// stored or there is nowhere to store it — so it never claims a key the reader has not provided.</summary>
     public bool Exists => State is CredentialState.Found or CredentialState.Unreadable;
+
+    /// <summary>
+    /// What to tell the reader about a named secret that is stored and unreadable. (#926)
+    ///
+    /// <para><b>One sentence, shared by every surface that reports it.</b> The resolver, the model catalogue
+    /// and the connection editor each phrased "no stored value … re-enter it" separately, which is how they
+    /// came to give advice that cannot work: on macOS the item exists, so re-entering runs
+    /// <c>SecItemAdd</c> → duplicate → <c>SecItemUpdate</c>, which needs the very authorization that was
+    /// just declined. Windows has no such problem — <c>Save</c> writes a fresh file — hence the split.</para>
+    /// </summary>
+    public static string Advice(string what) =>
+        OperatingSystem.IsWindows()
+            ? $"{what} is stored but could not be decrypted. Enter it again under Settings \u2192 AI."
+            : $"{what} is stored but CST Reader was not allowed to read it. Authorize it when macOS asks, "
+              + "or remove it under Settings \u2192 AI and enter it again.";
 
     /// <summary>The word for a log line. Deliberately says nothing about the value.</summary>
     public string Describe() => State switch

@@ -320,6 +320,75 @@ public class AiCredentialStoreTests : IDisposable
     /// The_separator_cannot_occur_inside_either_part catches it, because '_' is a character Sanitize emits.
     /// (fable review)
     /// </summary>
+    // ---- the state channel, on the REAL store (#926) ---------------------------------------------------
+
+    /// <summary>
+    /// <c>Read</c> on the real store, not on a test double.
+    ///
+    /// <para><b>Why this needed writing.</b> #926 added four outcomes and seven test fakes that implement
+    /// them — so every test of the new states was testing the fakes' model of the store rather than the
+    /// store. <c>Get</c> was covered throughout this file and <c>Read</c> nowhere, which left the real
+    /// dispatch, the <c>!IsAvailable</c> branch and the log wiring exercised only in production. (fable)</para>
+    /// </summary>
+    [Fact]
+    public void Read_reports_not_stored_before_anything_is_stored_and_found_after()
+    {
+        Assert.Equal(CredentialState.NotStored, _store.Read("anthropic", AiCredentialNames.Primary).State);
+
+        Assert.True(_store.Set("anthropic", AiCredentialNames.Primary, Secret));
+
+        var read = _store.Read("anthropic", AiCredentialNames.Primary);
+        Assert.Equal(CredentialState.Found, read.State);
+        Assert.Equal(Secret, read.Secret);
+        Assert.True(read.Exists);
+    }
+
+    [Fact]
+    public void Read_reports_not_stored_again_after_a_delete()
+    {
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        Assert.True(_store.Delete("anthropic", AiCredentialNames.Primary));
+
+        var read = _store.Read("anthropic", AiCredentialNames.Primary);
+        Assert.Equal(CredentialState.NotStored, read.State);
+        Assert.False(read.Exists);
+    }
+
+    /// <summary>Get is Read's value and nothing else, so the two can never disagree about the same item.</summary>
+    [Fact]
+    public void Get_agrees_with_Read_on_the_real_store()
+    {
+        Assert.Null(_store.Get("anthropic", AiCredentialNames.Primary));
+        Assert.Null(_store.Read("anthropic", AiCredentialNames.Primary).Secret);
+
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+
+        Assert.Equal(
+            _store.Read("anthropic", AiCredentialNames.Primary).Secret,
+            _store.Get("anthropic", AiCredentialNames.Primary));
+    }
+
+    /// <summary>
+    /// The outcome word reaches the log, and the secret still does not. (#926)
+    ///
+    /// <para>The log line is the only place three of the four states are visible at all today, so a change
+    /// that stopped <c>Read</c> calling <see cref="CredentialRead.Describe"/> would otherwise be silent.</para>
+    /// </summary>
+    [Fact]
+    public void Read_logs_the_outcome_and_never_the_secret()
+    {
+        _store.Read("anthropic", AiCredentialNames.Primary);
+        Assert.Contains(_log.Lines, l => l.Contains("none stored", StringComparison.Ordinal));
+
+        _log.Lines.Clear();
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        _store.Read("anthropic", AiCredentialNames.Primary);
+
+        Assert.Contains(_log.Lines, l => l.Contains("found", StringComparison.Ordinal));
+        Assert.All(_log.Lines, l => Assert.DoesNotContain(Secret, l, StringComparison.Ordinal));
+        Assert.All(_log.Lines, l => Assert.DoesNotContain(Secret[..12], l, StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_service_name_is_stable()
     {

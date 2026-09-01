@@ -77,8 +77,12 @@ public class AiConnectionEditorViewModelTests
         public string? Unavailable => Available ? null : "Nowhere to store a key in this build.";
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
+        /// <summary>Accounts the OS holds but will not hand over. (#926)</summary>
+        public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
         public CredentialRead Read(string connectionId, string name) =>
             !Available ? CredentialRead.Unavailable
+            : Unreadable.Contains(Account(connectionId, name)) ? CredentialRead.Unreadable
             : Stored.TryGetValue(Account(connectionId, name), out var k)
                 ? CredentialRead.Found(k)
                 : CredentialRead.NotStored;
@@ -1085,6 +1089,68 @@ public class AiConnectionEditorViewModelTests
 
         Assert.Null(h.Keys.Get("gw", AiCredentialNames.Header("cf-aig-authorization")));
         Assert.Equal("cf-token-abc", h.Keys.Get("gw", AiCredentialNames.Header("x-gateway-token")));
+    }
+
+    /// <summary>
+    /// The sheet says a locked key IS stored, and gives the remedy that works. (#926)
+    ///
+    /// <para><b>This sheet is where the reader acts on being told wrong.</b> The row badged "Key locked" and
+    /// the Edit sheet directly under it said "No key is stored for Groq." — so the reader pastes a
+    /// replacement, which on macOS runs SecItemAdd → duplicate → SecItemUpdate and needs the authorization
+    /// that just failed. It appears to work and changes nothing. (fable)</para>
+    /// </summary>
+    [Fact]
+    public void The_sheet_reports_a_locked_key_as_stored_rather_than_missing()
+    {
+        var h = new Harness();
+        h.Service.Add("mine", Draft());
+        h.Keys.Set("mine", AiCredentialNames.Primary, "sk-stored");
+
+        Assert.True(h.Existing("mine").HasStoredKey);
+
+        h.Keys.Unreadable.Add("mine:" + AiCredentialNames.Primary);
+        var locked = h.Existing("mine");
+
+        Assert.True(locked.HasStoredKey);
+        Assert.DoesNotContain("No key is stored", locked.KeyStatus, StringComparison.Ordinal);
+        // Not the replace-it sentence either: pasting is what does not work here.
+        Assert.DoesNotContain("Paste a new one", locked.KeyStatus, StringComparison.Ordinal);
+        if (!OperatingSystem.IsWindows())
+            Assert.Contains("authorize", locked.KeyStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Renaming a secret header whose value is LOCKED must not destroy it. (#926)
+    ///
+    /// <para><b>This was silent, permanent data loss.</b> The carry read the old account with <c>Get</c>,
+    /// which answers null for an unreadable item exactly as it does for an absent one, so nothing was
+    /// carried — and the sweep below then deleted the old account, because no header claimed it any more.
+    /// The reader's only copy of the secret was gone, with no error and nothing to recover from. It
+    /// contradicted <see cref="CredentialState.Unreadable"/>'s own rule that the state is never a reason to
+    /// delete anything, since both platforms can recover from it. (fable)</para>
+    ///
+    /// <para>Keeping the old account is the conservative half: the reader authorizes, and their secret is
+    /// still there under the name it was stored with.</para>
+    /// </summary>
+    [Fact]
+    public void Renaming_a_secret_header_whose_value_is_locked_does_not_destroy_it()
+    {
+        var h = new Harness();
+        var add = h.Custom();
+        add.Id = "gw";
+        add.BaseUrl = "https://gateway.example/v1";
+        Header(add, "cf-aig-authorization", "cf-token-abc", secret: true);
+        Save(add);
+
+        var old = AiCredentialNames.Header("cf-aig-authorization");
+        h.Keys.Unreadable.Add("gw:" + old);
+
+        var edit = h.Existing("gw");
+        edit.Headers.Single().Name = "x-gateway-token";
+        Save(edit);
+
+        // Still there under the name it was stored with, ready for the reader to authorize.
+        Assert.Equal("cf-token-abc", h.Keys.Stored["gw:" + old]);
     }
 
     /// <summary>Renaming and rotating in one edit does both: a typed value wins over the carried one.</summary>

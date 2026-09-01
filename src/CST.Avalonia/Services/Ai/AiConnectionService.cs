@@ -210,14 +210,6 @@ namespace CST.Avalonia.Services.Ai
         public IReadOnlyList<AiConnection> Connections =>
             Chat.Connections.Select(ToRuntime).ToList();
 
-        /// <summary>
-        /// Where this connection's credential came from. (#678, #689)
-        ///
-        /// <para>Only <c>Keychain</c> and <c>None</c> today. <c>Environment</c> arrives with the
-        /// <c>CST_AI_*</c> discovery work, and when it does the rule is that a found credential makes a
-        /// provider <i>available</i>, never <i>connected</i> — so it will be reported here without a
-        /// connection existing until the reader acts.</para>
-        /// </summary>
         /// <summary>Reads last-known reachability under the lock; see <see cref="ReportReachability"/>.</summary>
         private Reachability ReachabilityOf(string connectionId)
         {
@@ -226,7 +218,8 @@ namespace CST.Avalonia.Services.Ai
         }
 
         /// <summary>
-        /// Where this connection's credential comes from. (#689, #714)
+        /// Where this connection's credential comes from, and whether a stored one is unreadable.
+        /// (#689, #714, #926)
         ///
         /// <para><b>Stored wins.</b> Entering a key is a deliberate act and a variable in the environment is
         /// often forgotten — the maintainer was surprised by one on his own machine — so a reader who typed a
@@ -237,16 +230,25 @@ namespace CST.Avalonia.Services.Ai
         /// <para>A discovered credential counts only for a connection that was ADOPTED from the environment.
         /// Discovery alone never makes a connection authenticated: that is the opt-in step, and this method
         /// reports state rather than creating it.</para>
+        ///
+        /// <para><b>Two facts, because they answer different questions</b> (#926). The source names the
+        /// credential a request will actually use; the flag says the stored one is there and unreadable. A
+        /// locked stored key beside a working variable is both at once, and the row needs to say so — the
+        /// alternative is a Settings page reporting a state the wire does not share, which is precisely what
+        /// <see cref="Reachability"/> exists to prevent one layer up.</para>
+        ///
+        /// <para><b>This must agree with the request path, not merely be defensible.</b>
+        /// <c>ChatProviderResolver</c> and <c>AiModelCatalog</c> both resolve <c>stored ?? environment</c>; if
+        /// this refused to fall through, Settings would disable a model that sends perfectly well, and the
+        /// reader consulting Settings to diagnose would be reading the surface that is wrong.</para>
         /// </summary>
-        private CredentialSource SourceFor(string connectionId)
+        private (CredentialSource Source, bool StoredKeyUnreadable) CredentialFor(string connectionId)
         {
-            // Read, not Get (#926). A stored key this build cannot read is a different state from no key, and
-            // it must not fall through to the environment either: the whole point of "stored wins" above is
-            // that a key the reader typed is not quietly replaced by a variable they forgot they set, and an
-            // authorization the reader can still grant does not make their key stop counting.
+            // Read, not Get (#926). A stored key this build cannot read is a different state from no key.
             var read = _credentials?.Read(connectionId, AiCredentialNames.Primary);
-            if (read?.State == CredentialState.Found) return CredentialSource.Keychain;
-            if (read?.State == CredentialState.Unreadable) return CredentialSource.Unreadable;
+            if (read?.State == CredentialState.Found) return (CredentialSource.Keychain, false);
+
+            var locked = read?.State == CredentialState.Unreadable;
 
             // Adopted from the environment, and the variable still holds something. When it does not — unset
             // between sessions, or renamed — this falls through to None, which reads as "no key" rather than
@@ -259,9 +261,18 @@ namespace CST.Avalonia.Services.Ai
             if (record is not null
                 && AiEnvironmentCredential.For(
                     record.UsesEnvironmentKey, record.EnvironmentVariable, _environmentKeys) is not null)
-                return CredentialSource.Environment;
+                // A locked stored key does NOT stop the environment variable being used, because the request
+                // path uses it: ChatProviderResolver and AiModelCatalog both resolve `stored ?? environment`,
+                // so refusing here would have Settings disable a model that sends perfectly well. Reporting
+                // Environment is what the app ACTUALLY does; the locked key travels alongside as its own fact
+                // so the row can say which credential is in use and why the other is not. "Stored wins" is
+                // intact — a readable stored key still takes precedence, above. (#926) [fsnow: use the env
+                // var, and say so]
+                return (CredentialSource.Environment, locked);
 
-            return CredentialSource.None;
+            // No usable credential at all. Not None: a key IS stored, and telling the reader otherwise is the
+            // whole of #926 — it sends them to re-enter one that is present and correct.
+            return locked ? (CredentialSource.Unreadable, true) : (CredentialSource.None, false);
         }
 
 
@@ -752,7 +763,10 @@ namespace CST.Avalonia.Services.Ai
             record.AuthScheme = draft.AuthScheme;
         }
 
-        private AiConnection ToRuntime(AiConnectionRecord r) => new(
+        private AiConnection ToRuntime(AiConnectionRecord r)
+        {
+            var credential = CredentialFor(r.Id);
+            return new AiConnection(
             r.Id,
             r.DisplayName,
             ChatProviderResolver.TryParseKind(r.Kind, out var kind) ? kind : ChatProviderKind.OpenAiCompatible,
@@ -766,12 +780,14 @@ namespace CST.Avalonia.Services.Ai
             new Dictionary<string, string>(r.Inputs),
             r.PresetId,
             r.SecretInputs?.ToList(),
-            SourceFor(r.Id),
+            credential.Source,
             ReachabilityOf(r.Id),
             r.AuthHeaderName,
             r.AuthScheme,
             r.UsesEnvironmentKey,
-            r.EnvironmentVariable);
+            r.EnvironmentVariable,
+            credential.StoredKeyUnreadable);
+        }
 
         /// <summary>
         /// Every credential name this connection could have filed a secret under. (#759)

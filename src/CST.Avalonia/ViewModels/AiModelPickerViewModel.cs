@@ -340,6 +340,9 @@ namespace CST.Avalonia.ViewModels
         {
             if (connection.IsIncomplete) return "not finished being set up";
 
+            // KeySource, not StoredKeyUnreadable: a locked stored key beside a working environment variable
+            // resolves to Environment and sends perfectly well, so disabling it here would have the picker
+            // contradict the wire. Only a locked key with nothing behind it makes the model unusable. (#926)
             if (connection.KeySource == CredentialSource.Unreadable)
                 return "its API key could not be read";
 

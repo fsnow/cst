@@ -153,6 +153,16 @@ namespace CST.Avalonia.Models.Ai
     /// <param name="Inputs">The reader's answers to the preset's prompts (resource name, account id, region,
     /// project). Substituted into <paramref name="BaseUrl"/> and <paramref name="Headers"/>. Empty for the
     /// ~150 of 189 providers that are a plain base URL and a bearer token.</param>
+    /// <param name="StoredKeyUnreadable">A key IS stored for this connection and this build could not read it
+    /// — on macOS, ordinarily an item whose ACL names a different binary. (#926)
+    ///
+    /// <para><b>Separate from <paramref name="KeySource"/> because they answer different questions.</b>
+    /// KeySource says where the credential a request will actually use comes from; this says something is
+    /// wrong with the stored one. Both can be true at once: a locked stored key alongside a working
+    /// environment variable resolves to <see cref="CredentialSource.Environment"/> — requests work — while
+    /// this stays true so the row can say which credential is being used and why the other is not. Folding
+    /// them into one enum would force a choice between reporting the working credential and reporting the
+    /// broken one, and the reader needs both.</para></param>
     public sealed record AiConnection(
         string Id,
         string DisplayName,
@@ -168,8 +178,21 @@ namespace CST.Avalonia.Models.Ai
         string AuthHeaderName = "Authorization",
         string? AuthScheme = "Bearer",
         bool UsesEnvironmentKey = false,
-        string? EnvironmentVariable = null)
+        string? EnvironmentVariable = null,
+        bool StoredKeyUnreadable = false)
     {
+        /// <summary>
+        /// A key is stored for this connection and could not be read — however the source resolved. (#926)
+        ///
+        /// <para><b>Ask this, not the two fields.</b> "Locked" is expressible twice — as
+        /// <see cref="CredentialSource.Unreadable"/> when nothing else can serve, and as
+        /// <see cref="StoredKeyUnreadable"/> beside a working <see cref="CredentialSource.Environment"/>
+        /// variable — and a consumer that checks only one of them is right in one case and wrong in the
+        /// other. Deriving it here is what stops the two from being able to disagree in practice, since the
+        /// service sets them together and everything else reads this.</para>
+        /// </summary>
+        public bool KeyLocked => StoredKeyUnreadable || KeySource == CredentialSource.Unreadable;
+
         /// <summary>The base URL with <see cref="Inputs"/> substituted in — what a request actually goes to.</summary>
         public string ResolvedBaseUrl => AiTemplate.Expand(BaseUrl, Inputs);
 

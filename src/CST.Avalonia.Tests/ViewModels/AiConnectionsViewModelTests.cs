@@ -232,12 +232,17 @@ public class AiConnectionsViewModelTests
     private static AiConnectionRowViewModel Row(
         CredentialSource source = CredentialSource.None,
         Reachability state = Reachability.Configured,
-        string baseUrl = "http://localhost:11434/v1")
+        string baseUrl = "http://localhost:11434/v1",
+        bool storedKeyUnreadable = false,
+        string? environmentVariable = null)
     {
         var connection = new AiConnection(
             "local", "Local Ollama", ChatProviderKind.OpenAiCompatible, baseUrl,
             new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>(),
-            PresetId: null, KeySource: source, State: state);
+            PresetId: null, KeySource: source, State: state,
+            UsesEnvironmentKey: environmentVariable is not null,
+            EnvironmentVariable: environmentVariable,
+            StoredKeyUnreadable: storedKeyUnreadable);
         return new AiConnectionRowViewModel(new AiConnectionsViewModel(null, null), connection);
     }
 
@@ -276,6 +281,68 @@ public class AiConnectionsViewModelTests
         Assert.True(Row(CredentialSource.Keychain).CanRemoveKey);
         Assert.False(Row(CredentialSource.Environment).CanRemoveKey);
         Assert.False(Row(CredentialSource.None).CanRemoveKey);
+    }
+
+    /// <summary>
+    /// A locked key with a working variable names the variable, and does not read as broken. (#926)
+    ///
+    /// <para>Requests succeed and are billed to that variable, so the row states which credential is in use
+    /// rather than raising an alarm — and <c>KeyProblemNeedsAction</c> stays false, so it does not take the
+    /// caution colour the unusable states use. [fsnow: use the env var, and say so]</para>
+    /// </summary>
+    [Fact]
+    public void A_locked_key_with_an_environment_fallback_names_the_variable_and_is_not_an_alarm()
+    {
+        var row = Row(CredentialSource.Environment, storedKeyUnreadable: true,
+                      environmentVariable: "OPENROUTER_API_KEY");
+
+        Assert.Contains("OPENROUTER_API_KEY", row.KeySourceBadge, StringComparison.Ordinal);
+        Assert.True(row.HasKeyProblem);
+        Assert.False(row.KeyProblemNeedsAction);
+        Assert.True(row.KeyProblemIsStatement);
+        Assert.Contains("OPENROUTER_API_KEY", row.KeyProblem!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A locked key with nothing behind it IS an alarm, and the two shapes never render together. (#926)
+    ///
+    /// <para>The mutual exclusion is asserted because the row template binds both to the same text: without
+    /// it the caution case would print the sentence twice.</para>
+    /// </summary>
+    [Fact]
+    public void A_locked_key_with_no_fallback_needs_action_and_renders_one_line_only()
+    {
+        var row = Row(CredentialSource.Unreadable, storedKeyUnreadable: true);
+
+        Assert.True(row.HasKeyProblem);
+        Assert.True(row.KeyProblemNeedsAction);
+        Assert.False(row.KeyProblemIsStatement);
+        Assert.NotEqual(row.KeyProblemNeedsAction, row.KeyProblemIsStatement);
+    }
+
+    /// <summary>
+    /// The advice for an unreadable key is the one for THIS platform. (#926)
+    ///
+    /// <para>This is the only place in the app that tells a macOS reader the remedy is to <i>authorize</i>.
+    /// A mutation making the string platform-blind killed no test, and the consequence is not cosmetic: it
+    /// would hand macOS readers the DPAPI advice — delete and retype — which discards precisely the
+    /// recoverable state <see cref="CredentialState.Unreadable"/> says never to clean up. (fable)</para>
+    /// </summary>
+    [Fact]
+    public void The_locked_key_advice_matches_the_platform()
+    {
+        var text = Row(CredentialSource.Unreadable, storedKeyUnreadable: true).KeyProblem!;
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Contains("decrypt", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("authorize", text, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            Assert.Contains("authorize", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("decrypt", text, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>

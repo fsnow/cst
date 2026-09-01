@@ -821,11 +821,15 @@ namespace CST.Avalonia.ViewModels
         /// unlike "No key" — those two shared a badge, and the reader acted on it by re-entering keys that
         /// were already stored and correct.</para>
         /// </summary>
-        public string KeySourceBadge => _connection.KeySource switch
+        public string KeySourceBadge => _connection switch
         {
-            CredentialSource.Keychain => "Keychain",
-            CredentialSource.Environment => "Environment",
-            CredentialSource.Unreadable => "Key locked",
+            // The compound case first: a locked stored key beside a working variable. Requests DO work, and
+            // they are billed to the variable, so the badge names it rather than reporting either fact alone.
+            { KeySource: CredentialSource.Environment, KeyLocked: true } c =>
+                $"Key locked — using {c.EnvironmentVariable}",
+            { KeySource: CredentialSource.Keychain } => "Keychain",
+            { KeySource: CredentialSource.Environment } => "Environment",
+            { KeySource: CredentialSource.Unreadable } => "Key locked",
             _ => "No key",
         };
 
@@ -838,10 +842,29 @@ namespace CST.Avalonia.ViewModels
         /// blob did not decrypt, which is usually an administrator-initiated password reset; entering the key
         /// again is the whole fix, and may simply start working once a roaming profile finishes syncing.</para>
         /// </summary>
-        public string? KeyProblem => _connection.KeySource != CredentialSource.Unreadable ? null
+        public string? KeyProblem =>
+            !_connection.KeyLocked ? null
+            : _connection.KeySource == CredentialSource.Environment
+                // Nothing is broken for the reader right now, so this states the situation rather than asking
+                // for action: the request path is already using the variable.
+                ? $"The stored key could not be read, so requests are using {_connection.EnvironmentVariable}"
             : OperatingSystem.IsWindows()
-                ? "Stored, but it did not decrypt — remove it and enter it again"
+                ? "Stored, but it did not decrypt — enter it again to replace it"
                 : "Stored, but this build was not allowed to read it — authorize it, or remove and re-enter";
+
+        /// <summary>
+        /// Whether <see cref="KeyProblem"/> is a problem the reader must act on, or merely a statement.
+        /// (#926)
+        ///
+        /// <para>A locked key with a working variable is not a fault: sending works. Colouring it like the
+        /// caution states would teach the reader that the warning colour means nothing much.</para>
+        /// </summary>
+        public bool KeyProblemNeedsAction =>
+            _connection.KeyLocked && _connection.KeySource != CredentialSource.Environment;
+
+        /// <summary>The complement, so the two lines in the row template are mutually exclusive rather than
+        /// both rendering the same sentence when action IS needed.</summary>
+        public bool KeyProblemIsStatement => HasKeyProblem && !KeyProblemNeedsAction;
 
         public bool HasKeyProblem => KeyProblem is not null;
 
@@ -969,6 +992,8 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(CanRemoveKey));
             this.RaisePropertyChanged(nameof(KeyProblem));
             this.RaisePropertyChanged(nameof(HasKeyProblem));
+            this.RaisePropertyChanged(nameof(KeyProblemNeedsAction));
+            this.RaisePropertyChanged(nameof(KeyProblemIsStatement));
             this.RaisePropertyChanged(nameof(StatusText));
             this.RaisePropertyChanged(nameof(IsIncomplete));
             this.RaisePropertyChanged(nameof(IncompleteText));

@@ -128,13 +128,18 @@
                                                    IsVisible="{Binding IsIncomplete}"
                                                    Classes="Secondary"
                                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
-                                        <!-- A stored key we could not read (#926). Shares the caution slot
-                                             with IncompleteText because it is the same kind of statement -
-                                             this row is not usable yet, and here is the reason - and the two
-                                             cannot both apply: a connection still carrying URL placeholders
-                                             has never reached the point of storing a key. -->
+                                        <!-- A stored key we could not read (#926). Two shapes, because two
+                                             situations: with no fallback the row cannot be used and takes the
+                                             caution colour IncompleteText uses; with a working environment
+                                             variable the request path carries on regardless, so it is a plain
+                                             secondary line. Colouring a working connection like a broken one
+                                             teaches the reader that the caution colour means nothing much. -->
                                         <TextBlock Text="{Binding KeyProblem}"
-                                                   IsVisible="{Binding HasKeyProblem}"
+                                                   IsVisible="{Binding KeyProblemIsStatement}"
+                                                   Classes="Secondary"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding KeyProblem}"
+                                                   IsVisible="{Binding KeyProblemNeedsAction}"
                                                    Classes="Secondary"
                                                    TextWrapping="Wrap"
                                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
