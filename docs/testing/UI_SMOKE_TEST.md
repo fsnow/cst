@@ -113,6 +113,78 @@ marking each step **Pass / Fail / N/A** and jotting anything odd in **Notes**.
 - [ ] Change the **Logging** level → new log lines appear at that level.
 - [ ] Settings persist across a restart.
 
+## 9a. AI Assistant — key storage  ⊞ ⭐
+
+**Why this section exists.** An API key must never reach a file we write, and on Windows that promise is
+kept by DPAPI over a file per secret — a code path **developed on macOS and exercised by tests that do not
+run there**. The suite's 17 skips are these. Everything below was learned from real defects found on
+2026-08-31 (#926, #925); each check is one of them.
+
+Skip the whole section if the AI Assistant is off (Settings › AI). Turn it on and add one provider with a
+key to run it — any provider, the key need not be valid for most of these.
+
+**Where things live on Windows**
+
+```
+%APPDATA%\CSTReader\credentials\CST Reader — AI provider\<connection>.<name>.dpapi
+```
+
+One file per secret, e.g. `openrouter.primary.dpapi`. The separator is `.` on Windows and `:` on macOS —
+`:` is not a legal filename character. On macOS these are Keychain items under the service
+**"CST Reader — AI provider"**, visible in Keychain Access.
+
+**The promise**
+
+- [ ] After storing a key, open `%APPDATA%\CSTReader\settings.json` and search for it. **The key must not
+      be there** — not the whole key, not a fragment.  ⭐
+- [ ] Open the `.dpapi` file in a hex or text viewer. **The key must not be readable in it.**  ⊞ ⭐
+- [ ] Restart the app. The provider still shows its key as stored, and a request still works.
+
+**Removing**
+
+- [ ] **Settings › AI › Providers › Edit › Remove stored key** → the sheet stops saying a key is stored, and
+      the `.dpapi` file is gone.
+- [ ] **Delete a whole connection** (row → Delete) → its `.dpapi` file is gone too. *(A leftover file is an
+      orphan nothing can reach, and a connection later created with the same id would silently adopt it.)*
+- [ ] Removing the last key leaves **no empty `credentials` sub-directory** behind.
+
+**An unreadable key is not a missing key**  ⊞ ⭐ *(#926 — the defect this section was written for)*
+
+On Windows a blob stops decrypting after an **administrator-initiated password reset**, which discards the
+user's DPAPI master key. Simulate it by overwriting the file with junk:
+
+```powershell
+$f = "$env:APPDATA\CSTReader\credentials\CST Reader — AI provider\<connection>.primary.dpapi"
+Copy-Item $f "$f.bak"                          # keep the real one
+[IO.File]::WriteAllBytes($f, (1..64 | % { Get-Random -Max 256 }))
+```
+
+Restart the app, then check:
+
+- [ ] The provider row badges **"Key locked"**, not "No key".  ⭐
+- [ ] Its message says the key is **stored but could not be decrypted**, and to enter it again. It must
+      **not** say no key is stored — that sends the reader to re-enter a key they may still have, and on
+      macOS re-entering cannot work at all.
+- [ ] The Edit sheet agrees: it must not say *"No key is stored for &lt;provider&gt;."*
+- [ ] Sending a message reports the same thing, **not** *"No API key is stored… Add one in Settings."*
+      *(The row and the composer disagreeing is the specific failure this was caught as.)*
+- [ ] **The junk file is still there.** It is deliberately not deleted: "cannot decrypt now" is not "cannot
+      decrypt ever" — a roaming profile can arrive later, and a domain account can recover after an admin
+      reset. Deleting would turn a temporary state into permanent loss.
+- [ ] **Entering the key again fixes it** on Windows — `Save` writes a fresh file, so replace works here.
+      *(It does not on macOS, where the item's ACL is not its value. That platform difference is why the two
+      messages differ; if the Windows message ever starts talking about authorizing, that is the bug.)*
+
+Then `Move-Item "$f.bak" $f -Force` to restore, or just re-enter the key.
+
+**Quiet at launch**  *(#925)*
+
+- [ ] Set logging to **Debug**, restart, open Settings › AI › Providers, close it. In the log, count
+      `Credential lookup` lines: expect **single digits**, and none at all before the first thing that
+      needs a key. *(It was 114 for three connections across one launch and one Settings window. On Windows
+      the cost is only wasted decryption; on macOS each one could raise a password dialog.)*
+- [ ] No credential prompt of any kind appears at launch.
+
 ## 10. Graphics / rendering stability  ⊞ ⭐
 
 - [ ] Over sustained use (open/close books, float/unfloat, switch tabs, scroll), the reader view **does not go black/blank and stay that way**.  ⊞ *(#401 — the virtualized-GPU stall; if it happens: does clicking/selecting text restore it? capture repro + whether hardware-accel is on)*
@@ -155,6 +227,9 @@ marking each step **Pass / Fail / N/A** and jotting anything odd in **Notes**.
 10. **Install/uninstall + process cleanup** — §1, §14.
 11. **SmartScreen / unsigned installer** friction — §1.
 12. **Multi-monitor / DPI changes** — §2, §13.
+13. **DPAPI key storage** (#579, #926) — §9a. The whole Windows credential path is developed on macOS and
+    covered by tests that **skip** there, so this seam reaches Windows less exercised than any other in this
+    list.
 
 ---
 
@@ -171,6 +246,7 @@ marking each step **Pass / Fail / N/A** and jotting anything odd in **Notes**.
 | 7 Dock float/split | | | |
 | 8 Menus & shortcuts | | | |
 | 9 Settings | | | |
+| 9a AI key storage (DPAPI) | | | |
 | 10 Rendering stability | | | |
 | 11 View Source PDF | | | |
 | 12 Updates | | | |
