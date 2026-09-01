@@ -357,12 +357,24 @@ public class AiModelCatalogTests
         public string? Unavailable => null;
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
+        /// <summary>How many times a caller asked for a VALUE. Every one can raise a macOS prompt. (#925)</summary>
+        internal int ValueReads { get; private set; }
+
         public CredentialState Probe(string connectionId, string name) =>
             _byAccount.ContainsKey(connectionId + ":" + name)
                 ? CredentialState.Found
                 : CredentialState.NotStored;
 
         public CredentialRead Read(string connectionId, string name) =>
+            Counted(connectionId, name);
+
+        private CredentialRead Counted(string connectionId, string name)
+        {
+            ValueReads++;
+            return ReadUncounted(connectionId, name);
+        }
+
+        private CredentialRead ReadUncounted(string connectionId, string name) =>
             _byAccount.TryGetValue(connectionId + ":" + name, out var k)
                 ? CredentialRead.Found(k)
                 : CredentialRead.NotStored;
@@ -570,6 +582,41 @@ public class AiModelCatalogTests
 
     private static AiModelCatalog CatalogOver(StubHttpMessageHandler handler) =>
         new(new HttpClient(handler), credentials: null, NullLogger<AiModelCatalog>.Instance);
+
+    /// <summary>
+    /// A paginated listing fetches its credentials once, not once per page. (#925)
+    ///
+    /// <para><b>Every credential fetch is a possible macOS authorization dialog</b> — the ACL guards the
+    /// value, and cancelling one prompt records no decision, so the next fetch asks again. Authenticate ran
+    /// per request, inside the page loop: Anthropic pages at twenty models by default, so a five-hundred
+    /// model catalogue was twenty-five prompts to load one list.</para>
+    ///
+    /// <para>Nothing is lost by hoisting it. The credentials cannot change part-way through a listing, so
+    /// re-reading them per page was never buying freshness — only prompts.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_paged_listing_reads_its_key_once_for_the_whole_listing()
+    {
+        var keys = new NamedKeys();
+        keys.Set("anthropic", AiCredentialNames.Primary, "sk-ant-test");
+
+        var handler = new StubHttpMessageHandler(request =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    request.RequestUri!.Query.Contains("after_id=", StringComparison.Ordinal)
+                        ? """{"data":[{"id":"claude-sonnet"}],"has_more":false}"""
+                        : """{"data":[{"id":"claude-opus"}],"has_more":true,"last_id":"claude-opus"}"""),
+            });
+
+        var before = keys.ValueReads;
+        var result = await new AiModelCatalog(
+            new HttpClient(handler), keys, NullLogger<AiModelCatalog>.Instance).FetchAsync(Paged());
+
+        Assert.True(result.Ok);
+        Assert.Equal(2, handler.RequestedUrls.Count);          // two pages were genuinely fetched
+        Assert.Equal(before + 1, keys.ValueReads);             // and the key was read once
+    }
 
     /// <summary>
     /// The listing is read to the end, not one page deep. Before #769 an Anthropic-protocol connection with
