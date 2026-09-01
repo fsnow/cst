@@ -115,12 +115,14 @@ public readonly record struct CredentialRead(CredentialState State, string? Secr
     /// same id".</para>
     /// </summary>
     public static string SecretsLeftBehind(string displayName) =>
+        // Interpolated on EVERY line. A `+ "…{displayName}…"` continuation is a plain string, so the
+        // placeholder reaches the reader verbatim — which is exactly what shipped for one build.
         OperatingSystem.IsWindows()
             ? $"{displayName} was removed, but its stored key could not be deleted and is still on this "
-              + "computer."
+              + $"computer."
             : $"{displayName} was removed, but its stored key could not be deleted \u2014 macOS did not "
-              + "allow it. It is still in your keychain, and adding {displayName} again will find it. "
-              + "Delete the \u201cCST Reader \u2014 AI provider\u201d entry in Keychain Access to clear it.";
+              + $"allow it. It is still in your keychain, and adding {displayName} again will find it. "
+              + $"Delete the \u201cCST Reader \u2014 AI provider\u201d entry in Keychain Access to clear it.";
 
     /// <summary>The word for a log line. Deliberately says nothing about the value.</summary>
     public string Describe() => State switch

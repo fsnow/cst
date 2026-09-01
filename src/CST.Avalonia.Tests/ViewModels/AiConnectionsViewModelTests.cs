@@ -174,6 +174,8 @@ public class AiConnectionsViewModelTests
         vm.Delete("openrouter");
 
         Assert.True(vm.HasProblem);
+        Assert.Contains("OpenRouter", vm.Problem!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("{", vm.Problem!, StringComparison.Ordinal);
         Assert.Empty(vm.Connections);          // the connection still goes
     }
 

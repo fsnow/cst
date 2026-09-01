@@ -483,7 +483,12 @@ public class AiConnectionServiceTests
 
         Assert.True(result.Ok);                       // the connection is gone
         Assert.Empty(settings.Ai.Chat.Connections);
-        Assert.NotNull(result.Problem);               // and the orphan is named
+        // Named, and FORMED. Asserting only NotNull let a `+ "…{displayName}…"` continuation ship - a
+        // plain string, so the placeholder reached the reader verbatim. Every one of these sentences is
+        // built by concatenation, so the brace check is the one that generalises. (#926)
+        Assert.NotNull(result.Problem);
+        Assert.Contains("My box", result.Problem!, StringComparison.Ordinal);
+        Assert.DoesNotContain("{", result.Problem!, StringComparison.Ordinal);
         Assert.Equal("k", keys.Get("box", AiCredentialNames.Primary));
     }
 
