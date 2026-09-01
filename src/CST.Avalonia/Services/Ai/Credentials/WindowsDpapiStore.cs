@@ -104,7 +104,6 @@ internal static class WindowsDpapiStore
         }
     }
 
-    /// <summary>The stored secret, or null when there is none - or when the blob cannot be decrypted.</summary>
     /// <summary>
     /// Whether a blob exists, without decrypting it. (#925)
     ///
@@ -115,11 +114,17 @@ internal static class WindowsDpapiStore
     /// <para>Presence, not readability: a blob whose master key is gone still exists, and reporting it
     /// absent is the conflation #926 removed.</para>
     /// </summary>
-    internal static bool Exists(string service, string account)
+    internal static CredentialState Exists(string service, string account)
     {
-        lock (Gate) return File.Exists(FileFor(service, account));
+        // A state rather than a bool, to match the macOS probe, which has a third answer this does not:
+        // File.Exists is not refused the way a Keychain query can be.
+        lock (Gate)
+            return File.Exists(FileFor(service, account))
+                ? CredentialState.Found
+                : CredentialState.NotStored;
     }
 
+    /// <summary>The stored secret, or null when there is none - or when the blob cannot be decrypted.</summary>
     internal static CredentialRead Find(string service, string account)
     {
         var path = FileFor(service, account);

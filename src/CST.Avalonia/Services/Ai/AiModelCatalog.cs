@@ -419,17 +419,6 @@ namespace CST.Avalonia.Services.Ai
             return AiCatalogResult.Success(models, complete, skipped);
         }
 
-        /// <summary>
-        /// Authenticates exactly as a chat request to the same endpoint would.
-        ///
-        /// <para>Routed through <see cref="AiHttp.ApplyAuth"/> rather than reimplemented: a listing and a
-        /// question go to the same host with the same credential, and two implementations would eventually
-        /// disagree. The visible symptom would be a provider whose model list loads while its answers 401 —
-        /// two surfaces contradicting each other, which is the failure #673 exists to prevent.</para>
-        ///
-        /// <para>Header values are templates like the base URL is: Azure and Cloudflare put reader-supplied
-        /// inputs in them.</para>
-        /// </summary>
         /// <summary>Everything a request to this connection has to carry, fetched once per listing. (#925)</summary>
         private sealed record ListingCredentials(string? Key, Dictionary<string, string> Headers);
 
@@ -461,6 +450,18 @@ namespace CST.Avalonia.Services.Ai
             return new ListingCredentials(key, headers);
         }
 
+        /// <summary>
+        /// Authenticates exactly as a chat request to the same endpoint would.
+        ///
+        /// <para>Routed through <see cref="AiHttp.ApplyAuth"/> rather than reimplemented: a listing and a
+        /// question go to the same host with the same credential, and two implementations would eventually
+        /// disagree. The visible symptom would be a provider whose model list loads while its answers 401 —
+        /// two surfaces contradicting each other, which is the failure #673 exists to prevent.</para>
+        ///
+        /// <para>Header values are templates like the base URL is: Azure and Cloudflare put reader-supplied
+        /// inputs in them — expanded in <see cref="ResolveCredentials"/>, which runs once per listing while
+        /// this runs once per page.</para>
+        /// </summary>
         private void Authenticate(
             HttpRequestMessage request, AiConnection connection, ListingCredentials credentials)
         {

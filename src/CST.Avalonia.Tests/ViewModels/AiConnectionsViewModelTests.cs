@@ -87,6 +87,9 @@ public class AiConnectionsViewModelTests
         /// <summary>Accounts the OS holds but will not hand over. (#926)</summary>
         public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Accounts a real Read has actually visited. (#925)</summary>
+        private readonly HashSet<string> _readOnce = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
@@ -96,8 +99,13 @@ public class AiConnectionsViewModelTests
 
         public CredentialState Probe(string connectionId, string name)
         {
+            // Unreadable ONLY once a real Read has established it — the real store's semantics. (#925, fable)
+            // A probe asks the item's metadata and cannot learn that its value is unreadable; it reports
+            // Found. Fakes that answered Unreadable straight away tested only the post-first-read steady
+            // state, and certified a state the app does not enter at launch.
             var account = Account(connectionId, name);
-            if (Unreadable.Contains(account)) return CredentialState.Unreadable;
+            if (Unreadable.Contains(account) && _readOnce.Contains(account))
+                return CredentialState.Unreadable;
             return Keys.ContainsKey(account) ? CredentialState.Found : CredentialState.NotStored;
         }
 
@@ -105,6 +113,7 @@ public class AiConnectionsViewModelTests
         {
             ValueReads++;
             var account = Account(connectionId, name);
+            _readOnce.Add(account);
             if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
             return Keys.TryGetValue(account, out var k)
                 ? CredentialRead.Found(k)

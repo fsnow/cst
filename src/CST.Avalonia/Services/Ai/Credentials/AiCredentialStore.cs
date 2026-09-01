@@ -125,11 +125,12 @@ public sealed class AiCredentialStore : IAiCredentialStore
         lock (_knownGate)
             if (_known.TryGetValue(account, out var remembered)) return remembered;
 
-        var exists = OperatingSystem.IsWindows()
+        // Each platform classifies its own probe. macOS reuses MacOsKeychain.Classify, so an unanticipated
+        // Security.framework failure reports Unreadable rather than absent - the same rule a real read
+        // follows, and the one that keeps a locked keychain from reading as "you have no keys". (fable)
+        return OperatingSystem.IsWindows()
             ? WindowsDpapiStore.Exists(_service, account)
             : MacOsKeychain.Exists(_service, account);
-
-        return exists ? CredentialState.Found : CredentialState.NotStored;
     }
 
     public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
@@ -174,11 +175,22 @@ public sealed class AiCredentialStore : IAiCredentialStore
             ? WindowsDpapiStore.Save(_service, account, secret.Trim())
             : MacOsKeychain.Save(_service, account, secret.Trim());
 
-        // Forgotten rather than assumed. A successful Save does not make the item readable BY US - on macOS
-        // SecItemUpdate rewrites the value and leaves the ACL alone, which is why replacing a locked key
-        // succeeds and changes nothing the reader can see (#926). Recording Found here would have the badge
-        // announce a key we still cannot read.
-        lock (_knownGate) _known.Remove(account);
+        // A remembered Unreadable SURVIVES a successful save; anything else is forgotten. (fable)
+        //
+        // Recording Found here would have the badge announce a key we still cannot read - and so, one hop
+        // later, does forgetting: the next Probe misses the cache, asks the OS whether an item exists, and
+        // gets Found. On macOS SecItemUpdate rewrites the value and leaves the ACL alone, so pasting a
+        // replacement over a locked key succeeds and changes nothing (tested 2026-08-31). Clearing here made
+        // every surface then report it healthy - the #926 confusion upgraded from silence to a false
+        // statement, on the exact path the sheet invites with "Paste a new one to replace it".
+        //
+        // Keeping it under-claims if the item really was recreated readable, and the next real read corrects
+        // that. Under-claiming is the direction this whole seam has chosen.
+        lock (_knownGate)
+        {
+            if (!_known.TryGetValue(account, out var before) || before != CredentialState.Unreadable)
+                _known.Remove(account);
+        }
         _logger.LogInformation("Stored a secret for {Connection}/{Name}: {Result}",
             connectionId, name, saved ? "ok" : "failed");
         return saved;
@@ -194,9 +206,13 @@ public sealed class AiCredentialStore : IAiCredentialStore
             ? WindowsDpapiStore.Delete(_service, account)
             : MacOsKeychain.Delete(_service, account);
 
-        // Forgotten either way. On success there is nothing to remember; on failure the item is still there
-        // and in a state we no longer have evidence about.
-        lock (_knownGate) _known.Remove(account);
+        // Forgotten only on SUCCESS. (fable)
+        //
+        // A failed delete changed nothing, so the evidence we had still holds - and discarding it made a
+        // DECLINED removal look like progress: badge "Key locked" -> Remove -> dismiss the prompt -> delete
+        // fails -> cache cleared -> next Probe finds the item present -> badge "Keychain", problem gone. The
+        // reader's failed attempt to revoke a key made the row report it healthier.
+        if (deleted) lock (_knownGate) _known.Remove(account);
         _logger.LogInformation("Removed a secret for {Connection}/{Name}: {Result}",
             connectionId, name, deleted ? "ok" : "failed");
         return deleted;

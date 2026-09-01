@@ -342,6 +342,9 @@ public class AiConnectionServiceTests
         /// binary, or a DPAPI blob that will not decrypt. The store can see it and cannot read it. (#926)</summary>
         internal HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Accounts a real Read has actually visited. (#925)</summary>
+        private readonly HashSet<string> _readOnce = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
@@ -351,8 +354,13 @@ public class AiConnectionServiceTests
 
         public CredentialState Probe(string connectionId, string name)
         {
+            // Unreadable ONLY once a real Read has established it — the real store's semantics. (#925, fable)
+            // A probe asks the item's metadata and cannot learn that its value is unreadable; it reports
+            // Found. Fakes that answered Unreadable straight away tested only the post-first-read steady
+            // state, and certified a state the app does not enter at launch.
             var account = Account(connectionId, name);
-            if (Unreadable.Contains(account)) return CredentialState.Unreadable;
+            if (Unreadable.Contains(account) && _readOnce.Contains(account))
+                return CredentialState.Unreadable;
             return _byAccount.ContainsKey(account) ? CredentialState.Found : CredentialState.NotStored;
         }
 
@@ -360,6 +368,7 @@ public class AiConnectionServiceTests
         {
             ValueReads++;
             var account = Account(connectionId, name);
+            _readOnce.Add(account);
             if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
             return _byAccount.TryGetValue(account, out var k)
                 ? CredentialRead.Found(k)
@@ -489,6 +498,13 @@ public class AiConnectionServiceTests
 
         keys.Unreadable.Add("box:" + AiCredentialNames.Primary);
 
+        // Still Keychain: a probe asks the item's metadata and cannot learn its value is unreadable (#925).
+        // "A key is stored" is true, and #926's rule was never to claim one is ABSENT when it is not.
+        Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
+
+        // Something actually uses the key. That read fails, the store remembers, and the badge catches up.
+        keys.Get("box", AiCredentialNames.Primary);
+
         Assert.Equal(CredentialSource.Unreadable, service.Connections.Single().KeySource);
     }
 
@@ -507,6 +523,7 @@ public class AiConnectionServiceTests
         service.Add("box", Draft());
         keys.Set("box", AiCredentialNames.Primary, "k");
         keys.Unreadable.Add("box:" + AiCredentialNames.Primary);
+        keys.Get("box", AiCredentialNames.Primary);   // a real use establishes the locked state (#925)
 
         var record = settings.Ai.Chat.Connections.Single();
         record.UsesEnvironmentKey = true;

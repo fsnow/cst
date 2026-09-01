@@ -214,9 +214,9 @@ internal static class MacOsKeychain
     /// prompts — so a probe reports presence and the locked state is discovered at first real use. See
     /// <see cref="AiCredentialStore.Probe"/>, which is where the two are reconciled.</para>
     /// </summary>
-    internal static bool Exists(string service, string account)
+    internal static CredentialState Exists(string service, string account)
     {
-        if (Symbols.Value is not { } k) return false;
+        if (Symbols.Value is not { } k) return CredentialState.Unavailable;
 
         var query = IntPtr.Zero;
         var result = IntPtr.Zero;
@@ -233,12 +233,17 @@ internal static class MacOsKeychain
                     k.True,
                     k.MatchLimitOne,
                 });
-            if (query == IntPtr.Zero) return false;
+            if (query == IntPtr.Zero) return CredentialState.Unavailable;
 
-            // Success means an item matched. Every failure - not found, and anything unanticipated - is
-            // reported as "no", because this answer is used to say a key IS present and over-claiming that
-            // would put the app back to describing keys the reader does not have.
-            return SecItemCopyMatching(query, out result) == ErrSecSuccess;
+            // Classified by the SAME rule as a real read, deliberately. (fable)
+            //
+            // This returned a bool and mapped every failure to "absent", which contradicted Classify twelve
+            // lines up - "an unanticipated failure is not evidence that an item is absent, and claiming
+            // absence we cannot see is precisely the harm here". The concrete risk is errSecInteractionNotAllowed
+            // on a locked login keychain: if an attributes query can fail that way, EVERY stored key would
+            // report NotStored and #926's defect returns wholesale. Whether it can was not established, so
+            // the cheap and consistent thing is not to have the question matter.
+            return Classify(SecItemCopyMatching(query, out result));
         }
         finally
         {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using CST.Avalonia.Services.Ai;
 using CST.Avalonia.Services.Ai.Credentials;
@@ -387,6 +388,145 @@ public class AiCredentialStoreTests : IDisposable
         Assert.Contains(_log.Lines, l => l.Contains("found", StringComparison.Ordinal));
         Assert.All(_log.Lines, l => Assert.DoesNotContain(Secret, l, StringComparison.Ordinal));
         Assert.All(_log.Lines, l => Assert.DoesNotContain(Secret[..12], l, StringComparison.Ordinal));
+    }
+
+    // ---- the probe and what it remembers (#925) ---------------------------------------------------------
+
+    /// <summary>
+    /// A probe answers presence without fetching the value. (#925)
+    ///
+    /// <para>On macOS the ACL guards an item's data, not its metadata, which is the whole mechanism: this
+    /// runs against the real Keychain and must not prompt.</para>
+    /// </summary>
+    [Fact]
+    public void Probe_reports_presence_without_reading_the_value()
+    {
+        Assert.Equal(CredentialState.NotStored, _store.Probe("anthropic", AiCredentialNames.Primary));
+
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+
+        Assert.Equal(CredentialState.Found, _store.Probe("anthropic", AiCredentialNames.Primary));
+        Assert.All(_log.Lines, l => Assert.DoesNotContain(Secret, l, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The probe remembers what a real read learned, rather than re-reading. (#925)
+    ///
+    /// <para>Observed by deleting the item behind the store's back: a passthrough would report NotStored, a
+    /// cache reports what the last real read established. This is the only test that can tell them apart
+    /// without a second signed binary. (fable — the cache had no tests at all)</para>
+    /// </summary>
+    [Fact]
+    public void Probe_reports_what_the_last_real_read_established()
+    {
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        Assert.Equal(Secret, _store.Read("anthropic", AiCredentialNames.Primary).Secret);
+
+        // Behind the store's back, so nothing invalidates its memory.
+        MacOsKeychain.Delete(_service, AiCredentialStore.AccountFor("anthropic", AiCredentialNames.Primary));
+
+        Assert.Equal(CredentialState.Found, _store.Probe("anthropic", AiCredentialNames.Primary));
+    }
+
+    /// <summary>
+    /// Stores an item the real store will find PRESENT and UNREADABLE, using each platform's own primitive.
+    ///
+    /// <para>macOS: an item whose value is empty — <c>Find</c> classifies a zero-length payload as unreadable,
+    /// and <c>AiCredentialStore.Set</c> refuses to create one, so it has to be written directly. Windows: junk
+    /// where a DPAPI blob should be, which is what an administrator-initiated password reset leaves behind.
+    /// Both give a genuine <see cref="CredentialState.Unreadable"/> through the real store, which is otherwise
+    /// only reachable with two differently-signed binaries.</para>
+    /// </summary>
+    private void StoreAnUnreadableItem(string connectionId, string name)
+    {
+        var account = AiCredentialStore.AccountFor(connectionId, name);
+        if (OperatingSystem.IsWindows())
+        {
+            _store.Set(connectionId, name, Secret);
+            var file = Directory.EnumerateFiles(WindowsDpapiStore.DirectoryFor(_service)).Single();
+            File.WriteAllBytes(file, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+        }
+        else
+        {
+            Assert.True(MacOsKeychain.Save(_service, account, ""));
+        }
+    }
+
+    /// <summary>
+    /// A successful Set does not erase a remembered <see cref="CredentialState.Unreadable"/>. (#925, fable)
+    ///
+    /// <para><b>The trap this closes.</b> On macOS <c>SecItemUpdate</c> rewrites a value and leaves the ACL
+    /// alone, so pasting a replacement over a locked key succeeds and changes nothing — tested 2026-08-31.
+    /// Clearing the memory on save made every surface then report the connection healthy: #926's confusion
+    /// upgraded from silence to a false statement, on the exact path the sheet invites with "Paste a new one
+    /// to replace it".</para>
+    ///
+    /// <para>So the save under-claims, and only a real read may lift it — which is the last assertion here,
+    /// and what stops the rule being "remember Unreadable forever".</para>
+    /// </summary>
+    [Fact]
+    public void A_save_does_not_clear_a_remembered_unreadable_but_a_read_does()
+    {
+        StoreAnUnreadableItem("anthropic", AiCredentialNames.Primary);
+
+        Assert.Equal(CredentialState.Unreadable, _store.Read("anthropic", AiCredentialNames.Primary).State);
+        Assert.Equal(CredentialState.Unreadable, _store.Probe("anthropic", AiCredentialNames.Primary));
+
+        Assert.True(_store.Set("anthropic", AiCredentialNames.Primary, Secret));
+
+        // Still Unreadable: the save is exactly the operation that succeeds without helping.
+        Assert.Equal(CredentialState.Unreadable, _store.Probe("anthropic", AiCredentialNames.Primary));
+
+        // And a real read is what corrects it, so the under-claim cannot outlive the evidence for it.
+        Assert.Equal(Secret, _store.Read("anthropic", AiCredentialNames.Primary).Secret);
+        Assert.Equal(CredentialState.Found, _store.Probe("anthropic", AiCredentialNames.Primary));
+    }
+
+    /// <summary>
+    /// A FAILED delete leaves the remembered state alone. (#925, fable)
+    ///
+    /// <para>A failed delete changed nothing, so the evidence still holds. Discarding it made a declined
+    /// removal look like progress: the badge went from "Key locked" to "Keychain" because the reader's
+    /// attempt to revoke a key had failed.</para>
+    /// </summary>
+    [Fact]
+    public void A_delete_that_succeeds_clears_the_memory_and_reports_not_stored()
+    {
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        _store.Read("anthropic", AiCredentialNames.Primary);
+        Assert.Equal(CredentialState.Found, _store.Probe("anthropic", AiCredentialNames.Primary));
+
+        Assert.True(_store.Delete("anthropic", AiCredentialNames.Primary));
+
+        // Not the remembered Found: a successful delete is exactly when the memory must go.
+        Assert.Equal(CredentialState.NotStored, _store.Probe("anthropic", AiCredentialNames.Primary));
+    }
+
+    /// <summary>
+    /// A delete the OS REFUSES leaves the remembered state alone. (#925, fable)
+    ///
+    /// <para><b>Windows-only because a failing delete cannot be produced on macOS</b> — there, refusal needs
+    /// an item whose ACL names another binary, which needs a second signed build. Holding the DPAPI file open
+    /// makes the same refusal reachable, so this is the one machine that can run it.</para>
+    ///
+    /// <para>The rule: a failed delete changed nothing, so the evidence still stands. Discarding it made a
+    /// <i>declined</i> removal look like progress — the badge went from "Key locked" to "Keychain" because
+    /// the reader's attempt to revoke a key had failed.</para>
+    /// </summary>
+    [WindowsFact]
+    public void A_delete_the_os_refuses_leaves_the_remembered_state_alone()
+    {
+        _store.Set("anthropic", AiCredentialNames.Primary, Secret);
+        Assert.Equal(Secret, _store.Read("anthropic", AiCredentialNames.Primary).Secret);
+
+        var file = Directory.EnumerateFiles(WindowsDpapiStore.DirectoryFor(_service)).Single();
+        using (var _ = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.False(_store.Delete("anthropic", AiCredentialNames.Primary));
+
+            // Not NotStored: nothing was deleted, so nothing about the previous evidence changed.
+            Assert.Equal(CredentialState.Found, _store.Probe("anthropic", AiCredentialNames.Primary));
+        }
     }
 
     [Fact]

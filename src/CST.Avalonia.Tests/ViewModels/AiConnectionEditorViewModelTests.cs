@@ -84,22 +84,37 @@ public class AiConnectionEditorViewModelTests
         public HashSet<string> Undeletable { get; } = new(StringComparer.Ordinal);
 
         /// <summary>How many times a caller asked for a VALUE. (#925)</summary>
+        /// <summary>How many times a caller asked for a VALUE. Every one can raise a macOS prompt. (#925)</summary>
         public int ValueReads { get; private set; }
+
+        /// <summary>Accounts a real Read has actually visited. (#925)</summary>
+        private readonly HashSet<string> _readOnce = new(StringComparer.Ordinal);
 
         public CredentialState Probe(string connectionId, string name)
         {
             if (!Available) return CredentialState.Unavailable;
             var account = Account(connectionId, name);
-            if (Unreadable.Contains(account)) return CredentialState.Unreadable;
+            // Unreadable only once a real Read has established it — a probe reads metadata and cannot learn
+            // that a value is unreadable. Matching the real store here is what makes the pre-first-read
+            // window testable at all. (fable)
+            if (Unreadable.Contains(account) && _readOnce.Contains(account))
+                return CredentialState.Unreadable;
             return Stored.ContainsKey(account) ? CredentialState.Found : CredentialState.NotStored;
         }
 
-        public CredentialRead Read(string connectionId, string name) =>
-            !Available ? CredentialRead.Unavailable
-            : Unreadable.Contains(Account(connectionId, name)) ? CredentialRead.Unreadable
-            : Stored.TryGetValue(Account(connectionId, name), out var k)
+        public CredentialRead Read(string connectionId, string name)
+        {
+            if (!Available) return CredentialRead.Unavailable;
+
+            var account = Account(connectionId, name);
+            ValueReads++;
+            _readOnce.Add(account);
+
+            if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
+            return Stored.TryGetValue(account, out var k)
                 ? CredentialRead.Found(k)
                 : CredentialRead.NotStored;
+        }
         public bool Set(string connectionId, string name, string secret)
         { Stored[Account(connectionId, name)] = secret; return true; }
         /// <summary>
@@ -1163,6 +1178,35 @@ public class AiConnectionEditorViewModelTests
     }
 
     /// <summary>
+    /// Opening the edit sheet fetches no secret. (#925, fable)
+    ///
+    /// <para>The sheet asks about keys to decide what to SAY, never to send anything — so on macOS it has no
+    /// business raising an authorization dialog, and it was "one of the worst offenders". Nothing pinned that
+    /// after the fix: the counter existed on the fake and no test read it, so reverting either call site to
+    /// <c>Read</c> passed the whole suite.</para>
+    ///
+    /// <para>Zero, not fewer: any fetch on this path can prompt.</para>
+    /// </summary>
+    [Fact]
+    public void Opening_the_edit_sheet_reads_no_secret()
+    {
+        var h = new Harness();
+        h.Service.Add("gw", Draft());
+        h.Keys.Set("gw", AiCredentialNames.Primary, "sk-stored");
+        h.Keys.Set("gw", AiCredentialNames.Header("cf-aig-authorization"), "cf-token");
+
+        var before = h.Keys.ValueReads;
+        var vm = h.Existing("gw");
+
+        // Touch everything the sheet renders about stored secrets.
+        Assert.True(vm.HasStoredKey);
+        _ = vm.KeyStatus;
+        _ = vm.Headers.Count;
+
+        Assert.Equal(before, h.Keys.ValueReads);
+    }
+
+    /// <summary>
     /// The sheet says a locked key IS stored, and gives the remedy that works. (#926)
     ///
     /// <para><b>This sheet is where the reader acts on being told wrong.</b> The row badged "Key locked" and
@@ -1180,6 +1224,7 @@ public class AiConnectionEditorViewModelTests
         Assert.True(h.Existing("mine").HasStoredKey);
 
         h.Keys.Unreadable.Add("mine:" + AiCredentialNames.Primary);
+        h.Keys.Get("mine", AiCredentialNames.Primary);   // a real use establishes the locked state (#925)
         var locked = h.Existing("mine");
 
         Assert.True(locked.HasStoredKey);

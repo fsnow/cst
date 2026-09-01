@@ -322,7 +322,11 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         var lockedSecrets = connection.Headers
             .Where(h => h.Secret
                         && string.IsNullOrEmpty(headers.GetValueOrDefault(h.Name))
-                        && _credentials?.Read(connection.Id, AiCredentialNames.Header(h.Name)).State
+                        // Probe, not Read (#925, fable). ExpandHeaders has already Read this exact header a
+                        // few lines up - which is why its value is empty - so a second Read would raise a
+                        // SECOND authorization dialog for one send. Probe returns what that read recorded:
+                        // exact, free, and one prompt instead of two.
+                        && _credentials?.Probe(connection.Id, AiCredentialNames.Header(h.Name))
                            == CredentialState.Unreadable)
             .Select(h => h.Name)
             .ToList();
