@@ -5,6 +5,8 @@ using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
+using System.Threading.Tasks;
+using CST.Avalonia.Services.Ai.Credentials;
 using CST.Avalonia.ViewModels;
 using Moq;
 using Xunit;
@@ -24,23 +26,53 @@ public class AiModelPickerViewModelTests
         /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
         private static string Account(string connectionId, string name) => connectionId + ":" + name;
+        /// <summary>Accounts the OS holds but will not hand over. (#926)</summary>
+        public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? Get(string connectionId, string name) =>
-            Keys.GetValueOrDefault(Account(connectionId, name));
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
+            return Keys.TryGetValue(account, out var k)
+                ? CredentialRead.Found(k)
+                : CredentialRead.NotStored;
+        }
         public bool Set(string connectionId, string name, string secret)
         { Keys[Account(connectionId, name)] = secret; return true; }
         public bool Delete(string connectionId, string name) => Keys.Remove(Account(connectionId, name));
     }
 
-    private static (AiModelPickerViewModel Picker, AiConnectionService Service, FakeCredentialStore Keys) Make()
+    private static (AiModelPickerViewModel Picker, AiConnectionService Service, FakeCredentialStore Keys) Make(
+        IAiEnvironmentKeys? environment = null)
     {
         var settings = new Settings();
         var svc = new Mock<ISettingsService>();
         svc.SetupGet(s => s.Settings).Returns(settings);
         var keys = new FakeCredentialStore();
-        var service = new AiConnectionService(svc.Object, keys);
+        var service = new AiConnectionService(svc.Object, keys, null, environment);
         return (new AiModelPickerViewModel(service), service, keys);
+    }
+
+    /// <summary>An environment holding exactly one variable, for the adoption cases. (#926)</summary>
+    private sealed class OneVariable : IAiEnvironmentKeys
+    {
+        private readonly string _name;
+        private readonly string _value;
+
+        internal OneVariable(string name, string value) { _name = name; _value = value; }
+
+        public event EventHandler? Changed;
+        public string? VariableFor(AiProviderPreset preset) => _name;
+        public string? ValueFor(AiProviderPreset preset) => _value;
+        public string? Read(string variableName) =>
+            string.Equals(variableName, _name, StringComparison.Ordinal) ? _value : null;
+        public IReadOnlyList<AiEnvironmentKey> Discover(IEnumerable<AiProviderPreset> presets) =>
+            Array.Empty<AiEnvironmentKey>();
+        public Task Ready => Task.CompletedTask;
     }
 
     private static AiConnectionDraft Draft(string name, params AiModelEntry[] models) =>
@@ -414,6 +446,58 @@ public class AiModelPickerViewModelTests
         picker.Refresh();
 
         Assert.True(AllModels(picker).Single().IsUsable);
+    }
+
+    /// <summary>
+    /// A stored key the OS will not hand over disables the model, and says so in its own words. (#926)
+    ///
+    /// <para><b>This test did not exist and should have.</b> The branch it covers could be deleted with the
+    /// whole suite still green: the fake gained an <c>Unreadable</c> set that nothing used, so an unreadable
+    /// connection fell past the <c>KeySource == None</c> check and the model became silently usable — half
+    /// the fix reverted, undetected. (fable)</para>
+    ///
+    /// <para>The reason is asserted as "not the missing-key sentence" rather than by its exact words: the
+    /// wording is free to change, the distinction is not.</para>
+    /// </summary>
+    [Fact]
+    public void A_model_whose_stored_key_cannot_be_read_is_unusable_for_that_reason()
+    {
+        var (picker, service, keys) = Make();
+        service.AddFromPreset("openrouter", new Dictionary<string, string>());
+        service.EnableModel("openrouter", "x/y", "X", true);
+        keys.Set("openrouter", AiCredentialNames.Primary, "sk-or-secret");
+        picker.Refresh();
+        Assert.True(AllModels(picker).Single().IsUsable);
+
+        keys.Unreadable.Add("openrouter:" + AiCredentialNames.Primary);
+        picker.Refresh();
+
+        var model = AllModels(picker).Single();
+        Assert.False(model.IsUsable);
+        Assert.NotEqual("no API key stored", model.Unusable);
+        Assert.NotEqual("", model.Unusable);
+    }
+
+    /// <summary>
+    /// A locked stored key with a working environment variable leaves the model usable. (#926)
+    ///
+    /// <para>The request path resolves <c>stored ?? environment</c>, so it sends perfectly well. Disabling it
+    /// here would have the picker contradict the wire — the failure class <see cref="Reachability"/> exists
+    /// to prevent one layer up, arriving from the credential side instead.</para>
+    /// </summary>
+    [Fact]
+    public void A_locked_key_with_an_environment_fallback_leaves_the_model_usable()
+    {
+        var (picker, service, keys) = Make(new OneVariable("OPENROUTER_API_KEY", "sk-or-from-env"));
+        service.AddFromPreset("openrouter", new Dictionary<string, string>(), "OPENROUTER_API_KEY");
+        service.EnableModel("openrouter", "x/y", "X", true);
+        keys.Set("openrouter", AiCredentialNames.Primary, "sk-or-secret");
+        keys.Unreadable.Add("openrouter:" + AiCredentialNames.Primary);
+        picker.Refresh();
+
+        var model = AllModels(picker).Single();
+        Assert.True(model.IsUsable);
+        Assert.Equal("", model.Unusable);
     }
 
     /// <summary>

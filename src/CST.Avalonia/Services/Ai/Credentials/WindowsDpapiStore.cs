@@ -105,13 +105,13 @@ internal static class WindowsDpapiStore
     }
 
     /// <summary>The stored secret, or null when there is none - or when the blob cannot be decrypted.</summary>
-    internal static string? Find(string service, string account)
+    internal static CredentialRead Find(string service, string account)
     {
         var path = FileFor(service, account);
 
         lock (Gate)
         {
-            if (!File.Exists(path)) return null;
+            if (!File.Exists(path)) return CredentialRead.NotStored;
 
             try
             {
@@ -119,7 +119,7 @@ internal static class WindowsDpapiStore
                     File.ReadAllBytes(path), Entropy, DataProtectionScope.CurrentUser);
                 try
                 {
-                    return Encoding.UTF8.GetString(plaintext);
+                    return CredentialRead.Found(Encoding.UTF8.GetString(plaintext));
                 }
                 finally
                 {
@@ -135,8 +135,11 @@ internal static class WindowsDpapiStore
                 // the user performs themselves migrates it, so this is the IT-helpdesk case, not the
                 // forgot-my-password case. It also covers a file copied from another machine or account.
                 //
-                // Reported as "no key stored", never as an error: the honest thing to tell someone in that
-                // state is "please re-enter your key", not a cryptography failure they can do nothing with.
+                // Reported as Unreadable, not NotStored (#926). This used to report "no key stored", reasoning
+                // that "please re-enter your key" is more useful to someone in this state than a cryptography
+                // failure they can do nothing with. That advice survives - see below, re-entering does work
+                // here - but it belongs in the message, not in the state: saying "nothing is stored" about a
+                // blob that IS stored is what let the same collapse hide a recoverable macOS denial.
                 //
                 // The file is deliberately LEFT IN PLACE. "Undecryptable now" is not "undecryptable forever":
                 // the data directory is ROAMING AppData, and the DPAPI master keys under
@@ -145,18 +148,24 @@ internal static class WindowsDpapiStore
                 // keys to the DC and can likewise recover after an admin reset. Deleting here would convert
                 // both of those temporary states into permanent loss, to save a sub-millisecond decrypt on the
                 // next launch. Re-entering a key overwrites the blob anyway, so nothing accumulates.
-                return null;
+                //
+                // Re-entering is a REAL remedy on this platform, which is not true of the macOS case sharing
+                // this state: Save here writes a fresh file with no permission to ask for, whereas SecItemAdd
+                // on a duplicate falls through to SecItemUpdate and needs the very authorization that was
+                // just declined. Anything phrasing this state for the reader has to say something different
+                // per platform.
+                return CredentialRead.Unreadable;
             }
             catch (Exception)
             {
-                // Unreadable file, transient IO, a concurrent writer. Report "none stored" and leave the file
+                // Unreadable file, transient IO, a concurrent writer. Report Unreadable and leave the file
                 // alone - destroying it on a hiccup would be data loss.
                 //
                 // Behaviourally identical to the catch above, and kept separate only to carry the two
                 // different explanations: the cases arrive for unrelated reasons and a future change is
                 // likelier to want to treat one of them differently. No test distinguishes them, and none
                 // can - both tests below would pass with these collapsed into one.
-                return null;
+                return CredentialRead.Unreadable;
             }
         }
     }

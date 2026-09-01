@@ -329,10 +329,22 @@ namespace CST.Avalonia.ViewModels
         /// provider fact from the extraction rather than a guess. For a custom endpoint nothing is claimed:
         /// plenty of them need no key at all, and disabling a model on a hunch would be worse than letting
         /// the request explain itself.</para>
+        ///
+        /// <para><b>A locked key is stated separately from a missing one</b> (#926). Both leave the model
+        /// unusable this moment, but "no API key stored" sends a reader who has one to store it again; the
+        /// key is there and the reader needs to authorize it, not replace it. Unlike the two above, this one
+        /// is worth saying even for a custom endpoint: an item we can see and cannot read is a fact about
+        /// this connection, not a guess about whether it needs a key.</para>
         /// </summary>
         private static string ReasonItCannotBeUsed(AiConnection connection)
         {
             if (connection.IsIncomplete) return "not finished being set up";
+
+            // KeySource, not StoredKeyUnreadable: a locked stored key beside a working environment variable
+            // resolves to Environment and sends perfectly well, so disabling it here would have the picker
+            // contradict the wire. Only a locked key with nothing behind it makes the model unusable. (#926)
+            if (connection.KeySource == CredentialSource.Unreadable)
+                return "its API key could not be read";
 
             var preset = AiProviderPresets.ById(connection.Id);
             if (preset is { RequiresKey: true } && connection.KeySource == CredentialSource.None)

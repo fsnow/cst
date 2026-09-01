@@ -24,11 +24,19 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 /// <para><b>This targets the FILE-BASED (login) keychain, deliberately.</b> <c>SecItem</c> routes to the
 /// data-protection keychain only when the query carries <c>kSecUseDataProtectionKeychain</c> or
 /// <c>kSecAttrSynchronizable</c>; with neither, it talks to the file-based one
-/// (Apple, TN3137 / DTS "On Mac Keychains"). That is the right target here because the data-protection keychain
-/// "is only available to code that can carry an entitlement", and its access groups are determined by code
-/// signing — so a plain <c>dotnet run</c> development build could not reach a key the signed <c>.app</c> stored,
-/// or the reverse. Apple does say the file-based implementation is on the road to deprecation; revisiting is
-/// tracked separately.</para>
+/// (Apple, TN3137 / DTS "On Mac Keychains"). The data-protection keychain "is only available to code that can
+/// carry an entitlement", and its access groups are determined by code signing, so a plain <c>dotnet run</c>
+/// build could not reach a key the signed <c>.app</c> stored. What the file-based keychain buys is that a
+/// development build can store and read <b>its own</b> keys without a signed bundle. Apple says the file-based
+/// implementation is on the road to deprecation; revisiting is #609.</para>
+///
+/// <para><b>It does NOT let a development build and a signed build share keys.</b> This doc used to say so, and
+/// it was the stated reason for the choice. The file-based keychain gates on a per-item ACL, and an ACL records
+/// the binary that created the item — <c>apphost</c>, ad-hoc signed, no team for a <c>dotnet run</c> build
+/// against <c>com.cst.avalonia</c>, Developer ID for the installed app. Each is foreign to the other. The
+/// difference from the data-protection keychain is not that sharing works; it is that the failure arrives as a
+/// modal password dialog rather than a clean denial, one per read. Installing a signed build over a machine
+/// that had been running development builds produced eight such dialogs at launch (#609, #925).</para>
 ///
 /// <para><b>Hence no <c>kSecAttrAccessible</c>.</b> Accessibility classes are the data-protection keychain's
 /// access model; the file-based keychain uses ACLs instead, and the attribute is accepted and ignored there.
@@ -43,9 +51,21 @@ internal static class MacOsKeychain
     private const string CoreFoundation =
         "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
 
-    private const int ErrSecSuccess = 0;
-    private const int ErrSecItemNotFound = -25300;
+    internal const int ErrSecSuccess = 0;
+    internal const int ErrSecItemNotFound = -25300;
     private const int ErrSecDuplicateItem = -25299;
+
+    // The three ways a READ can fail while the item is sitting right there. Distinguished because the remedy
+    // differs from "no key stored": the reader authorizes once, or unlocks, and the same key works. Collapsing
+    // them into not-found is #926 — it told the maintainer to re-enter keys he already had.
+    //
+    // internal so the tests can both name them in Classify's cases and pin their VALUES against SecBase.h.
+    // Naming them alone would not catch a wrong number - the test and the code would move together - and a
+    // wrong number here is silent: the status never matches, so the read falls to the default and a genuinely
+    // absent key starts reporting itself unreadable.
+    internal const int ErrSecAuthFailed = -25293;              // authorization declined
+    internal const int ErrSecUserCanceled = -128;              // the reader dismissed the prompt
+    internal const int ErrSecInteractionNotAllowed = -25308;   // locked, and no UI available to ask
 
     // ---- CoreFoundation ------------------------------------------------------------------------------------
 
@@ -150,12 +170,41 @@ internal static class MacOsKeychain
 
     internal static bool IsAvailable => OperatingSystem.IsMacOS() && Symbols.Value is not null;
 
+    /// <summary>
+    /// What an unsuccessful <c>SecItemCopyMatching</c> status means for the reader. (#926)
+    ///
+    /// <para><b>Separated from <see cref="Find"/> so it can be tested at all.</b> Everything around it is a
+    /// P/Invoke into Security.framework, which no unit test can drive — and this mapping is the entire defect
+    /// #926 fixes, so leaving it inside the native call would leave the one line that matters unguarded. A
+    /// mutation flipping <c>errSecAuthFailed</c> back to "not stored" killed no test until this moved out.</para>
+    ///
+    /// <para><b>Unrecognised statuses are Unreadable, not NotStored.</b> An unanticipated failure is not
+    /// evidence that an item is absent, and claiming absence we cannot see is precisely the harm here: it is
+    /// what tells a reader to re-enter a key that is present and correct. The conservative direction is to
+    /// under-claim.</para>
+    /// </summary>
+    internal static CredentialState Classify(int status) => status switch
+    {
+        ErrSecSuccess => CredentialState.Found,
+        ErrSecItemNotFound => CredentialState.NotStored,
+        _ => CredentialState.Unreadable,
+    };
+
     // ---- Operations ----------------------------------------------------------------------------------------
 
-    /// <summary>The stored secret, or null when there is no item (or the platform is unavailable).</summary>
-    internal static string? Find(string service, string account)
+    /// <summary>
+    /// One stored secret, and what happened when we asked for it. (#926)
+    ///
+    /// <para><b>Every status is classified, not just success.</b> This is the one operation of the three here
+    /// whose answer reaches the reader, and it used to be the only one that did not discriminate — while
+    /// <see cref="Save"/> acts on <c>errSecDuplicateItem</c> and <see cref="Delete"/> accepts
+    /// <c>errSecItemNotFound</c>. An item whose ACL names a different binary — the ordinary case after a
+    /// development build and a signed build have both written keys — answers <c>errSecAuthFailed</c>, which
+    /// read as "no key stored" and sent the reader off to re-enter one.</para>
+    /// </summary>
+    internal static CredentialRead Find(string service, string account)
     {
-        if (Symbols.Value is not { } k) return null;
+        if (Symbols.Value is not { } k) return CredentialRead.Unavailable;
 
         var query = IntPtr.Zero;
         var result = IntPtr.Zero;
@@ -172,17 +221,21 @@ internal static class MacOsKeychain
                     k.True,
                     k.MatchLimitOne,
                 });
-            if (query == IntPtr.Zero) return null;
+            if (query == IntPtr.Zero) return CredentialRead.Unavailable;
 
             var status = SecItemCopyMatching(query, out result);
-            if (status != ErrSecSuccess || result == IntPtr.Zero) return null;
+            if (status != ErrSecSuccess) return new CredentialRead(Classify(status), null);
+
+            // Success with nothing to copy. Not an item that is missing — one whose value we failed to
+            // receive, which is the same class of "cannot read it" as a declined authorization.
+            if (result == IntPtr.Zero) return CredentialRead.Unreadable;
 
             var length = CFDataGetLength(result);
-            if (length <= 0) return null;
+            if (length <= 0) return CredentialRead.Unreadable;
 
             var bytes = new byte[length];
             Marshal.Copy(CFDataGetBytePtr(result), bytes, 0, (int)length);
-            return Encoding.UTF8.GetString(bytes);
+            return CredentialRead.Found(Encoding.UTF8.GetString(bytes));
         }
         finally
         {

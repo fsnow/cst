@@ -84,13 +84,32 @@ public class AiConnectionsViewModelTests
         /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
         private static string Account(string connectionId, string name) => connectionId + ":" + name;
+        /// <summary>Accounts the OS holds but will not hand over. (#926)</summary>
+        public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? Get(string connectionId, string name) =>
-            Keys.GetValueOrDefault(Account(connectionId, name));
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
+            return Keys.TryGetValue(account, out var k)
+                ? CredentialRead.Found(k)
+                : CredentialRead.NotStored;
+        }
         public bool Set(string connectionId, string name, string secret)
         { Keys[Account(connectionId, name)] = secret; return true; }
-        public bool Delete(string connectionId, string name) => Keys.Remove(Account(connectionId, name));
+        /// <summary>Accounts the OS will not delete. (#926)</summary>
+        public HashSet<string> Undeletable { get; } = new(StringComparer.Ordinal);
+
+        public bool Delete(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Undeletable.Contains(account)) return false;
+            return Keys.Remove(account);
+        }
     }
 
     /// <summary>Adds a preset the way a reader does — open the sheet, fill it in, save. There is no
@@ -135,6 +154,43 @@ public class AiConnectionsViewModelTests
 
         Assert.Contains(vm.Connections, c => c.Id == "openrouter");
         Assert.DoesNotContain(vm.AvailablePresets, p => p.Id == "openrouter");
+    }
+
+    /// <summary>
+    /// Deleting a connection whose key the OS will not release says so. (#926)
+    ///
+    /// <para><b>The screen is where this failed.</b> The service reported the leftover with Ok=true, and this
+    /// view model dropped it — <c>Problem = result.Ok ? null : result.Problem</c> — so the reader saw a clean
+    /// removal, and adding the provider back walked into the orphan.</para>
+    /// </summary>
+    [Fact]
+    public void Deleting_a_connection_whose_key_survives_tells_the_reader()
+    {
+        var keys = new FakeCredentialStore();
+        var (vm, _) = Make(keys);
+        AddThroughSheet(vm, "openrouter");
+        keys.Undeletable.Add("openrouter:" + AiCredentialNames.Primary);
+
+        vm.Delete("openrouter");
+
+        Assert.True(vm.HasProblem);
+        Assert.Contains("OpenRouter", vm.Problem!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("{", vm.Problem!, StringComparison.Ordinal);
+        Assert.Empty(vm.Connections);          // the connection still goes
+    }
+
+    /// <summary>And an ordinary delete stays quiet, so the above is not simply always on.</summary>
+    [Fact]
+    public void Deleting_a_connection_whose_key_goes_reports_nothing()
+    {
+        var keys = new FakeCredentialStore();
+        var (vm, _) = Make(keys);
+        AddThroughSheet(vm, "openrouter");
+
+        vm.Delete("openrouter");
+
+        Assert.False(vm.HasProblem);
+        Assert.Empty(vm.Connections);
     }
 
     /// <summary>Deleting puts it back, so the reader can undo an add without knowing the URL by heart.</summary>
@@ -221,13 +277,117 @@ public class AiConnectionsViewModelTests
     private static AiConnectionRowViewModel Row(
         CredentialSource source = CredentialSource.None,
         Reachability state = Reachability.Configured,
-        string baseUrl = "http://localhost:11434/v1")
+        string baseUrl = "http://localhost:11434/v1",
+        bool storedKeyUnreadable = false,
+        string? environmentVariable = null)
     {
         var connection = new AiConnection(
             "local", "Local Ollama", ChatProviderKind.OpenAiCompatible, baseUrl,
             new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>(),
-            PresetId: null, KeySource: source, State: state);
+            PresetId: null, KeySource: source, State: state,
+            UsesEnvironmentKey: environmentVariable is not null,
+            EnvironmentVariable: environmentVariable,
+            StoredKeyUnreadable: storedKeyUnreadable);
         return new AiConnectionRowViewModel(new AiConnectionsViewModel(null, null), connection);
+    }
+
+    /// <summary>
+    /// A key the OS holds and will not hand over is badged apart from having no key at all. (#926)
+    ///
+    /// <para><b>The defect in one assertion.</b> These two rendered as the same "No key", and the maintainer
+    /// acted on it the way anyone would — by re-entering three keys that were present and correct, one macOS
+    /// authorization away. The badge is asserted by inequality rather than by its words, so renaming it is
+    /// free and merging the two states is not.</para>
+    /// </summary>
+    [Fact]
+    public void A_key_that_cannot_be_read_is_badged_apart_from_no_key()
+    {
+        var locked = Row(CredentialSource.Unreadable);
+        var empty = Row(CredentialSource.None);
+
+        Assert.NotEqual(empty.KeySourceBadge, locked.KeySourceBadge);
+        Assert.True(locked.HasKeyProblem);
+        Assert.False(empty.HasKeyProblem);
+        Assert.False(Row(CredentialSource.Keychain).HasKeyProblem);
+    }
+
+    /// <summary>
+    /// Removal stays offered for a key we cannot read. (#926)
+    ///
+    /// <para>It is the reader's way out of the state, and it would be absent had this been written as "can we
+    /// read it" rather than "did we store it". Deleting needs no authorization on either platform, so the
+    /// button is not promising something it cannot do — the distinction that keeps an environment-sourced row
+    /// showing an empty slot instead.</para>
+    /// </summary>
+    [Fact]
+    public void Removal_is_offered_for_a_stored_key_that_cannot_be_read()
+    {
+        Assert.True(Row(CredentialSource.Unreadable).CanRemoveKey);
+        Assert.True(Row(CredentialSource.Keychain).CanRemoveKey);
+        Assert.False(Row(CredentialSource.Environment).CanRemoveKey);
+        Assert.False(Row(CredentialSource.None).CanRemoveKey);
+    }
+
+    /// <summary>
+    /// A locked key with a working variable names the variable, and does not read as broken. (#926)
+    ///
+    /// <para>Requests succeed and are billed to that variable, so the row states which credential is in use
+    /// rather than raising an alarm — and <c>KeyProblemNeedsAction</c> stays false, so it does not take the
+    /// caution colour the unusable states use. [fsnow: use the env var, and say so]</para>
+    /// </summary>
+    [Fact]
+    public void A_locked_key_with_an_environment_fallback_names_the_variable_and_is_not_an_alarm()
+    {
+        var row = Row(CredentialSource.Environment, storedKeyUnreadable: true,
+                      environmentVariable: "OPENROUTER_API_KEY");
+
+        Assert.Contains("OPENROUTER_API_KEY", row.KeySourceBadge, StringComparison.Ordinal);
+        Assert.True(row.HasKeyProblem);
+        Assert.False(row.KeyProblemNeedsAction);
+        Assert.True(row.KeyProblemIsStatement);
+        Assert.Contains("OPENROUTER_API_KEY", row.KeyProblem!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A locked key with nothing behind it IS an alarm, and the two shapes never render together. (#926)
+    ///
+    /// <para>The mutual exclusion is asserted because the row template binds both to the same text: without
+    /// it the caution case would print the sentence twice.</para>
+    /// </summary>
+    [Fact]
+    public void A_locked_key_with_no_fallback_needs_action_and_renders_one_line_only()
+    {
+        var row = Row(CredentialSource.Unreadable, storedKeyUnreadable: true);
+
+        Assert.True(row.HasKeyProblem);
+        Assert.True(row.KeyProblemNeedsAction);
+        Assert.False(row.KeyProblemIsStatement);
+        Assert.NotEqual(row.KeyProblemNeedsAction, row.KeyProblemIsStatement);
+    }
+
+    /// <summary>
+    /// The advice for an unreadable key is the one for THIS platform. (#926)
+    ///
+    /// <para>This is the only place in the app that tells a macOS reader the remedy is to <i>authorize</i>.
+    /// A mutation making the string platform-blind killed no test, and the consequence is not cosmetic: it
+    /// would hand macOS readers the DPAPI advice — delete and retype — which discards precisely the
+    /// recoverable state <see cref="CredentialState.Unreadable"/> says never to clean up. (fable)</para>
+    /// </summary>
+    [Fact]
+    public void The_locked_key_advice_matches_the_platform()
+    {
+        var text = Row(CredentialSource.Unreadable, storedKeyUnreadable: true).KeyProblem!;
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Contains("decrypt", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("authorize", text, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            Assert.Contains("Allow", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("decrypt", text, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>

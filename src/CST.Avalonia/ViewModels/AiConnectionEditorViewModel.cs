@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reactive;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using ReactiveUI;
 
 namespace CST.Avalonia.ViewModels
@@ -54,6 +55,17 @@ namespace CST.Avalonia.ViewModels
         /// header that is renamed, unmarked or removed takes its stored secret with it rather than leaving an
         /// orphan nothing can reach. (#771)</summary>
         private readonly List<string> _secretHeadersAtOpen = new();
+
+        /// <summary>
+        /// Accounts a rename could not carry because the OS would not hand the secret over, and which must
+        /// therefore survive the sweep that removes accounts no header claims any more. (#926)
+        ///
+        /// <para>Without this, renaming a secret header while its item is locked deletes the only copy: the
+        /// carry reads null, writes nothing, and the sweep then removes the account the value was still in.
+        /// Keeping it is recoverable — the reader authorizes and the old name still holds their secret — and
+        /// deleting it is not.</para>
+        /// </summary>
+        private readonly HashSet<string> _secretsToKeepUnreadable = new(StringComparer.Ordinal);
 
         private string _id = "";
         private string _displayName = "";
@@ -252,8 +264,11 @@ namespace CST.Avalonia.ViewModels
                     IsSecret = header.Secret,
                     ArrivedSecret = header.Secret,
                     OriginalName = header.Name,
+                    // Exists, not readable (#926): a locked secret is still stored, and telling the reader it
+                    // is not is what sends them to re-enter something they already have.
                     HasStoredSecret = header.Secret
-                        && credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) is not null,
+                        && (credentials?.Read(connection.Id, AiCredentialNames.Header(header.Name))
+                            ?? CredentialRead.Unavailable).Exists,
                 });
 
             vm._secretHeadersAtOpen.AddRange(connection.Headers
@@ -393,14 +408,28 @@ namespace CST.Avalonia.ViewModels
 
         public bool HasKeyUnavailable => !string.IsNullOrEmpty(KeyUnavailable);
 
-        /// <summary>Whether a key is already filed under this id — only knowable for a connection that
-        /// exists.</summary>
-        public bool HasStoredKey =>
-            _existingId is not null && _credentials?.Get(_existingId, AiCredentialNames.Primary) is not null;
+        /// <summary>What the store says about this connection's primary key. (#926)</summary>
+        private CredentialRead StoredKey => _existingId is null
+            ? CredentialRead.NotStored
+            : _credentials?.Read(_existingId, AiCredentialNames.Primary) ?? CredentialRead.Unavailable;
+
+        /// <summary>
+        /// Whether a key is already filed under this id — only knowable for a connection that exists.
+        ///
+        /// <para><b>Exists, not readable</b> (#926). A key we cannot read is still a key, and this is the
+        /// sheet where the reader would act on being told otherwise: it drove the whole defect, since the row
+        /// badged "Key locked" while the Edit sheet directly under it said "No key is stored".</para>
+        /// </summary>
+        public bool HasStoredKey => StoredKey.Exists;
 
         public string KeyStatus => _existingId is null
             ? "Stored in the operating system's credential store, never in settings."
-            : HasStoredKey
+            // Locked first: it is a kind of "stored", so the readable-key sentence below would otherwise claim
+            // it and tell the reader to paste a replacement - which on macOS needs the authorization that just
+            // failed, so it would appear to work and change nothing. (#926)
+            : StoredKey.State == CredentialState.Unreadable
+                ? CredentialRead.Advice($"{_displayName}'s key")
+            : StoredKey.State == CredentialState.Found
                 ? $"A key is stored for {_displayName}. Paste a new one to replace it."
                 // "No key is stored" is true and reads as "you have no key", which on an adopted connection is
                 // false — it authenticates from the environment, and saying otherwise sends the reader to
@@ -694,7 +723,19 @@ namespace CST.Avalonia.ViewModels
                 var to = AiCredentialNames.Header(row.Name.Trim());
                 if (string.Equals(from, to, StringComparison.Ordinal)) continue;
 
-                if (_credentials.Get(connectionId, from) is { } carried)
+                // Read, not Get (#926). A locked secret returns null from Get, so the carry was skipped and
+                // the sweep below then deleted the old account - renaming a secret header while its Keychain
+                // item was unauthorized DESTROYED the secret, permanently and silently. Recorded here as the
+                // account to leave alone: CredentialRead.Unreadable's own doc says this state is never a
+                // reason to delete anything, because both platforms can recover from it.
+                var read = _credentials.Read(connectionId, from);
+                if (read.State == CredentialState.Unreadable)
+                {
+                    _secretsToKeepUnreadable.Add(from);
+                    continue;
+                }
+
+                if (read.Secret is { } carried)
                     _credentials.Set(connectionId, to, carried);
             }
 
@@ -703,7 +744,8 @@ namespace CST.Avalonia.ViewModels
                 .Select(h => AiCredentialNames.Header(h.Name.Trim()))
                 .ToHashSet(StringComparer.Ordinal);
 
-            foreach (var gone in _secretHeadersAtOpen.Where(name => !keeping.Contains(name)))
+            foreach (var gone in _secretHeadersAtOpen.Where(
+                         name => !keeping.Contains(name) && !_secretsToKeepUnreadable.Contains(name)))
                 _credentials.Delete(connectionId, gone);
 
             // A typed value wins over anything carried above, so renaming and rotating in one edit does both.
@@ -724,11 +766,31 @@ namespace CST.Avalonia.ViewModels
         /// model list is real user work, and destroying it on an action meant only to stop billing would be
         /// data loss.</para>
         /// </summary>
+        /// <summary>
+        /// Forget the stored key — and say so when the OS refuses. (#926)
+        ///
+        /// <para><b>The return value used to be discarded.</b> Deleting a macOS Keychain item DOES need
+        /// authorization, contrary to what this fix originally assumed: on a locked item the reader is
+        /// prompted, and dismissing the prompt fails the delete. The row then stopped showing the key and the
+        /// sheet said nothing, so the app reported a removal that had not happened — leaving a live
+        /// credential the reader believed they had revoked, which is the one outcome a Remove button must
+        /// never produce. Observed 2026-08-31: <c>Removed a secret for groq/primary: failed</c>, with the
+        /// item still in the keychain afterwards.</para>
+        ///
+        /// <para>Only the sheet is refreshed on success. On failure nothing is cleared, because nothing
+        /// changed, and the reader is told what to do about it.</para>
+        /// </summary>
         private void RemoveKey()
         {
             if (_credentials is null || _existingId is null) return;
 
-            _credentials.Delete(_existingId, AiCredentialNames.Primary);
+            if (!_credentials.Delete(_existingId, AiCredentialNames.Primary))
+            {
+                Problem = CredentialRead.RemovalRefused(_displayName);
+                return;
+            }
+
+            Problem = null;
             ApiKeyEntry = "";
             this.RaisePropertyChanged(nameof(HasStoredKey));
             this.RaisePropertyChanged(nameof(KeyStatus));

@@ -445,7 +445,10 @@ namespace CST.Avalonia.ViewModels
         {
             if (_service is null) return;
             var result = _service.Remove(id);
-            Problem = result.Ok ? null : result.Problem;
+            // Not `result.Ok ? null : …` (#926). Remove can succeed and still have something the reader must
+            // know: the connection is gone, its key could not be deleted, and adding the provider back would
+            // find the orphan.
+            Problem = result.Problem;
         }
 
         /// <summary>
@@ -460,7 +463,9 @@ namespace CST.Avalonia.ViewModels
         internal void RemoveKey(string id)
         {
             if (_credentials is null) return;
-            _credentials.Delete(id, AiCredentialNames.Primary);
+            Problem = _credentials.Delete(id, AiCredentialNames.Primary)
+                ? null
+                : CredentialRead.RemovalRefused(id);
             Rebind();
         }
 
@@ -816,13 +821,59 @@ namespace CST.Avalonia.ViewModels
         ///
         /// <para>"No key" is a legitimate resting state, not a warning: a local runner needs none, and a
         /// connection may authenticate entirely through its headers.</para>
+        ///
+        /// <para><b>"Key locked" is the one badge that IS a warning</b> (#926), and it has to be visibly
+        /// unlike "No key" — those two shared a badge, and the reader acted on it by re-entering keys that
+        /// were already stored and correct.</para>
         /// </summary>
-        public string KeySourceBadge => _connection.KeySource switch
+        public string KeySourceBadge => _connection switch
         {
-            CredentialSource.Keychain => "Keychain",
-            CredentialSource.Environment => "Environment",
+            // The compound case first: a locked stored key beside a working variable. Requests DO work, and
+            // they are billed to the variable, so the badge names it rather than reporting either fact alone.
+            { KeySource: CredentialSource.Environment, KeyLocked: true } c =>
+                $"Key locked — using {c.EnvironmentVariable}",
+            { KeySource: CredentialSource.Keychain } => "Keychain",
+            { KeySource: CredentialSource.Environment } => "Environment",
+            { KeySource: CredentialSource.Unreadable } => "Key locked",
             _ => "No key",
         };
+
+        /// <summary>
+        /// What to do about a key that is stored and unreadable, or null when there is nothing to say. (#926)
+        ///
+        /// <para>Platform-specific because the remedy is. On macOS the item's ACL names a different binary —
+        /// ordinarily a development build that stored the key before this signed one — and the way out is to
+        /// authorize once at the prompt, or to remove the key here and enter it again. On Windows the DPAPI
+        /// blob did not decrypt, which is usually an administrator-initiated password reset; entering the key
+        /// again is the whole fix, and may simply start working once a roaming profile finishes syncing.</para>
+        /// </summary>
+        public string? KeyProblem =>
+            !_connection.KeyLocked ? null
+            : _connection.KeySource == CredentialSource.Environment
+                // Nothing is broken for the reader right now, so this states the situation rather than asking
+                // for action: the request path is already using the variable.
+                ? $"The stored key could not be read, so requests are using {_connection.EnvironmentVariable}"
+            : OperatingSystem.IsWindows()
+                ? "Stored, but it did not decrypt — enter it again to replace it"
+                // Not "remove and re-enter": removing needs authorization too and can fail, and replacing
+                // the key succeeds without helping — an item's ACL is not its value. Both tested 2026-08-31.
+                : "Stored, but this build was not allowed to read it — choose Allow when macOS asks";
+
+        /// <summary>
+        /// Whether <see cref="KeyProblem"/> is a problem the reader must act on, or merely a statement.
+        /// (#926)
+        ///
+        /// <para>A locked key with a working variable is not a fault: sending works. Colouring it like the
+        /// caution states would teach the reader that the warning colour means nothing much.</para>
+        /// </summary>
+        public bool KeyProblemNeedsAction =>
+            _connection.KeyLocked && _connection.KeySource != CredentialSource.Environment;
+
+        /// <summary>The complement, so the two lines in the row template are mutually exclusive rather than
+        /// both rendering the same sentence when action IS needed.</summary>
+        public bool KeyProblemIsStatement => HasKeyProblem && !KeyProblemNeedsAction;
+
+        public bool HasKeyProblem => KeyProblem is not null;
 
         /// <summary>
         /// The provider's own documentation, where the catalogue publishes one.
@@ -847,8 +898,13 @@ namespace CST.Avalonia.ViewModels
         ///
         /// <para>False for a key we did not store, and false when there is none — in both cases the slot is
         /// simply empty. #678 made this reachable by filing keys under the connection's id.</para>
+        ///
+        /// <para><b>True for a stored key we cannot read</b> (#926). We did store it, deleting needs no
+        /// authorization on either platform, and it is the reader's way out of the state — so this is the one
+        /// row where removal matters most, and it would be absent if the check were "can we read it".</para>
         /// </summary>
-        public bool CanRemoveKey => _connection.KeySource == CredentialSource.Keychain;
+        public bool CanRemoveKey =>
+            _connection.KeySource is CredentialSource.Keychain or CredentialSource.Unreadable;
 
         /// <summary>
         /// What we actually know about whether this works.
@@ -941,6 +997,10 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(RowTooltip));
             this.RaisePropertyChanged(nameof(KeySourceBadge));
             this.RaisePropertyChanged(nameof(CanRemoveKey));
+            this.RaisePropertyChanged(nameof(KeyProblem));
+            this.RaisePropertyChanged(nameof(HasKeyProblem));
+            this.RaisePropertyChanged(nameof(KeyProblemNeedsAction));
+            this.RaisePropertyChanged(nameof(KeyProblemIsStatement));
             this.RaisePropertyChanged(nameof(StatusText));
             this.RaisePropertyChanged(nameof(IsIncomplete));
             this.RaisePropertyChanged(nameof(IncompleteText));

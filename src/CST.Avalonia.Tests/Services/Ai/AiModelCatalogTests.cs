@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using CST.Avalonia.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -354,8 +355,12 @@ public class AiModelCatalogTests
         private readonly Dictionary<string, string> _byAccount = new(StringComparer.Ordinal);
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? Get(string connectionId, string name) =>
-            _byAccount.GetValueOrDefault(connectionId + ":" + name);
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name) =>
+            _byAccount.TryGetValue(connectionId + ":" + name, out var k)
+                ? CredentialRead.Found(k)
+                : CredentialRead.NotStored;
         public bool Set(string connectionId, string name, string secret)
         { _byAccount[connectionId + ":" + name] = secret; return true; }
         public bool Delete(string connectionId, string name) => _byAccount.Remove(connectionId + ":" + name);

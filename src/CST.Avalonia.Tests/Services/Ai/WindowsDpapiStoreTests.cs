@@ -15,7 +15,8 @@ namespace CST.Avalonia.Tests.Services.Ai;
 /// replace-in-place, per-provider separation, and the acceptance test that the key never reaches a log. Those
 /// now exercise DPAPI for real when the suite runs on Windows. What is left here is what only this
 /// implementation can be asked: that the bytes on disk are actually encrypted, and that a blob this user cannot
-/// currently decrypt is treated as "no key" without being destroyed.</para>
+/// currently decrypt reports itself unreadable — distinctly from no key at all (#926) — without being
+/// destroyed.</para>
 ///
 /// <para>These are <see cref="WindowsFactAttribute"/> rather than tests that return early off Windows, so the
 /// macOS run reports skips instead of green tests that asserted nothing.</para>
@@ -88,15 +89,23 @@ public class WindowsDpapiStoreTests : IDisposable
     }
 
     [WindowsFact]
-    public void An_undecryptable_blob_reads_as_no_key_rather_than_throwing()
+    public void An_undecryptable_blob_reads_as_unreadable_rather_than_as_absent()
     {
         // The administrator-initiated password reset case: the user's DPAPI master key is discarded, so every
         // CurrentUser blob becomes unreadable. A user in that state should be asked to re-enter their key, not
         // shown a cryptography error they can do nothing about. Also covers a file copied from another machine.
+        //
+        // "Ask them to re-enter it" is the MESSAGE, and it is still right here. The STATE is Unreadable, not
+        // NotStored (#926): a blob is on disk, and reporting absence about a file we can see is what let the
+        // macOS half of this - a stored key behind a declined authorization - tell the maintainer he had no
+        // keys at all. No value escapes either way; the difference is what the app may then say and do.
         WindowsDpapiStore.Save(_service, "anthropic", Secret);
         File.WriteAllBytes(TheFile, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });   // not a DPAPI blob at all
 
-        Assert.Null(WindowsDpapiStore.Find(_service, "anthropic"));
+        var read = WindowsDpapiStore.Find(_service, "anthropic");
+        Assert.Equal(CredentialState.Unreadable, read.State);
+        Assert.Null(read.Secret);
+        Assert.True(read.Exists);   // and so the app must not offer "no key stored"
     }
 
     [WindowsFact]
@@ -117,7 +126,7 @@ public class WindowsDpapiStoreTests : IDisposable
 
         // And re-entering a key overwrites the dead blob, so nothing accumulates from keeping it.
         Assert.True(WindowsDpapiStore.Save(_service, "anthropic", "sk-ant-replacement"));
-        Assert.Equal("sk-ant-replacement", WindowsDpapiStore.Find(_service, "anthropic"));
+        Assert.Equal("sk-ant-replacement", WindowsDpapiStore.Find(_service, "anthropic").Secret);
         Assert.NotEqual(before, File.ReadAllBytes(file));
     }
 
@@ -126,17 +135,17 @@ public class WindowsDpapiStoreTests : IDisposable
     {
         // The other half of the same principle, and the distinction the implementation draws deliberately: a
         // transient IO failure - a backup tool or sync client holding the file open - must not cost the user
-        // their key. It reads as "none stored" for that moment and works again afterwards.
+        // their key. It reads as unreadable for that moment and works again afterwards.
         WindowsDpapiStore.Save(_service, "anthropic", Secret);
         var file = TheFile;
 
         using (var _ = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            Assert.Null(WindowsDpapiStore.Find(_service, "anthropic"));
+            Assert.Equal(CredentialState.Unreadable, WindowsDpapiStore.Find(_service, "anthropic").State);
             Assert.True(File.Exists(file));
         }
 
-        Assert.Equal(Secret, WindowsDpapiStore.Find(_service, "anthropic"));
+        Assert.Equal(Secret, WindowsDpapiStore.Find(_service, "anthropic").Secret);
     }
 
     [WindowsFact]
@@ -147,7 +156,7 @@ public class WindowsDpapiStoreTests : IDisposable
         var awkward = _service + " \u2014 with / \\ : * ? \" < > |";
 
         Assert.True(WindowsDpapiStore.Save(awkward, "anthropic", Secret));
-        Assert.Equal(Secret, WindowsDpapiStore.Find(awkward, "anthropic"));
+        Assert.Equal(Secret, WindowsDpapiStore.Find(awkward, "anthropic").Secret);
 
         try { Directory.Delete(WindowsDpapiStore.DirectoryFor(awkward), recursive: true); } catch { }
     }
@@ -155,7 +164,10 @@ public class WindowsDpapiStoreTests : IDisposable
     [WindowsFact]
     public void Reading_a_provider_that_was_never_stored_leaves_no_file_behind()
     {
-        Assert.Null(WindowsDpapiStore.Find(_service, "openai-compatible"));
+        // NotStored, not Unreadable: there is genuinely no file, and this is the one state that should send
+        // the reader to type a key in. If this ever reported Unreadable, every unconfigured provider would
+        // claim to be holding a key it cannot read. (#926)
+        Assert.Equal(CredentialState.NotStored, WindowsDpapiStore.Find(_service, "openai-compatible").State);
 
         var dir = WindowsDpapiStore.DirectoryFor(_service);
         Assert.True(!Directory.Exists(dir) || !Directory.EnumerateFiles(dir).Any());
@@ -168,7 +180,7 @@ public class WindowsDpapiStoreTests : IDisposable
         WindowsDpapiStore.Save(_service, "anthropic", Secret);
         Assert.True(WindowsDpapiStore.Delete(_service, "anthropic"));
         Assert.True(WindowsDpapiStore.Delete(_service, "anthropic"));   // again
-        Assert.Null(WindowsDpapiStore.Find(_service, "anthropic"));
+        Assert.Equal(CredentialState.NotStored, WindowsDpapiStore.Find(_service, "anthropic").State);
     }
 
     [WindowsFact]
@@ -198,7 +210,7 @@ public class WindowsDpapiStoreTests : IDisposable
         var files = Directory.EnumerateFiles(WindowsDpapiStore.DirectoryFor(_service)).ToList();
         Assert.Single(files);
         Assert.DoesNotContain(files, f => f.EndsWith(".tmp", StringComparison.Ordinal));
-        Assert.Equal("sk-ant-second", WindowsDpapiStore.Find(_service, "anthropic"));
+        Assert.Equal("sk-ant-second", WindowsDpapiStore.Find(_service, "anthropic").Secret);
     }
 
     [WindowsFact]
@@ -218,6 +230,6 @@ public class WindowsDpapiStoreTests : IDisposable
             Assert.False(WindowsDpapiStore.Save(_service, "anthropic", "sk-ant-never-lands"));
 
         Assert.False(File.Exists(temp));
-        Assert.Equal(Secret, WindowsDpapiStore.Find(_service, "anthropic"));   // the working key survived
+        Assert.Equal(Secret, WindowsDpapiStore.Find(_service, "anthropic").Secret);   // the working key survived
     }
 }

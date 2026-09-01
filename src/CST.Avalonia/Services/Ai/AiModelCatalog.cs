@@ -214,10 +214,26 @@ namespace CST.Avalonia.Services.Ai
                 return AiCatalogResult.Fail(
                     $"This connection has two {duplicate.Key} headers. Remove one under Settings \u2192 AI.");
 
-            var missingSecrets = connection.Headers
-                .Where(h => h.Secret
-                            && string.IsNullOrEmpty(_credentials?.Get(connection.Id, AiCredentialNames.Header(h.Name))))
-                .Select(h => h.Name)
+            // Unreadable before absent, and the same sentence the chat path uses (#926). The two surfaces send
+            // the same credentials, so they must also explain a failure the same way - and "re-enter it"
+            // cannot work on macOS for a secret that is stored and merely locked.
+            var reads = connection.Headers
+                .Where(h => h.Secret)
+                .Select(h => (h.Name, Read: _credentials?.Read(connection.Id, AiCredentialNames.Header(h.Name))
+                                            ?? CredentialRead.Unavailable))
+                .ToList();
+
+            var lockedSecrets = reads
+                .Where(r => r.Read.State == CredentialState.Unreadable)
+                .Select(r => r.Name)
+                .ToList();
+            if (lockedSecrets.Count > 0)
+                return AiCatalogResult.Fail(
+                    CredentialRead.Advice($"The {string.Join(", ", lockedSecrets)} header's value"));
+
+            var missingSecrets = reads
+                .Where(r => string.IsNullOrEmpty(r.Read.Secret))
+                .Select(r => r.Name)
                 .ToList();
             if (missingSecrets.Count > 0)
                 return AiCatalogResult.Fail(

@@ -128,6 +128,21 @@
                                                    IsVisible="{Binding IsIncomplete}"
                                                    Classes="Secondary"
                                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                        <!-- A stored key we could not read (#926). Two shapes, because two
+                                             situations: with no fallback the row cannot be used and takes the
+                                             caution colour IncompleteText uses; with a working environment
+                                             variable the request path carries on regardless, so it is a plain
+                                             secondary line. Colouring a working connection like a broken one
+                                             teaches the reader that the caution colour means nothing much. -->
+                                        <TextBlock Text="{Binding KeyProblem}"
+                                                   IsVisible="{Binding KeyProblemIsStatement}"
+                                                   Classes="Secondary"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding KeyProblem}"
+                                                   IsVisible="{Binding KeyProblemNeedsAction}"
+                                                   Classes="Secondary"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
                                     </StackPanel>
 
                                     <Border Grid.Column="2" Classes="Pill" VerticalAlignment="Center"

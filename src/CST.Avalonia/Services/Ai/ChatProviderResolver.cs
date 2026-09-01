@@ -43,8 +43,20 @@ public interface IAiCredentialStore
     /// more than one secret — Cloudflare's gateway wants a gateway token beside the upstream key (#701),
     /// Bedrock a secret access key beside an access key id (#702). A connection with one secret simply calls
     /// it <see cref="AiCredentialNames.Primary"/>.</para>
+    ///
+    /// <para><b>Null does not mean "none stored"</b> — see <see cref="Read"/>. This overload is for callers
+    /// that need the value and have nothing useful to say about why it is missing.</para>
     /// </summary>
     string? Get(string connectionId, string name);
+
+    /// <summary>
+    /// One stored secret, and what happened when we asked for it. (#926)
+    ///
+    /// <para>Prefer this wherever the answer reaches the reader. <see cref="Get"/> cannot distinguish "you
+    /// have not stored a key" from "your key is there and the OS would not let this build read it", and the
+    /// two need opposite advice: type one in, versus authorize and keep the one you have.</para>
+    /// </summary>
+    CredentialRead Read(string connectionId, string name);
 
     /// <summary>Store or replace one named secret. False when the platform cannot.</summary>
     bool Set(string connectionId, string name, string secret);
@@ -288,6 +300,24 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         // A header marked secret whose secret is not stored - the store was unavailable when it was saved, or
         // the reader deleted the item in Keychain Access. Sending the header empty produces a 401 that reads
         // as a bad key, so say which header is missing instead. (#771)
+        //
+        // Absent and unreadable are separated first (#926). Both leave the header empty, and the old single
+        // message told a reader whose secret was merely locked to re-enter it - which on macOS cannot work,
+        // since SecItemAdd on an existing item falls through to SecItemUpdate and needs the authorization
+        // that was just declined.
+        var lockedSecrets = connection.Headers
+            .Where(h => h.Secret
+                        && string.IsNullOrEmpty(headers.GetValueOrDefault(h.Name))
+                        && _credentials?.Read(connection.Id, AiCredentialNames.Header(h.Name)).State
+                           == CredentialState.Unreadable)
+            .Select(h => h.Name)
+            .ToList();
+        if (lockedSecrets.Count > 0)
+        {
+            problem = CredentialRead.Advice($"The {string.Join(", ", lockedSecrets)} header's value");
+            return null;
+        }
+
         var missingSecrets = connection.Headers
             .Where(h => h.Secret && string.IsNullOrEmpty(headers.GetValueOrDefault(h.Name)))
             .Select(h => h.Name)
@@ -306,9 +336,25 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         // Read at the moment of use rather than cached, so a variable the reader changes or unsets takes
         // effect on the next request. Nothing is copied into the credential store — a duplicate there would
         // outlive the variable, and the row it came from offers no remove action to undo that with (#691).
-        var apiKey = _credentials?.Get(connection.Id, AiCredentialNames.Primary)
+        var storedKey = _credentials?.Read(connection.Id, AiCredentialNames.Primary)
+                        ?? CredentialRead.Unavailable;
+        var apiKey = storedKey.Secret
                      ?? AiEnvironmentCredential.For(
                          connection.UsesEnvironmentKey, connection.EnvironmentVariable, _environmentKeys);
+
+        // A stored key we could not READ, with nothing behind it. Distinct from having none (#926): telling
+        // this reader to add a key sends them to re-enter one that is present and correct, and on macOS the
+        // re-entry needs the same authorization that just failed. Placed here, ahead of the per-kind guards,
+        // because the diagnosis is the same whatever protocol the connection speaks.
+        //
+        // Only when the fallback produced nothing: a locked key beside a working variable sends perfectly
+        // well, and refusing it here would contradict what the row now says. [fsnow: use the env var, and
+        // say so]
+        if (storedKey.State == CredentialState.Unreadable && string.IsNullOrWhiteSpace(apiKey))
+        {
+            problem = CredentialRead.Advice("This connection's API key");
+            return null;
+        }
 
         switch (kind)
         {

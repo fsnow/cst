@@ -338,14 +338,34 @@ public class AiConnectionServiceTests
         /// reads under another sees a miss rather than a hit (#759).</summary>
         private static string Account(string connectionId, string name) => connectionId + ":" + name;
 
+        /// <summary>Accounts the OS holds but will not hand over — a Keychain item whose ACL names another
+        /// binary, or a DPAPI blob that will not decrypt. The store can see it and cannot read it. (#926)</summary>
+        internal HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? Get(string connectionId, string name) =>
-            _byAccount.TryGetValue(Account(connectionId, name), out var k) ? k : null;
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
+            return _byAccount.TryGetValue(account, out var k)
+                ? CredentialRead.Found(k)
+                : CredentialRead.NotStored;
+        }
         public bool Set(string connectionId, string name, string secret)
         { _byAccount[Account(connectionId, name)] = secret; return true; }
+        /// <summary>Accounts the OS will not delete — authorization is needed for that too. (#926)</summary>
+        internal HashSet<string> Undeletable { get; } = new(StringComparer.Ordinal);
+
         public bool Delete(string connectionId, string name)
-        { _byAccount.Remove(Account(connectionId, name)); return true; }
+        {
+            var account = Account(connectionId, name);
+            if (Undeletable.Contains(account)) return false;
+            _byAccount.Remove(account);
+            return true;
+        }
     }
 
     private static (AiConnectionService Service, Settings Settings, Keys Keys) MakeWithKeys()
@@ -391,6 +411,100 @@ public class AiConnectionServiceTests
         keys.Set("box", AiCredentialNames.Primary, "k");
 
         Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
+    }
+
+    /// <summary>
+    /// A stored key the OS will not hand over reports its own state, not "no key". (#926)
+    ///
+    /// <para><b>The defect.</b> <c>SourceFor</c> asked <c>Get</c>, which answered null for a declined
+    /// authorization exactly as it did for an absent item — so a signed build reading keys a development
+    /// build had stored reported three configured providers as having none, and the app's advice was to type
+    /// them in again.</para>
+    /// </summary>
+    [Fact]
+    public void A_key_the_os_will_not_hand_over_is_reported_as_unreadable_not_as_absent()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+
+        Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
+
+        keys.Unreadable.Add("box:" + AiCredentialNames.Primary);
+
+        Assert.Equal(CredentialSource.Unreadable, service.Connections.Single().KeySource);
+    }
+
+    /// <summary>
+    /// An unreadable stored key does not fall through to an environment variable. (#926)
+    ///
+    /// <para>"Stored wins" exists so a key the reader typed is never quietly replaced by a variable they had
+    /// forgotten was set — the maintainer was surprised by one of his own. An authorization he can still
+    /// grant does not make his stored key stop counting, and reporting Environment here would have the app
+    /// silently billing a different credential at the moment he is least able to tell.</para>
+    /// </summary>
+    [Fact]
+    public void An_unreadable_stored_key_does_not_fall_through_to_the_environment()
+    {
+        var (service, settings, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+        keys.Unreadable.Add("box:" + AiCredentialNames.Primary);
+
+        var record = settings.Ai.Chat.Connections.Single();
+        record.UsesEnvironmentKey = true;
+        record.EnvironmentVariable = "BOX_API_KEY";
+
+        Assert.Equal(CredentialSource.Unreadable, service.Connections.Single().KeySource);
+    }
+
+    /// <summary>
+    /// A credential the OS refuses to delete is reported, and the connection still goes. (#926)
+    ///
+    /// <para><b>Observed.</b> Deleting a connection said it worked, the key stayed in the keychain, and
+    /// adding the provider back walked straight into the orphan — the state <see cref="Remove"/>'s own
+    /// comment exists to prevent: one "nothing can ever reach or clean up", which "would be silently
+    /// re-adopted if someone later created a connection with the same id". Deleting a Keychain item needs
+    /// authorization, so it can be refused, and the return value was discarded.</para>
+    ///
+    /// <para><b>Ok stays true.</b> Removing the connection is a settings edit that cannot fail, and it is the
+    /// reader's to delete — refusing would trap them with a connection they no longer want. What changes is
+    /// that the leftover is named instead of hidden.</para>
+    /// </summary>
+    [Fact]
+    public void A_credential_that_cannot_be_deleted_is_reported_and_the_connection_still_goes()
+    {
+        var (service, settings, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+        keys.Undeletable.Add("box:" + AiCredentialNames.Primary);
+
+        var result = service.Remove("box");
+
+        Assert.True(result.Ok);                       // the connection is gone
+        Assert.Empty(settings.Ai.Chat.Connections);
+        // Named, and FORMED. Asserting only NotNull let a `+ "…{displayName}…"` continuation ship - a
+        // plain string, so the placeholder reached the reader verbatim. Every one of these sentences is
+        // built by concatenation, so the brace check is the one that generalises. (#926)
+        Assert.NotNull(result.Problem);
+        Assert.Contains("My box", result.Problem!, StringComparison.Ordinal);
+        Assert.DoesNotContain("{", result.Problem!, StringComparison.Ordinal);
+        Assert.Equal("k", keys.Get("box", AiCredentialNames.Primary));
+    }
+
+    /// <summary>The ordinary path stays silent, so the report above is not simply always on.</summary>
+    [Fact]
+    public void A_removal_that_clears_its_credentials_reports_nothing()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+
+        var result = service.Remove("box");
+
+        Assert.True(result.Ok);
+        Assert.Null(result.Problem);
+        Assert.Null(keys.Get("box", AiCredentialNames.Primary));
     }
 
     /// <summary>
