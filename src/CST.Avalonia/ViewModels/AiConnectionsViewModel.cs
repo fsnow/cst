@@ -899,9 +899,14 @@ namespace CST.Avalonia.ViewModels
         /// <para>False for a key we did not store, and false when there is none — in both cases the slot is
         /// simply empty. #678 made this reachable by filing keys under the connection's id.</para>
         ///
-        /// <para><b>True for a stored key we cannot read</b> (#926). We did store it, deleting needs no
-        /// authorization on either platform, and it is the reader's way out of the state — so this is the one
-        /// row where removal matters most, and it would be absent if the check were "can we read it".</para>
+        /// <para><b>True for a stored key we cannot read</b> (#926). We did store it, so removal is ours to
+        /// offer, and it is the reader's only way out of the state from inside the app — which makes this the
+        /// one row where it matters most, and it would be absent if the check were "can we read it".</para>
+        ///
+        /// <para><b>Offering it is not promising it will work.</b> This said deleting "needs no authorization
+        /// on either platform"; it does, and a declined prompt fails the delete — observed 2026-08-31, with
+        /// the item still in the keychain afterwards. <c>KeyProblem</c> forty lines up says so. The button
+        /// stays, because trying is worth offering and the failure is now reported rather than swallowed.</para>
         /// </summary>
         public bool CanRemoveKey =>
             _connection.KeySource is CredentialSource.Keychain or CredentialSource.Unreadable;

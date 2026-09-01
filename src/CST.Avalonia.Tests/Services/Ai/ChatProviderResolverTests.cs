@@ -47,7 +47,23 @@ public class ChatProviderResolverTests
         /// <summary>Names the OS holds and will not hand over. (#926)</summary>
         internal HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>How many times a caller asked for a VALUE. Each is a possible macOS prompt. (#925)</summary>
+        internal int ValueReads { get; private set; }
+
+        public CredentialState Probe(string connectionId, string name)
+        {
+            if (!IsAvailable) return CredentialState.Unavailable;
+            if (Unreadable.Contains(name)) return CredentialState.Unreadable;
+            return ReadUncounted(connectionId, name).State;
+        }
+
         public CredentialRead Read(string connectionId, string name)
+        {
+            ValueReads++;
+            return ReadUncounted(connectionId, name);
+        }
+
+        private CredentialRead ReadUncounted(string connectionId, string name)
         {
             if (!IsAvailable) return CredentialRead.Unavailable;
             if (Unreadable.Contains(name)) return CredentialRead.Unreadable;
@@ -171,6 +187,36 @@ public class ChatProviderResolverTests
         Assert.Contains("stored", problem, StringComparison.OrdinalIgnoreCase);
         if (!OperatingSystem.IsWindows())
             Assert.Contains("Allow", problem, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A send reads each secret header once, not twice. (#925, fable)
+    ///
+    /// <para>The locked-header guard used to <c>Read</c> a header that <c>ExpandHeaders</c> had already read
+    /// microseconds earlier — which is <i>why</i> its value was empty. On macOS that is a second
+    /// authorization dialog for one send. The guard now asks <c>Probe</c>, which returns exactly what that
+    /// read recorded.</para>
+    ///
+    /// <para>Counted rather than asserted as a message, because the count is the thing that reaches the
+    /// reader: by this codebase's own metric, calls are prompts.</para>
+    /// </summary>
+    [Fact]
+    public void A_send_reads_a_secret_header_once()
+    {
+        var store = new FixedKey("sk-ant-stored");
+        store.Unreadable.Add(AiCredentialNames.Header("x-gateway-token"));
+
+        var resolver = Resolver(chat =>
+        {
+            var c = Conn(chat);
+            c.Kind = "anthropic";
+            c.Headers = new List<AiHeaderRecord> { new() { Name = "x-gateway-token", Secret = true } };
+            chat.ActiveModelId = "claude-opus-5";
+        }, store: store);
+
+        Assert.Null(resolver.Resolve(out var problem));
+        Assert.NotNull(problem);
+        Assert.Equal(1, store.ValueReads);
     }
 
     /// <summary>

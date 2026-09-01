@@ -58,6 +58,20 @@ public interface IAiCredentialStore
     /// </summary>
     CredentialRead Read(string connectionId, string name);
 
+    /// <summary>
+    /// What is known about a secret without asking the OS to hand it over. (#925)
+    ///
+    /// <para><b>Use this for every question that is only "is a key configured?"</b> — badges, status, the
+    /// editor's stored-key note. <see cref="Read"/> fetches the value, and on macOS fetching a value is what
+    /// raises the authorization dialog; answering a yes/no question that way is what produced 114 prompts'
+    /// worth of reads across one launch and one Settings window.</para>
+    ///
+    /// <para><see cref="CredentialState.Found"/> means an item is PRESENT. It does not promise the value can
+    /// be read — that is knowable only by reading, which prompts — unless a previous real read established
+    /// otherwise, which this reports.</para>
+    /// </summary>
+    CredentialState Probe(string connectionId, string name);
+
     /// <summary>Store or replace one named secret. False when the platform cannot.</summary>
     bool Set(string connectionId, string name, string secret);
 
@@ -308,7 +322,11 @@ public sealed class ChatProviderResolver : IChatProviderResolver
         var lockedSecrets = connection.Headers
             .Where(h => h.Secret
                         && string.IsNullOrEmpty(headers.GetValueOrDefault(h.Name))
-                        && _credentials?.Read(connection.Id, AiCredentialNames.Header(h.Name)).State
+                        // Probe, not Read (#925, fable). ExpandHeaders has already Read this exact header a
+                        // few lines up - which is why its value is empty - so a second Read would raise a
+                        // SECOND authorization dialog for one send. Probe returns what that read recorded:
+                        // exact, free, and one prompt instead of two.
+                        && _credentials?.Probe(connection.Id, AiCredentialNames.Header(h.Name))
                            == CredentialState.Unreadable)
             .Select(h => h.Name)
             .ToList();

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CST.Avalonia.Services.Ai;
 using Microsoft.Extensions.Logging;
 
@@ -11,13 +12,17 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 /// synced between machines. A key in it is a key in every one of those places, and unlike a wrong port number
 /// there is no way to notice after the fact.</para>
 ///
-/// <para><b>Reads should be lazy, on the request that needs it, and today they are not</b> — tracked as #925.
-/// The intent was that nothing here runs at startup, so a user who never turns surface B on never triggers a
-/// Keychain access (or, on Windows, a decrypt): a permission dialog on launch, for a feature the user has not
-/// asked for, teaches them to click through prompts. That is exactly what went on to happen — the maintainer
-/// met eight authorization prompts before a beta candidate was usable. Status queries reach
-/// <see cref="Read"/> at startup and on every refresh, and nothing caches, so one connection was read 153
-/// times in a single session. Do not read this paragraph as a description of current behaviour.</para>
+/// <para><b>Fetching a secret is lazy; asking whether one exists is not, and does not need to be.</b> (#925)
+/// The rule that matters is the original one: no permission dialog on launch for a feature the user has not
+/// asked for, because that teaches them to click through prompts. It stopped holding once every status
+/// question — the connection list, the badges, the editor's stored-key note — answered itself by fetching the
+/// value, which on macOS is the thing the ACL guards. Measured before the fix: 114 reads across one launch
+/// and one Settings window, 76 of them for a single account, and the maintainer pressing Escape fifteen to
+/// twenty times.</para>
+///
+/// <para>So the seam has two verbs. <see cref="Probe"/> answers "is a key configured?" from the item's
+/// metadata and never prompts; <see cref="Read"/> fetches the value and is reserved for the request that
+/// actually sends it. Everything that only renders a state uses the first.</para>
 ///
 /// <para><b>Nothing is ever logged.</b> Not the value, not a prefix, not its length. Outcomes only —
 /// <see cref="CredentialRead.Describe"/> is the whole vocabulary, and it says nothing about the value.</para>
@@ -35,6 +40,21 @@ public sealed class AiCredentialStore : IAiCredentialStore
 
     private readonly ILogger<AiCredentialStore> _logger;
     private readonly string _service;
+
+    /// <summary>
+    /// What a real read last learned about an account, by account name. (#925)
+    ///
+    /// <para><b>States, never secrets.</b> Holding the value would keep a credential in memory for the life
+    /// of the process to save a lookup nobody is waiting on, and this file's standing rule is that a secret
+    /// lives in the OS store and travels no further than the request that needs it.</para>
+    ///
+    /// <para><b>Written only by <see cref="Read"/>, cleared by <see cref="Set"/> and <see cref="Delete"/>.</b>
+    /// Those are the only two ways the app changes a stored secret, which is what makes this safe: the
+    /// original objection to caching here was that it "would go stale the moment the user changes the key in
+    /// Settings", and a cache both mutators clear cannot.</para>
+    /// </summary>
+    private readonly Dictionary<string, CredentialState> _known = new(StringComparer.Ordinal);
+    private readonly object _knownGate = new();
 
     public AiCredentialStore(ILogger<AiCredentialStore> logger) : this(logger, ServiceName) { }
 
@@ -79,6 +99,40 @@ public sealed class AiCredentialStore : IAiCredentialStore
         : "Secure key storage is not available on this platform. "
           + "An endpoint that needs no API key still works.";
 
+    /// <summary>
+    /// What is known about a secret <b>without asking the OS to hand it over</b>. (#925)
+    ///
+    /// <para><b>Never prompts, so status queries are free.</b> Presence comes from the item's metadata,
+    /// which the macOS ACL does not guard — see <see cref="MacOsKeychain.Exists"/>. Everything that only
+    /// wants to know whether a key is configured should call this: the connection list, the badges, the
+    /// editor's "a key is stored" note. They were fetching the secret to answer a yes/no question, and each
+    /// fetch could raise a modal password dialog.</para>
+    ///
+    /// <para><b><see cref="CredentialState.Found"/> here means PRESENT, not readable.</b> Readability is
+    /// knowable only by attempting the read, which is the thing that prompts. So a probe that has never seen
+    /// a real read reports a locked key as present — which is true, and is the honest half of what #926
+    /// established: the failure to avoid is claiming a key is ABSENT when it is not.</para>
+    ///
+    /// <para><b>A remembered failure wins.</b> Once a real <see cref="Read"/> has found an item unreadable,
+    /// that is recorded and reported here, so the badge catches up the moment anything actually tries to use
+    /// the key rather than waiting for the reader to try again.</para>
+    /// </summary>
+    public CredentialState Probe(string connectionId, string name)
+    {
+        if (!IsAvailable) return CredentialState.Unavailable;
+
+        var account = AccountFor(connectionId, name);
+        lock (_knownGate)
+            if (_known.TryGetValue(account, out var remembered)) return remembered;
+
+        // Each platform classifies its own probe. macOS reuses MacOsKeychain.Classify, so an unanticipated
+        // Security.framework failure reports Unreadable rather than absent - the same rule a real read
+        // follows, and the one that keeps a locked keychain from reading as "you have no keys". (fable)
+        return OperatingSystem.IsWindows()
+            ? WindowsDpapiStore.Exists(_service, account)
+            : MacOsKeychain.Exists(_service, account);
+    }
+
     public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
     public CredentialRead Read(string connectionId, string name)
@@ -89,6 +143,11 @@ public sealed class AiCredentialStore : IAiCredentialStore
         var read = OperatingSystem.IsWindows()
             ? WindowsDpapiStore.Find(_service, account)
             : MacOsKeychain.Find(_service, account);
+
+        // What a REAL read learned, for Probe to report without repeating the read. Only the state is kept -
+        // never the secret, which would put a credential in memory for the life of the process to save a
+        // lookup nobody was waiting on.
+        lock (_knownGate) _known[account] = read.State;
 
         // The OUTCOME, never the value — and not its length either, which narrows a guess.
         //
@@ -111,9 +170,27 @@ public sealed class AiCredentialStore : IAiCredentialStore
     {
         if (!IsAvailable || string.IsNullOrWhiteSpace(secret)) return false;
 
+        var account = AccountFor(connectionId, name);
         var saved = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Save(_service, AccountFor(connectionId, name), secret.Trim())
-            : MacOsKeychain.Save(_service, AccountFor(connectionId, name), secret.Trim());
+            ? WindowsDpapiStore.Save(_service, account, secret.Trim())
+            : MacOsKeychain.Save(_service, account, secret.Trim());
+
+        // A remembered Unreadable SURVIVES a successful save; anything else is forgotten. (fable)
+        //
+        // Recording Found here would have the badge announce a key we still cannot read - and so, one hop
+        // later, does forgetting: the next Probe misses the cache, asks the OS whether an item exists, and
+        // gets Found. On macOS SecItemUpdate rewrites the value and leaves the ACL alone, so pasting a
+        // replacement over a locked key succeeds and changes nothing (tested 2026-08-31). Clearing here made
+        // every surface then report it healthy - the #926 confusion upgraded from silence to a false
+        // statement, on the exact path the sheet invites with "Paste a new one to replace it".
+        //
+        // Keeping it under-claims if the item really was recreated readable, and the next real read corrects
+        // that. Under-claiming is the direction this whole seam has chosen.
+        lock (_knownGate)
+        {
+            if (!_known.TryGetValue(account, out var before) || before != CredentialState.Unreadable)
+                _known.Remove(account);
+        }
         _logger.LogInformation("Stored a secret for {Connection}/{Name}: {Result}",
             connectionId, name, saved ? "ok" : "failed");
         return saved;
@@ -124,9 +201,18 @@ public sealed class AiCredentialStore : IAiCredentialStore
     {
         if (!IsAvailable) return false;
 
+        var account = AccountFor(connectionId, name);
         var deleted = OperatingSystem.IsWindows()
-            ? WindowsDpapiStore.Delete(_service, AccountFor(connectionId, name))
-            : MacOsKeychain.Delete(_service, AccountFor(connectionId, name));
+            ? WindowsDpapiStore.Delete(_service, account)
+            : MacOsKeychain.Delete(_service, account);
+
+        // Forgotten only on SUCCESS. (fable)
+        //
+        // A failed delete changed nothing, so the evidence we had still holds - and discarding it made a
+        // DECLINED removal look like progress: badge "Key locked" -> Remove -> dismiss the prompt -> delete
+        // fails -> cache cleared -> next Probe finds the item present -> badge "Keychain", problem gone. The
+        // reader's failed attempt to revoke a key made the row report it healthier.
+        if (deleted) lock (_knownGate) _known.Remove(account);
         _logger.LogInformation("Removed a secret for {Connection}/{Name}: {Result}",
             connectionId, name, deleted ? "ok" : "failed");
         return deleted;

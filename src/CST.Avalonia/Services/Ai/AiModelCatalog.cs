@@ -257,6 +257,13 @@ namespace CST.Avalonia.Services.Ai
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(Timeout);
 
+            // Resolved ONCE, outside the page loop (#925). Authenticate used to run per request, so a
+            // paginated listing fetched the same secrets again for every page - and on macOS each fetch of a
+            // locked key is its own authorization dialog. Anthropic pages at twenty models, so a five-hundred
+            // model catalogue was twenty-five prompts for one listing. The credentials cannot change
+            // mid-listing anyway; re-reading them per page was never buying freshness.
+            var credentials = ResolveCredentials(connection);
+
             var models = new List<AiCatalogModel>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var skipped = 0;
@@ -269,7 +276,7 @@ namespace CST.Avalonia.Services.Ai
                 {
                     var pageUrl = cursor is null ? url : After(url, cursor);
                     using var request = new HttpRequestMessage(HttpMethod.Get, pageUrl);
-                    Authenticate(request, connection);
+                    Authenticate(request, connection, credentials);
 
                     using var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
 
@@ -412,18 +419,17 @@ namespace CST.Avalonia.Services.Ai
             return AiCatalogResult.Success(models, complete, skipped);
         }
 
+        /// <summary>Everything a request to this connection has to carry, fetched once per listing. (#925)</summary>
+        private sealed record ListingCredentials(string? Key, Dictionary<string, string> Headers);
+
         /// <summary>
-        /// Authenticates exactly as a chat request to the same endpoint would.
+        /// Reads this connection's secrets, once. (#925)
         ///
-        /// <para>Routed through <see cref="AiHttp.ApplyAuth"/> rather than reimplemented: a listing and a
-        /// question go to the same host with the same credential, and two implementations would eventually
-        /// disagree. The visible symptom would be a provider whose model list loads while its answers 401 —
-        /// two surfaces contradicting each other, which is the failure #673 exists to prevent.</para>
-        ///
-        /// <para>Header values are templates like the base URL is: Azure and Cloudflare put reader-supplied
-        /// inputs in them.</para>
+        /// <para>Separate from <see cref="Authenticate"/> so that applying them to a request - which happens
+        /// per page - cannot fetch them again. Every call here can raise a macOS authorization dialog, so the
+        /// count of calls is a count of possible prompts.</para>
         /// </summary>
-        private void Authenticate(HttpRequestMessage request, AiConnection connection)
+        private ListingCredentials ResolveCredentials(AiConnection connection)
         {
             // Stored, then the environment — the SAME rule the chat path applies, through the same helper.
             // Reading only the store here is the contradiction the summary above forbids: an adopted
@@ -440,6 +446,27 @@ namespace CST.Avalonia.Services.Ai
                 headers[header.Name] = header.Secret
                     ? _credentials?.Get(connection.Id, AiCredentialNames.Header(header.Name)) ?? string.Empty
                     : AiTemplate.Expand(header.Value ?? string.Empty, connection.Inputs);
+
+            return new ListingCredentials(key, headers);
+        }
+
+        /// <summary>
+        /// Authenticates exactly as a chat request to the same endpoint would.
+        ///
+        /// <para>Routed through <see cref="AiHttp.ApplyAuth"/> rather than reimplemented: a listing and a
+        /// question go to the same host with the same credential, and two implementations would eventually
+        /// disagree. The visible symptom would be a provider whose model list loads while its answers 401 —
+        /// two surfaces contradicting each other, which is the failure #673 exists to prevent.</para>
+        ///
+        /// <para>Header values are templates like the base URL is: Azure and Cloudflare put reader-supplied
+        /// inputs in them — expanded in <see cref="ResolveCredentials"/>, which runs once per listing while
+        /// this runs once per page.</para>
+        /// </summary>
+        private void Authenticate(
+            HttpRequestMessage request, AiConnection connection, ListingCredentials credentials)
+        {
+            var key = credentials.Key;
+            var headers = credentials.Headers;
 
             if (connection.Kind == ChatProviderKind.Anthropic)
             {

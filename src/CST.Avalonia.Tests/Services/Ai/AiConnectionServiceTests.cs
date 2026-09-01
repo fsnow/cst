@@ -342,13 +342,33 @@ public class AiConnectionServiceTests
         /// binary, or a DPAPI blob that will not decrypt. The store can see it and cannot read it. (#926)</summary>
         internal HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Accounts a real Read has actually visited. (#925)</summary>
+        private readonly HashSet<string> _readOnce = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
         public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
 
+        /// <summary>How many times a caller asked for a VALUE. A status query must never move this. (#925)</summary>
+        internal int ValueReads { get; private set; }
+
+        public CredentialState Probe(string connectionId, string name)
+        {
+            // Unreadable ONLY once a real Read has established it — the real store's semantics. (#925, fable)
+            // A probe asks the item's metadata and cannot learn that its value is unreadable; it reports
+            // Found. Fakes that answered Unreadable straight away tested only the post-first-read steady
+            // state, and certified a state the app does not enter at launch.
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account) && _readOnce.Contains(account))
+                return CredentialState.Unreadable;
+            return _byAccount.ContainsKey(account) ? CredentialState.Found : CredentialState.NotStored;
+        }
+
         public CredentialRead Read(string connectionId, string name)
         {
+            ValueReads++;
             var account = Account(connectionId, name);
+            _readOnce.Add(account);
             if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
             return _byAccount.TryGetValue(account, out var k)
                 ? CredentialRead.Found(k)
@@ -414,6 +434,52 @@ public class AiConnectionServiceTests
     }
 
     /// <summary>
+    /// Asking about connections never fetches a secret. (#925)
+    ///
+    /// <para><b>This is the whole issue in one assertion.</b> Every status question — the connection list,
+    /// the badges, the model picker — was answered by fetching the value, and on macOS fetching a value is
+    /// what raises the authorization dialog. Measured on the maintainer's machine: <b>114 reads</b> across
+    /// one launch and one Settings window, <b>76 of them for a single account</b>, each able to raise a
+    /// prompt because cancelling one records no decision. He pressed Escape "a good 15 or 20 times".</para>
+    ///
+    /// <para>Asserted as zero rather than as a smaller number: any value fetch on this path can prompt, so
+    /// "fewer" is not the property worth having. Reading the list repeatedly is deliberate — the defect was
+    /// that repetition cost anything at all.</para>
+    /// </summary>
+    [Fact]
+    public void Reading_the_connection_list_never_fetches_a_secret()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+        var before = keys.ValueReads;
+
+        for (var i = 0; i < 20; i++)
+        {
+            var connections = service.Connections;
+            Assert.Equal(CredentialSource.Keychain, connections.Single().KeySource);
+        }
+
+        Assert.Equal(before, keys.ValueReads);
+    }
+
+    /// <summary>
+    /// And a probe still tells a stored key from an absent one, so the silence is not bought with ignorance.
+    /// </summary>
+    [Fact]
+    public void A_probe_still_distinguishes_a_stored_key_from_none()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+
+        Assert.Equal(CredentialSource.None, service.Connections.Single().KeySource);
+
+        keys.Set("box", AiCredentialNames.Primary, "k");
+
+        Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
+    }
+
+    /// <summary>
     /// A stored key the OS will not hand over reports its own state, not "no key". (#926)
     ///
     /// <para><b>The defect.</b> <c>SourceFor</c> asked <c>Get</c>, which answered null for a declined
@@ -431,6 +497,13 @@ public class AiConnectionServiceTests
         Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
 
         keys.Unreadable.Add("box:" + AiCredentialNames.Primary);
+
+        // Still Keychain: a probe asks the item's metadata and cannot learn its value is unreadable (#925).
+        // "A key is stored" is true, and #926's rule was never to claim one is ABSENT when it is not.
+        Assert.Equal(CredentialSource.Keychain, service.Connections.Single().KeySource);
+
+        // Something actually uses the key. That read fails, the store remembers, and the badge catches up.
+        keys.Get("box", AiCredentialNames.Primary);
 
         Assert.Equal(CredentialSource.Unreadable, service.Connections.Single().KeySource);
     }
@@ -450,6 +523,7 @@ public class AiConnectionServiceTests
         service.Add("box", Draft());
         keys.Set("box", AiCredentialNames.Primary, "k");
         keys.Unreadable.Add("box:" + AiCredentialNames.Primary);
+        keys.Get("box", AiCredentialNames.Primary);   // a real use establishes the locked state (#925)
 
         var record = settings.Ai.Chat.Connections.Single();
         record.UsesEnvironmentKey = true;

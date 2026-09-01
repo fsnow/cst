@@ -265,10 +265,11 @@ namespace CST.Avalonia.ViewModels
                     ArrivedSecret = header.Secret,
                     OriginalName = header.Name,
                     // Exists, not readable (#926): a locked secret is still stored, and telling the reader it
-                    // is not is what sends them to re-enter something they already have.
+                    // is not is what sends them to re-enter something they already have. Probed rather than
+                    // read (#925) - building the sheet must not fetch every secret header's value.
                     HasStoredSecret = header.Secret
-                        && (credentials?.Read(connection.Id, AiCredentialNames.Header(header.Name))
-                            ?? CredentialRead.Unavailable).Exists,
+                        && credentials?.Probe(connection.Id, AiCredentialNames.Header(header.Name))
+                           is CredentialState.Found or CredentialState.Unreadable,
                 });
 
             vm._secretHeadersAtOpen.AddRange(connection.Headers
@@ -408,10 +409,16 @@ namespace CST.Avalonia.ViewModels
 
         public bool HasKeyUnavailable => !string.IsNullOrEmpty(KeyUnavailable);
 
-        /// <summary>What the store says about this connection's primary key. (#926)</summary>
-        private CredentialRead StoredKey => _existingId is null
-            ? CredentialRead.NotStored
-            : _credentials?.Read(_existingId, AiCredentialNames.Primary) ?? CredentialRead.Unavailable;
+        /// <summary>
+        /// What the store says about this connection's primary key. (#926, #925)
+        ///
+        /// <para>Probe, not Read: the sheet asks this to decide what to SAY, never to send anything, so it
+        /// has no business fetching the secret — and on macOS fetching it is what raises the authorization
+        /// dialog. Opening the sheet used to be one of the worst offenders.</para>
+        /// </summary>
+        private CredentialState StoredKey => _existingId is null
+            ? CredentialState.NotStored
+            : _credentials?.Probe(_existingId, AiCredentialNames.Primary) ?? CredentialState.Unavailable;
 
         /// <summary>
         /// Whether a key is already filed under this id — only knowable for a connection that exists.
@@ -420,16 +427,17 @@ namespace CST.Avalonia.ViewModels
         /// sheet where the reader would act on being told otherwise: it drove the whole defect, since the row
         /// badged "Key locked" while the Edit sheet directly under it said "No key is stored".</para>
         /// </summary>
-        public bool HasStoredKey => StoredKey.Exists;
+        public bool HasStoredKey =>
+            StoredKey is CredentialState.Found or CredentialState.Unreadable;
 
         public string KeyStatus => _existingId is null
             ? "Stored in the operating system's credential store, never in settings."
             // Locked first: it is a kind of "stored", so the readable-key sentence below would otherwise claim
             // it and tell the reader to paste a replacement - which on macOS needs the authorization that just
             // failed, so it would appear to work and change nothing. (#926)
-            : StoredKey.State == CredentialState.Unreadable
+            : StoredKey == CredentialState.Unreadable
                 ? CredentialRead.Advice($"{_displayName}'s key")
-            : StoredKey.State == CredentialState.Found
+            : StoredKey == CredentialState.Found
                 ? $"A key is stored for {_displayName}. Paste a new one to replace it."
                 // "No key is stored" is true and reads as "you have no key", which on an adopted connection is
                 // false — it authenticates from the environment, and saying otherwise sends the reader to
