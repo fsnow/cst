@@ -11,16 +11,16 @@ namespace CST.Avalonia.Services.Ai.Credentials;
 /// synced between machines. A key in it is a key in every one of those places, and unlike a wrong port number
 /// there is no way to notice after the fact.</para>
 ///
-/// <para><b>Read lazily, on the request that needs it.</b> Nothing here runs at startup, so a user who never
-/// turns surface B on never triggers a Keychain access (or, on Windows, a decrypt). That is the same class of
-/// mistake as the Chromium Safe Storage prompt this app already works around: a permission dialog on launch,
-/// for a feature the user has not asked for, teaches them to click through prompts.</para>
+/// <para><b>Reads should be lazy, on the request that needs it, and today they are not</b> — tracked as #925.
+/// The intent was that nothing here runs at startup, so a user who never turns surface B on never triggers a
+/// Keychain access (or, on Windows, a decrypt): a permission dialog on launch, for a feature the user has not
+/// asked for, teaches them to click through prompts. That is exactly what went on to happen — the maintainer
+/// met eight authorization prompts before a beta candidate was usable. Status queries reach
+/// <see cref="Read"/> at startup and on every refresh, and nothing caches, so one connection was read 153
+/// times in a single session. Do not read this paragraph as a description of current behaviour.</para>
 ///
-/// <para><b>Nothing is cached.</b> A cache would go stale the moment the user changes the key in Settings, and
-/// the lookup costs microseconds — the wrong side of that trade is the one where the app keeps using a
-/// credential the user has already replaced.</para>
-///
-/// <para><b>Nothing is ever logged.</b> Not the value, not a prefix, not its length. Outcomes only.</para>
+/// <para><b>Nothing is ever logged.</b> Not the value, not a prefix, not its length. Outcomes only —
+/// <see cref="CredentialRead.Describe"/> is the whole vocabulary, and it says nothing about the value.</para>
 /// </summary>
 public sealed class AiCredentialStore : IAiCredentialStore
 {
@@ -79,12 +79,14 @@ public sealed class AiCredentialStore : IAiCredentialStore
         : "Secure key storage is not available on this platform. "
           + "An endpoint that needs no API key still works.";
 
-    public string? Get(string connectionId, string name)
+    public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+    public CredentialRead Read(string connectionId, string name)
     {
-        if (!IsAvailable) return null;
+        if (!IsAvailable) return CredentialRead.Unavailable;
 
         var account = AccountFor(connectionId, name);
-        var secret = OperatingSystem.IsWindows()
+        var read = OperatingSystem.IsWindows()
             ? WindowsDpapiStore.Find(_service, account)
             : MacOsKeychain.Find(_service, account);
 
@@ -95,10 +97,13 @@ public sealed class AiCredentialStore : IAiCredentialStore
         // travels on every request in the clear, so it is public in a way its value never is, and "which of
         // this connection's secrets was missing" is the whole diagnosis when a two-credential provider 401s.
         // The line to hold is the value, and it is held here and at every other call. (fable review)
+        //
+        // Four outcomes, not two (#926). The line that read "none stored" for every one of them is what made
+        // eight declined authorization prompts look like three connections with no keys.
         _logger.LogDebug("Credential lookup for {Connection}/{Name}: {Result}",
-            connectionId, name, secret is null ? "none stored" : "found");
+            connectionId, name, read.Describe());
 
-        return secret;
+        return read;
     }
 
     /// <summary>Store or replace one named secret. Returns false when the platform cannot.</summary>

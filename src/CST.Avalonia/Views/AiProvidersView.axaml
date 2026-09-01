@@ -128,6 +128,16 @@
                                                    IsVisible="{Binding IsIncomplete}"
                                                    Classes="Secondary"
                                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                        <!-- A stored key we could not read (#926). Shares the caution slot
+                                             with IncompleteText because it is the same kind of statement -
+                                             this row is not usable yet, and here is the reason - and the two
+                                             cannot both apply: a connection still carrying URL placeholders
+                                             has never reached the point of storing a key. -->
+                                        <TextBlock Text="{Binding KeyProblem}"
+                                                   IsVisible="{Binding HasKeyProblem}"
+                                                   Classes="Secondary"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
                                     </StackPanel>
 
                                     <Border Grid.Column="2" Classes="Pill" VerticalAlignment="Center"

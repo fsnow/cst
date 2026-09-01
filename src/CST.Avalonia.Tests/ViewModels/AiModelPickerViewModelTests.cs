@@ -5,6 +5,7 @@ using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using CST.Avalonia.ViewModels;
 using Moq;
 using Xunit;
@@ -24,10 +25,21 @@ public class AiModelPickerViewModelTests
         /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
         private static string Account(string connectionId, string name) => connectionId + ":" + name;
+        /// <summary>Accounts the OS holds but will not hand over. (#926)</summary>
+        public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? Get(string connectionId, string name) =>
-            Keys.GetValueOrDefault(Account(connectionId, name));
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
+            return Keys.TryGetValue(account, out var k)
+                ? CredentialRead.Found(k)
+                : CredentialRead.NotStored;
+        }
         public bool Set(string connectionId, string name, string secret)
         { Keys[Account(connectionId, name)] = secret; return true; }
         public bool Delete(string connectionId, string name) => Keys.Remove(Account(connectionId, name));

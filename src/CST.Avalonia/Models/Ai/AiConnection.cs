@@ -15,6 +15,20 @@ namespace CST.Avalonia.Models.Ai
         Keychain,
 
         /// <summary>
+        /// Stored by us, and this build could not read it. (#926)
+        ///
+        /// <para><b>Distinct from <see cref="None"/> because the remedy is opposite.</b> None means type a
+        /// key in; this means one is already there and something else must be settled — on macOS, authorizing
+        /// a binary the item's ACL does not name, which is the ordinary state once a development build and a
+        /// signed build have both written keys. Reported as None, it sent the maintainer to re-enter three
+        /// keys that were present and correct.</para>
+        ///
+        /// <para><b>Removal stays offered</b>, unlike <see cref="Environment"/>: the app did store this one,
+        /// deleting needs no authorization on either platform, and it is the reader's way out.</para>
+        /// </summary>
+        Unreadable,
+
+        /// <summary>
         /// Picked up from an environment variable the app did not set.
         ///
         /// <para><b>This is why the enum exists rather than a bool.</b> The app cannot delete a credential it

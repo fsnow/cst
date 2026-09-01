@@ -816,13 +816,34 @@ namespace CST.Avalonia.ViewModels
         ///
         /// <para>"No key" is a legitimate resting state, not a warning: a local runner needs none, and a
         /// connection may authenticate entirely through its headers.</para>
+        ///
+        /// <para><b>"Key locked" is the one badge that IS a warning</b> (#926), and it has to be visibly
+        /// unlike "No key" — those two shared a badge, and the reader acted on it by re-entering keys that
+        /// were already stored and correct.</para>
         /// </summary>
         public string KeySourceBadge => _connection.KeySource switch
         {
             CredentialSource.Keychain => "Keychain",
             CredentialSource.Environment => "Environment",
+            CredentialSource.Unreadable => "Key locked",
             _ => "No key",
         };
+
+        /// <summary>
+        /// What to do about a key that is stored and unreadable, or null when there is nothing to say. (#926)
+        ///
+        /// <para>Platform-specific because the remedy is. On macOS the item's ACL names a different binary —
+        /// ordinarily a development build that stored the key before this signed one — and the way out is to
+        /// authorize once at the prompt, or to remove the key here and enter it again. On Windows the DPAPI
+        /// blob did not decrypt, which is usually an administrator-initiated password reset; entering the key
+        /// again is the whole fix, and may simply start working once a roaming profile finishes syncing.</para>
+        /// </summary>
+        public string? KeyProblem => _connection.KeySource != CredentialSource.Unreadable ? null
+            : OperatingSystem.IsWindows()
+                ? "Stored, but it did not decrypt — remove it and enter it again"
+                : "Stored, but this build was not allowed to read it — authorize it, or remove and re-enter";
+
+        public bool HasKeyProblem => KeyProblem is not null;
 
         /// <summary>
         /// The provider's own documentation, where the catalogue publishes one.
@@ -847,8 +868,13 @@ namespace CST.Avalonia.ViewModels
         ///
         /// <para>False for a key we did not store, and false when there is none — in both cases the slot is
         /// simply empty. #678 made this reachable by filing keys under the connection's id.</para>
+        ///
+        /// <para><b>True for a stored key we cannot read</b> (#926). We did store it, deleting needs no
+        /// authorization on either platform, and it is the reader's way out of the state — so this is the one
+        /// row where removal matters most, and it would be absent if the check were "can we read it".</para>
         /// </summary>
-        public bool CanRemoveKey => _connection.KeySource == CredentialSource.Keychain;
+        public bool CanRemoveKey =>
+            _connection.KeySource is CredentialSource.Keychain or CredentialSource.Unreadable;
 
         /// <summary>
         /// What we actually know about whether this works.
@@ -941,6 +967,8 @@ namespace CST.Avalonia.ViewModels
             this.RaisePropertyChanged(nameof(RowTooltip));
             this.RaisePropertyChanged(nameof(KeySourceBadge));
             this.RaisePropertyChanged(nameof(CanRemoveKey));
+            this.RaisePropertyChanged(nameof(KeyProblem));
+            this.RaisePropertyChanged(nameof(HasKeyProblem));
             this.RaisePropertyChanged(nameof(StatusText));
             this.RaisePropertyChanged(nameof(IsIncomplete));
             this.RaisePropertyChanged(nameof(IncompleteText));

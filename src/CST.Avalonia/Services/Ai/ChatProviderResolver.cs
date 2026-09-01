@@ -43,8 +43,20 @@ public interface IAiCredentialStore
     /// more than one secret — Cloudflare's gateway wants a gateway token beside the upstream key (#701),
     /// Bedrock a secret access key beside an access key id (#702). A connection with one secret simply calls
     /// it <see cref="AiCredentialNames.Primary"/>.</para>
+    ///
+    /// <para><b>Null does not mean "none stored"</b> — see <see cref="Read"/>. This overload is for callers
+    /// that need the value and have nothing useful to say about why it is missing.</para>
     /// </summary>
     string? Get(string connectionId, string name);
+
+    /// <summary>
+    /// One stored secret, and what happened when we asked for it. (#926)
+    ///
+    /// <para>Prefer this wherever the answer reaches the reader. <see cref="Get"/> cannot distinguish "you
+    /// have not stored a key" from "your key is there and the OS would not let this build read it", and the
+    /// two need opposite advice: type one in, versus authorize and keep the one you have.</para>
+    /// </summary>
+    CredentialRead Read(string connectionId, string name);
 
     /// <summary>Store or replace one named secret. False when the platform cannot.</summary>
     bool Set(string connectionId, string name, string secret);

@@ -42,10 +42,17 @@ public class ChatProviderResolverTests
 
         /// <summary>Named secrets take precedence, so a test can store a gateway token without also standing in
         /// for the primary key (#771).</summary>
-        public string? Get(string connectionId, string name) =>
-            _byName is not null && _byName.TryGetValue(name, out var named) ? named
-            : name == AiCredentialNames.Primary ? _key
-            : null;
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name)
+        {
+            if (!IsAvailable) return CredentialRead.Unavailable;
+            var secret =
+                _byName is not null && _byName.TryGetValue(name, out var named) ? named
+                : name == AiCredentialNames.Primary ? _key
+                : null;
+            return secret is null ? CredentialRead.NotStored : CredentialRead.Found(secret);
+        }
         public bool Set(string connectionId, string name, string secret) => throw new NotSupportedException();
         public bool Delete(string connectionId, string name) => throw new NotSupportedException();
     }

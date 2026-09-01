@@ -5,6 +5,7 @@ using CST.Avalonia.Models;
 using CST.Avalonia.Models.Ai;
 using CST.Avalonia.Services;
 using CST.Avalonia.Services.Ai;
+using CST.Avalonia.Services.Ai.Credentials;
 using CST.Avalonia.ViewModels;
 using Moq;
 using Xunit;
@@ -74,8 +75,13 @@ public class AiConnectionEditorViewModelTests
         public bool Available { get; set; } = true;
         public bool IsAvailable => Available;
         public string? Unavailable => Available ? null : "Nowhere to store a key in this build.";
-        public string? Get(string connectionId, string name) =>
-            Stored.GetValueOrDefault(Account(connectionId, name));
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name) =>
+            !Available ? CredentialRead.Unavailable
+            : Stored.TryGetValue(Account(connectionId, name), out var k)
+                ? CredentialRead.Found(k)
+                : CredentialRead.NotStored;
         public bool Set(string connectionId, string name, string secret)
         { Stored[Account(connectionId, name)] = secret; return true; }
         public bool Delete(string connectionId, string name) => Stored.Remove(Account(connectionId, name));

@@ -51,8 +51,13 @@ namespace CST.Avalonia.Tests.ViewModels
 
             private static string Account(string connectionId, string name) => connectionId + ":" + name;
 
-            public string? Get(string connectionId, string name) =>
-                Available && _keys.TryGetValue(Account(connectionId, name), out var k) ? k : null;
+            public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+            public CST.Avalonia.Services.Ai.Credentials.CredentialRead Read(string connectionId, string name) =>
+                !Available ? CST.Avalonia.Services.Ai.Credentials.CredentialRead.Unavailable
+                : _keys.TryGetValue(Account(connectionId, name), out var k)
+                    ? CST.Avalonia.Services.Ai.Credentials.CredentialRead.Found(k)
+                    : CST.Avalonia.Services.Ai.Credentials.CredentialRead.NotStored;
 
             public bool Set(string connectionId, string name, string secret)
             {

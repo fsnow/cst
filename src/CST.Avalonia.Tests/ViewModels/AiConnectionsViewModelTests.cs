@@ -84,10 +84,21 @@ public class AiConnectionsViewModelTests
         /// <summary>Keyed by the joined account, exactly as the real store files it (#759).</summary>
         public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
         private static string Account(string connectionId, string name) => connectionId + ":" + name;
+        /// <summary>Accounts the OS holds but will not hand over. (#926)</summary>
+        public HashSet<string> Unreadable { get; } = new(StringComparer.Ordinal);
+
         public bool IsAvailable => true;
         public string? Unavailable => null;
-        public string? Get(string connectionId, string name) =>
-            Keys.GetValueOrDefault(Account(connectionId, name));
+        public string? Get(string connectionId, string name) => Read(connectionId, name).Secret;
+
+        public CredentialRead Read(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Unreadable.Contains(account)) return CredentialRead.Unreadable;
+            return Keys.TryGetValue(account, out var k)
+                ? CredentialRead.Found(k)
+                : CredentialRead.NotStored;
+        }
         public bool Set(string connectionId, string name, string secret)
         { Keys[Account(connectionId, name)] = secret; return true; }
         public bool Delete(string connectionId, string name) => Keys.Remove(Account(connectionId, name));
@@ -228,6 +239,43 @@ public class AiConnectionsViewModelTests
             new List<AiModelEntry>(), Array.Empty<AiHeader>(), new Dictionary<string, string>(),
             PresetId: null, KeySource: source, State: state);
         return new AiConnectionRowViewModel(new AiConnectionsViewModel(null, null), connection);
+    }
+
+    /// <summary>
+    /// A key the OS holds and will not hand over is badged apart from having no key at all. (#926)
+    ///
+    /// <para><b>The defect in one assertion.</b> These two rendered as the same "No key", and the maintainer
+    /// acted on it the way anyone would — by re-entering three keys that were present and correct, one macOS
+    /// authorization away. The badge is asserted by inequality rather than by its words, so renaming it is
+    /// free and merging the two states is not.</para>
+    /// </summary>
+    [Fact]
+    public void A_key_that_cannot_be_read_is_badged_apart_from_no_key()
+    {
+        var locked = Row(CredentialSource.Unreadable);
+        var empty = Row(CredentialSource.None);
+
+        Assert.NotEqual(empty.KeySourceBadge, locked.KeySourceBadge);
+        Assert.True(locked.HasKeyProblem);
+        Assert.False(empty.HasKeyProblem);
+        Assert.False(Row(CredentialSource.Keychain).HasKeyProblem);
+    }
+
+    /// <summary>
+    /// Removal stays offered for a key we cannot read. (#926)
+    ///
+    /// <para>It is the reader's way out of the state, and it would be absent had this been written as "can we
+    /// read it" rather than "did we store it". Deleting needs no authorization on either platform, so the
+    /// button is not promising something it cannot do — the distinction that keeps an environment-sourced row
+    /// showing an empty slot instead.</para>
+    /// </summary>
+    [Fact]
+    public void Removal_is_offered_for_a_stored_key_that_cannot_be_read()
+    {
+        Assert.True(Row(CredentialSource.Unreadable).CanRemoveKey);
+        Assert.True(Row(CredentialSource.Keychain).CanRemoveKey);
+        Assert.False(Row(CredentialSource.Environment).CanRemoveKey);
+        Assert.False(Row(CredentialSource.None).CanRemoveKey);
     }
 
     /// <summary>

@@ -240,8 +240,13 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         private CredentialSource SourceFor(string connectionId)
         {
-            if (_credentials?.Get(connectionId, AiCredentialNames.Primary) is not null)
-                return CredentialSource.Keychain;
+            // Read, not Get (#926). A stored key this build cannot read is a different state from no key, and
+            // it must not fall through to the environment either: the whole point of "stored wins" above is
+            // that a key the reader typed is not quietly replaced by a variable they forgot they set, and an
+            // authorization the reader can still grant does not make their key stop counting.
+            var read = _credentials?.Read(connectionId, AiCredentialNames.Primary);
+            if (read?.State == CredentialState.Found) return CredentialSource.Keychain;
+            if (read?.State == CredentialState.Unreadable) return CredentialSource.Unreadable;
 
             // Adopted from the environment, and the variable still holds something. When it does not — unset
             // between sessions, or renamed — this falls through to None, which reads as "no key" rather than
