@@ -104,6 +104,24 @@ public readonly record struct CredentialRead(CredentialState State, string? Secr
               + "is still stored. Try again and choose Allow, or delete the \u201cCST Reader\u201d entry "
               + "in Keychain Access.";
 
+    /// <summary>
+    /// What to tell the reader when a connection was removed but its secrets could not be. (#926)
+    ///
+    /// <para><b>The removal itself is not in doubt</b> — that is a settings edit and it cannot fail. What can
+    /// fail is clearing the credential, because deleting a Keychain item needs authorization. The connection
+    /// must still go: it is the reader's to delete, and refusing would trap them. But saying nothing leaves
+    /// exactly the orphan <c>AiConnectionService.Remove</c>'s own comment warns about — one "nothing can ever
+    /// reach or clean up", which "would be silently re-adopted if someone later created a connection with the
+    /// same id".</para>
+    /// </summary>
+    public static string SecretsLeftBehind(string displayName) =>
+        OperatingSystem.IsWindows()
+            ? $"{displayName} was removed, but its stored key could not be deleted and is still on this "
+              + "computer."
+            : $"{displayName} was removed, but its stored key could not be deleted \u2014 macOS did not "
+              + "allow it. It is still in your keychain, and adding {displayName} again will find it. "
+              + "Delete the \u201cCST Reader \u2014 AI provider\u201d entry in Keychain Access to clear it.";
+
     /// <summary>The word for a log line. Deliberately says nothing about the value.</summary>
     public string Describe() => State switch
     {

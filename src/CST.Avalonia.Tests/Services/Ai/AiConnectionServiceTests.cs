@@ -356,8 +356,16 @@ public class AiConnectionServiceTests
         }
         public bool Set(string connectionId, string name, string secret)
         { _byAccount[Account(connectionId, name)] = secret; return true; }
+        /// <summary>Accounts the OS will not delete — authorization is needed for that too. (#926)</summary>
+        internal HashSet<string> Undeletable { get; } = new(StringComparer.Ordinal);
+
         public bool Delete(string connectionId, string name)
-        { _byAccount.Remove(Account(connectionId, name)); return true; }
+        {
+            var account = Account(connectionId, name);
+            if (Undeletable.Contains(account)) return false;
+            _byAccount.Remove(account);
+            return true;
+        }
     }
 
     private static (AiConnectionService Service, Settings Settings, Keys Keys) MakeWithKeys()
@@ -448,6 +456,50 @@ public class AiConnectionServiceTests
         record.EnvironmentVariable = "BOX_API_KEY";
 
         Assert.Equal(CredentialSource.Unreadable, service.Connections.Single().KeySource);
+    }
+
+    /// <summary>
+    /// A credential the OS refuses to delete is reported, and the connection still goes. (#926)
+    ///
+    /// <para><b>Observed.</b> Deleting a connection said it worked, the key stayed in the keychain, and
+    /// adding the provider back walked straight into the orphan — the state <see cref="Remove"/>'s own
+    /// comment exists to prevent: one "nothing can ever reach or clean up", which "would be silently
+    /// re-adopted if someone later created a connection with the same id". Deleting a Keychain item needs
+    /// authorization, so it can be refused, and the return value was discarded.</para>
+    ///
+    /// <para><b>Ok stays true.</b> Removing the connection is a settings edit that cannot fail, and it is the
+    /// reader's to delete — refusing would trap them with a connection they no longer want. What changes is
+    /// that the leftover is named instead of hidden.</para>
+    /// </summary>
+    [Fact]
+    public void A_credential_that_cannot_be_deleted_is_reported_and_the_connection_still_goes()
+    {
+        var (service, settings, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+        keys.Undeletable.Add("box:" + AiCredentialNames.Primary);
+
+        var result = service.Remove("box");
+
+        Assert.True(result.Ok);                       // the connection is gone
+        Assert.Empty(settings.Ai.Chat.Connections);
+        Assert.NotNull(result.Problem);               // and the orphan is named
+        Assert.Equal("k", keys.Get("box", AiCredentialNames.Primary));
+    }
+
+    /// <summary>The ordinary path stays silent, so the report above is not simply always on.</summary>
+    [Fact]
+    public void A_removal_that_clears_its_credentials_reports_nothing()
+    {
+        var (service, _, keys) = MakeWithKeys();
+        service.Add("box", Draft());
+        keys.Set("box", AiCredentialNames.Primary, "k");
+
+        var result = service.Remove("box");
+
+        Assert.True(result.Ok);
+        Assert.Null(result.Problem);
+        Assert.Null(keys.Get("box", AiCredentialNames.Primary));
     }
 
     /// <summary>

@@ -445,7 +445,10 @@ namespace CST.Avalonia.ViewModels
         {
             if (_service is null) return;
             var result = _service.Remove(id);
-            Problem = result.Ok ? null : result.Problem;
+            // Not `result.Ok ? null : …` (#926). Remove can succeed and still have something the reader must
+            // know: the connection is gone, its key could not be deleted, and adding the provider back would
+            // find the orphan.
+            Problem = result.Problem;
         }
 
         /// <summary>
@@ -460,7 +463,9 @@ namespace CST.Avalonia.ViewModels
         internal void RemoveKey(string id)
         {
             if (_credentials is null) return;
-            _credentials.Delete(id, AiCredentialNames.Primary);
+            Problem = _credentials.Delete(id, AiCredentialNames.Primary)
+                ? null
+                : CredentialRead.RemovalRefused(id);
             Rebind();
         }
 

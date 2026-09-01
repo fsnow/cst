@@ -101,7 +101,15 @@ public class AiConnectionsViewModelTests
         }
         public bool Set(string connectionId, string name, string secret)
         { Keys[Account(connectionId, name)] = secret; return true; }
-        public bool Delete(string connectionId, string name) => Keys.Remove(Account(connectionId, name));
+        /// <summary>Accounts the OS will not delete. (#926)</summary>
+        public HashSet<string> Undeletable { get; } = new(StringComparer.Ordinal);
+
+        public bool Delete(string connectionId, string name)
+        {
+            var account = Account(connectionId, name);
+            if (Undeletable.Contains(account)) return false;
+            return Keys.Remove(account);
+        }
     }
 
     /// <summary>Adds a preset the way a reader does — open the sheet, fill it in, save. There is no
@@ -146,6 +154,41 @@ public class AiConnectionsViewModelTests
 
         Assert.Contains(vm.Connections, c => c.Id == "openrouter");
         Assert.DoesNotContain(vm.AvailablePresets, p => p.Id == "openrouter");
+    }
+
+    /// <summary>
+    /// Deleting a connection whose key the OS will not release says so. (#926)
+    ///
+    /// <para><b>The screen is where this failed.</b> The service reported the leftover with Ok=true, and this
+    /// view model dropped it — <c>Problem = result.Ok ? null : result.Problem</c> — so the reader saw a clean
+    /// removal, and adding the provider back walked into the orphan.</para>
+    /// </summary>
+    [Fact]
+    public void Deleting_a_connection_whose_key_survives_tells_the_reader()
+    {
+        var keys = new FakeCredentialStore();
+        var (vm, _) = Make(keys);
+        AddThroughSheet(vm, "openrouter");
+        keys.Undeletable.Add("openrouter:" + AiCredentialNames.Primary);
+
+        vm.Delete("openrouter");
+
+        Assert.True(vm.HasProblem);
+        Assert.Empty(vm.Connections);          // the connection still goes
+    }
+
+    /// <summary>And an ordinary delete stays quiet, so the above is not simply always on.</summary>
+    [Fact]
+    public void Deleting_a_connection_whose_key_goes_reports_nothing()
+    {
+        var keys = new FakeCredentialStore();
+        var (vm, _) = Make(keys);
+        AddThroughSheet(vm, "openrouter");
+
+        vm.Delete("openrouter");
+
+        Assert.False(vm.HasProblem);
+        Assert.Empty(vm.Connections);
     }
 
     /// <summary>Deleting puts it back, so the reader can undo an add without knowing the URL by heart.</summary>

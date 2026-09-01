@@ -101,9 +101,20 @@ namespace CST.Avalonia.Services.Ai
         /// <summary>Edits everything except the id, which is immutable because the credential is filed under it.</summary>
         AiConnectionResult Update(string id, AiConnectionDraft draft);
 
-        /// <summary>Removes the connection and its models. Does not touch the credential — that is a separate
-        /// action, because for a custom endpoint the hand-entered model list is real user work and destroying
-        /// it on an action meant only to stop billing would be data loss.</summary>
+        /// <summary>
+        /// Removes the connection, its models and <b>every credential it filed</b>.
+        ///
+        /// <para>This said "does not touch the credential — that is a separate action" and had not been true
+        /// for some time: leaving a secret behind orphans it in the OS store, where nothing can reach it and
+        /// a later connection taking the same id would silently adopt it. The implementation's own comment
+        /// says so. What remains true is the reasoning underneath — the hand-typed model list is real user
+        /// work — which is why "remove this key" and "delete this connection" are still two actions rather
+        /// than one.</para>
+        ///
+        /// <para><b>Can return Ok with a Problem</b> (#926). The connection is a settings edit and always
+        /// goes; deleting a credential needs authorization and can be refused, and the reader has to be told
+        /// which secrets were left behind.</para>
+        /// </summary>
         AiConnectionResult Remove(string id);
 
         /// <summary>Chooses what the next request uses. A null model clears the choice.</summary>
@@ -522,8 +533,14 @@ namespace CST.Avalonia.Services.Ai
             // EVERY name, not just the primary one (#759): a connection may file more than one secret, and an
             // orphan is invisible precisely because nothing reads it. This is the one place that has to know
             // the full set, so it is the one place to extend when a provider adds a name.
-            foreach (var name in CredentialNamesOf(record))
-                _credentials?.Delete(record.Id, name);
+            // The return values are checked, not discarded (#926). Deleting a Keychain item needs
+            // authorization, so this CAN fail - observed 2026-08-31, when removing a connection reported
+            // success and left its key behind, and adding the provider back walked into the orphan the
+            // comment above warns about. The connection still goes: that is a settings edit, it cannot fail,
+            // and it is the reader's to delete. What changes is that they are told what was left.
+            var leftBehind = CredentialNamesOf(record)
+                .Where(name => _credentials is not null && !_credentials.Delete(record.Id, name))
+                .ToList();
 
             // Do not leave the active pointer dangling at something that no longer exists - a stale id reads
             // as "configured" to anything that only checks for null.
@@ -535,7 +552,12 @@ namespace CST.Avalonia.Services.Ai
 
             _settings.RequestSave();
             RaiseChanged();
-            return new AiConnectionResult(true);
+
+            // Ok, WITH a problem: the removal happened and something about it needs saying. Callers that only
+            // check Ok are unchanged; the one screen that shows this reads Problem either way.
+            return leftBehind.Count > 0
+                ? new AiConnectionResult(true, CredentialRead.SecretsLeftBehind(record.DisplayName))
+                : new AiConnectionResult(true);
         }
 
         public AiConnectionResult SetActive(string connectionId, string? modelId)
