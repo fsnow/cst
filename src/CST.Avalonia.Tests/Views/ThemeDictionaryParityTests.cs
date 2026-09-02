@@ -11,11 +11,16 @@ namespace CST.Avalonia.Tests.Views;
 /// <summary>
 /// Every <c>{DynamicResource}</c> key the app names has to exist somewhere. (#955)
 ///
-/// <para>A DynamicResource that resolves to nothing does not throw, log, or fail a build. It sets the
-/// property to nothing, and the control keeps its default: an unset <c>Background</c> is transparent, an
-/// unset <c>BorderBrush</c> draws no edge, and an unset <c>Foreground</c> is <b>black</b>. On a light ground
-/// black is what secondary text nearly looks like anyway, so eleven WinUI brush names that no loaded theme
-/// defines went unnoticed for a year and surfaced only as "the small text is invisible in dark mode".</para>
+/// <para>A DynamicResource that resolves to nothing does not throw, log, or fail a build - and what it does
+/// instead depends on where it is written. <b>Inside a DataTemplate</b> it binds at
+/// <c>BindingPriority.Template</c>, where the miss yields the property's DEFAULT: an unset
+/// <c>Foreground</c> is then <b>black</b>. <b>Outside</b> one it publishes <c>UnsetValue</c> at
+/// <c>LocalValue</c>, and the property falls through to INHERITED - which usually looks right.</para>
+///
+/// <para>That split is why #955 read as one panel misbehaving. The Assistant's turn template went black on
+/// a dark ground while visually identical text a few lines above it, outside any template, inherited white
+/// and looked fine. On a light ground neither is noticeable, because black is what secondary text nearly
+/// looks like anyway - so the phantom keys went unremarked for a year.</para>
 ///
 /// <para>Two rules, and the first is the one that made #955 a dark-mode bug rather than an everywhere bug:
 /// #102 added six of these keys to the <c>Light</c> dictionary and left <c>Dark</c> empty, so the same
@@ -34,11 +39,15 @@ public class ThemeDictionaryParityTests
     /// Keys a loaded theme really does provide, so we must NOT define them - shadowing a live theme brush
     /// is how you get an app that ignores its own theme.
     ///
-    /// <para>The first five were measured resolving in a headless <c>FluentTheme</c> +
-    /// <c>DockFluentTheme</c> harness. The four <c>SystemAccentColor*</c> entries were NOT: the platform
-    /// supplies those at runtime and a headless process has no platform, so the harness cannot tell
-    /// "absent" from "absent here". They are trusted rather than verified, and that is the one hole in
-    /// this test.</para>
+    /// <para>The <c>SystemAccentColor*</c> keys are NOT platform-supplied, though an earlier version of this
+    /// comment said so. <c>FluentTheme</c> answers them itself through its <c>SystemAccentColors</c>
+    /// resource provider, falling back to a hard-coded <c>#0078D7</c> when there is no
+    /// <c>IPlatformSettings</c> - so they resolve in a headless process too. Defining them here would
+    /// shadow the user's real accent colour.</para>
+    ///
+    /// <para><c>ContentControlThemeFontFamily</c> is Fluent's own, from <c>Accents/BaseResources.xaml</c>.
+    /// It is listed because a probe that bound a <c>FontFamily</c> to an <c>IBrush</c> property once
+    /// reported it missing, and a working attribute was removed on the strength of that.</para>
     /// </summary>
     private static readonly HashSet<string> ProvidedByALoadedTheme = new(StringComparer.Ordinal)
     {
@@ -52,6 +61,8 @@ public class ThemeDictionaryParityTests
         "SystemAccentColorDark1",
         "SystemAccentColorLight2",
         "SystemAccentColorLight3",
+
+        "ContentControlThemeFontFamily",
     };
 
     /// <summary>Our own, declared in App.axaml outside the theme dictionaries.</summary>
@@ -70,8 +81,39 @@ public class ThemeDictionaryParityTests
                      dark.OrderBy(k => k, StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// A key repeated inside ONE dictionary is a startup crash, and comparing the two key sets does not
+    /// catch it: duplicate the same <c>x:Key</c> in both and the sets still match. The build stays clean
+    /// too - the XAML compiler emits the populate method without complaint, and
+    /// <c>ArgumentException: An item with the same key has already been added</c> is thrown when
+    /// <c>App.Initialize</c> runs it, which no test in this project reaches.
+    /// </summary>
     [Fact]
-    public void Every_dynamic_resource_key_the_markup_names_is_defined_somewhere()
+    public void Neither_theme_dictionary_defines_a_key_twice()
+    {
+        var (light, dark) = ThemeDictionaries();
+
+        foreach (var (variant, keys) in new[] { ("Light", light), ("Dark", dark) })
+        {
+            var repeated = keys.GroupBy(k => k, StringComparer.Ordinal)
+                               .Where(g => g.Count() > 1)
+                               .Select(g => $"{g.Key} ×{g.Count()}")
+                               .ToList();
+
+            Assert.True(repeated.Count == 0,
+                $"The {variant} dictionary defines a key more than once, which throws inside " +
+                $"App.Initialize before any window opens:\n  " + string.Join("\n  ", repeated));
+        }
+    }
+
+    /// <summary>
+    /// Markup and code both, because they fail identically and only one of them is obvious. A key renamed
+    /// everywhere except <c>ProviderLogoConverter</c>'s <c>TryGetResource</c> call would leave that lookup
+    /// returning false forever, and its fallback is good enough that nobody would notice - which is exactly
+    /// how the original defect hid for a year.
+    /// </summary>
+    [Fact]
+    public void Every_resource_key_the_app_names_is_defined_somewhere()
     {
         var (light, _) = ThemeDictionaries();
         var known = new HashSet<string>(light, StringComparer.Ordinal);
@@ -79,14 +121,10 @@ public class ThemeDictionaryParityTests
         known.UnionWith(OurNonThemedResources);
 
         var unresolved = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var file in Directory.EnumerateFiles(
-                     Path.Combine(RepoRoot(), "src", "CST.Avalonia"), "*.axaml", SearchOption.AllDirectories))
-        {
-            if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") ||
-                file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
-                continue;
 
-            foreach (Match m in Regex.Matches(File.ReadAllText(file), @"\{DynamicResource\s+([A-Za-z0-9_]+)\s*\}"))
+        void Collect(string file, string pattern)
+        {
+            foreach (Match m in Regex.Matches(File.ReadAllText(file), pattern))
             {
                 var key = m.Groups[1].Value;
                 if (known.Contains(key)) continue;
@@ -96,8 +134,21 @@ public class ThemeDictionaryParityTests
             }
         }
 
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepoRoot(), "src", "CST.Avalonia"), "*.*", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+                continue;
+
+            if (file.EndsWith(".axaml", StringComparison.Ordinal))
+                Collect(file, @"\{(?:Dynamic|Static)Resource\s+([A-Za-z0-9_]+)\s*\}");
+            else if (file.EndsWith(".cs", StringComparison.Ordinal))
+                Collect(file, @"(?:TryGetResource|TryFindResource|FindResource|GetResourceObservable)\(\s*""([A-Za-z0-9_]+)""");
+        }
+
         Assert.True(unresolved.Count == 0,
-            "These DynamicResource keys are defined by no loaded theme and by no dictionary of ours, so they " +
+            "These resource keys are defined by no loaded theme and by no dictionary of ours, so they " +
             "silently set nothing:\n  " +
             string.Join("\n  ", unresolved.Select(kv => $"{kv.Key} — {string.Join(", ", kv.Value)}")));
     }

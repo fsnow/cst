@@ -54,10 +54,16 @@
         <ResourceDictionary>
             <!-- These are OUR brushes, not Avalonia's. Every key below is a WinUI name that the call
                  sites were written against and that neither Avalonia 11.3.6's FluentTheme nor
-                 Dock.Avalonia.Themes.Fluent actually defines (#955). An unresolved DynamicResource sets
-                 nothing, so a Foreground fell back to TextBlock's default black - invisible on a dark
-                 ground, and indistinguishable from ordinary text on a light one, which is why it survived
-                 a year. Measured in a headless FluentTheme + DockFluentTheme harness, not read from
+                 Dock.Avalonia.Themes.Fluent actually defines (#955).
+
+                 What an unresolved DynamicResource does depends on WHERE it is written, which is why this
+                 presented as one panel misbehaving rather than as the whole app. Outside a template it
+                 publishes UnsetValue at LocalValue priority and the property falls through to INHERITED -
+                 so the composer's own labels stayed white in dark and looked fine. Inside a DataTemplate
+                 it binds at Template priority, where the miss yields the property DEFAULT - and
+                 TextBlock.Foreground defaults to black. The reported text was invisible because it lives
+                 in the Assistant's turn template; the visually identical text above it did not, and did
+                 not. Measured in a headless FluentTheme + DockFluentTheme harness, not read from
                  documentation.
 
                  Both dictionaries must define the SAME KEYS. The Dark one used to be empty, which is
@@ -89,7 +95,9 @@
                     <!-- Subtle border so inset content edges read against the grey -->
                     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#E6E6EC"/>
 
-                    <!-- Controls. Fluent: ChromeMediumLow for the filled ones. -->
+                    <!-- Controls. White rather than Fluent's ChromeMediumLow (#F2F2F2): these sit inside
+                         cards that are already #FFFFFF, and the #102 ladder puts content surfaces above
+                         chrome, not below. The Dark block below does use ChromeMediumLow. -->
                     <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#FFFFFFFF"/>
                     <SolidColorBrush x:Key="TextControlBackgroundBrush" Color="#FFFFFFFF"/>
                     <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FFFFFFFF"/>

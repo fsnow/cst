@@ -211,10 +211,7 @@
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="XML file"/>
                                     <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
-                                        <!-- No FontFamily: this used to name ContentControlThemeFontFamily, a key no loaded
-                                             theme defines (#955), so it always fell through to the default UI font -
-                                             which is what a file name wants anyway. -->
-                                        <SelectableTextBlock Text="{Binding XmlFileName}"/>
+                                        <SelectableTextBlock Text="{Binding XmlFileName}" FontFamily="{DynamicResource ContentControlThemeFontFamily}"/>
                                         <Button x:Name="copyXmlFileNameButton"
                                                 Margin="10,0,0,0" Padding="6,1" MinWidth="0"
                                                 ToolTip.Tip="Copy the file name">
