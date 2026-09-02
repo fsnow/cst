@@ -93,9 +93,10 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                     <ListBox.Styles>
-                        <!-- The selected category used SubtleFillColorSecondaryBrush, which is faint enough
-                             to be invisible in light mode - the panel gave no indication of which category
-                             was showing. Re-pointed at the SAME fixed Dock accent the book/tool tabs and the
+                        <!-- The selected category used SubtleFillColorSecondaryBrush and showed nothing at
+                             all - the panel gave no indication of which category was showing. Recorded here
+                             as "faint enough to be invisible"; it was not faint, it was ABSENT. That key did
+                             not exist in any loaded theme until #955 defined it, so the setter set nothing. Re-pointed at the SAME fixed Dock accent the book/tool tabs and the
                              Highlight/Footnotes toggles use, so "selected" reads identically everywhere
                              whatever the OS accent colour is. (#270 established this convention.) -->
                         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">

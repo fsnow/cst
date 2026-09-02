@@ -60,8 +60,9 @@
                                      Colours follow the convention #270 established: Dock's FIXED VS-Code
                                      blue, not the OS accent, so "selected" reads the same here as on the
                                      book/tool tabs and in the Settings category list whatever accent the OS
-                                     is set to. (The Settings list also records that
-                                     SubtleFillColorSecondaryBrush was too faint to see in light mode.)
+                                     is set to. (The Settings list reached the same convention from the
+                                     other end: SubtleFillColorSecondaryBrush painted nothing there, because
+                                     until #955 that key existed in no loaded theme.)
 
                                      Fluent paints TreeViewItem selection on Border#PART_LayoutRoot and
                                      colours the text through ContentPresenter#PART_HeaderPresenter. What
