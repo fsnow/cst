@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CST.Avalonia.Models;
@@ -21,6 +22,39 @@ namespace CST.Avalonia.Views
         public SettingsWindow()
         {
             InitializeComponent();
+        }
+
+        /// <summary>
+        /// Escape closes Settings, the way it already closes Go To and About. (#943)
+        ///
+        /// <para><b>Close, not cancel.</b> The other two windows get this from <c>IsCancel="True"</c> on a
+        /// button, which in Avalonia means only "Escape triggers this". That is honest for them - they are
+        /// confirm-or-cancel dialogs. Settings applies every change as it is made and has nothing to revert,
+        /// so a hidden cancel button here would read as an abandon-changes affordance that does not exist.
+        /// An explicit handler says what actually happens.</para>
+        ///
+        /// <para><b>Why nothing checks for an open dropdown.</b> Escape reaches this only if no child took
+        /// it: a routed event stops bubbling once it is handled, and a ComboBox with its list open handles
+        /// Escape to close the list. So the "do not close while a control is using Escape" requirement is
+        /// satisfied by the routing rather than by a test here, and a control that starts handling Escape
+        /// later is covered automatically.</para>
+        ///
+        /// <para><b>A TextBox is the open question.</b> Avalonia's TextBox is not expected to handle Escape,
+        /// so Escape while editing one should close the window - which is defensible here, because the edit
+        /// is already applied and this window has no commit step. NOT VERIFIED in the running app: Avalonia
+        /// does not publish its windows through the macOS Accessibility API, so the keystroke could not be
+        /// driven into the window from a script. Worth a human trying it in a text field and with a
+        /// dropdown open.</para>
+        /// </summary>
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+
+            if (!e.Handled && e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                Close();
+            }
         }
 
         /// <summary>

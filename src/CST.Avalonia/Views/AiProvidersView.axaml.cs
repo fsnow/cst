@@ -1,5 +1,9 @@
+using System;
 using System.ComponentModel;
+using System.Reactive;
+using System.Reactive.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
@@ -22,6 +26,40 @@ namespace CST.Avalonia.Views
         }
 
         private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+
+        /// <summary>
+        /// Escape cancels the connection sheet, and only then is allowed to reach the Settings window.
+        /// (#943, fable review)
+        ///
+        /// <para><b>The sheet is the one place in Settings that is NOT applied as you type.</b> Everything
+        /// else pushes straight through to the settings service; this is a draft, committed only by
+        /// <c>Save</c> - which is where <c>StoreKey</c> files the API key
+        /// (<c>AiConnectionEditorViewModel.Save</c>). The key box is focused the moment the sheet opens,
+        /// because pasting a key is the only reason it is open, so "focus in a TextBox with uncommitted
+        /// work" is the NORMAL state here rather than an edge case. Escape closing the whole window from
+        /// there would discard the pasted key silently.</para>
+        ///
+        /// <para><b>Why here rather than on the window, and why not <c>IsCancel</c>.</b> A bubbling key
+        /// event reaches this view before the window, so handling it here settles the innermost context
+        /// first - Escape cancels the sheet, a second Escape closes Settings, which is what the reader who
+        /// asked for this expects from VS Code. <c>IsCancel="True"</c> on the sheet's Cancel button would
+        /// NOT work: Avalonia runs class handlers before instance handlers at each element, and
+        /// <c>IsCancel</c> is an instance handler on the window root, so the window's own
+        /// <c>OnKeyDown</c> would close Settings first.</para>
+        /// </summary>
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+
+            if (e.Handled || e.Key != Key.Escape) return;
+            if (DataContext is not AiConnectionsViewModel { IsEditing: true } vm) return;
+
+            var cancel = vm.Editor?.CancelCommand;
+            if (cancel is null) return;
+
+            e.Handled = true;
+            cancel.Execute().Subscribe();
+        }
 
         private void OnDataContextChanged(object? sender, System.EventArgs e)
         {
