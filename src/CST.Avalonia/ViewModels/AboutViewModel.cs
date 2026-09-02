@@ -142,7 +142,14 @@ namespace CST.Avalonia.ViewModels
                 ["Microsoft.Data.Sqlite", "SQLitePCLRaw.bundle_e_sqlite3"]),
             new("Azure.Identity and Microsoft.Graph", "Reaching the source PDFs held on SharePoint.",
                 ["Azure.Identity", "Microsoft.Graph"]),
-            new("Tmds.DBus.Protocol", "Desktop integration on Linux.", ["Tmds.DBus.Protocol"]),
+            // Every other line here says what the library does FOR US. This one used to say "Desktop
+            // integration on Linux", which is true of the library and misleading about the app: we do no
+            // desktop integration, the direct PackageReference exists only as a security version pin
+            // (CST.Avalonia.csproj, GHSA-xrw6-gwf8-vvr9), and we do not ship Linux. It stays in the list
+            // because it really does ship - dropping a shipped dependency from an attribution list would
+            // be the worse error - but it now describes the relationship rather than the package. (#937)
+            new("Tmds.DBus.Protocol", "Avalonia's Linux desktop plumbing. Shipped with the app; unused on macOS and Windows.",
+                ["Tmds.DBus.Protocol"]),
             new("System.Security.Cryptography.ProtectedData", "Protecting stored API keys on Windows.",
                 ["System.Security.Cryptography.ProtectedData"]),
         ];

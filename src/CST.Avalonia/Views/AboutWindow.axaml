@@ -70,8 +70,15 @@
         </Border>
 
         <!-- ACKNOWLEDGEMENTS -->
-        <ScrollViewer Grid.Row="1" Padding="20,18" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Spacing="18">
+        <!-- The inset is a MARGIN on the content, not Padding on the ScrollViewer, and the difference is
+             the whole of the clipped-last-credit bug (#937). Measured: with Padding="20,18" the extent comes
+             out 36px SHORTER than the content rather than 36px longer, so the maximum scroll offset stops
+             short and the tail of the list can never be scrolled clear of the actions bar - the last credit
+             sat 54px below the viewport with the scrollbar already at the end. A margin on the content is
+             added to the extent, which is what you want. AiAssistantPanel.axaml reached the same conclusion
+             from its own symptom; this is the same trap on the other axis. -->
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="18" Margin="20,18">
 
                 <StackPanel Spacing="10">
                     <TextBlock Text="Texts and data" Classes="Heading"/>
@@ -122,8 +129,15 @@
                                VerticalAlignment="Center" IsVisible="False"/>
                 </StackPanel>
 
+                <!-- No MinWidth, so it sizes to "Close" exactly as the Copy button beside it sizes to its
+                     own label. MinWidth="88" caused both reported faults at once (#937): the button was
+                     wider than it needed, and Fluent leaves HorizontalContentAlignment at Stretch, so the
+                     content presenter filled the 88px and the glyphs sat at its left edge. Measured at 88px
+                     the text began 9px in and was stretched to 70px wide; unconstrained the button is 54px
+                     with 9px either side, which is what the Copy button does (145px, 9px either side).
+                     Fluent sets no MinWidth of its own, so nothing puts the width back. -->
                 <Button Grid.Column="2" Content="Close" IsDefault="True" IsCancel="True"
-                        MinWidth="88" Click="OnClose"/>
+                        Click="OnClose"/>
             </Grid>
         </Border>
     </Grid>
