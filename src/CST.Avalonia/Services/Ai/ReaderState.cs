@@ -239,7 +239,7 @@ public sealed class ReaderStateService : IReaderStateService
         {
             _logger.LogDebug(
                 "Reader state: {Count} active book windows, resolved to the last one focused ({Book})",
-                candidates.Count, chosen.Book?.FileName);
+                candidates.Count, chosen.Book.FileName);
             document = chosen;
         }
         else
