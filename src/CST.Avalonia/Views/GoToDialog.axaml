@@ -23,35 +23,55 @@
         <StackPanel Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Spacing="10" Margin="0,0,30,0">
             <TextBlock Text="Go To What:" FontSize="14" Margin="0,0,0,5"/>
 
+            <!-- Click, not the bound SelectedType, sends focus back to the number box (#844). Click is
+                 raised only by a deliberate activation - pointer release, Space, or Enter - so focus moves
+                 when the reader CHOOSES a system, never as a side effect of the selection changing for
+                 some other reason (the letter-shortcut path in the code-behind sets SelectedType itself,
+                 and refocuses on its own terms).
+
+                 An earlier version of this comment justified it by saying a property handler would fire
+                 while ARROWING between the radios and drag focus out of the group. That is WPF's
+                 behaviour, and it is false here twice over: Avalonia 11.3.6 leaves XYFocus.NavigationModes
+                 at Gamepad|Remote, so arrow keys do nothing in this dialog at all - traversal is Tab, one
+                 stop per radio - and Avalonia's RadioButton has no key handling and no focus-triggered
+                 check, so moving focus cannot change IsChecked in the first place. Measured in a headless
+                 harness, not reasoned. Tab does not check; Space and Enter do. -->
+
             <RadioButton Content="Paragraph"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=Paragraph}"
                          IsEnabled="{Binding IsParagraphAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="VRI Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=VriPage}"
                          IsEnabled="{Binding IsVriPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="Myanmar Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=MyanmarPage}"
                          IsEnabled="{Binding IsMyanmarPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="PTS Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=PtsPage}"
                          IsEnabled="{Binding IsPtsPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="Thai Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=ThaiPage}"
                          IsEnabled="{Binding IsThaiPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="Other Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=OtherPage}"
                          IsEnabled="{Binding IsOtherPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
         </StackPanel>
 
         <!-- Right Column: Number input and buttons -->

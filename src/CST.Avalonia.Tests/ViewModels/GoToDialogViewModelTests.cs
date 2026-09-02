@@ -1,3 +1,5 @@
+using System.Linq;
+using CST;
 using CST.Avalonia.ViewModels;
 using Xunit;
 
@@ -84,4 +86,42 @@ public class GoToDialogViewModelTests
     [InlineData("1645", "P1.1645")]
     public void BuildPageAnchor_PadsPageToFourDigits(string input, string expected)
         => Assert.Equal(expected, GoToDialogViewModel.BuildPageAnchor("P", input, "1.2"));
+
+    // ---- The preference actually reaches the dialog (#844) --------------------------------------------
+
+    /// <summary>
+    /// <see cref="PageNumbering.Resolve"/> is covered thoroughly in <c>PageNumberingTests</c>, and all of
+    /// that passes whether or not the dialog ever CALLS it. These two cover the one line that wires the
+    /// feature in — replacing <c>Resolve(preferred, editions)</c> with <c>Resolve(null, editions)</c> is a
+    /// mutation the pure-function tests cannot see.
+    ///
+    /// <para>A freshly constructed <see cref="BookDisplayViewModel"/> has not built its markers, so
+    /// <c>Editions</c> is null. That is not a limitation of the test — it is the state #457 was about, and
+    /// the two paths give visibly different answers in it: <c>DefaultType(null)</c> is Paragraph, while a
+    /// preference is honoured because <c>Has(null, …)</c> answers "available". So Paragraph here means the
+    /// preference was dropped.</para>
+    /// </summary>
+    private static BookDisplayViewModel AnyBook()
+    {
+        ReactiveUiTestInit.Ensure();
+        var book = Books.Inst?.FirstOrDefault();
+        Assert.NotNull(book);
+        return new BookDisplayViewModel(book!);
+    }
+
+    [Fact]
+    public void Opens_On_The_Remembered_System()
+    {
+        var dialog = new GoToDialogViewModel(AnyBook(), NavigationType.PtsPage);
+
+        Assert.Equal(NavigationType.PtsPage, dialog.SelectedType);
+    }
+
+    [Fact]
+    public void Opens_On_The_Books_Default_When_Nothing_Is_Remembered()
+    {
+        var dialog = new GoToDialogViewModel(AnyBook());
+
+        Assert.Equal(NavigationType.Paragraph, dialog.SelectedType);
+    }
 }

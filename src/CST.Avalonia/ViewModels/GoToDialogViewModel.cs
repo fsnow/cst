@@ -29,7 +29,12 @@ namespace CST.Avalonia.ViewModels
         private bool _isThaiPageAvailable;
         private bool _isOtherPageAvailable;
 
-        public GoToDialogViewModel(BookDisplayViewModel bookViewModel)
+        /// <param name="preferred">
+        /// The numbering system the reader last navigated with, or null if they never have. Honoured when
+        /// this book carries it and ignored when it does not — see <see cref="PageNumbering.Resolve"/>. The
+        /// dialog does not persist it; the caller does, and only when the reader presses OK. (#844)
+        /// </param>
+        public GoToDialogViewModel(BookDisplayViewModel bookViewModel, NavigationType? preferred = null)
         {
             _logger = Log.ForContext<GoToDialogViewModel>();
             _book = bookViewModel.Book;
@@ -53,9 +58,10 @@ namespace CST.Avalonia.ViewModels
             IsThaiPageAvailable = PageNumbering.Has(editions, PageEdition.Thai);
             IsOtherPageAvailable = PageNumbering.Has(editions, PageEdition.Other);
 
-            // Open on a system the book actually has. Paragraph was hardcoded, and it is the weakest address
-            // available - ambiguous in 102 of 217 books because numbering restarts per sub-book (#447, #596).
-            SelectedType = PageNumbering.DefaultType(editions);
+            // Open on what the reader last used, when this book has it; otherwise on a system the book
+            // actually has. Paragraph was hardcoded, and it is the weakest address available - ambiguous in
+            // 102 of 217 books because numbering restarts per sub-book (#447, #596). (#844)
+            SelectedType = PageNumbering.Resolve(preferred, editions);
 
             _logger.Information("GoToDialog initialized for book: {Book}, Available pages: V={V}, M={M}, P={P}, T={T}, O={O}, default={Default}",
                 _book.FileName, IsVriPageAvailable, IsMyanmarPageAvailable, IsPtsPageAvailable, IsThaiPageAvailable, IsOtherPageAvailable, SelectedType);

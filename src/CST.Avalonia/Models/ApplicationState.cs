@@ -49,6 +49,27 @@ public class ApplicationState
     /// first set; empty restores the default (Select a Book). (#91)</summary>
     public string ActiveLeftToolId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The numbering system the reader last used in Go To — a <c>NavigationType</c> name, or empty if they
+    /// have never chosen. (#844)
+    ///
+    /// <para>Written when the reader presses OK with a well-formed number - never when the dialog merely
+    /// opens, and never on cancel. That includes a system the dialog fell back to because this book lacks
+    /// the reader's: pressing OK means a page number was typed in that system, which is a use.
+    /// <b>[fsnow]:</b> <i>"'the dialog opened on something and you pressed OK'. That's not a thing. You
+    /// wouldn't use a numbering system just because it opened to it."</i>
+    /// <see cref="ViewModels.PageNumbering.Resolve"/> holds the other half - it picks what to show, and
+    /// cannot write anything.</para>
+    ///
+    /// <para><b>Not "when navigation succeeds"</b>, though an earlier comment here said so: navigation is
+    /// an event that runs JS which swallows a missing anchor, so success is not observable from C# at all.
+    /// The gate is the reader's intent, which is the honest thing to record anyway.</para>
+    ///
+    /// <para>The name rather than the enum's number, because the number is positional and this file
+    /// outlives builds; an inserted enum member would silently re-point every saved preference.</para>
+    /// </summary>
+    public string PreferredGoToNumbering { get; set; } = string.Empty;
+
     // Open Book Dialog State  
     public OpenBookDialogState OpenBookDialog { get; set; } = new();
 
