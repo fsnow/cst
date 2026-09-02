@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -53,6 +54,32 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
     private DictionaryEntryViewModel? _selectedWord;
     private string _meaningDocumentHtml = "";
     private string _attribution = "";
+    /// <summary>
+    /// A headword the next completed lookup should select instead of auto-selecting the first match, then
+    /// forget. (#935)
+    ///
+    /// <para>One-shot because the restore has to BEAT the auto-select, not race it: <c>ApplyState</c> sets
+    /// <see cref="SearchText"/>, which schedules a throttled lookup, and that lookup's completion is what
+    /// assigns <see cref="SelectedWord"/>. Assigning it from <c>ApplyState</c> would simply be overwritten.
+    /// Consumed by the operation that would otherwise clobber it - the same shape as #919's tool-tab
+    /// restore - so a later lookup the reader actually asks for is never hijacked.</para>
+    /// </summary>
+    private string? _pendingSelectedHeadword;
+
+    /// <summary>
+    /// The query <see cref="_pendingSelectedHeadword"/> belongs to. (#935, fable review)
+    ///
+    /// <para>Without it the pending selection could steer a lookup the reader asked for, which is exactly
+    /// what its own comment promises will never happen. The restore lookup can be discarded by the
+    /// stale-completion guard - a cold SQLite open at startup easily outlives 300ms - and that guard returns
+    /// BEFORE the pending value is consumed, leaving it armed for whatever the reader types next.</para>
+    ///
+    /// <para>Not simply "clear it on a stale completion": the construction-time empty-query lookup can
+    /// complete AFTER ApplyState, and the guard discarding that one is what protects the restore. Matching
+    /// on the query distinguishes the two.</para>
+    /// </summary>
+    private string? _pendingSelectedFor;
+
     private bool _canGoBack;
     private bool _canGoForward;
 
@@ -107,6 +134,17 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         // Rebuild the meaning display whenever the selected headword changes.
         this.WhenAnyValue(x => x.SelectedWord)
             .Subscribe(_ => UpdateMeaning())
+            .DisposeWith(_disposables);
+
+        // Remember WHICH match was selected, not just the search text (#935). Skip(1) ignores the
+        // construction-time null; MarkDirty defers the write to the timer/shutdown save (STATE-2).
+        this.WhenAnyValue(x => x.SelectedWord)
+            .Skip(1)
+            .Subscribe(word =>
+            {
+                _stateService.Current.DictionaryDialog.SelectedHeadword = word?.DisplayWord ?? string.Empty;
+                _stateService.MarkDirty();
+            })
             .DisposeWith(_disposables);
 
         // Per-source attribution line, refreshed when the source changes (initial value included — no Skip).
@@ -222,8 +260,16 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         // #91: restore the last looked-up word too (the parallel to the Search pane's #87 term restore).
         // Setting SearchText triggers the throttled lookup, so the last definition reappears on launch.
         var savedText = _stateService.Current.DictionaryDialog.UserText;
-        if (!string.IsNullOrEmpty(savedText))
-            SearchText = savedText;
+        if (string.IsNullOrEmpty(savedText)) return;
+
+        // Armed BEFORE SearchText, because assigning that is what schedules the lookup whose completion
+        // consumes it - and armed only alongside a query, so a saved selection with no saved text cannot sit
+        // waiting for the reader's first lookup. (#935)
+        var savedWord = _stateService.Current.DictionaryDialog.SelectedHeadword;
+        _pendingSelectedHeadword = string.IsNullOrEmpty(savedWord) ? null : savedWord;
+        _pendingSelectedFor = savedText;
+
+        SearchText = savedText;
     }
 
     /// <summary>The enabled dictionary sources for the picker (shown by <c>DisplayName</c>), in the user's
@@ -346,14 +392,80 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
                 foreach (var e in results)
                     Words.Add(new DictionaryEntryViewModel(e));
 
-                // Auto-select the best (first) match so the definition shows immediately, like CST4.
-                SelectedWord = Words.FirstOrDefault();
+                // Auto-select the best (first) match so the definition shows immediately, like CST4 - unless
+                // a restore asked for a particular one (#935). Honoured only for the query it was armed
+                // with, and consumed either way, so it can neither be spent on a different lookup nor
+                // outlive the one it belongs to.
+                var wanted = string.Equals(query, _pendingSelectedFor, StringComparison.Ordinal)
+                    ? _pendingSelectedHeadword
+                    : null;
+                _pendingSelectedHeadword = null;
+                _pendingSelectedFor = null;
+
+                SelectedWord = ChooseSelection(wanted, Words);
             });
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Source})", query, source?.Id);
         }
+    }
+
+    /// <summary>
+    /// Which entry a completed lookup should select: the remembered headword when the results still contain
+    /// it, otherwise the first match. (#935)
+    ///
+    /// <para>The fallback is not a failure mode - it is exactly what a lookup did before this existed, and
+    /// it is reached whenever a source has been updated between sessions or the matcher has changed (#933
+    /// changed it once already).</para>
+    ///
+    /// <para>Compared through IPE rather than as text, because a headword is rendered in whichever script
+    /// was current when it was saved. A reader who switches script between sessions would otherwise never
+    /// match their own selection.</para>
+    ///
+    /// <para>Static and free of view-model state so the decision is testable; the caller owns the one-shot
+    /// bookkeeping that makes it apply to a restore only.</para>
+    /// </summary>
+    internal static DictionaryEntryViewModel? ChooseSelection(
+        string? wantedHeadword, IReadOnlyList<DictionaryEntryViewModel> words)
+    {
+        if (words.Count == 0) return null;
+        if (string.IsNullOrEmpty(wantedHeadword)) return words[0];
+
+        var wanted = MatchKey(wantedHeadword);
+        return words.FirstOrDefault(
+                   w => string.Equals(MatchKey(w.DisplayWord), wanted, StringComparison.Ordinal))
+               ?? words[0];
+    }
+
+    /// <summary>
+    /// The comparison key for a displayed headword. (#935, fable review)
+    ///
+    /// <para><b>Digits are folded to ASCII, and that is the whole reason this is not a bare
+    /// <c>Any2Ipe.Convert</c>.</b> DPPN distinguishes its homographs by NUMBER - "Nālandā 1", "Nālandā 2",
+    /// "Nālandāsutta 1" - which is exactly the case #935 was filed about. The display pipeline converts
+    /// those digits into the reading script, and IPE carries a Devanāgarī digit through unchanged while a
+    /// Latin one stays ASCII. Measured: the key differs in 11 of the 14 scripts, so a reader who selected
+    /// "Nālandāsutta 1" in Devanāgarī and reopened in Latin silently got the first match instead.</para>
+    ///
+    /// <para>And the miss was not merely transient: the new selection is written straight back to state, so
+    /// a failed match REPLACED the remembered one for good.</para>
+    ///
+    /// <para>Folding by numeric value rather than by codepoint range, so this holds for any script whose
+    /// digits the converters learn to emit later.</para>
+    /// </summary>
+    private static string MatchKey(string headword)
+    {
+        var folded = string.Create(headword.Length, headword, static (span, source) =>
+        {
+            for (int i = 0; i < source.Length; i++)
+            {
+                int digit = CharUnicodeInfo.GetDecimalDigitValue(source[i]);
+                span[i] = digit >= 0 ? (char)('0' + digit) : source[i];
+            }
+        });
+
+        return Any2Ipe.Convert(folded.ToLowerInvariant());
     }
 
     private void UpdateMeaning()
