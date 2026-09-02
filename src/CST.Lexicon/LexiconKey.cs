@@ -73,5 +73,21 @@ namespace CST.Lexicon
             string.IsNullOrEmpty(query)
                 ? string.Empty
                 : Any2Ipe.Convert(StripJoiners(query).ToLowerInvariant().Normalize(NormalizationForm.FormC));
+
+        /// <summary>
+        /// IPE <c>ḷ</c> (U+00E9) read as <c>l</c> (U+00E5), for MATCHING ONLY. (#933)
+        ///
+        /// <para><b>Not a claim that they are the same letter.</b> They are distinct phonemes in Pāli. What
+        /// this reconciles is two editorial traditions: DPPN follows Malalasekera's PTS spelling while the
+        /// corpus and DPD follow the Burmese/CST one, and the corpus itself disagrees - नाळन्द… occurs 102
+        /// times against नालन्द…'s 24. Applied to a query and to a key alike, so it works in both
+        /// directions.</para>
+        ///
+        /// <para>Lives here, beside <see cref="DeriveKey"/>, because two lookups need it - this library's
+        /// <c>LexiconReader</c> and the flat-file <c>DictionaryIndex</c> - and a rule about WHICH codepoints
+        /// fold is exactly the kind that drifts once it is written down twice. There is no combined ḷh
+        /// codepoint in IPE, so a single-character replacement covers ḷh as well.</para>
+        /// </summary>
+        public static string FoldRetroflexL(string ipe) => ipe.Replace('\u00E9', '\u00E5');
     }
 }
