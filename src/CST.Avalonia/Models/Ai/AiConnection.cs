@@ -209,6 +209,30 @@ namespace CST.Avalonia.Models.Ai
         /// </summary>
         public bool IsSecretInput(string key) =>
             SecretInputs is { } keys && keys.Contains(key, System.StringComparer.Ordinal);
+
+        /// <summary>
+        /// Which catalogue preset this connection came from, or null when it did not come from one. (#766)
+        ///
+        /// <para><b>Never guessed from <see cref="Id"/> where the answer is recorded.</b> A reader's own slug
+        /// can collide with a provider a later catalogue adds, and asking the preset table for it then
+        /// answers about a provider this connection has nothing to do with — wrong logo, wrong docs, and in
+        /// the model picker a "no API key stored" verdict that DISABLES a keyless endpoint that works.</para>
+        ///
+        /// <list type="bullet">
+        /// <item>A recorded preset id: that preset. The mark follows the provider, so a renamed connection
+        /// keeps it.</item>
+        /// <item>Recorded as custom (empty): null, and no lookup attempted — we KNOW there is no provider
+        /// behind it.</item>
+        /// <item>Nothing recorded: the id, which is the same answer for every connection a settings file
+        /// older than the field can hold.</item>
+        /// </list>
+        /// </summary>
+        public string? PresetIdOrLegacyId => PresetId switch
+        {
+            { Length: > 0 } preset => preset,
+            { } => null,
+            null => Id,
+        };
     }
 
     /// <summary>

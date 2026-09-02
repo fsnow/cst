@@ -56,8 +56,45 @@ public class ModelsDevCatalogTests : IDisposable
     private static HttpResponseMessage Ok(string body) =>
         new(HttpStatusCode.OK) { Content = new StringContent(body) };
 
-    private ModelsDevCatalog Make(HttpClient? http = null) =>
-        new(http ?? new HttpClient(new Stub(() => Ok(TwoProviders))), CachePath, "https://example.invalid/api.json");
+    // minimumProviders: 1 so the fixtures can stay two providers wide and readable. The floor's own
+    // behaviour is tested by passing a real one — see the cache-floor tests below. (R4-5)
+    private ModelsDevCatalog Make(HttpClient? http = null, int minimumProviders = 1) =>
+        new(http ?? new HttpClient(new Stub(() => Ok(TwoProviders))), CachePath,
+            "https://example.invalid/api.json", minimumProviders);
+
+    /// <summary>
+    /// The plausibility floor guarded only the network path; a sub-floor file on disk was served as the
+    /// catalogue. (R4-5)
+    ///
+    /// <para>A hand-edited or externally truncated <c>models-dev.json</c> then became the provider list with
+    /// no problem reported — <c>AiPresetSource</c>'s collapse guard fires only at zero hosted providers, and
+    /// one is enough to clear it. Permanent while offline, self-healing only after a successful refetch.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_cache_with_implausibly_few_providers_is_not_served()
+    {
+        File.WriteAllText(CachePath, TwoProviders);
+
+        // Offline, so the cache is the only thing that could answer.
+        var offline = new HttpClient(new Stub(() => throw new HttpRequestException("offline")));
+        var result = await Make(offline, minimumProviders: 50).GetAsync();
+
+        Assert.NotEqual(CatalogSource.Cache, result.Source);
+        Assert.False(File.Exists(CachePath));   // discarded, so a later refetch can heal it
+    }
+
+    /// <summary>And a cache that clears the floor is still preferred — the rule is a floor, not a
+    /// rejection of caches.</summary>
+    [Fact]
+    public async Task A_cache_that_clears_the_floor_is_still_served()
+    {
+        File.WriteAllText(CachePath, TwoProviders);
+
+        var offline = new HttpClient(new Stub(() => throw new HttpRequestException("offline")));
+        var result = await Make(offline, minimumProviders: 2).GetAsync();
+
+        Assert.Equal(CatalogSource.Cache, result.Source);
+    }
 
     // ---- the floor ------------------------------------------------------------------------------------
 
@@ -201,7 +238,11 @@ public class ModelsDevCatalogTests : IDisposable
     public async Task An_error_body_that_is_valid_json_does_not_replace_the_cache()
     {
         File.WriteAllText(CachePath, TwoProviders);
-        var catalog = Make(Client(() => Ok("""{"error":{"id":"rate_limited","message":"slow down"}}"""), out _));
+
+        // An explicit floor, because this test IS the floor: the error body parses to one record, so it
+        // clears the harness default of 1 and would be accepted. (R4-5)
+        var catalog = Make(Client(() => Ok("""{"error":{"id":"rate_limited","message":"slow down"}}"""), out _),
+                           minimumProviders: 2);
 
         await catalog.RefreshAsync(force: true);
         var result = await catalog.GetAsync();

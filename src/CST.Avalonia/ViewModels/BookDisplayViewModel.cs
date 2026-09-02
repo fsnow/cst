@@ -117,6 +117,18 @@ namespace CST.Avalonia.ViewModels
         private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
         private WebViewState? _savedWebViewState = null; // Saved state during float/unfloat
         private readonly CstDockFactory? _dockFactory; // Factory for float/unfloat operations
+        /// <summary>
+        /// Guards the three restoration-intent fields below. (R8-5)
+        ///
+        /// <para><c>UpdateLastCapturedAnchor</c> runs on the CEF thread (via <c>OnTitleChanged</c>) while the
+        /// <c>TakePending*</c> consumers run on the UI thread. Reference assignment is atomic and the current
+        /// UI-post orderings make a lost restore unlikely — the pending intent is consumed before any
+        /// changed-anchor report can clear it — but nothing ENFORCED that, so BOOK-7's take-vs-clear race was
+        /// prevented by timing rather than by construction. The critical sections are field reads and writes
+        /// only, so this cannot change single-threaded behaviour.</para>
+        /// </summary>
+        private readonly object _anchorGate = new();
+
         private string? _lastCapturedAnchor = null; // Cached anchor for scroll position restoration (persists across float/unfloat)
         private string? _pendingAnchorNavigation = null; // Anchor to navigate to when View becomes available
         private ReadingPositionToken? _pendingPositionToken = null; // #434 reading-position token to restore when the View becomes available (preferred over the coarse string anchor)
@@ -307,7 +319,7 @@ namespace CST.Avalonia.ViewModels
                         // of a 1000ms delay-then-hope timer racing the load. (BOOK-7)
                         if (savedToken != null)
                         {
-                            _pendingPositionToken = savedToken;
+                            lock (_anchorGate) _pendingPositionToken = savedToken;
                             _logger.Debug("Queued reading-position token restore");
                         }
                         await LoadBookContentAsync();
@@ -568,7 +580,7 @@ namespace CST.Avalonia.ViewModels
         /// Gets the last captured anchor for scroll position restoration.
         /// Updated every 200ms by the scroll timer, persists across float/unfloat.
         /// </summary>
-        public string? LastCapturedAnchor => _lastCapturedAnchor;
+        public string? LastCapturedAnchor { get { lock (_anchorGate) return _lastCapturedAnchor; } }
 
         // Latest rolling reading-position token, pushed from the View's status tick; persisted on shutdown for
         // cross-run restore (#434). Preferred over LastCapturedAnchor when present.
@@ -586,6 +598,8 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         public void UpdateLastCapturedAnchor(string? anchor)
         {
+            lock (_anchorGate)
+            {
             var previous = _lastCapturedAnchor;
             _lastCapturedAnchor = anchor;
 
@@ -611,6 +625,7 @@ namespace CST.Avalonia.ViewModels
                     _pendingPositionToken = null;
                 }
             }
+            }
         }
 
         /// <summary>
@@ -622,9 +637,12 @@ namespace CST.Avalonia.ViewModels
         /// </summary>
         internal string? TakePendingAnchorNavigation()
         {
-            var anchor = _pendingAnchorNavigation;
-            _pendingAnchorNavigation = null;
-            return anchor;
+            lock (_anchorGate)
+            {
+                var anchor = _pendingAnchorNavigation;
+                _pendingAnchorNavigation = null;
+                return anchor;
+            }
         }
 
         // Take (and clear) the queued #434 reading-position token. Preferred over the string anchor when both
@@ -632,15 +650,21 @@ namespace CST.Avalonia.ViewModels
         // than an anchor's top edge. (#434)
         internal ReadingPositionToken? TakePendingPositionToken()
         {
-            var token = _pendingPositionToken;
-            _pendingPositionToken = null;
-            return token;
+            lock (_anchorGate)
+            {
+                var token = _pendingPositionToken;
+                _pendingPositionToken = null;
+                return token;
+            }
         }
 
         // Queue a reading-position token to restore when the View next becomes available. Used when a
         // cross-window drag rebuilds this book's View with a fresh browser (#458): the VM instance is
         // preserved, so seeding the pending token lands the fresh View where the user was reading. (#434)
-        internal void QueuePositionRestore(ReadingPositionToken token) => _pendingPositionToken = token;
+        internal void QueuePositionRestore(ReadingPositionToken token)
+        {
+            lock (_anchorGate) _pendingPositionToken = token;
+        }
 
         internal int? TakePendingHitNavigation()
         {
@@ -944,13 +968,13 @@ namespace CST.Avalonia.ViewModels
                 if (_initialPositionToken != null && !restoreSearchHit)
                 {
                     // #434 cross-run restore: prefer the exact reading-position token over the coarse anchor.
-                    _pendingPositionToken = _initialPositionToken;
+                    lock (_anchorGate) _pendingPositionToken = _initialPositionToken;
                     _logger.Debug("Queued initial reading-position token restore (above={Above}, below={Below})",
                         _initialPositionToken.Above, _initialPositionToken.Below);
                 }
                 else if (!string.IsNullOrEmpty(_initialAnchor) && !restoreSearchHit)
                 {
-                    _pendingAnchorNavigation = _initialAnchor;
+                    lock (_anchorGate) _pendingAnchorNavigation = _initialAnchor;
                     _logger.Debug("Queued initial anchor navigation: {Anchor}", _initialAnchor);
                 }
                 else if (_searchTerms?.Any() == true)
@@ -1326,6 +1350,25 @@ namespace CST.Avalonia.ViewModels
         }
 
         /// <summary>
+        /// Whether <paramref name="pos"/> sits between a &lt; and its matching &gt; — i.e. inside a tag rather
+        /// than in text. (R8-6)
+        ///
+        /// <para>Scans back to the nearest angle bracket of each kind: a "&lt;" nearer than any "&gt;" means the
+        /// last thing opened has not closed, so this position is inside markup. Bounded in practice by the
+        /// distance to the previous tag, which in TEI is short.</para>
+        /// </summary>
+        internal static bool IsInsideTag(string xml, int pos)
+        {
+            if (pos <= 0 || pos > xml.Length) return false;
+
+            int lastOpen = xml.LastIndexOf('<', Math.Min(pos, xml.Length - 1));
+            if (lastOpen < 0) return false;
+
+            int lastClose = xml.LastIndexOf('>', Math.Min(pos, xml.Length - 1));
+            return lastOpen > lastClose;
+        }
+
+        /// <summary>
         /// Apply highlighting using pre-computed TermPosition objects with IsFirstTerm flags (for phrase/proximity search)
         /// </summary>
         private string ApplyHighlightingFromPositions(string xmlContent)
@@ -1350,6 +1393,23 @@ namespace CST.Avalonia.ViewModels
                     {
                         Log.Warning("[BookDisplay] Invalid offset range: {Start}-{End} (xml length: {Length})",
                             startOffset, endOffset, xmlContent.Length);
+                        continue;
+                    }
+
+                    // In range is not the same as in TEXT. An offset from an index that is stale relative to
+                    // the file on disk - the corpus updated after the last incremental pass - lands wherever
+                    // the old byte count put it, and splicing <hi> into the middle of "<p n=331>" makes the
+                    // whole document malformed. LoadXml then throws and the reader gets "Error loading book"
+                    // for a book that opens fine without a search. Skipping the one highlight degrades
+                    // honestly instead. (R8-6)
+                    //
+                    // Testing the ENDPOINTS, not the span: a highlight legitimately contains whole tags, and
+                    // the <hi>-crossing cases below exist to handle exactly that.
+                    if (IsInsideTag(xmlContent, startOffset) || IsInsideTag(xmlContent, endOffset))
+                    {
+                        Log.Warning("[BookDisplay] Skipping a highlight whose offsets land inside markup: " +
+                                    "{Start}-{End}. The search index is likely stale for this book (R8-6)",
+                            startOffset, endOffset);
                         continue;
                     }
 
