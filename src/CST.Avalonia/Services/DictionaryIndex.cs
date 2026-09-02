@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CST.Avalonia.Models;
+using CST.Lexicon;
 
 namespace CST.Avalonia.Services;
 
@@ -35,7 +36,14 @@ public sealed class DictionaryIndex
         _words.Sort(DictionaryWordComparer.Instance);
 
         _lFolded = _words.Select(w => (Key: FoldL(w.Word), Word: w)).ToList();
-        _lFolded.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
+        // Tiebreak on the UNFOLDED headword: List.Sort is unstable, and real folding pairs exist (Koḷa/Kola,
+        // Nāḷika/Nālika), so without this the order of a mixed run - and therefore which entry the pane
+        // auto-selects - would depend on build order. (fable review)
+        _lFolded.Sort((a, b) =>
+        {
+            int byKey = string.CompareOrdinal(a.Key, b.Key);
+            return byKey != 0 ? byKey : string.CompareOrdinal(a.Word.Word, b.Word.Word);
+        });
     }
 
     /// <summary>
@@ -50,7 +58,7 @@ public sealed class DictionaryIndex
     /// <para>Applied to the query and to the index key alike, so it works in both directions: a query
     /// spelled with <c>ḷ</c> reaches an <c>l</c> headword and the reverse.</para>
     /// </summary>
-    internal static string FoldL(string ipe) => ipe.Replace('\u00E9', '\u00E5');
+    internal static string FoldL(string ipe) => LexiconKey.FoldRetroflexL(ipe);
 
     public int Count => _words.Count;
 

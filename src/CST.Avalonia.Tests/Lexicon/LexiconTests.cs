@@ -41,6 +41,78 @@ namespace CST.Avalonia.Tests.Lexicon
             return LexiconReader.Open(path);
         }
 
+        // ---- ḷ/l folding on a miss (#933) ----
+
+        /// <summary>
+        /// The reported case, through the class DPPN is actually read with.
+        ///
+        /// <para>DPPN follows Malalasekera's PTS spelling (plain l); the corpus spells the same name with ḷ
+        /// in 102 of its 126 occurrences, so four clicks in five missed. The query is the INFLECTED
+        /// <c>nāḷandaṃ</c>, which has no entry — it can only be reached through the near-neighbour guess,
+        /// and the decoys are the real neighbours: <c>nāḷandaṃ</c> shares "nāḷ" with Nāḷika but "nāland"
+        /// with Nālandā once folded.</para>
+        ///
+        /// <para>This test exists because the first fix for #933 was applied to <c>DictionaryIndex</c>,
+        /// which serves only the flat-file dictionaries. It passed its own tests and left DPPN — the
+        /// dictionary in the report — exactly as broken as before.</para>
+        /// </summary>
+        [Fact]
+        public void An_inflected_query_crosses_the_l_spelling_difference()
+        {
+            var lex = Build(
+                new RawEntry("N\u0101\u1E37ika", "<p>A measure.</p>"),
+                new RawEntry("N\u0101\u1E37ikera", "<p>A coconut.</p>"),
+                new RawEntry("N\u0101land\u0101 1", "<p>A town.</p>"),
+                new RawEntry("N\u0101land\u0101sutta 1", "<p>A discourse.</p>"));
+
+            var hits = lex.Lookup("n\u0101\u1E37anda\u1E43");
+
+            Assert.Equal(
+                new[] { "N\u0101land\u0101 1", "N\u0101land\u0101sutta 1" },
+                hits.Select(h => h.Headword).ToArray());
+        }
+
+        /// <summary>An exact spelling wins every tie, so a word genuinely spelled with ḷ finds itself rather
+        /// than being dragged to a plain-l neighbour. Folding can only lengthen a common prefix, never
+        /// shorten one, which is why "strictly further" is the right test.</summary>
+        [Fact]
+        public void A_word_really_spelled_with_retroflex_l_still_finds_itself()
+        {
+            var lex = Build(
+                new RawEntry("N\u0101\u1E37ika", "<p>A measure.</p>"),
+                new RawEntry("N\u0101land\u0101 1", "<p>A town.</p>"));
+
+            Assert.Equal(new[] { "N\u0101\u1E37ika" },
+                lex.Lookup("n\u0101\u1E37ika").Select(h => h.Headword).ToArray());
+        }
+
+        /// <summary>
+        /// The fold must be decided before <paramref name="max"/> truncates anything.
+        ///
+        /// <para>Both near-neighbour arms return as soon as the bound is reached, so a fold applied after
+        /// them is skipped for exactly the queries whose unfolded guess is already crowded. Found by probing
+        /// the real dictionary at max=6, where <c>upāḷinā</c> filled the bound with unrelated
+        /// <c>upādāna…</c> entries and never reached the fold.</para>
+        /// </summary>
+        [Fact]
+        public void The_bound_does_not_suppress_the_fold()
+        {
+            var lex = Build(
+                new RawEntry("Up\u0101d\u0101nasutta 1", "<p>A discourse.</p>"),
+                new RawEntry("Up\u0101d\u0101nasutta 2", "<p>A discourse.</p>"),
+                new RawEntry("Up\u0101li 1", "<p>An elder.</p>"),
+                new RawEntry("Up\u0101lig\u0101th\u0101", "<p>Verses.</p>"));
+
+            // Unfolded, the two upādāna entries tie at "upā" and would fill a bound of 2 on their own. Both
+            // Upāli entries tie at "upāli" once folded, so the bound admits exactly those two - the point
+            // being that the fold decided the run at all, not which of its members survived the bound.
+            var hits = lex.Lookup("up\u0101\u1E37in\u0101", max: 2);
+
+            Assert.Equal(
+                new[] { "Up\u0101li 1", "Up\u0101lig\u0101th\u0101" },
+                hits.Select(h => h.Headword).ToArray());
+        }
+
         // ---- key derivation ----
 
         [Fact]

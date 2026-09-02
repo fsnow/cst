@@ -115,6 +115,24 @@ namespace CST.Lexicon
             int commonBehind = lo - 1 >= 0 ? CommonPrefix(queryKey, _entries[lo - 1].IpeKey) : 0;
             int commonAhead = lo < _entries.Length ? CommonPrefix(queryKey, _entries[lo].IpeKey) : 0;
 
+            // The same guess with ḷ and l read alike, taken only when it reaches STRICTLY further into the
+            // word. (#933)
+            //
+            // This is the arm that matters: the query that fails is an inflected form with no entry at all.
+            // nāḷandaṃ shares "nāḷ" (3) with Nāḷika but "nāland" (6) with Nālandā once folded, so DPPN sent
+            // the reader to Nāḷika. An earlier attempt folded only the EXACT arm, and in DictionaryIndex -
+            // which is not the class DPPN is read through - so it changed nothing here.
+            //
+            // Decided BEFORE the runs are collected: both arms below return early once `max` is reached, so
+            // a fold placed after them is skipped for exactly the queries whose unfolded guess is already
+            // crowded. Found by probing the real dictionary at max=6, where upāḷinā filled the bound with
+            // unrelated upādāna… entries and never reached the fold.
+            //
+            // Strictly greater, so an exact spelling wins every tie: folding can only lengthen a common
+            // prefix, so nothing that resolves today is diverted.
+            var folded = FoldedGuess(queryKey, Math.Max(commonBehind, commonAhead), max);
+            if (folded is not null) return folded;
+
             if (commonBehind >= commonAhead && commonBehind > 0)
             {
                 var stack = new Stack<LexiconEntry>();
@@ -141,6 +159,44 @@ namespace CST.Lexicon
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// The best ḷ/l-folded run, or null when folding gets no closer than <paramref name="unfoldedBest"/>.
+        /// (#933)
+        ///
+        /// <para>Scans rather than binary-searches: the question is how far into the word the closest entry
+        /// agrees, which an insertion point does not answer, and the folded order is not the stored order.
+        /// Runs only after an exact lookup has already missed.</para>
+        ///
+        /// <para>Ties break on the unfolded key, so a run mixing both spellings is ordered predictably - the
+        /// caller shows the first entry, and DPPN really does hold folding pairs (Koḷa/Kola,
+        /// Nāḷika/Nālika).</para>
+        /// </summary>
+        private IReadOnlyList<LexiconEntry>? FoldedGuess(string queryKey, int unfoldedBest, int max)
+        {
+            var key = LexiconKey.FoldRetroflexL(queryKey);
+
+            int best = 0;
+            for (int i = 0; i < _entries.Length; i++)
+            {
+                int common = CommonPrefix(key, LexiconKey.FoldRetroflexL(_entries[i].IpeKey));
+                if (common > best) best = common;
+            }
+
+            if (best <= unfoldedBest) return null;
+
+            var hits = new List<LexiconEntry>();
+            for (int i = 0; i < _entries.Length; i++)
+            {
+                if (CommonPrefix(key, LexiconKey.FoldRetroflexL(_entries[i].IpeKey)) == best)
+                    hits.Add(_entries[i]);
+            }
+
+            hits.Sort((a, b) => string.CompareOrdinal(a.IpeKey, b.IpeKey));
+
+            if (max > 0 && hits.Count > max) hits.RemoveRange(max, hits.Count - max);
+            return hits;
         }
 
         private static bool Reached(List<LexiconEntry> r, int max) => max > 0 && r.Count >= max;
