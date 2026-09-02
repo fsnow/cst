@@ -52,14 +52,46 @@
 
     <Application.Resources>
         <ResourceDictionary>
+            <!-- These are OUR brushes, not Avalonia's. Every key below is a WinUI name that the call
+                 sites were written against and that neither Avalonia 11.3.6's FluentTheme nor
+                 Dock.Avalonia.Themes.Fluent actually defines (#955).
+
+                 What an unresolved DynamicResource does depends on WHERE it is written, which is why this
+                 presented as one panel misbehaving rather than as the whole app. Outside a template it
+                 publishes UnsetValue at LocalValue priority and the property falls through to INHERITED -
+                 so the composer's own labels stayed white in dark and looked fine. Inside a DataTemplate
+                 it binds at Template priority, where the miss yields the property DEFAULT - and
+                 TextBlock.Foreground defaults to black. The reported text was invisible because it lives
+                 in the Assistant's turn template; the visually identical text above it did not, and did
+                 not. Measured in a headless FluentTheme + DockFluentTheme harness, not read from
+                 documentation.
+
+                 Both dictionaries must define the SAME KEYS. The Dark one used to be empty, which is
+                 what made this a dark-mode bug rather than an everywhere bug: #102 supplied six of these
+                 for Light only, so Light resolved and Dark did not.
+                 ThemeDictionaryParityTests holds that line.
+
+                 Values marked "Fluent" are the measured colour of the Avalonia brush named beside them,
+                 so this palette rides the theme's own ladder instead of a second opinion about it. The
+                 chrome values in Light are #102's and are deliberately NOT replaced. The three semantic
+                 colours at the end have no Fluent equivalent and are chosen. -->
             <ResourceDictionary.ThemeDictionaries>
-                <!-- Light-mode surface hierarchy (#102): a SUBTLE grey "chrome" tone (toolbars,
-                     left tool dock, tree, gutters) against white "content" surfaces (reading pane,
-                     cards) - matching the gentle VS Code "Light 2026" aesthetic, not a high-contrast
-                     ladder. Chrome #F6F6F9 vs content #FFFFFF ~= a 9-level step. Dark mode unchanged
-                     (empty Dark dict below). -->
                 <ResourceDictionary x:Key="Light">
-                    <!-- Chrome: window/page bg, dock gutters, book tree, toolbars, status bars, nav -->
+                    <!-- Text. Fluent: ForegroundBaseHigh / BaseMedium / BaseMediumLow. -->
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FF000000"/>
+                    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#99000000"/>
+                    <!-- Tertiary is DARKER than Fluent's own ladder would put it, on purpose. At
+                         BaseMediumLow (#66000000) it renders #999999 on white - 2.85:1, below WCAG AA's
+                         4.5:1 for text this size, and [fsnow] called it "a little light" on sight in the
+                         search panel's "217 of 217 books". #89000000 is #767676, 4.54:1, and still a clear
+                         step below Secondary's 5.74:1 so the three-level ladder survives. WinUI's own
+                         tertiary is 3.7:1, so matching the source palette exactly could not fix this. -->
+                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#89000000"/>
+
+                    <!-- Chrome: window/page bg, dock gutters, book tree, toolbars, status bars, nav.
+                         A SUBTLE grey against white content surfaces - the gentle VS Code "Light 2026"
+                         aesthetic, not a high-contrast ladder. Chrome #F6F6F9 vs content #FFFFFF is
+                         about a 9-level step. (#102) -->
                     <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#F6F6F9"/>
                     <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#F6F6F9"/>
                     <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#F6F6F9"/>
@@ -68,9 +100,59 @@
                     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FFFFFF"/>
                     <!-- Subtle border so inset content edges read against the grey -->
                     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#E6E6EC"/>
+
+                    <!-- Controls. White rather than Fluent's ChromeMediumLow (#F2F2F2): these sit inside
+                         cards that are already #FFFFFF, and the #102 ladder puts content surfaces above
+                         chrome, not below. The Dark block below does use ChromeMediumLow. -->
+                    <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="TextControlBackgroundBrush" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FFFFFFFF"/>
+                    <!-- Fluent: BackgroundListLow. The old value was invisible rather than faint - the
+                         key did not exist, so a selected row got no fill at all. -->
+                    <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#19000000"/>
+                    <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent"/>
+
+                    <!-- Semantic. No Fluent equivalent; chosen to stay legible on this ground. -->
+                    <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="#FF9D5D00"/>
+                    <SolidColorBrush x:Key="SystemFillColorCautionBackgroundBrush" Color="#FFFFF4CE"/>
+                    <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="#FFC42B1C"/>
                 </ResourceDictionary>
-                <!-- Dark mode unchanged: inherit Fluent dark defaults -->
-                <ResourceDictionary x:Key="Dark"/>
+
+                <ResourceDictionary x:Key="Dark">
+                    <!-- Text. Fluent: ForegroundBaseHigh / BaseMedium / BaseMediumLow. The reported
+                         defect (#955) is this block having been absent. -->
+                    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#99FFFFFF"/>
+                    <!-- Same correction as Light. #66FFFFFF is 3.79:1 on the #1F1F1F chrome and 3.66:1 on
+                         the Assistant's pure-black pane; #80FFFFFF is 5.10:1 and 5.32:1, against
+                         Secondary's 6.69:1. -->
+                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#80FFFFFF"/>
+
+                    <!-- Chrome, mirroring Light's step but inverted. Fluent: ChromeMedium for the
+                         recessed tone, ChromeMediumLow for content surfaces. -->
+                    <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#FF1F1F1F"/>
+                    <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#FF1F1F1F"/>
+                    <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#FF1F1F1F"/>
+                    <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#FF2B2B2B"/>
+                    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FF2B2B2B"/>
+                    <!-- Fluent: ForegroundBaseLow. Translucent white, so it reads as an edge on either
+                         of the two chrome tones above rather than only on one of them. -->
+                    <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#33FFFFFF"/>
+
+                    <!-- Controls. Fluent: ChromeMediumLow / BackgroundAltHigh. -->
+                    <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#FF2B2B2B"/>
+                    <SolidColorBrush x:Key="TextControlBackgroundBrush" Color="#FF2B2B2B"/>
+                    <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FF000000"/>
+                    <!-- Fluent: BackgroundListLow. -->
+                    <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#19FFFFFF"/>
+                    <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent"/>
+
+                    <!-- Semantic. Lightened for a dark ground: the Light amber and red are unreadable
+                         on it, which is the whole reason these are per-theme. -->
+                    <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="#FFFCE100"/>
+                    <SolidColorBrush x:Key="SystemFillColorCautionBackgroundBrush" Color="#FF433519"/>
+                    <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="#FFFF99A4"/>
+                </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
             <!-- ControlRecycling for view caching - preserves scroll position and state when switching tabs -->
