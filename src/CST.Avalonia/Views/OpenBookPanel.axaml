@@ -95,29 +95,58 @@
                                 <Style Selector="TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter">
                                     <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
                                 </Style>
+                                <!-- The icons need a rule of their own; the inheritance above does NOT reach
+                                     them. Fluent's ControlTheme for PathIcon sets Foreground to
+                                     TextControlForeground, and a Style setter outranks an Inherited value - so a
+                                     PathIcon with no local Foreground is not transparent to the rule above the
+                                     way the label is. It keeps the theme's ordinary text colour and sits black
+                                     on the accent fill. Measured, not reasoned: with this rule removed, a
+                                     selected row renders label White and icon Black in light mode. Dark mode
+                                     hides it, because TextControlForeground is white there too - which is why
+                                     it would have survived a dark-only look.
+
+                                     ">" and not a descendant combinator, for the reason given above: ">"
+                                     matches a LOGICAL child, and the header content's logical parent is the
+                                     TreeViewItem, so a child book's icon is out of reach. The descendant form
+                                     was measured doing exactly the damage that comment predicts - selecting a
+                                     category turned every book under it white on a black row.
+
+                                     Do not move this onto the PathIcons as a local Foreground instead:
+                                     LocalValue outranks StyleTrigger in Avalonia, so a local brush would beat
+                                     this rule and put the bug back. -->
+                                <Style Selector="TreeViewItem:selected &gt; StackPanel &gt; PathIcon">
+                                    <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+                                </Style>
                             </TreeView.Styles>
                             <TreeView.DataTemplates>
                                 <TreeDataTemplate DataType="vm:BookTreeNode" ItemsSource="{Binding Children}">
                                     <StackPanel Orientation="Horizontal" Margin="2">
                                         <!-- Tintable vector icons, not emoji (#932). These three glyphs were
-                                             U+1F4C4 / U+1F4C1 / U+1F4C2 in a TextBlock with no FontFamily, so
-                                             the shape was chosen by each platform's font fallback rather than
-                                             by us: colour on one Windows machine, black silhouette on the
-                                             next, grey on macOS - the same build disagreeing with itself. A
-                                             geometry takes the fallback chain out of the picture.
+                                             U+1F4C4 / U+1F4C1 / U+1F4C2 in a TextBlock with no FontFamily.
+                                             [fsnow], testing the Beta 6 builds: on macOS "they are always
+                                             grey"; on Windows "sometimes rendering in color, yellow folders
+                                             and light grey documents, and sometimes in black sillhouette".
 
-                                             Foreground is deliberately UNSET, so it inherits exactly as the
-                                             DisplayName label below does. That is what carries the selected
-                                             row's accent foreground down from ContentPresenter#PART_Header-
-                                             Presenter (see the TreeView.Styles comment above), and what makes
-                                             the icons follow light and dark. A colour emoji could do neither,
-                                             because it ignores Foreground - being tintable is the reason this
-                                             is a path and not merely a better-chosen font.
+                                             The diagnosis is font fallback, and it is an INFERENCE, not a
+                                             measurement: no FontFamily was set and none inherited, so the
+                                             shape came from whatever each platform resolved for a codepoint
+                                             the UI font does not carry. Nobody established which font drew
+                                             which rendering. A geometry is the right answer either way -
+                                             it removes the font from the question rather than choosing a
+                                             better one.
 
-                                             14x14 matches the PathIcon sizing in SearchPanel.axaml. Much
-                                             below that the open and closed folders stop being tellable apart.
-                                             The data is Material Design Icons (book, folder, folder-open) on
-                                             a 24x24 viewBox, which PathIcon scales to fit. -->
+                                             A colour emoji also ignores Foreground, so it can follow neither
+                                             the selected row nor the theme; being tintable is the second
+                                             reason this is a path. How the tint actually arrives is the
+                                             TreeViewItem:selected rule above - a style, not inheritance.
+
+                                             14x14 matches the PathIcons in SearchPanel.axaml. Much below
+                                             that the open and closed folders stop being tellable apart. The
+                                             data is Material Design Icons - book-outline, folder,
+                                             folder-open. PathIcon fits each path to the bounds of its OWN
+                                             geometry, not to a shared 24x24 frame, so the three land at
+                                             slightly different scales (0.70 / 0.70 / 0.66). Nothing is
+                                             clipped, because a bounds fit cannot clip. -->
                                         <!-- Book -->
                                         <PathIcon Data="M18,2A2,2 0 0,1 20,4V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V4A2,2 0 0,1 6,2H18M18,4H13V12L10.5,9.75L8,12V4H6V20H18V4Z"
                                                   Width="14" Height="14"
