@@ -79,6 +79,65 @@ public class AiLogoImagesTests : IDisposable
         Assert.Equal("references a remote resource", AiLogoImages.Screen(Write("remote.svg", svg)));
     }
 
+    /// <summary>The SVG 1.1 doctype names a w3.org DTD. The renderer does not resolve it, and refusing over
+    /// it cost <c>hpc-ai.svg</c> its mark — one of only two refusals across the whole 173-logo cache, both
+    /// of them wrong (#930).</summary>
+    [Fact]
+    public void A_standard_doctype_is_not_a_remote_reference()
+    {
+        var path = Write("hpc-ai.svg", """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><path d="M0,0H1"/></svg>
+            """);
+
+        Assert.Null(AiLogoImages.Screen(path));
+    }
+
+    /// <summary>Inkscape stamps its home page into a comment. That is the whole reason
+    /// <c>regolo-ai.svg</c> was refused (#930); a comment is not drawn and cannot cause a fetch.</summary>
+    [Fact]
+    public void A_generator_comment_is_not_a_remote_reference()
+    {
+        var path = Write("regolo-ai.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+            <!-- Created with Inkscape (http://www.inkscape.org/) -->
+            <path d="M0,0H1"/></svg>
+            """);
+
+        Assert.Null(AiLogoImages.Screen(path));
+    }
+
+    /// <summary>The point of the guard survives the two exemptions: a real fetch is still refused even when
+    /// the file also carries a doctype and a comment, which is what a fix that merely stopped looking would
+    /// break.</summary>
+    [Fact]
+    public void A_real_remote_image_is_still_refused_alongside_a_doctype_and_a_comment()
+    {
+        var path = Write("hostile.svg", """
+            <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+            <!-- Created with Inkscape (http://www.inkscape.org/) -->
+            <image href="https://example.com/tracker.png"/></svg>
+            """);
+
+        Assert.Equal("references a remote resource", AiLogoImages.Screen(path));
+    }
+
+    /// <summary>An entity bomb hides in the doctype's internal subset, which this change strips. It must
+    /// still be caught — the &lt;!ENTITY test reads the RAW text and runs first, and this pins that
+    /// ordering (#930).</summary>
+    [Fact]
+    public void An_entity_in_the_internal_subset_is_still_caught_though_the_doctype_is_stripped()
+    {
+        var path = Write("bomb.svg", """
+            <!DOCTYPE svg [ <!ENTITY lol "lol"> <!ENTITY lol2 "&lol;&lol;&lol;"> ]>
+            <svg xmlns="http://www.w3.org/2000/svg"><text>&lol2;</text></svg>
+            """);
+
+        Assert.Equal("declares XML entities", AiLogoImages.Screen(path));
+    }
+
     /// <summary>A fragment reference is internal and ordinary — one logo in the set uses one for a clip
     /// path.</summary>
     [Fact]

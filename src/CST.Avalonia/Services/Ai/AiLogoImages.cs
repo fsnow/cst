@@ -50,13 +50,34 @@ namespace CST.Avalonia.Services.Ai
         internal const int MaxBytes = 256 * 1024;
 
         /// <summary>
-        /// Any absolute URL, once the namespace declarations that legitimately contain one are removed.
+        /// Any absolute URL, once the parts of the file that can hold URL-shaped text WITHOUT causing a fetch
+        /// are removed.
         /// </summary>
         private static readonly Regex ExternalReference =
             new(@"\b(?:https?|ftp|file)://", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         private static readonly Regex NamespaceDeclaration =
             new(@"xmlns(:[\w-]+)?\s*=\s*""[^""]*""", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// An XML comment. Generators write their own home page into one - Inkscape does, which is how
+        /// <c>regolo-ai.svg</c> came to be refused (#930). A comment is not drawn and cannot cause a fetch.
+        /// </summary>
+        private static readonly Regex Comment =
+            new(@"<!--.*?-->", RegexOptions.Compiled | RegexOptions.Singleline);
+
+        /// <summary>
+        /// A doctype declaration. Its system identifier is a w3.org URL in every SVG 1.1 file that carries
+        /// one - <c>hpc-ai.svg</c> is the live case (#930). The renderer does not resolve it.
+        ///
+        /// <para>The optional internal subset is matched so that a <c>]&gt;</c> inside it cannot end the match
+        /// early and leave the tail behind. Stripping it loses nothing: <see cref="Screen"/> tests for
+        /// <c>&lt;!ENTITY</c> against the RAW text first, precisely because that is where an entity bomb
+        /// lives.</para>
+        /// </summary>
+        private static readonly Regex Doctype =
+            new(@"<!DOCTYPE[^\[>]*(\[[\s\S]*?\])?[^>]*>",
+                RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Keyed by file AND colour: the same mark is a different image in light and dark, and a reader can
@@ -151,8 +172,23 @@ namespace CST.Avalonia.Services.Ai
             if (text.Contains("<!ENTITY", StringComparison.OrdinalIgnoreCase))
                 return "declares XML entities";
 
-            // The SVG namespace is itself an http URL, so those have to come out before asking the question.
-            if (ExternalReference.IsMatch(NamespaceDeclaration.Replace(text, string.Empty)))
+            // Three kinds of URL-shaped text are not references to anything the renderer will fetch, and all
+            // three have to come out before asking the question: the SVG namespace is itself an http URL, a
+            // doctype's system identifier is a w3.org URL, and a generator stamps its home page into a
+            // comment. Measured over the 173-logo cache, the last two were the ONLY refusals, and both were
+            // wrong (#930).
+            //
+            // Order matters: this runs after the <!ENTITY test above, which reads the raw text.
+            var content = Doctype.Replace(text, string.Empty);
+            content = Comment.Replace(content, string.Empty);
+            content = NamespaceDeclaration.Replace(content, string.Empty);
+
+            // Still a bare scheme search over what is left, deliberately. The narrower rule - a remote scheme
+            // inside an href/xlink:href/src value - was the other way to fix this, and it is the wrong trade
+            // HERE: a false positive costs a monogram, which is what a missing logo has always shown, while a
+            // false negative is a synchronous network fetch on the UI thread. Over-refusing is the cheap
+            // failure, so only text that provably cannot cause a fetch is removed.
+            if (ExternalReference.IsMatch(content))
                 return "references a remote resource";
 
             return null;
