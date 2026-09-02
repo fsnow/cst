@@ -95,38 +95,88 @@
                                 <Style Selector="TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter">
                                     <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
                                 </Style>
+                                <!-- The icons need a rule of their own; the inheritance above does NOT reach
+                                     them. Fluent's ControlTheme for PathIcon sets Foreground to
+                                     TextControlForeground, and a Style setter outranks an Inherited value - so a
+                                     PathIcon with no local Foreground is not transparent to the rule above the
+                                     way the label is. It keeps the theme's ordinary text colour and sits black
+                                     on the accent fill. Measured, not reasoned: with this rule removed, a
+                                     selected row renders label White and icon Black in light mode. Dark mode
+                                     hides it, because TextControlForeground is white there too - which is why
+                                     it would have survived a dark-only look.
+
+                                     ">" and not a descendant combinator, for the reason given above: ">"
+                                     matches a LOGICAL child, and the header content's logical parent is the
+                                     TreeViewItem, so a child book's icon is out of reach. The descendant form
+                                     was measured doing exactly the damage that comment predicts - selecting a
+                                     category turned every book under it white on a black row.
+
+                                     Do not move this onto the PathIcons as a local Foreground instead:
+                                     LocalValue outranks StyleTrigger in Avalonia, so a local brush would beat
+                                     this rule and put the bug back. -->
+                                <Style Selector="TreeViewItem:selected &gt; StackPanel &gt; PathIcon">
+                                    <Setter Property="Foreground" Value="{DynamicResource DockApplicationAccentForegroundBrush}"/>
+                                </Style>
                             </TreeView.Styles>
                             <TreeView.DataTemplates>
                                 <TreeDataTemplate DataType="vm:BookTreeNode" ItemsSource="{Binding Children}">
                                     <StackPanel Orientation="Horizontal" Margin="2">
-                                        <!-- Icons using Unicode symbols for now (Mac-style icons coming later) -->
-                                        <!-- Book icon -->
-                                        <TextBlock Text="📄" FontSize="12" 
-                                               Margin="0,0,4,0" 
-                                               VerticalAlignment="Center"
-                                               IsVisible="{Binding IsBook}"/>
-                                        <!-- Closed folder icon -->
-                                        <TextBlock Text="📁" FontSize="12"
-                                               Margin="0,0,4,0" 
-                                               VerticalAlignment="Center">
-                                            <TextBlock.IsVisible>
+                                        <!-- Tintable vector icons, not emoji (#932). These three glyphs were
+                                             U+1F4C4 / U+1F4C1 / U+1F4C2 in a TextBlock with no FontFamily.
+                                             [fsnow], testing the Beta 6 builds: on macOS "they are always
+                                             grey"; on Windows "sometimes rendering in color, yellow folders
+                                             and light grey documents, and sometimes in black sillhouette".
+
+                                             The diagnosis is font fallback, and it is an INFERENCE, not a
+                                             measurement: no FontFamily was set and none inherited, so the
+                                             shape came from whatever each platform resolved for a codepoint
+                                             the UI font does not carry. Nobody established which font drew
+                                             which rendering. A geometry is the right answer either way -
+                                             it removes the font from the question rather than choosing a
+                                             better one.
+
+                                             A colour emoji also ignores Foreground, so it can follow neither
+                                             the selected row nor the theme; being tintable is the second
+                                             reason this is a path. How the tint actually arrives is the
+                                             TreeViewItem:selected rule above - a style, not inheritance.
+
+                                             14x14 matches the PathIcons in SearchPanel.axaml. Much below
+                                             that the open and closed folders stop being tellable apart. The
+                                             data is Material Design Icons - book-outline, folder,
+                                             folder-open. PathIcon fits each path to the bounds of its OWN
+                                             geometry, not to a shared 24x24 frame, so the three land at
+                                             slightly different scales (0.70 / 0.70 / 0.66). Nothing is
+                                             clipped, because a bounds fit cannot clip. -->
+                                        <!-- Book -->
+                                        <PathIcon Data="M18,2A2,2 0 0,1 20,4V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V4A2,2 0 0,1 6,2H18M18,4H13V12L10.5,9.75L8,12V4H6V20H18V4Z"
+                                                  Width="14" Height="14"
+                                                  Margin="0,0,4,0"
+                                                  VerticalAlignment="Center"
+                                                  IsVisible="{Binding IsBook}"/>
+                                        <!-- Closed category -->
+                                        <PathIcon Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"
+                                                  Width="14" Height="14"
+                                                  Margin="0,0,4,0"
+                                                  VerticalAlignment="Center">
+                                            <PathIcon.IsVisible>
                                                 <MultiBinding Converter="{x:Static converters:CategoryIconConverter.Instance}" ConverterParameter="closed">
                                                     <Binding Path="IsCategory"/>
                                                     <Binding Path="IsExpanded"/>
                                                 </MultiBinding>
-                                            </TextBlock.IsVisible>
-                                        </TextBlock>
-                                        <!-- Open folder icon -->
-                                        <TextBlock Text="📂" FontSize="12"
-                                               Margin="0,0,4,0" 
-                                               VerticalAlignment="Center">
-                                            <TextBlock.IsVisible>
+                                            </PathIcon.IsVisible>
+                                        </PathIcon>
+                                        <!-- Open category -->
+                                        <PathIcon Data="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"
+                                                  Width="14" Height="14"
+                                                  Margin="0,0,4,0"
+                                                  VerticalAlignment="Center">
+                                            <PathIcon.IsVisible>
                                                 <MultiBinding Converter="{x:Static converters:CategoryIconConverter.Instance}" ConverterParameter="open">
                                                     <Binding Path="IsCategory"/>
                                                     <Binding Path="IsExpanded"/>
                                                 </MultiBinding>
-                                            </TextBlock.IsVisible>
-                                        </TextBlock>
+                                            </PathIcon.IsVisible>
+                                        </PathIcon>
                                         <!-- Text -->
                                         <TextBlock Text="{Binding DisplayName}" 
                                                    VerticalAlignment="Center"
