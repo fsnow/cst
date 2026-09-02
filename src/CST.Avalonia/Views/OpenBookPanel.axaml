@@ -99,34 +99,55 @@
                             <TreeView.DataTemplates>
                                 <TreeDataTemplate DataType="vm:BookTreeNode" ItemsSource="{Binding Children}">
                                     <StackPanel Orientation="Horizontal" Margin="2">
-                                        <!-- Icons using Unicode symbols for now (Mac-style icons coming later) -->
-                                        <!-- Book icon -->
-                                        <TextBlock Text="📄" FontSize="12" 
-                                               Margin="0,0,4,0" 
-                                               VerticalAlignment="Center"
-                                               IsVisible="{Binding IsBook}"/>
-                                        <!-- Closed folder icon -->
-                                        <TextBlock Text="📁" FontSize="12"
-                                               Margin="0,0,4,0" 
-                                               VerticalAlignment="Center">
-                                            <TextBlock.IsVisible>
+                                        <!-- Tintable vector icons, not emoji (#932). These three glyphs were
+                                             U+1F4C4 / U+1F4C1 / U+1F4C2 in a TextBlock with no FontFamily, so
+                                             the shape was chosen by each platform's font fallback rather than
+                                             by us: colour on one Windows machine, black silhouette on the
+                                             next, grey on macOS - the same build disagreeing with itself. A
+                                             geometry takes the fallback chain out of the picture.
+
+                                             Foreground is deliberately UNSET, so it inherits exactly as the
+                                             DisplayName label below does. That is what carries the selected
+                                             row's accent foreground down from ContentPresenter#PART_Header-
+                                             Presenter (see the TreeView.Styles comment above), and what makes
+                                             the icons follow light and dark. A colour emoji could do neither,
+                                             because it ignores Foreground - being tintable is the reason this
+                                             is a path and not merely a better-chosen font.
+
+                                             14x14 matches the PathIcon sizing in SearchPanel.axaml. Much
+                                             below that the open and closed folders stop being tellable apart.
+                                             The data is Material Design Icons (book, folder, folder-open) on
+                                             a 24x24 viewBox, which PathIcon scales to fit. -->
+                                        <!-- Book -->
+                                        <PathIcon Data="M18,2A2,2 0 0,1 20,4V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V4A2,2 0 0,1 6,2H18M18,4H13V12L10.5,9.75L8,12V4H6V20H18V4Z"
+                                                  Width="14" Height="14"
+                                                  Margin="0,0,4,0"
+                                                  VerticalAlignment="Center"
+                                                  IsVisible="{Binding IsBook}"/>
+                                        <!-- Closed category -->
+                                        <PathIcon Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"
+                                                  Width="14" Height="14"
+                                                  Margin="0,0,4,0"
+                                                  VerticalAlignment="Center">
+                                            <PathIcon.IsVisible>
                                                 <MultiBinding Converter="{x:Static converters:CategoryIconConverter.Instance}" ConverterParameter="closed">
                                                     <Binding Path="IsCategory"/>
                                                     <Binding Path="IsExpanded"/>
                                                 </MultiBinding>
-                                            </TextBlock.IsVisible>
-                                        </TextBlock>
-                                        <!-- Open folder icon -->
-                                        <TextBlock Text="📂" FontSize="12"
-                                               Margin="0,0,4,0" 
-                                               VerticalAlignment="Center">
-                                            <TextBlock.IsVisible>
+                                            </PathIcon.IsVisible>
+                                        </PathIcon>
+                                        <!-- Open category -->
+                                        <PathIcon Data="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"
+                                                  Width="14" Height="14"
+                                                  Margin="0,0,4,0"
+                                                  VerticalAlignment="Center">
+                                            <PathIcon.IsVisible>
                                                 <MultiBinding Converter="{x:Static converters:CategoryIconConverter.Instance}" ConverterParameter="open">
                                                     <Binding Path="IsCategory"/>
                                                     <Binding Path="IsExpanded"/>
                                                 </MultiBinding>
-                                            </TextBlock.IsVisible>
-                                        </TextBlock>
+                                            </PathIcon.IsVisible>
+                                        </PathIcon>
                                         <!-- Text -->
                                         <TextBlock Text="{Binding DisplayName}" 
                                                    VerticalAlignment="Center"
