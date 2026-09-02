@@ -23,35 +23,46 @@
         <StackPanel Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Spacing="10" Margin="0,0,30,0">
             <TextBlock Text="Go To What:" FontSize="14" Margin="0,0,0,5"/>
 
+            <!-- Click, not the bound SelectedType, sends focus back to the number box (#844). A handler on
+                 the property would also fire while ARROWING between the radios, yanking focus out of the
+                 group mid-traversal and making it unusable from the keyboard. Click is raised by a pointer
+                 press and by Space - both deliberate choices - and not by focus merely moving. -->
+
             <RadioButton Content="Paragraph"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=Paragraph}"
                          IsEnabled="{Binding IsParagraphAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="VRI Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=VriPage}"
                          IsEnabled="{Binding IsVriPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="Myanmar Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=MyanmarPage}"
                          IsEnabled="{Binding IsMyanmarPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="PTS Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=PtsPage}"
                          IsEnabled="{Binding IsPtsPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="Thai Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=ThaiPage}"
                          IsEnabled="{Binding IsThaiPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
 
             <RadioButton Content="Other Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=OtherPage}"
                          IsEnabled="{Binding IsOtherPageAvailable}"
-                         GroupName="NavType"/>
+                         GroupName="NavType"
+                         Click="OnNavTypeClick"/>
         </StackPanel>
 
         <!-- Right Column: Number input and buttons -->

@@ -77,6 +77,45 @@ namespace CST.Avalonia.ViewModels
             return NavigationType.Paragraph;
         }
 
+        /// <summary>
+        /// Whether Go To can offer <paramref name="type"/> for a book carrying <paramref name="editions"/>.
+        ///
+        /// <para>Paragraph is always offered: every book has paragraphs, which is why it is the fallback
+        /// even though it is the weakest address. For the page systems this defers to <see cref="Has"/>,
+        /// including its deliberate "unknown answers true" for a book whose markers are not built yet.</para>
+        ///
+        /// <para>Walks <see cref="Order"/> rather than carrying an inverse of
+        /// <see cref="ToNavigationType"/>: a second switch would be a second thing to keep in step, and this
+        /// one cannot drift from the table the rest of the class already uses.</para>
+        /// </summary>
+        public static bool Offers(IReadOnlyList<PageEdition>? editions, NavigationType type)
+        {
+            if (type == NavigationType.Paragraph) return true;
+
+            foreach (var (edition, _) in Order)
+                if (ToNavigationType(edition) == type)
+                    return Has(editions, edition);
+
+            return false;
+        }
+
+        /// <summary>
+        /// The type Go To should open on, given what the reader last chose. (#844)
+        ///
+        /// <para><b>The remembered choice and the choice in effect are different things, and only the first
+        /// persists.</b> A reader who works in PTS opens a book with no PTS pagination; this returns the
+        /// book's own default so the dialog is usable, and the caller must NOT write that back as the
+        /// preference — one visit to a Myanmar-only text would otherwise silently convert a PTS reader to
+        /// Myanmar for good. That is the whole reason this is a pure function of the two inputs: it cannot
+        /// mutate the preference, because it cannot see it.</para>
+        ///
+        /// <para><paramref name="preferred"/> null means the reader has never chosen — a first run, or a
+        /// state file from before this existed — and falls through to <see cref="DefaultType"/>, which is
+        /// exactly the behaviour that shipped before.</para>
+        /// </summary>
+        public static NavigationType Resolve(NavigationType? preferred, IReadOnlyList<PageEdition>? editions)
+            => preferred is { } want && Offers(editions, want) ? want : DefaultType(editions);
+
         /// <summary>Maps an edition to the Go To navigation type that addresses it.</summary>
         public static NavigationType ToNavigationType(PageEdition edition) => edition switch
         {

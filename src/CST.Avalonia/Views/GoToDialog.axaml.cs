@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using CST.Avalonia.ViewModels;
@@ -61,6 +62,26 @@ namespace CST.Avalonia.Views
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
+        }
+
+        /// <summary>
+        /// Choosing a numbering system puts the caret back in the number box. (#844)
+        ///
+        /// <para>Without it, "open, pick a system, type a number" needs a second click: focus stays on the
+        /// radio, so the digits go nowhere. The letter-shortcut path at
+        /// <see cref="OnNumberTextBoxChanged"/> already re-focuses for the same reason after it rewrites
+        /// the text; this is the other way in.</para>
+        ///
+        /// <para><c>SelectAll</c> to match what <c>Opened</c> does, so a number already typed is replaced
+        /// by the next keystroke rather than appended to.</para>
+        /// </summary>
+        private void OnNavTypeClick(object? sender, RoutedEventArgs e)
+        {
+            var textBox = this.FindControl<TextBox>("NumberTextBox");
+            if (textBox is null) return;
+
+            textBox.Focus();
+            textBox.SelectAll();
         }
 
         private void OnNumberTextBoxChanged(object? sender, EventArgs e)

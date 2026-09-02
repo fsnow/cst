@@ -881,6 +881,51 @@ namespace CST.Avalonia.Services
             }
         }
 
+        /// <summary>
+        /// The numbering system the reader last navigated with, or null if they never have. (#844)
+        ///
+        /// <para>Stored as the enum's NAME, so an unrecognised value - a state file written by a build that
+        /// knew a system this one does not - is simply "no preference" rather than a wrong one.</para>
+        /// </summary>
+        private static NavigationType? ReadPreferredGoToNumbering()
+        {
+            try
+            {
+                var stored = App.ServiceProvider?.GetService<IApplicationStateService>()?
+                    .Current.PreferredGoToNumbering;
+
+                return string.IsNullOrEmpty(stored) ? null
+                    : Enum.TryParse<NavigationType>(stored, out var type) ? type
+                    : null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not read the preferred Go To numbering; opening on the book's default");
+                return null;
+            }
+        }
+
+        /// <summary>Records the system a successful Go To used, for the next one. (#844)</summary>
+        private static void WritePreferredGoToNumbering(NavigationType type)
+        {
+            try
+            {
+                var stateService = App.ServiceProvider?.GetService<IApplicationStateService>();
+                if (stateService is null) return;
+
+                if (stateService.Current.PreferredGoToNumbering == type.ToString()) return;
+
+                stateService.Current.PreferredGoToNumbering = type.ToString();
+                _ = stateService.SaveStateAsync();
+                Log.Information("Remembered Go To numbering: {Type}", type);
+            }
+            catch (Exception ex)
+            {
+                // A preference that fails to save costs the reader one re-selection. Never the navigation.
+                Log.Warning(ex, "Could not remember the Go To numbering {Type}", type);
+            }
+        }
+
         private void UpdateBookScriptInState(string windowId, Script newScript)
         {
             try
@@ -3613,8 +3658,8 @@ namespace CST.Avalonia.Services
             {
                 _logger.Information("Showing Go To dialog for book: {BookFile}", bookViewModel.Book.FileName);
 
-                // Create dialog ViewModel
-                var dialogViewModel = new GoToDialogViewModel(bookViewModel);
+                // Create dialog ViewModel, opening on whatever the reader last navigated with (#844).
+                var dialogViewModel = new GoToDialogViewModel(bookViewModel, ReadPreferredGoToNumbering());
 
                 // Create and show dialog
                 var dialog = new GoToDialog(dialogViewModel);
@@ -3641,6 +3686,11 @@ namespace CST.Avalonia.Services
                 if (result && !string.IsNullOrEmpty(dialogViewModel.ConstructedAnchor))
                 {
                     _logger.Information("Go To navigation requested: {Anchor}", dialogViewModel.ConstructedAnchor);
+
+                    // Remember the system only on a navigation that actually happened. Not on open, and not
+                    // on cancel: the dialog may have opened on a FALLBACK because this book lacks the
+                    // reader's system, and writing that back would convert them to it permanently. (#844)
+                    WritePreferredGoToNumbering(dialogViewModel.SelectedType);
 
                     // Trigger navigation via internal invoke method
                     bookViewModel.InvokeNavigateToChapter(dialogViewModel.ConstructedAnchor);

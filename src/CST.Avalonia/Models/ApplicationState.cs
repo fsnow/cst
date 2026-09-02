@@ -49,6 +49,20 @@ public class ApplicationState
     /// first set; empty restores the default (Select a Book). (#91)</summary>
     public string ActiveLeftToolId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The numbering system the reader last used in Go To — a <c>NavigationType</c> name, or empty if they
+    /// have never chosen. (#844)
+    ///
+    /// <para>Written only when a navigation actually succeeds, never when the dialog merely opens on a
+    /// fallback: not every book carries every system, so a PTS reader opening a Myanmar-only text must not
+    /// come back to find themselves converted. <see cref="ViewModels.PageNumbering.Resolve"/> holds the
+    /// other half of that rule.</para>
+    ///
+    /// <para>The name rather than the enum's number, because the number is positional and this file
+    /// outlives builds; an inserted enum member would silently re-point every saved preference.</para>
+    /// </summary>
+    public string PreferredGoToNumbering { get; set; } = string.Empty;
+
     // Open Book Dialog State  
     public OpenBookDialogState OpenBookDialog { get; set; } = new();
 

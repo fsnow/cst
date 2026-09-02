@@ -197,4 +197,74 @@ public class PageNumberingTests
     {
         Assert.Equal("Thai: 3.0210", PageNumbering.ComposeStatus(Eds(PageEdition.Thai), Page));
     }
+
+    // ---- Offers / Resolve (#844) ----------------------------------------------------------------------
+
+    [Fact]
+    public void Offers_Paragraph_ForEveryBook_IncludingOneWithNoPagination()
+    {
+        // Paragraph is the fallback precisely because it is the one address every book has.
+        Assert.True(PageNumbering.Offers(Eds(), NavigationType.Paragraph));
+        Assert.True(PageNumbering.Offers(Eds(PageEdition.Thai), NavigationType.Paragraph));
+        Assert.True(PageNumbering.Offers(null, NavigationType.Paragraph));
+    }
+
+    [Fact]
+    public void Offers_APageSystem_OnlyWhenTheBookCarriesIt()
+    {
+        var editions = Eds(PageEdition.Vri, PageEdition.Myanmar);
+
+        Assert.True(PageNumbering.Offers(editions, NavigationType.VriPage));
+        Assert.True(PageNumbering.Offers(editions, NavigationType.MyanmarPage));
+        Assert.False(PageNumbering.Offers(editions, NavigationType.PtsPage));
+        Assert.False(PageNumbering.Offers(editions, NavigationType.ThaiPage));
+        Assert.False(PageNumbering.Offers(editions, NavigationType.OtherPage));
+    }
+
+    [Fact]
+    public void Offers_TreatsUnbuiltMarkersAsAvailable_LikeHas()
+    {
+        // null is "not built yet", not "none" — see Has. Withholding a system the book has leaves the
+        // reader no route in; offering one it lacks costs a failed lookup.
+        Assert.True(PageNumbering.Offers(null, NavigationType.PtsPage));
+    }
+
+    [Fact]
+    public void Resolve_KeepsTheReadersSystem_WhenTheBookHasIt()
+    {
+        var editions = Eds(PageEdition.Vri, PageEdition.Pts);
+
+        // VRI wins the DefaultType precedence, so a PTS answer here can only come from the preference.
+        Assert.Equal(NavigationType.VriPage, PageNumbering.DefaultType(editions));
+        Assert.Equal(NavigationType.PtsPage, PageNumbering.Resolve(NavigationType.PtsPage, editions));
+    }
+
+    [Fact]
+    public void Resolve_FallsBackToTheBooksDefault_WhenTheBookLacksIt()
+    {
+        // The PTS reader opens a Myanmar-only text. The dialog has to be usable; the preference itself is
+        // the caller's to keep, and Resolve cannot touch it because it never sees it.
+        var editions = Eds(PageEdition.Myanmar);
+
+        Assert.Equal(NavigationType.MyanmarPage, PageNumbering.Resolve(NavigationType.PtsPage, editions));
+    }
+
+    [Fact]
+    public void Resolve_WithNoPreference_BehavesExactlyAsBefore()
+    {
+        // A first run, or a state file written before #844 existed.
+        foreach (var editions in new[] { Eds(), Eds(PageEdition.Thai), Eds(PageEdition.Vri, PageEdition.Pts) })
+            Assert.Equal(PageNumbering.DefaultType(editions), PageNumbering.Resolve(null, editions));
+    }
+
+    [Fact]
+    public void Resolve_HonoursAPreferenceForParagraph_OverAPaginatedBook()
+    {
+        // The one case where the preference must beat a "better" address: a reader who works in paragraph
+        // numbers has chosen that, and DefaultType would override them on every book with pagination.
+        var editions = Eds(PageEdition.Vri, PageEdition.Pts);
+
+        Assert.Equal(NavigationType.VriPage, PageNumbering.DefaultType(editions));
+        Assert.Equal(NavigationType.Paragraph, PageNumbering.Resolve(NavigationType.Paragraph, editions));
+    }
 }
