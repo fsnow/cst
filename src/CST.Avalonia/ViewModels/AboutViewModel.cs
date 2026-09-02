@@ -145,10 +145,15 @@ namespace CST.Avalonia.ViewModels
             // Every other line here says what the library does FOR US. This one used to say "Desktop
             // integration on Linux", which is true of the library and misleading about the app: we do no
             // desktop integration, the direct PackageReference exists only as a security version pin
-            // (CST.Avalonia.csproj, GHSA-xrw6-gwf8-vvr9), and we do not ship Linux. It stays in the list
-            // because it really does ship - dropping a shipped dependency from an attribution list would
-            // be the worse error - but it now describes the relationship rather than the package. (#937)
-            new("Tmds.DBus.Protocol", "Avalonia's Linux desktop plumbing. Shipped with the app; unused on macOS and Windows.",
+            // (CST.Avalonia.csproj, GHSA-xrw6-gwf8-vvr9), and we do not ship Linux.
+            //
+            // It stays for two reasons, and only the first is a judgement: dropping a shipped dependency
+            // from an attribution list would be the worse error, and AboutInventoryTests fails on a direct
+            // PackageReference with no line here. Verified shipped: Tmds.DBus.Protocol.dll is in the
+            // osx-arm64 publish output and in the installed .app, and Avalonia.FreeDesktop is the only
+            // shipped assembly that references it - nothing in Avalonia.Native or Avalonia.Win32 does.
+            // The wording now describes our relationship to it rather than the package. (#937)
+            new("Tmds.DBus.Protocol", "The D-Bus library Avalonia's Linux backend uses. Shipped with the app; unused on macOS and Windows.",
                 ["Tmds.DBus.Protocol"]),
             new("System.Security.Cryptography.ProtectedData", "Protecting stored API keys on Windows.",
                 ["System.Security.Cryptography.ProtectedData"]),
