@@ -54,9 +54,12 @@ public class ApplicationState
     /// have never chosen. (#844)
     ///
     /// <para>Written when the reader presses OK with a well-formed number - never when the dialog merely
-    /// opens on a fallback, and never on cancel. Not every book carries every system, so a PTS reader
-    /// opening a Myanmar-only text must not come back to find themselves converted.
-    /// <see cref="ViewModels.PageNumbering.Resolve"/> holds the other half of that rule.</para>
+    /// opens, and never on cancel. That includes a system the dialog fell back to because this book lacks
+    /// the reader's: pressing OK means a page number was typed in that system, which is a use.
+    /// <b>[fsnow]:</b> <i>"'the dialog opened on something and you pressed OK'. That's not a thing. You
+    /// wouldn't use a numbering system just because it opened to it."</i>
+    /// <see cref="ViewModels.PageNumbering.Resolve"/> holds the other half - it picks what to show, and
+    /// cannot write anything.</para>
     ///
     /// <para><b>Not "when navigation succeeds"</b>, though an earlier comment here said so: navigation is
     /// an event that runs JS which swallows a missing anchor, so success is not observable from C# at all.

@@ -102,12 +102,18 @@ namespace CST.Avalonia.ViewModels
         /// <summary>
         /// The type Go To should open on, given what the reader last chose. (#844)
         ///
-        /// <para><b>The remembered choice and the choice in effect are different things, and only the first
-        /// persists.</b> A reader who works in PTS opens a book with no PTS pagination; this returns the
-        /// book's own default so the dialog is usable, and the caller must NOT write that back as the
-        /// preference — one visit to a Myanmar-only text would otherwise silently convert a PTS reader to
-        /// Myanmar for good. That is the whole reason this is a pure function of the two inputs: it cannot
-        /// mutate the preference, because it cannot see it.</para>
+        /// <para><b>Choosing is not remembering.</b> A reader who works in PTS opens a book with no PTS
+        /// pagination, and this returns the book's own default so the dialog is usable — but merely being
+        /// shown a system is not evidence of anything, so this cannot be what updates the preference. It is
+        /// a pure function of its two inputs and cannot mutate the preference, because it cannot see it.
+        /// The caller decides what to record, after the reader has done something.</para>
+        ///
+        /// <para><b>[fsnow] settled what counts as "done something", and it is simpler than the guard an
+        /// earlier version of this comment described:</b> <i>"'the dialog opened on something and you
+        /// pressed OK'. That's not a thing. You wouldn't use a numbering system just because it opened to
+        /// it."</i> Pressing OK means a page number was typed <i>in</i> that system, which is a use. So a
+        /// fallback the reader actually navigates with is recorded, and rightly — what is not recorded is a
+        /// fallback merely displayed.</para>
         ///
         /// <para><paramref name="preferred"/> null means the reader has never chosen — a first run, or a
         /// state file from before this existed — and falls through to <see cref="DefaultType"/>, which is
