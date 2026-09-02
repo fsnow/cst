@@ -80,7 +80,13 @@
                     <!-- Text. Fluent: ForegroundBaseHigh / BaseMedium / BaseMediumLow. -->
                     <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FF000000"/>
                     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#99000000"/>
-                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#66000000"/>
+                    <!-- Tertiary is DARKER than Fluent's own ladder would put it, on purpose. At
+                         BaseMediumLow (#66000000) it renders #999999 on white - 2.85:1, below WCAG AA's
+                         4.5:1 for text this size, and [fsnow] called it "a little light" on sight in the
+                         search panel's "217 of 217 books". #89000000 is #767676, 4.54:1, and still a clear
+                         step below Secondary's 5.74:1 so the three-level ladder survives. WinUI's own
+                         tertiary is 3.7:1, so matching the source palette exactly could not fix this. -->
+                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#89000000"/>
 
                     <!-- Chrome: window/page bg, dock gutters, book tree, toolbars, status bars, nav.
                          A SUBTLE grey against white content surfaces - the gentle VS Code "Light 2026"
@@ -117,7 +123,10 @@
                          defect (#955) is this block having been absent. -->
                     <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFFFF"/>
                     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#99FFFFFF"/>
-                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#66FFFFFF"/>
+                    <!-- Same correction as Light. #66FFFFFF is 3.79:1 on the #1F1F1F chrome and 3.66:1 on
+                         the Assistant's pure-black pane; #80FFFFFF is 5.10:1 and 5.32:1, against
+                         Secondary's 6.69:1. -->
+                    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#80FFFFFF"/>
 
                     <!-- Chrome, mirroring Light's step but inverted. Fluent: ChromeMedium for the
                          recessed tone, ChromeMediumLow for content surfaces. -->
