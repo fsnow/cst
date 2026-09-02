@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Xml;
 using Avalonia.Media;
 using Avalonia.Svg.Skia;
 using Avalonia.Threading;
@@ -50,34 +52,10 @@ namespace CST.Avalonia.Services.Ai
         internal const int MaxBytes = 256 * 1024;
 
         /// <summary>
-        /// Any absolute URL, once the parts of the file that can hold URL-shaped text WITHOUT causing a fetch
-        /// are removed.
+        /// An absolute URL in a scheme the renderer would go to the network for.
         /// </summary>
         private static readonly Regex ExternalReference =
             new(@"\b(?:https?|ftp|file)://", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-        private static readonly Regex NamespaceDeclaration =
-            new(@"xmlns(:[\w-]+)?\s*=\s*""[^""]*""", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-        /// <summary>
-        /// An XML comment. Generators write their own home page into one - Inkscape does, which is how
-        /// <c>regolo-ai.svg</c> came to be refused (#930). A comment is not drawn and cannot cause a fetch.
-        /// </summary>
-        private static readonly Regex Comment =
-            new(@"<!--.*?-->", RegexOptions.Compiled | RegexOptions.Singleline);
-
-        /// <summary>
-        /// A doctype declaration. Its system identifier is a w3.org URL in every SVG 1.1 file that carries
-        /// one - <c>hpc-ai.svg</c> is the live case (#930). The renderer does not resolve it.
-        ///
-        /// <para>The optional internal subset is matched so that a <c>]&gt;</c> inside it cannot end the match
-        /// early and leave the tail behind. Stripping it loses nothing: <see cref="Screen"/> tests for
-        /// <c>&lt;!ENTITY</c> against the RAW text first, precisely because that is where an entity bomb
-        /// lives.</para>
-        /// </summary>
-        private static readonly Regex Doctype =
-            new(@"<!DOCTYPE[^\[>]*(\[[\s\S]*?\])?[^>]*>",
-                RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Keyed by file AND colour: the same mark is a different image in light and dark, and a reader can
@@ -169,27 +147,84 @@ namespace CST.Avalonia.Services.Ai
 
             var text = File.ReadAllText(path);
 
+            // Raw-text pre-filter, and the only one. An entity bomb has to be refused before anything tries
+            // to read the document, and XML's <!ENTITY is a lexical token that cannot be split or encoded.
             if (text.Contains("<!ENTITY", StringComparison.OrdinalIgnoreCase))
                 return "declares XML entities";
 
-            // Three kinds of URL-shaped text are not references to anything the renderer will fetch, and all
-            // three have to come out before asking the question: the SVG namespace is itself an http URL, a
-            // doctype's system identifier is a w3.org URL, and a generator stamps its home page into a
-            // comment. Measured over the 173-logo cache, the last two were the ONLY refusals, and both were
-            // wrong (#930).
+            // Everything else is asked of the PARSED document, not of the text. (#930, fable review)
             //
-            // Order matters: this runs after the <!ENTITY test above, which reads the raw text.
-            var content = Doctype.Replace(text, string.Empty);
-            content = Comment.Replace(content, string.Empty);
-            content = NamespaceDeclaration.Replace(content, string.Empty);
+            // Reading the text was the original mistake and it survived one fix. A search over raw text sees
+            // a different document than the renderer does, and every place the two disagree is a hole. The
+            // one that shipped: a <!-- inside one CDATA section and a --> inside another let the
+            // comment-stripping regex delete a live <image href="https://…"> between them, so the file was
+            // ACCEPTED and the renderer - which reads CDATA as literal text, leaving the element real -
+            // fetched it synchronously on the UI thread. Verified with a loopback listener.
+            //
+            // Parsing also closes a hole neither text approach could: the reader resolves character
+            // references, so href="&#104;ttp://…" is seen as the URL it is.
+            //
+            // Still no render backend, so this remains directly testable.
+            try
+            {
+                var settings = new XmlReaderSettings
+                {
+                    // Ignore, not Prohibit: a standard SVG 1.1 doctype is ordinary and must still parse -
+                    // refusing it is the bug this whole thread is about. Ignoring skips the DTD without
+                    // expanding anything, and the resolver is null so no system identifier is ever fetched.
+                    DtdProcessing = DtdProcessing.Ignore,
+                    XmlResolver = null,
+                    IgnoreComments = true,
+                    IgnoreWhitespace = true,
+                    IgnoreProcessingInstructions = true,
+                };
 
-            // Still a bare scheme search over what is left, deliberately. The narrower rule - a remote scheme
-            // inside an href/xlink:href/src value - was the other way to fix this, and it is the wrong trade
-            // HERE: a false positive costs a monogram, which is what a missing logo has always shown, while a
-            // false negative is a synchronous network fetch on the UI thread. Over-refusing is the cheap
-            // failure, so only text that provably cannot cause a fetch is removed.
-            if (ExternalReference.IsMatch(content))
-                return "references a remote resource";
+                using var reader = XmlReader.Create(new StringReader(text), settings);
+                var inStyle = false;
+                while (reader.Read())
+                {
+                    // <style> is the one place TEXT can fetch: CSS url() resolves like any other reference.
+                    // Other text - a <desc> that happens to mention a web page - cannot, and reading it
+                    // would put back a false positive of exactly the kind this issue was about.
+                    if (reader.NodeType == XmlNodeType.Element &&
+                        string.Equals(reader.LocalName, "style", StringComparison.OrdinalIgnoreCase))
+                        inStyle = !reader.IsEmptyElement;
+                    else if (reader.NodeType == XmlNodeType.EndElement &&
+                             string.Equals(reader.LocalName, "style", StringComparison.OrdinalIgnoreCase))
+                        inStyle = false;
+                    else if (inStyle &&
+                             reader.NodeType is XmlNodeType.Text or XmlNodeType.CDATA &&
+                             ExternalReference.IsMatch(reader.Value))
+                        return "references a remote resource";
+
+                    if (reader.NodeType != XmlNodeType.Element || !reader.HasAttributes) continue;
+
+                    while (reader.MoveToNextAttribute())
+                    {
+                        // A namespace declaration legitimately holds an http URL - the SVG namespace IS one -
+                        // and the renderer never fetches it. The ONLY exemption.
+                        if (string.Equals(reader.Prefix, "xmlns", StringComparison.Ordinal) ||
+                            string.Equals(reader.Name, "xmlns", StringComparison.Ordinal))
+                            continue;
+
+                        // Every other attribute value, rather than a list of the ones that fetch. href and
+                        // src are the obvious pair, but fill, stroke, filter, mask and clip-path all take
+                        // url(), and style takes CSS that can too. A list is a thing to be short by one -
+                        // and being short by one here is a network fetch on the UI thread, where being
+                        // over-broad is a monogram.
+                        if (ExternalReference.IsMatch(reader.Value))
+                            return "references a remote resource";
+                    }
+
+                    reader.MoveToElement();
+                }
+            }
+            catch (XmlException)
+            {
+                // Refuse what we cannot read. A file this cannot parse is one whose fetches cannot be
+                // enumerated, and a logo is decoration - the monogram is the honest answer.
+                return "is not well-formed XML";
+            }
 
             return null;
         }

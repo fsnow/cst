@@ -71,12 +71,79 @@ public class AiLogoImagesTests : IDisposable
     /// icon has no business reaching the network at draw time.</summary>
     [Theory]
     [InlineData("""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image href="https://evil.example/x.png"/></svg>""")]
-    [InlineData("""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image xlink:href="http://evil.example/x.png"/></svg>""")]
+    // Declares xmlns:xlink, as every real file using the prefix does. Without the declaration this is not
+    // well-formed XML at all, and is refused for that reason instead — covered separately below.
+    [InlineData("""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10"><image xlink:href="http://evil.example/x.png"/></svg>""")]
     [InlineData("""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image href="file:///etc/passwd"/></svg>""")]
     [InlineData("""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="url(https://evil.example/g)" d="M0,0H1"/></svg>""")]
     public void A_document_reaching_off_the_machine_is_refused(string svg)
     {
         Assert.Equal("references a remote resource", AiLogoImages.Screen(Write("remote.svg", svg)));
+    }
+
+    /// <summary>The bypass that shipped in c1fbb7a. (#930, fable review)
+    ///
+    /// <para>A <c>&lt;!--</c> inside one CDATA section and a <c>--&gt;</c> inside another let the
+    /// comment-stripping regex delete everything between them — including a live remote
+    /// <c>&lt;image&gt;</c> — so the file was ACCEPTED. The XML parser reads CDATA as literal text, so the
+    /// element is real and the renderer fetches it, synchronously, on the UI thread. Confirmed with a
+    /// loopback listener before this was fixed.</para></summary>
+    [Fact]
+    public void A_remote_image_hidden_between_two_CDATA_sections_is_still_refused()
+    {
+        var path = Write("cdata.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><desc><![CDATA[<!--]]></desc><image href="https://evil.example/x.png" width="10" height="10"/><desc><![CDATA[-->]]></desc></svg>
+            """);
+
+        Assert.Equal("references a remote resource", AiLogoImages.Screen(path));
+    }
+
+    /// <summary>A character reference spells the same URL without the letters being contiguous anywhere in
+    /// the file. No raw-text search can see it; the parser resolves it before we look. (#930)</summary>
+    [Fact]
+    public void A_remote_url_written_as_character_references_is_still_refused()
+    {
+        var path = Write("charref.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image href="&#104;ttp://evil.example/x.png" width="10" height="10"/></svg>
+            """);
+
+        Assert.Equal("references a remote resource", AiLogoImages.Screen(path));
+    }
+
+    /// <summary>CSS inside &lt;style&gt; fetches like any other reference, and it is text rather than an
+    /// attribute.</summary>
+    [Fact]
+    public void A_remote_url_in_a_style_block_is_refused()
+    {
+        var path = Write("style.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><style>.a { fill: url(https://evil.example/g); }</style><path class="a" d="M0,0H1"/></svg>
+            """);
+
+        Assert.Equal("references a remote resource", AiLogoImages.Screen(path));
+    }
+
+    /// <summary>Text that is NOT style must stay readable — a description mentioning a project's home page
+    /// is the false-positive class this whole issue was about.</summary>
+    [Fact]
+    public void A_web_address_in_a_description_is_not_a_remote_reference()
+    {
+        var path = Write("desc.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><desc>See https://example.com/about</desc><path d="M0,0H1"/></svg>
+            """);
+
+        Assert.Null(AiLogoImages.Screen(path));
+    }
+
+    /// <summary>A file the parser cannot read is refused rather than guessed at: its fetches cannot be
+    /// enumerated, and a logo is decoration — the monogram is the honest answer.</summary>
+    [Fact]
+    public void A_file_that_is_not_well_formed_is_refused()
+    {
+        var path = Write("broken.svg", """
+            <svg xmlns="http://www.w3.org/2000/svg"><image xlink:href="http://evil.example/x.png"/></svg>
+            """);
+
+        Assert.Equal("is not well-formed XML", AiLogoImages.Screen(path));
     }
 
     /// <summary>The SVG 1.1 doctype names a w3.org DTD. The renderer does not resolve it, and refusing over
