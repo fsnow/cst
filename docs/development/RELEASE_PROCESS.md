@@ -2,34 +2,22 @@
 
 This document describes the complete process for releasing a new version of CST Reader.
 
-**Last Updated:** August 22, 2026
-**Current Version:** 5.0.0-beta.6 (in development; Beta 5 released 2026-07)
+**Last Updated:** September 2, 2026
+**Current Version:** 5.0.0-beta.7 (in development; Beta 6 released 2026-09)
 
-> **Clean-start status for Beta 6: NOT required from Beta 5.** Beta 5 users upgrade in place —
-> **not because nothing on disk changed**, which is false, but because Beta 6 was built to absorb what
-> did. `settings.json` gained the whole AI connections surface, and the shape of a connection's headers
-> changed (#771); Beta 6 reads either shape (#784) rather than discarding the file. Two data-directory
-> migrations run on first launch: the superseded en/hi dictionary directories (#569) and the user XSL
-> directory (#616). And loading itself became recoverable — a backup is consulted when the file will not
-> parse (#785), a single bad property no longer costs the rest of it (#803), and a test asserts this build
-> reads what earlier builds wrote (#787).
+> **Clean-start status for Beta 7: not yet determined.** The cycle has just opened and nothing on disk
+> has changed, so as of today a Beta 6 user would upgrade in place. That is a statement about right now,
+> not a promise about the release — **re-derive it before publishing** rather than carrying this line
+> forward. A tokenizer or index-format change is what flips it to a mandatory clean start, because no
+> migration can absorb that one.
 >
-> Only users coming from **Beta 4 or earlier** must delete the data directory
-> (`~/Library/Application Support/CSTReader/` on macOS, `%APPDATA%\CSTReader\` on Windows) — the Beta 5
-> index-offset change (#53) is what they are crossing.
+> Users coming from **Beta 5 or earlier** are a separate question, to be answered at the same time. Beta 6
+> required a wipe from Beta 4 and earlier (the Beta 5 index-offset change, #53); whether Beta 7 extends
+> that line to Beta 5 depends on what this cycle changes.
 >
-> **What to verify before publishing** is therefore not "did anything change" but "does the upgrade path
-> still work": launch the new build on a real Beta 5 data directory and confirm settings, layout and open
-> books survive. Section 3 of the validation runbook covers it. A tokenizer or index-format change is
-> still the thing that flips this to a mandatory clean start, because no migration can absorb that one.
->
-> **Going backwards is the direction that bites.** Beta 6 writes state a Beta 5 install did not expect,
-> and Beta 5 lacks the tolerant loading that Beta 6 added. #616's migration is marked `Recurring`
-> precisely because a still-installed Beta 5 recreates the directory it removes.
->
-> General rule: whenever the tokenizer or index format changes, the clean-start instruction goes FIRST
-> in the release notes — not buried in "Upgrade Notes." When it is *not* required, say so explicitly,
-> because the beta line has trained users to wipe.
+> **What to verify before publishing** is not "did anything change" but "does the upgrade path still
+> work": launch the new build on a real data directory from the previous release and confirm settings,
+> layout and open books survive. Section 3 of the validation runbook covers it.
 
 ---
 
@@ -229,8 +217,12 @@ These contain the version text but must be left alone; a blind find-and-replace 
 
 - `Services/VersionComparer.cs` and `Tests/Services/VersionComparerTests.cs` — SemVer parsing **fixtures**
   (e.g. `"5.0.0-beta.5+abc1234"` testing build-metadata stripping). Version-agnostic by design.
-- `Tests/ViewModels/WelcomeViewModelTests.cs` — constructed test data, not an assertion about the app's
-  own version.
+- `Tests/ViewModels/WelcomeViewModelTests.cs` and `Tests/ViewModels/AboutViewModelTests.cs` —
+  constructed test data, not assertions about the app's own version. `AboutViewModelTests` alone holds
+  eleven occurrences, all of them inputs testing how a version string is PARSED (build-metadata
+  stripping, short-SHA extraction); renumbering them changes nothing and breaks the expected values.
+- `ViewModels/AboutViewModel.cs` — one doc comment carrying an example version (`e.g. "5.0.0-beta.6"`).
+  An illustration, not a string the app emits.
 - `docs/architecture/LEMMA_EXPANSION.md` and similar — **historical statements** ("implemented in Beta 5")
   that stay true.
 

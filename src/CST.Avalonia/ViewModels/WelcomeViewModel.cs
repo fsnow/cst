@@ -103,7 +103,7 @@ namespace CST.Avalonia.ViewModels
             var assembly = Assembly.GetExecutingAssembly();
             var rawVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                           ?? assembly.GetName().Version?.ToString()
-                          ?? "5.0.0-beta.6";
+                          ?? "5.0.0-beta.7";
 
             // Strip SemVer build metadata (the git hash after '+') for display + comparison. (#71)
             _updateService.CurrentAppVersion = VersionComparer.StripBuildMetadata(rawVersion);
