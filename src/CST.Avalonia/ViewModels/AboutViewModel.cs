@@ -122,7 +122,7 @@ namespace CST.Avalonia.ViewModels
             new("Avalonia", "The cross-platform UI framework, its Fluent theme, and the Inter typeface.",
                 ["Avalonia", "Avalonia.Desktop", "Avalonia.Themes.Fluent", "Avalonia.Fonts.Inter",
                  "Avalonia.Diagnostics"]),
-            new("Avalonia.Svg.Skia", "SVG rendering, which is how the provider logos are drawn.",
+            new("Avalonia.Svg.Skia", "SVG rendering, which is how the AI provider logos are drawn.",
                 ["Avalonia.Svg.Skia"]),
             new("Dock.Avalonia", "The docking layout — panels, tabs, and floating windows.",
                 ["Dock.Avalonia", "Dock.Avalonia.Themes.Fluent", "Dock.Controls.Recycling", "Dock.Model",
