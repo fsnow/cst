@@ -345,11 +345,18 @@
         </Border>
 
         <!-- ============ The transcript, scrolling ============ -->
-        <!-- The inset is a MARGIN on the content, not Padding on the ScrollViewer. ScrollViewer.Padding sits
-             inside the scrollable extent: the left half lands at the scroll origin and looks right, while the
-             right half scrolls off the end instead of reserving width, so the longest lines ran under the
-             edge and lost their last characters. The extra on the right clears the overlay scrollbar, which
-             Fluent draws on top of the content rather than beside it. -->
+        <!-- The inset is a MARGIN on the content, not Padding on the ScrollViewer. ScrollContentPresenter
+             applies Padding in Arrange but not in Measure, so the child is measured against the full width
+             and then arranged into less: a wrapped line keeps the width it wrapped at and runs under the
+             edge, losing its last characters. Nothing "scrolls off" here - this viewer leaves
+             HorizontalScrollBarVisibility at Disabled, so there is no horizontal extent to scroll; an
+             earlier version of this comment said otherwise and was wrong (measured, #937). The extra on the
+             right clears the overlay scrollbar, which Fluent draws on top of the content rather than beside
+             it.
+
+             Same root as the About box's clipped last credit, where it cost vertical extent instead:
+             AvaloniaUI/Avalonia#17158, fixed in Avalonia 12.1. ScrollViewerInsetTests holds the line until
+             #49 upgrades us. -->
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="14" Margin="8,8,16,8">
 

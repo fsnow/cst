@@ -122,7 +122,7 @@ namespace CST.Avalonia.ViewModels
             new("Avalonia", "The cross-platform UI framework, its Fluent theme, and the Inter typeface.",
                 ["Avalonia", "Avalonia.Desktop", "Avalonia.Themes.Fluent", "Avalonia.Fonts.Inter",
                  "Avalonia.Diagnostics"]),
-            new("Avalonia.Svg.Skia", "SVG rendering, which is how the provider logos are drawn.",
+            new("Avalonia.Svg.Skia", "SVG rendering, which is how the AI provider logos are drawn.",
                 ["Avalonia.Svg.Skia"]),
             new("Dock.Avalonia", "The docking layout — panels, tabs, and floating windows.",
                 ["Dock.Avalonia", "Dock.Avalonia.Themes.Fluent", "Dock.Controls.Recycling", "Dock.Model",
@@ -142,7 +142,19 @@ namespace CST.Avalonia.ViewModels
                 ["Microsoft.Data.Sqlite", "SQLitePCLRaw.bundle_e_sqlite3"]),
             new("Azure.Identity and Microsoft.Graph", "Reaching the source PDFs held on SharePoint.",
                 ["Azure.Identity", "Microsoft.Graph"]),
-            new("Tmds.DBus.Protocol", "Desktop integration on Linux.", ["Tmds.DBus.Protocol"]),
+            // Every other line here says what the library does FOR US. This one used to say "Desktop
+            // integration on Linux", which is true of the library and misleading about the app: we do no
+            // desktop integration, the direct PackageReference exists only as a security version pin
+            // (CST.Avalonia.csproj, GHSA-xrw6-gwf8-vvr9), and we do not ship Linux.
+            //
+            // It stays for two reasons, and only the first is a judgement: dropping a shipped dependency
+            // from an attribution list would be the worse error, and AboutInventoryTests fails on a direct
+            // PackageReference with no line here. Verified shipped: Tmds.DBus.Protocol.dll is in the
+            // osx-arm64 publish output and in the installed .app, and Avalonia.FreeDesktop is the only
+            // shipped assembly that references it - nothing in Avalonia.Native or Avalonia.Win32 does.
+            // The wording now describes our relationship to it rather than the package. (#937)
+            new("Tmds.DBus.Protocol", "The D-Bus library Avalonia's Linux backend uses. Shipped with the app; unused on macOS and Windows.",
+                ["Tmds.DBus.Protocol"]),
             new("System.Security.Cryptography.ProtectedData", "Protecting stored API keys on Windows.",
                 ["System.Security.Cryptography.ProtectedData"]),
         ];
