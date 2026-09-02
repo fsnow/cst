@@ -32,7 +32,7 @@ namespace CST.Avalonia.ViewModels
         /// <param name="preferred">
         /// The numbering system the reader last navigated with, or null if they never have. Honoured when
         /// this book carries it and ignored when it does not — see <see cref="PageNumbering.Resolve"/>. The
-        /// dialog does not persist it; the caller does, and only on a successful navigation. (#844)
+        /// dialog does not persist it; the caller does, and only when the reader presses OK. (#844)
         /// </param>
         public GoToDialogViewModel(BookDisplayViewModel bookViewModel, NavigationType? preferred = null)
         {

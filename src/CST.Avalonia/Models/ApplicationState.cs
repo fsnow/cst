@@ -53,10 +53,14 @@ public class ApplicationState
     /// The numbering system the reader last used in Go To — a <c>NavigationType</c> name, or empty if they
     /// have never chosen. (#844)
     ///
-    /// <para>Written only when a navigation actually succeeds, never when the dialog merely opens on a
-    /// fallback: not every book carries every system, so a PTS reader opening a Myanmar-only text must not
-    /// come back to find themselves converted. <see cref="ViewModels.PageNumbering.Resolve"/> holds the
-    /// other half of that rule.</para>
+    /// <para>Written when the reader presses OK with a well-formed number - never when the dialog merely
+    /// opens on a fallback, and never on cancel. Not every book carries every system, so a PTS reader
+    /// opening a Myanmar-only text must not come back to find themselves converted.
+    /// <see cref="ViewModels.PageNumbering.Resolve"/> holds the other half of that rule.</para>
+    ///
+    /// <para><b>Not "when navigation succeeds"</b>, though an earlier comment here said so: navigation is
+    /// an event that runs JS which swallows a missing anchor, so success is not observable from C# at all.
+    /// The gate is the reader's intent, which is the honest thing to record anyway.</para>
     ///
     /// <para>The name rather than the enum's number, because the number is positional and this file
     /// outlives builds; an inserted enum member would silently re-point every saved preference.</para>

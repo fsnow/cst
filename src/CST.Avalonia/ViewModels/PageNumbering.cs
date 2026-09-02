@@ -112,6 +112,16 @@ namespace CST.Avalonia.ViewModels
         /// <para><paramref name="preferred"/> null means the reader has never chosen — a first run, or a
         /// state file from before this existed — and falls through to <see cref="DefaultType"/>, which is
         /// exactly the behaviour that shipped before.</para>
+        ///
+        /// <para><b>The two functions disagree about a null <paramref name="editions"/>, on purpose.</b>
+        /// <see cref="DefaultType"/> reads it pessimistically and answers Paragraph — with nothing known,
+        /// pick the address every book has. <see cref="Offers"/> reads it optimistically and answers
+        /// available — see <see cref="Has"/> for why. So during the brief window before a book's markers
+        /// are built, this honours the preference rather than falling back, and the reader can get an
+        /// anchor for a system the book turns out to lack. That costs one failed lookup, which is the same
+        /// trade <see cref="Has"/> already makes deliberately, and it is preferable to overriding a
+        /// standing choice on a technicality of load order. Recorded because the asymmetry is real and
+        /// neither function used to mention the other.</para>
         /// </summary>
         public static NavigationType Resolve(NavigationType? preferred, IReadOnlyList<PageEdition>? editions)
             => preferred is { } want && Offers(editions, want) ? want : DefaultType(editions);

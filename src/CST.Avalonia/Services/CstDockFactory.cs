@@ -884,8 +884,11 @@ namespace CST.Avalonia.Services
         /// <summary>
         /// The numbering system the reader last navigated with, or null if they never have. (#844)
         ///
-        /// <para>Stored as the enum's NAME, so an unrecognised value - a state file written by a build that
-        /// knew a system this one does not - is simply "no preference" rather than a wrong one.</para>
+        /// <para>Stored as the enum's NAME, so a value this build does not know - a state file written by
+        /// one that knew a system this one does not - comes back as "no preference" rather than as a wrong
+        /// one. TryParse is case-SENSITIVE for names, and only this code writes the file, so the only way
+        /// to reach the odd corners (a bare number, a comma-separated pair) is to hand-edit it; those parse
+        /// to an undefined enum value that Offers rejects every time, which lands in the same place.</para>
         /// </summary>
         private static NavigationType? ReadPreferredGoToNumbering()
         {
@@ -3687,9 +3690,13 @@ namespace CST.Avalonia.Services
                 {
                     _logger.Information("Go To navigation requested: {Anchor}", dialogViewModel.ConstructedAnchor);
 
-                    // Remember the system only on a navigation that actually happened. Not on open, and not
-                    // on cancel: the dialog may have opened on a FALLBACK because this book lacks the
-                    // reader's system, and writing that back would convert them to it permanently. (#844)
+                    // Remember the system the reader pressed OK with. Not on open, and not on cancel: the
+                    // dialog may have OPENED on a fallback because this book lacks the reader's system, and
+                    // writing that back merely for having been shown would convert them to it. (#844)
+                    //
+                    // Deliberately not gated on the navigation working: InvokeNavigateToChapter raises an
+                    // event whose consumer runs JS that swallows a missing anchor, so "it succeeded" is not
+                    // a fact this side can learn. What is recorded is what the reader chose.
                     WritePreferredGoToNumbering(dialogViewModel.SelectedType);
 
                     // Trigger navigation via internal invoke method
