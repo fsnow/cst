@@ -47,6 +47,46 @@ public class SelectionPipelineTests
         Assert.Null(SelectionPipeline.Normalize(raw, Script.Latin));
     }
 
+    /// <summary>
+    /// A selection must not carry Devanāgarī punctuation into otherwise-Latin text. (#942)
+    ///
+    /// <para><b>[fsnow]</b>, running the Beta 6 runbook: <i>"I opened Apadanapali-1 and selected the third
+    /// verse. I see in the context the single danda and double danda in the Latin-script Pali, not semicolon
+    /// and period."</i></para>
+    ///
+    /// <para>Both marks flatten to a period. That loses the gāthā distinction the passage window keeps — a
+    /// single daṇḍa reads ";" there, because it ends a pada — and that is a deliberate call:
+    /// <i>"I am fine with both single and double danda being converted to period in this case. I don't think
+    /// it will materially affect the LLMs ability to understand the text."</i></para></summary>
+    [Theory]
+    [InlineData("gacchati\u0964", "gacchati.")]
+    [InlineData("gacchati\u0965", "gacchati.")]
+    [InlineData("eka\u0964 dve\u0965", "eka. dve.")]
+    public void A_danda_reaches_the_model_as_a_period(string raw, string expected)
+    {
+        Assert.Equal(expected, SelectionPipeline.Normalize(raw, Script.Latin));
+    }
+
+    /// <summary>
+    /// The reported path: reading in a non-Latin script, where the selection arrives as source text and only
+    /// its LETTERS were being converted.
+    ///
+    /// <para>This is why the check passes in Latin and fails everywhere else — a Latin reader's selection is
+    /// copied from what the reader itself rendered, through <c>ConvertBook</c>, which applies the
+    /// markup-driven daṇḍa rules.</para></summary>
+    [Fact]
+    public void A_selection_read_in_Devanagari_carries_no_Devanagari_punctuation()
+    {
+        // गच्छति। — "gacchati" followed by a single daṇḍa.
+        const string deva = "\u0917\u091A\u094D\u091B\u0924\u093F\u0964";
+
+        var normalized = SelectionPipeline.Normalize(deva, Script.Devanagari)!;
+
+        Assert.DoesNotContain('\u0964', normalized);
+        Assert.DoesNotContain('\u0965', normalized);
+        Assert.EndsWith(".", normalized);
+    }
+
     [Fact]
     public void Normalizing_is_idempotent()
     {

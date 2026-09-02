@@ -43,6 +43,23 @@ public static class SelectionPipeline
 
         var latin = sourceScript == Script.Latin ? raw : ScriptConverter.Convert(raw, sourceScript, Script.Latin);
 
+        // Latin letters with Devanāgarī punctuation is not a script. (#942)
+        //
+        // ScriptConverter.Convert converts LETTERS; the daṇḍa rules are written against <p rend> and need
+        // markup a selection does not have. So a reader in Devanāgarī sent "।" and "॥" to the model inside
+        // otherwise-Latin text. This is the same fallback TeiText.Convert applies to passage text that has
+        // lost its tags, now shared rather than copied.
+        //
+        // ONLY reachable for a non-Latin reading script. A Latin reader's selection is copied from what the
+        // reader itself rendered, through ConvertBook, which does run the markup rules - so their gāthā
+        // already reads ";" and passes through here untouched.
+        //
+        // Both marks flatten to a period, which loses the gāthā distinction the window keeps. [fsnow] made
+        // that call: "I am fine with both single and double danda being converted to period in this case. I
+        // don't think it will materially affect the LLMs ability to understand the text. It's better than
+        // non-Latin punctuation coming through, which could potentially confuse."
+        latin = ScriptConverter.LatinizeDandas(latin);
+
         // Compose BEFORE collapsing whitespace: a combining mark is not whitespace, but normalizing after a
         // regex pass means the regex ran over a different string than the one that ships.
         latin = latin.Normalize(NormalizationForm.FormC);

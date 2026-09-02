@@ -137,6 +137,23 @@ namespace CST.Conversion
             return str;
         }
 
+        /// <summary>
+        /// Latin text carrying no Devanāgarī sentence punctuation: both daṇḍas become a period. (#668, #942)
+        ///
+        /// <para><b>Only for text that arrives without its markup.</b> The daṇḍa rules proper are written
+        /// against <c>&lt;p rend&gt;</c> — <c>ConvertBook</c> runs them, and in a gāthā a single daṇḍa becomes
+        /// a semicolon because the distinction there is metrical. Bare text cannot know which paragraph it
+        /// came from, so this is the fallback both such callers share rather than a rule either owns.</para>
+        ///
+        /// <para><b>[fsnow]</b> settled flattening both marks rather than pursuing the alternative of cutting
+        /// the selection out of the rendered window: <i>"I am fine with both single and double danda being
+        /// converted to period in this case. I don't think it will materially affect the LLMs ability to
+        /// understand the text. It's better than non-Latin punctuation coming through, which could
+        /// potentially confuse."</i></para>
+        /// </summary>
+        public static string LatinizeDandas(string str) =>
+            str.Replace('\u0964', '.').Replace('\u0965', '.');
+
         public static string ToTitleCase(string str)
         {
             StringBuilder sb = new StringBuilder();

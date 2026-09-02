@@ -43,7 +43,7 @@ namespace CST.Search
             // — see LatinStop. This is the fallback for the prose case and for any text that did not come
             // through Clean, so the two never disagree the way the two Latin paths once did. (#680)
             if (output == Script.Latin)
-                converted = converted.Replace("\u0964", ".").Replace("\u0965", ".");
+                converted = ScriptConverter.LatinizeDandas(converted);
 
             return converted;
         }
