@@ -176,7 +176,12 @@ public class DictionaryDialogState
     public double? Y { get; set; }
 
     public string UserText { get; set; } = string.Empty;
-    public int SelectedWordIndex { get; set; }
+
+    /// <summary>Which of the matching headwords was selected, remembered across sessions (#935). Stored as
+    /// the headword rather than its position: the list is recomputed by a lookup at restore, against a
+    /// dictionary that can be updated between sessions and a matcher that #933 has already changed, so a
+    /// position is only correct while the list happens to be identical. Empty until first set.</summary>
+    public string SelectedHeadword { get; set; } = string.Empty;
     /// <summary>Preferred dictionary SOURCE id ("vri-childers"/"vri-hindi"/"dpd"/"dppn"), remembered across
     /// sessions (#466). A source identity, never a language code. Empty until first set.</summary>
     public string SourceId { get; set; } = string.Empty;
