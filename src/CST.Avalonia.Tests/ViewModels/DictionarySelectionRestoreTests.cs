@@ -77,6 +77,43 @@ public class DictionarySelectionRestoreTests
         Assert.Equal("n\u0101land\u0101", Word(DictionaryViewModel.ChooseSelection(deva, words)));
     }
 
+    /// <summary>
+    /// The case #935 was actually filed about, across a script change. (fable review)
+    ///
+    /// <para>DPPN distinguishes its homographs by NUMBER — "Nālandā 1", "Nālandāsutta 1". The display
+    /// pipeline converts those digits into the reading script, and IPE carries a Devanāgarī digit through
+    /// unchanged while a Latin one stays ASCII, so the keys differ in 11 of the 14 scripts. The earlier
+    /// script-change test passed only because its headword had no number — the feature's own motivating
+    /// data was the case it did not cover.</para>
+    ///
+    /// <para>The miss was not transient either: the fallback selection is written straight back to state,
+    /// so a failed match replaced the reader's remembered one permanently.</para></summary>
+    [Fact]
+    public void A_numbered_headword_still_matches_after_the_reading_script_changed()
+    {
+        // "N\u0101land\u0101sutta 1" as shown in Devan\u0101gar\u012B, digit included (\u0967 = 1).
+        const string devaNumbered =
+            "\u0928\u093E\u0932\u0928\u094D\u0926\u093E\u0938\u0941\u0924\u094D\u0924 \u0967";
+
+        // Wanted entry deliberately not first, so the auto-select cannot produce the answer by accident.
+        var words = Words("n\u0101land\u0101 1", "n\u0101land\u0101sutta 1");
+
+        Assert.Equal("n\u0101land\u0101sutta 1",
+            Word(DictionaryViewModel.ChooseSelection(devaNumbered, words)));
+    }
+
+    /// <summary>Numbers still distinguish, which is the point of keeping them: folding digits to ASCII must
+    /// not collapse "Nālandā 1" and "Nālandā 2" into the same key, or the reader who picked the second of
+    /// four would land on the first.</summary>
+    [Fact]
+    public void Folding_digits_does_not_merge_different_homographs()
+    {
+        var words = Words("n\u0101land\u0101 1", "n\u0101land\u0101 2");
+
+        Assert.Equal("n\u0101land\u0101 2",
+            Word(DictionaryViewModel.ChooseSelection("n\u0101land\u0101 2", words)));
+    }
+
     /// <summary>An empty result list selects nothing rather than throwing — a lookup that matched nothing is
     /// ordinary.</summary>
     [Fact]
