@@ -19,11 +19,38 @@ public sealed class DictionaryIndex
     // Sorted ascending by IPE headword (ordinal). Headwords are unique (the loader merges duplicates).
     private readonly List<DictionaryWord> _words;
 
+    /// <summary>
+    /// The same entries keyed by their l-folded headword and sorted on that key, consulted only when an
+    /// exact lookup misses. (#933)
+    ///
+    /// <para>A SECOND ordering rather than a changed one: <see cref="_words"/> keeps IPE's collation, every
+    /// entry keeps its own headword, and nothing here reaches display. Two entries that fold together stay
+    /// two entries.</para>
+    /// </summary>
+    private readonly List<(string Key, DictionaryWord Word)> _lFolded;
+
     public DictionaryIndex(IEnumerable<DictionaryWord> words)
     {
         _words = words.ToList();
         _words.Sort(DictionaryWordComparer.Instance);
+
+        _lFolded = _words.Select(w => (Key: FoldL(w.Word), Word: w)).ToList();
+        _lFolded.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
     }
+
+    /// <summary>
+    /// IPE <c>ḷ</c> (U+00E9) read as <c>l</c> (U+00E5), for MATCHING ONLY. (#933)
+    ///
+    /// <para><b>This is not a claim that they are the same letter.</b> They are distinct phonemes in Pāli.
+    /// What it reconciles is two editorial traditions: DPPN follows Malalasekera's PTS spelling, while the
+    /// corpus and DPD follow the Burmese/CST one, and the corpus itself disagrees — नाळन्द… occurs 102 times
+    /// and नालन्द… 24 times across the 217 files, so four clicks in five on that word landed on the spelling
+    /// DPPN does not carry.</para>
+    ///
+    /// <para>Applied to the query and to the index key alike, so it works in both directions: a query
+    /// spelled with <c>ḷ</c> reaches an <c>l</c> headword and the reverse.</para>
+    /// </summary>
+    internal static string FoldL(string ipe) => ipe.Replace('\u00E9', '\u00E5');
 
     public int Count => _words.Count;
 
@@ -100,6 +127,50 @@ public sealed class DictionaryIndex
                 else
                     break;
             }
+        }
+
+        // The guess again with ḷ and l read alike, taken only when it reaches STRICTLY further into the
+        // word. (#933)
+        //
+        // This has to happen on the GUESS, not on the exact search, because the guess is what bridges an
+        // inflected form to a headword - and that is where the spelling difference bites. Real case:
+        // nāḷandaṃ has no exact entry, shares "nāḷ" (3) with Nāḷika, and shares "nāland" (6) with Nālandā
+        // once folded. Folding only the exact arm left the reader on Nāḷika, which is what a lookup already
+        // did.
+        //
+        // Strictly greater, so an exact spelling still wins every tie: folding can only lengthen a common
+        // prefix, never shorten one, so anything resolving today keeps the answer it has.
+        var folded = FoldGuess(ipeWord, Math.Max(commonBehind, commonAhead));
+        return folded ?? results;
+    }
+
+    /// <summary>
+    /// The best l-folded run, or null when folding gets no closer to the query than
+    /// <paramref name="unfoldedBest"/> already did. (#933)
+    ///
+    /// <para>Scans the folded ordering rather than binary-searching it, because the question is "how far
+    /// into the word does the closest entry agree", which is not answered by an insertion point. The set is
+    /// one dictionary - 13,548 headwords for DPPN - and this runs only when an exact lookup has already
+    /// missed.</para>
+    /// </summary>
+    private IReadOnlyList<DictionaryWord>? FoldGuess(string ipeWord, int unfoldedBest)
+    {
+        var key = FoldL(ipeWord);
+
+        int best = 0;
+        for (int i = 0; i < _lFolded.Count; i++)
+        {
+            int common = CountCommonStartLetters(key, _lFolded[i].Key);
+            if (common > best) best = common;
+        }
+
+        if (best <= unfoldedBest) return null;
+
+        var results = new List<DictionaryWord>();
+        for (int i = 0; i < _lFolded.Count; i++)
+        {
+            if (CountCommonStartLetters(key, _lFolded[i].Key) == best)
+                results.Add(_lFolded[i].Word);
         }
 
         return results;
