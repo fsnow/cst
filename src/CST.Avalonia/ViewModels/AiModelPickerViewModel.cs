@@ -346,7 +346,13 @@ namespace CST.Avalonia.ViewModels
             if (connection.KeySource == CredentialSource.Unreadable)
                 return "its API key could not be read";
 
-            var preset = AiProviderPresets.ById(connection.Id);
+            // The RECORDED preset, not a guess from the id. Asking the preset table for a reader's own slug
+            // that a later catalogue has since claimed answers about a different provider - and here that
+            // wrong answer disables the row (IsEnabled binds IsUsable) for a keyless endpoint that works.
+            // (R5-6, the fix #766 made for the logo)
+            var preset = connection.PresetIdOrLegacyId is { } presetId
+                ? AiProviderPresets.ById(presetId)
+                : null;
             if (preset is { RequiresKey: true } && connection.KeySource == CredentialSource.None)
                 return "no API key stored";
 

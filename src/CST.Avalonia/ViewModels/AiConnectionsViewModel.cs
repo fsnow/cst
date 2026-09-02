@@ -884,7 +884,10 @@ namespace CST.Avalonia.ViewModels
         /// provider. Null for a custom endpoint, which has no provider identity, and for the local runners,
         /// which the catalogue does not carry.</para>
         /// </summary>
-        public string? DocUrl => AiProviderPresets.ById(_connection.Id)?.Doc;
+        // The recorded preset, matching ProviderId above rather than guessing from the id. (R5-6)
+        public string? DocUrl => _connection.PresetIdOrLegacyId is { } presetId
+            ? AiProviderPresets.ById(presetId)?.Doc
+            : null;
 
         public bool HasDoc => !string.IsNullOrEmpty(DocUrl);
 

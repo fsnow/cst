@@ -325,6 +325,48 @@ public sealed class ShellEnvParserTests
         Assert.Empty(parsed);
     }
 
+    /// <summary>
+    /// A stream cut off mid-value must not yield a truncated key. (R3-4)
+    ///
+    /// <para><c>env -0</c> terminates every entry, the last one included, so a complete stream ends in NUL.
+    /// Without one, the final entry was cut off — and "ANTHROPIC_API_KEY=sk-ant-parti" has a valid name and
+    /// a plausible value, so every other check passes it. The symptom is a 401 from a key the reader knows
+    /// is right, which is the hardest kind of wrong to diagnose from the outside.</para>
+    ///
+    /// <para><c>ShellEnvironment.WellFormed</c> makes the same test but is consulted only where the exit was
+    /// never observed; a shell that exits 0 having written a truncated payload arrives here already judged
+    /// a success.</para></summary>
+    [Fact]
+    public void A_value_cut_off_mid_write_is_discarded_rather_than_used()
+    {
+        var truncated = Parse("HOME=/Users/x\0ANTHROPIC_API_KEY=sk-ant-parti", "HOME", "ANTHROPIC_API_KEY");
+
+        Assert.Equal("/Users/x", truncated["HOME"]);
+        Assert.False(truncated.ContainsKey("ANTHROPIC_API_KEY"));
+    }
+
+    /// <summary>The same value, terminated, is kept — the rule is about the missing NUL, not about the last
+    /// entry being suspicious.</summary>
+    [Fact]
+    public void A_terminated_final_value_is_kept()
+    {
+        var complete = Parse("HOME=/Users/x\0ANTHROPIC_API_KEY=sk-ant-whole\0", "HOME", "ANTHROPIC_API_KEY");
+
+        Assert.Equal("sk-ant-whole", complete["ANTHROPIC_API_KEY"]);
+    }
+
+    /// <summary>A profile that prints its epilogue AFTER env leaves trailing chatter rather than a truncated
+    /// entry. Dropping the last chunk costs nothing there — the chatter would fail the name-shape check
+    /// anyway — and every complete variable before it survives, which is why this drops a chunk rather than
+    /// rejecting the whole payload.</summary>
+    [Fact]
+    public void Trailing_chatter_does_not_cost_the_variables_before_it()
+    {
+        var withEpilogue = Parse("OPENAI_API_KEY=sk-real\0Goodbye from .zlogout", "OPENAI_API_KEY");
+
+        Assert.Equal("sk-real", withEpilogue["OPENAI_API_KEY"]);
+    }
+
     [Fact]
     public void Nothing_is_kept_from_an_empty_stream()
     {

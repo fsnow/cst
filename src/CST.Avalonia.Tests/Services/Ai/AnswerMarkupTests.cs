@@ -219,6 +219,50 @@ public class AnswerMarkupTests
         Assert.Empty(table.Rows);
     }
 
+    /// <summary>
+    /// Model output is untrusted input, and the renderer is on the UI thread. (R6-3)
+    ///
+    /// <para><c>AnswerTableView.Apply</c> builds rows×columns controls and rebuilds the whole grid on every
+    /// 100 ms streaming flush, so a malfunctioning model emitting a few-hundred-column row freezes the panel
+    /// and the app rather than degrading.</para></summary>
+    [Fact]
+    public void A_runaway_row_is_clamped_rather_than_rendered()
+    {
+        var wide = "|" + string.Join("|", Enumerable.Repeat("x", 400)) + "|";
+        var source = wide + "\n|" + string.Join("|", Enumerable.Repeat("---", 400)) + "|\n" + wide;
+
+        var table = Assert.IsType<AnswerTable>(Assert.Single(AnswerMarkup.Parse(source)));
+
+        Assert.Equal(AnswerMarkup.MaxColumns, table.Header.Count);
+        Assert.Equal(AnswerMarkup.MaxColumns, Assert.Single(table.Rows).Count);
+    }
+
+    /// <summary>Height is capped the same way, and the overflow rows are still CONSUMED — left unread they
+    /// would come back as a wall of pipe characters rendered as prose.</summary>
+    [Fact]
+    public void A_runaway_row_count_is_clamped_and_not_re_read_as_prose()
+    {
+        var row = "| a | b |";
+        var source = "| h1 | h2 |\n| --- | --- |\n" +
+                     string.Join("\n", Enumerable.Repeat(row, AnswerMarkup.MaxRows + 50));
+
+        var blocks = AnswerMarkup.Parse(source);
+        var table = Assert.IsType<AnswerTable>(Assert.Single(blocks));
+
+        Assert.Equal(AnswerMarkup.MaxRows, table.Rows.Count);
+    }
+
+    /// <summary>An ordinary table is untouched — the caps are far above anything a reader would want, and a
+    /// word-by-word gloss is the real shape.</summary>
+    [Fact]
+    public void An_ordinary_table_is_not_clamped()
+    {
+        var table = Assert.IsType<AnswerTable>(Assert.Single(AnswerMarkup.Parse(WordTable)));
+
+        Assert.True(table.Header.Count < AnswerMarkup.MaxColumns);
+        Assert.True(table.Rows.Count < AnswerMarkup.MaxRows);
+    }
+
     [Fact]
     public void A_line_of_dashes_that_is_not_a_table_is_left_alone()
     {

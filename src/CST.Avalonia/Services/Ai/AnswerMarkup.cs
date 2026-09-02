@@ -91,8 +91,8 @@ public static class AnswerMarkup
                 var row = i + 2;
                 while (row < lines.Length && IsPipeRow(lines[row]))
                 {
-                    rows.Add(Cells(lines[row], aligns));
-                    row++;
+                    if (rows.Count < MaxRows) rows.Add(Cells(lines[row], aligns));
+                    row++;   // keep consuming, so the overflow is not re-read as prose
                 }
 
                 blocks.Add(new AnswerTable(header, rows));
@@ -274,12 +274,29 @@ public static class AnswerMarkup
             })
             .ToList();
 
+    /// <summary>
+    /// The widest and tallest table that will be rendered as a table. (R6-3)
+    ///
+    /// <para>Both are far beyond any table a reader would want — the assistant's real tables are a handful
+    /// of columns of word-by-word glosses — and low enough that a malfunctioning model cannot cost the UI
+    /// thread. <c>AnswerTableView.Apply</c> builds rows×columns <c>Border</c> + <c>SelectableTextBlock</c>
+    /// controls and rebuilds the WHOLE grid on every 100 ms streaming flush, so a few-hundred-column row
+    /// freezes the panel and the app rather than degrading.</para>
+    ///
+    /// <para>Overflow is not dropped: a row too wide keeps its first <see cref="MaxColumns"/> cells, and a
+    /// table too tall keeps its first <see cref="MaxRows"/>, so the answer stays readable rather than
+    /// vanishing. Model output is untrusted input like any other.</para>
+    /// </summary>
+    internal const int MaxColumns = 64;
+    internal const int MaxRows = 500;
+
     /// <summary>Split a pipe row into cells, dropping the leading and trailing pipes.</summary>
     private static IReadOnlyList<string> SplitRow(string line)
     {
         var trimmed = line.Trim();
         var inner = trimmed[1..^1];
-        return inner.Split('|');
+        var cells = inner.Split('|');
+        return cells.Length <= MaxColumns ? cells : cells[..MaxColumns];
     }
 
     // ---- Inline emphasis -----------------------------------------------------------------------------

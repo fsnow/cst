@@ -262,10 +262,9 @@ namespace CST.Avalonia.ViewModels
 
         public override int MonogramTone => AiMonogram.ToneFor(Id);
 
-        /// <summary>The connection id, which is the models.dev provider id for anything added from the
-        /// catalogue. A custom endpoint's own slug matches nothing, and falls back to the generic mark like
-        /// everywhere else.</summary>
-        protected override string? ProviderId => Id;
+        /// <summary>The RECORDED preset, not the connection id. A custom endpoint whose slug a later
+        /// catalogue claims would otherwise borrow that provider's mark. (R5-6, #766)</summary>
+        protected override string? ProviderId => _connection.PresetIdOrLegacyId;
 
         /// <summary>Every row this group could show, filtered and ordered.</summary>
         public List<AiCatalogRowViewModel> Visible { get; } = new();
@@ -347,7 +346,9 @@ namespace CST.Avalonia.ViewModels
         /// failed, leaves a reader needing a model id from somewhere. This is the somewhere. Hidden once the
         /// group has models, where it would be a link to information already on screen.</para>
         /// </summary>
-        public string? DocUrl => AiProviderPresets.ById(Id)?.Doc;
+        public string? DocUrl => _connection.PresetIdOrLegacyId is { } presetId
+            ? AiProviderPresets.ById(presetId)?.Doc
+            : null;
 
         /// <summary>
         /// Offered only once we have asked and come back with nothing.

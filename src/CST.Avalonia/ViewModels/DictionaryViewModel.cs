@@ -408,6 +408,27 @@ public class DictionaryViewModel : ReactiveTool, IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dictionary lookup failed for '{Query}' ({Source})", query, source?.Id);
+
+            // Clear rather than leave the previous query's entries standing under the new SearchText, which
+            // presents the OLD query's results as if they matched the new one - a wrong answer rather than a
+            // visible failure. Narrow trigger, since sources swallow their own failures and return empty; a
+            // mid-query SqliteException is about the only way here. (R12-5)
+            //
+            // Behind the same stale-completion guard as the success path, so a failed lookup that has
+            // already been superseded cannot wipe the results the reader is now looking at.
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (query != SearchText || !ReferenceEquals(source, SelectedSource))
+                    return;
+
+                Words.Clear();
+                SelectedWord = null;
+
+                // The one-shot restore is consumed here too. Leaving it armed would let a failed restore
+                // lookup steer whatever the reader typed next. (#935)
+                _pendingSelectedHeadword = null;
+                _pendingSelectedFor = null;
+            });
         }
     }
 

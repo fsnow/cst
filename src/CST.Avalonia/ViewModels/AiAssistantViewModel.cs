@@ -117,6 +117,32 @@ public class AiAssistantViewModel : ReactiveTool
         CopyCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel>(CopyAsync);
         ClearCommand = ReactiveCommand.Create(Clear);
 
+        // An unhandled exception in a ReactiveCommand goes to RxApp.DefaultExceptionHandler, which
+        // TERMINATES THE APP. Everything these commands call catches internally today, so no failing case is
+        // currently constructible - which is exactly what makes this worth wiring: the trap is armed for the
+        // first future edit that lets something throw, and it springs as a crash in a reading app rather
+        // than a message in a panel. SearchViewModel already does this for its own command. (R6-2)
+        //
+        // The pre-turn path is the live risk: _environmentKeys.Ready, _resolver.Resolve and GetCurrentAsync
+        // all run OUTSIDE RunAsync's try, as does CopyAsync's clipboard call.
+        foreach (var command in new IHandleObservableErrors[]
+                 {
+                     ExplainCommand, TranslateCommand, GrammarCommand, WordByWordCommand, AskQuestionCommand,
+                     StopCommand, RefreshReadinessCommand, RetryCommand, CopyCommand, ClearCommand,
+                 })
+        {
+            command.ThrownExceptions.Subscribe(ex =>
+            {
+                _logger.Error(ex, "AI Assistant command failed");
+                if (_current is { } turn)
+                {
+                    turn.Status = "Something went wrong. See the log for details.";
+                    turn.Failed = true;
+                }
+                IsBusy = false;
+            });
+        }
+
         // Asked once at construction so the panel can say it is not configured before anything is pressed.
         RefreshReadiness();
 
@@ -476,11 +502,23 @@ public class AiAssistantViewModel : ReactiveTool
         }
     }
 
-    /// <summary>Stops the turn in flight. What the visible stop control calls.</summary>
+    /// <summary>
+    /// Stops the turn in flight. What the visible stop control calls.
+    ///
+    /// <para><b>The caller's token first, and the order is the whole point.</b> The orchestrator ends a turn
+    /// quietly when the cancellation was not the caller's — <c>catch (OperationCanceledException) when
+    /// (!callerToken.IsCancellationRequested)</c> — because being superseded is not a failure. Cancelling
+    /// its internal source first opens a gap: if the stream's exception reaches that filter before the
+    /// caller token is cancelled, the filter matches, the turn ends by the superseded path, and the reader
+    /// gets a partial answer with no "Stopped." line, indistinguishable from a finished one.</para>
+    ///
+    /// <para>Cancelling the caller's token first makes the filter fail deterministically, so a stop the
+    /// reader asked for always reports itself as one. (R6-4)</para>
+    /// </summary>
     private void Stop()
     {
-        _orchestrator?.Stop();
         _turnCancellation?.Cancel();
+        _orchestrator?.Stop();
     }
 
     private AiTurnViewModel StartTurn(AiTask task, string? question, string? selection, bool clearBox)

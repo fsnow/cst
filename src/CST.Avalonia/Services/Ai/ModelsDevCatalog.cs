@@ -110,12 +110,21 @@ namespace CST.Avalonia.Services.Ai
 
         private CatalogResult? _current;
 
-        public ModelsDevCatalog(HttpClient? http = null, string? cachePath = null, string? source = null)
+        /// <param name="minimumProviders">
+        /// The plausibility floor, injectable so the cache-read rule can be tested with small fixtures
+        /// rather than a fifty-provider one. Production always uses
+        /// <see cref="MinimumPlausibleProviders"/>. (R4-5)
+        /// </param>
+        public ModelsDevCatalog(HttpClient? http = null, string? cachePath = null, string? source = null,
+                                int minimumProviders = MinimumPlausibleProviders)
         {
             _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             _cachePath = cachePath ?? Path.Combine(AppConstants.DataDirectory, "models-dev.json");
             _source = source ?? DefaultSource;
+            _minimumProviders = minimumProviders;
         }
+
+        private readonly int _minimumProviders;
 
         public async Task<CatalogResult> GetAsync(CancellationToken ct = default)
         {
@@ -162,7 +171,7 @@ namespace CST.Avalonia.Services.Ai
                     return;
                 }
 
-                if (Parse(text) is not { } parsed || parsed.Count < MinimumPlausibleProviders)
+                if (Parse(text) is not { } parsed || parsed.Count < _minimumProviders)
                 {
                     // A 200 carrying an error page is the realistic failure, not a 404 - so validate the
                     // shape rather than trusting the status code.
@@ -212,12 +221,19 @@ namespace CST.Avalonia.Services.Ai
                 if (!File.Exists(_cachePath)) return null;
 
                 var parsed = Parse(File.ReadAllText(_cachePath));
-                if (parsed is { Count: > 0 }) return parsed;
+                if (parsed is not null && parsed.Count >= _minimumProviders) return parsed;
 
+                // THE SAME FLOOR THE NETWORK PATH APPLIES (:165). It guarded only the fetch, so a sub-floor
+                // file on disk - hand-edited, truncated by an outside tool, or written by a build older than
+                // the floor - was served as the catalogue with no Problem reported: AiPresetSource's collapse
+                // guard fires only at zero hosted providers, and one is enough to clear it. The result is a
+                // quietly tiny provider list, permanent while offline. (R4-5)
+                //
                 // Unparseable rather than unreadable: Parse returns null instead of throwing, so this case
                 // never reaches the catch below. Discard it either way - a cache that cannot be read will
                 // fail identically on every subsequent start until something removes it.
-                Log.Warning("Provider catalogue cache did not parse; discarding it (#736)");
+                Log.Warning("Provider catalogue cache did not parse, or held implausibly few providers; " +
+                            "discarding it (#736)");
                 try { File.Delete(_cachePath); } catch { /* best effort */ }
                 return null;
             }

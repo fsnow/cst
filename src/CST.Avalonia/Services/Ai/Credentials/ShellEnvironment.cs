@@ -793,8 +793,28 @@ internal static class ShellEnvParser
         if (stdout is null || stdout.Length == 0 || keep is null || keep.Count == 0) return result;
 
         var text = Encoding.UTF8.GetString(stdout);
-        foreach (var chunk in text.Split('\0'))
+        var chunks = text.Split('\0');
+
+        // A COMPLETE STREAM ENDS IN NUL, so the final split chunk of one is "". Where it is not, the last
+        // entry was cut off mid-write and must not be kept: "ANTHROPIC_API_KEY=sk-ant-parti" has a perfectly
+        // valid name and a plausible value, so every check below passes it, and the reader gets a 401 from a
+        // key they know is right. (R3-4)
+        //
+        // Dropping the chunk rather than rejecting the payload, because a well-formedness gate on the whole
+        // stream cannot tell truncation from a profile that prints its epilogue AFTER env - which would end
+        // the payload with chatter and cost the reader every variable. A trailing chunk is discardable
+        // either way: chatter fails the name-shape check, and a truncated entry is the case this exists for.
+        //
+        // ShellEnvironment.WellFormed makes the same test, but only where the exit was never observed
+        // (Decide returns on the exit code alone when it has one). A shell that exits 0 having written a
+        // truncated payload - the cap hit with the remainder still in the pipe, or the buffer snapshotted at
+        // DrainGrace - reaches here with its verdict already "success".
+        int last = chunks.Length - 1;
+        if (chunks[last].Length > 0) last--;
+
+        for (int i = 0; i <= last; i++)
         {
+            var chunk = chunks[i];
             var split = chunk.IndexOf('=');
             if (split <= 0) continue;
 
