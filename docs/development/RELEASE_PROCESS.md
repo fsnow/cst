@@ -141,11 +141,18 @@ the build succeeds, the tests pass, and the mistake ships. Both were missed in B
 
 - [ ] **In-app welcome page rewritten for this release** — `src/CST.Avalonia/Resources/welcome-content.html`.
       This is BUNDLED INTO THE BUILD, so it must be correct before anything is packaged; it is not the same
-      file as `welcome-updates.json`, which is live-fetched and updated post-publish in Step 5. Three parts go
+      file as `welcome-updates.json`, which is live-fetched and updated post-publish in Step 5. Four parts go
       stale every cycle and none of them fail a test:
+      - the **date beside the version**, in the header and the footer alike. It is **only ever moved
+        forward** to the release month — "5.0.0-beta.7 • September 2026" — and **never set back** to a
+        placeholder, so a dev build carries the previous release's month until this step. It is easy to
+        miss precisely because the version number beside it is right: Bucket A bumps the number at the
+        start of the cycle, when the release month is not yet known, and leaves the date alone;
       - the **upgrade notice** — whether a clean start is required, and from which version. Beta 5's said
         "delete your data directory", which would have been wrong advice for every Beta 5 upgrader;
-      - the **focus areas** — they should name what is new *in this release*, not the last one;
+      - the **focus areas** — they should name what is new *in this release*, not the last one. When a
+        release follows close on the last one, the previous cycle's focus areas may still be the newest
+        thing the reader has seen; check whether they were installed before rewriting;
       - the **known limitations** — delete the ones that were fixed. Beta 6 still listed book fonts as
         not customizable, which #42 had shipped.
 - [ ] **Version strings updated and consistent** (bucket A) — see **Version strings: two timing buckets**
@@ -183,7 +190,7 @@ point every dev build self-identifies as the new version, which is what makes bu
 | `CST.Avalonia.csproj` | `Version`, `InformationalVersion`, `CFBundleVersion`, `CFBundleShortVersionString`, `AssemblyVersion`, `FileVersion` — **canonical source** |
 | `Info.plist` | `CFBundleVersion` + `CFBundleShortVersionString` |
 | `package-macos.sh` | helper-bundle `CFBundleVersion` / `CFBundleShortVersionString` |
-| `Resources/welcome-content.html` | header version + footer version/date |
+| `Resources/welcome-content.html` | header + footer **version number only** — leave the date, which is stamped with the release month at release time (checklist item 1) |
 | `Services/WelcomeUpdateService.cs` | `CurrentAppVersion` default |
 | `ViewModels/WelcomeViewModel.cs` | version fallback string |
 | `CLAUDE.md` | status line ("Beta N in development") |
