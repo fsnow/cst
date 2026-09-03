@@ -220,7 +220,9 @@ if none_at_all:
     for fn in none_at_all:
         w(f"| `{fn}` | {books.get(fn, {}).get('latin', '—')} |")
     w("")
-    w("Worth confirming this is a property of the printed sources rather than a gap in the XML.")
+    w("**Expected, not a gap in the XML.** These are `e*` texts, and the VRI printed set does not")
+    w("extend to them \u2014 so there is no printed pagination for them to carry, in any edition. The same")
+    w("reason accounts for the thin coverage across A\u00f1\u00f1a generally. **[fsnow]**")
 else:
     w("Every book carries at least one page-numbering system.")
 w("")

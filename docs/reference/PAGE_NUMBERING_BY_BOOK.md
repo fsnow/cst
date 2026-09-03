@@ -55,7 +55,9 @@ Paragraph for these, and a passage in them has no page reference to cite.**
 | `e0608n.nrf.xml` | Añña/Buddha-Vandanā Gantha-Saṅgaho/Buddhaguṇagāthāvalī |
 | `e0701n.nrf.xml` | Añña/Vaṃsa-Gantha-Saṅgaho/Cūḷaganthavaṃsa |
 
-Worth confirming this is a property of the printed sources rather than a gap in the XML.
+**Expected, not a gap in the XML.** These are `e*` texts, and the VRI printed set does not
+extend to them — so there is no printed pagination for them to carry, in any edition. The same
+reason accounts for the thin coverage across Añña generally. **[fsnow]**
 
 ## By commentary level
 
