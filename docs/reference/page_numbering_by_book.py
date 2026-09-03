@@ -22,7 +22,63 @@ OUT = os.path.join(HERE, "PAGE_NUMBERING_BY_BOOK.md")
 EDITIONS = [("V", "VRI"), ("M", "Myanmar"), ("P", "PTS"), ("T", "Thai"), ("O", "Other")]
 CODES = [c for c, _ in EDITIONS]
 
+# Books.cs CommentaryLevel -> the name the collection goes by.
+LEVELS = [("Mula", "M\u016Bla"), ("Atthakatha", "A\u1E6D\u1E6Dhakath\u0101"),
+          ("Tika", "\u1E6C\u012Bk\u0101"), ("Other", "A\u00F1\u00F1a (other)")]
+
 PB = re.compile(r'<pb\b[^>]*?\bed="([^"]*)"')
+
+# Devanagari -> Latin, mirroring CST.Conversion.Deva2Latn's table and ScriptConverter's
+# ToTitleCase — the pair the book tree itself applies (BookDisplayViewModel.FormatNavPath
+# calls ScriptConverter.Convert(..., Script.Latin, toTitleCase: true)). Ported rather than
+# invoked because this is a Python script and the mapping is frozen; verified character for
+# character against Deva2Latn.ConvertReference over all 217 nav paths.
+DEVA2LATN = {
+    "\u0902": "\u1E43",                                                   # niggahita
+    "\u0905": "a",  "\u0906": "\u0101", "\u0907": "i",  "\u0908": "\u012B",
+    "\u0909": "u",  "\u090A": "\u016B", "\u090F": "e",  "\u0910": "ai",
+    "\u0913": "o",  "\u0914": "au",                                      # independent vowels
+    "\u0915": "k",  "\u0916": "kh", "\u0917": "g",  "\u0918": "gh", "\u0919": "\u1E45",
+    "\u091A": "c",  "\u091B": "ch", "\u091C": "j",  "\u091D": "jh", "\u091E": "\u00F1",
+    "\u091F": "\u1E6D", "\u0920": "\u1E6Dh", "\u0921": "\u1E0D", "\u0922": "\u1E0Dh",
+    "\u0923": "\u1E47",
+    "\u0924": "t",  "\u0925": "th", "\u0926": "d",  "\u0927": "dh", "\u0928": "n",
+    "\u092A": "p",  "\u092B": "ph", "\u092C": "b",  "\u092D": "bh", "\u092E": "m",
+    "\u092F": "y",  "\u0930": "r",  "\u0932": "l",  "\u0935": "v",
+    "\u0938": "s",  "\u0939": "h",  "\u0933": "\u1E37",
+    "\u093E": "\u0101", "\u093F": "i", "\u0940": "\u012B", "\u0941": "u",
+    "\u0942": "\u016B", "\u0947": "e", "\u0948": "ai", "\u094B": "o", "\u094C": "au",
+    "\u094D": "",                                                        # virama
+    "\u0966": "0", "\u0967": "1", "\u0968": "2", "\u0969": "3", "\u096A": "4",
+    "\u096B": "5", "\u096C": "6", "\u096D": "7", "\u096E": "8", "\u096F": "9",
+    "\u0970": ".",                                                       # abbreviation sign
+    "\u200C": "", "\u200D": "",                                          # ZWNJ, ZWJ
+}
+INHERENT_A = re.compile("([\u0915-\u0939])([^\u093E-\u094Da])")
+
+
+def to_latin(deva):
+    """Deva2Latn.ConvertReference + ScriptConverter.ToTitleCase, in that order."""
+    if not deva:
+        return deva
+    # Insert the inherent 'a' after any consonant not followed by a vowel sign, virama or 'a'.
+    # Twice, and then once at end of string — the C# does exactly this, the repetition standing
+    # in for a backtrack it never worked out.
+    deva = INHERENT_A.sub(r"\1a\2", deva)
+    deva = INHERENT_A.sub(r"\1a\2", deva)
+    deva = re.sub("([\u0915-\u0939])$", r"\1a", deva)
+    latin = "".join(DEVA2LATN.get(c, c) for c in deva)
+
+    out, last_was_letter = [], False
+    for c in latin:
+        if c.isalpha():
+            if not last_was_letter:
+                c = c.upper()
+            last_was_letter = True
+        else:
+            last_was_letter = False
+        out.append(c)
+    return "".join(out)
 
 
 def read(path):
@@ -69,7 +125,9 @@ def parse_books(src_path):
         if m:
             books[cur]["matn"] = m.group(1)
     for meta in books.values():
-        meta["nav"] = meta["short"] or meta["long"] or "—"
+        meta["nav"] = meta["short"] or meta["long"] or ""
+        meta["latin"] = to_latin(meta["nav"]) or "—"
+        meta["nav"] = meta["nav"] or "—"
     return books
 
 
@@ -132,17 +190,22 @@ w("### What \"Other\" is")
 w("")
 if o_only and not o_with_others:
     first, last = o_only[0], o_only[-1]
-    navs = {books.get(fn, {}).get("nav", "").split("/")[0] for fn in o_only}
+    navs = {books.get(fn, {}).get("latin", "").split("/")[0] for fn in o_only}
+    # Name the collection from the data rather than from prose: the nav paths read Sihaḷa,
+    # and a tidied spelling here would not match the table below.
+    colls = {books.get(fn, {}).get("latin", "").split("/")[1]
+             for fn in o_only if books.get(fn, {}).get("latin", "").count("/") >= 1}
+    coll = colls.pop() if len(colls) == 1 else "one collection"
     w(f"**`O` is one edition's pagination, not a miscellany.** All {len(o_only)} books using it use")
     w(f"*nothing else*, and no book combines it with another system. They are a contiguous block,")
-    w(f"`{first}`–`{last}` — the Sīhaḷa-gantha-saṅgaho collection, Sinhalese texts paginated to a Sri")
-    w("Lankan printing with no counterpart among the VRI, Myanmar, PTS or Thai editions.")
+    w(f"`{first}`–`{last}` — the **{coll}** collection: Sinhalese texts paginated to a Sri Lankan")
+    w("printing with no counterpart among the VRI, Myanmar, PTS or Thai editions.")
     w("")
     w("That is why a reader never meets `O` in ordinary use: it appears only inside that collection,")
     w("and never as an alternative to a system they already had.")
     if len(navs) == 1:
         w("")
-        w(f"All of them sit under the same top-level nav node: `{navs.pop()}`.")
+        w(f"All of them sit under the same top-level nav node: **{to_latin(navs.pop())}**.")
 else:
     w(f"{len(o_only)} books use `O` alone; {len(o_with_others)} combine it with another system.")
 w("")
@@ -155,7 +218,7 @@ if none_at_all:
     w("| file | nav path |")
     w("|---|---|")
     for fn in none_at_all:
-        w(f"| `{fn}` | {books.get(fn, {}).get('nav', '—')} |")
+        w(f"| `{fn}` | {books.get(fn, {}).get('latin', '—')} |")
     w("")
     w("Worth confirming this is a property of the printed sources rather than a gap in the XML.")
 else:
@@ -167,6 +230,58 @@ w("")
 defaults = collections.Counter()
 for fn, counts in found.items():
     defaults[next((c for c in CODES if counts.get(c)), "Paragraph")] += 1
+
+# Per commentary level: how the five systems land across Mula / Atthakatha / Tika / Anya.
+by_level = {key: collections.Counter() for key, _ in LEVELS}
+level_totals = collections.Counter()
+level_defaults = {key: collections.Counter() for key, _ in LEVELS}
+unlevelled = []
+for fn, counts in found.items():
+    key = books.get(fn, {}).get("matn", "")
+    if key not in by_level:
+        unlevelled.append(fn)
+        continue
+    level_totals[key] += 1
+    for c in CODES:
+        if counts.get(c):
+            by_level[key][c] += 1
+    level_defaults[key][next((c for c in CODES if counts.get(c)), "Paragraph")] += 1
+
+w("## By commentary level")
+w("")
+w("The four levels the tree groups by, and how the editions fall across them. The pattern is not")
+w("uniform, which is the point: a system's overall share says little about the books a given")
+w("reader actually opens.")
+w("")
+w("| level | books | " + " | ".join(f"`{c}`" for c in CODES) + " |")
+w("|---|---:|" + "---:|" * len(CODES))
+for key, name in LEVELS:
+    total = level_totals[key]
+    if not total:
+        continue
+    cells = " | ".join(
+        (f"{by_level[key][c]} ({by_level[key][c] * 100 // total}%)" if by_level[key][c] else "\u00b7")
+        for c in CODES)
+    w(f"| {name} | {total} | {cells} |")
+w("")
+if unlevelled:
+    w(f"({len(unlevelled)} books carry no `CommentaryLevel`: "
+      + ", ".join(f"`{f}`" for f in sorted(unlevelled)) + ".)")
+    w("")
+w("And what a book of each level opens on by default, walking the same precedence `DefaultType`")
+w("does:")
+w("")
+w("| level | " + " | ".join(n for _, n in EDITIONS) + " | Paragraph |")
+w("|---|" + "---:|" * (len(EDITIONS) + 1))
+for key, name in LEVELS:
+    if not level_totals[key]:
+        continue
+    cells = " | ".join(str(level_defaults[key][c]) if level_defaults[key][c] else "\u00b7"
+                       for c in CODES)
+    para = level_defaults[key]["Paragraph"]
+    para_cell = str(para) if para else "\u00b7"
+    w(f"| {name} | {cells} | {para_cell} |")
+w("")
 
 w("## What this means for the app")
 w("")
@@ -226,16 +341,17 @@ w("")
 w("Book order is `Books.cs` order — the order the tree presents them. A `·` means the book carries")
 w("no page breaks for that edition; the number is how many it carries.")
 w("")
-w("| # | file | " + " | ".join(f"`{c}`" for c in CODES) + " | nav path |")
-w("|---:|---|" + "---:|" * len(CODES) + "---|")
+w("| # | file | level | " + " | ".join(f"`{c}`" for c in CODES) + " | nav path |")
+w("|---:|---|---|" + "---:|" * len(CODES) + "---|")
 for fn, meta in books.items():
+    lvl = dict(LEVELS).get(meta.get("matn", ""), meta.get("matn") or "?")
     counts = found.get(fn)
     if counts is None:
         cells = " | ".join("—" for _ in CODES)
-        w(f"| {meta.get('index', '')} | `{fn}` | {cells} | {meta['nav']} *(no XML)* |")
+        w(f"| {meta.get('index', '')} | `{fn}` | {lvl} | {cells} | {meta['latin']} *(no XML)* |")
         continue
     cells = " | ".join(str(counts[c]) if counts.get(c) else "·" for c in CODES)
-    w(f"| {meta.get('index', '')} | `{fn}` | {cells} | {meta['nav']} |")
+    w(f"| {meta.get('index', '')} | `{fn}` | {lvl} | {cells} | {meta['latin']} |")
 w("")
 
 open(OUT, "w", encoding="utf-8").write("\n".join(o) + "\n")
