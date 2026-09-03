@@ -141,11 +141,17 @@ the build succeeds, the tests pass, and the mistake ships. Both were missed in B
 
 - [ ] **In-app welcome page rewritten for this release** — `src/CST.Avalonia/Resources/welcome-content.html`.
       This is BUNDLED INTO THE BUILD, so it must be correct before anything is packaged; it is not the same
-      file as `welcome-updates.json`, which is live-fetched and updated post-publish in Step 5. Three parts go
+      file as `welcome-updates.json`, which is live-fetched and updated post-publish in Step 5. Four parts go
       stale every cycle and none of them fail a test:
+      - the **date beside the version**, in the header and the footer alike. Bucket A bumps the version
+        number at the start of the cycle and sets the date to "in development", because the release month
+        is not known yet. Flipping it to the actual month — "5.0.0-beta.7 • September 2026" — is the last
+        thing that happens, and it is easy to miss precisely because the version number beside it is right;
       - the **upgrade notice** — whether a clean start is required, and from which version. Beta 5's said
         "delete your data directory", which would have been wrong advice for every Beta 5 upgrader;
-      - the **focus areas** — they should name what is new *in this release*, not the last one;
+      - the **focus areas** — they should name what is new *in this release*, not the last one. When a
+        release follows close on the last one, the previous cycle's focus areas may still be the newest
+        thing the reader has seen; check whether they were installed before rewriting;
       - the **known limitations** — delete the ones that were fixed. Beta 6 still listed book fonts as
         not customizable, which #42 had shipped.
 - [ ] **Version strings updated and consistent** (bucket A) — see **Version strings: two timing buckets**
