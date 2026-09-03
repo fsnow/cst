@@ -88,6 +88,22 @@ package (installer included) was built on an ARM64 host, with every native confi
 What you *cannot* do is run an arm64 build on an x64 machine, so each arm64 artifact still needs a
 machine of its own architecture to smoke-test — hence the separate "Test on" column.
 
+**Neither Windows VM answers every question.** Placid and Merlin each have a class of check they cannot
+perform, and the classes are different — so "it passed on Windows" is not a result until you say which
+machine it passed on.
+
+- **Merlin (Fusion, arm64) cannot test appearance.** It runs unactivated Windows, which greys out
+  Personalization entirely: no light/dark theme, no accent colour, no high contrast, no transparency.
+  **[fsnow]**, 2026-09-03: *"dark mode is among the 'customizations' that cannot be set on my unactivated
+  arm64 VM Merlin. I tested Windows dark mode for the first time this morning on Placid."* Anything
+  theme-dependent goes to Placid or Kingfisher.
+- **Placid (Parallels, x64) cannot settle keyboard questions.** Parallels remaps ⌘/Ctrl — that is what
+  muddied the original `NativeMenuBar` dispatch question and sent #111 to bare metal in July 2026. Fusion
+  passes bindings through straightforwardly, so keyboard work goes to Merlin; all of #562 (Windows
+  shortcut coverage) was verified there. [observed]
+
+Kingfisher, being bare metal, has neither limit — it is simply less often to hand.
+
 Rough disk budget for a two-architecture Windows run: ~1 GB of publish trees, ~0.8 GB of artifacts in
 `dist/`, and a NuGet cache that reaches ~5 GB (both CEF packages are 0.7 GB of that). Allow ~8 GB free.
 Inno Setup's lzma2 compression is single-threaded and dominates the wall clock (~5 min per
@@ -572,6 +588,11 @@ before moving on — a missing asset discovered on a test machine costs a round 
 
 **Machines:** Kestrel or Egret (macOS arm64), Caracara (macOS x64), Merlin (Windows arm64),
 Kingfisher or Placid (Windows x64).
+
+Two runbook checks cannot be answered on the machine the architecture assigns them to: **appearance**
+(light/dark, accent, high contrast) is impossible on Merlin, and **keyboard shortcuts** are unreliable on
+Placid. See "Neither Windows VM answers every question" under the shipping matrix. Mark those boxes on
+the machine that can actually answer them, and leave them empty rather than passed elsewhere.
 
 Every machine pulls the same artifacts from the draft, so all four test what will actually ship rather
 than a local build that happens to be lying around.
