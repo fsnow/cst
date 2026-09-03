@@ -2,7 +2,7 @@
 
 CST Reader is a cross-platform application for reading and searching Pāli texts. The current main branch contains CST 5.0, built on .NET 10 and Avalonia UI — a ground-up rewrite of the Windows-only CST4.
 
-**Status: 5.0.0-beta.6.** The largest beta of this cycle. CST 5 matches or exceeds CST4 in features, apart from interface localization (see [Known Gaps](#known-gaps)), and Beta 6 adds an AI Assistant you can ask about the text you are reading, your choice of AI provider, and first-class Windows support on x64 and ARM64.
+**Status: 5.0.0-beta.7.** CST 5 matches or exceeds CST4 in features, apart from interface localization (see [Known Gaps](#known-gaps)). Beta 6 was the largest release of this cycle — an AI Assistant you can ask about the text you are reading, your choice of AI provider, and first-class Windows support on x64 and ARM64 — and Beta 7 follows it two days later with a fix for the AI Assistant in dark mode.
 
 CST Reader presents the Tipiṭaka **in Pāli**, rendered in 14 scripts. It does not include translations of the texts; the built-in dictionaries give the meaning of individual words.
 

@@ -1,45 +1,51 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-09-02T02:20:00Z",
+  "lastUpdated": "2026-09-03T16:35:00Z",
   "currentVersion": {
     "stable": "4.5.0-this-version-is-not-real",
-    "beta": "5.0.0-beta.6"
+    "beta": "5.0.0-beta.7"
   },
   "messages": {
     "5.0.0-beta.1": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.6",
-      "content": "CST Reader 5.0.0-beta.6 is available — the largest beta of this cycle, with 142 issues closed since Beta 5. It adds an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.6"
+      "title": "New Beta Available - 5.0.0-beta.7",
+      "content": "CST Reader 5.0.0-beta.7 is available. Beta 6 and Beta 7 add an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.7"
     },
     "5.0.0-beta.2": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.6",
-      "content": "CST Reader 5.0.0-beta.6 is available — the largest beta of this cycle, with 142 issues closed since Beta 5. It adds an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.6"
+      "title": "New Beta Available - 5.0.0-beta.7",
+      "content": "CST Reader 5.0.0-beta.7 is available. Beta 6 and Beta 7 add an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.7"
     },
     "5.0.0-beta.3": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.6",
-      "content": "CST Reader 5.0.0-beta.6 is available — the largest beta of this cycle, with 142 issues closed since Beta 5. It adds an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.6"
+      "title": "New Beta Available - 5.0.0-beta.7",
+      "content": "CST Reader 5.0.0-beta.7 is available. Beta 6 and Beta 7 add an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.7"
     },
     "5.0.0-beta.4": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.6",
-      "content": "CST Reader 5.0.0-beta.6 is available — the largest beta of this cycle, with 142 issues closed since Beta 5. It adds an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.6"
+      "title": "New Beta Available - 5.0.0-beta.7",
+      "content": "CST Reader 5.0.0-beta.7 is available. Beta 6 and Beta 7 add an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nIMPORTANT: coming from Beta 4 or earlier, delete the contents of ~/Library/Application Support/CSTReader/ (Windows: %APPDATA%\\CSTReader\\) before installing. The search index format changed in Beta 5 and an older index will not be read correctly.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.7"
     },
     "5.0.0-beta.5": {
       "type": "upgrade",
-      "title": "New Beta Available - 5.0.0-beta.6",
-      "content": "CST Reader 5.0.0-beta.6 is available — the largest beta of this cycle, with 142 issues closed since Beta 5. It adds an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nUpgrading from Beta 5: nothing to do. Install over the top — your settings, layout, open books and downloaded dictionaries carry across.",
-      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.6"
+      "title": "New Beta Available - 5.0.0-beta.7",
+      "content": "CST Reader 5.0.0-beta.7 is available. Beta 6 and Beta 7 add an AI Assistant you can ask about the text you are reading, your choice of AI provider, first-class Windows support on x64 and ARM64, Find in Page, text zoom, and a book font per script.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.7"
     },
     "5.0.0-beta.6": {
+      "type": "upgrade",
+      "title": "New Beta Available - 5.0.0-beta.7",
+      "content": "CST Reader 5.0.0-beta.7 is available — a fast follow to Beta 6 that fixes the AI Assistant in dark mode, where its text rendered dark on a dark background.\n\nNothing else to do: install over the top, and your settings, layout, open books and downloaded dictionaries carry across.",
+      "downloadUrl": "https://github.com/fsnow/cst/releases/tag/v5.0.0-beta.7"
+    },
+    "5.0.0-beta.7": {
       "type": "info",
-      "title": "You're Running Beta 6",
-      "content": "Thank you for testing CST Reader Beta 6. This release adds the AI Assistant and makes Windows a first-class target on both x64 and ARM64. The AI Assistant and the access surface for AI clients are the newest parts — reports on those are especially useful. Please report anything you find on GitHub."
+      "title": "You're Running Beta 7",
+      "content": "Thank you for testing CST Reader Beta 7. The AI Assistant and the access surface for AI clients are the newest parts of the app — reports on those are especially useful. Please report anything you find on GitHub."
     },
     "default": {
       "type": "warning",
@@ -50,17 +56,18 @@
   },
   "announcements": [
     {
-      "id": "2026-09-beta6-release",
-      "date": "2026-09-02T00:00:00Z",
-      "title": "CST Reader Beta 6 Released",
-      "content": "Beta 6 is the largest beta of this cycle: an AI Assistant for the text you are reading, your choice of AI provider, and Windows as a first-class target on x64 and ARM64. Upgrading from Beta 5 needs nothing — install over the top. From Beta 4 or earlier, delete the data directory first; see the release notes.",
+      "id": "2026-09-beta7-release",
+      "date": "2026-09-03T00:00:00Z",
+      "title": "CST Reader Beta 7 Released",
+      "content": "Beta 7 is a fast follow to Beta 6, fixing the AI Assistant in dark mode. If you have not installed Beta 6 either, this is the release that brings the AI Assistant, your choice of AI provider, and Windows as a first-class target on x64 and ARM64. From Beta 5 or Beta 6, install over the top; from Beta 4 or earlier, delete the data directory first — see the release notes.",
       "showUntil": "2026-12-31T00:00:00Z",
       "targetVersions": [
         "5.0.0-beta.1",
         "5.0.0-beta.2",
         "5.0.0-beta.3",
         "5.0.0-beta.4",
-        "5.0.0-beta.5"
+        "5.0.0-beta.5",
+        "5.0.0-beta.6"
       ]
     }
   ],
