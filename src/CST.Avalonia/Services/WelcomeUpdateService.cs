@@ -35,7 +35,7 @@ namespace CST.Avalonia.Services
         private static readonly HttpClient SharedHttpClient = new() { Timeout = HttpTimeout };
 
         // Current app version - will be injected from App.axaml.cs
-        public string CurrentAppVersion { get; set; } = "5.0.0-beta.7";
+        public string CurrentAppVersion { get; set; } = "5.0.0-beta.8";
 
         public WelcomeUpdateService(HttpClient? httpClient = null)
         {
