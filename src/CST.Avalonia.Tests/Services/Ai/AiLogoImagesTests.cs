@@ -248,7 +248,8 @@ public class AiLogoImagesTests : IDisposable
     }
 
     /// <summary>A logo naming its own colours must not be mistaken for something reaching off the machine.
-    /// Four of the set do — 302ai, evroc, novita-ai, zenmux — and they are the ones that will not theme.</summary>
+    /// Nine of the 195 do (measured 2026-09-06), and they are the ones that will not theme from the
+    /// stylesheet alone — four of those because the colour they name is black. (#971)</summary>
     [Fact]
     public void A_logo_with_literal_colours_passes()
     {
@@ -259,6 +260,93 @@ public class AiLogoImagesTests : IDisposable
 
         Assert.Null(AiLogoImages.Screen(path));
     }
+
+    // ---- #971: an explicit black fill is the SVG default written out, not a brand colour ----------------
+
+    /// <summary>Both places a fill can be written. The style attribute is the one that matters: the renderer
+    /// resolves it after the presentation attribute, so no author stylesheet can reach it — measured, with
+    /// and without <c>!important</c>. zenmux carries both on the same element.</summary>
+    [Theory]
+    [InlineData("""<path d="M0,0H1" fill="black"/>""", """<path d="M0,0H1" fill="currentColor"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="#000"/>""", """<path d="M0,0H1" fill="currentColor"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="#000000"/>""", """<path d="M0,0H1" fill="currentColor"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="rgb(0, 0, 0)"/>""", """<path d="M0,0H1" fill="currentColor"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="BLACK"/>""", """<path d="M0,0H1" fill="currentColor"/>""")]
+    [InlineData("""<path d="M0,0H1" style="fill:black;fill-opacity:1;"/>""",
+                """<path d="M0,0H1" style="fill:currentColor;fill-opacity:1;"/>""")]
+    [InlineData("""<path d="M0,0H1" style="fill:#000000;stroke-width:0.287356"/>""",
+                """<path d="M0,0H1" style="fill:currentColor;stroke-width:0.287356"/>""")]
+    [InlineData("""<style>.a{fill:black}</style><path class="a" d="M0,0H1"/>""",
+                """<style>.a{fill:currentColor}</style><path class="a" d="M0,0H1"/>""")]
+    public void An_explicit_black_fill_becomes_currentColor(string body, string expected)
+    {
+        Assert.Equal(Svg(expected), AiLogoImages.RedirectExplicitBlack(Svg(body)));
+    }
+
+    /// <summary>zenmux, the measured case: the presentation attribute and the style declaration are both
+    /// black on one element, and both have to move or the style wins and the mark stays black.</summary>
+    [Fact]
+    public void Both_spellings_on_one_element_are_redirected()
+    {
+        var svg = Svg("""<path d="M0,0H1" fill="black" style="fill:black;fill-opacity:1;"/>""");
+
+        Assert.Equal(
+            Svg("""<path d="M0,0H1" fill="currentColor" style="fill:currentColor;fill-opacity:1;"/>"""),
+            AiLogoImages.RedirectExplicitBlack(svg));
+    }
+
+    /// <summary>The 186 that already draw in currentColor render correctly on both grounds today, and the
+    /// same instance comes back so they keep loading straight from disk. A black detail beside a currentColor
+    /// mark is a deliberate contrast; there is no reading of it that makes repainting safe.</summary>
+    [Fact]
+    public void A_document_already_using_currentColor_is_untouched()
+    {
+        var svg = Svg("""<path d="M0,0H1" fill="currentColor"/><path d="M1,1H2" fill="black"/>""");
+
+        Assert.Same(svg, AiLogoImages.RedirectExplicitBlack(svg));
+    }
+
+    /// <summary>A mark drawn in a brand's palette keeps it — that is the whole reason the stylesheet redirects
+    /// currentColor and nothing else. 302ai's greys are the case in the set.</summary>
+    [Theory]
+    [InlineData("""<path d="M0,0H1" fill="#F5F5F5"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="rgb(156,155,155)"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="none"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="white"/>""")]
+    // Not black: the lookahead is what keeps the substitution off a longer keyword that starts the same way.
+    [InlineData("""<path d="M0,0H1" fill="blackcurrant"/>""")]
+    [InlineData("""<path d="M0,0H1" fill="#0000FF"/>""")]
+    // stroke defaults to none, so an explicit black stroke really was a choice. fill defaults to black.
+    [InlineData("""<path d="M0,0H1" stroke="black" fill="none"/>""")]
+    [InlineData("""<path d="M0,0H1" style="fill-opacity:1;stroke:black"/>""")]
+    public void A_colour_that_is_not_an_explicit_black_fill_is_left_alone(string body)
+    {
+        var svg = Svg(body);
+
+        Assert.Same(svg, AiLogoImages.RedirectExplicitBlack(svg));
+    }
+
+    /// <summary>The substitution rewrites one token and nothing around it: the document handed to the renderer
+    /// differs from the file by exactly that, so it can add no element, attribute or reference.</summary>
+    [Fact]
+    public void Nothing_but_the_colour_token_changes()
+    {
+        var svg = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+            <g clip-path="url(#c)"><path d="M0,0H1" fill="black"/></g>
+            <defs><clipPath id="c"><rect width="24" height="24" fill="white"/></clipPath></defs></svg>
+            """;
+
+        // The white in the clipPath and the fill="none" on the root are the two that a coarser rule would
+        // take with it; novita-ai carries both.
+        Assert.Equal(
+            svg.Replace(""" fill="black"/""", """ fill="currentColor"/"""),
+            AiLogoImages.RedirectExplicitBlack(svg));
+    }
+
+    private static string Svg(string body) =>
+        $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{body}</svg>""";
 
     [Fact]
     public void No_path_means_no_image()
