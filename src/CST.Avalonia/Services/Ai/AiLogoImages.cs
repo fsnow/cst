@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using Avalonia.Media;
@@ -22,10 +23,16 @@ namespace CST.Avalonia.Services.Ai
     /// with no release of ours in between and nothing to say it happened.</para>
     ///
     /// <para><b>Theming, measured in the running app.</b> Every logo renders <c>#000000</c> by default —
-    /// including the 101 of 105 drawn in <c>currentColor</c>, which would be invisible on a dark ground. The
-    /// renderer takes a stylesheet, and <c>* { color: … }</c> repaints exactly those, leaving a logo's own
-    /// brand colours alone. <c>svg { color: … }</c> does <b>not</b> work — the declaration does not inherit —
-    /// and <c>* { fill: … }</c> is worse than useless: it fills the outline-drawn logos solid.</para>
+    /// including the 186 of 195 drawn in <c>currentColor</c> (measured 2026-09-06), which would be invisible
+    /// on a dark ground. The renderer takes a stylesheet, and <c>* { color: … }</c> repaints exactly those,
+    /// leaving a logo's own brand colours alone. <c>svg { color: … }</c> does <b>not</b> work — the
+    /// declaration does not inherit — and <c>* { fill: … }</c> is worse than useless: it fills the
+    /// outline-drawn logos solid.</para>
+    ///
+    /// <para><b>An explicit black is not a brand colour</b> (#971). Four of the nine that name their own fills
+    /// name <em>black</em> — the SVG default written out rather than a decision — and those are the ones that
+    /// vanish on the dark pane. <see cref="RedirectExplicitBlack"/> turns them into <c>currentColor</c> before
+    /// the document reaches the renderer, so the same stylesheet reaches them too.</para>
     /// </summary>
     public interface IAiLogoImages
     {
@@ -56,6 +63,19 @@ namespace CST.Avalonia.Services.Ai
         /// </summary>
         private static readonly Regex ExternalReference =
             new(@"\b(?:https?|ftp|file)://", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// A fill of black, in either place it can be written and in any of the spellings CSS allows for the
+        /// same value. Only <c>black</c> occurs in today's set; the rest are here because the logos arrive
+        /// over the network, so what they contain is not ours to fix at build time. (#971)
+        ///
+        /// <para><c>lead</c> is put back verbatim, which is what keeps the two forms — <c>fill="…"</c> and
+        /// <c>fill:…</c> — in one expression. The lookahead is what stops <c>fill="blackcurrant"</c>, and it
+        /// consumes nothing, so trailing space inside the quotes survives.</para>
+        /// </summary>
+        private static readonly Regex ExplicitBlackFill = new(
+            """(?<lead>\bfill\s*(?::|=\s*")\s*)(?:black|#000(?:000)?|rgb\(\s*0\s*,\s*0\s*,\s*0\s*\))(?=\s*(?:["';}]|$))""",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Keyed by file AND colour: the same mark is a different image in light and dark, and a reader can
@@ -102,13 +122,14 @@ namespace CST.Avalonia.Services.Ai
                     return null;
                 }
 
-                // Only currentColor is redirected. A logo that names its own colours keeps them - four of the
-                // set do, and repainting a brand mark would be a worse answer than leaving it.
+                // Only currentColor is redirected. A logo that names its own colours keeps them - five of the
+                // set do, and repainting a brand mark would be a worse answer than leaving it. Black is the
+                // exception, and RedirectExplicitBlack has already dealt with it. (#971)
                 var css = string.Create(
                     CultureInfo.InvariantCulture,
                     $"* {{ color: #{foreground.R:X2}{foreground.G:X2}{foreground.B:X2}; }}");
 
-                var source = SvgSource.Load(path, null, new Svg.Model.SvgParameters(null, css));
+                var source = Load(path, new Svg.Model.SvgParameters(null, css));
                 if (source is null) return null;
 
                 var image = new SvgImage { Source = source };
@@ -124,6 +145,60 @@ namespace CST.Avalonia.Services.Ai
                 Log.Debug(ex, "Could not render the logo at {Path}; falling back to the monogram (#748)", path);
                 return null;
             }
+        }
+
+        /// <summary>
+        /// The screened document at <paramref name="path"/>, ready to draw.
+        ///
+        /// <para>A file that names no black paint is loaded from disk exactly as it was before (#971): the
+        /// 186 that draw in <c>currentColor</c> already theme correctly, and the path they take should not
+        /// change to fix four that do not.</para>
+        ///
+        /// <para>Latin-1 is a lossless byte-to-char map in both directions, so the document the renderer
+        /// parses is byte-identical to the file apart from the substitution — including whatever encoding it
+        /// declares for itself, which stays true rather than being re-encoded behind its own back.</para>
+        /// </summary>
+        private static SvgSource? Load(string path, Svg.Model.SvgParameters parameters)
+        {
+            var text = Encoding.Latin1.GetString(File.ReadAllBytes(path));
+            var redirected = RedirectExplicitBlack(text);
+            if (ReferenceEquals(redirected, text))
+                return SvgSource.Load(path, null, parameters);
+
+            using var stream = new MemoryStream(Encoding.Latin1.GetBytes(redirected));
+            return SvgSource.LoadFromStream(stream, parameters);
+        }
+
+        /// <summary>
+        /// <paramref name="svg"/> with an explicit black fill rewritten to <c>currentColor</c>, or the same
+        /// instance when there is nothing to do. (#971)
+        ///
+        /// <para><b>Why black and nothing else.</b> A mark drawn in a brand's palette must keep it — that is
+        /// why the stylesheet redirects only <c>currentColor</c>. But black is the value SVG paints with when
+        /// no one chose anything, so a logo "naming" it has generally named the default rather than decided,
+        /// and it is the one value guaranteed to fail on a dark ground. Stroke is left alone: <c>stroke</c>
+        /// defaults to <c>none</c>, so an explicit black stroke really was a choice.</para>
+        ///
+        /// <para><b>Why a document already using currentColor is skipped.</b> Those render correctly today,
+        /// on both grounds. A black detail beside a currentColor mark would be a deliberate contrast, and
+        /// there is no reading of it that makes repainting safe.</para>
+        ///
+        /// <para><b>Why the text and not the parsed document</b>, against the rule <see cref="Screen"/> sets
+        /// out for itself: the two are held to different standards because they answer different questions.
+        /// Screening decides whether a document may run at all, so it must see what the renderer sees. This
+        /// substitutes one colour token for another and can add no element, attribute or reference — a
+        /// disagreement with the renderer costs a mark that stays black, not a fetch that gets through. Both
+        /// spellings have to be reached anyway: <c>fill="black"</c> as a presentation attribute, and
+        /// <c>fill:black</c> in a style attribute, which the renderer resolves in that order — an author
+        /// stylesheet cannot override the latter, with or without <c>!important</c>. Measured: zenmux carries
+        /// both, and a <c>[fill="black"]</c> rule leaves it black.</para>
+        /// </summary>
+        internal static string RedirectExplicitBlack(string svg)
+        {
+            if (svg.Contains("currentColor", StringComparison.OrdinalIgnoreCase)) return svg;
+            if (!ExplicitBlackFill.IsMatch(svg)) return svg;
+
+            return ExplicitBlackFill.Replace(svg, "${lead}currentColor");
         }
 
         /// <summary>
