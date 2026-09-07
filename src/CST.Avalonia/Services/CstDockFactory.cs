@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -1200,8 +1201,14 @@ namespace CST.Avalonia.Services
         /// test could pin was a view model's CanFloat flag — and dropping a type from either pattern, or
         /// gutting its Shutdown, would have passed every test in the suite while re-introducing the crash.
         /// A membership test cannot prove the guards work; it can prove nobody quietly left a type out.</para>
+        ///
+        /// <para><c>NotNullWhen(true)</c> is load-bearing, not decoration. The guards this replaced were
+        /// type patterns, which narrow <c>dockable</c> to non-null for the rest of the method; a plain
+        /// <c>bool</c> method throws that away, and <c>PrepareCrossWindowMove</c>'s later
+        /// <c>dockable.Id</c> became a CS8602. Extracting a type test into a method has to carry the
+        /// nullability the pattern was carrying, or it silently costs the caller its flow analysis.</para>
         /// </summary>
-        internal static bool HostsLiveBrowser(IDockable? dockable) =>
+        internal static bool HostsLiveBrowser([NotNullWhen(true)] IDockable? dockable) =>
             dockable is BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel;
 
         internal static bool IsToolDockable(IDockable? dockable) =>
