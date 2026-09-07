@@ -114,8 +114,6 @@ namespace CST.Avalonia.ViewModels
         private bool _isWebViewAvailable = true; // Start optimistically to avoid fallback flash
         private bool _updatingChapterFromScroll = false;
         private bool _isInitializing = true;
-        private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
-        private WebViewState? _savedWebViewState = null; // Saved state during float/unfloat
         private readonly CstDockFactory? _dockFactory; // Factory for float/unfloat operations
         /// <summary>
         /// Guards the three restoration-intent fields below. (R8-5)
@@ -441,12 +439,6 @@ namespace CST.Avalonia.ViewModels
         {
             get => _isLoading;
             set => this.RaiseAndSetIfChanged(ref _isLoading, value);
-        }
-
-        public WebViewLifecycleOperation WebViewLifecycleOperation
-        {
-            get => _webViewLifecycleOperation;
-            set => this.RaiseAndSetIfChanged(ref _webViewLifecycleOperation, value);
         }
 
         public string PageStatusText
@@ -1788,34 +1780,6 @@ namespace CST.Avalonia.ViewModels
             OpenPdfRequested?.Invoke(_book.FileName, sourceType, pdfPage);
         }
 
-        /// <summary>
-        /// Restore WebView state after float/unfloat operation
-        /// </summary>
-        private void RestoreWebViewState()
-        {
-            if (_savedWebViewState == null)
-            {
-                _logger.Warning("No saved state to restore");
-                return;
-            }
-
-            _logger.Information("Restoring WebView state: HtmlLength={HtmlLength}, Positions={PositionCount}, Terms={TermCount}",
-                _savedWebViewState.HtmlContent?.Length ?? 0,
-                _savedWebViewState.SearchPositions?.Count ?? 0,
-                _savedWebViewState.SearchTerms?.Count ?? 0);
-
-            // Restore state (Note: _searchTerms and _searchPositions are readonly,
-            // so we can't reassign them - they stay as initialized)
-            _htmlContent = _savedWebViewState.HtmlContent ?? "";
-            CurrentHitIndex = _savedWebViewState.CurrentHitIndex;
-            TotalHits = _savedWebViewState.TotalHits;
-
-            // Update hit status text
-            UpdateHitStatusText();
-
-            // View will reload HTML and restore scroll position when it recreates WebView
-        }
-
         private void UpdateHitStatusText()
         {
             if (TotalHits > 0)
@@ -2326,49 +2290,4 @@ namespace CST.Avalonia.ViewModels
         }
     }
 
-    /// <summary>
-    /// Lifecycle signals for disposing and rebuilding a WebView around a float/unfloat.
-    ///
-    /// <para><b>DORMANT — nothing sets the four float states, and that is intentional. Do not delete them.</b>
-    /// They are scaffolding retained for #419 (float/unfloat for Source-PDF tabs). The float/unfloat buttons
-    /// that used to drive this were removed in #39 when drag-to-float shipped, taking the only writers with
-    /// them (<c>FloatDockableWithoutRecycling</c> / <c>UnfloatDockableWithoutRecycling</c>, both since
-    /// deleted). The enum, the view-model properties and both views' handlers survive; the only assignment
-    /// left in the tree is a reset to <c>None</c> inside the handler that reacts to it. Nothing misbehaves,
-    /// because these states are never entered. (#896)</para>
-    ///
-    /// <para><b>Whoever implements #419: this is probably not the mechanism you want.</b> The shipped float
-    /// path is the dispose-before-move funnel — <c>CstDockFactory.SplitToWindow</c> calling
-    /// <c>DisposeAndEvictRecycledView</c> before the move, so a fresh browser is built at the destination —
-    /// which already covers <c>PdfDisplayViewModel</c>. This enum is the older, button-era approach.</para>
-    ///
-    /// <para>The prior reference here, to <c>docs/research/BUTTON_BASED_FLOAT_APPROACH.md</c> Phase 4, is
-    /// SUPERSEDED: that document recommends <c>CanFloat = false</c> on documents, which is the opposite of
-    /// what shipped. See <c>docs/architecture/DOCK_SUBSYSTEM.md</c> — and #895, since those docs are
-    /// themselves still being corrected.</para>
-    /// </summary>
-    public enum WebViewLifecycleOperation
-    {
-        None,
-        PrepareForFloat,      // Signal View to dispose WebView before floating
-        RestoreAfterFloat,    // Signal View to recreate WebView after floating
-        PrepareForUnfloat,    // Signal View to dispose WebView before unfloating
-        RestoreAfterUnfloat   // Signal View to recreate WebView after unfloating
-    }
-
-    /// <summary>
-    /// Saved state for WebView recreation after float/unfloat operations
-    /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md Phase 4
-    /// </summary>
-    public class WebViewState
-    {
-        public string? HtmlContent { get; set; }
-        public int ScrollPosition { get; set; }
-        public List<TermPosition>? SearchPositions { get; set; }
-        public List<string>? SearchTerms { get; set; }
-        public Script BookScript { get; set; }
-        public string? CurrentAnchor { get; set; }
-        public int CurrentHitIndex { get; set; }
-        public int TotalHits { get; set; }
-    }
 }

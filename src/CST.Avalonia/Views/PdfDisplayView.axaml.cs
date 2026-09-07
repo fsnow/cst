@@ -1,7 +1,9 @@
 using System;
 using System.Reactive.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using ReactiveUI;
 using WebViewControl;
 using CST.Avalonia.Input;
@@ -16,7 +18,6 @@ public partial class PdfDisplayView : UserControl
     private readonly ILogger _logger;
     private PdfDisplayViewModel? _viewModel;
     private WebView? _webView;
-    private IDisposable? _lifecycleSubscription;
     private bool _hasPdfLoaded = false;
 
     public PdfDisplayView()
@@ -27,6 +28,46 @@ public partial class PdfDisplayView : UserControl
 
         // Try to create WebView
         TryCreateWebView();
+    }
+
+    /// <summary>
+    /// The window this view's browser belongs to, for the #458 invariant check below.
+    ///
+    /// <para>Adopted at the FIRST attach rather than at creation, because <c>TryCreateWebView</c> runs in the
+    /// constructor when there is no visual root yet — the same reason <c>BookDisplayView</c> uses <c>??=</c>
+    /// here. Cleared with the browser in <c>DisposeWebView</c>, so it always describes a live browser or
+    /// nothing, and a rebuilt browser adopts whichever window it is attached to next.</para>
+    /// </summary>
+    private Window? _browserBirthWindow;
+
+    /// <summary>
+    /// #458 invariant: a <b>live</b> browser must never re-attach to a window other than the one it was born
+    /// in — that is the crash, and on macOS it is a SIGSEGV with nothing in the log before it.
+    ///
+    /// <para>With dispose-before-move in place this cannot happen: every re-parent funnels through
+    /// <c>SplitToWindow</c> or <c>PrepareCrossWindowMove</c>, which call <c>DisposeAndEvictRecycledView</c>
+    /// first, so the view that arrives at the destination is a fresh one with no browser yet. If this Error
+    /// ever appears, a re-parent path is missing the guard — better a log line than a crash report. (#419)</para>
+    ///
+    /// <para><b>Deliberately only a log, unlike <c>BookDisplayView</c>, which also disposes and rebuilds
+    /// here.</b> That branch is a rescue, and writing one for PDFs would mean adding lifecycle handling this
+    /// view has never had, unverifiable without a GUI run, in the app's most fragile subsystem. The
+    /// diagnostic is the part that is free and cannot itself break anything.</para>
+    /// </summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+
+        if (this.GetVisualRoot() is not Window newWindow) return;
+
+        if (_webView != null && _browserBirthWindow != null && !ReferenceEquals(_browserBirthWindow, newWindow))
+        {
+            _logger.Error("*** #458 VIOLATION: live PDF WebView re-attaching to a different window — {Book} {Source}, born in {OldHash}, now {NewHash}. A re-parent path is carrying a live browser (crash risk). ***",
+                _viewModel?.BookFilename ?? "null", _viewModel?.SourceType.ToString() ?? "null",
+                _browserBirthWindow.GetHashCode(), newWindow.GetHashCode());
+        }
+
+        _browserBirthWindow ??= newWindow;
     }
 
     private void TryCreateWebView()
@@ -132,6 +173,7 @@ public partial class PdfDisplayView : UserControl
                     focusReporter.BrowserGotFocus -= OnBrowserGotFocus;   // (fable review)
                 _webView.Dispose();
                 _webView = null;
+                _browserBirthWindow = null;  // no live browser, so no window to be born in (#419)
                 _hasPdfLoaded = false;  // Reset so PDF reloads after recreate
                 _logger.Information("PDF WebView disposed successfully");
             }
@@ -139,6 +181,7 @@ public partial class PdfDisplayView : UserControl
             {
                 _logger.Error(ex, "Error while disposing PDF WebView");
                 _webView = null;
+                _browserBirthWindow = null;
             }
         }
     }
@@ -166,12 +209,6 @@ public partial class PdfDisplayView : UserControl
         // Subscribe to LoadPdfRequested event from ViewModel
         _viewModel.LoadPdfRequested += OnLoadPdfRequested;
 
-        // Subscribe to WebViewLifecycleOperation changes for float/unfloat
-        _lifecycleSubscription = _viewModel
-            .WhenAnyValue(vm => vm.WebViewLifecycleOperation)
-            .ObserveOn(new global::CST.Avalonia.AvaloniaUIThreadScheduler())
-            .Subscribe(OnWebViewLifecycleOperationChanged);
-
         // If PDF URL is already available (e.g., restored from state), load it
         // But only load once - don't reload on tab switches (preserves user's current page)
         if (!string.IsNullOrEmpty(_viewModel.PdfUrl) && !_hasPdfLoaded)
@@ -191,9 +228,6 @@ public partial class PdfDisplayView : UserControl
         {
             _viewModel.LoadPdfRequested -= OnLoadPdfRequested;
         }
-
-        _lifecycleSubscription?.Dispose();
-        _lifecycleSubscription = null;
 
         _logger.Information("PdfDisplayView unloaded (WebView kept alive)");
     }
@@ -235,62 +269,4 @@ public partial class PdfDisplayView : UserControl
         InjectShortcutRelay();
     }
 
-    private void OnWebViewLifecycleOperationChanged(WebViewLifecycleOperation operation)
-    {
-        switch (operation)
-        {
-            case WebViewLifecycleOperation.PrepareForFloat:
-            case WebViewLifecycleOperation.PrepareForUnfloat:
-                _logger.Information("PDF: Preparing for float/unfloat - saving state and disposing WebView");
-                SaveWebViewState();
-                DisposeWebView();
-                break;
-
-            case WebViewLifecycleOperation.RestoreAfterFloat:
-            case WebViewLifecycleOperation.RestoreAfterUnfloat:
-                _logger.Information("PDF: Restoring after float/unfloat - recreating WebView");
-                RecreateWebView();
-                RestoreWebViewState();
-                if (_viewModel != null)
-                {
-                    _viewModel.WebViewLifecycleOperation = WebViewLifecycleOperation.None;
-                }
-                break;
-        }
-    }
-
-    private void SaveWebViewState()
-    {
-        if (_viewModel != null && !string.IsNullOrEmpty(_viewModel.PdfUrl))
-        {
-            _viewModel.SavedWebViewState = new PdfWebViewState
-            {
-                Url = _viewModel.PdfUrl,
-                Page = _viewModel.TargetPage
-            };
-            _logger.Debug("PDF state saved: {Url}", _viewModel.PdfUrl);
-        }
-    }
-
-    private void RecreateWebView()
-    {
-        if (_webView == null)
-        {
-            TryCreateWebView();
-        }
-    }
-
-    private void RestoreWebViewState()
-    {
-        if (_viewModel?.SavedWebViewState != null && _webView != null)
-        {
-            var state = _viewModel.SavedWebViewState;
-            if (!string.IsNullOrEmpty(state.Url))
-            {
-                _logger.Information("Restoring PDF state: {Url}", state.Url);
-                LoadPdf(state.Url);
-            }
-            _viewModel.SavedWebViewState = null;
-        }
-    }
 }

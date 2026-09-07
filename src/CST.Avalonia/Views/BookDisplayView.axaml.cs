@@ -42,7 +42,6 @@ public partial class BookDisplayView : UserControl
     // shared slot would silently hand one caller the other's answer.
     private TaskCompletionSource<(string? Text, int? Paragraph)>? _aiSelectionTcs;
     private ScrollViewer? _fallbackBrowser;
-    private IDisposable? _lifecycleSubscription; // Subscription to WebViewLifecycleOperation changes
     private int _lastScrollPosition = 0;
     private bool _isBrowserInitialized = false;
     private TaskCompletionSource<string?>? _paraAnchorTcs = null;
@@ -680,7 +679,6 @@ public partial class BookDisplayView : UserControl
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.NavigateToHighlightRequested -= NavigateToHighlight;
             _viewModel.NavigateToChapterRequested -= NavigateToAnchor;
-            _lifecycleSubscription?.Dispose();
             _viewModel.BookDisplayControl = null;
         }
 
@@ -696,17 +694,6 @@ public partial class BookDisplayView : UserControl
             _viewModel.NavigateToHighlightRequested += NavigateToHighlight;
             _viewModel.NavigateToChapterRequested += NavigateToAnchor;
 
-            // Phase 4: Subscribe to WebViewLifecycleOperation changes for float/unfloat operations
-            // Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
-            // IMPORTANT: Capture ViewModel in local variable so dispose has stable reference
-            var vm = _viewModel;
-            _lifecycleSubscription = System.Reactive.Linq.Observable
-                .FromEventPattern<System.ComponentModel.PropertyChangedEventHandler, System.ComponentModel.PropertyChangedEventArgs>(
-                    h => vm.PropertyChanged += h,
-                    h => vm.PropertyChanged -= h)
-                .Where(pattern => pattern.EventArgs.PropertyName == nameof(BookDisplayViewModel.WebViewLifecycleOperation))
-                .Subscribe(_ => OnWebViewLifecycleOperationChanged());
-
             // If the ViewModel already has HTML content, load it immediately
             // This handles the case where the view is recreated but the ViewModel persists
             if (!string.IsNullOrEmpty(_viewModel.HtmlContent))
@@ -715,51 +702,6 @@ public partial class BookDisplayView : UserControl
                 Dispatcher.UIThread.Post(() => LoadHtmlContent());
             }
         }
-    }
-
-    /// <summary>
-    /// Handle WebViewLifecycleOperation changes for float/unfloat operations
-    /// Phase 4: Manual WebView disposal and recreation to prevent CEF crash
-    /// Related: docs/research/BUTTON_BASED_FLOAT_APPROACH.md
-    /// </summary>
-    private void OnWebViewLifecycleOperationChanged()
-    {
-        if (_viewModel == null) return;
-
-        var operation = _viewModel.WebViewLifecycleOperation;
-        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        _logger.Information("WebViewLifecycleOperation changed: {Operation}", operation);
-
-        switch (operation)
-        {
-            case WebViewLifecycleOperation.PrepareForFloat:
-            case WebViewLifecycleOperation.PrepareForUnfloat:
-                _logger.Warning("*** DISPOSING WebView before window operation ***");
-                DisposeWebView();
-                _logger.Information("WebView disposed, ready for window operation");
-                break;
-
-            case WebViewLifecycleOperation.RestoreAfterFloat:
-            case WebViewLifecycleOperation.RestoreAfterUnfloat:
-                _logger.Warning("*** RECREATING WebView after window operation ***");
-                TryCreateWebView();
-
-                // Reload HTML content if available
-                if (!string.IsNullOrEmpty(_viewModel.HtmlContent))
-                {
-                    _logger.Information("Reloading HTML content ({Length} chars) after WebView recreation",
-                        _viewModel.HtmlContent.Length);
-                    Dispatcher.UIThread.Post(() => LoadHtmlContent());
-                }
-                _logger.Information("WebView recreated and content reloaded");
-                break;
-
-            case WebViewLifecycleOperation.None:
-            default:
-                // No action needed
-                break;
-        }
-        _logger.Information("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
 
     private void OnIsVisibleChanged(object? sender, AvaloniaPropertyChangedEventArgs e)

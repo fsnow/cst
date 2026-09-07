@@ -27,8 +27,6 @@ namespace CST.Avalonia.ViewModels
         private bool _isWebViewAvailable = true;
         private string _pdfLocalPath = "";
         private string _pdfUrl = "";
-        private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
-        private PdfWebViewState? _savedWebViewState = null;
 
         /// <summary>
         /// Event raised when the PDF URL is ready to be loaded in the WebView.
@@ -61,7 +59,18 @@ namespace CST.Avalonia.ViewModels
             }
             Title = $"{GetSourceTypeName(sourceType)} - Page {targetPage}";
             CanClose = true;
-            CanFloat = false;  // Float/unfloat not yet implemented for PDF windows
+            // A PDF tab floats into its own window like a book (#419). Everything the float depends on
+            // already handles this type: SplitToWindow disposes the live browser before the move,
+            // PrepareCrossWindowMove does the same for a cross-window drag, DisposeAndEvictRecycledView
+            // shuts the view down and drops the cache entry, and CloseDockable evicts on close. The fresh
+            // view at the destination reloads PdfUrl and builds a new browser, so no live WebView crosses
+            // a re-parent.
+            //
+            // CanDrag is left at its default true, as it always was: CanFloat=false never blocked dragging
+            // a PDF INTO an existing floating window - Dock's ValidateDocument gates on CanDrag/CanDrop and
+            // never consults CanFloat - so that re-parent has been reachable since #458 and goes through
+            // the same funnel. This flag adds a second way in, not a new hazard.
+            CanFloat = true;
             CanPin = false;
 
             // Initialize commands
@@ -122,18 +131,6 @@ namespace CST.Avalonia.ViewModels
         {
             get => _pdfLocalPath;
             set => this.RaiseAndSetIfChanged(ref _pdfLocalPath, value);
-        }
-
-        public WebViewLifecycleOperation WebViewLifecycleOperation
-        {
-            get => _webViewLifecycleOperation;
-            set => this.RaiseAndSetIfChanged(ref _webViewLifecycleOperation, value);
-        }
-
-        public PdfWebViewState? SavedWebViewState
-        {
-            get => _savedWebViewState;
-            set => this.RaiseAndSetIfChanged(ref _savedWebViewState, value);
         }
 
         public string SourceTypeName => GetSourceTypeName(_sourceType);
@@ -248,12 +245,4 @@ namespace CST.Avalonia.ViewModels
         #endregion
     }
 
-    /// <summary>
-    /// Saved WebView state for PDF restoration after float/unfloat operations.
-    /// </summary>
-    public class PdfWebViewState
-    {
-        public string? Url { get; set; }
-        public int Page { get; set; }
-    }
 }
