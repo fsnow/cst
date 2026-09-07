@@ -42,12 +42,17 @@
                                   SelectedItem="{Binding SelectedNode}"
                                   AutoScrollToSelectedItem="False"
                                   Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                                  DoubleTapped="TreeView_DoubleTapped">
+                                  DoubleTapped="TreeView_DoubleTapped"
+                                  AutomationProperties.AutomationId="books.tree"
+                                  AutomationProperties.Name="Book tree">
                             <TreeView.Styles>
                                 <!-- Style for TreeViewItem -->
                                 <Style Selector="TreeViewItem" x:DataType="vm:BookTreeNode">
                                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                                     <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                                    <!-- #862: a TreeViewItem has no text of its own, so without this every node
+                                         reports its accessible name as the view-model type name. -->
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}"/>
                                     <Setter Property="Background" Value="Transparent"/>
                                 </Style>
                                 <!-- #646: the selected book is visible again. It used to be painted away —

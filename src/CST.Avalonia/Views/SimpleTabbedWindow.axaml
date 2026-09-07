@@ -98,7 +98,9 @@
                 <ComboBox MinWidth="120"
                           Margin="0,0,20,0"
                           x:Name="InterfaceLangCombo"
-                          SelectedIndex="0">
+                          SelectedIndex="0"
+                          AutomationProperties.AutomationId="main.interface-language"
+                          AutomationProperties.Name="Interface language">
                     <ComboBoxItem Content="English"/>
                 </ComboBox>
                 
@@ -108,7 +110,9 @@
                           Margin="0,0,5,0"/>
                 <ComboBox MinWidth="120"
                           x:Name="PaliScriptCombo"
-                          ToolTip.Tip="Default script for the Open a Book tree and new book windows">
+                          ToolTip.Tip="Default script for the Open a Book tree and new book windows"
+                          AutomationProperties.AutomationId="main.pali-script"
+                          AutomationProperties.Name="Pali script">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}"/>
@@ -121,6 +125,7 @@
         <!-- Main DockControl -->
         <dock:DockControl x:Name="DockControl"
                           Layout="{Binding Layout}"
-                          Factory="{Binding Factory}" />
+                          Factory="{Binding Factory}"
+                          AutomationProperties.AutomationId="main.dock" />
     </DockPanel>
 </Window>

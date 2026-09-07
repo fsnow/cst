@@ -24,7 +24,8 @@
 
             <!-- Status Text -->
             <TextBlock Grid.Column="0" Text="{Binding StatusText}"
-                       VerticalAlignment="Center" Margin="8,0"/>
+                       VerticalAlignment="Center" Margin="8,0"
+                       AutomationProperties.AutomationId="pdf.status"/>
 
             <!-- Loading Indicator -->
             <ProgressBar Grid.Column="1" IsIndeterminate="True"
@@ -41,7 +42,9 @@
                            Focusable="True"
                            IsTabStop="True"
                            ZIndex="-1000"
-                           IsHitTestVisible="True"/>
+                           IsHitTestVisible="True"
+                                AutomationProperties.AutomationId="pdf.page"
+                                AutomationProperties.Name="Source PDF"/>
 
                 <!-- Fallback when WebView not available -->
                 <ScrollViewer x:Name="fallbackDisplay"

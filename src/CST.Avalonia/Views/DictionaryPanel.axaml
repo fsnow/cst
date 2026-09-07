@@ -37,7 +37,9 @@
                      Text="{Binding SearchText}"
                      Watermark="Look up a word…"
                      HorizontalAlignment="Stretch"
-                     Margin="0,0,0,4"/>
+                     Margin="0,0,0,4"
+                     AutomationProperties.AutomationId="dictionary.search"
+                     AutomationProperties.Name="Look up a word"/>
             <!-- Hidden measurer: renders the longest DisplayName (plus room for the dropdown arrow) so the
                  Auto column stays fixed at that width regardless of which — possibly short — source is
                  selected. Opacity 0 + not hit-testable; shares the ComboBox's cell so it adds no height. -->
@@ -51,7 +53,9 @@
                       HorizontalAlignment="Stretch"
                       ItemsSource="{Binding Sources}"
                       SelectedItem="{Binding SelectedSource}"
-                      ToolTip.Tip="Dictionary source">
+                      ToolTip.Tip="Dictionary source"
+                      AutomationProperties.AutomationId="dictionary.source"
+                      AutomationProperties.Name="Dictionary source">
                 <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="dict:IDictionarySource">
                         <TextBlock Text="{Binding DisplayName}"/>
@@ -64,7 +68,9 @@
         <TextBlock Grid.Row="1" Classes="pane-label" Text="Words" Margin="8,4,8,2"/>
         <ListBox Grid.Row="2" Margin="8,0"
                  ItemsSource="{Binding Words}"
-                 SelectedItem="{Binding SelectedWord}">
+                 SelectedItem="{Binding SelectedWord}"
+                 AutomationProperties.AutomationId="dictionary.words"
+                 AutomationProperties.Name="Words">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:DictionaryEntryViewModel">
                     <TextBlock Text="{Binding DisplayWord}"
@@ -73,9 +79,11 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
             <ListBox.Styles>
-                <Style Selector="ListBoxItem">
+                <Style Selector="ListBoxItem" x:DataType="vm:DictionaryEntryViewModel">
                     <Setter Property="Padding" Value="4,2"/>
                     <Setter Property="MinHeight" Value="0"/>
+                    <!-- #862 -->
+                    <Setter Property="AutomationProperties.Name" Value="{Binding DisplayWord}"/>
                 </Style>
             </ListBox.Styles>
         </ListBox>
@@ -94,11 +102,15 @@
                 <Button Grid.Column="1" Classes="nav"
                         Command="{Binding BackCommand}"
                         Content="◀"
-                        ToolTip.Tip="Back"/>
+                        ToolTip.Tip="Back"
+                        AutomationProperties.AutomationId="dictionary.back"
+                        AutomationProperties.Name="Back"/>
                 <Button Grid.Column="2" Classes="nav"
                         Command="{Binding ForwardCommand}"
                         Content="▶"
-                        ToolTip.Tip="Forward"/>
+                        ToolTip.Tip="Forward"
+                        AutomationProperties.AutomationId="dictionary.forward"
+                        AutomationProperties.Name="Forward"/>
             </Grid>
 
             <!-- Definition: rendered as an HTML document in a WebView (#466). The source's MeaningHtml is
@@ -108,7 +120,9 @@
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                <wv:WebView x:Name="MeaningWebView"/>
+                <wv:WebView x:Name="MeaningWebView"
+                            AutomationProperties.AutomationId="dictionary.meaning"
+                            AutomationProperties.Name="Meaning"/>
             </Border>
 
             <!-- Per-source attribution (from the source's recorded citation; hidden when blank). -->
