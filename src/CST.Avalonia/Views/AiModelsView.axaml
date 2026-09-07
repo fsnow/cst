@@ -105,9 +105,16 @@
                                         </Border>
                                         <Image IsVisible="{Binding LogoPath,
                                                    Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
-                                               Source="{Binding LogoPath,
-                                                   Converter={x:Static conv:ProviderLogoConverter.Instance}}"
-                                               Stretch="Uniform" Margin="1"/>
+                                               Stretch="Uniform" Margin="1">
+                                            <!-- ActualThemeVariant is not read: it is here so a theme switch invalidates the
+                                                 binding and the mark is redrawn in the new colour. (#971) -->
+                                            <Image.Source>
+                                                <MultiBinding Converter="{x:Static conv:ProviderLogoConverter.Instance}">
+                                                    <Binding Path="LogoPath"/>
+                                                    <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}"/>
+                                                </MultiBinding>
+                                            </Image.Source>
+                                        </Image>
                                     </Panel>
 
                                     <TextBlock Grid.Column="2" Text="{Binding DisplayName}"

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Data.Converters;
@@ -15,12 +16,17 @@ namespace CST.Avalonia.Converters
     /// a placeholder: the row already has a tile behind it, and the binding simply never replaces it.</para>
     ///
     /// <para><b>The colour is read from the theme at conversion time</b>, because a mark drawn in
-    /// <c>currentColor</c> is invisible against its own background in one of the two themes. A row built
-    /// before a theme switch keeps the colour it was built with until the list is rebuilt — acceptable
-    /// because the settings window is short-lived and a theme change is rare, and worth stating so nobody
-    /// reads it as a bug.</para>
+    /// <c>currentColor</c> is invisible against its own background in one of the two themes.</para>
+    ///
+    /// <para><b>Bind it as a MultiBinding, with the control's <c>ActualThemeVariant</c> second</b> (#971).
+    /// Nothing re-runs a converter when the theme changes, so a single binding would leave every mark on the
+    /// colour it was first drawn in — every logo in the pane black at once, if the switch was to dark. The
+    /// second value is never read; it is there so the variant is a binding source and a switch invalidates
+    /// the row. Measured: <b>[fsnow]</b>, on the build that fixed the black fills — <i>"when I open the
+    /// program in dark mode all the logos show correctly as light"</i>, but switching with the pane open did
+    /// not repaint them.</para>
     /// </summary>
-    public class ProviderLogoConverter : IValueConverter
+    public class ProviderLogoConverter : IValueConverter, IMultiValueConverter
     {
         public static readonly ProviderLogoConverter Instance = new();
 
@@ -31,6 +37,11 @@ namespace CST.Avalonia.Converters
 
             return images.Get(path, Foreground());
         }
+
+        /// <param name="values">The logo path, then the theme variant that exists only to be depended on.
+        /// Tolerates a short list so a mis-written binding draws the monogram rather than throwing.</param>
+        public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture) =>
+            Convert(values.Count > 0 ? values[0] : null, targetType, parameter, culture);
 
         /// <summary>The theme's own primary text colour, so a monochrome mark reads like the name beside
         /// it. Falls back to a mid grey that is legible on either ground rather than to black, which

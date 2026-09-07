@@ -113,9 +113,16 @@
                                             <TextBlock Text="{Binding Monogram}"/>
                                         </Border>
                                         <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
-                                               Source="{Binding LogoPath,
-                                                   Converter={x:Static conv:ProviderLogoConverter.Instance}}"
-                                               Stretch="Uniform" Margin="2"/>
+                                               Stretch="Uniform" Margin="2">
+                                            <!-- ActualThemeVariant is not read: it is here so a theme switch invalidates the
+                                                 binding and the mark is redrawn in the new colour. (#971) -->
+                                            <Image.Source>
+                                                <MultiBinding Converter="{x:Static conv:ProviderLogoConverter.Instance}">
+                                                    <Binding Path="LogoPath"/>
+                                                    <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}"/>
+                                                </MultiBinding>
+                                            </Image.Source>
+                                        </Image>
                                     </Panel>
 
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
@@ -234,9 +241,16 @@
                                                 <TextBlock Text="{Binding Monogram}"/>
                                             </Border>
                                             <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
-                                                   Source="{Binding LogoPath,
-                                                       Converter={x:Static conv:ProviderLogoConverter.Instance}}"
-                                                   Stretch="Uniform" Margin="2"/>
+                                                   Stretch="Uniform" Margin="2">
+                                                <!-- ActualThemeVariant is not read: it is here so a theme switch invalidates the
+                                                     binding and the mark is redrawn in the new colour. (#971) -->
+                                                <Image.Source>
+                                                    <MultiBinding Converter="{x:Static conv:ProviderLogoConverter.Instance}">
+                                                        <Binding Path="LogoPath"/>
+                                                        <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}"/>
+                                                    </MultiBinding>
+                                                </Image.Source>
+                                            </Image>
                                         </Panel>
 
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
@@ -301,9 +315,16 @@
                                                 <TextBlock Text="{Binding Monogram}"/>
                                             </Border>
                                             <Image IsVisible="{Binding LogoPath, Converter={x:Static conv:ProviderLogoRenderedConverter.Instance}}"
-                                                   Source="{Binding LogoPath,
-                                                       Converter={x:Static conv:ProviderLogoConverter.Instance}}"
-                                                   Stretch="Uniform" Margin="2"/>
+                                                   Stretch="Uniform" Margin="2">
+                                                <!-- ActualThemeVariant is not read: it is here so a theme switch invalidates the
+                                                     binding and the mark is redrawn in the new colour. (#971) -->
+                                                <Image.Source>
+                                                    <MultiBinding Converter="{x:Static conv:ProviderLogoConverter.Instance}">
+                                                        <Binding Path="LogoPath"/>
+                                                        <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}"/>
+                                                    </MultiBinding>
+                                                </Image.Source>
+                                            </Image>
                                         </Panel>
 
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
@@ -337,9 +358,15 @@
                                         Background="{DynamicResource DockApplicationAccentBrushLow}">
                                     <TextBlock Text="+"/>
                                 </Border>
-                                <Image Source="{Binding $parent[UserControl].((vm:AiConnectionsViewModel)DataContext).GenericLogoPath,
-                                           Converter={x:Static conv:ProviderLogoConverter.Instance}}"
-                                       Stretch="Uniform" Margin="2"/>
+                                <Image Stretch="Uniform" Margin="2">
+                                    <!-- As above: the variant is a dependency, not an input. (#971) -->
+                                    <Image.Source>
+                                        <MultiBinding Converter="{x:Static conv:ProviderLogoConverter.Instance}">
+                                            <Binding Path="$parent[UserControl].((vm:AiConnectionsViewModel)DataContext).GenericLogoPath"/>
+                                            <Binding Path="ActualThemeVariant" RelativeSource="{RelativeSource Self}"/>
+                                        </MultiBinding>
+                                    </Image.Source>
+                                </Image>
                             </Panel>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                                 <TextBlock Text="Custom endpoint" FontWeight="SemiBold"/>
