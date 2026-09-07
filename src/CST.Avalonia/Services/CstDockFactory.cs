@@ -1186,6 +1186,24 @@ namespace CST.Avalonia.Services
         /// <para>Extracted so it can be tested: the guards themselves end in <c>FloatDockable</c>, which
         /// needs a host window and cannot run headless.</para>
         /// </summary>
+        /// <summary>
+        /// Whether this dockable carries a live CEF browser, and therefore must be disposed before any
+        /// re-parent. (#419)
+        ///
+        /// <para>Three types do: books, source PDFs, and the Dictionary tool (#466). Carrying any of their
+        /// browsers across a re-parent is the #458 SIGSEGV, so this set is the input to
+        /// <see cref="SplitToWindow"/> and <see cref="PrepareCrossWindowMove"/> — the two guards that call
+        /// <c>DisposeAndEvictRecycledView</c> before the move.</para>
+        ///
+        /// <para><b>Extracted so membership can be tested.</b> The guards themselves need a host window and
+        /// a real ControlRecycling resource and cannot run headless (#655), so before this the only thing a
+        /// test could pin was a view model's CanFloat flag — and dropping a type from either pattern, or
+        /// gutting its Shutdown, would have passed every test in the suite while re-introducing the crash.
+        /// A membership test cannot prove the guards work; it can prove nobody quietly left a type out.</para>
+        /// </summary>
+        internal static bool HostsLiveBrowser(IDockable? dockable) =>
+            dockable is BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel;
+
         internal static bool IsToolDockable(IDockable? dockable) =>
             dockable is ITool || dockable is IToolDock;
 
@@ -1997,7 +2015,7 @@ namespace CST.Avalonia.Services
         {
             // DictionaryViewModel is a CEF-hosting TOOL (#466) — same re-parent hazard as the book/PDF
             // documents, so it gets the same dispose-before-move.
-            if (dockable is BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel)
+            if (HostsLiveBrowser(dockable))
             {
                 if (dockable is BookDisplayViewModel bookVm && bookVm.LastPositionToken is { } token)
                     bookVm.QueuePositionRestore(token);
@@ -2033,7 +2051,7 @@ namespace CST.Avalonia.Services
         private void PrepareCrossWindowMove(IDockable? dockable, IDock? targetDock)
         {
             // Books, PDFs, and the CEF-hosting Dictionary tool (#466) — everything that carries a live browser.
-            if (dockable is not (BookDisplayViewModel or PdfDisplayViewModel or DictionaryViewModel)) return;
+            if (!HostsLiveBrowser(dockable)) return;
             if (targetDock == null) return;
 
             var sourceRoot = GetRootOwner(dockable);
