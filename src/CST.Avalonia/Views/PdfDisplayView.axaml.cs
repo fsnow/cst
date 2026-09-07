@@ -18,7 +18,6 @@ public partial class PdfDisplayView : UserControl
     private readonly ILogger _logger;
     private PdfDisplayViewModel? _viewModel;
     private WebView? _webView;
-    private IDisposable? _lifecycleSubscription;
     private bool _hasPdfLoaded = false;
 
     public PdfDisplayView()
@@ -210,12 +209,6 @@ public partial class PdfDisplayView : UserControl
         // Subscribe to LoadPdfRequested event from ViewModel
         _viewModel.LoadPdfRequested += OnLoadPdfRequested;
 
-        // Subscribe to WebViewLifecycleOperation changes for float/unfloat
-        _lifecycleSubscription = _viewModel
-            .WhenAnyValue(vm => vm.WebViewLifecycleOperation)
-            .ObserveOn(new global::CST.Avalonia.AvaloniaUIThreadScheduler())
-            .Subscribe(OnWebViewLifecycleOperationChanged);
-
         // If PDF URL is already available (e.g., restored from state), load it
         // But only load once - don't reload on tab switches (preserves user's current page)
         if (!string.IsNullOrEmpty(_viewModel.PdfUrl) && !_hasPdfLoaded)
@@ -235,9 +228,6 @@ public partial class PdfDisplayView : UserControl
         {
             _viewModel.LoadPdfRequested -= OnLoadPdfRequested;
         }
-
-        _lifecycleSubscription?.Dispose();
-        _lifecycleSubscription = null;
 
         _logger.Information("PdfDisplayView unloaded (WebView kept alive)");
     }
@@ -279,62 +269,4 @@ public partial class PdfDisplayView : UserControl
         InjectShortcutRelay();
     }
 
-    private void OnWebViewLifecycleOperationChanged(WebViewLifecycleOperation operation)
-    {
-        switch (operation)
-        {
-            case WebViewLifecycleOperation.PrepareForFloat:
-            case WebViewLifecycleOperation.PrepareForUnfloat:
-                _logger.Information("PDF: Preparing for float/unfloat - saving state and disposing WebView");
-                SaveWebViewState();
-                DisposeWebView();
-                break;
-
-            case WebViewLifecycleOperation.RestoreAfterFloat:
-            case WebViewLifecycleOperation.RestoreAfterUnfloat:
-                _logger.Information("PDF: Restoring after float/unfloat - recreating WebView");
-                RecreateWebView();
-                RestoreWebViewState();
-                if (_viewModel != null)
-                {
-                    _viewModel.WebViewLifecycleOperation = WebViewLifecycleOperation.None;
-                }
-                break;
-        }
-    }
-
-    private void SaveWebViewState()
-    {
-        if (_viewModel != null && !string.IsNullOrEmpty(_viewModel.PdfUrl))
-        {
-            _viewModel.SavedWebViewState = new PdfWebViewState
-            {
-                Url = _viewModel.PdfUrl,
-                Page = _viewModel.TargetPage
-            };
-            _logger.Debug("PDF state saved: {Url}", _viewModel.PdfUrl);
-        }
-    }
-
-    private void RecreateWebView()
-    {
-        if (_webView == null)
-        {
-            TryCreateWebView();
-        }
-    }
-
-    private void RestoreWebViewState()
-    {
-        if (_viewModel?.SavedWebViewState != null && _webView != null)
-        {
-            var state = _viewModel.SavedWebViewState;
-            if (!string.IsNullOrEmpty(state.Url))
-            {
-                _logger.Information("Restoring PDF state: {Url}", state.Url);
-                LoadPdf(state.Url);
-            }
-            _viewModel.SavedWebViewState = null;
-        }
-    }
 }

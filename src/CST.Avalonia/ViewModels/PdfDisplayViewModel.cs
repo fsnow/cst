@@ -27,8 +27,6 @@ namespace CST.Avalonia.ViewModels
         private bool _isWebViewAvailable = true;
         private string _pdfLocalPath = "";
         private string _pdfUrl = "";
-        private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
-        private PdfWebViewState? _savedWebViewState = null;
 
         /// <summary>
         /// Event raised when the PDF URL is ready to be loaded in the WebView.
@@ -133,18 +131,6 @@ namespace CST.Avalonia.ViewModels
         {
             get => _pdfLocalPath;
             set => this.RaiseAndSetIfChanged(ref _pdfLocalPath, value);
-        }
-
-        public WebViewLifecycleOperation WebViewLifecycleOperation
-        {
-            get => _webViewLifecycleOperation;
-            set => this.RaiseAndSetIfChanged(ref _webViewLifecycleOperation, value);
-        }
-
-        public PdfWebViewState? SavedWebViewState
-        {
-            get => _savedWebViewState;
-            set => this.RaiseAndSetIfChanged(ref _savedWebViewState, value);
         }
 
         public string SourceTypeName => GetSourceTypeName(_sourceType);
@@ -259,12 +245,4 @@ namespace CST.Avalonia.ViewModels
         #endregion
     }
 
-    /// <summary>
-    /// Saved WebView state for PDF restoration after float/unfloat operations.
-    /// </summary>
-    public class PdfWebViewState
-    {
-        public string? Url { get; set; }
-        public int Page { get; set; }
-    }
 }
