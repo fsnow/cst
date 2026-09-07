@@ -68,8 +68,8 @@ namespace CST.Avalonia.ViewModels
             //
             // CanDrag is left at its default true, as it always was: CanFloat=false never blocked dragging
             // a PDF INTO an existing floating window - Dock's ValidateDocument gates on CanDrag/CanDrop and
-            // never consults CanFloat - so that re-parent has been reachable since #458 and goes through
-            // the same funnel. This flag adds a second way in, not a new hazard.
+            // never consults CanFloat - so that re-parent was reachable BEFORE #458, which is what crashed;
+            // #458 is what made it safe. This flag adds a second way in, not a new hazard.
             CanFloat = true;
             CanPin = false;
 

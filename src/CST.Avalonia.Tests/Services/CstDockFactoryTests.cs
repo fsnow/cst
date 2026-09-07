@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CST.Avalonia.Services;
+using CST.Avalonia.ViewModels;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using Xunit;
@@ -304,6 +305,39 @@ public class CstDockFactoryTests
     public void Null_is_not_a_tool()
     {
         Assert.False(CstDockFactory.IsToolDockable(null));
+    }
+
+    // ---- HostsLiveBrowser: who must be disposed before a re-parent (#419) -----------------------------
+
+    /// <summary>
+    /// The three types that carry a live CEF browser. Dropping one from this set removes it from BOTH
+    /// dispose-before-move guards at once, and nothing else in the suite would notice: the guards need a
+    /// host window and cannot run headless (#655), and a view model's CanFloat flag stays true either way.
+    /// The failure that follows is the #458 SIGSEGV on macOS, with no log line before it.
+    ///
+    /// <para>This cannot prove the guards work. It proves nobody quietly left a type out of them.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(BookDisplayViewModel))]
+    [InlineData(typeof(PdfDisplayViewModel))]
+    [InlineData(typeof(DictionaryViewModel))]
+    public void Every_browser_hosting_type_must_be_disposed_before_a_reparent(System.Type type)
+    {
+        var dockable = (IDockable)System.Runtime.Serialization.FormatterServices
+            .GetUninitializedObject(type);
+
+        Assert.True(CstDockFactory.HostsLiveBrowser(dockable),
+            $"{type.Name} hosts a CEF browser but is not in HostsLiveBrowser, so neither SplitToWindow nor " +
+            "PrepareCrossWindowMove will dispose it before a re-parent.");
+    }
+
+    /// <summary>A dockable with no browser must NOT be disposed — that would rebuild views for nothing.</summary>
+    [Fact]
+    public void A_dockable_without_a_browser_is_left_alone()
+    {
+        Assert.False(CstDockFactory.HostsLiveBrowser(new CST.Avalonia.ViewModels.Dock.ReactiveTool()));
+        Assert.False(CstDockFactory.HostsLiveBrowser(new CST.Avalonia.ViewModels.Dock.ReactiveDocument()));
+        Assert.False(CstDockFactory.HostsLiveBrowser(null));
     }
 
 }

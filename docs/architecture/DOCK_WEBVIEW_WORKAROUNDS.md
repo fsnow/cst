@@ -23,11 +23,11 @@ candidate to *replace* (not re-add) in the overhaul.
 | What | Where | Works around / why |
 |---|---|---|
 | `TryCreateWebView()` / `DisposeWebView()` manual cycle | BookDisplayView ~160–215 | CEF native handle invalid after a window-context change; must dispose then recreate. |
-| Window-change detection by **reference equality** (3 branches) → dispose+recreate+reload only on real window change | BookDisplayView ~550–650 | Distinguish float/unfloat (recreate) from same-window tab switch (keep, instant). |
-| `OnDetachedFromVisualTree` nulls `_currentWindow` ("CRITICAL FIX") | BookDisplayView ~655–670 | Force window-change detection on a later ControlRecycling reattach; fixed float→unfloat→tab-switch→tab-back crash. |
+| Window-change detection by **reference equality** — the dispose+recreate branch is **DEAD** | BookDisplayView `OnAttachedToVisualTree` | Written to tell float/unfloat from a same-window tab switch. It cannot fire: the row below nulls `_currentWindow` unconditionally and Avalonia detaches before attaching, so the field is always null at attach. Left in place; **do not cite it as protection**. (#419 review) |
+| `OnDetachedFromVisualTree` nulls `_currentWindow` — was labelled "CRITICAL FIX" | BookDisplayView | The label is why the row above is dead. Whatever it fixed, it did not do so by *enabling* window-change detection — it disabled it permanently. |
 | Dispose-before-move funnel: `SplitToWindow` + the cross-dock `MoveDockable`/`SwapDockable`/`SplitToDock` overrides call `DisposeAndEvictRecycledView` before the move | CstDockFactory 2045, 1964, 1984, 1172 | No live browser ever crosses a re-parent; the framework builds a fresh one at the destination. Covers books, PDFs and the dictionary (#466). |
 | `LoadHtmlContent` writes HTML to a **temp file** + `LoadUrl(fileUrl)` instead of a data URI | BookDisplayView ~441–516 | CEF data-URI size limits — the largest books (~3.6 MB) exceed them. |
-| PDF tabs mirror the same dispose/recreate + lifecycle-op handling | PdfDisplayView ~31–177 | Same CEF reparent constraint for the PDFium WebView. |
+| PDF tabs float through the funnel and carry the same `#458` invariant log | PdfDisplayView | Same CEF re-parent constraint for the PDFium WebView. `PdfDisplayView` rebuilds nothing itself — the factory disposes and evicts, and the destination builds a fresh view. (#419) |
 
 ## B. ControlRecycling-specific
 

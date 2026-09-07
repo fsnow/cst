@@ -35,8 +35,13 @@ public partial class PdfDisplayView : UserControl
     ///
     /// <para>Adopted at the FIRST attach rather than at creation, because <c>TryCreateWebView</c> runs in the
     /// constructor when there is no visual root yet — the same reason <c>BookDisplayView</c> uses <c>??=</c>
-    /// here. Cleared with the browser in <c>DisposeWebView</c>, so it always describes a live browser or
-    /// nothing, and a rebuilt browser adopts whichever window it is attached to next.</para>
+    /// here. Cleared in <c>DisposeWebView</c>, which is the only place this view's browser goes away: nothing
+    /// here rebuilds one, so a disposed view stays disposed until the factory replaces it wholesale.</para>
+    ///
+    /// <para><c>_webView != null</c> is a proxy for "live", not a guarantee of it — WebViewControl
+    /// self-disposes when its root window's <c>PlatformImpl</c> goes null, and on a failed browser init — so
+    /// the check below can in principle report a violation for an already-dead browser. That direction is
+    /// harmless: a false alarm costs a log line, where a missed one costs a crash.</para>
     /// </summary>
     private Window? _browserBirthWindow;
 
@@ -49,10 +54,13 @@ public partial class PdfDisplayView : UserControl
     /// first, so the view that arrives at the destination is a fresh one with no browser yet. If this Error
     /// ever appears, a re-parent path is missing the guard — better a log line than a crash report. (#419)</para>
     ///
-    /// <para><b>Deliberately only a log, unlike <c>BookDisplayView</c>, which also disposes and rebuilds
-    /// here.</b> That branch is a rescue, and writing one for PDFs would mean adding lifecycle handling this
-    /// view has never had, unverifiable without a GUI run, in the app's most fragile subsystem. The
-    /// diagnostic is the part that is free and cannot itself break anything.</para>
+    /// <para><b>A log and nothing more, and that matches <c>BookDisplayView</c> — which appears to rescue
+    /// here but does not.</b> Its window-change branch tests <c>_currentWindow</c>, which
+    /// <c>OnDetachedFromVisualTree</c> nulls unconditionally; Avalonia detaches before it attaches on every
+    /// re-parent, so that field is always null at attach and the dispose-and-rebuild branch cannot execute.
+    /// An earlier version of this comment described declining to copy that rescue. There is no rescue to
+    /// copy: both views are protected solely by the <c>CstDockFactory</c> funnel, and the check in both is
+    /// diagnostic. (Established in review of #419; the dead branch itself is left alone.)</para>
     /// </summary>
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {

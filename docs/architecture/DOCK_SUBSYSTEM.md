@@ -158,9 +158,15 @@ guard, which is better than a SIGSEGV.
   **reference equality**: a different non-null `_currentWindow` → dispose + recreate + reload; `null` →
   first attach or post-detach reattach, just track the window; same instance → ControlRecycling tab switch,
   no recreate.
-- `OnDetachedFromVisualTree` ([654](../../src/CST.Avalonia/Views/BookDisplayView.axaml.cs#L654)) — nulls
-  `_currentWindow`. Because detach nulls it, *which* path takes which branch is subtle and has been
-  iteratively patched; the funnel above is what actually guarantees safety, not this branching.
+- `OnDetachedFromVisualTree` — nulls `_currentWindow`, **unconditionally**. Avalonia detaches before it
+  attaches on every re-parent, so `_currentWindow` is **always null at attach**: of the three branches above,
+  the dispose + recreate + reload one **cannot execute**, and only "first attach / post-detach reattach" and
+  "same instance" are reachable.
+
+  This is not a subtlety to be careful around — it means the branching provides no protection at all, and
+  the funnel is not merely what *actually* guarantees safety but the only thing that does. Established by
+  reading `Visual.SetVisualParent` in Avalonia 11.3.6 during the #419 review. The dead branch is left in
+  place pending a decision on removing it; do not cite it as a safeguard.
 - **Drag-time airspace hide** (`SimpleTabbedWindow`, `DRAG_DETECTION_THRESHOLD = 150` ms): a timer watches
   `DockControl.IsDraggingDock` and, past the threshold, sets `IsVisible = false` on every WebView in every
   window, restoring shortly after the drag ends. This is a workaround for the native-WebView **airspace**
