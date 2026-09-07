@@ -47,14 +47,13 @@ Status: 301 Moved Permanently
 PdfDisplayViewModel (new)
 ├── Inherits: ReactiveDocument
 ├── Contains: WebView control for PDF rendering
-├── Manages: Page navigation, toolbar state, float/unfloat
+├── Manages: Page navigation, toolbar state
 └── Services: SettingsService (for state persistence)
 
 PdfDisplayView.axaml (new)
 ├── WebView control (docked to fill)
 ├── Simplified toolbar (no script/chapter/search controls)
-├── Status bar (page info, loading indicator)
-└── Float/Unfloat buttons (same as BookDisplayView)
+└── Status bar (page info, loading indicator)
 
 BookDisplayViewModel (modified)
 ├── Add keyboard shortcuts: Ctrl+Q, Ctrl+E
@@ -67,9 +66,7 @@ BookDisplayViewModel (modified)
 **High Reuse (80%+ similar to BookDisplayViewModel)**:
 - ReactiveDocument inheritance pattern
 - WebView lifecycle management
-- Float/Unfloat button implementation
 - Toolbar/status bar structure
-- IsFloating state management
 - Dock.Avalonia integration
 
 **Simplified (features removed)**:
@@ -83,23 +80,21 @@ BookDisplayViewModel (modified)
 - PDF URL construction with #page= fragment
 - Source type selection (Burmese1957 vs Burmese2010)
 
-### 3.3 Float/Unfloat CEF Crash Prevention
+### 3.3 Floating and the CEF re-parent rule
 
-**Critical Requirement**: Use the same button-based float/unfloat approach as BookDisplayViewModel.
+**Critical requirement**: never carry a live WebView across a re-parent — it SIGSEGVs on macOS.
 
-**Rationale**: BookDisplayViewModel.cs:76-82 demonstrates this pattern was implemented specifically to prevent CEF crashes during drag-based floating operations.
+**How that is met**: floating is a **drag**, and every trigger funnels through `CstDockFactory`'s
+`SplitToWindow` override (drag release, invalid-target drop, float indicator, tab double-click, tab context
+menu → Float) and `DisposeAndEvictRecycledView`, which dispose the live browser and evict the recycled view
+before the move. The fresh view at the destination reloads `PdfUrl` and builds a new browser. A PDF tab needs
+nothing of its own for this: `PdfDisplayViewModel` sets `CanFloat = true` and the funnel already names the
+type (#419).
 
-**Implementation**:
-```csharp
-// PdfDisplayViewModel
-private bool _isFloating = false;
-private WebViewLifecycleOperation _webViewLifecycleOperation = WebViewLifecycleOperation.None;
-private WebViewState? _savedWebViewState = null;
-
-// Float/Unfloat buttons in toolbar
-public ReactiveCommand<Unit, Unit> FloatWindowCommand { get; }
-public ReactiveCommand<Unit, Unit> UnfloatWindowCommand { get; }
-```
+There are **no float or unfloat buttons, and no per-view float state** — no `FloatWindowCommand`,
+`UnfloatWindowCommand`, `IsFloating`, `WebViewLifecycleOperation` or `SavedWebViewState`. The buttons were
+removed in #39 and the dormant lifecycle scaffold was deleted in #419. See
+[DOCK_SUBSYSTEM.md](../../architecture/DOCK_SUBSYSTEM.md).
 
 ## 4. Implementation Details
 
@@ -135,7 +130,7 @@ addSource("s0101m.mul.xml", SourceType.Burmese1957, 19,
 **Responsibilities**:
 - Inherit from ReactiveDocument for docking system integration
 - Manage WebView control for PDF rendering
-- Handle float/unfloat operations with CEF crash prevention
+- Dispose the browser before any cross-window move (the funnel does this; see 3.3)
 - Track current PDF source (filename, URL, page offset)
 - Provide toolbar state (page info, loading status)
 - Persist state for session restoration
@@ -163,14 +158,6 @@ public string BookTitle { get; }  // Derived from filename
 public string StatusText { get; }  // "Viewing Burmese 1957 Edition - Page 23"
 public bool IsLoading { get; }
 
-// WebView lifecycle (same as BookDisplayViewModel)
-public bool IsFloating { get; }
-public WebViewLifecycleOperation WebViewLifecycleOperation { get; }
-public WebViewState? SavedWebViewState { get; }
-
-// Commands
-public ReactiveCommand<Unit, Unit> FloatWindowCommand { get; }
-public ReactiveCommand<Unit, Unit> UnfloatWindowCommand { get; }
 ```
 
 **Page Calculation Logic**:
@@ -206,12 +193,6 @@ private string BuildPdfUrl(string bookFilename, Sources.SourceType sourceType, i
 
       <!-- Spacer -->
       <Border HorizontalAlignment="Stretch" />
-
-      <!-- Float/Unfloat Buttons (right-aligned) -->
-      <Button Command="{Binding FloatWindowCommand}"
-              IsVisible="{Binding !IsFloating}">↗</Button>
-      <Button Command="{Binding UnfloatWindowCommand}"
-              IsVisible="{Binding IsFloating}">↙</Button>
     </StackPanel>
 
     <!-- Status Bar -->
@@ -231,7 +212,7 @@ private string BuildPdfUrl(string bookFilename, Sources.SourceType sourceType, i
 
 **Differences from BookDisplayView**:
 - **Removed**: Script selector, chapter dropdown, search navigation, linked book buttons
-- **Kept**: Float/unfloat buttons, status bar, loading indicator
+- **Kept**: Status bar, loading indicator
 - **Simplified**: Toolbar only shows source type and window controls
 
 ### 4.4 Add Keyboard Shortcuts to BookDisplayView
@@ -382,7 +363,6 @@ public class PdfWindowState
     public string BookFilename { get; set; } = "";
     public string SourceType { get; set; } = "Burmese1957";  // Serialized enum
     public int CurrentPage { get; set; }
-    public bool IsFloating { get; set; }
     public double X { get; set; }
     public double Y { get; set; }
     public double Width { get; set; }
@@ -403,7 +383,6 @@ public void SavePdfWindowState(PdfDisplayViewModel vm)
         BookFilename = vm.BookFilename,
         SourceType = vm.SourceType.ToString(),
         CurrentPage = vm.CurrentPage,
-        IsFloating = vm.IsFloating,
         // ... bounds
     };
 
@@ -436,7 +415,6 @@ public void RestorePdfWindows(CstDockFactory factory)
 
 ### Phase 2: UI Components (Day 2)
 4. ✅ Create PdfDisplayView.axaml with simplified toolbar
-5. ✅ Implement float/unfloat buttons with CEF crash prevention
 6. ✅ Wire up WebView PDF rendering
 
 ### Phase 3: Integration (Day 3)
@@ -448,7 +426,6 @@ public void RestorePdfWindows(CstDockFactory factory)
 ### Phase 4: Polish (Day 4)
 11. ✅ Add session state persistence for PDF windows
 12. ✅ Test page navigation accuracy
-13. ✅ Verify float/unfloat state restoration
 14. ✅ Test with multiple simultaneous PDF windows
 
 ## 6. Testing Strategy
@@ -461,10 +438,10 @@ public void RestorePdfWindows(CstDockFactory factory)
 - [ ] Press Ctrl+Q → PDF opens to correct page
 - [ ] Verify page calculation: PDF page = PageStart + (MyanmarPage - 1)
 
-**Float/Unfloat**:
-- [ ] Float PDF window → WebView lifecycle managed correctly
-- [ ] Unfloat PDF window → Returns to main window tab
-- [ ] No CEF crashes during float/unfloat operations
+**Floating** (drag only — there are no buttons):
+- [ ] Drag a PDF tab out → it opens in its own window and renders
+- [ ] Drag it back into the main window → still renders
+- [ ] No CEF crash on either move (#419)
 
 **Multiple PDFs**:
 - [ ] Open 3+ different books
@@ -587,5 +564,5 @@ After implementation, update:
 - **CST4 Implementation**: `docs/features/in-progress/SHOW_SOURCE_PDF.md`
 - **BookDisplayViewModel**: `src/CST.Avalonia/ViewModels/BookDisplayViewModel.cs:76-120`
 - **ReactiveDocument**: `src/CST.Avalonia/ViewModels/Dock/ReactiveDocument.cs`
-- **Float/Unfloat Logic**: BookDisplayViewModel implements CEF crash prevention
+- **The CEF re-parent rule**: [DOCK_SUBSYSTEM.md](../../architecture/DOCK_SUBSYSTEM.md) §4 (the dispose-before-move funnel)
 - **CEF PDF Support**: [CEF Forum Discussion](https://www.magpcss.org/ceforum/viewtopic.php?f=10&t=11107)

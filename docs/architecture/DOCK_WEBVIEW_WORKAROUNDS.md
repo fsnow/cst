@@ -46,7 +46,7 @@ candidate to *replace* (not re-add) in the overhaul.
 | Drag state machine: 50 ms poll, **150 ms** drag threshold, **100 ms** min-hide, 10 s fallback restore | SimpleTabbedWindow ~33–41, 432–516 | Filter flickering `IsDraggingDock`; prevent WebView flashing; recover if a drag hangs. |
 | Cross-window `DragEnter`/`Drop`/`DragLeave` → hide/restore WebViews | SimpleTabbedWindow ~61–99 | Event-based path for explicit drag-drop (complements the timer). |
 | Drag-time WebView hide/restore has a **single owner** (SimpleTabbedWindow) — no per-view monitor | invariant | A second monitor in BookDisplayView (repeated hide/show during tab switches) invalidated CEF native handles → `InitializeWithChildHandle` null-deref crash. Its long-disabled copy was **deleted in #85**; do not reintroduce per-view drag monitoring. |
-| `CanDrag=true`, `CanFloat=true` on books | CstDockFactory 525, 643 | Books stay draggable AND floatable: the dispose-before-move funnel makes drag-to-float safe, so no capability has to be withheld (#39). |
+| `CanDrag=true`, `CanFloat=true` on books and PDFs | CstDockFactory `OpenBookInNewTab` / `OpenBook`; `PdfDisplayViewModel` ctor | Books and PDFs stay draggable AND floatable: the dispose-before-move funnel makes drag-to-float safe, so no capability has to be withheld (#39, #419). |
 
 ## D. Dock structure / Dock.Avalonia gaps
 
