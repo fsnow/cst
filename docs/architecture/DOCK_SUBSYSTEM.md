@@ -154,15 +154,13 @@ guard, which is better than a SIGSEGV.
 
 ### View-side lifecycle
 
-- `OnAttachedToVisualTree` ([550](../../src/CST.Avalonia/Views/BookDisplayView.axaml.cs#L550)) — branches by
+- `OnAttachedToVisualTree` ([549](../../src/CST.Avalonia/Views/BookDisplayView.axaml.cs#L549)) — branches by
   **reference equality**: a different non-null `_currentWindow` → dispose + recreate + reload; `null` →
   first attach or post-detach reattach, just track the window; same instance → ControlRecycling tab switch,
   no recreate.
-- `OnDetachedFromVisualTree` ([655](../../src/CST.Avalonia/Views/BookDisplayView.axaml.cs#L655)) — nulls
+- `OnDetachedFromVisualTree` ([654](../../src/CST.Avalonia/Views/BookDisplayView.axaml.cs#L654)) — nulls
   `_currentWindow`. Because detach nulls it, *which* path takes which branch is subtle and has been
   iteratively patched; the funnel above is what actually guarantees safety, not this branching.
-- `WebViewLifecycleOperation` ([`BookDisplayViewModel.cs:2276`](../../src/CST.Avalonia/ViewModels/BookDisplayViewModel.cs#L2276))
-  — **dormant.** Nothing sets its four float states; it is scaffolding retained for #419. See #896.
 - **Drag-time airspace hide** (`SimpleTabbedWindow`, `DRAG_DETECTION_THRESHOLD = 150` ms): a timer watches
   `DockControl.IsDraggingDock` and, past the threshold, sets `IsVisible = false` on every WebView in every
   window, restoring shortly after the drag ends. This is a workaround for the native-WebView **airspace**

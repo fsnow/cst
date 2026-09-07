@@ -392,10 +392,10 @@ private void LogDockHierarchy(IDock? dock, int level = 0)
 
 ## When Floating Windows Were Introduced
 
-The floating window feature was added in Beta 3 with the "Button-Based Float/Unfloat" implementation. Key commits:
-- Initial implementation with manual lifecycle control
-- CEF crash prevention when floating/docking
-- Event subscription/resubscription patterns
+Floating windows arrived in Beta 3. The float was driven by explicit toolbar buttons at first; those were
+removed in #39, and floating is now a **drag** whose every trigger funnels through `SplitToWindow` and
+`DisposeAndEvictRecycledView` so no live browser crosses a re-parent. What survived the change is the
+discipline, not the mechanism: dispose before the move, then rebuild at the destination.
 
 ## Related Files
 
