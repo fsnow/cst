@@ -26,10 +26,13 @@ CST Reader (**CST = Chaṭṭha Saṅgāyana Tipiṭaka**) is a cross-platform P
 dotnet build src/CST.Avalonia
 dotnet run --project src/CST.Avalonia
 
-dotnet test src/CST.Avalonia.Tests                                     # full suite (~3 min)
+dotnet test src/CST.Avalonia.Tests                                     # main suite (~3.5 min)
+dotnet test src/CST.Avalonia.UiTests                                   # headless Avalonia suite (<1 s)
 dotnet test src/CST.Avalonia.Tests --filter "FullyQualifiedName~CstDockFactoryTests"   # one class
 ```
-**Always name the test project.** There is no solution file, so a bare `dotnet test` acts on the project in the current directory — and in `src/CST.Avalonia` that is the app, which is not a test project: it restores, runs nothing, and **exits 0**. A silent green indistinguishable from a passing suite. `CST.Avalonia.Tests` is the only test project in the tree.
+**Always name the test project, and there are TWO.** There is no solution file, so a bare `dotnet test` acts on the project in the current directory — and in `src/CST.Avalonia` that is the app, which is not a test project: it restores, runs nothing, and **exits 0**. A silent green indistinguishable from a passing suite.
+
+`CST.Avalonia.Tests` holds everything that does not need a live Avalonia application. `CST.Avalonia.UiTests` (#655) holds the ones that do — the headless style tests, which exist so a XAML selector that matches nothing fails a test instead of shipping. **They cannot share a process**: an Avalonia `Application` binds `Dispatcher.UIThread` to the headless session's thread for the whole process, so `Dispatcher.UIThread.CheckAccess()` goes false everywhere else and any code that gates on it (e.g. `AiConnectionService.RaiseChanged`) posts into a queue nothing pumps. Measured: putting them in one project took the main suite from 0 failures to 88. The reasoning is in `CST.Avalonia.UiTests.csproj`; the facts it turns on are asserted in `HeadlessApplicationLeakTests`.
 
 Piping the run through `tail` compounds this: you get *tail's* exit code, and the window drops the `[FAIL]` lines. Redirect to a file and echo the real exit code.
 

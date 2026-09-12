@@ -18,6 +18,9 @@ src/CST.Avalonia/dist/
 src/CST.Avalonia.Tests/bin/
 src/CST.Avalonia.Tests/obj/
 
+src/CST.Avalonia.UiTests/bin/
+src/CST.Avalonia.UiTests/obj/
+
 src/CST.CharacterAnalysis/bin/
 src/CST.CharacterAnalysis/obj/
 

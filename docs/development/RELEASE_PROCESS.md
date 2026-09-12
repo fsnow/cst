@@ -183,8 +183,10 @@ the build succeeds, the tests pass, and the mistake ships. Both were missed in B
       Skipping this degrades gracefully: the snapshot is only the last fallback behind the runtime cache and
       the network, so a stale one costs nothing at runtime. (#733, #736)
 - [ ] Build succeeds: `dotnet build src/CST.Avalonia`
-- [ ] Tests pass: `dotnet test src/CST.Avalonia.Tests` (or acceptable skip rate documented) — pass the
-      project path or run from that directory; `dotnet test` in `src/CST.Avalonia` runs nothing and exits 0
+- [ ] Tests pass: `dotnet test src/CST.Avalonia.Tests` AND `dotnet test src/CST.Avalonia.UiTests` (or
+      acceptable skip rate documented) — pass the project path or run from that directory; `dotnet test` in
+      `src/CST.Avalonia` runs nothing and exits 0. Both projects, every time: the headless Avalonia tests
+      live in their own assembly because they cannot share a process with the main suite (#655)
 - [ ] All changes committed and pushed to `main` branch
 - [ ] No critical bugs or blockers
 

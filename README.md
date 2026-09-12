@@ -92,7 +92,8 @@ dotnet run        # run
 ```
 
 ```bash
-dotnet test src/CST.Avalonia.Tests                              # full suite
+dotnet test src/CST.Avalonia.Tests                              # main suite
+dotnet test src/CST.Avalonia.UiTests                           # headless Avalonia suite
 dotnet test src/CST.Avalonia.Tests --filter "FullyQualifiedName~CstDockFactoryTests"   # one class
 ```
 
@@ -128,6 +129,7 @@ src/CST.Avalonia/          # Main application (the working directory)
 └── dictionaries/          # Bundled dictionary data
 
 src/CST.Avalonia.Tests/    # Test suite
+src/CST.Avalonia.UiTests/  # Headless Avalonia tests (own process; see its .csproj)
 src/CST.Core/              # Book catalog, source-PDF mappings, shared contracts
 src/CST.Lucene/            # Search engine library
 src/CST.Lexicon/           # Dictionary asset format

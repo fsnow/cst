@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless Avalonia tests: the ones that need a live Application, so a XAML style selector that matches
+    nothing can fail a test. (#655)
+
+    WHY THIS IS A SECOND TEST PROJECT, and not four more files in CST.Avalonia.Tests, which is where #655
+    asked for them. Measured, on 2026-09-06, by putting them there first:
+
+      Baseline                                  2853 passed, 0 failed, 18 skipped
+      With [assembly: AvaloniaTestApplication]  2778 passed, 88 FAILED, 18 skipped
+
+    An Avalonia Application is process-global, and so is the dispatcher it binds. Once the first
+    [AvaloniaFact] starts the headless session, Dispatcher.UIThread belongs to that session's thread for
+    the rest of the process - so on every OTHER thread, including the xunit threads running tests that
+    have never heard of Avalonia, Dispatcher.UIThread.CheckAccess() flips from true to false.
+    AiConnectionService.RaiseChanged gates on exactly that: it posts instead of calling, the post is never
+    pumped (only the session thread can pump it), and the subscribing view models never rebuild. That is
+    87 of the 88 - AiModelsViewModelTests (55), AiModelPickerViewModelTests (22),
+    AiConnectionsViewModelTests (8), AiConnectionRowLogoTests (2). The 88th is PlatformGestureTests, which
+    reads Application.Current: the headless backend reports Control as the command modifier on every OS, so
+    on macOS that assertion passed or failed depending on whether xunit had scheduled a headless test yet.
+
+    None of that is fixable from the test side. Application.PlatformSettings is not virtual,
+    IPlatformSettings is explicitly not implementable outside the framework, DefaultPlatformSettings
+    computes its hotkey configuration with no field to reach, and a dispatcher cannot be pumped from a
+    thread that does not own it. A separate assembly runs in a separate process, which is the only place
+    the two sets of assumptions can both be true.
+
+    SO: `dotnet test src/CST.Avalonia.Tests` is no longer the whole suite. Run BOTH.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- 11.3.6 to match CST.Avalonia's Avalonia packages exactly. Avalonia.Headless.XUnit depends on
+         xunit.core >= 2.4.0, so it is the xunit v2 line this repo already uses, not v3. -->
+    <PackageReference Include="Avalonia.Headless" Version="11.3.6" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="11.3.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CST.Avalonia\CST.Avalonia.csproj" />
+  </ItemGroup>
+
+</Project>
