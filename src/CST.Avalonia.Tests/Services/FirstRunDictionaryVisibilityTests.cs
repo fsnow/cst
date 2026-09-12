@@ -11,6 +11,7 @@ using CST.Lemma;
 using CST.Tools;
 using Microsoft.Data.Sqlite;
 using Moq;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
@@ -31,6 +32,7 @@ namespace CST.Avalonia.Tests.Services;
 /// A clean first run has nothing to lock — see
 /// <c>DpdUpdateServiceTests.InstallFromGzip_into_an_empty_directory_reports_the_asset_live_not_staged</c>.</para>
 /// </summary>
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class FirstRunDictionaryVisibilityTests : IDisposable
 {
     private readonly string _dir;

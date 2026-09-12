@@ -9,6 +9,7 @@ using CST.Avalonia.Services;
 using CST.Conversion;
 using CST.Lemma;
 using Microsoft.Data.Sqlite;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
@@ -16,6 +17,7 @@ namespace CST.Avalonia.Tests.Services;
 // Orchestration tests for LemmaSearchService: form gathering, alternation building, result mapping.
 // Uses a real SqliteLemmaProvider over a tiny fixture + a fake ISearchService that "attests" a subset of
 // the alternation forms. outputScript=Ipe throughout so terms pass through without script conversion.
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class LemmaSearchServiceTests : IDisposable
 {
     private readonly string _dbPath;

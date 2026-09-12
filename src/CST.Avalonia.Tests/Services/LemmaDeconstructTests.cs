@@ -7,6 +7,7 @@ using CST.Avalonia.Services.LocalApi.Lemma;
 using CST.Conversion;
 using CST.Lemma;
 using Microsoft.Data.Sqlite;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
@@ -15,6 +16,7 @@ namespace CST.Avalonia.Tests.Services;
 // with a full-scope `forms` table (deconstructor populated for non-enclitic compounds too). Covers the four
 // shapes: pure sandhi (split, no headword), enclitic split, compound-stored-as-lemma (direct, no split), and
 // a plain word with neither.
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class LemmaDeconstructTests : IDisposable
 {
     private readonly string _dbPath;

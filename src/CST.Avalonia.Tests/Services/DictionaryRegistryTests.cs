@@ -10,6 +10,7 @@ using CST.Lemma;
 using CST.Lexicon;
 using CST.Tools;
 using Microsoft.Data.Sqlite;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
@@ -19,6 +20,7 @@ namespace CST.Avalonia.Tests.Services;
 /// the dpd-cst-subset asset, a downloaded lexicon (DPPN) is a source, and the flat-file languages are sources —
 /// all enumerated + routed through the one registry, with the RegistryDictionaryTool exposing them over /v1.
 /// </summary>
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class DictionaryRegistryTests : IDisposable
 {
     private readonly string _dir;

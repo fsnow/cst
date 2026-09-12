@@ -8,6 +8,7 @@ using CST.Avalonia.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
@@ -27,6 +28,7 @@ namespace CST.Avalonia.Tests.Services;
 /// enough to the shipped one that the updater could treat the fake as current indefinitely. A test suite must
 /// not be able to do that, which is why <see cref="DpdUpdateService"/> now takes a root.</para>
 /// </summary>
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class DictionaryRetryTests : IDisposable
 {
     private readonly string _root;

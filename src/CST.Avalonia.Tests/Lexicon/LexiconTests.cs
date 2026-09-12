@@ -4,6 +4,7 @@ using System.Linq;
 using CST.Conversion;
 using CST.Lexicon;
 using Microsoft.Data.Sqlite;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Lexicon
@@ -14,6 +15,7 @@ namespace CST.Avalonia.Tests.Lexicon
     /// homonyms surface together, HTML in a headword is stripped for the key but the published form is kept,
     /// and the exact/prefix/nearest search matches the flat-file dictionary's behaviour.
     /// </summary>
+    [Collection("Sqlite")]   // #960: ClearAllPools is process-wide
     public class LexiconTests : IDisposable
     {
         private readonly string _dir;
