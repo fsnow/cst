@@ -1,0 +1,91 @@
+{
+  "version": "1.0",
+  "id": "golden-session",
+  "name": "Explain · Mahāvaggapāḷi 1.1",
+  "created": "2026-09-12T10:15:00+00:00",
+  "lastActive": "2026-09-12T10:27:00+00:00",
+  "turns": [
+    {
+      "task": "Explain",
+      "answer": "The paragraph opens the Mahāvagga.",
+      "reasoning": "First, identify the speaker…",
+      "citation": {
+        "bookId": "s0402m.mul.xml",
+        "bookName": "Mahāvaggapāḷi",
+        "normalizedReference": "1.1",
+        "pages": [
+          {
+            "edition": "Vri",
+            "volume": 1,
+            "number": 23
+          }
+        ]
+      },
+      "subject": "tena samayena buddho bhagavā",
+      "notices": [
+        "The word list was not available.",
+        "The apparatus was empty."
+      ],
+      "isPartialPassage": true,
+      "usage": "1,024 in · 512 out",
+      "elapsed": "4.2s",
+      "status": "",
+      "failed": false,
+      "sent": {
+        "fields": [
+          {
+            "name": "Provider",
+            "value": "anthropic"
+          },
+          {
+            "name": "Model",
+            "value": "claude-opus-4-1"
+          }
+        ],
+        "systemPrompt": "You are reading Pāli.",
+        "userContent": "Passage: tena samayena…"
+      },
+      "providerId": "anthropic",
+      "modelId": "claude-opus-4-1",
+      "when": "2026-09-12T10:15:00+00:00",
+      "readingPosition": {
+        "above": "para1",
+        "below": "para2",
+        "fraction": 0.375
+      }
+    },
+    {
+      "task": "Ask",
+      "question": "What does bhagavā mean here?",
+      "answer": "It is an epithet",
+      "notices": [],
+      "isPartialPassage": false,
+      "elapsed": "1m 3s",
+      "status": "The provider closed the connection.",
+      "failed": true,
+      "providerId": "anthropic",
+      "modelId": "claude-opus-4-1",
+      "when": "2026-09-12T10:21:00+00:00"
+    },
+    {
+      "task": "Translate",
+      "answer": "At that time the Blessed One…",
+      "citation": {
+        "bookId": "s0403m.mul.xml",
+        "bookName": "Cūḷavaggapāḷi",
+        "normalizedReference": "2.4",
+        "pages": [
+          {
+            "edition": "Vri",
+            "volume": 1,
+            "number": 23
+          }
+        ]
+      },
+      "notices": [],
+      "isPartialPassage": false,
+      "failed": false,
+      "when": "2026-09-12T10:27:00+00:00"
+    }
+  ]
+}

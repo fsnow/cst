@@ -90,6 +90,23 @@ public class ApplicationState
     /// </summary>
     public List<string> AppliedDataMigrations { get; set; } = new();
 
+    /// <summary>
+    /// The Assistant conversation to reopen on launch, or null if there is none. (#849)
+    ///
+    /// <para><b>[fsnow]</b> chose <i>"Restore the last session silently"</i>, so this is read at startup the
+    /// way open books and reading positions are — no model call, no prompt.</para>
+    ///
+    /// <para><b>An id, not the conversation.</b> The transcripts live one file each under
+    /// <c>&lt;DataDirectory&gt;/assistant-sessions/</c> (<see cref="Services.Ai.IAiSessionStore"/>): this file
+    /// is read synchronously at launch and backed up on a timer, and a session with forty answers in it is a
+    /// different weight class from a window rectangle. Everything sharing this file shares its failure mode,
+    /// and a transcript is the last thing that should be able to cost a reader their window layout.</para>
+    ///
+    /// <para>An id naming a session that has since been deleted is not an error — the store answers null and
+    /// the panel starts empty.</para>
+    /// </summary>
+    public string? ActiveAssistantSessionId { get; set; }
+
     // Application Preferences
     public ApplicationPreferences Preferences { get; set; } = new();
 }

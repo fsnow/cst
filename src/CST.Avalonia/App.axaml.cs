@@ -1646,6 +1646,11 @@ public partial class App : Application
         // mode. (#790)
         services.AddSingleton<Services.Ai.IAiModelListingCache>(_ => new Services.Ai.AiModelListingCache());
 
+        // Assistant conversations, one file each under <DataDirectory>/assistant-sessions/. Not in
+        // application-state.json, which keeps only the active session's id — a transcript is a different
+        // weight class from a window rectangle, and everything in that file shares its failure mode. (#849)
+        services.AddSingleton<Services.Ai.IAiSessionStore, Services.Ai.AiSessionStore>();
+
         // The fidelity advisory (#584). Data only — Settings (#585) and the panel (#586) surface it.
         services.AddSingleton<ILemmaReportService, LemmaReportService>();
 
