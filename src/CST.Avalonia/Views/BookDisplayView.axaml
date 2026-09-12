@@ -65,7 +65,9 @@
                           MinWidth="120"
                           Margin="5"
                           VerticalAlignment="Center"
-                          ToolTip.Tip="Script for displaying Pali text">
+                          ToolTip.Tip="Script for displaying Pali text"
+                          AutomationProperties.AutomationId="book.script"
+                          AutomationProperties.Name="Script">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}"/>
@@ -85,7 +87,9 @@
                           Margin="5"
                           VerticalAlignment="Center"
                           IsVisible="{Binding HasChapters}"
-                          ToolTip.Tip="Navigate to chapter">
+                          ToolTip.Tip="Navigate to chapter"
+                          AutomationProperties.AutomationId="book.chapter"
+                          AutomationProperties.Name="Chapter">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}"
@@ -100,10 +104,14 @@
                 <!-- Search Navigation (visible when search terms present) -->
                 <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center"
                             IsVisible="{Binding HasSearchHighlights}">
-                    <Button Command="{Binding FirstHitCommand}" ToolTip.Tip="First search result" Margin="2">
+                    <Button Command="{Binding FirstHitCommand}" ToolTip.Tip="First search result" Margin="2"
+                            AutomationProperties.AutomationId="book.hit.first"
+                            AutomationProperties.Name="First search result">
                         <Image Source="avares://CST.Avalonia/Assets/Images/ArrowFirst.png" Width="16" Height="16"/>
                     </Button>
-                    <Button Command="{Binding PreviousHitCommand}" ToolTip.Tip="Previous search result" Margin="2">
+                    <Button Command="{Binding PreviousHitCommand}" ToolTip.Tip="Previous search result" Margin="2"
+                            AutomationProperties.AutomationId="book.hit.previous"
+                            AutomationProperties.Name="Previous search result">
                         <Image Source="avares://CST.Avalonia/Assets/Images/ArrowPrevious.png" Width="16" Height="16"/>
                     </Button>
                     <!-- MinWidth is set in code-behind (UpdateHitCounterWidth) by MEASURING the widest
@@ -113,18 +121,24 @@
                          would shrink the WebView viewport and scroll the target hit out of view). We
                          measure rather than estimate px so a tuned window width can't tip into a wrap. (#196) -->
                     <TextBlock x:Name="HitCounterText" Text="{Binding HitStatusText}"
-                               VerticalAlignment="Center" Margin="5,0" TextAlignment="Center"/>
-                    <Button Command="{Binding NextHitCommand}" ToolTip.Tip="Next search result" Margin="2">
+                               VerticalAlignment="Center" Margin="5,0" TextAlignment="Center"
+                               AutomationProperties.AutomationId="book.hit.counter"/>
+                    <Button Command="{Binding NextHitCommand}" ToolTip.Tip="Next search result" Margin="2"
+                            AutomationProperties.AutomationId="book.hit.next"
+                            AutomationProperties.Name="Next search result">
                         <Image Source="avares://CST.Avalonia/Assets/Images/ArrowNext.png" Width="16" Height="16"/>
                     </Button>
-                    <Button Command="{Binding LastHitCommand}" ToolTip.Tip="Last search result" Margin="2">
+                    <Button Command="{Binding LastHitCommand}" ToolTip.Tip="Last search result" Margin="2"
+                            AutomationProperties.AutomationId="book.hit.last"
+                            AutomationProperties.Name="Last search result">
                         <Image Source="avares://CST.Avalonia/Assets/Images/ArrowLast.png" Width="16" Height="16"/>
                     </Button>
                     <!-- #224: highlight on/off — lives with the hit-nav cluster, so it only appears when the
                          book was opened from search (CST4 hides Show Search Terms when totalHits == 0). -->
                     <ToggleButton IsChecked="{Binding ShowSearchTerms}"
                                   ToolTip.Tip="Highlight search terms"
-                                  Margin="6,2,2,2" VerticalAlignment="Center">
+                                  Margin="6,2,2,2" VerticalAlignment="Center"
+                                  AutomationProperties.AutomationId="book.highlight">
                         <TextBlock Text="Highlight"/>
                     </ToggleButton>
                 </StackPanel>
@@ -134,17 +148,20 @@
                             IsVisible="{Binding HasLinkedBooks}">
                     <Button Command="{Binding OpenMulaCommand}"
                             IsEnabled="{Binding HasMula}"
-                            ToolTip.Tip="Open root text" Margin="2">
+                            ToolTip.Tip="Open root text" Margin="2"
+                            AutomationProperties.AutomationId="book.open-mula">
                         <TextBlock Text="Mula"/>
                     </Button>
                     <Button Command="{Binding OpenAtthakathaCommand}"
                             IsEnabled="{Binding HasAtthakatha}"
-                            ToolTip.Tip="Open commentary" Margin="2">
+                            ToolTip.Tip="Open commentary" Margin="2"
+                            AutomationProperties.AutomationId="book.open-atthakatha">
                         <TextBlock Text="Aṭṭha"/>
                     </Button>
                     <Button Command="{Binding OpenTikaCommand}"
                             IsEnabled="{Binding HasTika}"
-                            ToolTip.Tip="Open sub-commentary" Margin="2">
+                            ToolTip.Tip="Open sub-commentary" Margin="2"
+                            AutomationProperties.AutomationId="book.open-tika">
                         <TextBlock Text="Ṭīkā"/>
                     </Button>
                 </StackPanel>
@@ -153,13 +170,15 @@
                 <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
                     <ToggleButton IsChecked="{Binding ShowFootnotes}"
                                   ToolTip.Tip="Show footnotes (variant readings)"
-                                  Margin="2" VerticalAlignment="Center">
+                                  Margin="2" VerticalAlignment="Center"
+                                  AutomationProperties.AutomationId="book.footnotes">
                         <TextBlock Text="Footnotes"/>
                     </ToggleButton>
                 </StackPanel>
 
                 <!-- View Source PDF buttons: one per source the book actually has (1957 / 2010 / PDF). -->
-                <ItemsControl ItemsSource="{Binding AvailableSources}" Margin="5" VerticalAlignment="Center">
+                <ItemsControl ItemsSource="{Binding AvailableSources}" Margin="5" VerticalAlignment="Center"
+                              AutomationProperties.AutomationId="book.sources">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal"/>
@@ -190,7 +209,9 @@
                 <StackPanel Orientation="Horizontal" Margin="5" VerticalAlignment="Center">
                     <Button x:Name="bookInfoButton"
                             Margin="2" Padding="9,2" MinWidth="0"
-                            ToolTip.Tip="Book information (source file, collection, type)">
+                            ToolTip.Tip="Book information (source file, collection, type)"
+                            AutomationProperties.AutomationId="book.info"
+                            AutomationProperties.Name="Book information">
                         <TextBlock Text="i" FontWeight="Bold"/>
                         <Button.Flyout>
                             <Flyout Placement="BottomEdgeAlignedLeft">
@@ -214,7 +235,9 @@
                                         <SelectableTextBlock Text="{Binding XmlFileName}" FontFamily="{DynamicResource ContentControlThemeFontFamily}"/>
                                         <Button x:Name="copyXmlFileNameButton"
                                                 Margin="10,0,0,0" Padding="6,1" MinWidth="0"
-                                                ToolTip.Tip="Copy the file name">
+                                                ToolTip.Tip="Copy the file name"
+                                                AutomationProperties.AutomationId="book.info.copy-file-name"
+                                                AutomationProperties.Name="Copy the file name">
                                             <TextBlock Text="Copy"/>
                                         </Button>
                                     </StackPanel>
@@ -253,7 +276,9 @@
                     <Button x:Name="zoomOutButton"
                             IsEnabled="{Binding CanZoomOut}"
                             Margin="2" Padding="8,2" MinWidth="0"
-                            ToolTip.Tip="Zoom out">
+                            ToolTip.Tip="Zoom out"
+                            AutomationProperties.AutomationId="book.zoom-out"
+                            AutomationProperties.Name="Zoom out">
                         <TextBlock Text="&#x2212;"/>
                     </Button>
                     <!-- Fixed width: the box holds "50%" through "300%", and letting it size to content
@@ -266,11 +291,15 @@
                              Margin="2"
                              VerticalContentAlignment="Center"
                              TextAlignment="Center"
-                             ToolTip.Tip="Book text zoom, stored per script — it applies to every open book in this script. Type a percentage, e.g. 115. Enter to apply, Escape to cancel."/>
+                             ToolTip.Tip="Book text zoom, stored per script — it applies to every open book in this script. Type a percentage, e.g. 115. Enter to apply, Escape to cancel."
+                             AutomationProperties.AutomationId="book.zoom"
+                             AutomationProperties.Name="Book text zoom"/>
                     <Button x:Name="zoomInButton"
                             IsEnabled="{Binding CanZoomIn}"
                             Margin="2" Padding="8,2" MinWidth="0"
-                            ToolTip.Tip="Zoom in">
+                            ToolTip.Tip="Zoom in"
+                            AutomationProperties.AutomationId="book.zoom-in"
+                            AutomationProperties.Name="Zoom in">
                         <TextBlock Text="+"/>
                     </Button>
                 </StackPanel>
@@ -289,13 +318,15 @@
             <!-- Page References (VRI, Myanmar, PTS, Thai, Other) -->
             <TextBlock Grid.Column="0" Text="{Binding PageReferencesText}" 
                        VerticalAlignment="Center" Margin="8,0"
-                       ToolTip.Tip="Page numbers: VRI=Vipassana Research Institute, Myanmar=Burmese edition, PTS=Pali Text Society, Thai=Thai edition, Other=Miscellaneous editions"/>
+                       ToolTip.Tip="Page numbers: VRI=Vipassana Research Institute, Myanmar=Burmese edition, PTS=Pali Text Society, Thai=Thai edition, Other=Miscellaneous editions"
+                       AutomationProperties.AutomationId="book.page-references"/>
             
             <!-- Book Info -->
             <TextBlock Grid.Column="1" Text="{Binding BookInfoText}" 
                        VerticalAlignment="Center" Margin="8,0"
                        converters:FontHelper.DynamicFontFamily="{Binding CurrentScriptFontFamily}"
-                       converters:FontHelper.DynamicFontSize="{Binding CurrentScriptFontSize}"/>
+                       converters:FontHelper.DynamicFontSize="{Binding CurrentScriptFontSize}"
+                       AutomationProperties.AutomationId="book.book-info"/>
             
             <!-- Loading Indicator -->
             <ProgressBar Grid.Column="2" IsIndeterminate="True" 
@@ -328,7 +359,9 @@
                 Padding="8,5"
                 Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                BorderThickness="0,0,0,1">
+                BorderThickness="0,0,0,1"
+                AutomationProperties.AutomationId="book.find-bar"
+                AutomationProperties.Name="Find in page">
             <!-- Right-aligned so the controls sit near the scrollbar and the book's left margin stays
                  clean, but the Border itself stretches so the strip reads as chrome rather than a
                  floating island. -->
@@ -339,7 +372,9 @@
                                  Padding="6,2"
                                  VerticalContentAlignment="Center"
                                  Watermark="Find in page"
-                                 ToolTip.Tip="Find in this book. Enter for next, Shift+Enter for previous, Escape to close."/>
+                                 ToolTip.Tip="Find in this book. Enter for next, Shift+Enter for previous, Escape to close."
+                                 AutomationProperties.AutomationId="book.find.query"
+                                 AutomationProperties.Name="Find in page"/>
 
                         <!-- Fixed width so the bar does not resize as the count changes from "" to
                              "3 of 47" — a jittering overlay over settled text reads as a glitch. -->
@@ -348,21 +383,28 @@
                                    Margin="8,0,4,0"
                                    VerticalAlignment="Center"
                                    TextAlignment="Right"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   AutomationProperties.AutomationId="book.find.count"/>
 
                         <Button x:Name="findPrevButton"
                                 Margin="2,0,0,0" Padding="6,2" MinWidth="0"
-                                ToolTip.Tip="Previous match (Shift+Enter)">
+                                ToolTip.Tip="Previous match (Shift+Enter)"
+                                AutomationProperties.AutomationId="book.find.previous"
+                                AutomationProperties.Name="Previous match">
                             <TextBlock Text="&#x2227;"/>
                         </Button>
                         <Button x:Name="findNextButton"
                                 Margin="2,0,0,0" Padding="6,2" MinWidth="0"
-                                ToolTip.Tip="Next match (Enter)">
+                                ToolTip.Tip="Next match (Enter)"
+                                AutomationProperties.AutomationId="book.find.next"
+                                AutomationProperties.Name="Next match">
                             <TextBlock Text="&#x2228;"/>
                         </Button>
                         <Button x:Name="findCloseButton"
                                 Margin="6,0,0,0" Padding="6,2" MinWidth="0"
-                                ToolTip.Tip="Close (Escape)">
+                                ToolTip.Tip="Close (Escape)"
+                                AutomationProperties.AutomationId="book.find.close"
+                                AutomationProperties.Name="Close the find bar">
                             <TextBlock Text="&#x2715;"/>
                         </Button>
                     </StackPanel>
@@ -377,7 +419,9 @@
                            Focusable="True"
                            IsTabStop="True"
                            ZIndex="-1000"
-                           IsHitTestVisible="True"/>
+                           IsHitTestVisible="True"
+                                AutomationProperties.AutomationId="book.text"
+                                AutomationProperties.Name="Book text"/>
                 
                 <!-- Fallback Text Display -->
                 <ScrollViewer x:Name="fallbackBrowser"

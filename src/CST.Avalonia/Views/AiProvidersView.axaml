@@ -166,13 +166,15 @@
                                              straight duplicate of the sheet's own. -->
                                         <Button Content="{Binding EditLabel}" Classes="Link"
                                                 IsVisible="{Binding CanEdit}"
-                                                Command="{Binding EditCommand}"/>
+                                                Command="{Binding EditCommand}"
+                                                AutomationProperties.Name="{Binding DisplayName, StringFormat='Edit {0}'}"/>
                                         <!-- Two destructive actions, not one: stopping the billing and
                                              throwing away a hand-typed model list are different intentions.
                                              An environment-sourced row gets an EMPTY slot here rather than a
                                              disabled button — the app cannot delete a key it never stored,
                                              and a control there would lie about what it can do. -->
                                         <Button Content="Delete" Classes="Link"
+                                                AutomationProperties.Name="{Binding DisplayName, StringFormat='Delete {0}'}"
                                                 Command="{Binding DeleteCommand}"/>
                                     </StackPanel>
 
@@ -210,7 +212,8 @@
                  the lookup is unnecessary there rather than unavailable. -->
             <StackPanel IsVisible="{Binding ShowShellEnvironmentControl}" Margin="0,0,0,16">
                 <CheckBox IsChecked="{Binding ReadLoginShellEnvironment}"
-                          Content="Look for API keys in your login shell"/>
+                          Content="Look for API keys in your login shell"
+                          AutomationProperties.AutomationId="settings.ai.read-login-shell"/>
                 <TextBlock Text="{Binding ShellEnvironmentStatusText}"
                            IsVisible="{Binding ShellEnvironmentStatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                            Classes="SettingDescription" Margin="0,4,0,0"/>
@@ -261,7 +264,8 @@
 
                                         <Button Grid.Column="2" Content="Use it"
                                                 Command="{Binding UseCommand}"
-                                                VerticalAlignment="Center"/>
+                                                VerticalAlignment="Center"
+                                                AutomationProperties.Name="{Binding DisplayName, StringFormat='Use the key found for {0}'}"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -278,7 +282,8 @@
                            Foreground="{DynamicResource SystemFillColorCautionBrush}"
                            Margin="0,0,0,6"/>
                 <Button Content="Try again" Command="{Binding RetryCatalogueCommand}"
-                        HorizontalAlignment="Left"/>
+                        HorizontalAlignment="Left"
+                        AutomationProperties.AutomationId="settings.ai.retry-catalogue"/>
             </StackPanel>
 
             <TextBlock Text="Looking for the provider list…"
@@ -290,7 +295,9 @@
             <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8"
                   IsVisible="{Binding HasCatalogue}">
                 <TextBox Grid.Column="0" Text="{Binding PresetSearch}"
-                         Watermark="Search providers"/>
+                         Watermark="Search providers"
+                         AutomationProperties.AutomationId="settings.ai.provider-search"
+                         AutomationProperties.Name="Search providers"/>
                 <TextBlock Grid.Column="1" Text="{Binding CatalogueCount}" Classes="Secondary"
                            Margin="10,0,2,0" VerticalAlignment="Center"/>
             </Grid>
@@ -333,6 +340,7 @@
                                         </StackPanel>
 
                                         <Button Grid.Column="2" Content="+ Add"
+                                                AutomationProperties.Name="{Binding DisplayName, StringFormat='Add {0}'}"
                                                 Command="{Binding AddCommand}"
                                                 VerticalAlignment="Center"/>
                                     </Grid>
@@ -375,7 +383,9 @@
                             </StackPanel>
                             <Button Grid.Column="2" Content="+ Add"
                                     Command="{Binding AddCustomCommand}"
-                                    VerticalAlignment="Center"/>
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.AutomationId="settings.ai.add-custom-endpoint"
+                                    AutomationProperties.Name="Add a custom endpoint"/>
                         </Grid>
                     </Border>
 
@@ -403,7 +413,9 @@
                             <TextBox Text="{Binding Id}"
                                      IsEnabled="{Binding IsIdEditable}"
                                      Watermark="myprovider"
-                                     Width="320" HorizontalAlignment="Left"/>
+                                     Width="320" HorizontalAlignment="Left"
+                                     AutomationProperties.AutomationId="settings.ai.editor.id"
+                                     AutomationProperties.Name="Id"/>
                             <!-- Immutable after creation because it is the account the credential is filed
                                  under. A URL-derived id would change with a port and the key would look
                                  rejected rather than lost. -->
@@ -413,14 +425,18 @@
                             <TextBlock Text="Display name" Classes="SettingLabel"/>
                             <TextBox Text="{Binding DisplayName}"
                                      Watermark="My provider"
-                                     Width="320" HorizontalAlignment="Left"/>
+                                     Width="320" HorizontalAlignment="Left"
+                                     AutomationProperties.AutomationId="settings.ai.editor.display-name"
+                                     AutomationProperties.Name="Display name"/>
                             <TextBlock Text="What this endpoint is called on screen. Rename it whenever you like."
                                        Classes="SettingDescription"/>
 
                             <TextBlock Text="Protocol" Classes="SettingLabel"/>
                             <ComboBox ItemsSource="{Binding Kinds}"
                                       SelectedItem="{Binding Kind}"
-                                      Width="320" HorizontalAlignment="Left">
+                                      Width="320" HorizontalAlignment="Left"
+                                      AutomationProperties.AutomationId="settings.ai.editor.protocol"
+                                      AutomationProperties.Name="Protocol">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:AiKindChoice">
                                         <TextBlock Text="{Binding Display}"/>
@@ -433,7 +449,9 @@
                             <TextBlock Text="Endpoint address" Classes="SettingLabel"/>
                             <TextBox Text="{Binding BaseUrl}"
                                      Watermark="https://api.myprovider.com/v1"
-                                     Width="480" HorizontalAlignment="Left"/>
+                                     Width="480" HorizontalAlignment="Left"
+                                     AutomationProperties.AutomationId="settings.ai.editor.endpoint-address"
+                                     AutomationProperties.Name="Endpoint address"/>
                             <TextBlock Text="Required. For an OpenAI-compatible endpoint this is what selects the provider."
                                        Classes="SettingDescription"/>
 
@@ -466,7 +484,8 @@
                             </ItemsControl>
                             <Button Content="+ Add header" Classes="Link"
                                     Command="{Binding AddHeaderCommand}"
-                                    HorizontalAlignment="Left"/>
+                                    HorizontalAlignment="Left"
+                                    AutomationProperties.AutomationId="settings.ai.editor.add-header"/>
                             <TextBlock Text="For endpoints that authenticate with something other than a bearer key — a gateway token, or a provider's own key header. Mark such a value Secret: it then goes to the system keychain, and only the header's name is written to the settings file."
                                        Classes="SettingDescription" Margin="0,6,0,15"/>
                             <!-- Where there is nowhere to store a secret the checkbox is disabled, so the
@@ -508,11 +527,14 @@
                                          IsEnabled="{Binding CanStoreKeys}"
                                          Watermark="Paste a key"
                                          Width="320"
-                                         Loaded="OnApiKeyBoxLoaded"/>
+                                         Loaded="OnApiKeyBoxLoaded"
+                                         AutomationProperties.AutomationId="settings.ai.editor.api-key"
+                                         AutomationProperties.Name="API key"/>
                                 <Button Content="Remove stored key" Classes="Link"
                                         IsVisible="{Binding HasStoredKey}"
                                         Command="{Binding RemoveKeyCommand}"
-                                        VerticalAlignment="Center"/>
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.AutomationId="settings.ai.editor.remove-key"/>
                             </StackPanel>
                             <TextBlock Text="{Binding KeyStatus}" Classes="SettingDescription" Margin="0,4,0,0"/>
                             <TextBlock Text="{Binding KeyUnavailable}"
@@ -545,7 +567,8 @@
                         </ItemsControl>
                         <Button Content="+ Add model" Classes="Link"
                                 Command="{Binding AddModelCommand}"
-                                HorizontalAlignment="Left"/>
+                                HorizontalAlignment="Left"
+                                AutomationProperties.AutomationId="settings.ai.editor.add-model"/>
                         <TextBlock Text="{Binding ModelsHint}"
                                    Classes="SettingDescription" Margin="0,6,0,0"/>
                         <TextBlock Text="The id goes on the wire, exactly as the provider spells it. The display name is yours, and is what the model picker shows."
@@ -592,8 +615,10 @@
                                  key box taking focus above: paste, Enter, done, no mouse. A single-line
                                  TextBox does not handle Enter itself, so it reaches the default button. -->
                             <Button Content="{Binding SaveText}" Command="{Binding SaveCommand}"
-                                    IsDefault="True"/>
-                            <Button Content="Cancel" Classes="Link" Command="{Binding CancelCommand}"/>
+                                    IsDefault="True"
+                                    AutomationProperties.AutomationId="settings.ai.editor.save"/>
+                            <Button Content="Cancel" Classes="Link" Command="{Binding CancelCommand}"
+                                    AutomationProperties.AutomationId="settings.ai.editor.cancel"/>
                         </StackPanel>
                     </StackPanel>
                 </DataTemplate>

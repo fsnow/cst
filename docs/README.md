@@ -39,6 +39,7 @@ Guides for development workflows:
 - [Code Review 2026-07-01](development/CODE_REVIEW_2026-07-01.md) - Multi-agent whole-codebase review (80 findings, ranked; hand-off for the fixing session)
 - [Code Review 2026-08 Findings](development/CODE_REVIEW_2026-08_FINDINGS.md) - Fable review of the work since 2026-07-12, by area (81 findings: 4 HIGH now fixed, 26 MED and 51 LOW recorded here only)
 - [Cloud / Web Session Setup](development/CLOUD_SESSION_SETUP.md) - Provisioning a fresh remote container: XML corpus download, .NET SDK egress-policy block, CST_XML_DIR
+- [Accessibility Naming](development/ACCESSIBILITY_NAMING.md) - AutomationProperties.Name / AutomationId convention, what Avalonia's peers do with them, and what AppleScript can and cannot reach
 - [Proposed Claude Skills](development/PROPOSED_CLAUDE_SKILLS.md) - AI assistant skill definitions
 
 ### ✨ **features/** - Feature Planning & Specifications

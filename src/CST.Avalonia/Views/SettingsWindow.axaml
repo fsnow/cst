@@ -82,6 +82,8 @@
             <!-- Category List -->
             <Border Grid.Column="0" Background="{DynamicResource LayerFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
                 <ListBox ItemsSource="{Binding Categories}"
+                         AutomationProperties.AutomationId="settings.categories"
+                         AutomationProperties.Name="Settings categories"
                          SelectedItem="{Binding SelectedCategory}"
                          Background="Transparent"
                          BorderThickness="0">
@@ -99,6 +101,12 @@
                              not exist in any loaded theme until #955 defined it, so the setter set nothing. Re-pointed at the SAME fixed Dock accent the book/tool tabs and the
                              Highlight/Footnotes toggles use, so "selected" reads identically everywhere
                              whatever the OS accent colour is. (#270 established this convention.) -->
+                        <!-- #862: without this a row reports its accessible name as the container's
+                             Content.ToString() - the view-model type name - because a ListBoxItem has
+                             no visible text of its own. -->
+                        <Style Selector="ListBoxItem" x:DataType="vm:SettingsCategoryViewModel">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+                        </Style>
                         <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
                             <Setter Property="Background" Value="{DynamicResource DockApplicationAccentBrushLow}"/>
                         </Style>
@@ -141,10 +149,14 @@
                                         <DockPanel>
                                             <Button Content="Browse..." 
                                                    Command="{Binding BrowseCommand}"
+                                                   AutomationProperties.AutomationId="settings.general.browse-xml"
+                                                   AutomationProperties.Name="Browse for the XML books directory"
                                                    DockPanel.Dock="Right" 
                                                    Margin="5,0,0,0"
                                                    Width="80"/>
                                             <TextBox Text="{Binding XmlBooksDirectory}" 
+                                                     AutomationProperties.AutomationId="settings.general.xml-directory"
+                                                     AutomationProperties.Name="XML books directory"
                                                     IsReadOnly="True"/>
                                         </DockPanel>
                                         <TextBlock Text="Location of the Tipitaka XML book files" 
@@ -155,10 +167,14 @@
                                             <DockPanel>
                                                 <Button Content="Browse..." 
                                                        Command="{Binding BrowseIndexCommand}"
+                                                       AutomationProperties.AutomationId="settings.general.browse-index"
+                                                       AutomationProperties.Name="Browse for the index directory"
                                                        DockPanel.Dock="Right" 
                                                        Margin="5,0,0,0"
                                                        Width="80"/>
                                                 <TextBox Text="{Binding IndexDirectory}" 
+                                                         AutomationProperties.AutomationId="settings.general.index-directory"
+                                                         AutomationProperties.Name="Index directory"
                                                         Watermark="Default location will be used if empty"/>
                                             </DockPanel>
                                             <TextBlock Text="Location where search index files are stored" 
@@ -196,6 +212,8 @@
                                                  keeps it usable if the right-hand panel ever shrinks. -->
                                             <ListBox Grid.Column="0"
                                                     ItemsSource="{Binding ScriptFontSettings}"
+                                                    AutomationProperties.AutomationId="settings.appearance.scripts"
+                                                    AutomationProperties.Name="Pali scripts"
                                                     SelectedItem="{Binding SelectedScript}"
                                                     MinHeight="200"
                                                     VerticalAlignment="Stretch">
@@ -209,9 +227,11 @@
                                                      ~3 lines tall. Trimmed so all fourteen fit without
                                                      scrolling at the default dialog size. -->
                                                 <ListBox.Styles>
-                                                    <Style Selector="ListBoxItem">
+                                                    <Style Selector="ListBoxItem" x:DataType="vm:ScriptFontSettingViewModel">
                                                         <Setter Property="Padding" Value="10,4"/>
                                                         <Setter Property="MinHeight" Value="0"/>
+                                                        <!-- #862: as for the category list above. -->
+                                                        <Setter Property="AutomationProperties.Name" Value="{Binding ScriptName}"/>
                                                     </Style>
                                                 </ListBox.Styles>
                                             </ListBox>
@@ -249,6 +269,8 @@
                                                                      VerticalAlignment="Center" Margin="10,0,0,0"
                                                                      DockPanel.Dock="Right"/>
                                                         <ComboBox ItemsSource="{Binding SelectedScript.AvailableFonts}"
+                                                                  AutomationProperties.AutomationId="settings.appearance.ui-font"
+                                                                  AutomationProperties.Name="Pali UI font"
                                                                   SelectedItem="{Binding SelectedScript.SelectedFontFamily}"
                                                                   IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
                                                                   HorizontalAlignment="Stretch"/>
@@ -268,6 +290,8 @@
                                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <NumericUpDown Grid.Row="1" Grid.Column="1" 
                                                                   Value="{Binding SelectedScript.FontSize}"
+                                                                  AutomationProperties.AutomationId="settings.appearance.ui-font-size"
+                                                                  AutomationProperties.Name="Pali UI font size"
                                                                   Minimum="8" Maximum="32" Increment="1"
                                                                   Width="120" HorizontalAlignment="Left"
                                                                   Margin="0,0,0,10"/>
@@ -316,6 +340,8 @@
                                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <ComboBox Grid.Row="0" Grid.Column="1"
                                                               ItemsSource="{Binding SelectedScript.AvailableBookFonts}"
+                                                              AutomationProperties.AutomationId="settings.appearance.book-font"
+                                                              AutomationProperties.Name="Pali book font"
                                                               SelectedItem="{Binding SelectedScript.SelectedBookFontFamily}"
                                                               IsEnabled="{Binding !SelectedScript.IsLoadingFonts}"
                                                               HorizontalAlignment="Stretch"
@@ -344,6 +370,7 @@
                                         <TextBlock Text="Hardware acceleration for the reader view. If book pages occasionally go blank until you click or select text (seen with some GPUs and in virtual machines), turn this off to use software rendering."
                                                   Classes="SettingDescription" TextWrapping="Wrap"/>
                                         <CheckBox IsChecked="{Binding UseHardwareAcceleration}"
+                                                  AutomationProperties.AutomationId="settings.configuration.hardware-acceleration"
                                                  Content="Use hardware acceleration (requires restart)"
                                                  Margin="0,10,0,0"/>
                                     </StackPanel>
@@ -358,10 +385,13 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Spacing="10">
                                             <TextBlock Text="Books to remember:" VerticalAlignment="Center"/>
                                             <NumericUpDown Value="{Binding MaxRecentBooks}"
+                                                           AutomationProperties.AutomationId="settings.configuration.recent-books-count"
+                                                           AutomationProperties.Name="Books to remember"
                                                           Minimum="0" Maximum="50" Increment="1"
                                                           FormatString="0" Width="120"/>
                                             <Button Content="Clear List"
                                                    Command="{Binding ClearRecentBooksCommand}"
+                                                   AutomationProperties.AutomationId="settings.configuration.clear-recent-books"
                                                    VerticalAlignment="Center"
                                                    ToolTip.Tip="Empty the recent-books list now"/>
                                         </StackPanel>
@@ -383,6 +413,7 @@
 
                                         <Button Content="Open Settings Folder"
                                                Command="{Binding OpenSettingsFileCommand}"
+                                               AutomationProperties.AutomationId="settings.configuration.open-settings-folder"
                                                Margin="0,10,0,0"
                                                HorizontalAlignment="Left"/>
                                     </StackPanel>
@@ -400,6 +431,7 @@
                                                   Classes="SettingDescription"/>
                                         
                                         <CheckBox IsChecked="{Binding EnableAutomaticUpdates}" 
+                                                  AutomationProperties.AutomationId="settings.xml-updates.enabled"
                                                  Content="Enable automatic updates" 
                                                  Margin="0,10,0,15"/>
                                         
@@ -408,6 +440,8 @@
                                                       VerticalAlignment="Center" Margin="0,0,10,10"/>
                                             <TextBox Grid.Row="0" Grid.Column="1"
                                                     Text="{Binding XmlRepositoryOwner}"
+                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-owner"
+                                                    AutomationProperties.Name="Repository owner"
                                                     Watermark="e.g., VipassanaTech"
                                                     Margin="0,0,0,10"/>
 
@@ -415,6 +449,8 @@
                                                       VerticalAlignment="Center" Margin="0,0,10,10"/>
                                             <TextBox Grid.Row="1" Grid.Column="1"
                                                     Text="{Binding XmlRepositoryName}"
+                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-name"
+                                                    AutomationProperties.Name="Repository name"
                                                     Watermark="e.g., tipitaka-xml"
                                                     Margin="0,0,0,10"/>
 
@@ -422,6 +458,8 @@
                                                       VerticalAlignment="Center" Margin="0,0,10,10"/>
                                             <TextBox Grid.Row="2" Grid.Column="1"
                                                     Text="{Binding XmlRepositoryPath}"
+                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-path"
+                                                    AutomationProperties.Name="Repository path"
                                                     Watermark="e.g., deva master (leave empty for root)"
                                                     Margin="0,0,0,10"/>
 
@@ -429,11 +467,14 @@
                                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
                                             <TextBox Grid.Row="3" Grid.Column="1"
                                                     Text="{Binding XmlRepositoryBranch}"
+                                                    AutomationProperties.AutomationId="settings.xml-updates.repository-branch"
+                                                    AutomationProperties.Name="Repository branch"
                                                     Watermark="e.g., main"/>
                                         </Grid>
 
                                         <Button Content="Restore Defaults"
                                                Command="{Binding RestoreDefaultsCommand}"
+                                               AutomationProperties.AutomationId="settings.xml-updates.restore-defaults"
                                                Margin="0,15,0,0"
                                                HorizontalAlignment="Left"
                                                ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
@@ -452,6 +493,7 @@
                                                   Classes="SettingDescription"/>
 
                                         <CheckBox IsChecked="{Binding EnableAutomaticUpdates}"
+                                                  AutomationProperties.AutomationId="settings.dictionary-updates.enabled"
                                                  Content="Enable automatic updates"
                                                  Margin="0,10,0,15"/>
 
@@ -460,6 +502,8 @@
                                                       VerticalAlignment="Center" Margin="0,0,10,10"/>
                                             <TextBox Grid.Row="0" Grid.Column="1"
                                                     Text="{Binding RepositoryOwner}"
+                                                    AutomationProperties.AutomationId="settings.dictionary-updates.repository-owner"
+                                                    AutomationProperties.Name="Repository owner"
                                                     Watermark="e.g., fsnow"
                                                     Margin="0,0,0,10"/>
 
@@ -467,11 +511,14 @@
                                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
                                             <TextBox Grid.Row="1" Grid.Column="1"
                                                     Text="{Binding RepositoryName}"
+                                                    AutomationProperties.AutomationId="settings.dictionary-updates.repository-name"
+                                                    AutomationProperties.Name="Repository name"
                                                     Watermark="e.g., cst-dictionaries"/>
                                         </Grid>
 
                                         <Button Content="Restore Defaults"
                                                Command="{Binding RestoreDefaultsCommand}"
+                                               AutomationProperties.AutomationId="settings.dictionary-updates.restore-defaults"
                                                Margin="0,15,0,0"
                                                HorizontalAlignment="Left"
                                                ToolTip.Tip="Reset the repository fields to their known-good defaults"/>
@@ -490,9 +537,10 @@
                                         <TextBlock Text="Choose which dictionaries appear in the dictionary panel and their order. The first enabled source is the default. Uncheck a source to hide it; use the arrows to reorder."
                                                   Classes="SettingDescription"/>
 
-                                        <ItemsControl ItemsSource="{Binding Rows}" Margin="0,10,0,0">
+                                        <ItemsControl ItemsSource="{Binding Rows}" Margin="0,10,0,0"
+                                                      AutomationProperties.AutomationId="settings.dictionary.sources">
                                             <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
+                                                <DataTemplate x:DataType="vm:DictionarySourceRowViewModel">
                                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,3">
                                                         <CheckBox Grid.Column="0"
                                                                  IsChecked="{Binding Enabled}"
@@ -501,11 +549,13 @@
                                                                  VerticalAlignment="Center"/>
                                                         <Button Grid.Column="2" Content="&#x25B2;"
                                                                Command="{Binding MoveUpCommand}"
+                                                               AutomationProperties.Name="{Binding DisplayName, StringFormat='Move {0} up'}"
                                                                IsEnabled="{Binding CanMoveUp}"
                                                                Padding="8,2" Margin="0,0,4,0"
                                                                ToolTip.Tip="Move up"/>
                                                         <Button Grid.Column="3" Content="&#x25BC;"
                                                                Command="{Binding MoveDownCommand}"
+                                                               AutomationProperties.Name="{Binding DisplayName, StringFormat='Move {0} down'}"
                                                                IsEnabled="{Binding CanMoveDown}"
                                                                Padding="8,2"
                                                                ToolTip.Tip="Move down"/>
@@ -528,13 +578,15 @@
                              they belong to. The master switch stays on the first tab, adjacent to what it
                              gates, rather than becoming a left-nav row of its own. -->
                         <DataTemplate DataType="vm:AiSettingsViewModel">
-                            <TabControl SelectedIndex="{Binding SelectedTab}">
-                              <TabItem Header="General">
+                            <TabControl SelectedIndex="{Binding SelectedTab}"
+                                        AutomationProperties.AutomationId="settings.ai.tabs">
+                              <TabItem Header="General" AutomationProperties.AutomationId="settings.ai.tab.general">
                                 <StackPanel Margin="0,12,0,0">
                                 <Border Classes="SettingGroup">
                                     <StackPanel>
                                         <TextBlock Text="AI Features" Classes="SettingLabel"/>
                                         <CheckBox IsChecked="{Binding AiEnabled}"
+                                                  AutomationProperties.AutomationId="settings.ai.enabled"
                                                  Content="Enable AI Features"
                                                  Margin="0,10,0,0"/>
                                         <TextBlock Text="When off, all AI features are disabled."
@@ -552,6 +604,7 @@
                                         <TextBlock Text="AI Assistant" Classes="SettingLabel"/>
 
                                         <CheckBox IsChecked="{Binding ChatEnabled}"
+                                                  AutomationProperties.AutomationId="settings.ai.assistant-enabled"
                                                  IsEnabled="{Binding SubPermissionsEnabled}"
                                                  Content="Enable the assistant"
                                                  Margin="0,10,0,0"/>
@@ -562,6 +615,8 @@
                                              is genuinely one-per-app. -->
                                         <TextBlock Text="Answer language" Classes="SettingLabel" Margin="0,14,0,0"/>
                                         <AutoCompleteBox Text="{Binding AnswerLanguage}"
+                                                         AutomationProperties.AutomationId="settings.ai.answer-language"
+                                                         AutomationProperties.Name="Answer language"
                                                         ItemsSource="{Binding AnswerLanguageSuggestions}"
                                                         IsEnabled="{Binding AssistantFieldsEnabled}"
                                                         FilterMode="StartsWith"
@@ -578,13 +633,17 @@
 
                                         <!-- REST surface (/v1): for code agents. -->
                                         <CheckBox IsChecked="{Binding LocalApiEnabled}"
+                                                  AutomationProperties.AutomationId="settings.ai.local-api-enabled"
                                                  IsEnabled="{Binding SubPermissionsEnabled}"
                                                  Content="Run the local API server (Claude Code &amp; tool-calling agents)"
                                                  Margin="0,10,0,0"/>
 
-                                        <Expander Header="Sample agent prompt" Margin="24,4,0,0">
+                                        <Expander Header="Sample agent prompt" Margin="24,4,0,0"
+                                                  AutomationProperties.AutomationId="settings.ai.sample-prompt">
                                             <StackPanel>
                                                 <TextBox Text="{Binding LocalApiSamplePrompt, Mode=OneWay}"
+                                                         AutomationProperties.AutomationId="settings.ai.sample-prompt-text"
+                                                         AutomationProperties.Name="Sample agent prompt"
                                                         IsReadOnly="True"
                                                         AcceptsReturn="True"
                                                         TextWrapping="NoWrap"
@@ -594,6 +653,7 @@
                                                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                                     <Button Content="Copy sample prompt"
+                                                            AutomationProperties.AutomationId="settings.ai.copy-sample-prompt"
                                                             Click="OnCopySamplePrompt"
                                                             IsEnabled="{Binding SubPermissionsEnabled}"
                                                             HorizontalAlignment="Left"/>
@@ -606,6 +666,7 @@
 
                                         <!-- MCP surface (/mcp): for chat clients, reached via the app's mcp-bridge relay. #280 -->
                                         <CheckBox IsChecked="{Binding McpEnabled}"
+                                                  AutomationProperties.AutomationId="settings.ai.mcp-enabled"
                                                  IsEnabled="{Binding SubPermissionsEnabled}"
                                                  Content="Enable MCP access (Claude Desktop &amp; other chat clients)"
                                                  Margin="0,10,0,0"/>
@@ -613,9 +674,12 @@
                                         <!-- Copy sits at the bottom of the expander, matching the prompt above: the button
                                              follows the thing it copies rather than preceding a collapsed panel. Clipboard is
                                              done in code-behind since the view model has no TopLevel. -->
-                                        <Expander Header="Sample MCP configuration" Margin="24,4,0,0">
+                                        <Expander Header="Sample MCP configuration" Margin="24,4,0,0"
+                                                  AutomationProperties.AutomationId="settings.ai.sample-mcp">
                                             <StackPanel>
                                                 <TextBox Text="{Binding McpClientConfigJson, Mode=OneWay}"
+                                                         AutomationProperties.AutomationId="settings.ai.sample-mcp-text"
+                                                         AutomationProperties.Name="Sample MCP configuration"
                                                         IsReadOnly="True"
                                                         AcceptsReturn="True"
                                                         TextWrapping="NoWrap"
@@ -625,6 +689,7 @@
                                                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                                     <Button Content="Copy MCP configuration"
+                                                            AutomationProperties.AutomationId="settings.ai.copy-mcp-config"
                                                             Click="OnCopyMcpConfig"
                                                             IsEnabled="{Binding SubPermissionsEnabled}"
                                                             HorizontalAlignment="Left"/>
@@ -638,6 +703,7 @@
                                         <!-- Cross-cutting capability: navigate/highlight is offered over BOTH surfaces, so this
                                              is enabled whenever either one is on (RemoteControlEnabled). #440 -->
                                         <CheckBox IsChecked="{Binding AllowRemoteControl}"
+                                                  AutomationProperties.AutomationId="settings.ai.allow-remote-control"
                                                  IsEnabled="{Binding RemoteControlEnabled}"
                                                  Content="Allow agents to drive the reader (navigate and highlight)"
                                                  Margin="0,10,0,0"/>
@@ -648,12 +714,14 @@
                                 </StackPanel>
                               </TabItem>
 
-                              <TabItem Header="Providers" IsVisible="{Binding ShowConnectionTabs}">
+                              <TabItem Header="Providers" IsVisible="{Binding ShowConnectionTabs}"
+                                       AutomationProperties.AutomationId="settings.ai.tab.providers">
                                 <views:AiProvidersView DataContext="{Binding Connections}"
                                                        Margin="0,12,0,0"/>
                               </TabItem>
 
-                              <TabItem Header="Models" IsVisible="{Binding ShowConnectionTabs}">
+                              <TabItem Header="Models" IsVisible="{Binding ShowConnectionTabs}"
+                                       AutomationProperties.AutomationId="settings.ai.tab.models">
                                 <views:AiModelsView DataContext="{Binding Models}"
                                                     Margin="0,12,0,0"/>
                               </TabItem>
@@ -672,6 +740,8 @@
                                         <StackPanel Margin="0,10,0,15">
                                             <TextBlock Text="Log Level" Classes="SettingLabel"/>
                                             <ComboBox ItemsSource="{Binding LogLevels}" 
+                                                      AutomationProperties.AutomationId="settings.developer.log-level"
+                                                      AutomationProperties.Name="Log level"
                                                      SelectedItem="{Binding LogLevel}"
                                                      Width="200" HorizontalAlignment="Left"/>
                                             <TextBlock Text="Controls how much detail is written to log files" 
@@ -680,6 +750,7 @@
                                         
                                         <Button Content="Open Logs Folder" 
                                                Command="{Binding OpenLogsCommand}"
+                                               AutomationProperties.AutomationId="settings.developer.open-logs-folder"
                                                Width="150" HorizontalAlignment="Left"/>
                                         <TextBlock Text="Opens the folder containing application log files" 
                                                   Classes="SettingDescription"/>

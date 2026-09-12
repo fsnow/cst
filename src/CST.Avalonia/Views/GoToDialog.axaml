@@ -41,37 +41,43 @@
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=Paragraph}"
                          IsEnabled="{Binding IsParagraphAvailable}"
                          GroupName="NavType"
-                         Click="OnNavTypeClick"/>
+                         Click="OnNavTypeClick"
+                         AutomationProperties.AutomationId="goto.type.paragraph"/>
 
             <RadioButton Content="VRI Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=VriPage}"
                          IsEnabled="{Binding IsVriPageAvailable}"
                          GroupName="NavType"
-                         Click="OnNavTypeClick"/>
+                         Click="OnNavTypeClick"
+                         AutomationProperties.AutomationId="goto.type.vri-page"/>
 
             <RadioButton Content="Myanmar Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=MyanmarPage}"
                          IsEnabled="{Binding IsMyanmarPageAvailable}"
                          GroupName="NavType"
-                         Click="OnNavTypeClick"/>
+                         Click="OnNavTypeClick"
+                         AutomationProperties.AutomationId="goto.type.myanmar-page"/>
 
             <RadioButton Content="PTS Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=PtsPage}"
                          IsEnabled="{Binding IsPtsPageAvailable}"
                          GroupName="NavType"
-                         Click="OnNavTypeClick"/>
+                         Click="OnNavTypeClick"
+                         AutomationProperties.AutomationId="goto.type.pts-page"/>
 
             <RadioButton Content="Thai Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=ThaiPage}"
                          IsEnabled="{Binding IsThaiPageAvailable}"
                          GroupName="NavType"
-                         Click="OnNavTypeClick"/>
+                         Click="OnNavTypeClick"
+                         AutomationProperties.AutomationId="goto.type.thai-page"/>
 
             <RadioButton Content="Other Page"
                          IsChecked="{Binding SelectedType, Converter={x:Static converters:EnumEqualityConverter.Instance}, ConverterParameter=OtherPage}"
                          IsEnabled="{Binding IsOtherPageAvailable}"
                          GroupName="NavType"
-                         Click="OnNavTypeClick"/>
+                         Click="OnNavTypeClick"
+                         AutomationProperties.AutomationId="goto.type.other-page"/>
         </StackPanel>
 
         <!-- Right Column: Number input and buttons -->
@@ -84,7 +90,9 @@
                          Height="32"
                          FontSize="14"
                          HorizontalAlignment="Left"
-                         x:Name="NumberTextBox"/>
+                         x:Name="NumberTextBox"
+                         AutomationProperties.AutomationId="goto.number"
+                         AutomationProperties.Name="Number"/>
             </StackPanel>
 
             <!-- OK Button -->
@@ -94,7 +102,8 @@
                     Height="36"
                     HorizontalContentAlignment="Center"
                     IsDefault="True"
-                    x:Name="OkButton"/>
+                    x:Name="OkButton"
+                    AutomationProperties.AutomationId="goto.ok"/>
 
             <!-- Cancel Button -->
             <Button Content="Cancel"
@@ -102,7 +111,8 @@
                     Width="160"
                     Height="36"
                     HorizontalContentAlignment="Center"
-                    IsCancel="True"/>
+                    IsCancel="True"
+                    AutomationProperties.AutomationId="goto.cancel"/>
         </StackPanel>
 
     </Grid>

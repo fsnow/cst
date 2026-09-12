@@ -49,6 +49,16 @@
       <Setter Property="FontSize" Value="12"/>
     </Style>
     
+    <!-- #862: the clickable part of an Expander is the ToggleButton in its template, and its
+         accessible name comes from its Content - the Expander's Header. Where that Header is a
+         layout element rather than text (here a Grid carrying the label, the filter summary and
+         the book count) the name is the panel's TYPE NAME, "Avalonia.Controls.Grid". A name on
+         the Expander itself does not reach the button, so it is set on the button through the
+         template. -->
+    <Style Selector="Expander#FilterExpander /template/ ToggleButton">
+      <Setter Property="AutomationProperties.Name" Value="Include text types"/>
+    </Style>
+
     <!-- Alternating row colors for better readability -->
     <Style Selector="ListBoxItem:nth-child(2n)">
       <Setter Property="Background" Value="{DynamicResource SubtleFillColorTransparentBrush}"/>
@@ -90,7 +100,9 @@
                    Text="{Binding SearchText}"
                    Watermark="Enter search terms..."
                    BorderThickness="0"
-                   Background="Transparent">
+                   Background="Transparent"
+                   AutomationProperties.AutomationId="search.terms"
+                   AutomationProperties.Name="Search terms">
             <TextBox.KeyBindings>
               <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
               <KeyBinding Gesture="Escape" Command="{Binding ClearCommand}"/>
@@ -116,7 +128,9 @@
                       BorderThickness="0"
                       Padding="4"
                       CornerRadius="3"
-                      VerticalAlignment="Center">
+                      VerticalAlignment="Center"
+                      AutomationProperties.AutomationId="search.clear"
+                      AutomationProperties.Name="Clear the search">
                 <Button.IsVisible>
                   <MultiBinding Converter="{x:Static BoolConverters.And}">
                     <Binding Path="!IsSearching"/>
@@ -146,7 +160,9 @@
                   ItemsSource="{Binding SearchModes}"
                   SelectedItem="{Binding SelectedSearchMode}"
                   FontSize="12"
-                  Margin="0,4,0,8">
+                  Margin="0,4,0,8"
+                  AutomationProperties.AutomationId="search.mode"
+                  AutomationProperties.Name="Search mode">
           <ComboBox.ItemTemplate>
             <DataTemplate>
               <TextBlock Text="{Binding DisplayName}"/>
@@ -171,7 +187,9 @@
                    Value="{Binding ProximityDistance}"
                    TickFrequency="5"
                    TickPlacement="BottomRight"
-                   VerticalAlignment="Center"/>
+                   VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="search.word-distance"
+                    AutomationProperties.Name="Word distance"/>
             <TextBlock Grid.Column="2"
                       Text="{Binding ProximityDistance}"
                       VerticalAlignment="Center"
@@ -209,7 +227,9 @@
         </Border>
 
         <!-- Book Type Filters -->
-        <Expander Name="FilterExpander" IsExpanded="{Binding IsTextTypesExpanded}" Margin="0,4,0,0">
+        <Expander Name="FilterExpander" IsExpanded="{Binding IsTextTypesExpanded}" Margin="0,4,0,0"
+                  AutomationProperties.AutomationId="search.text-types"
+                  AutomationProperties.Name="Include text types">
           <Expander.Header>
             <Grid ColumnDefinitions="Auto,*,Auto">
               <TextBlock Grid.Column="0" Text="Include Text Types" FontWeight="Medium" FontSize="12"/>
@@ -231,37 +251,46 @@
                       Content="Select All"
                       FontSize="12"
                       Padding="8,4"
-                      Margin="0,0,4,0"/>
+                      Margin="0,0,4,0"
+                      AutomationProperties.AutomationId="search.filters.select-all"/>
               <Button Command="{Binding SelectNoneFiltersCommand}"
                       Content="Select None"
                       FontSize="12"
-                      Padding="8,4"/>
+                      Padding="8,4"
+                      AutomationProperties.AutomationId="search.filters.select-none"/>
             </StackPanel>
             <!-- Pitaka Filters -->
             <TextBlock Text="Pitaka:" FontWeight="Medium" FontSize="12" Margin="0,0,0,4"/>
             <WrapPanel Margin="0,0,0,8">
               <CheckBox Classes="filter-checkbox" Content="Vinaya" 
-                       IsChecked="{Binding IncludeVinaya}"/>
+                       IsChecked="{Binding IncludeVinaya}"
+                        AutomationProperties.AutomationId="search.filter.vinaya"/>
               <CheckBox Classes="filter-checkbox" Content="Sutta" 
-                       IsChecked="{Binding IncludeSutta}"/>
+                       IsChecked="{Binding IncludeSutta}"
+                        AutomationProperties.AutomationId="search.filter.sutta"/>
               <CheckBox Classes="filter-checkbox" Content="Abhidhamma" 
-                       IsChecked="{Binding IncludeAbhidhamma}"/>
+                       IsChecked="{Binding IncludeAbhidhamma}"
+                        AutomationProperties.AutomationId="search.filter.abhidhamma"/>
             </WrapPanel>
             
             <!-- Commentary Level Filters -->
             <TextBlock Text="Commentary Level:" FontWeight="Medium" FontSize="12" Margin="0,4,0,4"/>
             <WrapPanel Margin="0,0,0,8">
               <CheckBox Classes="filter-checkbox" Content="Mūla" 
-                       IsChecked="{Binding IncludeMula}"/>
+                       IsChecked="{Binding IncludeMula}"
+                        AutomationProperties.AutomationId="search.filter.mula"/>
               <CheckBox Classes="filter-checkbox" Content="Aṭṭhakathā" 
-                       IsChecked="{Binding IncludeAttha}"/>
+                       IsChecked="{Binding IncludeAttha}"
+                        AutomationProperties.AutomationId="search.filter.atthakatha"/>
               <CheckBox Classes="filter-checkbox" Content="Ṭīkā" 
-                       IsChecked="{Binding IncludeTika}"/>
+                       IsChecked="{Binding IncludeTika}"
+                        AutomationProperties.AutomationId="search.filter.tika"/>
             </WrapPanel>
             
             <!-- Other Texts -->
             <CheckBox Classes="filter-checkbox" Content="Other Texts" 
-                     IsChecked="{Binding IncludeOther}"/>
+                     IsChecked="{Binding IncludeOther}"
+                      AutomationProperties.AutomationId="search.filter.other"/>
           </StackPanel>
         </Expander>
       </StackPanel>
@@ -281,7 +310,9 @@
                    ItemsSource="{Binding Terms}"
                    SelectionMode="Multiple"
                    Background="Transparent"
-                   BorderThickness="0">
+                   BorderThickness="0"
+                   AutomationProperties.AutomationId="search.matching-terms"
+                   AutomationProperties.Name="Matching terms">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:MatchingTermViewModel">
                 <Grid ColumnDefinitions="*,Auto" MinHeight="24" Margin="0,0,14,0">
@@ -312,9 +343,11 @@
             
             <!-- Compact item styling to match Books list -->
             <ListBox.Styles>
-              <Style Selector="ListBoxItem">
+              <Style Selector="ListBoxItem" x:DataType="vm:MatchingTermViewModel">
                 <Setter Property="Padding" Value="4"/>
                 <Setter Property="MinHeight" Value="0"/>
+                <!-- #862 -->
+                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayTerm}"/>
               </Style>
             </ListBox.Styles>
           </ListBox>
@@ -338,7 +371,9 @@
                    Background="Transparent"
                    BorderThickness="0"
                    FontFamily="{Binding CurrentScriptFontFamily}"
-                   FontSize="{Binding CurrentScriptFontSize}">
+                   FontSize="{Binding CurrentScriptFontSize}"
+                   AutomationProperties.AutomationId="search.books"
+                   AutomationProperties.Name="Books">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:BookOccurrenceViewModel">
                 <Grid ColumnDefinitions="*,Auto" MinHeight="24" Margin="0,0,14,0">
@@ -369,9 +404,11 @@
             
             <!-- Double-click to open book -->
             <ListBox.Styles>
-              <Style Selector="ListBoxItem">
+              <Style Selector="ListBoxItem" x:DataType="vm:BookOccurrenceViewModel">
                 <Setter Property="Padding" Value="4"/>
                 <Setter Property="MinHeight" Value="0"/>
+                <!-- #862 -->
+                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}"/>
               </Style>
             </ListBox.Styles>
           </ListBox>

@@ -59,7 +59,8 @@
                         <Button Content="Check again"
                                 Command="{Binding RefreshReadinessCommand}"
                                 HorizontalAlignment="Left"
-                                FontSize="11"/>
+                                FontSize="11"
+                                AutomationProperties.AutomationId="assistant.check-again"/>
                     </StackPanel>
                 </Border>
 
@@ -77,7 +78,9 @@
                          AcceptsReturn="False"
                          MaxHeight="90"
                          TextWrapping="Wrap"
-                         IsEnabled="{Binding CanAsk}">
+                         IsEnabled="{Binding CanAsk}"
+                         AutomationProperties.AutomationId="assistant.question"
+                         AutomationProperties.Name="Question">
                     <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding AskQuestionCommand}"/>
                     </TextBox.KeyBindings>
@@ -97,7 +100,9 @@
                         FontSize="11"
                         Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
                         BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1">
+                        BorderThickness="1"
+                        AutomationProperties.AutomationId="assistant.model"
+                        AutomationProperties.Name="Model">
                     <StackPanel Orientation="Horizontal" Spacing="5">
                         <TextBlock Text="{Binding ModelPicker.CurrentLabel}" VerticalAlignment="Center"/>
                         <TextBlock Text="⌄" FontSize="10" VerticalAlignment="Center"
@@ -110,7 +115,9 @@
 
                                 <!-- Pinned above a scrolling list, and it takes focus: the list can grow. -->
                                 <TextBox Grid.Row="0" Text="{Binding ModelPicker.Search}"
-                                         Watermark="Search models" Margin="0,0,0,6"/>
+                                         Watermark="Search models" Margin="0,0,0,6"
+                                         AutomationProperties.AutomationId="assistant.model-search"
+                                         AutomationProperties.Name="Search models"/>
 
                                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                                     <StackPanel>
@@ -252,7 +259,8 @@
                                         HorizontalAlignment="Left"
                                         Background="Transparent" BorderThickness="0"
                                         FontSize="11" Padding="4,4,4,0"
-                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                        AutomationProperties.AutomationId="assistant.manage-models"/>
                             </Grid>
                         </Flyout>
                     </Button.Flyout>
@@ -271,7 +279,9 @@
                         FontSize="11"
                         Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
                         BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1">
+                        BorderThickness="1"
+                        AutomationProperties.AutomationId="assistant.effort"
+                        AutomationProperties.Name="Effort">
                     <StackPanel Orientation="Horizontal" Spacing="5">
                         <TextBlock Text="{Binding EffortPicker.CurrentLabel}" VerticalAlignment="Center"/>
                         <TextBlock Text="⌄" FontSize="10" VerticalAlignment="Center"
@@ -322,19 +332,25 @@
                     <!-- First, and disabled until something is typed: the other four are complete without a
                          question, and this one IS the question. -->
                     <Button Content="Ask" Command="{Binding AskQuestionCommand}"
-                            IsEnabled="{Binding CanAskQuestion}" Margin="0,0,10,4"/>
+                            IsEnabled="{Binding CanAskQuestion}" Margin="0,0,10,4"
+                            AutomationProperties.AutomationId="assistant.ask"/>
                     <Button Content="Explain" Command="{Binding ExplainCommand}"
-                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"/>
+                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"
+                            AutomationProperties.AutomationId="assistant.explain"/>
                     <Button Content="Translate" Command="{Binding TranslateCommand}"
-                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"/>
+                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"
+                            AutomationProperties.AutomationId="assistant.translate"/>
                     <Button Content="Grammar" Command="{Binding GrammarCommand}"
-                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"/>
+                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"
+                            AutomationProperties.AutomationId="assistant.grammar"/>
                     <Button Content="Word by word" Command="{Binding WordByWordCommand}"
-                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"/>
+                            IsEnabled="{Binding CanAsk}" Margin="0,0,4,4"
+                            AutomationProperties.AutomationId="assistant.word-by-word"/>
                     <!-- Visible only while a turn runs: §10 requires a stop control, and a permanently dead
                          button is not one. -->
                     <Button Content="Stop" Command="{Binding StopCommand}"
-                            IsVisible="{Binding IsBusy}" Margin="0,0,4,4"/>
+                            IsVisible="{Binding IsBusy}" Margin="0,0,4,4"
+                            AutomationProperties.AutomationId="assistant.stop"/>
                 </WrapPanel>
 
                 <TextBlock Text="Answers are generated by a model you configure. They can be wrong — check them against the text."

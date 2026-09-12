@@ -62,13 +62,16 @@
         <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10"
               IsVisible="{Binding !HasNoConnections}">
             <TextBox Grid.Column="0" Text="{Binding Search}"
-                     Watermark="Search models"/>
+                     Watermark="Search models"
+                     AutomationProperties.AutomationId="settings.ai.model-search"
+                     AutomationProperties.Name="Search models"/>
             <!-- Built from published price, which is a fact the provider states rather than a preference of
                  ours. Off by default: on would be a claim about what the reader wants to spend. -->
             <CheckBox Grid.Column="1" IsChecked="{Binding FreeOnly}"
                       Content="Free models only"
                       Margin="10,0,0,0" VerticalAlignment="Center"
-                      ToolTip.Tip="Hides models the provider publishes a price for. Endpoints that publish no price at all — a local runner — are unaffected."/>
+                      ToolTip.Tip="Hides models the provider publishes a price for. Endpoints that publish no price at all — a local runner — are unaffected."
+                      AutomationProperties.AutomationId="settings.ai.free-models-only"/>
         </Grid>
 
         <Border Classes="SettingGroup" Padding="0"
@@ -86,7 +89,8 @@
                                 <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                                     <Button Grid.Column="0" Classes="Link"
                                             Command="{Binding ToggleCommand}"
-                                            Padding="2,0" Margin="0,0,4,0">
+                                            Padding="2,0" Margin="0,0,4,0"
+                                            AutomationProperties.Name="{Binding DisplayName, StringFormat='Expand or collapse {0}'}">
                                         <TextBlock Text="{Binding IsExpanded, Converter={x:Static conv:ChevronConverter.Instance}}"
                                                    FontSize="10"/>
                                     </Button>
@@ -127,7 +131,8 @@
                                     <Button Grid.Column="4" Classes="Link"
                                             Content="Refresh"
                                             IsEnabled="{Binding CanFetch}"
-                                            Command="{Binding FetchCommand}"/>
+                                            Command="{Binding FetchCommand}"
+                                            AutomationProperties.Name="{Binding DisplayName, StringFormat='Refresh {0}'}"/>
                                 </Grid>
 
                                 <TextBlock Text="Asking the provider for its models…"
@@ -149,7 +154,8 @@
                                         IsVisible="{Binding ShowDoc}"
                                         Command="{Binding OpenDocCommand}"
                                         ToolTip.Tip="{Binding DocUrl}"
-                                        HorizontalAlignment="Left" Margin="26,0,0,0"/>
+                                        HorizontalAlignment="Left" Margin="26,0,0,0"
+                                        AutomationProperties.Name="{Binding DisplayName, StringFormat='See the models for {0}'}"/>
 
                             </StackPanel>
                         </Border>
@@ -191,7 +197,8 @@
                                      on at once, which is the entire point of a short list. -->
                                 <ToggleSwitch Grid.Column="2" IsChecked="{Binding Enabled}"
                                               OnContent="" OffContent=""
-                                              VerticalAlignment="Center"/>
+                                              VerticalAlignment="Center"
+                                              AutomationProperties.Name="{Binding DisplayName}"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
