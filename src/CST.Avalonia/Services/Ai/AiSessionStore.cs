@@ -258,17 +258,7 @@ public sealed class AiSessionStore : IAiSessionStore
             // behaviour that makes that work rather than producing a session that saves itself elsewhere.
             session.Id = id;
 
-            // A property initializer does NOT survive an explicit null in the file: `"turns": null` sets the
-            // member to null, initializer and all. Everything downstream — this store's own summary, and the
-            // panel rebuilding the transcript — then meets a null collection where the type promises one, and
-            // a NullReferenceException out of a listing is precisely the "cannot open the panel" failure the
-            // rest of this class goes to lengths to avoid. Nothing this build writes produces such a file; a
-            // hand-edit or a truncating tool does.
-            session.Name ??= string.Empty;
-            session.Turns ??= new List<AiTurnRecord>();
-            session.Turns.RemoveAll(t => t is null);
-            foreach (var turn in session.Turns)
-                turn.Notices ??= new List<string>();
+            Normalize(session);
 
             return session;
         }
@@ -280,6 +270,70 @@ public sealed class AiSessionStore : IAiSessionStore
         {
             PreserveUnreadable(id, path, ex.Message);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Make a loaded session safe to hand out: no null collection where the type promises one, and no null
+    /// element inside one.
+    ///
+    /// <para><b>A property initializer does not survive an explicit null in the file.</b> <c>"turns": null</c>
+    /// sets the member to null, initializer and all, and <c>[ null ]</c> puts a null in a list of a
+    /// non-nullable type. Everything downstream then meets what the type says cannot happen — this store's own
+    /// summary, the panel rebuilding the transcript, <c>Describe(citation)</c> iterating the pages — and a
+    /// <c>NullReferenceException</c> out of a listing is precisely the "the panel will not open" failure the
+    /// rest of this class goes to lengths to avoid.</para>
+    ///
+    /// <para>Nothing this build writes produces such a file. A hand-edit does, and a hand-edited session is a
+    /// thing a reader may well try once the format is documented.</para>
+    /// </summary>
+    private static void Normalize(AiSession session)
+    {
+        session.Name ??= string.Empty;
+        session.Version ??= string.Empty;
+
+        session.Turns ??= new List<AiTurnRecord>();
+        session.Turns.RemoveAll(t => t is null);
+
+        session.Compactions ??= new List<AiCompactionRecord>();
+        session.Compactions.RemoveAll(c => c is null);
+        foreach (var compaction in session.Compactions)
+        {
+            compaction.Summary ??= string.Empty;
+            compaction.SummarisedTurnIds ??= new List<string>();
+            compaction.SummarisedTurnIds.RemoveAll(id => id is null);
+        }
+
+        foreach (var turn in session.Turns)
+        {
+            turn.Id ??= AiSession.NewId();
+            turn.Notices ??= new List<string>();
+            turn.Notices.RemoveAll(n => n is null);
+
+            if (turn.Citation is { } citation)
+            {
+                citation.BookId ??= string.Empty;
+                citation.BookName ??= string.Empty;
+                citation.NormalizedReference ??= string.Empty;
+                citation.Pages ??= new List<AiPageRecord>();
+                citation.Pages.RemoveAll(p => p is null);
+            }
+
+            if (turn.Sent is { } sent)
+            {
+                sent.SystemPrompt ??= string.Empty;
+                sent.UserContent ??= string.Empty;
+                sent.Fields ??= new List<AiSentFieldRecord>();
+                sent.Fields.RemoveAll(f => f is null);
+                foreach (var field in sent.Fields)
+                {
+                    field.Name ??= string.Empty;
+                    field.Value ??= string.Empty;
+                }
+
+                sent.ReplayedTurnIds ??= new List<string>();
+                sent.ReplayedTurnIds.RemoveAll(id => id is null);
+            }
         }
     }
 
@@ -345,9 +399,18 @@ public sealed class AiSessionStore : IAiSessionStore
         var path = PathFor(session.Id);
         var temp = path + ".tmp";
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // The wait is INSIDE the try, so an already-cancelled token is reported like any other failure rather
+        // than thrown at a caller this contract told not to expect throws. The wiring saves at the end of a
+        // turn with the turn's own token — the one the reader may have just cancelled by pressing Stop — so
+        // "the reader stopped the turn" would otherwise arrive as an exception out of the save that was
+        // supposed to keep what had streamed. (Caught by a review probe on the first cut, which threw
+        // TaskCanceledException here.)
+        var acquired = false;
         try
         {
+            await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            acquired = true;
+
             Directory.CreateDirectory(_directory);
 
             await File.WriteAllTextAsync(temp, json, cancellationToken).ConfigureAwait(false);
@@ -381,7 +444,10 @@ public sealed class AiSessionStore : IAiSessionStore
         }
         finally
         {
-            _writeLock.Release();
+            // Only if we took it. Releasing a semaphore we never acquired — which is what an unconditional
+            // release does when the wait itself was cancelled — hands the next writer a lock it did not wait
+            // for, and the count never comes back.
+            if (acquired) _writeLock.Release();
         }
     }
 

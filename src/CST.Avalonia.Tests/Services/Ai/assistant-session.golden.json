@@ -6,7 +6,9 @@
   "lastActive": "2026-09-12T10:27:00+00:00",
   "turns": [
     {
+      "id": "turn-one",
       "task": "Explain",
+      "askedLine": "«Explain» — Mahāvaggapāḷi 1.1",
       "answer": "The paragraph opens the Mahāvagga.",
       "reasoning": "First, identify the speaker…",
       "citation": {
@@ -27,9 +29,9 @@
         "The apparatus was empty."
       ],
       "isPartialPassage": true,
-      "usage": "1,024 in · 512 out",
-      "elapsed": "4.2s",
-      "status": "",
+      "inputTokens": 1024,
+      "outputTokens": 512,
+      "elapsedMs": 4200,
       "failed": false,
       "sent": {
         "fields": [
@@ -43,7 +45,8 @@
           }
         ],
         "systemPrompt": "You are reading Pāli.",
-        "userContent": "Passage: tena samayena…"
+        "userContent": "Passage: tena samayena…",
+        "replayedTurnIds": []
       },
       "providerId": "anthropic",
       "modelId": "claude-opus-4-1",
@@ -55,19 +58,30 @@
       }
     },
     {
+      "id": "turn-two",
       "task": "Ask",
       "question": "What does bhagavā mean here?",
+      "askedLine": "«Question» — Mahāvaggapāḷi 1.1: What does bhagavā mean here?",
       "answer": "It is an epithet",
       "notices": [],
       "isPartialPassage": false,
-      "elapsed": "1m 3s",
+      "elapsedMs": 63000,
       "status": "The provider closed the connection.",
       "failed": true,
+      "sent": {
+        "fields": [],
+        "systemPrompt": "You are reading Pāli.",
+        "userContent": "Passage: tena samayena… What does bhagavā mean here?",
+        "replayedTurnIds": [
+          "turn-one"
+        ]
+      },
       "providerId": "anthropic",
       "modelId": "claude-opus-4-1",
       "when": "2026-09-12T10:21:00+00:00"
     },
     {
+      "id": "turn-three",
       "task": "Translate",
       "answer": "At that time the Blessed One…",
       "citation": {
@@ -86,6 +100,16 @@
       "isPartialPassage": false,
       "failed": false,
       "when": "2026-09-12T10:27:00+00:00"
+    }
+  ],
+  "compactions": [
+    {
+      "when": "2026-09-12T10:45:00+00:00",
+      "summary": "Two earlier turns, about the opening of the Mahāvagga.",
+      "summarisedTurnIds": [
+        "turn-one",
+        "turn-two"
+      ]
     }
   ]
 }
