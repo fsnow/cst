@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CST.Avalonia.Services;
 using Microsoft.Data.Sqlite;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
@@ -13,6 +14,7 @@ namespace CST.Avalonia.Tests.Services;
 // Unit tests for DpdUpdateService's testable core (#390/#468): CATALOG manifest parsing, the two-axis version
 // comparison, the per-asset version reads (a DPD lemma db vs a lexicon), and the verify→decompress→probe→atomic
 // install with preservation of a good existing asset.
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class DpdUpdateServiceTests : IDisposable
 {
     private readonly string _dir;

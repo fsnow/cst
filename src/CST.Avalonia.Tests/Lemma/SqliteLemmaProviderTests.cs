@@ -3,12 +3,14 @@ using System.IO;
 using System.Linq;
 using CST.Lemma;
 using Microsoft.Data.Sqlite;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Lemma;
 
 // Exercises SqliteLemmaProvider against a tiny hand-built fixture (rows mirror real DPD ground truth:
 // pajānāti=39702, paññā 1=39994, paññāya 1(ger)=40070, paññāya 2(fem)=40071, nappajānāti=35708).
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class SqliteLemmaProviderTests : IDisposable
 {
     private readonly string _dbPath;

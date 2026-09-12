@@ -60,15 +60,6 @@ internal static class SseReader
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 
-        // Linked so a real cancellation still propagates; the deadline is rescheduled after every successful
-        // read, which is what makes this an idle timeout rather than a total one.
-        //
-        // Benign race: the timer can fire in the window between a read returning and the reschedule below. The
-        // token is then permanently cancelled and the next read reports an idle timeout even though data had just
-        // arrived. It needs the stream to go quiet for the whole window and then deliver a line within
-        // microseconds of expiry; the cost is one spurious "stopped responding" that a retry clears.
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
         string? name = null;
         var data = new StringBuilder();
         var sawAnyData = false;
@@ -86,11 +77,29 @@ internal static class SseReader
             string? line;
             AiError? failure = null;
 
+            // ONE SOURCE PER READ, and this is load-bearing rather than tidy. A CancellationTokenSource that
+            // has fired is cancelled for good. Sharing one across reads meant a timer expiring in the gap
+            // between a read returning and the next re-arm poisoned every read that followed: the stream is
+            // alive and still delivering, and the reader reports "the model stopped responding".
+            //
+            // The comment that used to sit here called that race benign, on the grounds that it needs a line
+            // to arrive within microseconds of expiry. That measured the wrong interval. The window is not the
+            // arrival — it is however long this thread is descheduled between the read returning and the
+            // re-arm, which under a loaded machine is milliseconds. It is the cause of #798: the reader
+            // returned its first event and then a spurious network failure, roughly once in ten full-suite
+            // runs, and never when the test was run alone.
+            //
+            // A source per line costs an allocation and a timer against a loop that already allocates a
+            // string per line and awaits I/O on each one. Linked to ct throughout, so a real cancellation
+            // still propagates.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
             try
             {
                 // Armed BEFORE the read, so the window in force always matches the pivot. Arming afterwards
                 // left one read carrying the previous line's verdict — harmless (always the more lenient of the
-                // two) but it made the timeout message name a window that had not applied.
+                // two) but it made the timeout message name a window that had not applied. With a source per
+                // read this is also the only arming that source ever gets.
                 //
                 // Two different shapes of window, deliberately. AFTER the first data line the idle window
                 // slides: a stream that keeps producing is allowed to run for as long as it likes, and only a

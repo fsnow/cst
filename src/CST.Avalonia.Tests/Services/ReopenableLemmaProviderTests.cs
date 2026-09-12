@@ -3,6 +3,7 @@ using System.IO;
 using CST.Avalonia.Services;
 using CST.Lemma;
 using Microsoft.Data.Sqlite;
+using CST.Avalonia.Tests.TestSupport;
 using Xunit;
 
 namespace CST.Avalonia.Tests.Services;
@@ -18,6 +19,7 @@ namespace CST.Avalonia.Tests.Services;
 /// the first-run bug would come straight back — silently, and only on a machine where the asset arrives
 /// after startup.</para>
 /// </summary>
+[Collection("Sqlite")]   // #960: ClearAllPools is process-wide
 public sealed class ReopenableLemmaProviderTests : IDisposable
 {
     private readonly string _dir;
