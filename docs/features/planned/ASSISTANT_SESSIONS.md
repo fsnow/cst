@@ -1,6 +1,6 @@
 # Assistant sessions — conversation, persistence, naming, compaction (Planned)
 
-> Plan of record for #849 (retain and restore Assistant turns) and #850 (no Clear control), drafted
+> Plan of record for #849 (retain and restore Assistant turns) and #850 (the + new-conversation control), drafted
 > 2026-09-11. Provenance is marked throughout: **[fsnow]** is the maintainer's decision, **[suggestion]** is
 > an agent's and advisory, **[observed]** is a fact from code or a named source. Unmarked text is context.
 
@@ -49,7 +49,7 @@ Two things make the rest cheaper than it looks:
   `ReadingPositionToken` (#434) is the persisted position format. Nothing new has to be *computed* for
   persistence — only written down.
 
-**[observed] `ClearCommand` is bound to nothing** (#850). `AiAssistantPanel.axaml` has no Clear control; the
+**[observed] `ClearCommand` is bound to nothing** (#850). `AiAssistantPanel.axaml` never references it; the
 command exists, is guarded against `IsBusy`, and is unreachable.
 
 ## 2. Claude Code parity map
@@ -62,16 +62,16 @@ directory. Items marked *skip* are deliberately not carried over.
 | Every turn is appended to a transcript file as it completes; nothing is lost on a crash | One file per session under `CSTReader/assistant-sessions/`, written at the end of each turn | P2 |
 | Prior turns are in the model's context; follow-ups work | History replayed as `user`/`assistant` pairs in `ChatRequest.Messages` | **P1** |
 | `--continue` — pick up the most recent session | On launch, the panel reloads the last active session (no model call) | P2 |
-| `/clear` — start a new session; the old one stays on disk | **New conversation** control. The transcript empties; nothing is deleted | P0 (#850) |
+| `/clear` — start a new session; the old one stays on disk | A **+** (new conversation) control: the current session is saved, the panel starts a fresh one; nothing is deleted | P0 (#850) |
 | Auto-title from the first prompt; `/rename` | Auto-name from the first turn (preset + citation, or the question); rename in the panel | P3 |
 | `--resume` / `/resume` picker: title, when, how many messages | Session list in the panel: name, last active, turn count, books touched; switch by clicking | P3 |
 | `/compact [instructions]` — summarise older turns, keep recent ones verbatim | **Compact** action + a compaction prompt template; the summary becomes the first message | P4 |
 | Auto-compact near the context window | Automatic when the estimated request exceeds a fraction of the model's `ContextLength` (`AiModelRecord.ContextLength`, [observed] already stored from the listing) | P4 |
 | `/context` — how full the window is | The per-turn "Estimated context" field (#665/#672) gains the history's share | P1 |
-| Sessions expire after `cleanupPeriodDays` (30) | Retention **undecided** — see §6 | — |
+| Sessions expire after `cleanupPeriodDays` (30) | *skip* — kept forever, no cap; delete is manual, per session (§6) | — |
 | Resuming forks a new session id | *skip* — a reader resumes in place; forking is a developer concern | — |
 | `/rewind`, checkpoints | *skip* — nothing in a reading session to roll back to | — |
-| Sessions are per project directory | *One global list*, not per book — see §6 | — |
+| Sessions are per project directory | One global list, not per book (§6) | — |
 
 The tester's three numbered points map to P2 (save), P2 (reload) and P4 (last-N or summary).
 
@@ -148,23 +148,25 @@ pattern) and the panel starts empty with a notice, never a crash.
 
 ### 3.3 Sessions (P0, P3)
 
-**Clear means "new conversation", and never "delete".** [suggestion] This answers #850's open question the
-way Claude Code answers it: `/clear` starts a new session and the old one remains resumable. So the control
-needs no confirmation — nothing is destroyed. Deletion is a separate, explicit action on an entry in the
-session list, and that one confirms. **Two controls, two meanings; neither quietly means both.**
+**There is no Clear.** **[fsnow]** *"'Clear' was introduced by Claude at some point and is not relevant. I
+would like to create new conversations like in Claude Code, maybe also with a plus button, while saving the
+current one."* So the control is **+** — new conversation: the current session is saved (it already is, at
+every `EndTurn`), and the panel starts an empty one. Nothing is destroyed, so it needs no confirmation.
+`ClearCommand` and `Clear()` are removed, not rebound; #850 is rewritten to describe the + control.
 
-For #850 today, before sessions exist: bind the existing `ClearCommand` to a control labelled **New
-conversation** rather than **Clear**. Its behaviour today (empty the transcript) is a special case of its
-behaviour later (start a session), and the label survives P3 unchanged.
+For P0, before the session store exists, + does what `Clear()` did — empties the transcript — because there
+is nothing to save yet. The control and its meaning survive P2/P3 unchanged; only what happens underneath
+grows.
 
-**Naming:** a session is auto-named from its first turn — `Explain · Mahāvaggapāḷi 1.1`, or the first 60
-characters of a question — and renamable. [suggestion] No model-generated titles: they cost a call per
-session for a name the reader can type, and the free-tier endpoints this app is tested against are the ones
-least able to afford it.
+**Deletion** is a separate action on a row in the session list, and it confirms — the one irreversible thing
+here. **[fsnow]** chose *"Yes, with confirmation"*.
+
+**Naming:** **[fsnow]** chose *"Auto from the first turn, renamable"* — `Explain · Mahāvaggapāḷi 1.1`, or the
+first ~60 characters of a question; the reader can rename. No model-generated titles.
 
 **The list:** newest-active first; each row shows name, last-active time, turn count, and the distinct books
-its citations name. Click switches the panel to it (the in-flight turn, if any, blocks the switch exactly as
-`Clear()` is blocked by `IsBusy`). Rename and Delete on the row.
+its citations name. Click switches the panel to it (the in-flight turn, if any, blocks the switch, the way
+`IsBusy` guards every other command). Rename and Delete on the row.
 
 ### 3.4 Compaction (P4)
 
@@ -175,10 +177,17 @@ verbatim. The transcript on screen keeps every turn — compaction changes what 
 **shown** — with a marker row where the boundary falls (*"12 earlier turns summarised"*), which the `Sent`
 expander can open.
 
-Automatic trigger: when the estimated request would exceed a fraction of `ContextLength` for the resolved
-model. Where `ContextLength` is unknown (a hand-typed model id, no listing) there is no automatic trigger,
-only the manual action and a notice on the turn that says why. The fraction and *N* are numbers **[fsnow]**
-has not chosen and this plan does not invent (see §6).
+**[fsnow]** *"Manual and auto at a fraction of context length"*. The automatic trigger fires when the
+estimated request reaches **95% of `ContextLength`** for the resolved model — **[fsnow]** *"95%, but make
+this a setting"* — so the fraction is a `Settings.Ai.Chat` value with 95 as its default. **The last 4
+turns stay verbatim** (**[fsnow]**: *"Last 4 turns"*); everything older goes into the summary. Where
+`ContextLength` is unknown (a hand-typed model id, no listing) there is no automatic trigger, only the manual
+action and a notice on the turn that says why.
+
+[suggestion] Two consequences of 95% worth building in: the summary call itself has to fit in the remaining
+5%, so the summariser sends only the turns being compacted, never the whole session; and the estimate is a
+chars-per-token heuristic that runs worse on diacritic-heavy Pāli (AI_SURFACE_B §14), so a `ContextTooLong`
+error from the provider should itself trigger a compaction-and-retry rather than surface as a dead turn.
 
 The "resend only the last N exchanges" half of the tester's point 3 falls out of the same *N* with the summary
 step turned off — it is a degenerate compaction, not a separate feature.
@@ -201,7 +210,7 @@ UI phases are the maintainer's (standing pattern).
 
 | # | Issue | Work | UI-free | Depends on |
 |---|---|---|---|---|
-| **P0** | #850 | Bind `ClearCommand` to a **New conversation** control | ✗ (one button; XAML only) | — |
+| **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` | ✗ (one button) | — |
 | **P1** | new | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.Messages`, estimate over the whole request | ✅ | — |
 | **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
 | **P3** | new | Session service: new / switch / rename / delete / auto-name; the list, rename and delete UI | service ✅, panel ✗ | P2 |
@@ -228,29 +237,24 @@ format, compaction boundary, prompt-cache stability) is shaped by.
   auto trigger fires at the threshold and not below it; no trigger when `ContextLength` is null.
 - **P5** — manual, on Egret; nothing here is headless-testable (dock + CEF).
 
-## 6. Decisions for the maintainer
+## 6. Decisions — record
 
-Each with the agent's recommendation, marked. None is decided.
+Decided by **[fsnow]** on 2026-09-12, answering the questions this plan raised. Where he chose one of the
+options offered, the option's label is quoted; where he wrote his own answer, his words are.
 
-1. **Restore the last session on launch, or open empty with a Resume affordance?** [suggestion] Restore —
-   the app restores books, layout and reading positions silently, and an answer about a passage is part of
-   where the reader was (#849's own argument). Claude Code's default is a fresh session with `--continue`
-   opt-in, but a CLI has no persistent window to restore into.
-2. **History layout** (§3.1): citation line + question + answer per prior turn, bundle for the current turn
-   only. [suggestion] Yes; the alternative re-sends the passage every turn.
-3. **Store the sent prompt (`SentContext`) on disk?** It contains passage text. [suggestion] Yes — it is
-   corpus text on the reader's own machine, the §10 privacy concern is about *sending*, and a restored turn
-   without it cannot answer "what did the model see", which is what #665 exists for. Cap per turn if size
-   is a concern.
-4. **Clear = new conversation, delete lives in the list** (§3.3). [suggestion] Yes.
-5. **Retention.** Claude Code deletes after 30 days by default. [suggestion] Leave it unset — no cap, no
-   expiry — until a reason appears; a study transcript is not a build log. The setting is a placeholder.
-6. **Auto-name locally, never by the model** (§3.3). [suggestion] Yes.
-7. **Compaction numbers** — the context fraction that triggers it and the *N* turns kept verbatim. Not
-   proposed; they are yours, and a reasonable first value would come from watching the estimate field over a
-   real session.
-8. **One global session list, not per book.** [suggestion] Global — a reader's study session crosses mūla
-   and aṭṭhakathā, and the list shows which books each session touched. Per-book *filtering* of the list can
-   come later without changing the store.
-9. **Sequencing #850.** [suggestion] Ship the P0 button now as *New conversation* (a five-line XAML change)
-   rather than holding it for P3; it fixes the bug in the milestone without a label that P3 would rename.
+1. **History layout** (§3.1) — *"Citation + question → answer"*: each prior turn replayed as its citation
+   line plus the question, then the answer; the passage bundle sent once, for the current turn only.
+2. **New conversation, not Clear** (§3.3) — *"'Clear' was introduced by Claude at some point and is not
+   relevant. I would like to create new conversations like in Claude Code, maybe also with a plus button,
+   while saving the current one."*
+3. **On launch** — *"Restore the last session silently"*: the panel reloads the last active session's
+   turns, no model call, the way books and reading positions are restored.
+4. **The sent prompt is stored on disk** — *"Yes, in full"*.
+5. **Naming** — *"Auto from the first turn, renamable"*.
+6. **Scope** — *"One global list"*, not per book.
+7. **Retention** — *"Forever, no cap"*. Deletion is manual, per session.
+8. **Compaction** (§3.4) — *"Manual and auto at a fraction of context length"*; the fraction is
+   *"95%, but make this a setting"*; *"Last 4 turns"* stay verbatim.
+9. **Delete** — *"Yes, with confirmation"*, as an action on a row in the session list.
+10. **#850** — *"Retitle it as the + / New conversation button"*: the issue is kept and its body rewritten;
+    the dead `ClearCommand` is removed rather than bound.
