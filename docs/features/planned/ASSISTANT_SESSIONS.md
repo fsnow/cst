@@ -211,7 +211,7 @@ UI phases are the maintainer's (standing pattern).
 | # | Issue | Work | UI-free | Depends on |
 |---|---|---|---|---|
 | **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` | ✗ (one button) | — |
-| **P1** | new | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.Messages`, estimate over the whole request | ✅ | — |
+| **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.Messages`, estimate over the whole request | ✅ | — |
 | **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
 | **P3** | new | Session service: new / switch / rename / delete / auto-name; the list, rename and delete UI | service ✅, panel ✗ | P2 |
 | **P4** | new | Compaction: template, summariser, marker row, manual action, auto trigger from `ContextLength` | ✅ except the action | P1, P3 |

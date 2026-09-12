@@ -198,6 +198,47 @@ public class AnthropicMessagesProviderTests
         Assert.False(root.TryGetProperty("top_k", out _));
     }
 
+    /// <summary>
+    /// A conversation on the wire: the system prompt stays in its own top-level field and the turns go in the
+    /// messages array, alternating, in order. (#991)
+    ///
+    /// <para>Asserted on the serialized body rather than reasoned about, because "the adapter iterates the
+    /// list" is only half of what a longer list needs to be true — the API requires alternating roles and a
+    /// non-empty text block in each, and the system prompt must not be dealt into the array as a pseudo-turn
+    /// the way the OpenAI-compatible shape expects.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_replayed_conversation_is_serialized_as_alternating_turns()
+    {
+        var handler = StubHttpMessageHandler.Sse(HappyStream);
+        var conversation = new ChatRequest(
+            "claude-opus-5", 1024, "You are a Pali reading assistant.",
+            new[]
+            {
+                new ChatMessage(ChatRole.User, "\u00abExplain\u00bb \u2014 Dhammapadap\u0101\u1E37i"),
+                new ChatMessage(ChatRole.Assistant, "Heedfulness is the path."),
+                new ChatMessage(ChatRole.User, "What does the third word mean?"),
+            });
+
+        await CollectAsync(Provider(handler), conversation);
+
+        using var body = JsonDocument.Parse(handler.LastRequestBody);
+        var root = body.RootElement;
+
+        // Top-level, not a message: Anthropic has no system role in the array.
+        Assert.Equal("You are a Pali reading assistant.", root.GetProperty("system").GetString());
+
+        var messages = root.GetProperty("messages").EnumerateArray().ToList();
+        Assert.Equal(3, messages.Count);
+        Assert.Equal(
+            new[] { "user", "assistant", "user" },
+            messages.Select(m => m.GetProperty("role").GetString()));
+        Assert.Equal(
+            conversation.Messages.Select(m => m.Content),
+            messages.Select(m => m.GetProperty("content").GetString()));
+        Assert.DoesNotContain(messages, m => string.IsNullOrEmpty(m.GetProperty("content").GetString()));
+    }
+
     [Fact]
     public async Task An_unset_cap_becomes_the_ceiling_every_current_model_accepts()
     {

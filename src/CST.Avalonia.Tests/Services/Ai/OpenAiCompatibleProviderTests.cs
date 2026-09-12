@@ -72,6 +72,41 @@ public class OpenAiCompatibleProviderTests
         Assert.False(body.RootElement.TryGetProperty("max_tokens", out _));
     }
 
+    /// <summary>
+    /// A conversation on the wire: the system prompt leads the array, as this shape expects, and the turns
+    /// follow it in order with their own roles. (#991)
+    ///
+    /// <para>Asserted on the serialized body because the system-as-first-message step is the one place a longer
+    /// message list could go wrong here — the system prompt has to stay ahead of the conversation rather than
+    /// between the reader and their own last question.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_replayed_conversation_follows_the_system_message_in_order()
+    {
+        var handler = StubHttpMessageHandler.Sse(HappyStream);
+        var conversation = new ChatRequest(
+            "deepseek-chat", 1024, "You are a Pali reading assistant.",
+            new[]
+            {
+                new ChatMessage(ChatRole.User, "\u00abExplain\u00bb \u2014 Dhammapadap\u0101\u1E37i"),
+                new ChatMessage(ChatRole.Assistant, "Heedfulness is the path."),
+                new ChatMessage(ChatRole.User, "What does the third word mean?"),
+            });
+
+        await CollectAsync(Provider(handler), conversation);
+
+        using var body = JsonDocument.Parse(handler.LastRequestBody);
+        var messages = body.RootElement.GetProperty("messages").EnumerateArray().ToList();
+
+        Assert.Equal(
+            new[] { "system", "user", "assistant", "user" },
+            messages.Select(m => m.GetProperty("role").GetString()));
+        Assert.Equal("You are a Pali reading assistant.", messages[0].GetProperty("content").GetString());
+        Assert.Equal(
+            conversation.Messages.Select(m => m.Content),
+            messages.Skip(1).Select(m => m.GetProperty("content").GetString()));
+    }
+
     [Fact]
     public async Task Streams_text_deltas_in_order()
     {

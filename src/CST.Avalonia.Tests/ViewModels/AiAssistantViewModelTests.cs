@@ -32,10 +32,14 @@ public class AiAssistantViewModelTests
         internal int StopCalls { get; private set; }
         internal AiTurnRequest? LastRequest { get; private set; }
 
+        /// <summary>Every request, in order. A conversation is only visible across turns. (#991)</summary>
+        internal List<AiTurnRequest> Requests { get; } = new();
+
         public async IAsyncEnumerable<AiTurnEvent> RunAsync(
             AiTurnRequest request, [EnumeratorCancellation] CancellationToken ct = default)
         {
             LastRequest = request;
+            Requests.Add(request);
             foreach (var e in Events)
             {
                 ct.ThrowIfCancellationRequested();
@@ -968,5 +972,180 @@ public class AiAssistantViewModelTests
         Assert.Equal("The term **appamāda** matters.", vm.LastTurn!.Answer);
         Assert.Equal("The term appamāda matters.", AnswerMarkup.PlainText(vm.LastTurn!.Blocks));
         Assert.Equal("The term appamāda matters.", vm.LastTurn!.CopyText);
+    }
+
+    // ---- The conversation the model is shown (#991) -----------------------------------------------
+
+    /// <summary>A stub that answers every turn the same way: citation, some text, done.</summary>
+    private static StubOrchestrator Answering(params AiTurnEvent[] middle)
+    {
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.AddRange(middle);
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(0, 0)));
+        return orchestrator;
+    }
+
+    /// <summary>
+    /// The panel sends what is on screen. Before #991 every request was one user message, so the model had
+    /// never seen the turn before it and a follow-up question was about nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_next_question_carries_the_conversation_so_far()
+    {
+        var orchestrator = Answering(AiTurnEvent.ForText("Heedfulness is the path."));
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+
+        await vm.AskAsync(AiTask.Explain);
+        vm.Question = "what does the third word mean?";
+        await vm.AskAsync(AiTask.Ask);
+
+        // A first question has nothing to replay.
+        Assert.Empty(orchestrator.Requests[0].History ?? Array.Empty<AiExchange>());
+
+        var history = Assert.Single(orchestrator.Requests[1].History!);
+
+        // The question side is the app's own chrome — the preset that was pressed and the citation the panel
+        // drew from the bundle — never anything parsed out of what the model said.
+        Assert.Equal(
+            "\u00abExplain\u00bb \u2014 S\u012Blakkhandhavaggap\u0101\u1E37i \u2014 para 12", history.Question);
+        Assert.Equal("Heedfulness is the path.", history.Answer);
+    }
+
+    /// <summary>The reader's own words go in with the citation, so a follow-up about a follow-up still has the
+    /// thread of it.</summary>
+    [Fact]
+    public async Task A_replayed_turn_carries_the_question_that_was_asked()
+    {
+        var orchestrator = Answering(AiTurnEvent.ForText("It means vigilance."));
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+
+        vm.Question = "what is appamāda?";
+        await vm.AskAsync(AiTask.Ask);
+        await vm.AskAsync(AiTask.Translate);
+
+        var history = Assert.Single(orchestrator.Requests[1].History!);
+        Assert.Equal(
+            "\u00abQuestion\u00bb \u2014 S\u012Blakkhandhavaggap\u0101\u1E37i \u2014 para 12: "
+            + "what is appamāda?",
+            history.Question);
+    }
+
+    /// <summary>
+    /// A turn that failed before writing anything is not replayed: there is no answer to attribute to the
+    /// model, and a lone user message would tell it a question was asked and silently dropped.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_turn_with_no_answer_is_not_replayed()
+    {
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForError(new AiError(AiErrorKind.Network, "dropped")));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+
+        Assert.True(vm.Turns[0].Failed);
+        Assert.False(vm.Turns[0].HasAnswer);
+        Assert.Empty(orchestrator.Requests[1].History ?? Array.Empty<AiExchange>());
+    }
+
+    /// <summary>
+    /// A turn that failed PART-WAY is replayed as it stands. It is on screen, the reader is reading it, and a
+    /// follow-up will be about what they read — so trimming it out of the history would answer a question
+    /// about something the reader cannot see.
+    /// </summary>
+    [Fact]
+    public async Task A_partial_answer_is_replayed_as_it_stands()
+    {
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForText("Heedfulness is the pa"));
+        orchestrator.Events.Add(AiTurnEvent.ForError(new AiError(AiErrorKind.Network, "dropped")));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+
+        Assert.True(vm.Turns[0].Failed);
+        Assert.Equal("Heedfulness is the pa", Assert.Single(orchestrator.Requests[1].History!).Answer);
+    }
+
+    /// <summary>
+    /// <b>Reasoning is never replayed.</b> It is kept out of the answer because it is the model thinking aloud
+    /// rather than what it told the reader, and that holds just as well on the way back in: replaying it would
+    /// feed half-formed guesses about a canonical text back as though they had been said.
+    /// </summary>
+    [Fact]
+    public async Task Reasoning_is_never_replayed()
+    {
+        var orchestrator = Answering(
+            AiTurnEvent.ForReasoning("Maybe it is a locative. Or maybe not — check the commentary."),
+            AiTurnEvent.ForText("It is an accusative of time."));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Grammar);
+        await vm.AskAsync(AiTask.Explain);
+
+        // The reasoning was genuinely there and genuinely kept — without this the test would pass on a turn
+        // that never produced any.
+        Assert.Contains("Maybe it is a locative", vm.Turns[0].Reasoning);
+
+        var history = Assert.Single(orchestrator.Requests[1].History!);
+        Assert.Equal("It is an accusative of time.", history.Answer);
+        Assert.DoesNotContain("locative", history.Question);
+        Assert.DoesNotContain("Maybe it is a locative", history.Answer);
+    }
+
+    /// <summary>
+    /// Retry re-asks with the history as it is NOW, not as it was — which is what a reader pressing "Try
+    /// again" after reading two more answers means by it, and what falls out of assembling the history from
+    /// the transcript rather than storing a copy per turn.
+    /// </summary>
+    [Fact]
+    public async Task Retry_re_asks_with_the_conversation_as_it_stands_now()
+    {
+        var orchestrator = Answering(AiTurnEvent.ForText("An answer."));
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+
+        // Turn one was sent with no history at all; repeating it now sends both of the turns on screen.
+        await vm.RetryCommand.Execute(vm.Turns[0]).ToTask();
+
+        Assert.Equal(3, orchestrator.Requests.Count);
+        Assert.Equal(2, orchestrator.Requests[2].History!.Count);
+        Assert.Equal(AiTask.Explain, orchestrator.Requests[2].Task);
+    }
+
+    /// <summary>
+    /// The question line, on its own. The layout is a decision about what the model is shown rather than an
+    /// implementation detail: the preset says what was asked of the passage, and the citation says which
+    /// passage — the answers alone say neither.
+    /// </summary>
+    [Fact]
+    public void The_replayed_question_line_names_the_preset_and_the_passage()
+    {
+        var preset = new AiTurnViewModel(AiTask.Translate, null)
+        {
+            Citation = "Mahāvaggapāḷi — paragraph 1",
+        };
+        Assert.Equal(
+            "\u00abTranslate\u00bb \u2014 Mahāvaggapāḷi — paragraph 1",
+            AiAssistantViewModel.DescribeAsked(preset));
+
+        var asked = new AiTurnViewModel(AiTask.Ask, "  why the optative?  ")
+        {
+            Citation = "Mahāvaggapāḷi — paragraph 1",
+        };
+        Assert.Equal(
+            "\u00abQuestion\u00bb \u2014 Mahāvaggapāḷi — paragraph 1: why the optative?",
+            AiAssistantViewModel.DescribeAsked(asked));
+
+        // A turn whose citation never arrived — the request failed before the Started event — still says what
+        // was asked rather than opening with a dangling dash.
+        Assert.Equal("\u00abExplain\u00bb", AiAssistantViewModel.DescribeAsked(new AiTurnViewModel(AiTask.Explain, null)));
     }
 }

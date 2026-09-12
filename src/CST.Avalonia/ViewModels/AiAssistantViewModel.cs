@@ -39,6 +39,13 @@ namespace CST.Avalonia.ViewModels;
 /// asking a second question destroyed the first answer — for a reader working through a passage, which is the
 /// only kind of reader this has, that is the ordinary case rather than an edge one.
 /// </para>
+///
+/// <para>
+/// <b>And it is the conversation.</b> What is on screen is what the model is shown of the turns before this
+/// one — see <see cref="HistoryFor"/> — so a follow-up question means what the reader means by it. The panel
+/// was a transcript to the reader and a series of unrelated requests to the model until #991, which is why
+/// "what did you mean by the third word?" used to answer about nothing.
+/// </para>
 /// </summary>
 public class AiAssistantViewModel : ReactiveTool
 {
@@ -384,7 +391,10 @@ public class AiAssistantViewModel : ReactiveTool
                 // Carried rather than collapsed into "no selection": a selection the reader could not read is
                 // a different state, and conflating them is what makes a dropped selection look to the user
                 // like the assistant ignored it. (#581)
-                state.SelectionUnavailable);
+                state.SelectionUnavailable,
+                // Read from the transcript AFTER StartTurn, so the turn just added is excluded by identity
+                // rather than by an index the next change to this method could invalidate. (#991)
+                HistoryFor(turn));
 
             await foreach (var e in _orchestrator.RunAsync(request, _turnCancellation!.Token))
                 Handle(turn, e);
@@ -684,6 +694,52 @@ public class AiAssistantViewModel : ReactiveTool
             + "mean, then ask again.",
         _ => "The reader could not say which passage you are on.",
     };
+
+    /// <summary>
+    /// The conversation as the model is shown it: every earlier turn on screen, oldest first. (#991)
+    ///
+    /// <para><b>Assembled from the transcript rather than kept as a second list.</b> What the reader can see is
+    /// what the model is told, with no third place for the two to drift apart — and it is why Retry re-asks with
+    /// the history as it stands now rather than as it stood when the turn it repeats was first sent.</para>
+    ///
+    /// <para><b>A turn with no answer text is left out.</b> A failed turn is a request the model never answered,
+    /// so there is no assistant reply to replay and a lone user message would tell it a question was asked and
+    /// silently dropped. A turn with PARTIAL text goes in as it stands: it is on screen, the reader is reading
+    /// it, and a follow-up will be about what they read.</para>
+    ///
+    /// <para>The turn being started is excluded — it is already in <see cref="Turns"/> by the time this runs,
+    /// and its own context is what the current message carries.</para>
+    /// </summary>
+    private IReadOnlyList<AiExchange> HistoryFor(AiTurnViewModel current) =>
+        Turns
+            .Where(t => !ReferenceEquals(t, current) && t.HasAnswer)
+            .Select(t => new AiExchange(DescribeAsked(t), t.Answer))
+            .ToList();
+
+    /// <summary>
+    /// The question side of an earlier turn, as the model is shown it again: which preset, which passage, and
+    /// the reader's own words where there were any. (#991)
+    ///
+    /// <para><b>Built from the app's own chrome, never re-gathered and never parsed out of anything the model
+    /// said.</b> The citation is the line the panel already drew from <see cref="CitationRef"/>, which is what
+    /// keeps a replayed conversation as trustworthy as the screen it came from; the preset label is there
+    /// because "Translate" and "Grammar" asked different things of the same passage and the answers alone do not
+    /// say which was asked.</para>
+    ///
+    /// <para><b>The passage itself is not here.</b> Replaying each turn's full context would send the same
+    /// paragraph once per turn; the citation tells the model which passage an earlier answer was about, which is
+    /// what a follow-up needs once the reader has moved on. A follow-up that needs the text of a passage the
+    /// reader has left will not get it — ask about the passage you are in.</para>
+    ///
+    /// <para>Nothing in here moves between turns: no clock, no turn number, no count. A replayed message that
+    /// changed from one request to the next would break the stable prefix a provider's prompt caching needs.</para>
+    /// </summary>
+    internal static string DescribeAsked(AiTurnViewModel turn)
+    {
+        var opening = $"\u00ab{turn.PresetLabel}\u00bb";
+        var head = string.IsNullOrWhiteSpace(turn.Citation) ? opening : $"{opening} \u2014 {turn.Citation}";
+        return turn.HasQuestion ? $"{head}: {turn.Question!.Trim()}" : head;
+    }
 
     /// <summary>
     /// The citation as ONE quiet line, built from the bundle rather than parsed out of the answer: the book's

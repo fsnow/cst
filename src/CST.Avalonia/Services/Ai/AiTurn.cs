@@ -4,6 +4,24 @@ using CST.Navigation;
 namespace CST.Avalonia.Services.Ai;
 
 /// <summary>
+/// One earlier turn, as the model is shown it again. (#991)
+///
+/// <para>Both halves are strings the app has ALREADY rendered — there is nothing here to re-render, and
+/// nothing to re-gather. <paramref name="Question"/> is the app's own citation line plus what was asked, never
+/// a re-send of that turn's passage: replaying each turn's full context would send the same paragraph once per
+/// turn. <paramref name="Answer"/> is the raw answer as it stands on screen.</para>
+///
+/// <para><b>What this deliberately does not carry.</b> No reasoning — it was segregated from the answer
+/// because it is the model thinking aloud rather than what it told the reader, and that holds just as well on
+/// the way back in. No notices, no usage, no timings: none of them was ever said to the model.</para>
+/// </summary>
+/// <param name="Question">The question side, already rendered: citation line, preset label, and the reader's
+/// own words where there were any.</param>
+/// <param name="Answer">The raw answer. A partial answer is replayed as it is — it stands on screen, so it
+/// stands in the history.</param>
+public sealed record AiExchange(string Question, string Answer);
+
+/// <summary>
 /// What the user asked for. The orchestrator's whole input — everything else it looks up.
 /// </summary>
 /// <param name="Reference">Where in the book. Null reads from the START of the book, so a caller that does not
@@ -12,13 +30,29 @@ namespace CST.Avalonia.Services.Ai;
 /// selected.</param>
 /// <param name="SelectionUnavailable">The reader could not read the selection — see
 /// <see cref="SelectionState.Unavailable"/>. Distinct from a null <paramref name="SelectionText"/>.</param>
+/// <param name="History">
+/// Earlier turns of the same conversation, oldest first, replayed to the model ahead of this one. (#991)
+///
+/// <para>Null or empty is a one-shot turn, which is what every turn was before this existed: the model saw
+/// one user message and nothing else, so "what did you mean by the third word?" could not work at all.</para>
+///
+/// <para><b>The caller owns which turns are in here</b>, because only the caller knows what is on screen. The
+/// panel sends what the reader can see, in the order they can see it, minus turns that produced no answer
+/// text; the orchestrator adds the current turn's context and sends the lot.</para>
+///
+/// <para><b>The passage is sent for the current turn only.</b> A follow-up asked after the reader has moved on
+/// gets each earlier turn's citation but not its text — enough for the model to know which passage an earlier
+/// answer was about, and not a re-send of the paragraph on every turn. Where that is not enough, the reader's
+/// recourse is to ask about the passage they are in.</para>
+/// </param>
 public sealed record AiTurnRequest(
     AiTask Task,
     string BookId,
     NavigationReference? Reference = null,
     string? SelectionText = null,
     string? UserQuestion = null,
-    bool SelectionUnavailable = false);
+    bool SelectionUnavailable = false,
+    IReadOnlyList<AiExchange>? History = null);
 
 /// <summary>What kind of thing a <see cref="AiTurnEvent"/> carries.</summary>
 public enum AiTurnEventKind
@@ -89,10 +123,26 @@ public sealed record AiTurnContext(
 /// </summary>
 /// <param name="Fields">Named values, in display order — provider, model, task, language, book, reference,
 /// pages, the estimated token count, and what each gathered part contributed.</param>
+/// <param name="History">
+/// The earlier turns replayed ahead of this one, in the order they were sent, or empty for a one-shot turn.
+/// (#991)
+///
+/// <para>Here because the conversation is part of what the model saw, and this type's whole claim is that it
+/// says what was sent. A panel that showed only <paramref name="UserContent"/> once history existed would be
+/// showing the last message of a longer request and calling it the request.</para>
+///
+/// <para>The request is <paramref name="SystemPrompt"/>, then these, then <paramref name="UserContent"/> as
+/// the final user message — so this list stops short of the current turn rather than repeating it.</para>
+/// </param>
 public sealed record SentContext(
     IReadOnlyList<SentField> Fields,
     string SystemPrompt,
-    string UserContent);
+    string UserContent,
+    IReadOnlyList<ChatMessage>? History = null)
+{
+    /// <summary>Whether anything was replayed. What the panel hides its history block on.</summary>
+    public bool HasHistory => History is { Count: > 0 };
+}
 
 /// <summary>One named value in <see cref="SentContext.Fields"/>.</summary>
 public sealed record SentField(string Name, string Value);
