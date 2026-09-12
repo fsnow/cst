@@ -56,11 +56,17 @@ public interface IAiChatOrchestrator
 /// only, so a ten-turn conversation about one paragraph sends that paragraph once rather than ten times.
 /// Reasoning is never replayed.</para>
 ///
-/// <para><b>The prefix has to stay byte-identical between turns.</b> Prompt caching (Anthropic's
-/// <c>cache_control</c>, and the automatic equivalents elsewhere) applies to a request prefix that has not
-/// changed, so nothing here may put the time, the turn count, or anything else that moves into the system
-/// prompt or into an already-sent message. It is also why the replayed strings are the ones the earlier turns
-/// were built from rather than anything re-rendered now.</para>
+/// <para><b>The replayed half is byte-stable; the system prompt is not.</b> [observed 2026-09-12] Nothing here
+/// puts the time, the turn count, or anything else that moves into a replayed message — what goes back is the
+/// strings the earlier turns were built from, never anything re-rendered now. The system prompt does move:
+/// <c>Resources/Ai/system.md</c> embeds <c>{{scope}}</c> and <c>{{outputLanguage}}</c>, and
+/// <c>PromptBuilder.Scope</c> renders the book name, the reference, how many paragraphs the window covers and a
+/// sentence that depends on whether anything is selected — so it holds only while the reader stays on the same
+/// reference with the same selection state and answer language, and changes as soon as any of those does.
+/// Neither adapter sets Anthropic's <c>cache_control</c>, and nothing else here asks for caching, so no
+/// behaviour depends on a stable prefix today. One that could be relied on would mean moving the scope
+/// statement out of the system prompt and into the per-turn message, which is not this layer's to decide.
+/// Keeping the replayed half stable is worth doing regardless, because it is the half that grows.</para>
 ///
 /// <para><b>What is never logged above Debug.</b> The prompt contains corpus text and the user's own question,
 /// and the answer contains both back again. Above Debug this logs only shapes and counts. (§10)</para>
@@ -438,18 +444,6 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     }
 
     /// <summary>
-    /// What to tell the user when the model stopped at its output limit (#601). The three cases are genuinely
-    /// different situations, and the difference is invisible to the provider that detected the truncation:
-    ///
-    /// <list type="bullet">
-    /// <item>Text was written — <b>the dangerous one</b>. Without this message a half-finished translation
-    /// renders under a citation exactly like a finished one, and nothing on screen says otherwise.</item>
-    /// <item>Reasoning but no answer — #601's original case. The work was done and never written down; the fix
-    /// is a bigger budget or a lighter-reasoning model, not a retry.</item>
-    /// <item>Neither — the cap is small enough that nothing could be produced at all.</item>
-    /// </list>
-    /// </summary>
-    /// <summary>
     /// The conversation the caller handed over, as wire messages: each earlier turn's question side as a
     /// <c>user</c> message and its answer as the <c>assistant</c> reply, oldest first. (#991)
     ///
@@ -460,7 +454,8 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     /// model even where it is accepted.</para>
     ///
     /// <para>Nothing is re-rendered and nothing is trimmed. These strings were already sent or already shown,
-    /// and rewriting one would change a prefix a provider may have cached.</para>
+    /// and rewriting one would make the replayed half of the request differ from turn to turn for no reason —
+    /// see the class remarks for what does and does not hold about a cacheable prefix.</para>
     /// </summary>
     private static IReadOnlyList<ChatMessage> Replay(IReadOnlyList<AiExchange>? history)
     {
@@ -574,6 +569,18 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         }
     }
 
+    /// <summary>
+    /// What to tell the user when the model stopped at its output limit (#601). The three cases are genuinely
+    /// different situations, and the difference is invisible to the provider that detected the truncation:
+    ///
+    /// <list type="bullet">
+    /// <item>Text was written — <b>the dangerous one</b>. Without this message a half-finished translation
+    /// renders under a citation exactly like a finished one, and nothing on screen says otherwise.</item>
+    /// <item>Reasoning but no answer — #601's original case. The work was done and never written down; the fix
+    /// is a bigger budget or a lighter-reasoning model, not a retry.</item>
+    /// <item>Neither — the cap is small enough that nothing could be produced at all.</item>
+    /// </list>
+    /// </summary>
     private static string TruncationMessage(bool sawText, bool sawReasoning) =>
         sawText
             ? "This answer is incomplete: the model reached its output limit and stopped part-way through."

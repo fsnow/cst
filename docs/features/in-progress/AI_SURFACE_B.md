@@ -274,14 +274,25 @@ right semantic for a reader and it shapes B5's orchestrator.
 
 **A turn is part of a conversation** (#991, 2026-09-12). `ChatRequest.Messages` carries the turns before this
 one as `user`/`assistant` pairs, ahead of this turn's message. **[fsnow]** chose the layout *"Citation +
-question → answer"*: each earlier turn is replayed as the app's own citation line plus what was asked, then the
-raw answer; the passage, selection and lemma blocks are sent for the **current turn only**, so a ten-turn
-conversation about one paragraph sends that paragraph once. Reasoning is never replayed, a turn that produced no
-answer text is not replayed, and the token estimate covers the whole message list — the figure auto-compaction
-is driven by. A follow-up asked after the reader has moved on gets each earlier turn's citation but not its
-text. The stable-prefix requirement that prompt caching needs follows from the same layout: nothing that moves
-between turns may enter the system prompt or an already-sent message. Persistence, named sessions and
-compaction are planned separately in
+question → answer"*.
+
+**[suggestion]** How that is built: each earlier turn is replayed as the app's own citation line plus what was
+asked, then the raw answer; the passage, selection and lemma blocks are sent for the **current turn only**, so a
+ten-turn conversation about one paragraph sends that paragraph once. Reasoning is never replayed, a turn that
+produced no answer text is not replayed, and the token estimate covers the whole message list — the figure
+auto-compaction is driven by. A follow-up asked after the reader has moved on gets each earlier turn's citation
+but not its text.
+
+**[observed] The request has no prefix that is stable by construction, and nothing asks for caching**
+(2026-09-12). The replayed messages *are* byte-stable: they are the strings the earlier turns were built from,
+and nothing turn- or time-dependent enters them. **The system prompt is not.** `Resources/Ai/system.md` embeds
+`{{scope}}` and `{{outputLanguage}}`, and `PromptBuilder.Scope` renders the book name, the reference, a
+paragraphs-covered sentence and a selection-dependent sentence — so it holds only while the reader stays on the
+same reference with the same selection state and answer language, and changes as soon as any of those does.
+Neither adapter sets Anthropic's `cache_control`. A prefix that could be cached reliably therefore needs work
+beyond #991: the varying scope statement would have to move out of the system prompt into the per-turn
+message. Persistence,
+named sessions and compaction are planned separately in
 [ASSISTANT_SESSIONS.md](../planned/ASSISTANT_SESSIONS.md).
 
 All errors normalize into one `AiError` type: not-configured, no-network, 401, 429 + retry-after,

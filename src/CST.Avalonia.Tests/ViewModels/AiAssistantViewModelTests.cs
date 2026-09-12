@@ -1121,6 +1121,29 @@ public class AiAssistantViewModelTests
     }
 
     /// <summary>
+    /// An earlier turn is replayed IDENTICALLY on every later turn. (#991)
+    ///
+    /// <para>The property a prompt-cache prefix would need from this half of the request, and the test that
+    /// fails the moment anyone appends a turn tag, a count or a timestamp to the replayed question line. (The
+    /// system prompt does not have this property today — <c>Resources/Ai/system.md</c> embeds a scope statement
+    /// that moves with the reader — so nothing is claimed here about the request as a whole.)</para>
+    /// </summary>
+    [Fact]
+    public async Task An_earlier_turn_is_replayed_byte_for_byte_on_every_later_turn()
+    {
+        var orchestrator = Answering(AiTurnEvent.ForText("An answer."));
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+        await vm.AskAsync(AiTask.Grammar);
+
+        // Value equality on the record, so both halves are compared — the question line and the answer.
+        Assert.Equal(orchestrator.Requests[1].History![0], orchestrator.Requests[2].History![0]);
+        Assert.Equal(2, orchestrator.Requests[2].History!.Count);
+    }
+
+    /// <summary>
     /// The question line, on its own. The layout is a decision about what the model is shown rather than an
     /// implementation detail: the preset says what was asked of the passage, and the citation says which
     /// passage — the answers alone say neither.
@@ -1146,6 +1169,8 @@ public class AiAssistantViewModelTests
 
         // A turn whose citation never arrived — the request failed before the Started event — still says what
         // was asked rather than opening with a dangling dash.
-        Assert.Equal("\u00abExplain\u00bb", AiAssistantViewModel.DescribeAsked(new AiTurnViewModel(AiTask.Explain, null)));
+        Assert.Equal(
+            "\u00abExplain\u00bb",
+            AiAssistantViewModel.DescribeAsked(new AiTurnViewModel(AiTask.Explain, null)));
     }
 }

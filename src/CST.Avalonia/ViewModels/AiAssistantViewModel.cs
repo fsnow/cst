@@ -731,8 +731,10 @@ public class AiAssistantViewModel : ReactiveTool
     /// what a follow-up needs once the reader has moved on. A follow-up that needs the text of a passage the
     /// reader has left will not get it — ask about the passage you are in.</para>
     ///
-    /// <para>Nothing in here moves between turns: no clock, no turn number, no count. A replayed message that
-    /// changed from one request to the next would break the stable prefix a provider's prompt caching needs.</para>
+    /// <para>Nothing in here moves between turns: no clock, no turn number, no count — so an earlier turn is
+    /// replayed identically for as long as it is on screen. That is the property a future prompt-cache prefix
+    /// would need from this half of the request; the system prompt does not have it today, for reasons recorded
+    /// on <see cref="AiChatOrchestrator"/>.</para>
     /// </summary>
     internal static string DescribeAsked(AiTurnViewModel turn)
     {
