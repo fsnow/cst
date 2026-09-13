@@ -470,16 +470,31 @@ public class AiAssistantViewModel : ReactiveTool
                 turn.Status = WaitingMessage(_elapsed.Elapsed, sawReasoning: false);
                 break;
 
-            case AiTurnEventKind.Text when e.Text is { Length: > 0 }:
+            case AiTurnEventKind.Text:
+            {
+                // Two views of one delta, and either half can be empty (see AiTurnEventKind.Text). The marked
+                // half is what the model wrote, markers and all — kept for replay to the model and bound to
+                // nothing; the visible half is what the reader sees.
+                var visible = e.Text is { Length: > 0 };
                 lock (_pendingGate)
                 {
-                    turn.AppendAnswer(e.Text);
-                    _pendingAnswer = true;
+                    if (e.MarkedText is { Length: > 0 } marked) turn.AppendMarkedAnswer(marked);
+                    if (visible)
+                    {
+                        turn.AppendAnswer(e.Text!);
+                        _pendingAnswer = true;
+                    }
                 }
+
+                // Only renderable text is progress: a delta the filter swallowed whole has put nothing on
+                // screen, so the waiting message still has something to say.
+                if (!visible) break;
+
                 // Text on screen IS the progress report; the counter has nothing left to say.
                 _sawText = true;
                 turn.Status = "";
                 break;
+            }
 
             case AiTurnEventKind.Reasoning when e.Text is { Length: > 0 }:
                 // Never concatenated into the answer — it is the model thinking aloud, not what it is telling
@@ -707,13 +722,19 @@ public class AiAssistantViewModel : ReactiveTool
     /// silently dropped. A turn with PARTIAL text goes in as it stands: it is on screen, the reader is reading
     /// it, and a follow-up will be about what they read.</para>
     ///
+    /// <para><b>What goes back is <see cref="AiTurnViewModel.MarkedAnswer"/>, never <c>Answer</c>.</b> The
+    /// screen shows the answer with its <c>[[…]]</c> Pāli markers stripped; the system prompt tells the model to
+    /// put those markers on every Pāli span. Replaying the stripped text would hand it a transcript of its own
+    /// answers ignoring that instruction, and a model shown its own apparent practice follows it. <b>[fsnow]</b>,
+    /// on fixing this before #991 merged: <i>"I want to fix this before we merge."</i></para>
+    ///
     /// <para>The turn being started is excluded — it is already in <see cref="Turns"/> by the time this runs,
     /// and its own context is what the current message carries.</para>
     /// </summary>
     private IReadOnlyList<AiExchange> HistoryFor(AiTurnViewModel current) =>
         Turns
             .Where(t => !ReferenceEquals(t, current) && t.HasAnswer)
-            .Select(t => new AiExchange(DescribeAsked(t), t.Answer))
+            .Select(t => new AiExchange(DescribeAsked(t), t.MarkedAnswer))
             .ToList();
 
     /// <summary>

@@ -277,11 +277,21 @@ one as `user`/`assistant` pairs, ahead of this turn's message. **[fsnow]** chose
 question → answer"*.
 
 **[suggestion]** How that is built: each earlier turn is replayed as the app's own citation line plus what was
-asked, then the raw answer; the passage, selection and lemma blocks are sent for the **current turn only**, so a
+asked, then the answer; the passage, selection and lemma blocks are sent for the **current turn only**, so a
 ten-turn conversation about one paragraph sends that paragraph once. Reasoning is never replayed, a turn that
 produced no answer text is not replayed, and the token estimate covers the whole message list — the figure
 auto-compaction is driven by. A follow-up asked after the reader has moved on gets each earlier turn's citation
 but not its text.
+
+**[fsnow] The replayed answer is the model's own marked text, not what the panel shows** — *"I want to fix this
+before we merge."* (2026-09-12, before #991 merged.) §9's `[[…]]` markers are stripped from the display by
+`PaliQuoteFilter`, so the answer on screen has none; `system.md` tells the model to wrap **every** Pāli span in
+them. Replaying the stripped text would hand the model, from turn 2 on, a transcript of its own answers ignoring
+the instruction it is being given — and a model shown its own apparent practice follows it. So the orchestrator
+emits both halves of each text delta (`AiTurnEvent.Text` for the screen, `AiTurnEvent.MarkedText` as written),
+`AiTurnViewModel` accumulates the marked half beside the displayed one, and the history replays the marked half.
+**Unbalanced markers go back as written**: the filter strips those from the display and counts them (#587), but
+what the model is shown of its own output should be what it produced, not a repaired version.
 
 **[observed] The request has no prefix that is stable by construction, and nothing asks for caching**
 (2026-09-12). The replayed messages *are* byte-stable: they are the strings the earlier turns were built from,

@@ -17,8 +17,11 @@ namespace CST.Avalonia.Services.Ai;
 /// </summary>
 /// <param name="Question">The question side, already rendered: citation line, preset label, and the reader's
 /// own words where there were any.</param>
-/// <param name="Answer">The raw answer. A partial answer is replayed as it is — it stands on screen, so it
-/// stands in the history.</param>
+/// <param name="Answer">The answer <b>as the model wrote it</b>, Pāli markers and all — not the stripped text
+/// the panel displays. The system prompt tells the model to wrap every Pāli span in <c>[[…]]</c>; replaying the
+/// stripped version would show it a transcript of its own answers disobeying that instruction, which a model is
+/// expected to imitate. <b>[fsnow]</b>, deciding this before #991 merged: <i>"I want to fix this before we
+/// merge."</i> A partial answer is replayed as it is — it stands on screen, so it stands in the history.</param>
 public sealed record AiExchange(string Question, string Answer);
 
 /// <summary>
@@ -64,7 +67,15 @@ public enum AiTurnEventKind
     /// </summary>
     Started,
 
-    /// <summary>Answer text, marker-stripped and ready to render.</summary>
+    /// <summary>
+    /// Answer text. Two views of the same delta: <see cref="AiTurnEvent.Text"/> is marker-stripped and ready to
+    /// render, <see cref="AiTurnEvent.MarkedText"/> is what the model actually wrote.
+    ///
+    /// <para><b>Either can be empty.</b> A delta that ends between the two brackets of a marker renders nothing
+    /// yet — the filter holds the bracket back — and the flush at the end of a stream releases visible text
+    /// whose marked form was already carried by the delta it arrived in. A caller appends whichever halves are
+    /// present; it must not assume they arrive together.</para>
+    /// </summary>
     Text,
 
     /// <summary>Model reasoning, segregated. A caller may show it deliberately or drop it; never concatenate it
@@ -165,16 +176,31 @@ public sealed record PaliMarkerReport(int Quotes, int UnbalancedMarkers);
 public sealed record AiUsageReport(int? InputTokens, int? OutputTokens);
 
 /// <summary>One event in a turn. See <see cref="AiTurnEventKind"/> for which field each kind populates.</summary>
+/// <param name="MarkedText">
+/// On a <see cref="AiTurnEventKind.Text"/> event: the same delta as the model wrote it, <b>marker for marker</b>
+/// — including markers that never found a partner, which <see cref="PaliQuoteFilter"/> strips from
+/// <paramref name="Text"/> and counts. (#991)
+///
+/// <para>Kept because a later turn replays earlier answers to the model, and the text on screen is the wrong
+/// thing to replay: the system prompt tells the model to wrap every Pāli span in <c>[[…]]</c>, so a transcript
+/// of stripped answers is a transcript of itself disobeying that instruction. Unbalanced markers go back too —
+/// what the model is shown of its own output should be what it produced, not a repaired version of it.</para>
+/// </param>
 public sealed record AiTurnEvent(
     AiTurnEventKind Kind,
     string? Text = null,
     AiTurnContext? Context = null,
     AiUsageReport? Usage = null,
     AiError? Error = null,
-    PaliMarkerReport? Markers = null)
+    PaliMarkerReport? Markers = null,
+    string? MarkedText = null)
 {
     public static AiTurnEvent ForStarted(AiTurnContext context) => new(AiTurnEventKind.Started, Context: context);
-    public static AiTurnEvent ForText(string text) => new(AiTurnEventKind.Text, Text: text);
+
+    /// <param name="markedText">What the model wrote, markers intact. Null where there is nothing new to carry
+    /// — the end-of-stream flush releases text whose marked form went out with an earlier delta.</param>
+    public static AiTurnEvent ForText(string text, string? markedText = null) =>
+        new(AiTurnEventKind.Text, Text: text, MarkedText: markedText);
     public static AiTurnEvent ForReasoning(string text) => new(AiTurnEventKind.Reasoning, Text: text);
     public static AiTurnEvent ForUsage(AiUsageReport usage) => new(AiTurnEventKind.Usage, Usage: usage);
     public static AiTurnEvent ForError(AiError error) => new(AiTurnEventKind.Error, Error: error);

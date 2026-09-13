@@ -53,8 +53,9 @@ public interface IAiChatOrchestrator
 /// ahead of this turn's message, which is what makes a follow-up question mean anything — until #991 every turn
 /// was a single user message and the model had never seen the one before it. What is replayed is each turn's
 /// citation line, question and answer; the passage, selection and lemma blocks are sent for the CURRENT turn
-/// only, so a ten-turn conversation about one paragraph sends that paragraph once rather than ten times.
-/// Reasoning is never replayed.</para>
+/// only, so a ten-turn conversation about one paragraph sends that paragraph once rather than ten times. The
+/// answer that goes back is the model's own marked text, not the stripped text on screen — see
+/// <see cref="AiTurnEvent.MarkedText"/>. Reasoning is never replayed.</para>
 ///
 /// <para><b>The replayed half is byte-stable; the system prompt is not.</b> [observed 2026-09-12] Nothing here
 /// puts the time, the turn count, or anything else that moves into a replayed message — what goes back is the
@@ -351,11 +352,16 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                     case ChatDeltaKind.Text when delta.Text is { Length: > 0 } text:
                     {
                         var visible = markers.Feed(text);
-                        if (visible.Length > 0)
-                        {
-                            sawText = true;
-                            yield return AiTurnEvent.ForText(visible);
-                        }
+                        if (visible.Length > 0) sawText = true;
+
+                        // Yielded even when the filter held everything back, because the two halves are not
+                        // interchangeable: `visible` is what the panel renders, `text` is what the model wrote,
+                        // and the marked half has to reach the transcript whole so a later turn can replay it
+                        // (#991). A delta ending between the two brackets of a marker is the ordinary case, not
+                        // an edge one, so dropping the event when nothing is renderable yet would lose exactly
+                        // the spans this exists to preserve. `sawText` still follows the VISIBLE half: a turn
+                        // that produced only markers produced no answer.
+                        yield return AiTurnEvent.ForText(visible, text);
                         break;
                     }
 
@@ -381,6 +387,8 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             }
         }
 
+        // A bracket held back that never completed a marker: ordinary text after all. No marked half — it was
+        // already carried, markers and all, by the delta it arrived in.
         var tail = markers.Flush();
         if (tail.Length > 0)
         {
@@ -452,6 +460,11 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     /// cost of trusting the caller is a rejected request rather than a degraded one: the Anthropic Messages API
     /// refuses an empty text block outright, and an assistant turn with nothing in it means nothing to any
     /// model even where it is accepted.</para>
+    ///
+    /// <para><b>The answers come back marked.</b> What the caller replays is the model's own text with its
+    /// <c>[[…]]</c> Pāli markers intact, not the stripped text on screen — the system prompt asks for those
+    /// markers on every Pāli span, so replaying the stripped form would show the model a transcript of itself
+    /// ignoring the instruction. Nothing here inspects or repairs them.</para>
     ///
     /// <para>Nothing is re-rendered and nothing is trimmed. These strings were already sent or already shown,
     /// and rewriting one would make the replayed half of the request differ from turn to turn for no reason —

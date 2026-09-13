@@ -757,6 +757,49 @@ public class AiChatOrchestratorTests
     }
 
     /// <summary>
+    /// Both halves of every text delta reach the caller: the stripped text for the screen, and what the model
+    /// wrote for the history. (#991)
+    ///
+    /// <para>Split across deltas on purpose, including a delta that ends between the two brackets — the filter
+    /// holds that bracket back, so the visible half of one event is empty while its marked half is not, and an
+    /// event dropped for having nothing renderable would lose the span this exists to keep.</para>
+    /// </summary>
+    [Fact]
+    public async Task Each_text_delta_carries_both_the_stripped_and_the_marked_form()
+    {
+        var provider = new FakeProvider(new[]
+        {
+            ChatDelta.ForText("The term ["),
+            ChatDelta.ForText("[appam\u0101da]] matters."),
+        });
+
+        var events = await CollectAsync(Orchestrator(provider));
+
+        Assert.Equal("The term appam\u0101da matters.", TextOf(events));
+        Assert.Equal(
+            "The term [[appam\u0101da]] matters.",
+            string.Concat(events.Where(e => e.Kind == AiTurnEventKind.Text).Select(e => e.MarkedText)));
+    }
+
+    /// <summary>
+    /// A marker with no partner goes into the marked half as written. The filter strips it from the display and
+    /// counts it (#587); what the model is shown of its own output is what it produced.
+    /// </summary>
+    [Fact]
+    public async Task An_unbalanced_marker_survives_in_the_marked_form()
+    {
+        var provider = new FakeProvider(new[] { ChatDelta.ForText("The term [[appam\u0101da matters.") });
+
+        var events = await CollectAsync(Orchestrator(provider));
+
+        Assert.Equal("The term appam\u0101da matters.", TextOf(events));
+        Assert.Equal(
+            "The term [[appam\u0101da matters.",
+            string.Concat(events.Where(e => e.Kind == AiTurnEventKind.Text).Select(e => e.MarkedText)));
+        Assert.Equal(1, events[^1].Markers!.UnbalancedMarkers);
+    }
+
+    /// <summary>
     /// A turn that produced no answer is not replayed. The panel already leaves one out, but this is the last
     /// point before the wire: the Anthropic Messages API refuses an empty text block outright, so a caller's
     /// slip would be a rejected request rather than a slightly poorer one.

@@ -976,6 +976,10 @@ public class AiAssistantViewModelTests
 
     // ---- The conversation the model is shown (#991) -----------------------------------------------
 
+    /// <summary>One text delta with both halves, as the orchestrator emits them for text carrying no
+    /// markers — the stripped form and the model's own form are the same string.</summary>
+    private static AiTurnEvent Said(string text) => AiTurnEvent.ForText(text, text);
+
     /// <summary>A stub that answers every turn the same way: citation, some text, done.</summary>
     private static StubOrchestrator Answering(params AiTurnEvent[] middle)
     {
@@ -993,7 +997,7 @@ public class AiAssistantViewModelTests
     [Fact]
     public async Task The_next_question_carries_the_conversation_so_far()
     {
-        var orchestrator = Answering(AiTurnEvent.ForText("Heedfulness is the path."));
+        var orchestrator = Answering(Said("Heedfulness is the path."));
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
 
         await vm.AskAsync(AiTask.Explain);
@@ -1017,7 +1021,7 @@ public class AiAssistantViewModelTests
     [Fact]
     public async Task A_replayed_turn_carries_the_question_that_was_asked()
     {
-        var orchestrator = Answering(AiTurnEvent.ForText("It means vigilance."));
+        var orchestrator = Answering(Said("It means vigilance."));
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
 
         vm.Question = "what is appamāda?";
@@ -1061,7 +1065,7 @@ public class AiAssistantViewModelTests
     {
         var orchestrator = new StubOrchestrator();
         orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
-        orchestrator.Events.Add(AiTurnEvent.ForText("Heedfulness is the pa"));
+        orchestrator.Events.Add(Said("Heedfulness is the pa"));
         orchestrator.Events.Add(AiTurnEvent.ForError(new AiError(AiErrorKind.Network, "dropped")));
 
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
@@ -1082,7 +1086,7 @@ public class AiAssistantViewModelTests
     {
         var orchestrator = Answering(
             AiTurnEvent.ForReasoning("Maybe it is a locative. Or maybe not — check the commentary."),
-            AiTurnEvent.ForText("It is an accusative of time."));
+            Said("It is an accusative of time."));
 
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
         await vm.AskAsync(AiTask.Grammar);
@@ -1106,7 +1110,7 @@ public class AiAssistantViewModelTests
     [Fact]
     public async Task Retry_re_asks_with_the_conversation_as_it_stands_now()
     {
-        var orchestrator = Answering(AiTurnEvent.ForText("An answer."));
+        var orchestrator = Answering(Said("An answer."));
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
 
         await vm.AskAsync(AiTask.Explain);
@@ -1131,7 +1135,7 @@ public class AiAssistantViewModelTests
     [Fact]
     public async Task An_earlier_turn_is_replayed_byte_for_byte_on_every_later_turn()
     {
-        var orchestrator = Answering(AiTurnEvent.ForText("An answer."));
+        var orchestrator = Answering(Said("An answer."));
         var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
 
         await vm.AskAsync(AiTask.Explain);
@@ -1141,6 +1145,75 @@ public class AiAssistantViewModelTests
         // Value equality on the record, so both halves are compared — the question line and the answer.
         Assert.Equal(orchestrator.Requests[1].History![0], orchestrator.Requests[2].History![0]);
         Assert.Equal(2, orchestrator.Requests[2].History!.Count);
+    }
+
+    /// <summary>
+    /// <b>The model is replayed its own marked text, not the text on screen.</b> (#991) The panel strips the
+    /// <c>[[…]]</c> Pāli markers, and the system prompt asks for them on every Pāli span — so replaying the
+    /// stripped answer would show the model a transcript of itself ignoring the instruction it is given, which
+    /// is the kind of thing a model imitates. <b>[fsnow]</b>: <i>"I want to fix this before we merge."</i>
+    /// </summary>
+    [Fact]
+    public async Task A_replayed_answer_keeps_the_markers_the_model_wrote()
+    {
+        var orchestrator = Answering(
+            AiTurnEvent.ForText("The term appamāda matters.", "The term [[appamāda]] matters."));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+
+        // On screen: stripped, exactly as before.
+        Assert.Equal("The term appamāda matters.", vm.Turns[0].Answer);
+        Assert.DoesNotContain("[[", vm.Turns[0].Answer);
+
+        // To the model: as written.
+        Assert.Equal(
+            "The term [[appamāda]] matters.",
+            Assert.Single(orchestrator.Requests[1].History!).Answer);
+    }
+
+    /// <summary>
+    /// A marker with no partner is replayed as written. The filter strips it from the display and counts it
+    /// (#587); what the model is shown of its own output should be what it produced, not a repair of it.
+    /// </summary>
+    [Fact]
+    public async Task An_unbalanced_marker_survives_replay()
+    {
+        var orchestrator = Answering(
+            AiTurnEvent.ForText("The term appamāda matters.", "The term [[appamāda matters."));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+
+        Assert.DoesNotContain("[[", vm.Turns[0].Answer);
+        Assert.Equal(
+            "The term [[appamāda matters.",
+            Assert.Single(orchestrator.Requests[1].History!).Answer);
+    }
+
+    /// <summary>
+    /// A delta the filter swallows whole — one that ends between the two brackets of a marker — puts nothing on
+    /// screen, so it must not be taken for progress or for an answer, and its marked half must still be kept.
+    /// </summary>
+    [Fact]
+    public async Task A_delta_with_nothing_renderable_yet_still_contributes_its_marked_text()
+    {
+        var orchestrator = new StubOrchestrator();
+        orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
+        orchestrator.Events.Add(AiTurnEvent.ForText("", "The term ["));
+        orchestrator.Events.Add(AiTurnEvent.ForText("The term appamāda.", "[appamāda]]."));
+        orchestrator.Events.Add(AiTurnEvent.ForCompleted(new PaliMarkerReport(1, 0)));
+
+        var vm = new AiAssistantViewModel(orchestrator, new StubReaderState(), null, null);
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Translate);
+
+        Assert.Equal("The term appamāda.", vm.Turns[0].Answer);
+        Assert.Equal(
+            "The term [[appamāda]].",
+            Assert.Single(orchestrator.Requests[1].History!).Answer);
     }
 
     /// <summary>
