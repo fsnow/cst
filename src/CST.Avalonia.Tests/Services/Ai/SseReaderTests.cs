@@ -181,8 +181,61 @@ public class SseReaderTests
             firstEvent: TimeSpan.FromMilliseconds(300),   // total run exceeds this comfortably
             abandonAfter: TimeSpan.FromSeconds(20));
 
+        // Assert the absence of a failure BEFORE filtering failures out. The filter is what the assertion
+        // needs, but on a red run it also throws away the one line that says why — and this test spent a
+        // month failing intermittently with its reason discarded (#798).
+        Assert.All(events, e => Assert.Null(e.Failure));
         Assert.Equal(new[] { "one", "two", "three" }, events.Where(e => e.Failure is null).Select(e => e.Data));
+    }
 
+    /// <summary>
+    /// The regression test for #798: a slow CONSUMER must not make the reader give up on a live stream.
+    ///
+    /// <para>The reader used to share one <c>CancellationTokenSource</c> across every read and re-arm it
+    /// before each one. A source that has fired is cancelled for good, so if its timer expired in the gap
+    /// between a read returning and the next re-arm, every read after it failed — the stream still
+    /// delivering, and the reader announcing that the model had stopped responding.</para>
+    ///
+    /// <para><b>The gap is not exotic, which is what makes this testable without controlling the clock.</b>
+    /// Both providers are themselves async iterators that yield each delta to the UI from inside their
+    /// <c>await foreach</c> over this reader, so whatever the consumer takes between deltas lands squarely
+    /// inside that window. Holding the enumerator here for longer than the idle timeout is not a contrived
+    /// stall; it is the ordinary shape of the call, exaggerated until it is deterministic.</para>
+    ///
+    /// <para>Deterministic in the failing direction: after a hold of 1500 ms a 500 ms timer has certainly
+    /// fired. Under the fix it passes because the next read gets a source of its own, which cannot carry a
+    /// verdict from a read that already returned.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_slow_consumer_does_not_make_the_reader_abandon_a_live_stream()
+    {
+        var stream = new PacedStream(
+            PacedStream.EndBehaviour.Closes,
+            (TimeSpan.FromMilliseconds(50), "data: one"),
+            (TimeSpan.Zero, ""),
+            (TimeSpan.FromMilliseconds(50), "data: two"),
+            (TimeSpan.Zero, ""),
+            (TimeSpan.FromMilliseconds(50), "data: three"),
+            (TimeSpan.Zero, ""));
+
+        using var abandon = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var events = new List<SseEvent>();
+
+        await foreach (var e in SseReader.ReadAsync(
+                           stream,
+                           idleTimeout: TimeSpan.FromMilliseconds(500),
+                           firstEventTimeout: TimeSpan.FromSeconds(10),
+                           abandon.Token))
+        {
+            events.Add(e);
+
+            // The consumer dawdles once, for three times the idle window, exactly where a UI would.
+            if (e.Data == "one")
+                await Task.Delay(TimeSpan.FromMilliseconds(1500));
+        }
+
+        Assert.All(events, e => Assert.Null(e.Failure));
+        Assert.Equal(new[] { "one", "two", "three" }, events.Select(e => e.Data));
     }
 
     [Fact]

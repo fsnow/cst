@@ -82,16 +82,27 @@ internal static class SseReader
             // between a read returning and the next re-arm poisoned every read that followed: the stream is
             // alive and still delivering, and the reader reports "the model stopped responding".
             //
-            // The comment that used to sit here called that race benign, on the grounds that it needs a line
-            // to arrive within microseconds of expiry. That measured the wrong interval. The window is not the
-            // arrival — it is however long this thread is descheduled between the read returning and the
-            // re-arm, which under a loaded machine is milliseconds. It is the cause of #798: the reader
-            // returned its first event and then a spurious network failure, roughly once in ten full-suite
-            // runs, and never when the test was run alone.
+            // The comment that used to sit here called the race benign because it needs a line to arrive
+            // within microseconds of expiry. It named the right interval and got its WIDTH wrong: the
+            // condition is that a line lands between the timer expiring and the re-arm, and that gap is
+            // nowhere near microseconds.
             //
-            // A source per line costs an allocation and a timer against a loop that already allocates a
-            // string per line and awaits I/O on each one. Linked to ct throughout, so a real cancellation
-            // still propagates.
+            // What widens it most is not the machine being busy — it is the CONSUMER. Both providers are
+            // async iterators that yield each delta to the UI from inside their own await foreach over this
+            // reader, so whatever the UI spends between deltas sits inside the gap. Measured, on the old
+            // code: a 300 ms idle window, 200 ms between lines, and a consumer holding the enumerator for
+            // 1000 ms failed three times out of three with "stopped responding"; on this code it passes.
+            // A_slow_consumer_does_not_make_the_reader_abandon_a_live_stream is that case, and it fails if
+            // the shared source is put back.
+            //
+            // It is the cause of the two named occurrences of #798 — first event delivered, then a spurious
+            // network failure, never reproducible when the test ran alone. That issue also records an
+            // earlier unnamed failure it declines to attribute, and this does not claim it.
+            //
+            // A source per read costs an allocation and a timer. Measured at 20,000 events: no timer
+            // accumulation, and allocation roughly doubles per event — from about 375 to 695 bytes — which
+            // is well under a megabyte across a long answer. Linked to ct throughout, so a real
+            // cancellation still propagates and is still told apart from a timeout by the filter below.
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
             try
