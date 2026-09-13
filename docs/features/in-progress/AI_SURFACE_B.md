@@ -272,6 +272,39 @@ public interface IChatProvider
 **Concurrency:** invoking a preset while a stream is running is **cancel-and-replace**, not queue. That is the
 right semantic for a reader and it shapes B5's orchestrator.
 
+**A turn is part of a conversation** (#991, 2026-09-12). `ChatRequest.Messages` carries the turns before this
+one as `user`/`assistant` pairs, ahead of this turn's message. **[fsnow]** chose the layout *"Citation +
+question → answer"*.
+
+**[suggestion]** How that is built: each earlier turn is replayed as the app's own citation line plus what was
+asked, then the answer; the passage, selection and lemma blocks are sent for the **current turn only**, so a
+ten-turn conversation about one paragraph sends that paragraph once. Reasoning is never replayed, a turn that
+produced no answer text is not replayed, and the token estimate covers the whole message list — the figure
+auto-compaction is driven by. A follow-up asked after the reader has moved on gets each earlier turn's citation
+but not its text.
+
+**[fsnow] The replayed answer is the model's own marked text, not what the panel shows** — *"I want to fix this
+before we merge."* (2026-09-12, before #991 merged.) §9's `[[…]]` markers are stripped from the display by
+`PaliQuoteFilter`, so the answer on screen has none; `system.md` tells the model to wrap **every** Pāli span in
+them. Replaying the stripped text would hand the model, from turn 2 on, a transcript of its own answers ignoring
+the instruction it is being given — and a model shown its own apparent practice follows it. So the orchestrator
+emits both halves of each text delta (`AiTurnEvent.Text` for the screen, `AiTurnEvent.MarkedText` as written),
+`AiTurnViewModel` accumulates the marked half beside the displayed one, and the history replays the marked half.
+**Unbalanced markers go back as written**: the filter strips those from the display and counts them (#587), but
+what the model is shown of its own output should be what it produced, not a repaired version.
+
+**[observed] The request has no prefix that is stable by construction, and nothing asks for caching**
+(2026-09-12). The replayed messages *are* byte-stable: they are the strings the earlier turns were built from,
+and nothing turn- or time-dependent enters them. **The system prompt is not.** `Resources/Ai/system.md` embeds
+`{{scope}}` and `{{outputLanguage}}`, and `PromptBuilder.Scope` renders the book name, the reference, a
+paragraphs-covered sentence and a selection-dependent sentence — so it holds only while the reader stays on the
+same reference with the same selection state and answer language, and changes as soon as any of those does.
+Neither adapter sets Anthropic's `cache_control`. A prefix that could be cached reliably therefore needs work
+beyond #991: the varying scope statement would have to move out of the system prompt into the per-turn
+message. Persistence,
+named sessions and compaction are planned separately in
+[ASSISTANT_SESSIONS.md](../planned/ASSISTANT_SESSIONS.md).
+
 All errors normalize into one `AiError` type: not-configured, no-network, 401, 429 + retry-after,
 context-too-long, provider-shaped. **Provider error bodies are sanitized before logging** — some providers echo
 request material.
@@ -516,8 +549,6 @@ output quality, and it is far easier to critique as inspectable data than as a p
 
 ## 14. Open questions
 
-- **Follow-up turns** — one-shot per invocation, or a short conversation over the same bundle? (One-shot covers
-  the named use cases; conversation needs history management and re-budgeting.)
 - ~~**`ICorpusTools`** — delete as dead, or implement it?~~ *Deleted in #580: no implementation, no consumer,
   and one of its four members had no implementation at all.*
 - ~~**Which dictionaries feed glosses by default**~~ *Moot for v1: no glosses are injected (§4). Returns as a

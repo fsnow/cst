@@ -20,6 +20,7 @@ namespace CST.Avalonia.ViewModels;
 public sealed class AiTurnViewModel : ReactiveObject
 {
     private readonly StringBuilder _answer = new();
+    private readonly StringBuilder _markedAnswer = new();
     private readonly StringBuilder _reasoning = new();
 
     public AiTurnViewModel(AiTask task, string? question)
@@ -80,6 +81,22 @@ public sealed class AiTurnViewModel : ReactiveObject
         _answer.Append(text);
         HasAnswer = _answer.Length > 0;
     }
+
+    /// <summary>
+    /// The same answer as the model wrote it, <c>[[…]]</c> Pāli markers and all. (#991)
+    ///
+    /// <para><b>Not bound to anything, and not for the reader.</b> The markers exist so the app can convert
+    /// quoted Pāli into the reader's script; on screen they are stripped, which is what <see cref="Answer"/>
+    /// holds. This half exists because a later turn replays this one TO THE MODEL, and the system prompt tells
+    /// it to wrap every Pāli span in those markers — replaying the stripped form would show it a transcript of
+    /// its own answers disobeying that instruction, which is the kind of thing a model imitates.</para>
+    ///
+    /// <para>Unbalanced markers are kept as written. <see cref="PaliQuoteFilter"/> strips those from the
+    /// display, rightly; what the model is shown of its own output should still be what it produced.</para>
+    /// </summary>
+    internal string MarkedAnswer => _markedAnswer.ToString();
+
+    internal void AppendMarkedAnswer(string text) => _markedAnswer.Append(text);
 
     /// <summary>Re-parse and publish. Called once per flush, not once per delta.</summary>
     internal void PublishAnswer()

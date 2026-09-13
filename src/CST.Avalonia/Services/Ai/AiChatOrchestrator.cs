@@ -48,6 +48,27 @@ public interface IAiChatOrchestrator
 /// the caller gets a well-formed, successful, blank turn. So a turn that emitted no text is turned into a
 /// named error here, where it is still possible to say something useful about it.</para>
 ///
+/// <para><b>A turn is part of a conversation, not a request on its own.</b> The caller hands over the earlier
+/// turns (<see cref="AiTurnRequest.History"/>) and they are replayed as <c>user</c>/<c>assistant</c> pairs
+/// ahead of this turn's message, which is what makes a follow-up question mean anything — until #991 every turn
+/// was a single user message and the model had never seen the one before it. What is replayed is each turn's
+/// citation line, question and answer; the passage, selection and lemma blocks are sent for the CURRENT turn
+/// only, so a ten-turn conversation about one paragraph sends that paragraph once rather than ten times. The
+/// answer that goes back is the model's own marked text, not the stripped text on screen — see
+/// <see cref="AiTurnEvent.MarkedText"/>. Reasoning is never replayed.</para>
+///
+/// <para><b>The replayed half is byte-stable; the system prompt is not.</b> [observed 2026-09-12] Nothing here
+/// puts the time, the turn count, or anything else that moves into a replayed message — what goes back is the
+/// strings the earlier turns were built from, never anything re-rendered now. The system prompt does move:
+/// <c>Resources/Ai/system.md</c> embeds <c>{{scope}}</c> and <c>{{outputLanguage}}</c>, and
+/// <c>PromptBuilder.Scope</c> renders the book name, the reference, how many paragraphs the window covers and a
+/// sentence that depends on whether anything is selected — so it holds only while the reader stays on the same
+/// reference with the same selection state and answer language, and changes as soon as any of those does.
+/// Neither adapter sets Anthropic's <c>cache_control</c>, and nothing else here asks for caching, so no
+/// behaviour depends on a stable prefix today. One that could be relied on would mean moving the scope
+/// statement out of the system prompt and into the per-turn message, which is not this layer's to decide.
+/// Keeping the replayed half stable is worth doing regardless, because it is the half that grows.</para>
+///
 /// <para><b>What is never logged above Debug.</b> The prompt contains corpus text and the user's own question,
 /// and the answer contains both back again. Above Debug this logs only shapes and counts. (§10)</para>
 /// </summary>
@@ -256,14 +277,21 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         // Content at Debug only — the prompt carries corpus text and the user's question. (§10)
         _logger.LogDebug("AI turn prompt for {Task}:\n{System}\n---\n{User}",
             request.Task, prompt.System, prompt.UserContent);
-        // Estimated over the RENDERED PROMPT — the strings that actually go on the wire — rather than over the
+        // The conversation so far, replayed ahead of this turn. Built before the estimate and before the
+        // Started event, because both of them have to account for it: a history the reader cannot see in the
+        // Sent block, or that the token figure does not count, is a request the app is misreporting. (#991)
+        var replayed = Replay(request.History);
+
+        // Estimated over the WHOLE REQUEST — the strings that actually go on the wire — rather than over the
         // bundle, which is a subset of them. The bundle figure omitted the system prompt, the preset's template
-        // and the reader's own question, all of which are sent. (#672)
-        var estimatedTokens = AiTokens.Estimate(prompt.System, prompt.UserContent);
+        // and the reader's own question, all of which are sent (#672); leaving the replayed conversation out
+        // would repeat that mistake on the one part of the request that grows by itself. (#991)
+        var estimatedTokens = EstimateRequest(prompt, replayed);
         _logger.LogInformation(
-            "AI turn: {Task} on {BookId} via {Provider}/{Model}, ~{Tokens} context tokens, {Notices} notice(s)",
+            "AI turn: {Task} on {BookId} via {Provider}/{Model}, ~{Tokens} context tokens, "
+            + "{History} replayed turn(s), {Notices} notice(s)",
             request.Task, request.BookId, provider.Provider.Id, provider.Model,
-            estimatedTokens, prompt.Notices.Count);
+            estimatedTokens, replayed.Count / 2, prompt.Notices.Count);
 
         // Read off the budget report rather than off the notice wording: the panel raises its partial-passage
         // badge from this, and a badge that depends on how a sentence is phrased stops working the first time
@@ -273,14 +301,19 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
         yield return AiTurnEvent.ForStarted(new AiTurnContext(
             bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, prompt.Notices, passageTrimmed,
-            Describe(bundle, prompt, provider)));
+            Describe(bundle, prompt, provider, replayed)));
 
-        // ---- Stream.
+        // ---- Stream. The conversation, then this turn. This turn's message goes LAST and carries the full
+        // rendered prompt, so the passage the model is being asked about is the last thing it reads.
+        var messages = new List<ChatMessage>(replayed.Count + 1);
+        messages.AddRange(replayed);
+        messages.Add(new ChatMessage(ChatRole.User, prompt.UserContent));
+
         var chat = new ChatRequest(
             provider.Model,
             prompt.MaxOutputTokens,
             prompt.System,
-            new[] { new ChatMessage(ChatRole.User, prompt.UserContent) },
+            messages,
             effort);
 
         var markers = new PaliQuoteFilter();
@@ -319,11 +352,16 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
                     case ChatDeltaKind.Text when delta.Text is { Length: > 0 } text:
                     {
                         var visible = markers.Feed(text);
-                        if (visible.Length > 0)
-                        {
-                            sawText = true;
-                            yield return AiTurnEvent.ForText(visible);
-                        }
+                        if (visible.Length > 0) sawText = true;
+
+                        // Yielded even when the filter held everything back, because the two halves are not
+                        // interchangeable: `visible` is what the panel renders, `text` is what the model wrote,
+                        // and the marked half has to reach the transcript whole so a later turn can replay it
+                        // (#991). A delta ending between the two brackets of a marker is the ordinary case, not
+                        // an edge one, so dropping the event when nothing is renderable yet would lose exactly
+                        // the spans this exists to preserve. `sawText` still follows the VISIBLE half: a turn
+                        // that produced only markers produced no answer.
+                        yield return AiTurnEvent.ForText(visible, text);
                         break;
                     }
 
@@ -349,6 +387,8 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             }
         }
 
+        // A bracket held back that never completed a marker: ordinary text after all. No marked half — it was
+        // already carried, markers and all, by the delta it arrived in.
         var tail = markers.Flush();
         if (tail.Length > 0)
         {
@@ -412,23 +452,55 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
     }
 
     /// <summary>
-    /// What to tell the user when the model stopped at its output limit (#601). The three cases are genuinely
-    /// different situations, and the difference is invisible to the provider that detected the truncation:
+    /// The conversation the caller handed over, as wire messages: each earlier turn's question side as a
+    /// <c>user</c> message and its answer as the <c>assistant</c> reply, oldest first. (#991)
     ///
-    /// <list type="bullet">
-    /// <item>Text was written — <b>the dangerous one</b>. Without this message a half-finished translation
-    /// renders under a citation exactly like a finished one, and nothing on screen says otherwise.</item>
-    /// <item>Reasoning but no answer — #601's original case. The work was done and never written down; the fix
-    /// is a bigger budget or a lighter-reasoning model, not a retry.</item>
-    /// <item>Neither — the cap is small enough that nothing could be produced at all.</item>
-    /// </list>
+    /// <para><b>An exchange missing either half is dropped here as well as by the caller.</b> The panel already
+    /// omits a failed turn that produced no answer text, but this is the last point before the wire and the
+    /// cost of trusting the caller is a rejected request rather than a degraded one: the Anthropic Messages API
+    /// refuses an empty text block outright, and an assistant turn with nothing in it means nothing to any
+    /// model even where it is accepted.</para>
+    ///
+    /// <para><b>The answers come back marked.</b> What the caller replays is the model's own text with its
+    /// <c>[[…]]</c> Pāli markers intact, not the stripped text on screen — the system prompt asks for those
+    /// markers on every Pāli span, so replaying the stripped form would show the model a transcript of itself
+    /// ignoring the instruction. Nothing here inspects or repairs them.</para>
+    ///
+    /// <para>Nothing is re-rendered and nothing is trimmed. These strings were already sent or already shown,
+    /// and rewriting one would make the replayed half of the request differ from turn to turn for no reason —
+    /// see the class remarks for what does and does not hold about a cacheable prefix.</para>
     /// </summary>
+    private static IReadOnlyList<ChatMessage> Replay(IReadOnlyList<AiExchange>? history)
+    {
+        if (history is not { Count: > 0 }) return Array.Empty<ChatMessage>();
+
+        var messages = new List<ChatMessage>(history.Count * 2);
+        foreach (var exchange in history)
+        {
+            if (string.IsNullOrWhiteSpace(exchange.Question) || string.IsNullOrWhiteSpace(exchange.Answer))
+                continue;
+
+            messages.Add(new ChatMessage(ChatRole.User, exchange.Question));
+            messages.Add(new ChatMessage(ChatRole.Assistant, exchange.Answer));
+        }
+
+        return messages;
+    }
+
+    /// <summary>Every string this request puts on the wire, taken together — the system prompt, the replayed
+    /// conversation, and this turn's own message. (#672, #991)</summary>
+    private static int EstimateRequest(RenderedPrompt prompt, IReadOnlyList<ChatMessage> replayed) =>
+        AiTokens.Estimate(
+            new[] { prompt.System, prompt.UserContent }.Concat(replayed.Select(m => m.Content)));
+
     /// <summary>
-    /// What this turn sent, as named fields plus the two prompt halves. Assembled here because this is the
-    /// only place that holds the bundle, the rendered prompt and the resolved provider at once. (#665)
+    /// What this turn sent: named fields, the replayed conversation, and the two prompt halves. Assembled here
+    /// because this is the only place that holds the bundle, the rendered prompt and the resolved provider at
+    /// once. (#665)
     /// </summary>
     private static SentContext Describe(
-        AiContextBundle bundle, RenderedPrompt prompt, ChatProviderResolution provider)
+        AiContextBundle bundle, RenderedPrompt prompt, ChatProviderResolution provider,
+        IReadOnlyList<ChatMessage> replayed)
     {
         var fields = new List<SentField>
         {
@@ -439,10 +511,11 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             new("Book", bundle.Book.Name),
             new("Book id", bundle.Book.BookId),
             new("Reference", bundle.Citation.NormalizedReference),
-            // Over the rendered prompt, which is what was sent. Reading this off the bundle omitted the system
+            // Over the whole request, which is what was sent. Reading this off the bundle omitted the system
             // prompt, the preset template and the reader's own question — a figure captioned as the context
-            // that measured a subset of it. (#672)
-            new("Estimated context", $"~{AiTokens.Estimate(prompt.System, prompt.UserContent):N0} tokens"),
+            // that measured a subset of it (#672) — and the replayed conversation is the part that grows without
+            // the reader doing anything, so its share is named rather than folded in. (#991)
+            new("Estimated context", DescribeEstimate(prompt, replayed)),
         };
 
         if (bundle.Budget.ParagraphsCovered is int covered)
@@ -459,7 +532,26 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
             fields.Add(new SentField($"Part: {part.Name}", detail));
         }
 
-        return new SentContext(fields, prompt.System, prompt.UserContent);
+        return new SentContext(fields, prompt.System, prompt.UserContent, replayed);
+    }
+
+    /// <summary>
+    /// The estimate as the Sent block states it: the whole request, and how much of it the conversation
+    /// accounts for. (#991)
+    ///
+    /// <para>The two figures answer different questions. The total is what this request costs; the history's
+    /// share is what it will cost to keep asking — the number a reader watching a long conversation approach a
+    /// context window needs, and cannot derive from the total.</para>
+    /// </summary>
+    private static string DescribeEstimate(RenderedPrompt prompt, IReadOnlyList<ChatMessage> replayed)
+    {
+        var total = EstimateRequest(prompt, replayed);
+        if (replayed.Count == 0) return $"~{total:N0} tokens";
+
+        var history = AiTokens.Estimate(replayed.Select(m => m.Content));
+        var turns = replayed.Count / 2;
+        return $"~{total:N0} tokens, ~{history:N0} of them "
+               + (turns == 1 ? "1 earlier turn" : $"{turns} earlier turns");
     }
 
     private static string PageRef(SnippetPageRef page)
@@ -490,6 +582,18 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
         }
     }
 
+    /// <summary>
+    /// What to tell the user when the model stopped at its output limit (#601). The three cases are genuinely
+    /// different situations, and the difference is invisible to the provider that detected the truncation:
+    ///
+    /// <list type="bullet">
+    /// <item>Text was written — <b>the dangerous one</b>. Without this message a half-finished translation
+    /// renders under a citation exactly like a finished one, and nothing on screen says otherwise.</item>
+    /// <item>Reasoning but no answer — #601's original case. The work was done and never written down; the fix
+    /// is a bigger budget or a lighter-reasoning model, not a retry.</item>
+    /// <item>Neither — the cap is small enough that nothing could be produced at all.</item>
+    /// </list>
+    /// </summary>
     private static string TruncationMessage(bool sawText, bool sawReasoning) =>
         sawText
             ? "This answer is incomplete: the model reached its output limit and stopped part-way through."

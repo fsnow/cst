@@ -104,16 +104,23 @@ Mechanics:
 - `AiTurnRequest` gains `IReadOnlyList<AiExchange> History` (question-side text + answer text, both already
   rendered strings). The orchestrator prepends them to `Messages`. Failed turns with no answer text are not
   replayed; a turn with partial text is replayed as-is (it stands on screen, so it stands in the history).
-- `SentContext` (#665) must show the replayed messages, or "what did the model see" stops being true. Add a
-  `Messages` list to `SentContext`; the panel's expander renders them under the two prompt halves.
+- `SentContext` (#665) must show the replayed messages, or "what did the model see" stops being true. Shipped
+  in #991 as `SentContext.History` (plus `HasHistory`), rendered by the panel's Sent expander above the
+  message it sent.
 - The token estimate (`AiTokens.Estimate`) runs over the whole message list, and the "Estimated context"
   field says how much of it is history — the input to auto-compaction in P4.
 - Reasoning is **never** replayed. It was segregated from the answer for a reason (§8 of the design doc).
 - Retry re-asks with the history *as it is now*, not as it was. Simpler, and what a reader pressing "Try
   again" on a 504 wants.
 - **Prompt caching** (Anthropic `cache_control` on the stable prefix) is exactly what a replayed history
-  benefits from. Not in this plan; noted so nobody designs the message layout in a way that defeats it —
-  the system prompt and older history must stay byte-stable between turns, which the layout above does.
+  benefits from, and **[observed] the request has no prefix that is stable by construction, and nothing asks
+  for caching (2026-09-12)**. The layout above keeps the replayed messages byte-stable; the *system prompt* is
+  not, because `Resources/Ai/system.md` embeds `{{scope}}` and `{{outputLanguage}}` and `PromptBuilder.Scope`
+  renders the book name, the reference, a paragraphs-covered sentence and a selection-dependent sentence — it
+  holds only while the reader stays on the same reference with the same selection state and answer language.
+  Neither adapter sets `cache_control`. [suggestion] Whoever takes
+  caching up will have to move the scope statement out of the system prompt and into the per-turn message
+  first; that was not #991's work.
 
 ### 3.2 Persistence (P2)
 
@@ -211,7 +218,7 @@ UI phases are the maintainer's (standing pattern).
 | # | Issue | Work | UI-free | Depends on |
 |---|---|---|---|---|
 | **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` | ✗ (one button) | — |
-| **P1** | new | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.Messages`, estimate over the whole request | ✅ | — |
+| **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request | ✅ | — |
 | **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
 | **P3** | new | Session service: new / switch / rename / delete / auto-name; the list, rename and delete UI | service ✅, panel ✗ | P2 |
 | **P4** | new | Compaction: template, summariser, marker row, manual action, auto trigger from `ContextLength` | ✅ except the action | P1, P3 |
@@ -226,7 +233,7 @@ format, compaction boundary, prompt-cache stability) is shaped by.
 
 - **P1** — the fake-provider test that already asserts the assembled request (`AiChatOrchestrator` suite)
   gains cases for: history prepended in order; a failed turn without text omitted; reasoning never replayed;
-  `SentContext.Messages` matches what was sent; the estimate covers the list.
+  `SentContext.History` matches what was sent; the estimate covers the list.
 - **P2** — `IAiSessionStore` against a temp directory (the `ApplicationStateService` test seam pattern):
   round-trip of every field; a truncated file is moved aside and reported, not thrown; save is atomic (no
   `.tmp` promoted over good data); restore builds `Turns` identical to the live ones. A golden session file

@@ -707,4 +707,188 @@ public class AiChatOrchestratorTests
 
         Assert.Null(provider.LastRequest!.ReasoningEffort);
     }
+
+    // ---- The conversation (#991) ---------------------------------------------------------------------------
+
+    /// <summary>An earlier turn as the panel hands it over: the app's own citation line plus what was asked,
+    /// and the answer that came back. No passage, and no reasoning — there is nowhere to put either.</summary>
+    private static AiExchange Exchange(string asked, string answered) => new(asked, answered);
+
+    private static AiTurnRequest AskWith(params AiExchange[] history) =>
+        new(AiTask.Ask, "s0502m.mul.xml", new NavigationReference.Paragraph(21),
+            UserQuestion: "What does the third word mean?", History: history);
+
+    private const string FirstAsked = "\u00abExplain\u00bb \u2014 Dhammapadap\u0101\u1E37i \u2014 paragraph 21 (dhp)";
+    private const string FirstAnswer = "Heedfulness is the path to the deathless.";
+    private const string SecondAsked = FirstAsked + ": what is appam\u0101da?";
+    private const string SecondAnswer = "Vigilance, watchfulness.";
+
+    /// <summary>
+    /// The whole point of #991: the model is shown the turns before this one, in order, as user/assistant
+    /// pairs, and this turn's full context goes last.
+    /// </summary>
+    [Fact]
+    public async Task The_conversation_is_replayed_ahead_of_this_turns_message()
+    {
+        var provider = new FakeProvider();
+
+        await CollectAsync(
+            Orchestrator(provider),
+            AskWith(Exchange(FirstAsked, FirstAnswer), Exchange(SecondAsked, SecondAnswer)));
+
+        var sent = provider.LastRequest!;
+        Assert.Equal(
+            new[] { ChatRole.User, ChatRole.Assistant, ChatRole.User, ChatRole.Assistant, ChatRole.User },
+            sent.Messages.Select(m => m.Role));
+
+        Assert.Equal(FirstAsked, sent.Messages[0].Content);
+        Assert.Equal(FirstAnswer, sent.Messages[1].Content);
+        Assert.Equal(SecondAsked, sent.Messages[2].Content);
+        Assert.Equal(SecondAnswer, sent.Messages[3].Content);
+
+        // This turn's message is the FULL rendered prompt and it goes last, so the passage the model is being
+        // asked about is the last thing it reads.
+        Assert.Contains("Appam\u0101do amatapada\u1E43.", sent.Messages[^1].Content);
+
+        // And the passage is sent ONCE. Replaying each turn's own context would send the same paragraph once
+        // per turn, which is the layout this one was chosen over.
+        Assert.DoesNotContain(
+            sent.Messages.Take(4), m => m.Content.Contains("Appam\u0101do amatapada\u1E43."));
+    }
+
+    /// <summary>
+    /// Both halves of every text delta reach the caller: the stripped text for the screen, and what the model
+    /// wrote for the history. (#991)
+    ///
+    /// <para>Split across deltas on purpose, including a delta that ends between the two brackets — the filter
+    /// holds that bracket back, so the visible half of one event is empty while its marked half is not, and an
+    /// event dropped for having nothing renderable would lose the span this exists to keep.</para>
+    /// </summary>
+    [Fact]
+    public async Task Each_text_delta_carries_both_the_stripped_and_the_marked_form()
+    {
+        var provider = new FakeProvider(new[]
+        {
+            ChatDelta.ForText("The term ["),
+            ChatDelta.ForText("[appam\u0101da]] matters."),
+        });
+
+        var events = await CollectAsync(Orchestrator(provider));
+
+        Assert.Equal("The term appam\u0101da matters.", TextOf(events));
+        Assert.Equal(
+            "The term [[appam\u0101da]] matters.",
+            string.Concat(events.Where(e => e.Kind == AiTurnEventKind.Text).Select(e => e.MarkedText)));
+    }
+
+    /// <summary>
+    /// A marker with no partner goes into the marked half as written. The filter strips it from the display and
+    /// counts it (#587); what the model is shown of its own output is what it produced.
+    /// </summary>
+    [Fact]
+    public async Task An_unbalanced_marker_survives_in_the_marked_form()
+    {
+        var provider = new FakeProvider(new[] { ChatDelta.ForText("The term [[appam\u0101da matters.") });
+
+        var events = await CollectAsync(Orchestrator(provider));
+
+        Assert.Equal("The term appam\u0101da matters.", TextOf(events));
+        Assert.Equal(
+            "The term [[appam\u0101da matters.",
+            string.Concat(events.Where(e => e.Kind == AiTurnEventKind.Text).Select(e => e.MarkedText)));
+        Assert.Equal(1, events[^1].Markers!.UnbalancedMarkers);
+    }
+
+    /// <summary>
+    /// A turn that produced no answer is not replayed. The panel already leaves one out, but this is the last
+    /// point before the wire: the Anthropic Messages API refuses an empty text block outright, so a caller's
+    /// slip would be a rejected request rather than a slightly poorer one.
+    /// </summary>
+    [Fact]
+    public async Task An_exchange_with_no_answer_text_is_not_replayed()
+    {
+        var provider = new FakeProvider();
+
+        await CollectAsync(
+            Orchestrator(provider),
+            AskWith(
+                Exchange(FirstAsked, FirstAnswer),
+                Exchange(SecondAsked, ""),
+                Exchange(SecondAsked, "   ")));
+
+        var sent = provider.LastRequest!;
+        Assert.Equal(3, sent.Messages.Count);
+        Assert.Equal(FirstAnswer, sent.Messages[1].Content);
+        Assert.DoesNotContain(sent.Messages, m => string.IsNullOrWhiteSpace(m.Content));
+    }
+
+    /// <summary>
+    /// What the reader is shown under "Context sent" is the request, history included. Once a conversation
+    /// exists, showing only the current message would be showing the last message of a longer request and
+    /// calling it the request. (#665, #991)
+    /// </summary>
+    [Fact]
+    public async Task The_sent_context_shows_the_replayed_conversation()
+    {
+        var provider = new FakeProvider();
+
+        var events = await CollectAsync(
+            Orchestrator(provider),
+            AskWith(Exchange(FirstAsked, FirstAnswer), Exchange(SecondAsked, SecondAnswer)));
+
+        var sent = events.First(e => e.Kind == AiTurnEventKind.Started).Context!.Sent!;
+        Assert.True(sent.HasHistory);
+
+        // Exactly what went on the wire, minus this turn's own message, which is UserContent.
+        Assert.Equal(
+            provider.LastRequest!.Messages.Take(4).Select(m => (m.Role, m.Content)),
+            sent.History!.Select(m => (m.Role, m.Content)));
+        Assert.Equal(sent.UserContent, provider.LastRequest!.Messages[^1].Content);
+    }
+
+    /// <summary>
+    /// The estimate covers the whole request and says how much of it the conversation accounts for — the figure
+    /// that decides when a conversation has to be compacted, and the one part of a request that grows without
+    /// the reader doing anything.
+    /// </summary>
+    [Fact]
+    public async Task The_estimate_covers_the_whole_request_and_names_the_historys_share()
+    {
+        var provider = new FakeProvider();
+
+        var events = await CollectAsync(
+            Orchestrator(provider),
+            AskWith(Exchange(FirstAsked, FirstAnswer), Exchange(SecondAsked, SecondAnswer)));
+
+        var sent = events.First(e => e.Kind == AiTurnEventKind.Started).Context!.Sent!;
+        var field = sent.Fields.First(f => f.Name == "Estimated context").Value;
+
+        var whole = AiTokens.Estimate(
+            new[] { sent.SystemPrompt, sent.UserContent }.Concat(sent.History!.Select(m => m.Content)));
+        var history = AiTokens.Estimate(sent.History!.Select(m => m.Content));
+
+        Assert.StartsWith($"~{whole:N0} tokens", field);
+        Assert.Contains($"~{history:N0} of them 2 earlier turns", field);
+
+        // The history is a real share of it, not a rounding artefact: the assertion above would hold trivially
+        // if the estimate had silently ignored the replayed messages and both figures were zero.
+        Assert.True(history > 0);
+        Assert.True(whole > history);
+    }
+
+    /// <summary>A first question is what it always was — one message, and nothing claimed about a
+    /// conversation that does not exist yet.</summary>
+    [Fact]
+    public async Task A_first_question_sends_one_message_and_reports_no_history()
+    {
+        var provider = new FakeProvider();
+
+        var events = await CollectAsync(Orchestrator(provider));
+
+        Assert.Single(provider.LastRequest!.Messages);
+
+        var sent = events.First(e => e.Kind == AiTurnEventKind.Started).Context!.Sent!;
+        Assert.False(sent.HasHistory);
+        Assert.DoesNotContain("earlier turn", sent.Fields.First(f => f.Name == "Estimated context").Value);
+    }
 }

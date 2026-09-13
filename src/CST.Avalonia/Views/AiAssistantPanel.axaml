@@ -499,6 +499,33 @@
                                                              FontSize="11"
                                                              Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
+                                        <!-- The conversation replayed ahead of this turn. Shown because it is
+                                             part of what the model saw: once history exists, "the message
+                                             sent" below is the last message of a longer request. Empty for a
+                                             first question, and the whole block goes with it. -->
+                                        <StackPanel Spacing="4" IsVisible="{Binding Sent.HasHistory}">
+                                            <TextBlock Text="Conversation replayed" FontSize="11" FontWeight="SemiBold"/>
+                                            <ItemsControl ItemsSource="{Binding Sent.History}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="ai:ChatMessage">
+                                                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,2">
+                                                            <SelectableTextBlock Grid.Column="0"
+                                                                                 Text="{Binding Role}"
+                                                                                 FontSize="11"
+                                                                                 FontWeight="SemiBold"
+                                                                                 MinWidth="70"
+                                                                                 Margin="0,0,8,0"/>
+                                                            <SelectableTextBlock Grid.Column="1"
+                                                                                 Text="{Binding Content}"
+                                                                                 FontSize="11"
+                                                                                 TextWrapping="Wrap"
+                                                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
                                         <TextBlock Text="Message sent" FontSize="11" FontWeight="SemiBold"/>
                                         <SelectableTextBlock Text="{Binding Sent.UserContent}"
                                                              TextWrapping="Wrap"
