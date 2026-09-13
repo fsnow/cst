@@ -208,6 +208,29 @@ public class AiChatOrchestratorTests
         Assert.Equal("Dhammapadapāḷi", started.Book.Name);
     }
 
+    /// <summary>
+    /// The context names the connection and model that answered — structured, not only printed in the Sent
+    /// block. (#849)
+    ///
+    /// <para>A stored turn has to be attributable, and a conversation spanning a model change is the ordinary
+    /// case rather than a corner of it. These ids were on neither this contract nor the panel before, so the
+    /// alternative was for the panel to match a <c>SentField</c> by its English label — the same mistake as
+    /// deriving the partial-passage flag from the wording of a notice.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_context_says_which_connection_and_model_answered()
+    {
+        var events = await CollectAsync(Orchestrator(new FakeProvider()));
+
+        var started = Assert.IsType<AiTurnContext>(events[0].Context);
+        Assert.Equal("fake", started.ProviderId);
+        Assert.Equal("test-model", started.ModelId);
+
+        // The same two values the reader can already read in the Sent block, which is the point: one source.
+        Assert.Equal("fake", started.Sent!.Fields.Single(f => f.Name == "Provider").Value);
+        Assert.Equal("test-model", started.Sent.Fields.Single(f => f.Name == "Model").Value);
+    }
+
     [Fact]
     public async Task The_configured_answer_language_reaches_the_bundle()
     {

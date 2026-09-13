@@ -46,6 +46,27 @@ namespace CST.Avalonia.ViewModels;
 /// was a transcript to the reader and a series of unrelated requests to the model until #991, which is why
 /// "what did you mean by the third word?" used to answer about nothing.
 /// </para>
+///
+/// <para>
+/// <b>And it persists.</b> The panel owns one <see cref="AiSession"/> at a time: it is created at the first
+/// turn that ends, rewritten in full at the end of every turn after that, and reloaded at the next launch —
+/// <b>[fsnow]</b>: <i>"Restore the last session silently"</i>, the way books and reading positions are
+/// restored, with no model call. <c>ApplicationState.ActiveAssistantSessionId</c> is the one thing
+/// application state keeps; the transcripts live one file each (#849).
+/// </para>
+///
+/// <para>
+/// <b>A failed save never fails a turn.</b> The store answers false rather than throwing, and the worst this
+/// panel does about it is put one sentence in <see cref="Status"/>. The answer is on screen and the reader is
+/// reading it; losing it to an error dialog about a file would be the larger harm.
+/// </para>
+///
+/// <para>
+/// <b>There is no Clear.</b> <b>[fsnow]</b>: <i>"'Clear' was introduced by Claude at some point and is not
+/// relevant. I would like to create new conversations like in Claude Code, maybe also with a plus button,
+/// while saving the current one."</i> So the command is <see cref="NewConversationCommand"/>, and nothing is
+/// destroyed by it — the conversation it leaves behind was already written at its last turn.
+/// </para>
 /// </summary>
 public class AiAssistantViewModel : ReactiveTool
 {
@@ -53,7 +74,18 @@ public class AiAssistantViewModel : ReactiveTool
     private readonly IReaderStateService? _readerState;
     private readonly IChatProviderResolver? _resolver;
     private readonly ISettingsService? _settings;
+    private readonly IAiSessionStore? _store;
+    private readonly IApplicationStateService? _appState;
     private readonly ILogger _logger = Log.ForContext<AiAssistantViewModel>();
+
+    /// <summary>
+    /// The conversation being added to, or null when the panel is fresh. (#849)
+    ///
+    /// <para>Created lazily, at the first turn that ENDS rather than at the first that starts: a session whose
+    /// only turn was refused before it reached the model would be a file recording something the reader did not
+    /// do, and the refusals above <c>StartTurn</c> never create a turn at all.</para>
+    /// </summary>
+    private AiSession? _session;
 
     /// <summary>
     /// How often streamed text reaches the screen. Fast enough to read as live, slow enough that a fast stream
@@ -86,12 +118,23 @@ public class AiAssistantViewModel : ReactiveTool
         IChatProviderResolver? resolver,
         ISettingsService? settings,
         IAiConnectionService? connections = null,
-        Services.Ai.Credentials.IAiEnvironmentKeys? environmentKeys = null)
+        Services.Ai.Credentials.IAiEnvironmentKeys? environmentKeys = null,
+        // Optional like everything above, and for the same reason: a panel with no store is a panel that
+        // forgets, not a panel that fails. (#849)
+        IAiSessionStore? store = null,
+        IApplicationStateService? appState = null)
     {
         _orchestrator = orchestrator;
         _readerState = readerState;
         _resolver = resolver;
         _settings = settings;
+        _store = store;
+        _appState = appState;
+
+        // Before anything is loaded, as the store's contract asks. An unreadable transcript is the one failure
+        // the reader has to be told about — it has been kept aside rather than deleted, and the log alone
+        // leaves them with an empty panel and no explanation.
+        if (_store is not null) _store.Unreadable += OnSessionUnreadable;
 
         // Changing model is the reason the provider rework exists, so it belongs here rather than in
         // Settings (#693). Readiness is re-asked on every switch: picking a model on a connection with no
@@ -122,7 +165,7 @@ public class AiAssistantViewModel : ReactiveTool
         // that Retry no longer writes to the question box.
         RetryCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel?>(RetryAsync);
         CopyCommand = ReactiveCommand.CreateFromTask<AiTurnViewModel>(CopyAsync);
-        ClearCommand = ReactiveCommand.Create(Clear);
+        NewConversationCommand = ReactiveCommand.Create(NewConversation);
 
         // An unhandled exception in a ReactiveCommand goes to RxApp.DefaultExceptionHandler, which
         // TERMINATES THE APP. Everything these commands call catches internally today, so no failing case is
@@ -135,7 +178,7 @@ public class AiAssistantViewModel : ReactiveTool
         foreach (var command in new IHandleObservableErrors[]
                  {
                      ExplainCommand, TranslateCommand, GrammarCommand, WordByWordCommand, AskQuestionCommand,
-                     StopCommand, RefreshReadinessCommand, RetryCommand, CopyCommand, ClearCommand,
+                     StopCommand, RefreshReadinessCommand, RetryCommand, CopyCommand, NewConversationCommand,
                  })
         {
             command.ThrownExceptions.Subscribe(ex =>
@@ -187,7 +230,23 @@ public class AiAssistantViewModel : ReactiveTool
     /// <summary>Copies one turn's answer. Explicit rather than left to drag-select, which stopped covering
     /// the whole answer once tables put each cell in its own control.</summary>
     public ReactiveCommand<AiTurnViewModel, Unit> CopyCommand { get; }
-    public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+
+    /// <summary>
+    /// Start a new conversation, keeping the one on screen. (#849, #850)
+    ///
+    /// <para><b>[fsnow]</b>: <i>"'Clear' was introduced by Claude at some point and is not relevant. I would
+    /// like to create new conversations like in Claude Code, maybe also with a plus button, while saving the
+    /// current one."</i></para>
+    ///
+    /// <para><b>It saves nothing, because there is nothing left to save.</b> Every turn was written when it
+    /// ended, so this only lets go: the transcript clears, the session reference drops, and the active id in
+    /// application state is cleared so the next launch restores an empty panel rather than the conversation the
+    /// reader had just set aside. Nothing is destroyed, so it asks nothing.</para>
+    ///
+    /// <para>Guarded by <see cref="IsBusy"/> like every other command: letting go of a session whose turn is
+    /// still streaming would leave that turn's save writing to a conversation the panel no longer shows.</para>
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> NewConversationCommand { get; }
 
     /// <summary>Re-ask the resolver whether the assistant is configured. Bound to the panel's own refresh, so
     /// a reader who has just been sent to Settings can come back and see the answer change.</summary>
@@ -374,7 +433,12 @@ public class AiAssistantViewModel : ReactiveTool
         // the box — the box now holds unsent drafts, and those are precious.
         var typed = questionOverride ?? Question;
         var question = string.IsNullOrWhiteSpace(typed) ? null : typed.Trim();
-        var turn = StartTurn(task, question, state.SelectionText, clearBox: questionOverride is null);
+        var turn = StartTurn(
+            task, question, state.SelectionText, clearBox: questionOverride is null,
+            // Where the reader was standing when they asked, captured at the START of the turn rather than at
+            // its end: by the time an answer arrives they may have scrolled on, and the position a stored turn
+            // is asking to be taken back to is the one it was asked from. (#849)
+            readingPosition: state.ReadingPosition);
 
         try
         {
@@ -416,6 +480,12 @@ public class AiAssistantViewModel : ReactiveTool
         finally
         {
             EndTurn(turn);
+
+            // Written here, after the turn is closed, so the record holds the final status, the final elapsed
+            // figure and whatever text stood when it stopped. Awaited rather than fired and forgotten: the
+            // caller's IsBusy is still true, which is what keeps a new conversation from being started out from
+            // under the write. (#849)
+            await SaveTurnAsync(turn);
         }
     }
 
@@ -445,11 +515,23 @@ public class AiAssistantViewModel : ReactiveTool
         await clipboard.SetTextAsync(turn.CopyText);
     }
 
-    private void Clear()
+    /// <inheritdoc cref="NewConversationCommand"/>
+    private void NewConversation()
     {
         if (IsBusy) return;
+
         Turns.Clear();
         this.RaisePropertyChanged(nameof(HasTurns));
+        this.RaisePropertyChanged(nameof(LastTurn));
+
+        _session = null;
+
+        if (_appState is not null)
+        {
+            _appState.Current.ActiveAssistantSessionId = null;
+            _appState.MarkDirty();
+        }
+
         Status = "";
     }
 
@@ -462,6 +544,14 @@ public class AiAssistantViewModel : ReactiveTool
                 // while the model is still thinking.
                 turn.Citation = Describe(context.Citation);
                 turn.CitationDetail = DescribeCitationDetail(context.Citation);
+                // And the citation ITSELF, not only the two lines drawn from it. This event was the only place
+                // it ever appeared and the panel used to drop it here, which left a stored turn readable and
+                // unnavigable — nothing in "Mahāvaggapāḷi — para 12" names a file to reopen. (#849)
+                turn.StructuredCitation = context.Citation;
+                // Which model answered. Structured for the same reason (#849): recovering it from the Sent
+                // block would mean matching a field by its English label.
+                turn.ProviderId = context.ProviderId;
+                turn.ModelId = context.ModelId;
                 turn.Notices.Clear();
                 foreach (var notice in context.Notices) turn.Notices.Add(notice);
                 turn.RaiseNoticesChanged();
@@ -510,6 +600,10 @@ public class AiAssistantViewModel : ReactiveTool
 
             case AiTurnEventKind.Usage when e.Usage is { } usage:
                 turn.Usage = FormatUsage(usage);
+                // The report as well as the line printed from it: the line has been through :N0, so the same
+                // turn reads 1,024 or 1.024 depending on the machine that stored it, and no arithmetic can be
+                // done on it afterwards. (#849)
+                turn.UsageReport = usage;
                 break;
 
             case AiTurnEventKind.Error when e.Error is { } error:
@@ -546,7 +640,9 @@ public class AiAssistantViewModel : ReactiveTool
         _orchestrator?.Stop();
     }
 
-    private AiTurnViewModel StartTurn(AiTask task, string? question, string? selection, bool clearBox)
+    private AiTurnViewModel StartTurn(
+        AiTask task, string? question, string? selection, bool clearBox,
+        Models.ReadingPositionToken? readingPosition = null)
     {
         var turn = new AiTurnViewModel(task, question)
         {
@@ -554,6 +650,7 @@ public class AiAssistantViewModel : ReactiveTool
             // forgotten — is visible immediately rather than discovered in the answer.
             Subject = Summarize(selection),
             Status = "Contacting the provider…",
+            ReadingPosition = readingPosition,
         };
 
         Turns.Add(turn);
@@ -596,6 +693,7 @@ public class AiAssistantViewModel : ReactiveTool
     private void Tick(AiTurnViewModel turn)
     {
         Flush(turn);
+        turn.ElapsedTime = _elapsed.Elapsed;
         turn.Elapsed = FormatElapsed(_elapsed.Elapsed);
 
         // The tick owns the status line only while nothing real has arrived, and surrenders it the instant
@@ -647,10 +745,179 @@ public class AiAssistantViewModel : ReactiveTool
         _flushTimer = null;
         _elapsed.Stop();
         Flush(turn);
+        // The duration as well as the line printed from it — the stopwatch is restarted by the next turn, so
+        // after this the turn itself is the only thing that still knows. (#849)
+        turn.ElapsedTime = _elapsed.Elapsed;
         turn.Elapsed = FormatElapsed(_elapsed.Elapsed);
         turn.IsRunning = false;
         _current = null;
     }
+
+    // ---- Persistence (#849) ----------------------------------------------------------------------
+
+    /// <summary>
+    /// Write the conversation, including the turn that has just ended.
+    ///
+    /// <para><b>The whole session, every turn</b> — not an append. The turn that ended is not the only thing
+    /// that changed about the file: <c>LastActive</c> moved, and on the first turn the name was set. A
+    /// whole-file replace is also the only version of this that cannot leave unreadable JSON behind.</para>
+    ///
+    /// <para><b>A failure is a sentence, never an exception.</b> The store answers false; the answer is on
+    /// screen either way, and the reader is reading it. What they are told is that the conversation will not be
+    /// there next time — which is the part they can act on, by copying the answer.</para>
+    /// </summary>
+    private async Task SaveTurnAsync(AiTurnViewModel turn)
+    {
+        if (_store is null) return;
+
+        try
+        {
+            var session = _session ??= CreateSession(turn);
+
+            session.Turns.Add(turn.ToRecord());
+            session.LastActive = DateTimeOffset.Now;
+
+            // Deliberately NOT the turn's cancellation token. A stopped turn is exactly the one whose partial
+            // answer most needs keeping, and handing the save the token the reader has just cancelled would
+            // abandon the write that was supposed to keep it.
+            if (await _store.SaveAsync(session))
+                return;
+
+            // The store has already logged why. What is left to say is what it means for the reader.
+            Status = "That answer could not be saved, so this conversation will not reopen next time.";
+        }
+        catch (Exception ex)
+        {
+            // The store promises not to throw; this catch is for the mapping above it, and the rule is the same
+            // either way — a turn the reader can read must not be lost to a problem with a file.
+            _logger.Error(ex, "Could not record the assistant turn");
+            Status = "That answer could not be saved, so this conversation will not reopen next time.";
+        }
+    }
+
+    /// <summary>
+    /// The session this panel is now adding to, named from the turn that created it.
+    ///
+    /// <para><b>[fsnow]</b> chose <i>"Auto from the first turn, renamable"</i> — so the name is composed here,
+    /// once, and never by a model. A preset turn is named for what was asked and where (<c>Explain ·
+    /// Mahāvaggapāḷi para 12</c>); a question is named by its own first words, because that is what the reader
+    /// will recognise in a list and the preset label would be the same on every one of them.</para>
+    /// </summary>
+    private AiSession CreateSession(AiTurnViewModel turn)
+    {
+        var now = DateTimeOffset.Now;
+        var session = new AiSession
+        {
+            Id = AiSession.NewId(),
+            Name = NameFor(turn),
+            Created = now,
+            LastActive = now,
+        };
+
+        if (_appState is not null)
+        {
+            // The one thing application state keeps, so the next launch knows which file to reopen. Dirtied
+            // rather than saved: the state service owns when it writes.
+            _appState.Current.ActiveAssistantSessionId = session.Id;
+            _appState.MarkDirty();
+        }
+
+        return session;
+    }
+
+    /// <summary>The auto-name. <b>[fsnow]</b>: <i>"Auto from the first turn, renamable"</i>.</summary>
+    internal static string NameFor(AiTurnViewModel turn)
+    {
+        // A question names itself. Its first words are what distinguishes it from the next question about the
+        // same passage, which the preset label and citation would not.
+        if (turn.Task == AiTask.Ask && !string.IsNullOrWhiteSpace(turn.Question))
+            return Shorten(turn.Question!, 60);
+
+        var citation = turn.Citation;
+        return string.IsNullOrWhiteSpace(citation)
+            // No citation to name it by — a turn that failed before the context was assembled. The preset alone
+            // is a poor name and still better than an empty row; a rename is one gesture away.
+            ? turn.PresetLabel
+            : $"{turn.PresetLabel} · {citation}";
+    }
+
+    /// <summary>
+    /// The first <paramref name="max"/> characters, whitespace collapsed, with an ellipsis where there was more.
+    /// Cut at the end rather than elided in the middle, unlike <see cref="Summarize"/>: a name is read from its
+    /// start, and a list of names sharing a prefix is the case the reader is scanning for.
+    /// </summary>
+    private static string Shorten(string text, int max)
+    {
+        var collapsed = System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
+        return collapsed.Length <= max ? collapsed : $"{collapsed[..max].TrimEnd()}…";
+    }
+
+    /// <summary>
+    /// Reload the last conversation, silently. <b>[fsnow]</b>: <i>"Restore the last session silently"</i>.
+    ///
+    /// <para><b>Called by the app after application state has loaded, not from the constructor.</b> The panel is
+    /// built during the dock layout build, which runs BEFORE <c>LoadStateAsync</c> completes — so a constructor
+    /// reading <c>ActiveAssistantSessionId</c> would read the default empty state and restore nothing, every
+    /// time. The same sequencing <c>SearchViewModel.ApplyState</c> (#87) and <c>DictionaryViewModel.ApplyState</c>
+    /// (#479) exist for.</para>
+    ///
+    /// <para>Idempotent, and it never overwrites a conversation in progress: a panel that already has turns has
+    /// been used, and this is a launch-time restore rather than a switch (that is P3's).</para>
+    /// </summary>
+    public async Task RestoreAsync(CancellationToken ct = default)
+    {
+        if (_store is null || _appState is null) return;
+        if (_session is not null || Turns.Count > 0) return;
+
+        var id = _appState.Current.ActiveAssistantSessionId;
+        if (string.IsNullOrEmpty(id)) return;
+
+        AiSession? session;
+        try
+        {
+            session = await _store.LoadAsync(id, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // The store does not throw for a bad file; anything here is a defect, and a defect must still not
+            // be the reason the panel will not open.
+            _logger.Error(ex, "Could not restore the assistant session {Id}", id);
+            return;
+        }
+
+        // Null is both "there is no such file" and "it could not be read". The panel does the same thing for
+        // each — start empty — and only the second has anything to say, which Unreadable has already said.
+        if (session is null) return;
+
+        _session = session;
+
+        // By id, so a turn's replayed-history can be rebuilt from the ids it stored rather than from copies of
+        // earlier answers. Built over the whole session first: the references point backwards today, and a
+        // restore that depended on that would break the day compaction reorders anything.
+        var byId = new Dictionary<string, AiTurnRecord>(StringComparer.Ordinal);
+        foreach (var record in session.Turns)
+            byId[record.Id] = record;
+
+        foreach (var record in session.Turns)
+            Turns.Add(AiTurnViewModel.FromRecord(record, byId));
+
+        this.RaisePropertyChanged(nameof(HasTurns));
+        this.RaisePropertyChanged(nameof(LastTurn));
+
+        _logger.Information(
+            "Restored assistant session {Id} with {Count} turn(s)", session.Id, session.Turns.Count);
+    }
+
+    /// <summary>
+    /// A transcript that could not be read. It has been kept aside, not deleted, and this is the only place the
+    /// reader learns either fact.
+    /// </summary>
+    private void OnSessionUnreadable(AiSessionUnreadable report) =>
+        Status = $"That conversation could not be read. It has been kept at {report.KeptPath}.";
 
     /// <summary>Moves whatever has accumulated onto the screen, in one property change per kind.</summary>
     private void Flush(AiTurnViewModel turn)
@@ -730,12 +997,28 @@ public class AiAssistantViewModel : ReactiveTool
     ///
     /// <para>The turn being started is excluded — it is already in <see cref="Turns"/> by the time this runs,
     /// and its own context is what the current message carries.</para>
+    ///
+    /// <para><b>A restored turn replays like any other</b> (#849): it carries the marked answer it was written
+    /// with, and its question line is the one it was stored with rather than one re-rendered from today's
+    /// wording — see <see cref="AiTurnViewModel.RestoredAskedLine"/>. So a follow-up asked after a restart
+    /// continues the conversation instead of starting one.</para>
+    ///
+    /// <para><b>Which turns went in is recorded on the turn</b>, because the stored record says what the model
+    /// was sent and that cannot be recomputed later: by the time this turn is written, a newer turn may have
+    /// changed what "the turns with answers" means.</para>
     /// </summary>
-    private IReadOnlyList<AiExchange> HistoryFor(AiTurnViewModel current) =>
-        Turns
+    private IReadOnlyList<AiExchange> HistoryFor(AiTurnViewModel current)
+    {
+        var replayed = Turns
             .Where(t => !ReferenceEquals(t, current) && t.HasAnswer)
+            .ToList();
+
+        current.ReplayedTurnIds = replayed.Select(t => t.Id).ToList();
+
+        return replayed
             .Select(t => new AiExchange(DescribeAsked(t), t.MarkedAnswer))
             .ToList();
+    }
 
     /// <summary>
     /// The question side of an earlier turn, as the model is shown it again: which preset, which passage, and
@@ -759,6 +1042,11 @@ public class AiAssistantViewModel : ReactiveTool
     /// </summary>
     internal static string DescribeAsked(AiTurnViewModel turn)
     {
+        // A turn read off disk replays the line it was stored with. The record keeps that line precisely so a
+        // later change to the wording below cannot alter what a restored conversation tells the model it was
+        // asked — a record of what a model saw that re-renders itself is not a record. (#849)
+        if (turn.RestoredAskedLine is { Length: > 0 } stored) return stored;
+
         var opening = $"\u00ab{turn.PresetLabel}\u00bb";
         var head = string.IsNullOrWhiteSpace(turn.Citation) ? opening : $"{opening} \u2014 {turn.Citation}";
         return turn.HasQuestion ? $"{head}: {turn.Question!.Trim()}" : head;

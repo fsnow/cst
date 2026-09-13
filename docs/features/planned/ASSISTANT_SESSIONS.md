@@ -43,14 +43,21 @@ Two things make the rest cheaper than it looks:
   `User` and `Assistant`, and both adapters iterate the list (`OpenAiCompatibleProvider.cs:237`,
   `AnthropicMessagesProvider.cs:251`). Only the orchestrator's single-message construction stands between the
   app and a conversation.
-- **[observed] A turn already carries everything a stored record needs.** `AiTurnViewModel` holds the task,
-  question, raw answer, reasoning, citation, notices, partial-passage flag, usage, elapsed, and the
-  `SentContext` (#665) with both prompt halves. `CitationRef` carries `BookId` + `NormalizedReference`;
-  `ReadingPositionToken` (#434) is the persisted position format. Nothing new has to be *computed* for
-  persistence — only written down.
+- **[observed] A turn holds the display strings but not the facts they were made from.** `AiTurnViewModel` has
+  the task, question, raw answer, marked answer, reasoning, notices, partial-passage flag and the `SentContext`
+  (#665) — and, for the rest, only what is on screen. Four things a record needs were **not reachable from a
+  turn** at the end of it:
+  - the structured `CitationRef` — it arrived once on the `Started` event and `Handle` replaced it with two
+    rendered lines, so nothing left named a file to reopen;
+  - the `AiUsageReport` — formatted by `FormatUsage` and dropped, leaving a `:N0`-grouped string;
+  - the elapsed duration — only `FormatElapsed`'s `"4.2s"`, and the panel's one stopwatch is restarted by the
+    next turn;
+  - the provider and model ids — on neither `AiTurnContext` nor the view model, so carrying them needed a
+    contract change rather than a read from the panel.
 
-**[observed] `ClearCommand` is bound to nothing** (#850). `AiAssistantPanel.axaml` never references it; the
-command exists, is guarded against `IsBusy`, and is unreachable.
+  So the wiring is not "only written down": the turn had to start keeping the originals beside the strings
+  derived from them. Nothing bound in the panel changed. (Corrected 2026-09-12, after building it — the
+  original claim here was wrong, and the store's record docs were written against the corrected list.)
 
 ## 2. Claude Code parity map
 
@@ -138,20 +145,30 @@ the Claude Code guarantee. Atomic write (temp + `File.Replace`), the pattern `Ap
 
 | field | source | note |
 |---|---|---|
-| task, question | `AiTurnViewModel` | |
-| citation (`CitationRef`) | `AiTurnContext.Citation` | **required** — #849 comment 2: this is what makes "take me back" possible |
+| id, task, question, when | `AiTurnViewModel` | the id is minted at construction, so a later turn can point at this one while it is still on screen |
+| citation (`CitationRef`) | `AiTurnContext.Citation`, kept on the turn as `StructuredCitation` | **required** — #849 comment 2: this is what makes "take me back" possible |
 | subject (selection summary) | `Subject` | display text only; the full selection is in the sent prompt |
-| answer (raw), reasoning | builders | reasoning is shown collapsed today; storing it keeps the turn faithful |
+| answer (raw), marked answer, reasoning | builders | both answer halves: the stripped one renders, the marked one replays (#991) |
 | notices, partial-passage flag | `Notices`, `IsPartialPassage` | |
-| usage, elapsed, status, failed | | |
-| sent context (`SentContext`) | #665 | see the decision in §6 — [suggestion] store it |
-| reading position (`ReadingPositionToken`) | captured from the active book at `StartTurn` | #849 comment 3; **new capture**, the only new data |
-| provider id, model id, when | | the model that answered is part of the record |
+| usage (two ints), elapsed (ms), status, failed | `UsageReport` and `ElapsedTime` on the turn | numbers, not the `:N0`/`"4.2s"` strings printed from them |
+| asked line | `DescribeAsked(turn)` | derivable from *today's* wording, so stored: a record of what a model saw must not re-render itself |
+| sent context (`SentContext`) | #665, mapped to `AiSentRecord` | prompt halves and fields by value; the replayed conversation by **id** — a 30-turn file would otherwise hold 435 copies of its own answers |
+| reading position (`ReadingPositionToken`) | `ReaderState.ReadingPosition`, captured at `StartTurn` | #849 comment 3; **new capture** — read from `BookDisplayViewModel.LastPositionToken`, the rolling ~200 ms token the dock factory already persists, rather than by a fresh WebView round trip |
+| provider id, model id | `AiTurnContext.ProviderId`/`ModelId` (**new** on that contract) | the model that answered is part of the record |
 
-**Restore:** at launch the panel reads the active session and rebuilds `Turns` from records — a
-constructor `AiTurnViewModel(AiTurnRecord)` alongside the live one, with `IsRunning = false`. No model call.
-A session file that fails to parse is moved aside with a timestamp (the `application-state.unreadable-*`
-pattern) and the panel starts empty with a notice, never a crash.
+**Restore:** at launch the panel reads the active session and rebuilds `Turns` from records —
+`AiTurnViewModel.FromRecord(record, byId)` alongside the live constructor, with `IsRunning = false` and the
+answer published (`Blocks` exist only after `PublishAnswer`). No model call. A session file that fails to parse
+is moved aside with a timestamp (the `application-state.unreadable-*` pattern) and the panel starts empty with a
+notice, never a crash.
+
+**[observed] Launch sequencing.** The panel's view model is built during `CstDockFactory.CreateLayout`, which
+runs *before* `LoadStateAsync` completes — so a constructor reading `ActiveAssistantSessionId` would read the
+default empty state every launch. The restore is therefore pushed in by `App.InitializeFromLoadedState`, as
+`AiAssistantViewModel.RestoreAsync()`, next to `SearchViewModel.ApplyState` (#87) and
+`DictionaryViewModel.ApplyState` (#479), which exist for exactly this. It is gated on
+`CstDockFactory.AssistantEnabled()`, because resolving the singleton would otherwise *create* a panel for a
+reader who has the feature switched off.
 
 ### 3.3 Sessions (P0, P3)
 
@@ -161,9 +178,10 @@ current one."* So the control is **+** — new conversation: the current session
 every `EndTurn`), and the panel starts an empty one. Nothing is destroyed, so it needs no confirmation.
 `ClearCommand` and `Clear()` are removed, not rebound; #850 is rewritten to describe the + control.
 
-For P0, before the session store exists, + does what `Clear()` did — empties the transcript — because there
-is nothing to save yet. The control and its meaning survive P2/P3 unchanged; only what happens underneath
-grows.
+**[observed] The command exists as of the P2 wiring: `NewConversationCommand`** — `IsBusy`-guarded like every
+other, it clears `Turns`, drops the session, and clears `ActiveAssistantSessionId`. It saves nothing, because
+every turn was already written when it ended. `ClearCommand`/`Clear()` are gone. What is left for #850 is the
+button.
 
 **Deletion** is a separate action on a row in the session list, and it confirms — the one irreversible thing
 here. **[fsnow]** chose *"Yes, with confirmation"*.
