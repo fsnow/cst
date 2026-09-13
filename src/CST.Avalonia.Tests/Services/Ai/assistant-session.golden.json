@@ -10,6 +10,7 @@
       "task": "Explain",
       "askedLine": "«Explain» — Mahāvaggapāḷi 1.1",
       "answer": "The paragraph opens the Mahāvagga.",
+      "markedAnswer": "The paragraph opens the [[Mahāvagga]].",
       "reasoning": "First, identify the speaker…",
       "citation": {
         "bookId": "s0402m.mul.xml",
@@ -62,7 +63,8 @@
       "task": "Ask",
       "question": "What does bhagavā mean here?",
       "askedLine": "«Question» — Mahāvaggapāḷi 1.1: What does bhagavā mean here?",
-      "answer": "It is an epithet",
+      "answer": "It is an epithet: bhagavā",
+      "markedAnswer": "It is an epithet: [[bhagavā]]",
       "notices": [],
       "isPartialPassage": false,
       "elapsedMs": 63000,

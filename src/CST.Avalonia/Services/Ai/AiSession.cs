@@ -174,11 +174,35 @@ public sealed class AiTurnRecord
     public string? Answer { get; set; }
 
     /// <summary>
+    /// The same answer as the model wrote it, <c>[[…]]</c> Pāli markers and all. (#991)
+    ///
+    /// <para><b>Why both halves are stored.</b> <see cref="Answer"/> is the stripped form, which is what the
+    /// panel renders; this is the marked form, which is what a later turn replays TO THE MODEL. The system
+    /// prompt tells the model to wrap every Pāli span in those markers, so replaying the stripped form shows
+    /// it a transcript of its own answers disobeying that instruction — the kind of thing a model imitates.
+    /// Keeping only one half would decide, for every session reloaded from disk, either that the transcript
+    /// renders with markers in it or that the model is fed marker-free examples of its own writing; a restored
+    /// conversation has to be able to do both things the live one does.</para>
+    ///
+    /// <para>Unbalanced markers are kept as written, as the live turn keeps them: <c>PaliQuoteFilter</c> strips
+    /// those from the display, rightly, and what the model is shown of its own output should still be what it
+    /// produced.</para>
+    ///
+    /// <para>Null on a turn that produced no text, and on any session written before this field existed —
+    /// where the restore path has only the stripped form to replay, which is the pre-#991 behaviour rather
+    /// than a fault.</para>
+    /// </summary>
+    public string? MarkedAnswer { get; set; }
+
+    /// <summary>
     /// The model thinking aloud, kept segregated exactly as the live turn keeps it. Stored because a turn
     /// without it does not render identically — the panel offers it collapsed — and <b>never</b> merged into
     /// <see cref="Answer"/>: half-formed guesses about the text are not what the model is telling the reader.
-    /// (It is also never replayed to a model; that is #991's rule, and this field is not an argument against
-    /// it.)
+    ///
+    /// <para><b>Stored, never replayed.</b> Unlike <see cref="MarkedAnswer"/>, which exists precisely to be
+    /// replayed, reasoning is kept only so a reopened turn shows what the live one showed. It is not part of
+    /// what a later turn sends: the segregation that keeps it out of the answer is the same rule that keeps it
+    /// out of the conversation (#991).</para>
     /// </summary>
     public string? Reasoning { get; set; }
 

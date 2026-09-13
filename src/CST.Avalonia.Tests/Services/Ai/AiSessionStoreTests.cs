@@ -81,6 +81,8 @@ public sealed class AiSessionStoreTests : IDisposable
                 Question = null,
                 AskedLine = "«Explain» — Mahāvaggapāḷi 1.1",
                 Answer = "The paragraph opens the Mahāvagga.",
+                // The same answer as the model wrote it: stripped for the screen, marked for the replay.
+                MarkedAnswer = "The paragraph opens the [[Mahāvagga]].",
                 Reasoning = "First, identify the speaker…",
                 Citation = Citation("s0402m.mul.xml", "Mahāvaggapāḷi", "1.1"),
                 Subject = "tena samayena buddho bhagavā",
@@ -117,8 +119,9 @@ public sealed class AiSessionStoreTests : IDisposable
                 Task = AiTask.Ask,
                 Question = "What does bhagavā mean here?",
                 AskedLine = "«Question» — Mahāvaggapāḷi 1.1: What does bhagavā mean here?",
-                // A mid-stream failure keeps what arrived — so the record does too.
-                Answer = "It is an epithet",
+                // A mid-stream failure keeps what arrived — so the record does too, both halves of it.
+                Answer = "It is an epithet: bhagavā",
+                MarkedAnswer = "It is an epithet: [[bhagavā]]",
                 Citation = null,
                 Status = "The provider closed the connection.",
                 Failed = true,
@@ -175,6 +178,10 @@ public sealed class AiSessionStoreTests : IDisposable
         Assert.Null(first.Question);
         Assert.Equal("«Explain» — Mahāvaggapāḷi 1.1", first.AskedLine);
         Assert.Equal("The paragraph opens the Mahāvagga.", first.Answer);
+        // Both halves: the stripped one renders, the marked one is what a later turn replays. A record with
+        // only one of them would decide, for every reloaded session, either that the transcript shows markers
+        // or that the model is fed marker-free examples of its own writing. (#991)
+        Assert.Equal("The paragraph opens the [[Mahāvagga]].", first.MarkedAnswer);
         Assert.Equal("First, identify the speaker…", first.Reasoning);
         Assert.Equal("tena samayena buddho bhagavā", first.Subject);
         Assert.Equal(
@@ -211,9 +218,10 @@ public sealed class AiSessionStoreTests : IDisposable
         var failed = loaded.Turns[1];
         Assert.True(failed.Failed);
         Assert.Equal("The provider closed the connection.", failed.Status);
-        // Partial text stands. A failed turn is not an empty one, and a record that dropped what arrived
-        // would restore the conversation as something the reader never saw.
-        Assert.Equal("It is an epithet", failed.Answer);
+        // Partial text stands, in both halves. A failed turn is not an empty one, and a record that dropped
+        // what arrived would restore the conversation as something the reader never saw.
+        Assert.Equal("It is an epithet: bhagavā", failed.Answer);
+        Assert.Equal("It is an epithet: [[bhagavā]]", failed.MarkedAnswer);
         Assert.Equal("What does bhagavā mean here?", failed.Question);
         Assert.Equal(63000, failed.ElapsedMs);
         Assert.Null(failed.Citation);
@@ -225,6 +233,9 @@ public sealed class AiSessionStoreTests : IDisposable
         Assert.Equal(AiTask.Translate, bare.Task);
         Assert.Null(bare.Sent);
         Assert.Null(bare.Reasoning);
+        // A session written before the marked half existed has only the stripped one — the pre-#991 behaviour
+        // rather than a fault, and the reason this field is nullable.
+        Assert.Null(bare.MarkedAnswer);
         Assert.Null(bare.Status);
         Assert.False(bare.IsPartialPassage);
     }
@@ -281,7 +292,9 @@ public sealed class AiSessionStoreTests : IDisposable
         {
             Assert.True(byId.ContainsKey(id));
             Assert.False(string.IsNullOrEmpty(byId[id].AskedLine));
-            Assert.False(string.IsNullOrEmpty(byId[id].Answer));
+            // The MARKED half is the one a replay sends, so a referenced turn that had only the stripped one
+            // would rebuild a history the live pipeline would not have sent. (#991)
+            Assert.False(string.IsNullOrEmpty(byId[id].MarkedAnswer));
         }
 
         // And the earlier answer appears in the file exactly once — in the turn that produced it, nowhere in
