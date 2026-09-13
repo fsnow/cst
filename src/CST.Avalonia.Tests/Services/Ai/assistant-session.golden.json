@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "id": "golden-session",
+  "name": "Explain · Mahāvaggapāḷi 1.1",
+  "created": "2026-09-12T10:15:00+00:00",
+  "lastActive": "2026-09-12T10:27:00+00:00",
+  "turns": [
+    {
+      "id": "turn-one",
+      "task": "Explain",
+      "askedLine": "«Explain» — Mahāvaggapāḷi 1.1",
+      "answer": "The paragraph opens the Mahāvagga.",
+      "markedAnswer": "The paragraph opens the [[Mahāvagga]].",
+      "reasoning": "First, identify the speaker…",
+      "citation": {
+        "bookId": "s0402m.mul.xml",
+        "bookName": "Mahāvaggapāḷi",
+        "normalizedReference": "1.1",
+        "pages": [
+          {
+            "edition": "Vri",
+            "volume": 1,
+            "number": 23
+          }
+        ]
+      },
+      "subject": "tena samayena buddho bhagavā",
+      "notices": [
+        "The word list was not available.",
+        "The apparatus was empty."
+      ],
+      "isPartialPassage": true,
+      "inputTokens": 1024,
+      "outputTokens": 512,
+      "elapsedMs": 4200,
+      "failed": false,
+      "sent": {
+        "fields": [
+          {
+            "name": "Provider",
+            "value": "anthropic"
+          },
+          {
+            "name": "Model",
+            "value": "claude-opus-4-1"
+          }
+        ],
+        "systemPrompt": "You are reading Pāli.",
+        "userContent": "Passage: tena samayena…",
+        "replayedTurnIds": []
+      },
+      "providerId": "anthropic",
+      "modelId": "claude-opus-4-1",
+      "when": "2026-09-12T10:15:00+00:00",
+      "readingPosition": {
+        "above": "para1",
+        "below": "para2",
+        "fraction": 0.375
+      }
+    },
+    {
+      "id": "turn-two",
+      "task": "Ask",
+      "question": "What does bhagavā mean here?",
+      "askedLine": "«Question» — Mahāvaggapāḷi 1.1: What does bhagavā mean here?",
+      "answer": "It is an epithet: bhagavā",
+      "markedAnswer": "It is an epithet: [[bhagavā]]",
+      "notices": [],
+      "isPartialPassage": false,
+      "elapsedMs": 63000,
+      "status": "The provider closed the connection.",
+      "failed": true,
+      "sent": {
+        "fields": [],
+        "systemPrompt": "You are reading Pāli.",
+        "userContent": "Passage: tena samayena… What does bhagavā mean here?",
+        "replayedTurnIds": [
+          "turn-one"
+        ]
+      },
+      "providerId": "anthropic",
+      "modelId": "claude-opus-4-1",
+      "when": "2026-09-12T10:21:00+00:00"
+    },
+    {
+      "id": "turn-three",
+      "task": "Translate",
+      "answer": "At that time the Blessed One…",
+      "citation": {
+        "bookId": "s0403m.mul.xml",
+        "bookName": "Cūḷavaggapāḷi",
+        "normalizedReference": "2.4",
+        "pages": [
+          {
+            "edition": "Vri",
+            "volume": 1,
+            "number": 23
+          }
+        ]
+      },
+      "notices": [],
+      "isPartialPassage": false,
+      "failed": false,
+      "when": "2026-09-12T10:27:00+00:00"
+    }
+  ],
+  "compactions": [
+    {
+      "when": "2026-09-12T10:45:00+00:00",
+      "summary": "Two earlier turns, about the opening of the Mahāvagga.",
+      "summarisedTurnIds": [
+        "turn-one",
+        "turn-two"
+      ]
+    }
+  ]
+}
