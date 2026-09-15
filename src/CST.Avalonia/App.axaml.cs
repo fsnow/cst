@@ -1070,12 +1070,26 @@ public partial class App : Application
         // feature off would otherwise get a panel constructed, an environment-key probe subscribed to, and a
         // readiness check run, for a tool that is not in the layout. (CstDockFactory.CreateLayout resolves it
         // only when enabled, for the same reason.)
+        //
+        // POSTED, not awaited, for the same reason the two panels above are: awaiting it puts the assistant's
+        // restore on the path to the reader's books, so anything unexpected in one transcript delays or skips
+        // the rest of the restore. RestoreAsync isolates its own failures now; this is the second net, and the
+        // one that survives the next edit inside it. (fable review)
         if (CstDockFactory.AssistantEnabled())
         {
-            await Dispatcher.UIThread.InvokeAsync(async () =>
+            Dispatcher.UIThread.Post(async void () =>
             {
-                var assistant = ServiceProvider?.GetService<AiAssistantViewModel>();
-                if (assistant != null) await assistant.RestoreAsync();
+                try
+                {
+                    var assistant = ServiceProvider?.GetService<AiAssistantViewModel>();
+                    if (assistant != null) await assistant.RestoreAsync();
+                }
+                catch (Exception ex)
+                {
+                    // An async void continuation: an escape here reaches the unhandled handler and kills a
+                    // reading app over a transcript.
+                    Log.Error(ex, "Could not restore the assistant conversation");
+                }
             });
         }
 

@@ -49,10 +49,10 @@ namespace CST.Avalonia.ViewModels;
 ///
 /// <para>
 /// <b>And it persists.</b> The panel owns one <see cref="AiSession"/> at a time: it is created at the first
-/// turn that ends, rewritten in full at the end of every turn after that, and reloaded at the next launch —
-/// <b>[fsnow]</b>: <i>"Restore the last session silently"</i>, the way books and reading positions are
-/// restored, with no model call. <c>ApplicationState.ActiveAssistantSessionId</c> is the one thing
-/// application state keeps; the transcripts live one file each (#849).
+/// turn that ends, rewritten in full at the end of every turn after that, and reloaded at the next launch.
+/// <b>[fsnow]</b>: <i>"Restore the last session silently"</i>. That is the way books and reading positions are
+/// already restored, and it costs no model call. <c>ApplicationState.ActiveAssistantSessionId</c> is the one
+/// thing application state keeps; the transcripts live one file each (#849).
 /// </para>
 ///
 /// <para>
@@ -798,10 +798,12 @@ public class AiAssistantViewModel : ReactiveTool
     /// <summary>
     /// The session this panel is now adding to, named from the turn that created it.
     ///
-    /// <para><b>[fsnow]</b> chose <i>"Auto from the first turn, renamable"</i> — so the name is composed here,
-    /// once, and never by a model. A preset turn is named for what was asked and where (<c>Explain ·
-    /// Mahāvaggapāḷi para 12</c>); a question is named by its own first words, because that is what the reader
-    /// will recognise in a list and the preset label would be the same on every one of them.</para>
+    /// <para><b>[fsnow]</b> chose <i>"Auto from the first turn, renamable"</i>.</para>
+    ///
+    /// <para>So the name is composed here, once, and never by a model. A preset turn is named for what was asked
+    /// and where (<c>Explain · Mahāvaggapāḷi para 12</c>); a question is named by its own first words, because
+    /// that is what the reader will recognise in a list and the preset label would be the same on every one of
+    /// them.</para>
     /// </summary>
     private AiSession CreateSession(AiTurnViewModel turn)
     {
@@ -845,11 +847,30 @@ public class AiAssistantViewModel : ReactiveTool
     /// The first <paramref name="max"/> characters, whitespace collapsed, with an ellipsis where there was more.
     /// Cut at the end rather than elided in the middle, unlike <see cref="Summarize"/>: a name is read from its
     /// start, and a list of names sharing a prefix is the case the reader is scanning for.
+    ///
+    /// <para><b>Cut on a text element, not a UTF-16 index.</b> <c>collapsed[..max]</c> lands between the halves
+    /// of a surrogate pair whenever the 60th character is one — the JSON writer then substitutes U+FFFD, so the
+    /// session is named with a replacement character rather than the word the reader typed. Nothing is lost and
+    /// it looks like corruption, which for an auto-name is most of the damage. (fable review)</para>
     /// </summary>
     private static string Shorten(string text, int max)
     {
         var collapsed = System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
-        return collapsed.Length <= max ? collapsed : $"{collapsed[..max].TrimEnd()}…";
+        if (collapsed.Length <= max) return collapsed;
+
+        // Walk text elements — a pair, a combining sequence or an emoji cluster counts once, the way a reader
+        // counts characters — and stop at the last boundary that fits.
+        var enumerator = System.Globalization.StringInfo.GetTextElementEnumerator(collapsed);
+        var cut = 0;
+        var taken = 0;
+        while (enumerator.MoveNext())
+        {
+            if (taken == max) break;
+            cut = enumerator.ElementIndex + ((string)enumerator.Current).Length;
+            taken++;
+        }
+
+        return $"{collapsed[..cut].TrimEnd()}…";
     }
 
     /// <summary>
@@ -872,10 +893,50 @@ public class AiAssistantViewModel : ReactiveTool
         var id = _appState.Current.ActiveAssistantSessionId;
         if (string.IsNullOrEmpty(id)) return;
 
-        AiSession? session;
+        // Reading and MAPPING are both inside the guard. The store hardens what it reads, but nothing hardens
+        // what the mapping then does with it — a stored duration outside TimeSpan's range is an OverflowException
+        // in FromRecord, from a file the store considered well-formed. Left outside, that exception unwound
+        // through the app's awaited restore call and skipped every restore after it: window state, the active
+        // tool, and the reader's open books. A malformed transcript must cost the transcript, nothing else.
+        // (fable review)
         try
         {
-            session = await _store.LoadAsync(id, ct);
+            var session = await _store.LoadAsync(id, ct);
+
+            // Null is both "there is no such file" and "it could not be read". The panel does the same thing
+            // for each — start empty — and only the second has anything to say, which Unreadable has said.
+            if (session is null) return;
+
+            // Re-checked after the await: the reader can ask a question while the file is being read, and the
+            // two must not interleave. A live turn wins — it is on screen, and this is only a restore.
+            if (_session is not null || Turns.Count > 0)
+            {
+                _logger.Information(
+                    "Not restoring assistant session {Id}: the panel was used while it was loading", id);
+                return;
+            }
+
+            // By id, so a turn's replayed-history can be rebuilt from the ids it stored rather than from copies
+            // of earlier answers. Built over the whole session first: the references point backwards today, and
+            // a restore that depended on that would break the day compaction reorders anything.
+            var byId = new Dictionary<string, AiTurnRecord>(StringComparer.Ordinal);
+            foreach (var record in session.Turns)
+                byId[record.Id] = record;
+
+            var restored = new List<AiTurnViewModel>(session.Turns.Count);
+            foreach (var record in session.Turns)
+                restored.Add(AiTurnViewModel.FromRecord(record, byId));
+
+            // Nothing reaches the panel until every turn has mapped, so a transcript is restored whole or not
+            // at all — half a conversation on screen would read as a conversation.
+            _session = session;
+            foreach (var turn in restored) Turns.Add(turn);
+
+            this.RaisePropertyChanged(nameof(HasTurns));
+            this.RaisePropertyChanged(nameof(LastTurn));
+
+            _logger.Information(
+                "Restored assistant session {Id} with {Count} turn(s)", session.Id, session.Turns.Count);
         }
         catch (OperationCanceledException)
         {
@@ -883,41 +944,34 @@ public class AiAssistantViewModel : ReactiveTool
         }
         catch (Exception ex)
         {
-            // The store does not throw for a bad file; anything here is a defect, and a defect must still not
-            // be the reason the panel will not open.
             _logger.Error(ex, "Could not restore the assistant session {Id}", id);
-            return;
+            Status = "The last conversation could not be reopened. It is still on disk.";
         }
-
-        // Null is both "there is no such file" and "it could not be read". The panel does the same thing for
-        // each — start empty — and only the second has anything to say, which Unreadable has already said.
-        if (session is null) return;
-
-        _session = session;
-
-        // By id, so a turn's replayed-history can be rebuilt from the ids it stored rather than from copies of
-        // earlier answers. Built over the whole session first: the references point backwards today, and a
-        // restore that depended on that would break the day compaction reorders anything.
-        var byId = new Dictionary<string, AiTurnRecord>(StringComparer.Ordinal);
-        foreach (var record in session.Turns)
-            byId[record.Id] = record;
-
-        foreach (var record in session.Turns)
-            Turns.Add(AiTurnViewModel.FromRecord(record, byId));
-
-        this.RaisePropertyChanged(nameof(HasTurns));
-        this.RaisePropertyChanged(nameof(LastTurn));
-
-        _logger.Information(
-            "Restored assistant session {Id} with {Count} turn(s)", session.Id, session.Turns.Count);
     }
 
     /// <summary>
     /// A transcript that could not be read. It has been kept aside, not deleted, and this is the only place the
     /// reader learns either fact.
+    ///
+    /// <para><b>Posted, because this arrives off the UI thread.</b> The store raises it from inside the catch in
+    /// its own read, after an <c>await … ConfigureAwait(false)</c> — so a thread-pool continuation. Assigning
+    /// <see cref="Status"/> there writes a bound property, Avalonia verifies thread access on that write, and
+    /// the resulting exception unwinds through the store's catch and out of its load: the file would be kept
+    /// aside correctly and the reader would be told nothing, which is the one outcome this handler exists to
+    /// prevent. (fable review)</para>
+    ///
+    /// <para><b>Guarded rather than always posted</b>, so the sentence still arrives when the report does come
+    /// from the UI thread — and so a test host, which has no dispatcher loop to pump a posted callback, can see
+    /// it at all. <c>CheckAccess</c> is true on every thread until an <c>Application</c> binds the dispatcher
+    /// (measured), which is exactly the difference between the two cases.</para>
     /// </summary>
-    private void OnSessionUnreadable(AiSessionUnreadable report) =>
-        Status = $"That conversation could not be read. It has been kept at {report.KeptPath}.";
+    private void OnSessionUnreadable(AiSessionUnreadable report)
+    {
+        var sentence = $"That conversation could not be read. It has been kept at {report.KeptPath}.";
+
+        if (Dispatcher.UIThread.CheckAccess()) Status = sentence;
+        else Dispatcher.UIThread.Post(() => Status = sentence);
+    }
 
     /// <summary>Moves whatever has accumulated onto the screen, in one property change per kind.</summary>
     private void Flush(AiTurnViewModel turn)
@@ -1009,8 +1063,12 @@ public class AiAssistantViewModel : ReactiveTool
     /// </summary>
     private IReadOnlyList<AiExchange> HistoryFor(AiTurnViewModel current)
     {
+        // Whitespace-only counts as no answer, matching AiChatOrchestrator.Replay, which drops a pair with an
+        // empty half so no request carries an empty content block. Selecting on HasAnswer alone recorded such a
+        // turn in ReplayedTurnIds and then never sent it, so the stored record claimed the model saw a turn it
+        // did not. One rule, applied in both places. (fable review)
         var replayed = Turns
-            .Where(t => !ReferenceEquals(t, current) && t.HasAnswer)
+            .Where(t => !ReferenceEquals(t, current) && !string.IsNullOrWhiteSpace(t.MarkedAnswer))
             .ToList();
 
         current.ReplayedTurnIds = replayed.Select(t => t.Id).ToList();

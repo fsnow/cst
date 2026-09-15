@@ -56,8 +56,7 @@ Two things make the rest cheaper than it looks:
     contract change rather than a read from the panel.
 
   So the wiring is not "only written down": the turn had to start keeping the originals beside the strings
-  derived from them. Nothing bound in the panel changed. (Corrected 2026-09-12, after building it — the
-  original claim here was wrong, and the store's record docs were written against the corrected list.)
+  derived from them. Nothing bound in the panel changed. **[observed] 2026-09-12**, from building it.
 
 ## 2. Claude Code parity map
 
@@ -140,6 +139,14 @@ one file each (`AppConstants.DataDirectory` is the single source of truth for th
 **Write cadence:** the whole session file is rewritten at `EndTurn` (turn complete, failed, or stopped), on
 rename, and on compaction — never per streamed delta. A crash mid-turn loses only the turn in flight, which is
 the Claude Code guarantee. Atomic write (temp + `File.Replace`), the pattern `ApplicationStateService` uses.
+
+**[observed] 2026-09-13: there is no shutdown drain, and two turns can be lost at Quit.** The store is not
+`IDisposable` and `SaveApplicationStateAsync` does not consult it, so (a) a turn still streaming when the reader
+quits never reaches the `finally` that saves it — Stop keeps a partial answer, Quit does not — and (b) a
+session's *first* turn ending inside the shutdown state save can be written after `ForceSaveAsync`, so the file
+exists but `ActiveAssistantSessionId` never reaches disk and the conversation is orphaned until P3 lists it. The
+same window is open for a crash within `ApplicationStateService`'s 60-second save timer. A follow-up, not P2:
+the fix is a drain hook, and it wants the session list (P3) to make an orphan recoverable.
 
 **What a stored turn holds** — everything the panel shows, so a restored turn renders identically:
 

@@ -56,11 +56,23 @@ public class AiAssistantSessionWiringTests
 
         internal AiSession? LastSaved => Saves.Count == 0 ? null : Saves[^1];
 
-        public Task<AiSession?> LoadAsync(string id, CancellationToken cancellationToken = default)
+        /// <summary>Awaited inside <see cref="LoadAsync"/> before it answers, so a test can act on the panel
+        /// while a restore is in flight — the check-then-await window the guard closes.</summary>
+        internal TaskCompletionSource? Gate { get; set; }
+
+        /// <summary>Raised from a thread-pool thread, where the real store raises it: from the catch in its own
+        /// read, after an <c>await … ConfigureAwait(false)</c>. <see cref="ReportOnLoad"/> fires on the caller's
+        /// thread instead, which is why it could not see the defect this exists for.</summary>
+        internal AiSessionUnreadable? ReportFromThreadPool { get; set; }
+
+        public async Task<AiSession?> LoadAsync(string id, CancellationToken cancellationToken = default)
         {
             AskedFor = id;
             if (ReportOnLoad is { } report) Unreadable?.Invoke(report);
-            return Task.FromResult(ToLoad);
+            if (ReportFromThreadPool is { } offThread)
+                await Task.Run(() => Unreadable?.Invoke(offThread)).ConfigureAwait(false);
+            if (Gate is { } gate) await gate.Task;
+            return ToLoad;
         }
 
         public Task<bool> SaveAsync(AiSession session, CancellationToken cancellationToken = default)
@@ -771,5 +783,99 @@ public class AiAssistantSessionWiringTests
         // And it was saved into a conversation that still exists.
         Assert.Single(store.LastSaved!.Turns);
         Assert.Equal(store.LastSaved.Id, state.ActiveAssistantSessionId);
+    }
+
+    // ---- What the review named (fable, 2026-09-13) ----------------------------------------------
+
+    /// <summary>
+    /// The store raises <c>Unreadable</c> from a thread-pool continuation — inside the catch in its own read,
+    /// after an <c>await … ConfigureAwait(false)</c>. Setting a bound property there throws in the real app, and
+    /// the exception unwinds through the store's catch, so the file is kept aside and the reader is told nothing.
+    ///
+    /// <para><b>What this does and does not pin.</b> It asserts that a report raised off the caller's thread
+    /// still reaches <see cref="AiAssistantViewModel.Status"/> and that nothing escapes the load. It cannot
+    /// assert the marshalling: with no <c>Application</c> bound, <c>Dispatcher.UIThread.CheckAccess()</c> is
+    /// true on every thread (measured), so this host takes the direct path. The posted path needs a running
+    /// dispatcher, which no suite here has.</para>
+    /// </summary>
+    [Fact]
+    public async Task An_unreadable_conversation_reported_off_the_ui_thread_still_reaches_the_reader()
+    {
+        var (vm, store, state, _) = Panel(Answering(Said("An answer.")));
+        state.ActiveAssistantSessionId = "gone";
+        store.ToLoad = null;
+
+        var report = new AiSessionUnreadable("gone", "/kept/gone.unreadable-1.json", "truncated");
+        store.ReportFromThreadPool = report;
+
+        await vm.RestoreAsync();
+
+        Assert.Empty(vm.Turns);
+        Assert.Contains("/kept/gone.unreadable-1.json", vm.Status);
+    }
+
+    /// <summary>
+    /// Restore reads the file asynchronously, and the reader can ask a question in that window. The live turn
+    /// wins — it is on screen — and the restored transcript is dropped rather than interleaved with it.
+    /// </summary>
+    [Fact]
+    public async Task A_question_asked_while_the_last_conversation_loads_wins()
+    {
+        var (vm, store, state, _) = Panel(Answering(Said("A live answer.")));
+        state.ActiveAssistantSessionId = "earlier";
+        store.ToLoad = new AiSession
+        {
+            Id = "earlier",
+            Name = "Earlier",
+            Turns = { new AiTurnRecord { Id = "t1", Task = AiTask.Explain, Answer = "An older answer." } },
+        };
+        store.Gate = new TaskCompletionSource();
+
+        var restore = vm.RestoreAsync();
+        await vm.AskAsync(AiTask.Explain);
+
+        store.Gate.SetResult();
+        await restore;
+
+        // One turn, the live one, and the file it was saved into is not the one that was loading.
+        Assert.Single(vm.Turns);
+        Assert.Equal("A live answer.", vm.Turns[0].Answer);
+        Assert.NotEqual("earlier", store.LastSaved!.Id);
+    }
+
+    /// <summary>
+    /// A turn whose answer is only whitespace is dropped by <c>AiChatOrchestrator.Replay</c>, so recording it as
+    /// replayed would have the stored record claim the model saw a turn it never did.
+    /// </summary>
+    [Fact]
+    public async Task A_whitespace_answer_is_neither_replayed_nor_recorded_as_replayed()
+    {
+        // The stub replays one script, so both turns answer with whitespace; what matters is that the SECOND
+        // turn found nothing to replay in the first.
+        var (vm, store, _, _) = Panel(Answering(Said("   ")));
+
+        await vm.AskAsync(AiTask.Explain);
+        await vm.AskAsync(AiTask.Grammar);
+
+        Assert.Empty(vm.Turns[1].ReplayedTurnIds);
+        Assert.Empty(store.LastSaved!.Turns[1].Sent?.ReplayedTurnIds ?? new List<string>());
+    }
+
+    /// <summary>
+    /// The auto-name is cut on a text element, not a UTF-16 index: cutting mid-pair makes the JSON writer
+    /// substitute U+FFFD, so the conversation is named with a replacement character.
+    /// </summary>
+    [Fact]
+    public async Task An_auto_name_is_never_cut_through_a_character()
+    {
+        var (vm, store, _, _) = Panel(Answering(Said("An answer.")));
+
+        // The 60th text element is an emoji, so a naive cut lands between its two halves.
+        vm.Question = new string('a', 59) + "\U0001F64F" + " and more besides";
+        await vm.AskAsync(AiTask.Ask);
+
+        var name = store.LastSaved!.Name;
+        Assert.DoesNotContain('\uFFFD', name);
+        Assert.False(char.IsHighSurrogate(name[^2]), "the name ends on a whole character");
     }
 }
