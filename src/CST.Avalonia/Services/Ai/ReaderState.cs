@@ -52,12 +52,33 @@ public enum ReaderStateProblem
 /// or when the anchor cache could not place it — the caller then falls back to
 /// <paramref name="Paragraph"/>.</para>
 /// </param>
+/// <param name="ReadingPosition">
+/// Where the reader was standing, as #434's two-anchor token — the position an Assistant turn stores so it can
+/// later be taken back to it. (#849)
+///
+/// <para><b>[fsnow]</b>: <i>"The Assistant's memory should carry the same scroll context saved elsewhere: two
+/// anchors and a fraction between them."</i> So this is the app's own persisted representation, not a second
+/// one — and it is not redundant with the citation a turn also stores: the citation is where the answer
+/// points, this is where the reader was.</para>
+///
+/// <para><b>[observed] Read from the book view model's rolling capture, not from the WebView.</b>
+/// <c>BookDisplayViewModel.LastPositionToken</c> is refreshed from the view's ~200 ms status tick and is
+/// already what <c>CstDockFactory</c> persists per book window at shutdown. Reading it is a field access on
+/// the UI thread; asking the WebView for a fresh token is a JS round trip that shares a lock with the status
+/// pipeline and can time out. <b>The fidelity trade is up to one tick of staleness</b> — the reader could have
+/// scrolled in the last fifth of a second — which is smaller than the trade a live round trip makes by
+/// occasionally returning nothing at all.</para>
+///
+/// <para>Null before the anchor cache has built, which is the same case the store already documents as "not
+/// captured": a turn is worth keeping without one.</para>
+/// </param>
 public sealed record ReaderState(
     string BookId,
     int Paragraph,
     string? SelectionText,
     bool SelectionUnavailable = false,
-    int? SelectionParagraph = null);
+    int? SelectionParagraph = null,
+    Models.ReadingPositionToken? ReadingPosition = null);
 
 /// <summary>
 /// Whether the caller can say which book window the reader means. (#938)
@@ -269,7 +290,14 @@ public sealed class ReaderStateService : IReaderStateService
             return (ReaderStateResult.Fail(ReaderStateProblem.PositionUnknown), null);
         }
 
-        return (ReaderStateResult.Ok(new ReaderState(document.Book.FileName, paragraph, SelectionText: null)),
+        return (ReaderStateResult.Ok(new ReaderState(
+                    document.Book.FileName,
+                    paragraph,
+                    SelectionText: null,
+                    // The rolling #434 token the view pushes here every status tick — the same value the dock
+                    // factory persists per book window. Taken on this thread rather than by a fresh WebView
+                    // round trip: see the note on the parameter. (#849)
+                    ReadingPosition: document.LastPositionToken)),
                 document);
     }
 

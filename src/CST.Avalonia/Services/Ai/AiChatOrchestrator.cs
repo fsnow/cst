@@ -301,7 +301,11 @@ public sealed class AiChatOrchestrator : IAiChatOrchestrator
 
         yield return AiTurnEvent.ForStarted(new AiTurnContext(
             bundle.Task, bundle.OutputLanguage, bundle.Citation, bundle.Book, prompt.Notices, passageTrimmed,
-            Describe(bundle, prompt, provider, replayed)));
+            Describe(bundle, prompt, provider, replayed),
+            // Structured as well as printed in the Sent block. A stored turn has to say which model answered
+            // it (#849), and the alternative — the panel matching a SentField by its English label — is the
+            // same mistake as deriving the partial-passage flag from a notice's wording.
+            provider.Provider.Id, provider.Model));
 
         // ---- Stream. The conversation, then this turn. This turn's message goes LAST and carries the full
         // rendered prompt, so the passage the model is being asked about is the last thing it reads.

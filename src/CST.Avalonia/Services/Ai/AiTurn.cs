@@ -110,6 +110,19 @@ public enum AiTurnEventKind
 /// by keyword-matching prose also fails the rule the rest of this contract keeps: what the user sees beside an
 /// answer is built from bundle data, never parsed out of text. Notices are for reading; this is for deciding.</para>
 /// </param>
+/// <param name="ProviderId">
+/// Which connection answered. (#849)
+///
+/// <para><b>Structured, beside the line <see cref="Sent"/> already prints.</b> A stored turn has to name the
+/// model that produced it — an answer is not attributable without one, and a conversation spanning a model
+/// change is the ordinary case rather than a corner of it. The id is in <c>Sent.Fields</c> too, but as a
+/// display row: recovering it from there would mean matching a field by its English label, which is the same
+/// mistake as reading the partial-passage flag out of a notice's wording.</para>
+///
+/// <para>Null only where a caller assembles a context without a resolved provider, which the orchestrator
+/// never does.</para>
+/// </param>
+/// <param name="ModelId">Which model, as the reader configured it — see <paramref name="ProviderId"/>.</param>
 public sealed record AiTurnContext(
     AiTask Task,
     string OutputLanguage,
@@ -117,7 +130,9 @@ public sealed record AiTurnContext(
     BookContext Book,
     IReadOnlyList<string> Notices,
     bool PassageTrimmed,
-    SentContext? Sent = null);
+    SentContext? Sent = null,
+    string? ProviderId = null,
+    string? ModelId = null);
 
 /// <summary>
 /// Everything the turn actually sent, for the reader to look at. (#665)

@@ -1061,6 +1061,38 @@ public partial class App : Application
             dictionaryViewModel?.ApplyState();
         });
 
+        // And the Assistant panel: reload the conversation it was in. [fsnow]: "Restore the last session
+        // silently" — no model call, the way books and reading positions are restored. Same sequencing story as
+        // the two panels above (the VM is built during the layout build, before this load finishes), so the
+        // restore is pushed here rather than done in its constructor. (#849)
+        //
+        // Gated on the assistant being switched on, because resolving the VM CREATES it: a reader with the
+        // feature off would otherwise get a panel constructed, an environment-key probe subscribed to, and a
+        // readiness check run, for a tool that is not in the layout. (CstDockFactory.CreateLayout resolves it
+        // only when enabled, for the same reason.)
+        //
+        // POSTED, not awaited, for the same reason the two panels above are: awaiting it puts the assistant's
+        // restore on the path to the reader's books, so anything unexpected in one transcript delays or skips
+        // the rest of the restore. RestoreAsync isolates its own failures now; this is the second net, and the
+        // one that survives the next edit inside it. (fable review)
+        if (CstDockFactory.AssistantEnabled())
+        {
+            Dispatcher.UIThread.Post(async void () =>
+            {
+                try
+                {
+                    var assistant = ServiceProvider?.GetService<AiAssistantViewModel>();
+                    if (assistant != null) await assistant.RestoreAsync();
+                }
+                catch (Exception ex)
+                {
+                    // An async void continuation: an escape here reaches the unhandled handler and kills a
+                    // reading app over a transcript.
+                    Log.Error(ex, "Could not restore the assistant conversation");
+                }
+            });
+        }
+
         // #44: the recent-books menu reads the (now-loaded) persisted MRU list; refresh it so the saved list
         // shows on launch even if the window's menu was registered before this load finished.
         Dispatcher.UIThread.Post(RebuildRecentMenus);
@@ -1704,7 +1736,12 @@ public partial class App : Application
             sp.GetService<Services.Ai.IChatProviderResolver>(),
             sp.GetService<ISettingsService>(),
             sp.GetService<Services.Ai.IAiConnectionService>(),
-            sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>()));
+            sp.GetService<Services.Ai.Credentials.IAiEnvironmentKeys>(),
+            // The transcript store and the one line of application state that names the active conversation.
+            // The panel writes a session at the end of every turn and reloads the last one at launch — see
+            // AiAssistantViewModel.RestoreAsync, which InitializeFromLoadedState calls once state is in. (#849)
+            sp.GetService<Services.Ai.IAiSessionStore>(),
+            sp.GetService<IApplicationStateService>()));
         // services.AddTransient<MainWindowViewModel>();
     }
 

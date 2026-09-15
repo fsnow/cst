@@ -26,7 +26,7 @@ namespace CST.Avalonia.Tests.ViewModels;
 /// </summary>
 public class AiAssistantViewModelTests
 {
-    private sealed class StubOrchestrator : IAiChatOrchestrator
+    internal sealed class StubOrchestrator : IAiChatOrchestrator
     {
         internal List<AiTurnEvent> Events { get; } = new();
         internal int StopCalls { get; private set; }
@@ -51,7 +51,7 @@ public class AiAssistantViewModelTests
         public void Stop() => StopCalls++;
     }
 
-    private sealed class StubReaderState : IReaderStateService
+    internal sealed class StubReaderState : IReaderStateService
     {
         internal ReaderStateResult Result { get; set; } =
             ReaderStateResult.Ok(new ReaderState("s0101m.mul.xml", 12, null));
@@ -79,17 +79,17 @@ public class AiAssistantViewModelTests
         }
     }
 
-    private static CitationRef Citation() =>
+    internal static CitationRef Citation() =>
         new("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", "para 12", Array.Empty<SnippetPageRef>());
 
-    private static AiTurnContext Context(params string[] notices) => Context(false, notices);
+    internal static AiTurnContext Context(params string[] notices) => Context(false, notices);
 
-    private static AiTurnContext Context(bool passageTrimmed, params string[] notices) =>
+    internal static AiTurnContext Context(bool passageTrimmed, params string[] notices) =>
         new(AiTask.Explain, "English", Citation(),
             new BookContext("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", CST.Pitaka.Sutta, CST.CommentaryLevel.Mula),
             notices, passageTrimmed);
 
-    private static AiTurnContext ContextWithSent(SentContext sent) =>
+    internal static AiTurnContext ContextWithSent(SentContext sent) =>
         new(AiTask.Explain, "English", Citation(),
             new BookContext("s0101m.mul.xml", "Sīlakkhandhavaggapāḷi", CST.Pitaka.Sutta, CST.CommentaryLevel.Mula),
             Array.Empty<string>(), false, sent);
@@ -978,10 +978,10 @@ public class AiAssistantViewModelTests
 
     /// <summary>One text delta with both halves, as the orchestrator emits them for text carrying no
     /// markers — the stripped form and the model's own form are the same string.</summary>
-    private static AiTurnEvent Said(string text) => AiTurnEvent.ForText(text, text);
+    internal static AiTurnEvent Said(string text) => AiTurnEvent.ForText(text, text);
 
     /// <summary>A stub that answers every turn the same way: citation, some text, done.</summary>
-    private static StubOrchestrator Answering(params AiTurnEvent[] middle)
+    internal static StubOrchestrator Answering(params AiTurnEvent[] middle)
     {
         var orchestrator = new StubOrchestrator();
         orchestrator.Events.Add(AiTurnEvent.ForStarted(Context()));
