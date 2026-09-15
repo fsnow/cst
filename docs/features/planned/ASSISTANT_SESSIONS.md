@@ -238,7 +238,7 @@ recoverable; the control's label should promise the position, not the selection.
 ## 4. Phasing
 
 Ordered by dependency. **UI-free** phases are `dotnet test`-verifiable and suitable for a worktree subagent;
-UI phases are the maintainer's (standing pattern).
+UI phases are done by a Claude session on Kestrel, where the maintainer can preview them (standing pattern).
 
 | # | Issue | Work | UI-free | Depends on |
 |---|---|---|---|---|

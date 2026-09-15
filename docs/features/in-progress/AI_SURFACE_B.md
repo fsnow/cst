@@ -505,8 +505,8 @@ Ordered by dependency. **UI-free** items are `dotnet test`-verifiable and need n
 | **B4** | #582 | Presets + system prompt + template rendering (embedded defaults, user-editable) | ✅ | B3 |
 | **B5** | #583 | Orchestrator: bundle → prompt → provider → stream, cancel-and-replace, usage accounting | ✅ | B1, B2, B4 |
 | **B6** | #584 | Model registry + fidelity advisory data | ✅ | — |
-| **B7** | #585 | Settings UI: provider, base URL, model, key entry, answer language, Pāli script, advisory | ✗ (Frank) | B2, B6 |
-| **B8** | #586 | In-app panel: invoke, stream, stop, scope + citation chrome, generated-text treatment, **input plumbing** | ✗ (Frank) | B5, B3a |
+| **B7** | #585 | Settings UI: provider, base URL, model, key entry, answer language, Pāli script, advisory | ✗ (Kestrel) | B2, B6 |
+| **B8** | #586 | In-app panel: invoke, stream, stop, scope + citation chrome, generated-text treatment, **input plumbing** | ✗ (Kestrel) | B5, B3a |
 | **B9** | #587 | Eval harness: fixed passages × presets × models, scored for grounding, citation accuracy, terminology, marker discipline | ✅ | B5 |
 
 **B2 is not fully UI-free**: DPAPI cannot be tested under `dotnet test` on macOS — it needs a Windows target
