@@ -237,8 +237,8 @@ its citations name. Click switches the panel to it (the in-flight turn, if any, 
 - Enablement is bindable flags, not `canExecute` observables (the reason is recorded at `RetryCommand`'s
   construction): `CanSwitchSession`, `CanRenameSession`, and per-row `CanDelete`. The + button is enabled by
   `CanAsk` **and** `HasTurns` together (a `MultiBinding` with `BoolConverters.And` in the Kestrel UI) —
-  **[fsnow]** chose *"Disabled when empty"* (as relayed to this backend session by the coordinating session; the
-  wording is not in #850's text).
+  **[fsnow]** chose *"Disabled when empty"* (2026-09-22, the option label he selected when asked on the Kestrel
+  session's behalf).
 
 ### 3.4 Compaction (P4)
 
