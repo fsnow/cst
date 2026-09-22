@@ -391,6 +391,10 @@ public class AiAssistantSessionListTests
 
         await vm.RenameSessionAsync("older", "Older, renamed");
 
+        // The rename happened — without this, a rename that silently did nothing would pass as "order unchanged".
+        Assert.Equal("Older, renamed", store.OnDisk("older")!.Name);
+        Assert.Equal("Older, renamed", vm.Sessions[1].Name);
+
         Assert.Equal(new[] { "newer", "older" }, vm.Sessions.Select(s => s.Id));
         Assert.Equal(Monday, store.OnDisk("older")!.LastActive);
     }
@@ -530,5 +534,290 @@ public class AiAssistantSessionListTests
         Assert.Equal(id, state.ActiveAssistantSessionId);
         Assert.Contains("could not be deleted", vm.Status);
         Assert.Single(vm.Sessions);
+    }
+
+    // ---- Overlaps (#997 review, 2026-09-22) -------------------------------------------------------
+    //
+    // Each of these pins a guard that a mutation removed without any other test noticing: the switch holding
+    // IsBusy, the switch recording which id it is loading, the refresh's latest-wins check — and the three defects
+    // the review's probes found (P1, P1b, P3).
+
+    /// <summary>
+    /// A switch holds <c>IsBusy</c> while it reads, so a question asked mid-load is refused rather than answered
+    /// into the conversation being left and then wiped off the screen when the load lands.
+    /// </summary>
+    [Fact]
+    public async Task A_question_is_refused_while_a_switch_is_loading()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("b", "B", Monday, "B's answer."));
+        var orchestrator = Answering(Said("An answer."));
+        var (vm, _, _, _) = Panel(orchestrator, store: store);
+
+        var gate = new TaskCompletionSource();
+        store.Gate = gate;
+        var switching = vm.SwitchToSessionAsync("b");
+
+        Assert.False(vm.CanAsk);
+        Assert.False(vm.CanSwitchSession);
+        await vm.AskAsync(AiTask.Explain);
+        Assert.Empty(orchestrator.Requests);
+
+        gate.SetResult();
+        await switching;
+
+        Assert.Equal("B's answer.", Assert.Single(vm.Turns).Answer);
+        Assert.True(vm.CanAsk);
+    }
+
+    /// <summary>The conversation a switch is loading cannot be deleted under it: the switch would show a
+    /// conversation whose file had gone, and the next turn's save would write it back.</summary>
+    [Fact]
+    public async Task A_delete_is_refused_while_a_switch_is_loading_that_conversation()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("b", "B", Monday, "B's answer."));
+        var (vm, _, state, _) = Panel(new StubOrchestrator(), store: store);
+        await vm.RestoreAsync();
+
+        var gate = new TaskCompletionSource();
+        store.Gate = gate;
+        var switching = vm.SwitchToSessionAsync("b");
+
+        Assert.False(vm.Sessions.Single(s => s.Id == "b").CanDelete);
+        await vm.DeleteSessionAsync("b");
+        Assert.NotNull(store.OnDisk("b"));
+
+        gate.SetResult();
+        await switching;
+
+        Assert.Single(vm.Turns);
+        Assert.Equal("b", state.ActiveAssistantSessionId);
+        Assert.True(vm.Sessions.Single(s => s.Id == "b").CanDelete);
+    }
+
+    /// <summary>Only the newest listing lands. An older one finishing late would put back a row that has since
+    /// gone, or — as here — take away one that has since arrived.</summary>
+    [Fact]
+    public async Task A_listing_overtaken_by_a_newer_one_is_dropped()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("a", "A", Monday, "x"));
+        var (vm, _, _, _) = Panel(new StubOrchestrator(), store: store);
+        await vm.RestoreAsync();
+
+        store.HoldListings = true;
+        var older = vm.RefreshSessionsAsync();
+        store.Seed(Stored("b", "B", Monday.AddHours(1), "y"));
+        var newer = vm.RefreshSessionsAsync();
+
+        store.HeldListings[1].SetResult();
+        await newer;
+        store.HeldListings[0].SetResult();
+        await older;
+
+        Assert.Equal(new[] { "b", "a" }, vm.Sessions.Select(s => s.Id));
+    }
+
+    /// <summary>
+    /// A turn's list refresh runs outside its busy window. The store lists by reading every file in full; awaited,
+    /// it held every command disabled (and Stop showing) after every answer for as long as that took.
+    /// </summary>
+    [Fact]
+    public async Task A_turn_does_not_wait_for_the_list_to_refresh()
+    {
+        var (vm, store, _, _) = Panel(Answering(Said("An answer.")));
+        store.HoldListings = true;
+
+        var ask = vm.AskAsync(AiTask.Explain);
+        var finished = await Task.WhenAny(ask, Task.Delay(TimeSpan.FromSeconds(10)));
+
+        Assert.Same(ask, finished);
+        Assert.False(vm.IsBusy);
+        Assert.Single(store.HeldListings);
+
+        store.HeldListings[0].SetResult();
+    }
+
+    /// <summary>
+    /// Review probe P1: the active conversation deleted, then another, before the first delete's listing returns.
+    /// The first listing is overtaken and dropped — which used to leave the first delete reading a stale list,
+    /// reporting a failure, keeping the transcript on screen and letting the next turn write the file back.
+    /// </summary>
+    [Fact]
+    public async Task Deleting_the_active_conversation_then_another_quickly_deletes_both()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("a", "A", Monday.AddHours(1), "A's answer."));
+        store.Seed(Stored("b", "B", Monday, "B's answer."));
+        var (vm, _, state, _) = Panel(Answering(Said("An answer.")), store: store,
+            state: new ApplicationState { ActiveAssistantSessionId = "a" });
+        await vm.RestoreAsync();
+        Assert.Single(vm.Turns);
+
+        store.HoldListings = true;
+        var first = vm.DeleteSessionAsync("a");
+
+        // Let go of before anything was awaited.
+        Assert.Empty(vm.Turns);
+        Assert.Null(state.ActiveAssistantSessionId);
+
+        var second = vm.DeleteSessionAsync("b");
+        store.HeldListings[0].SetResult();
+        await first;
+        store.HeldListings[1].SetResult();
+        await second;
+
+        Assert.DoesNotContain("could not be deleted", vm.Status);
+        Assert.Empty(vm.Turns);
+        Assert.Empty(vm.Sessions);
+        Assert.Null(store.OnDisk("a"));
+        Assert.Null(store.OnDisk("b"));
+
+        store.HoldListings = false;
+        await vm.AskAsync(AiTask.Explain);
+        Assert.NotEqual("a", store.LastSaved!.Id);
+        Assert.Null(store.OnDisk("a"));
+    }
+
+    /// <summary>Review probe P1b: + pressed while a delete's listing is out. The delete's listing is overtaken, and
+    /// that is not a failed delete.</summary>
+    [Fact]
+    public async Task A_new_conversation_during_a_delete_is_not_a_failed_delete()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("a", "A", Monday.AddHours(1), "A's answer."));
+        store.Seed(Stored("b", "B", Monday, "B's answer."));
+        var (vm, _, _, _) = Panel(new StubOrchestrator(), store: store,
+            state: new ApplicationState { ActiveAssistantSessionId = "a" });
+        await vm.RestoreAsync();
+
+        store.HoldListings = true;
+        var deleting = vm.DeleteSessionAsync("b");
+        vm.NewConversationCommand.Execute().Subscribe();
+
+        store.HeldListings[0].SetResult();
+        await deleting;
+        store.HeldListings[1].SetResult();
+
+        Assert.DoesNotContain("could not be deleted", vm.Status);
+        Assert.Null(store.OnDisk("b"));
+        Assert.Equal(new[] { "a" }, vm.Sessions.Select(s => s.Id));
+    }
+
+    /// <summary>
+    /// Review probe P3: a rename of the conversation a switch is loading. The switch had already read the old name;
+    /// without waiting for it, the rename reached disk, the switch showed the old name, and the next turn wrote the
+    /// old name back. The rename now waits for the switch and renames what it put on screen.
+    /// </summary>
+    [Fact]
+    public async Task A_rename_during_a_switch_to_that_conversation_is_kept()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("b", "Old name", Monday, "B's answer."));
+        var (vm, _, _, _) = Panel(Answering(Said("An answer.")), store: store);
+        await vm.RestoreAsync();
+
+        var gate = new TaskCompletionSource();
+        store.Gate = gate;
+        var switching = vm.SwitchToSessionAsync("b");
+        var renaming = vm.RenameSessionAsync("b", "New name");
+
+        gate.SetResult();
+        await switching;
+        Assert.True(await renaming);
+
+        Assert.Equal("New name", store.OnDisk("b")!.Name);
+        Assert.Equal("New name", vm.Sessions.Single(s => s.Id == "b").Name);
+
+        await vm.AskAsync(AiTask.Translate);
+        Assert.Equal("b", store.LastSaved!.Id);
+        Assert.Equal("New name", store.OnDisk("b")!.Name);
+    }
+
+    /// <summary>A rename is allowed while a turn runs in that conversation, and the turn's own save keeps it.
+    /// </summary>
+    [Fact]
+    public async Task A_rename_while_a_turn_runs_is_kept_by_the_turns_save()
+    {
+        var store = new FakeStore();
+        var state = new ApplicationState();
+        var (writer, _, _, _) = Panel(Answering(Said("An answer.")), store: store, state: state);
+        await writer.AskAsync(AiTask.Explain);
+        var id = state.ActiveAssistantSessionId!;
+
+        var blocking = new BlockingOrchestrator();
+        var (vm, _, _, _) = Panel(blocking, store: store, state: state);
+        await vm.RestoreAsync();
+        var pending = vm.AskAsync(AiTask.Translate);
+        Assert.True(vm.IsBusy);
+        Assert.True(vm.CanRenameSession);
+
+        Assert.True(await vm.RenameSessionAsync(id, "Named mid-turn"));
+        Assert.Equal("Named mid-turn", store.OnDisk(id)!.Name);
+
+        blocking.Gate.SetResult();
+        await pending;
+
+        var onDisk = store.OnDisk(id)!;
+        Assert.Equal("Named mid-turn", onDisk.Name);
+        Assert.Equal(2, onDisk.Turns.Count);
+    }
+
+    // ---- Which unreadable files are announced -----------------------------------------------------
+
+    /// <summary>
+    /// A broken file found while LISTING is logged, not announced: the list is read at launch and after every
+    /// turn, and the sentence would be about a conversation the reader never opened.
+    /// </summary>
+    [Fact]
+    public async Task A_broken_file_found_while_listing_is_not_announced()
+    {
+        var (vm, store, _, _) = Panel(Answering(Said("An answer.")));
+        store.ListReportsUnreadable = new AiSessionUnreadable("y", "/kept/y.unreadable-1.json", "truncated");
+
+        await vm.RestoreAsync();
+        Assert.Equal("", vm.Status);
+
+        await vm.AskAsync(AiTask.Explain);
+        Assert.Equal("", vm.Status);
+    }
+
+    /// <summary>
+    /// A switch to a conversation that is simply gone says so, even when a listing running at the same time trips
+    /// over some OTHER broken file: the report is matched by id, not by "something was reported meanwhile".
+    /// </summary>
+    [Fact]
+    public async Task A_missing_switch_target_is_not_confused_with_another_files_report()
+    {
+        var (vm, store, _, _) = Panel(new StubOrchestrator());
+
+        var gate = new TaskCompletionSource();
+        store.Gate = gate;
+        var switching = vm.SwitchToSessionAsync("x");
+
+        store.ListReportsUnreadable = new AiSessionUnreadable("y", "/kept/y.unreadable-1.json", "truncated");
+        await vm.RefreshSessionsAsync();
+
+        gate.SetResult();
+        await switching;
+
+        Assert.Contains("no longer on disk", vm.Status);
+        Assert.DoesNotContain("/kept/y", vm.Status);
+    }
+
+    /// <summary>A rename of a conversation whose file turns out unreadable keeps the sentence saying where it was
+    /// kept, rather than replacing it with "no longer on disk".</summary>
+    [Fact]
+    public async Task Renaming_an_unreadable_conversation_says_where_it_was_kept()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("broken", "Broken", Monday, "x"));
+        store.UnreadableIds.Add("broken");
+        var (vm, _, _, _) = Panel(new StubOrchestrator(), store: store);
+
+        Assert.False(await vm.RenameSessionAsync("broken", "A new name"));
+
+        Assert.Contains("/kept/broken.unreadable-1.json", vm.Status);
     }
 }

@@ -589,7 +589,7 @@ public class AiAssistantViewModel : ReactiveTool
         if (IsBusy) return;
 
         LetGoOfSession();
-        _ = RefreshSessionsAsync();
+        RefreshSessionsSoon();
     }
 
     /// <summary>
@@ -874,7 +874,25 @@ public class AiAssistantViewModel : ReactiveTool
 
         // Whatever the save did: the row's turn count and recency moved if it worked, and the first turn of a
         // conversation is what puts it in the list at all. (#997)
-        await RefreshSessionsAsync();
+        //
+        // NOT awaited. This runs in RunAsync's finally, before AskAsync clears IsBusy, and the store lists by
+        // reading every session file in full: awaited, every answer held Stop visible and every command disabled
+        // while the whole list was parsed — measured by review at 361–488 ms and ~820 MB allocated per turn with
+        // 200 sessions of 30 turns. The list is cosmetic here; nothing in the turn waits on it.
+        RefreshSessionsSoon();
+    }
+
+    /// <summary>
+    /// Start a list refresh without waiting for it. <see cref="RefreshSessionsAsync"/> catches its own failures,
+    /// so the continuation is a second net — an exception must reach the log, not the unobserved-task handler.
+    /// </summary>
+    private void RefreshSessionsSoon()
+    {
+        _ = RefreshSessionsAsync().ContinueWith(
+            t => _logger.Error(t.Exception, "Could not refresh the assistant session list"),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
     }
 
     /// <summary>
@@ -998,8 +1016,9 @@ public class AiAssistantViewModel : ReactiveTool
         switch (read.Outcome)
         {
             case TranscriptOutcome.Missing:
-                // Null is both "there is no such file" and "it could not be read". The panel does the same thing
-                // for each — start empty — and only the second has anything to say, which Unreadable has said.
+            case TranscriptOutcome.Unreadable:
+                // The panel starts empty either way, and only the unreadable case has anything to say — which
+                // OnSessionUnreadable has said, because this load was announced.
                 return;
 
             case TranscriptOutcome.Failed:
@@ -1026,8 +1045,11 @@ public class AiAssistantViewModel : ReactiveTool
     {
         Loaded,
 
-        /// <summary>No such file, or a file the store could not read and has kept aside (and reported).</summary>
+        /// <summary>No such file.</summary>
         Missing,
+
+        /// <summary>A file the store could not read; it has been kept aside, and the reader told where.</summary>
+        Unreadable,
 
         /// <summary>The file read, and mapping it to turns threw.</summary>
         Failed,
@@ -1054,8 +1076,10 @@ public class AiAssistantViewModel : ReactiveTool
     {
         try
         {
-            var session = await _store!.LoadAsync(id, ct);
-            if (session is null) return new Transcript(TranscriptOutcome.Missing, null, null);
+            var (session, unreadable) = await LoadAnnouncedAsync(id, ct);
+            if (session is null)
+                return new Transcript(
+                    unreadable ? TranscriptOutcome.Unreadable : TranscriptOutcome.Missing, null, null);
 
             // By id, so a turn's replayed-history can be rebuilt from the ids it stored rather than from copies
             // of earlier answers. Built over the whole session first: the references point backwards today, and
@@ -1128,6 +1152,10 @@ public class AiAssistantViewModel : ReactiveTool
     /// kept aside and <c>Unreadable</c> has said where; a missing one (deleted from another window, or by hand)
     /// gets its own sentence. The list is refreshed either way, which removes the row that could not be
     /// opened.</para>
+    ///
+    /// <para>[observed] <b>For the view:</b> because a switch holds <see cref="IsBusy"/> while it reads, everything
+    /// bound to it behaves as during a turn — the Stop control shows (and has nothing to stop), and the presets and
+    /// + disable — for as long as the file takes to read.</para>
     /// </summary>
     public async Task SwitchToSessionAsync(string? id)
     {
@@ -1137,9 +1165,9 @@ public class AiAssistantViewModel : ReactiveTool
 
         IsBusy = true;
         _switchingTo = id;
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _switchDone = done.Task;
         UpdateRowAvailability();
-
-        var reportsBefore = Volatile.Read(ref _unreadableReports);
 
         try
         {
@@ -1154,11 +1182,13 @@ public class AiAssistantViewModel : ReactiveTool
                         "Switched to assistant session {Id} with {Count} turn(s)", id, read.Turns!.Count);
                     break;
 
+                case TranscriptOutcome.Unreadable:
+                    // OnSessionUnreadable has told the reader where THIS file was kept; saying "not there" on top
+                    // of it would be wrong.
+                    break;
+
                 case TranscriptOutcome.Missing:
-                    // Unreadable has already told the reader where the file was kept; saying "not there" on top
-                    // of it would be wrong. Only a file that is simply gone gets this sentence.
-                    if (Volatile.Read(ref _unreadableReports) == reportsBefore)
-                        Status = "That conversation is no longer on disk.";
+                    Status = "That conversation is no longer on disk.";
                     break;
 
                 case TranscriptOutcome.Failed:
@@ -1170,10 +1200,15 @@ public class AiAssistantViewModel : ReactiveTool
         {
             _switchingTo = null;
             IsBusy = false;
+            done.TrySetResult();
         }
 
         await RefreshSessionsAsync();
     }
+
+    /// <summary>Completes when the switch in progress (if any) has landed or failed. A rename of the session being
+    /// switched to waits on it — see <see cref="RenameSessionAsync"/>.</summary>
+    private Task _switchDone = Task.CompletedTask;
 
     /// <summary>
     /// Give a conversation the reader's own name. <b>[fsnow]</b>: <i>"Auto from the first turn, renamable"</i> —
@@ -1193,8 +1228,20 @@ public class AiAssistantViewModel : ReactiveTool
     /// <para><b>The active conversation is renamed on the object the panel holds</b>, not on a fresh copy read off
     /// disk: the next turn's save writes that object in full, and a copy renamed beside it would be overwritten
     /// by the old name. For the same reason a listed conversation that becomes active while its file is being read
-    /// here is renamed on the panel's object instead. Allowed while a turn runs — both writes are the whole
-    /// session, made on this thread, and the turn's save will carry the new name.</para>
+    /// here is renamed on the panel's object instead.</para>
+    ///
+    /// <para><b>A rename of the conversation a switch is loading waits for the switch to land</b>, then renames the
+    /// object it put on screen. Without the wait, the rename wrote the new name to disk and the switch — which had
+    /// already read the file — showed the old one, and the next turn's save wrote the old name back. (review probe
+    /// P3) Deferring rather than refusing keeps what the reader typed.</para>
+    ///
+    /// <para><b>Allowed while a turn runs.</b> The rename's save and the turn's save both write the whole session
+    /// object, both from this thread. That is safe because of an ordering in <c>AiSessionStore.SaveAsync</c> that its
+    /// contract does not state [observed]: it serializes the session <i>synchronously, before</i> it awaits its write
+    /// lock, so each save's JSON is a snapshot taken at the moment it was called, and the two cannot interleave
+    /// inside one serialization. Writes then go through the lock in the order the saves were called, so the later
+    /// call — which holds everything the earlier one did — lands last. A store that serialized after taking the lock,
+    /// or off this thread, would need this reconsidered.</para>
     /// </summary>
     public async Task<bool> RenameSessionAsync(string? id, string? name)
     {
@@ -1206,10 +1253,13 @@ public class AiAssistantViewModel : ReactiveTool
         var written = false;
         try
         {
+            if (string.Equals(_switchingTo, id, StringComparison.Ordinal)) await _switchDone;
+
             AiSession? target = ActiveSession(id);
+            var unreadable = false;
             if (target is null)
             {
-                var loaded = await _store.LoadAsync(id);
+                (var loaded, unreadable) = await LoadAnnouncedAsync(id, CancellationToken.None);
 
                 // Switched to while it was being read: the panel's object is the one that will be saved from now on.
                 target = ActiveSession(id) ?? loaded;
@@ -1217,7 +1267,8 @@ public class AiAssistantViewModel : ReactiveTool
 
             if (target is null)
             {
-                Status = "That conversation is no longer on disk.";
+                // An unreadable file has been announced with where it was kept; that sentence stays.
+                if (!unreadable) Status = "That conversation is no longer on disk.";
             }
             else if (target.Name == trimmed)
             {
@@ -1254,12 +1305,20 @@ public class AiAssistantViewModel : ReactiveTool
     /// is empty because the active session could not be read — the id in application state is what the next
     /// launch would try, so it goes too.</para>
     ///
-    /// <para><b>Refused only for the conversation a turn is running in</b> (or a switch is loading): that turn's
-    /// save would write the file straight back. Any other row can be deleted mid-turn.</para>
+    /// <para><b>Refused only for the conversation a turn is running in, or the one a switch is loading</b>: that
+    /// turn's save, or the next one after the switch lands, would write the file straight back. Any other row can
+    /// be deleted mid-turn.</para>
     ///
-    /// <para><b>The list decides whether it worked.</b> The store answers false both for "no such file" (not an
-    /// error: the work is done) and for a file it could not remove, and only the second must leave the panel
-    /// alone. So the list is re-read, and a row still in it is a delete that failed.</para>
+    /// <para><b>The active conversation is let go of BEFORE anything is awaited.</b> Nothing is running (the guard
+    /// above), so nothing can start between the check and the let-go, and no later turn can save into the session
+    /// being deleted. The first cut let go only after re-reading the list, and a newer refresh overtaking that one
+    /// left the check reading a stale list: the reader was told the delete failed, the transcript stayed on screen,
+    /// and the next turn wrote the file back. (review probes P1, P1b)</para>
+    ///
+    /// <para><b>Whether it worked is decided by the delete, not by the list.</b> The store answers false both for
+    /// "no such file" (the work is done) and for a file it could not remove, so a false is followed by a load: a
+    /// session still there is a delete that failed. Then the conversation is put back on screen, if the panel has
+    /// not been used since. The list refresh afterwards is cosmetic.</para>
     /// </summary>
     public async Task DeleteSessionAsync(string? id)
     {
@@ -1268,31 +1327,45 @@ public class AiAssistantViewModel : ReactiveTool
         if (IsBusy && (IsActiveId(id) || string.Equals(_switchingTo, id, StringComparison.Ordinal)))
             return;
 
+        var wasActive = IsActiveId(id);
+        var heldSession = wasActive ? _session : null;
+        var heldTurns = wasActive ? Turns.ToList() : null;
+        if (wasActive) LetGoOfSession();
+
+        bool gone;
         try
         {
-            await _store.DeleteAsync(id);
+            // Not an announced load: a file that turns out unreadable here is gone from the list either way, and
+            // telling the reader about it in the middle of deleting it would be noise. It is logged.
+            gone = await _store.DeleteAsync(id) || await _store.LoadAsync(id) is null;
         }
         catch (Exception ex)
         {
             // The store promises not to throw; this is the second net, as everywhere else in the panel.
             _logger.Error(ex, "Could not delete the assistant session {Id}", id);
+            gone = false;
+        }
+
+        if (!gone)
+        {
+            if (wasActive && _session is null && Turns.Count == 0 && !IsBusy
+                && string.IsNullOrEmpty(_appState?.Current.ActiveAssistantSessionId))
+            {
+                if (heldSession is not null)
+                {
+                    ShowSession(heldSession, heldTurns!);
+                }
+                else if (_appState is not null)
+                {
+                    _appState.Current.ActiveAssistantSessionId = id;
+                    _appState.MarkDirty();
+                }
+            }
+
+            Status = "That conversation could not be deleted.";
         }
 
         await RefreshSessionsAsync();
-
-        if (Sessions.Any(s => string.Equals(s.Id, id, StringComparison.Ordinal)))
-        {
-            Status = "That conversation could not be deleted.";
-            return;
-        }
-
-        // Re-asked after the awaits, and only acted on when nothing is running: a turn started in the meantime
-        // is saving into this session, and emptying the panel under it is what the guard above exists to stop.
-        if (IsActiveId(id) && !IsBusy)
-        {
-            LetGoOfSession();
-            await RefreshSessionsAsync();
-        }
     }
 
     private bool IsActiveId(string id) =>
@@ -1402,18 +1475,56 @@ public class AiAssistantViewModel : ReactiveTool
     /// it at all. <c>CheckAccess</c> is true on every thread until an <c>Application</c> binds the dispatcher
     /// (measured), which is exactly the difference between the two cases.</para>
     /// </summary>
-    private int _unreadableReports;
-
     private void OnSessionUnreadable(AiSessionUnreadable report)
     {
-        // Counted before anything is posted, so a switch that finds its target missing can tell "unreadable, and
-        // already said so" from "simply gone" without waiting on the dispatcher. (#997)
-        Interlocked.Increment(ref _unreadableReports);
+        // Only a load the reader asked for is announced: the launch restore of the active conversation, a switch,
+        // a rename. The list is read at launch and after every turn, and a broken file found THERE is about a
+        // conversation the reader never opened — announcing it would put a sentence about some other conversation
+        // on the panel after every answer until the file was moved. It is kept aside by the store either way, and
+        // logged. (#997 review)
+        //
+        // Marked before anything is posted, so the caller can tell "unreadable, and already said so" from "simply
+        // gone" when its load returns, without waiting on the dispatcher. Keyed by the report's own id, so a
+        // listing that trips over file Y while a switch is loading X cannot be mistaken for X's report.
+        if (!_announceUnreadable.TryUpdate(report.Id, true, false)
+            && !_announceUnreadable.ContainsKey(report.Id))
+        {
+            _logger.Warning(
+                "An assistant session found while listing ({Id}) could not be read and has been kept at {Path}",
+                report.Id, report.KeptPath);
+            return;
+        }
 
         var sentence = $"That conversation could not be read. It has been kept at {report.KeptPath}.";
 
         if (Dispatcher.UIThread.CheckAccess()) Status = sentence;
         else Dispatcher.UIThread.Post(() => Status = sentence);
+    }
+
+    /// <summary>
+    /// The ids whose load the reader asked for, while it runs — and whether an unreadable report has arrived for
+    /// each. See <see cref="OnSessionUnreadable"/>. Concurrent because the store raises its report from a
+    /// thread-pool continuation.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _announceUnreadable =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Load a session the reader asked for, so that an unreadable file is announced on the panel rather than only
+    /// logged. Answers the session (null when missing or unreadable) and whether it was reported unreadable.
+    /// </summary>
+    private async Task<(AiSession? Session, bool Unreadable)> LoadAnnouncedAsync(string id, CancellationToken ct)
+    {
+        _announceUnreadable[id] = false;
+        try
+        {
+            var session = await _store!.LoadAsync(id, ct);
+            return (session, _announceUnreadable.TryGetValue(id, out var reported) && reported);
+        }
+        finally
+        {
+            _announceUnreadable.TryRemove(id, out _);
+        }
     }
 
     /// <summary>Moves whatever has accumulated onto the screen, in one property change per kind.</summary>

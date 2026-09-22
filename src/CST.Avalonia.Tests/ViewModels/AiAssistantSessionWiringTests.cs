@@ -62,8 +62,9 @@ public class AiAssistantSessionWiringTests
 
         internal AiSession? LastSaved => Saves.Count == 0 ? null : Saves[^1];
 
-        /// <summary>Awaited inside <see cref="LoadAsync"/> before it answers, so a test can act on the panel
-        /// while a restore is in flight — the check-then-await window the guard closes.</summary>
+        /// <summary>Taken by the NEXT <see cref="LoadAsync"/>, which reads the disk first and then waits on it
+        /// before answering — so a test can act on the panel while a restore or switch is in flight (the
+        /// check-then-await window the guards close), and a later load is not held with it.</summary>
         internal TaskCompletionSource? Gate { get; set; }
 
         /// <summary>Raised from a thread-pool thread, where the real store raises it: from the catch in its own
@@ -79,6 +80,19 @@ public class AiAssistantSessionWiringTests
         internal HashSet<string> UnreadableIds { get; } = new(StringComparer.Ordinal);
 
         internal bool DeleteFails { get; set; }
+
+        /// <summary>
+        /// While set, every listing snapshots the disk and then waits to be released by its index in
+        /// <see cref="HeldListings"/> — so a test can hold listings open and let a newer one finish first, the
+        /// overlap the real store's file reads make possible.
+        /// </summary>
+        internal bool HoldListings { get; set; }
+
+        internal List<TaskCompletionSource> HeldListings { get; } = new();
+
+        /// <summary>Raised from a thread-pool thread by every listing, as the real store does when it trips over a
+        /// broken file while listing.</summary>
+        internal AiSessionUnreadable? ListReportsUnreadable { get; set; }
         internal int LoadCalls { get; private set; }
         internal int ListCalls { get; private set; }
         internal List<string> Deleted { get; } = new();
@@ -100,8 +114,6 @@ public class AiAssistantSessionWiringTests
             if (ReportOnLoad is { } report) Unreadable?.Invoke(report);
             if (ReportFromThreadPool is { } offThread)
                 await Task.Run(() => Unreadable?.Invoke(offThread)).ConfigureAwait(false);
-            if (Gate is { } gate) await gate.Task;
-
             if (UnreadableIds.Contains(id))
             {
                 Disk.Remove(id);
@@ -109,7 +121,17 @@ public class AiAssistantSessionWiringTests
                 return null;
             }
 
-            return ToLoad ?? OnDisk(id);
+            // Read BEFORE waiting, as a real read would have: what a held load answers is what the file said when
+            // it was read, whatever has been written since.
+            var read = ToLoad ?? OnDisk(id);
+
+            if (Gate is { } gate)
+            {
+                Gate = null;
+                await gate.Task;
+            }
+
+            return read;
         }
 
         public Task<bool> SaveAsync(AiSession session, CancellationToken cancellationToken = default)
@@ -122,9 +144,26 @@ public class AiAssistantSessionWiringTests
 
         /// <summary>Newest-active first, id breaking ties — the real store's order, which the panel must keep
         /// rather than impose its own.</summary>
-        public Task<IReadOnlyList<AiSessionSummary>> ListAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<AiSessionSummary>> ListAsync(CancellationToken cancellationToken = default)
         {
             ListCalls++;
+            var snapshot = Snapshot();
+
+            if (ListReportsUnreadable is { } report)
+                await Task.Run(() => Unreadable?.Invoke(report)).ConfigureAwait(false);
+
+            if (HoldListings)
+            {
+                var held = new TaskCompletionSource();
+                HeldListings.Add(held);
+                await held.Task;
+            }
+
+            return snapshot;
+        }
+
+        private IReadOnlyList<AiSessionSummary> Snapshot()
+        {
             var summaries = Disk.Keys
                 .Select(id => OnDisk(id)!)
                 .Select(s => new AiSessionSummary(
@@ -134,7 +173,7 @@ public class AiAssistantSessionWiringTests
                 .OrderByDescending(s => s.LastActive)
                 .ThenBy(s => s.Id, StringComparer.Ordinal)
                 .ToList();
-            return Task.FromResult<IReadOnlyList<AiSessionSummary>>(summaries);
+            return summaries;
         }
 
         public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
@@ -885,12 +924,13 @@ public class AiAssistantSessionWiringTests
             Name = "Earlier",
             Turns = { new AiTurnRecord { Id = "t1", Task = AiTask.Explain, Answer = "An older answer." } },
         };
-        store.Gate = new TaskCompletionSource();
+        var gate = new TaskCompletionSource();
+        store.Gate = gate;
 
         var restore = vm.RestoreAsync();
         await vm.AskAsync(AiTask.Explain);
 
-        store.Gate.SetResult();
+        gate.SetResult();
         await restore;
 
         // One turn, the live one, and the file it was saved into is not the one that was loading.
