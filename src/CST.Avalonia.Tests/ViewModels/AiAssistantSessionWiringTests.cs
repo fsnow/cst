@@ -37,8 +37,14 @@ public class AiAssistantSessionWiringTests
     /// <summary>
     /// A store that records rather than writes. <b>Answers, never throws</b> — the same contract the real one
     /// keeps, which is what makes "a failed save is a sentence" testable at all.
+    ///
+    /// <para><b>It also keeps a disk</b> (#997): every successful save is kept as its serialized JSON, through the
+    /// real store's own <see cref="AiSessionStore.JsonOptions"/>, and loading, listing and deleting work from
+    /// that. A copy rather than the object the panel handed in, because the panel mutates its session after
+    /// saving it — a list or a switch reading the live object would see changes no file holds. Shared with
+    /// <c>AiAssistantSessionListTests</c>, which is what it was widened for.</para>
     /// </summary>
-    private sealed class FakeStore : IAiSessionStore
+    internal sealed class FakeStore : IAiSessionStore
     {
         internal AiSession? ToLoad { get; set; }
 
@@ -65,28 +71,78 @@ public class AiAssistantSessionWiringTests
         /// thread instead, which is why it could not see the defect this exists for.</summary>
         internal AiSessionUnreadable? ReportFromThreadPool { get; set; }
 
+        /// <summary>Sessions as they were last written, by id, as JSON.</summary>
+        internal Dictionary<string, string> Disk { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Ids whose file will not parse: loading one moves it off the disk and reports it, as the real
+        /// store does.</summary>
+        internal HashSet<string> UnreadableIds { get; } = new(StringComparer.Ordinal);
+
+        internal bool DeleteFails { get; set; }
+        internal int LoadCalls { get; private set; }
+        internal int ListCalls { get; private set; }
+        internal List<string> Deleted { get; } = new();
+
+        /// <summary>Put a session on the disk without the panel having written it — another launch's work.</summary>
+        internal void Seed(AiSession session) =>
+            Disk[session.Id] = System.Text.Json.JsonSerializer.Serialize(session, AiSessionStore.JsonOptions);
+
+        /// <summary>A session as it stands on the disk now: a fresh copy, never the object that was saved.</summary>
+        internal AiSession? OnDisk(string id) =>
+            Disk.TryGetValue(id, out var json)
+                ? System.Text.Json.JsonSerializer.Deserialize<AiSession>(json, AiSessionStore.JsonOptions)
+                : null;
+
         public async Task<AiSession?> LoadAsync(string id, CancellationToken cancellationToken = default)
         {
             AskedFor = id;
+            LoadCalls++;
             if (ReportOnLoad is { } report) Unreadable?.Invoke(report);
             if (ReportFromThreadPool is { } offThread)
                 await Task.Run(() => Unreadable?.Invoke(offThread)).ConfigureAwait(false);
             if (Gate is { } gate) await gate.Task;
-            return ToLoad;
+
+            if (UnreadableIds.Contains(id))
+            {
+                Disk.Remove(id);
+                Unreadable?.Invoke(new AiSessionUnreadable(id, $"/kept/{id}.unreadable-1.json", "truncated"));
+                return null;
+            }
+
+            return ToLoad ?? OnDisk(id);
         }
 
         public Task<bool> SaveAsync(AiSession session, CancellationToken cancellationToken = default)
         {
             Saves.Add(session);
             TurnCountAtSave.Add(session.Turns.Count);
+            if (SaveSucceeds) Seed(session);
             return Task.FromResult(SaveSucceeds);
         }
 
-        public Task<IReadOnlyList<AiSessionSummary>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<AiSessionSummary>>(Array.Empty<AiSessionSummary>());
+        /// <summary>Newest-active first, id breaking ties — the real store's order, which the panel must keep
+        /// rather than impose its own.</summary>
+        public Task<IReadOnlyList<AiSessionSummary>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            ListCalls++;
+            var summaries = Disk.Keys
+                .Select(id => OnDisk(id)!)
+                .Select(s => new AiSessionSummary(
+                    s.Id, s.Name, s.Created, s.LastActive, s.Turns.Count,
+                    s.Turns.Select(t => t.Citation?.BookId).Where(b => !string.IsNullOrEmpty(b))
+                        .Distinct().ToList()!))
+                .OrderByDescending(s => s.LastActive)
+                .ThenBy(s => s.Id, StringComparer.Ordinal)
+                .ToList();
+            return Task.FromResult<IReadOnlyList<AiSessionSummary>>(summaries);
+        }
 
-        public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
+        public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
+        {
+            if (DeleteFails) return Task.FromResult(false);
+            Deleted.Add(id);
+            return Task.FromResult(Disk.Remove(id));
+        }
 
         public event Action<AiSessionUnreadable>? Unreadable;
     }
@@ -111,7 +167,7 @@ public class AiAssistantSessionWiringTests
 
     /// <summary>Holds a turn open at a known point, so "while a turn is running" is a state a test can be in
     /// rather than a race it has to win.</summary>
-    private sealed class BlockingOrchestrator : IAiChatOrchestrator
+    internal sealed class BlockingOrchestrator : IAiChatOrchestrator
     {
         internal TaskCompletionSource Gate { get; } = new();
 
@@ -128,7 +184,7 @@ public class AiAssistantSessionWiringTests
         }
     }
 
-    private static (AiAssistantViewModel Vm, FakeStore Store, ApplicationState State,
+    internal static (AiAssistantViewModel Vm, FakeStore Store, ApplicationState State,
         Mock<IApplicationStateService> StateService) Panel(
             IAiChatOrchestrator orchestrator, StubReaderState? reader = null, FakeStore? store = null,
             ApplicationState? state = null)
@@ -153,12 +209,12 @@ public class AiAssistantSessionWiringTests
 
     /// <summary>A context that also names the connection that answered — what #849 added to
     /// <c>AiTurnContext</c> so a stored answer is attributable.</summary>
-    private static AiTurnContext ContextFrom(string providerId = "openrouter", string modelId = "some/model") =>
+    internal static AiTurnContext ContextFrom(string providerId = "openrouter", string modelId = "some/model") =>
         new(AiTask.Explain, "English", Citation(),
             new BookContext("s0101m.mul.xml", "book", CST.Pitaka.Sutta, CST.CommentaryLevel.Mula),
             Array.Empty<string>(), false, Sent(), providerId, modelId);
 
-    private static StubOrchestrator AnsweringFrom(AiTurnContext context, params AiTurnEvent[] middle)
+    internal static StubOrchestrator AnsweringFrom(AiTurnContext context, params AiTurnEvent[] middle)
     {
         var orchestrator = new StubOrchestrator();
         orchestrator.Events.Add(AiTurnEvent.ForStarted(context));

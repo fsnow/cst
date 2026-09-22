@@ -144,9 +144,12 @@ the Claude Code guarantee. Atomic write (temp + `File.Replace`), the pattern `Ap
 `IDisposable` and `SaveApplicationStateAsync` does not consult it, so (a) a turn still streaming when the reader
 quits never reaches the `finally` that saves it — Stop keeps a partial answer, Quit does not — and (b) a
 session's *first* turn ending inside the shutdown state save can be written after `ForceSaveAsync`, so the file
-exists but `ActiveAssistantSessionId` never reaches disk and the conversation is orphaned until P3 lists it. The
-same window is open for a crash within `ApplicationStateService`'s 60-second save timer. A follow-up, not P2:
-the fix is a drain hook, and it wants the session list (P3) to make an orphan recoverable.
+exists but `ActiveAssistantSessionId` never reaches disk. The same window is open for a crash within
+`ApplicationStateService`'s 60-second save timer. **(b) is recoverable as of P3 (#997) [observed]:** a session
+file that is not the active one is simply a row in the session list, so the reader relaunches to an empty panel
+with that conversation at the top of the list, one click from being reopened — pinned by
+`AiAssistantSessionListTests.A_conversation_nothing_points_at_is_listed_and_can_be_reopened`. (a) still loses
+the turn in flight; the fix is a drain hook, not yet built.
 
 **What a stored turn holds** — everything the panel shows, so a restored turn renders identically:
 
@@ -200,6 +203,29 @@ first ~60 characters of a question; the reader can rename. No model-generated ti
 its citations name. Click switches the panel to it (the in-flight turn, if any, blocks the switch, the way
 `IsBusy` guards every other command). Rename and Delete on the row.
 
+**[observed] What exists as of the #997 backend (2026-09-22)** — all on `AiAssistantViewModel`, tested in
+`AiAssistantSessionListTests`; the view is Kestrel's:
+
+- `Sessions` — an `ObservableCollection<AiSessionRowViewModel>` in the store's order (`Id`, `Name`, `LastActive`,
+  `TurnCount`, `BookIds`, `IsActive`, `CanDelete`), plus `HasSessions`. Refreshed after every save, rename,
+  delete, switch, new conversation and restore; rows are updated in place and reordered rather than rebuilt, so
+  a refresh at the end of a turn does not tear down an open rename box. `BookIds` are file names
+  (`s0101m.mul.xml`) — the summary carries no book names.
+- `SwitchToSessionCommand` (session id) — refused while `IsBusy`, and holds `IsBusy` itself while it reads. It
+  loads and maps through the same `ReadTranscriptAsync` / `ShowSession` path the launch restore uses, so the two
+  render identically and share the whole-or-nothing mapping and failure isolation. Switching to the conversation
+  on screen does nothing; an unreadable or missing target leaves the current one on screen and sets `Status`.
+- `RenameSessionCommand` (`AiSessionRename(Id, Name)`) — trimmed; empty or whitespace is refused and the old name
+  kept. Works on the active session (renaming the object the next turn will save) and on any listed one.
+  [suggestion] A rename does **not** move `LastActive`, so it does not reorder the list: "last active" is shown as
+  when the conversation was last used, and a row that jumped to the top on rename would move out from under a
+  reader working down the list.
+- `DeleteSessionCommand` (session id) — no confirmation (the view asks). Deleting the conversation on screen
+  leaves the panel as `NewConversationCommand` does. Refused only for the conversation a turn is running in,
+  which is per row: `AiSessionRowViewModel.CanDelete`.
+- Enablement is bindable flags, not `canExecute` observables (the reason is recorded at `RetryCommand`'s
+  construction): `CanAsk` (the + button), `CanSwitchSession`, `CanRenameSession`, and per-row `CanDelete`.
+
 ### 3.4 Compaction (P4)
 
 Manual **Compact** and automatic compaction share one mechanism: the older turns are summarised by the active
@@ -245,7 +271,7 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
 | **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` | ✗ (one button) | — |
 | **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request | ✅ | — |
 | **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
-| **P3** | new | Session service: new / switch / rename / delete / auto-name; the list, rename and delete UI | service ✅, panel ✗ | P2 |
+| **P3** | #997 | Session list, switch, rename, delete on the panel view model (new and auto-name landed with P2) — **backend done** (§3.3); the list, rename and delete UI remain | service ✅, panel ✗ | P2 |
 | **P4** | new | Compaction: template, summariser, marker row, manual action, auto trigger from `ContextLength` | ✅ except the action | P1, P3 |
 | **P5** | #849 | Take me back: open + go-to + position restore, as a turn action | ✗ (dock + WebView) | P2 |
 
