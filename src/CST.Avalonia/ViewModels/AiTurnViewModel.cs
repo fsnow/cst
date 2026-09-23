@@ -391,6 +391,62 @@ public sealed class AiTurnViewModel : ReactiveObject
     internal IReadOnlyList<string> ReplayedTurnIds { get; set; } = Array.Empty<string>();
 
     /// <summary>
+    /// The compaction whose summary was replayed ahead of <see cref="ReplayedTurnIds"/>, by
+    /// <c>AiCompactionRecord.Id</c>, or null where nothing had been compacted. (#998) Taken from the sending, like
+    /// the turn ids — a later compaction must not change what this turn's record says it was sent with.
+    /// </summary>
+    internal string? SummaryId { get; set; }
+
+    // ---- Compaction, as the transcript shows it (#998) ----------------------------------------------
+    //
+    // A summarised turn stays on screen unchanged: compaction changes what is SENT, not what is SHOWN. These say
+    // where the boundary falls, so the view can draw the marker row ("12 earlier turns summarised") above the first
+    // turn after it. Set by the panel (AiAssistantViewModel.RaiseCompactionChanged) from the compaction in force.
+
+    private bool _isSummarised;
+
+    /// <summary>Whether the model is now shown this turn only through the summary. The turn itself is untouched.</summary>
+    public bool IsSummarised
+    {
+        get => _isSummarised;
+        internal set => this.RaiseAndSetIfChanged(ref _isSummarised, value);
+    }
+
+    private string _compactionMarker = "";
+
+    /// <summary>
+    /// The marker row's text — <c>"12 earlier turns summarised"</c> — on the FIRST turn after the summarised span,
+    /// and empty on every other turn. One turn carries it so an items control over <c>Turns</c> can draw the row
+    /// without a second collection.
+    /// </summary>
+    public string CompactionMarker
+    {
+        get => _compactionMarker;
+        internal set
+        {
+            this.RaiseAndSetIfChanged(ref _compactionMarker, value);
+            this.RaisePropertyChanged(nameof(HasCompactionMarker));
+        }
+    }
+
+    public bool HasCompactionMarker => !string.IsNullOrEmpty(CompactionMarker);
+
+    private string _compactionSummary = "";
+
+    /// <summary>
+    /// The summary in force, beside <see cref="CompactionMarker"/> and only where it is, for the marker row to open.
+    ///
+    /// <para><b>Raw, with the <c>[[…]]</c> Pāli markers still in it</b> — it is what the model wrote and what it is
+    /// shown again, not display text. A view must strip the markers before showing it (the way
+    /// <c>PaliQuoteFilter</c> strips an answer's), or the reader sees literal double brackets.</para>
+    /// </summary>
+    public string CompactionSummary
+    {
+        get => _compactionSummary;
+        internal set => this.RaiseAndSetIfChanged(ref _compactionSummary, value);
+    }
+
+    /// <summary>
     /// The question line this turn was replayed to the model WITH, as it was stored — set only on a turn
     /// rebuilt from disk. (#849)
     ///
@@ -435,7 +491,7 @@ public sealed class AiTurnViewModel : ReactiveObject
         // translation here.
         Status = Status,
         Failed = Failed,
-        Sent = ToRecord(Sent, ReplayedTurnIds),
+        Sent = ToRecord(Sent, ReplayedTurnIds, SummaryId),
         ProviderId = ProviderId,
         ModelId = ModelId,
         When = When,
@@ -458,8 +514,11 @@ public sealed class AiTurnViewModel : ReactiveObject
     /// a turn deleted from a session by hand leaves one, and losing the whole conversation over a dangling
     /// reference is the failure this layer exists to avoid.
     /// </param>
+    /// <param name="compactionsById">Every compaction in the session, by id, so the summary this turn was sent
+    /// with (<c>AiSentRecord.SummaryId</c>) is rebuilt as the first replayed exchange. Same skip rule. (#998)</param>
     internal static AiTurnViewModel FromRecord(
-        AiTurnRecord record, IReadOnlyDictionary<string, AiTurnRecord>? byId = null)
+        AiTurnRecord record, IReadOnlyDictionary<string, AiTurnRecord>? byId = null,
+        IReadOnlyDictionary<string, AiCompactionRecord>? compactionsById = null)
     {
         var turn = new AiTurnViewModel(record.Task, record.Question)
         {
@@ -472,6 +531,7 @@ public sealed class AiTurnViewModel : ReactiveObject
             ModelId = record.ModelId,
             ReadingPosition = record.ReadingPosition,
             ReplayedTurnIds = record.Sent?.ReplayedTurnIds?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>(),
+            SummaryId = NullIfEmpty(record.Sent?.SummaryId),
             RestoredAskedLine = NullIfEmpty(record.AskedLine),
             Status = record.Status ?? "",
             Failed = record.Failed,
@@ -508,7 +568,7 @@ public sealed class AiTurnViewModel : ReactiveObject
             turn.Elapsed = AiAssistantViewModel.FormatElapsed(turn.ElapsedTime.Value);
         }
 
-        turn.Sent = ToLive(record.Sent, byId);
+        turn.Sent = ToLive(record.Sent, byId, compactionsById);
 
         // Last, because the blocks are parsed from whatever the builder holds by then.
         turn.PublishAnswer();
@@ -547,8 +607,10 @@ public sealed class AiTurnViewModel : ReactiveObject
     /// turn would put 29 answers inside turn 30 and 435 copies of them in a 30-turn file. Nothing is lost: a
     /// written turn never changes, so the ids plus each referenced turn's stored asked-line and marked answer
     /// rebuild it exactly.</para>
+    ///
+    /// <para>A summary sent ahead of the turns (#998) is stored the same way: by the compaction's id.</para>
     /// </summary>
-    private static AiSentRecord? ToRecord(SentContext? sent, IReadOnlyList<string> replayedTurnIds) =>
+    private static AiSentRecord? ToRecord(SentContext? sent, IReadOnlyList<string> replayedTurnIds, string? summaryId) =>
         sent is null
             ? null
             : new AiSentRecord
@@ -558,15 +620,30 @@ public sealed class AiTurnViewModel : ReactiveObject
                 SystemPrompt = sent.SystemPrompt,
                 UserContent = sent.UserContent,
                 ReplayedTurnIds = replayedTurnIds.ToList(),
+                SummaryId = summaryId,
             };
 
-    /// <inheritdoc cref="ToRecord(SentContext?, IReadOnlyList{string})"/>
+    /// <inheritdoc cref="ToRecord(SentContext?, IReadOnlyList{string}, string?)"/>
     private static SentContext? ToLive(
-        AiSentRecord? record, IReadOnlyDictionary<string, AiTurnRecord>? byId)
+        AiSentRecord? record, IReadOnlyDictionary<string, AiTurnRecord>? byId,
+        IReadOnlyDictionary<string, AiCompactionRecord>? compactionsById)
     {
         if (record is null) return null;
 
         var history = new List<ChatMessage>();
+
+        // The summary first, as it was sent (#998): its stored line, or today's where a file predates the field.
+        // Skipped, like a dangling turn id, when it resolves to nothing or to an empty summary — the orchestrator
+        // never sends an empty half, so the record of what was sent must not claim one.
+        if (record.SummaryId is { Length: > 0 } summaryId
+            && compactionsById is not null
+            && compactionsById.TryGetValue(summaryId, out var compaction)
+            && !string.IsNullOrWhiteSpace(compaction.Summary))
+        {
+            history.Add(new ChatMessage(ChatRole.User, compaction.AskedLine ?? AiCompaction.SummaryAskedLine));
+            history.Add(new ChatMessage(ChatRole.Assistant, compaction.Summary));
+        }
+
         foreach (var id in record.ReplayedTurnIds)
         {
             if (byId is null || !byId.TryGetValue(id, out var earlier)) continue;

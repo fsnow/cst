@@ -51,12 +51,23 @@ public static class PromptTemplateNames
     public const string WordByWordSelection = "word-by-word-selection";
     public const string AskSelection = "ask-selection";
 
+    /// <summary>
+    /// The summariser's instructions — what compaction sends to have older turns summarised. (#998)
+    ///
+    /// <para>User-editable like the presets, and for the same reason: it decides what the model is shown of its
+    /// own earlier conversation, which is exactly what a reader who cares about the answers may want to adjust.
+    /// It is <b>not a preset</b>: it has no passage, no citation and no system prompt of its own, and its
+    /// placeholders are its own (<see cref="PromptPlaceholders.AllowedFor"/>).</para>
+    /// </summary>
+    public const string Compact = "compact";
+
     public static IReadOnlyList<string> All { get; } =
         new[]
         {
             System,
             Explain, Translate, Grammar, WordByWord, Ask,
             ExplainSelection, TranslateSelection, GrammarSelection, WordByWordSelection, AskSelection,
+            Compact,
         };
 
     /// <summary>
@@ -111,12 +122,40 @@ public static class PromptPlaceholders
     public const string UserQuestion = "userQuestion";
     public const string Provisions = "provisions";
 
-    /// <summary>Every placeholder any template may use. An unknown one is a template error, not an empty string.</summary>
+    /// <summary>The turns being compacted, rendered by <see cref="AiCompaction.RenderConversation"/>. Compaction
+    /// template only. (#998)</summary>
+    public const string Conversation = "conversation";
+
+    /// <summary>What the reader asked the summary to attend to — Claude Code's <c>/compact [instructions]</c>, or a
+    /// sentence saying there were none. Compaction template only. (#998)</summary>
+    public const string Instructions = "instructions";
+
+    /// <summary>Every placeholder the system prompt and the presets may use. An unknown one is a template error,
+    /// not an empty string.</summary>
     public static IReadOnlySet<string> Known { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         OutputLanguage, Scope, PaliOpen, PaliClose,
         Passage, Citation, Book, Selection, Lemmas, Apparatus, UserQuestion, Provisions,
     };
+
+    /// <summary>
+    /// The placeholders the compaction template may use. (#998)
+    ///
+    /// <para><b>A set of its own rather than two more names in <see cref="Known"/>.</b> The summariser has no
+    /// bundle — no passage, no citation, no scope — and the presets have no conversation to summarise. One shared
+    /// set would let a preset edit say <c>{{conversation}}</c> and validate cleanly, then render it as nothing: the
+    /// literal-brace failure the unknown-name check exists to prevent, arriving as a silent blank instead.</para>
+    /// </summary>
+    public static IReadOnlySet<string> KnownForCompaction { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Conversation, Instructions, OutputLanguage, PaliOpen, PaliClose,
+    };
+
+    /// <summary>The placeholders a given template may use.</summary>
+    public static IReadOnlySet<string> AllowedFor(string templateName) =>
+        string.Equals(templateName, PromptTemplateNames.Compact, StringComparison.Ordinal)
+            ? KnownForCompaction
+            : Known;
 
     /// <summary>
     /// What a template cannot do without. Two kinds, both load-bearing.
@@ -155,6 +194,13 @@ public static class PromptPlaceholders
             [PromptTemplateNames.WordByWordSelection] =
                 new[] { Passage, Citation, Lemmas, Selection, UserQuestion },
             [PromptTemplateNames.AskSelection] = new[] { Passage, Citation, Selection, UserQuestion },
+
+            // The turns, the reader's instructions, and the marking instruction's inputs. The markers are required
+            // for the reason they are required in the system prompt, and more so: the summary is REPLAYED, so a
+            // summary written without them teaches the model its own earlier answers had none. The instructions are
+            // required for the reason {{userQuestion}} is — an edit that drops them validates cleanly and then
+            // ignores what the reader typed into the Compact box, with nothing to say so. (#998)
+            [PromptTemplateNames.Compact] = new[] { Conversation, Instructions, PaliOpen, PaliClose },
         };
 }
 
@@ -331,7 +377,8 @@ public sealed class PromptTemplateStore : IPromptTemplateStore
             .Select(m => m.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var unknown in used.Where(u => !PromptPlaceholders.Known.Contains(u)).OrderBy(u => u, StringComparer.Ordinal))
+        var allowed = PromptPlaceholders.AllowedFor(name);
+        foreach (var unknown in used.Where(u => !allowed.Contains(u)).OrderBy(u => u, StringComparer.Ordinal))
             problems.Add($"{{{{{unknown}}}}} is not a placeholder this template can use");
 
         foreach (var required in PromptPlaceholders.Required[name].Where(r => !used.Contains(r)))

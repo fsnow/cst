@@ -810,10 +810,25 @@ public sealed class AiSessionStoreTests : IDisposable
         var session = Conversation("golden-session");
         session.Compactions.Add(new AiCompactionRecord
         {
+            // A fixed id: the default is a fresh GUID, which a golden file cannot hold. (#998)
+            Id = "compaction-one",
             When = Created.AddMinutes(30),
-            Summary = "Two earlier turns, about the opening of the Mahāvagga.",
+            Summary = "Two earlier turns, about the opening of the [[Mahāvagga]].",
+            AskedLine = AiCompaction.SummaryAskedLine,
             SummarisedTurnIds = { "turn-one", "turn-two" },
+            Instructions = "Keep the grammar points.",
+            Automatic = false,
+            ProviderId = "anthropic",
+            ModelId = "claude-opus-4-1",
         });
+
+        // A turn sent after that compaction names the summary it was sent with, by id. (#998)
+        session.Turns[2].Sent = new AiSentRecord
+        {
+            SystemPrompt = "You are reading Pāli.",
+            UserContent = "Passage: evaṃ me sutaṃ…",
+            SummaryId = "compaction-one",
+        };
 
         var actual = Normalize(JsonSerializer.Serialize(session, AiSessionStore.JsonOptions));
 
@@ -841,7 +856,10 @@ public sealed class AiSessionStoreTests : IDisposable
         Assert.Equal(0.375, loaded.Turns[0].ReadingPosition!.Fraction);
         Assert.NotNull(loaded.Turns[0].Sent);
         Assert.Equal(new[] { "turn-one" }, loaded.Turns[1].Sent!.ReplayedTurnIds);
-        Assert.Single(loaded.Compactions);
+        var compaction = Assert.Single(loaded.Compactions);
+        Assert.Equal("compaction-one", compaction.Id);
+        Assert.Equal(AiCompaction.SummaryAskedLine, compaction.AskedLine);
+        Assert.Equal("compaction-one", loaded.Turns[2].Sent!.SummaryId);
     }
 
     /// <summary>

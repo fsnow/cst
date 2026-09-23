@@ -101,17 +101,30 @@
       "notices": [],
       "isPartialPassage": false,
       "failed": false,
+      "sent": {
+        "fields": [],
+        "systemPrompt": "You are reading Pāli.",
+        "userContent": "Passage: evaṃ me sutaṃ…",
+        "replayedTurnIds": [],
+        "summaryId": "compaction-one"
+      },
       "when": "2026-09-12T10:27:00+00:00"
     }
   ],
   "compactions": [
     {
+      "id": "compaction-one",
       "when": "2026-09-12T10:45:00+00:00",
-      "summary": "Two earlier turns, about the opening of the Mahāvagga.",
+      "summary": "Two earlier turns, about the opening of the [[Mahāvagga]].",
+      "askedLine": "«Earlier in this conversation» — summarise what we discussed before the turns that follow.",
       "summarisedTurnIds": [
         "turn-one",
         "turn-two"
-      ]
+      ],
+      "instructions": "Keep the grammar points.",
+      "automatic": false,
+      "providerId": "anthropic",
+      "modelId": "claude-opus-4-1"
     }
   ]
 }

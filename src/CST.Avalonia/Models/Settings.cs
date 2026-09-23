@@ -150,6 +150,25 @@ namespace CST.Avalonia.Models
         /// 400 the reader cannot attribute.</para>
         /// </summary>
         public string? ReasoningEffort { get; set; }
+
+        /// <summary>
+        /// Compact the Assistant conversation automatically when the estimated request reaches this percentage of
+        /// the model's context window. <b>0 turns automatic compaction off.</b> (#998)
+        ///
+        /// <para><b>[fsnow]</b>: <i>"Manual and auto at a fraction of context length"</i>, the fraction
+        /// <i>"95%, but make this a setting"</i>. So 95 is the default, and the manual Compact action works whatever
+        /// this holds.</para>
+        ///
+        /// <para>[suggestion] <b>0 as off</b>, rather than a separate switch or a nullable: one number the reader
+        /// can read, whose off state is the one value that could not mean anything else — a threshold of 0% would
+        /// compact before every turn. Valid values are 0–100; anything else is put back to 95 on load by
+        /// <see cref="SettingsValidator"/>, the way a bad log level or font size is. No floor above 0 is imposed:
+        /// none was asked for, and a low value is a reader's choice to trade detail for room.</para>
+        ///
+        /// <para>Only a model whose provider published a context length can trigger it
+        /// (<see cref="AiModelRecord.ContextLength"/>); for one that did not, the turn says so in a notice.</para>
+        /// </summary>
+        public int AutoCompactPercent { get; set; } = 95;
     }
 
     /// <summary>
