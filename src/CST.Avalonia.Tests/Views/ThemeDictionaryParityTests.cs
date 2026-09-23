@@ -63,6 +63,10 @@ public class ThemeDictionaryParityTests
         "SystemAccentColorLight3",
 
         "ContentControlThemeFontFamily",
+
+        // Fluent's Button ControlTheme resources, which this scan does not read. Resolution is asserted by
+        // AiAssistantPanelIconStyleTests (UiTests), which looks it up under a live FluentTheme.
+        "ButtonForegroundDisabled",
     };
 
     /// <summary>Our own, declared in App.axaml outside the theme dictionaries.</summary>
