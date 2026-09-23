@@ -1246,4 +1246,18 @@ public class AiAssistantViewModelTests
             "\u00abExplain\u00bb",
             AiAssistantViewModel.DescribeAsked(new AiTurnViewModel(AiTask.Explain, null)));
     }
+
+    /// <summary>
+    /// The bundle's path arrives in Latin without title case. The caption — and the conversation name made from
+    /// it — reads the way the book tabs do. <b>[fsnow]</b>: <i>"title case? yes"</i> (2026-09-22).
+    /// </summary>
+    [Theory]
+    [InlineData("tipiṭaka (mūla)/sutta piṭaka/dīgha nikāya/sīlakkhandhavaggapāḷi", "Sīlakkhandhavaggapāḷi")]
+    [InlineData("sīlakkhandhavaggapāḷi", "Sīlakkhandhavaggapāḷi")]
+    [InlineData("dīgha nikāya/mahāvaggapāḷi", "Mahāvaggapāḷi")]
+    [InlineData("vinaya piṭaka/pārājikapāḷi", "Pārājikapāḷi")]
+    public void The_caption_names_the_book_in_title_case(string path, string expected)
+    {
+        Assert.Equal(expected, AiAssistantViewModel.LeafBookName(path));
+    }
 }
