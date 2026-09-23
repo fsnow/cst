@@ -3,15 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Avalonia.Data.Converters;
-using CST.Avalonia.ViewModels;
-using CST.Conversion;
+using CST.Avalonia.Services;
 
 namespace CST.Avalonia.Converters;
 
 /// <summary>
-/// A session row's books, as the list shows them: the book's own name in Latin script, title-cased as the book
-/// tabs show it, cut to the leaf the citation captions use (<see cref="AiAssistantViewModel.LeafBookName"/>).
-/// (#997)
+/// A session row's books, as the list shows them: each book's name as its tab and the Recent Books menu show
+/// it (<see cref="RecentBooksService.DisplayName"/>, Latin script). (#997)
 ///
 /// <para>[observed] <see cref="AiSessionRowViewModel.BookIds"/> carries XML file names (<c>s0101m.mul.xml</c>),
 /// and nothing in the session summary carries a book name, so the name is looked up here. An id the book list
@@ -28,18 +26,11 @@ public sealed class AiSessionBooksConverter : IValueConverter
         throw new NotSupportedException();
 
     internal static string Format(IEnumerable<string> ids) =>
-        string.Join(", ", ids.Select(id =>
-        {
-            var path = LongNavPath(id);
-            if (string.IsNullOrWhiteSpace(path)) return id;
-            var leaf = AiAssistantViewModel.LeafBookName(
-                ScriptConverter.Convert(path, Script.Devanagari, Script.Latin, toTitleCase: true));
-            return leaf.Length == 0 ? id : leaf;
-        }));
+        string.Join(", ", ids.Select(id => Lookup(id) is { } book ? RecentBooksService.DisplayName(book) : id));
 
-    private static string? LongNavPath(string id)
+    private static Book? Lookup(string id)
     {
-        try { return Books.Inst[id].LongNavPath; }
+        try { return Books.Inst[id]; }
         catch (KeyNotFoundException) { return null; }
     }
 }

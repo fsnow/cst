@@ -283,7 +283,8 @@ public class AiAssistantViewModel : ReactiveTool
     /// <summary>
     /// The name of the conversation on screen, for the session switcher's label: the active row's name, or
     /// "New conversation" when no row is active (a fresh panel, or one whose first turn is not yet saved).
-    /// Set in one place, <see cref="UpdateRowAvailability"/>, which is where the active row is decided.
+    /// Set in <see cref="UpdateRowAvailability"/>, which is where the active row is decided; that also runs the
+    /// moment the panel lets go of or shows a session, so the label does not wait for the list to re-read.
     /// </summary>
     public string ActiveSessionName
     {
@@ -626,6 +627,7 @@ public class AiAssistantViewModel : ReactiveTool
         }
 
         Status = "";
+        UpdateRowAvailability();   // the switcher's label, now rather than after the next listing (#997 UI)
     }
 
     private void Handle(AiTurnViewModel turn, AiTurnEvent e)
@@ -1140,6 +1142,7 @@ public class AiAssistantViewModel : ReactiveTool
             _appState.Current.ActiveAssistantSessionId = session.Id;
             _appState.MarkDirty();
         }
+        UpdateRowAvailability();   // the switcher's label, now rather than after the next listing (#997 UI)
     }
 
     /// <summary>

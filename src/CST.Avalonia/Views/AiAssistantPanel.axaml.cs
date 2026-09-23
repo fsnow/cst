@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Input;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -8,6 +9,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
+using Serilog;
 
 namespace CST.Avalonia.Views;
 
@@ -17,7 +19,7 @@ namespace CST.Avalonia.Views;
 /// <para>
 /// Everything it shows is bound and everything it does is a command on <c>AiAssistantViewModel</c>, with two
 /// exceptions below: a drag has no command form, and the session list's row actions are routed here to reach
-/// those commands with their row. There is no WebView here and there must never be one — see
+/// the view model with their row. There is no WebView here and there must never be one — see
 /// the panel's XAML header and AI_SURFACE_B.md §8.
 /// </para>
 /// </summary>
@@ -132,25 +134,31 @@ public partial class AiAssistantPanel : UserControl
             vm.ResizeReasoning(e.Vector.Y);
     }
 
-    // ---- The session list (#997). Code-behind because each action carries view work beside its command -
-    // closing the list on a switch, focusing the rename box, closing other rows' prompts - and a Flyout has
-    // no bindable open state (see OnPickerChanged). The handlers take the row from the clicked control's
-    // DataContext and send it to the panel's own commands, which is where the rules (busy, refused names,
-    // which row may go) live. ----
+    // ---- The session list (#997). Code-behind because each action carries view work beside it - closing the
+    // list on a switch, focusing the rename box, closing other rows' prompts - and a Flyout has no bindable
+    // open state (see OnPickerChanged). The handlers take the row from the clicked control's DataContext and
+    // call the panel's own methods, which is where the rules (busy, refused names, which row may go) live. ----
 
     private static AiSessionRowViewModel? RowOf(object? sender) =>
         (sender as Control)?.DataContext as AiSessionRowViewModel;
 
-    private static void Run(ICommand command, object? parameter)
-    {
-        if (command.CanExecute(parameter)) command.Execute(parameter);
-    }
+    /// <summary>
+    /// Run a session operation without waiting for it. The panel's methods, not its commands: a ReactiveCommand
+    /// refuses to run while its previous run is still going, and a rename or delete takes a store write plus a
+    /// full re-listing - so the second of two quick deletes, the natural way to prune a long list, was refused
+    /// after its row had already closed its prompt, and looked accepted (review of #1009). The methods keep
+    /// their own guards (busy, refused names, which row may go) and catch their own store failures.
+    /// </summary>
+    private static void Forget(Task operation) =>
+        operation.ContinueWith(
+            t => Log.Error(t.Exception, "An Assistant session operation failed"),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
     private void OnSwitchSession(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not AiAssistantViewModel vm || RowOf(sender) is not { } row) return;
         SessionsChip.Flyout?.Hide();
-        Run(vm.SwitchToSessionCommand, row.Id);
+        Forget(vm.SwitchToSessionAsync(row.Id));
     }
 
     private void OnBeginRename(object? sender, RoutedEventArgs e)
@@ -168,6 +176,25 @@ public partial class AiAssistantPanel : UserControl
         {
             box.Focus();
             box.SelectAll();
+        }, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// A rename box that appears already open is a row whose container was rebuilt - the list reordered under
+    /// it (a finished answer moves its conversation to the top) and <c>Move</c> gave the row a new container.
+    /// The row's state survived; give the new box the focus the old one had, caret at the end, so typing
+    /// carries on. (review of #1009, measured headless)
+    /// </summary>
+    private void OnRenameBoxAttached(object? sender, global::Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (box.DataContext is AiSessionRowViewModel { IsRenaming: true } && box.IsEffectivelyVisible)
+            {
+                box.Focus();
+                box.CaretIndex = box.Text?.Length ?? 0;
+            }
         }, DispatcherPriority.Loaded);
     }
 
@@ -194,7 +221,7 @@ public partial class AiAssistantPanel : UserControl
     private void CommitRename(AiSessionRowViewModel? row)
     {
         if (DataContext is not AiAssistantViewModel vm || row is null) return;
-        if (row.CommitRename() is { } rename) Run(vm.RenameSessionCommand, rename);
+        if (row.CommitRename() is { } rename) Forget(vm.RenameSessionAsync(rename.Id, rename.Name));
     }
 
     private void OnBeginDelete(object? sender, RoutedEventArgs e)
@@ -210,7 +237,7 @@ public partial class AiAssistantPanel : UserControl
     {
         if (DataContext is not AiAssistantViewModel vm || RowOf(sender) is not { } row) return;
         row.CancelDelete();
-        Run(vm.DeleteSessionCommand, row.Id);
+        Forget(vm.DeleteSessionAsync(row.Id));
     }
 
     private IEnumerable<AiSessionRowViewModel> OtherRows(AiSessionRowViewModel row) =>

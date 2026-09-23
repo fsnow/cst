@@ -86,6 +86,41 @@ public class AiSessionListViewTests
         Assert.Equal(AiAssistantViewModel.NewConversationName, vm.ActiveSessionName);
     }
 
+    /// <summary>
+    /// The label changes the moment the panel lets go of a conversation, not when the list next re-reads: the
+    /// real store lists by reading every file, and until it answered the switcher named a conversation that
+    /// was no longer on screen (review of #1009). The listing is held open here to make that window visible.
+    /// </summary>
+    [Fact]
+    public async Task The_label_does_not_wait_for_the_list_to_re_read()
+    {
+        var store = new FakeStore();
+        store.Seed(Stored("first", "First", Monday.AddHours(1)));
+        store.Seed(Stored("second", "Second", Monday));
+        var (vm, _, _, _) = Panel(new StubOrchestrator(), store: store,
+            state: new ApplicationState { ActiveAssistantSessionId = "first" });
+        await vm.RestoreAsync();
+        Assert.Equal("First", vm.ActiveSessionName);
+
+        store.HoldListings = true;
+
+        vm.NewConversationCommand.Execute().Subscribe();
+        Assert.Equal(AiAssistantViewModel.NewConversationName, vm.ActiveSessionName);
+
+        var switching = vm.SwitchToSessionAsync("second");
+        await Task.Yield();
+        while (store.HeldListings.Count < 2) await Task.Delay(1);   // the switch has shown its session
+        Assert.Equal("Second", vm.ActiveSessionName);
+
+        var deleting = vm.DeleteSessionAsync("second");
+        Assert.Equal(AiAssistantViewModel.NewConversationName, vm.ActiveSessionName);
+
+        store.HoldListings = false;
+        foreach (var held in store.HeldListings.ToList()) held.TrySetResult();
+        await switching;
+        await deleting;
+    }
+
     // ---- A row's rename and delete state ------------------------------------------------------------
 
     [Fact]

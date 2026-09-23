@@ -35,6 +35,20 @@
         <Style Selector="Button:disabled > PathIcon">
             <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundDisabled}"/>
         </Style>
+
+        <!-- Quiet text buttons for the session rows' Save / Cancel / Delete / Keep - the same two rules
+             AiProvidersView defines for its rows, which that view scopes to itself. Pinned by
+             AiAssistantPanelIconStyleTests. -->
+        <Style Selector="Button.Link">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style Selector="Button.Link:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+        </Style>
     </UserControl.Styles>
 
     <!-- #586: generated text renders HERE, in Avalonia controls, and never inside the book's CEF WebView.
@@ -403,8 +417,12 @@
                      global list" and delete "Yes, with confirmation" (ASSISTANT_SESSIONS.md §6).
 
                      A flyout rather than a standing list [suggestion]: the panel is a narrow column whose
-                     height belongs to the transcript. Opening the list is always allowed; switching is not
-                     while a turn runs (CanSwitchSession), and each row's Delete follows its own CanDelete. -->
+                     height belongs to the transcript. The list opens whenever there is a saved conversation
+                     (HasSessions), a turn running or not; switching waits for the turn (CanSwitchSession),
+                     and each row's Delete follows its own CanDelete.
+
+                     Rows carry no AutomationId: every generated row would share it (ACCESSIBILITY_NAMING.md
+                     §2). The list has the id; each row's controls have a Name that includes the row's name. -->
                 <Button x:Name="SessionsChip"
                         Grid.Column="0"
                         HorizontalAlignment="Stretch"
@@ -460,7 +478,6 @@
                                                                 Background="Transparent"
                                                                 BorderThickness="0"
                                                                 Padding="8,4"
-                                                                AutomationProperties.AutomationId="assistant.session-switch"
                                                                 AutomationProperties.Name="{Binding Name}">
                                                             <StackPanel Spacing="1">
                                                                 <TextBlock Classes="SessionName"
@@ -490,7 +507,6 @@
                                                                 Background="Transparent" BorderThickness="0"
                                                                 Padding="6,4"
                                                                 ToolTip.Tip="Rename"
-                                                                AutomationProperties.AutomationId="assistant.session-rename"
                                                                 AutomationProperties.Name="{Binding Name, StringFormat='Rename {0}'}">
                                                             <PathIcon Width="12" Height="12"
                                                                       Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/>
@@ -502,7 +518,6 @@
                                                                 Background="Transparent" BorderThickness="0"
                                                                 Padding="6,4"
                                                                 ToolTip.Tip="Delete"
-                                                                AutomationProperties.AutomationId="assistant.session-delete"
                                                                 AutomationProperties.Name="{Binding Name, StringFormat='Delete {0}'}">
                                                             <PathIcon Width="12" Height="12"
                                                                       Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
@@ -510,22 +525,21 @@
                                                     </Grid>
 
                                                     <!-- Renaming: Enter keeps the new name, Escape the old
-                                                         one (code-behind; a KeyBinding in a template has no
-                                                         DataContext to bind a parameter from). -->
+                                                         one (code-behind, with the other row actions). -->
                                                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4"
                                                           Margin="8,4" IsVisible="{Binding IsRenaming}">
                                                         <TextBox Text="{Binding RenameText}"
                                                                  KeyDown="OnRenameKeyDown"
-                                                                 AutomationProperties.AutomationId="assistant.session-rename-box"
-                                                                 AutomationProperties.Name="Conversation name"/>
+                                                                 AttachedToVisualTree="OnRenameBoxAttached"
+                                                                 AutomationProperties.Name="{Binding Name, StringFormat='New name for {0}'}"/>
                                                         <Button Grid.Column="1" Content="Save" Classes="Link"
                                                                 Click="OnCommitRename"
                                                                 VerticalAlignment="Center"
-                                                                AutomationProperties.AutomationId="assistant.session-rename-save"/>
+                                                                AutomationProperties.Name="{Binding Name, StringFormat='Save the new name for {0}'}"/>
                                                         <Button Grid.Column="2" Content="Cancel" Classes="Link"
                                                                 Click="OnCancelRename"
                                                                 VerticalAlignment="Center"
-                                                                AutomationProperties.AutomationId="assistant.session-rename-cancel"/>
+                                                                AutomationProperties.Name="{Binding Name, StringFormat='Keep the name {0}'}"/>
                                                     </Grid>
 
                                                     <!-- Confirming delete: an inline second click, as the
@@ -539,10 +553,10 @@
                                                                     Click="OnConfirmDelete"
                                                                     IsEnabled="{Binding CanDelete}"
                                                                     Foreground="{DynamicResource SystemFillColorCriticalBrush}"
-                                                                    AutomationProperties.AutomationId="assistant.session-delete-confirm"/>
+                                                                    AutomationProperties.Name="{Binding Name, StringFormat='Delete {0} permanently'}"/>
                                                             <Button Content="Keep" Classes="Link"
                                                                     Click="OnCancelDelete"
-                                                                    AutomationProperties.AutomationId="assistant.session-delete-cancel"/>
+                                                                    AutomationProperties.Name="{Binding Name, StringFormat='Keep {0}'}"/>
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </StackPanel>
