@@ -1,6 +1,15 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CST.Avalonia.ViewModels;
+using Serilog;
 
 namespace CST.Avalonia.Views;
 
@@ -8,8 +17,9 @@ namespace CST.Avalonia.Views;
 /// The in-app assistant's view. (#586)
 ///
 /// <para>
-/// Everything it shows is bound and everything it does is a command on <c>AiAssistantViewModel</c>, with one
-/// exception below: a drag has no command form. There is no WebView here and there must never be one — see
+/// Everything it shows is bound and everything it does is a command on <c>AiAssistantViewModel</c>, with two
+/// exceptions below: a drag has no command form, and the session list's row actions are routed here to reach
+/// the view model with their row. There is no WebView here and there must never be one — see
 /// the panel's XAML header and AI_SURFACE_B.md §8.
 /// </para>
 /// </summary>
@@ -45,6 +55,11 @@ public partial class AiAssistantPanel : UserControl
         // reader's next act is to dismiss a popup rather than ask the question they opened it for. The effort
         // picker had the IsOpen state and nothing observing it, which is the same bug this block already
         // exists to prevent — it just had not been extended to the second chip. (fable review)
+        // A rename box or a "Delete?" left open when the list is dismissed is not waiting for anything: the
+        // reader looked away, which is an answer. Reopening the list shows every row plain. (#997)
+        if (SessionsChip.Flyout is { } sessionsFlyout)
+            sessionsFlyout.Closed += (_, _) => ResetSessionRows();
+
         if (EffortChip.Flyout is { } effortFlyout)
         {
             effortFlyout.Opened += (_, _) => SetEffortOpen(true);
@@ -117,5 +132,121 @@ public partial class AiAssistantPanel : UserControl
     {
         if (DataContext is AiAssistantViewModel vm)
             vm.ResizeReasoning(e.Vector.Y);
+    }
+
+    // ---- The session list (#997). Code-behind because each action carries view work beside it - closing the
+    // list on a switch, focusing the rename box, closing other rows' prompts - and a Flyout has no bindable
+    // open state (see OnPickerChanged). The handlers take the row from the clicked control's DataContext and
+    // call the panel's own methods, which is where the rules (busy, refused names, which row may go) live. ----
+
+    private static AiSessionRowViewModel? RowOf(object? sender) =>
+        (sender as Control)?.DataContext as AiSessionRowViewModel;
+
+    /// <summary>
+    /// Run a session operation without waiting for it. The panel's methods, not its commands: a ReactiveCommand
+    /// refuses to run while its previous run is still going, and a rename or delete takes a store write plus a
+    /// full re-listing - so the second of two quick deletes, the natural way to prune a long list, was refused
+    /// after its row had already closed its prompt, and looked accepted (review of #1009). The methods keep
+    /// their own guards (busy, refused names, which row may go) and catch their own store failures.
+    /// </summary>
+    private static void Forget(Task operation) =>
+        operation.ContinueWith(
+            t => Log.Error(t.Exception, "An Assistant session operation failed"),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+
+    private void OnSwitchSession(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not AiAssistantViewModel vm || RowOf(sender) is not { } row) return;
+        SessionsChip.Flyout?.Hide();
+        Forget(vm.SwitchToSessionAsync(row.Id));
+    }
+
+    private void OnBeginRename(object? sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is not { } row) return;
+        foreach (var other in OtherRows(row)) { other.CancelRename(); other.CancelDelete(); }
+        row.BeginRename();
+
+        // The box becomes visible on the next layout pass; focus it then, with the old name selected so typing
+        // replaces it — what a rename box is for.
+        var box = (sender as Control)?.FindAncestorOfType<StackPanel>()
+            ?.GetVisualDescendants().OfType<TextBox>().FirstOrDefault();
+        if (box is null) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            box.Focus();
+            box.SelectAll();
+        }, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// A rename box that appears already open is a row whose container was rebuilt - the list reordered under
+    /// it (a finished answer moves its conversation to the top) and <c>Move</c> gave the row a new container.
+    /// The row's state survived; give the new box the focus the old one had, caret at the end, so typing
+    /// carries on. (review of #1009, measured headless)
+    /// </summary>
+    private void OnRenameBoxAttached(object? sender, global::Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (box.DataContext is AiSessionRowViewModel { IsRenaming: true } && box.IsEffectivelyVisible)
+            {
+                box.Focus();
+                box.CaretIndex = box.Text?.Length ?? 0;
+            }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void OnCommitRename(object? sender, RoutedEventArgs e) => CommitRename(RowOf(sender));
+
+    private void OnCancelRename(object? sender, RoutedEventArgs e) => RowOf(sender)?.CancelRename();
+
+    private void OnRenameKeyDown(object? sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Enter:
+                CommitRename(RowOf(sender));
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                // Handled, so Escape closes the box and not the whole list.
+                RowOf(sender)?.CancelRename();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void CommitRename(AiSessionRowViewModel? row)
+    {
+        if (DataContext is not AiAssistantViewModel vm || row is null) return;
+        if (row.CommitRename() is { } rename) Forget(vm.RenameSessionAsync(rename.Id, rename.Name));
+    }
+
+    private void OnBeginDelete(object? sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is not { } row) return;
+        foreach (var other in OtherRows(row)) { other.CancelRename(); other.CancelDelete(); }
+        row.BeginDelete();
+    }
+
+    private void OnCancelDelete(object? sender, RoutedEventArgs e) => RowOf(sender)?.CancelDelete();
+
+    private void OnConfirmDelete(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not AiAssistantViewModel vm || RowOf(sender) is not { } row) return;
+        row.CancelDelete();
+        Forget(vm.DeleteSessionAsync(row.Id));
+    }
+
+    private IEnumerable<AiSessionRowViewModel> OtherRows(AiSessionRowViewModel row) =>
+        (DataContext as AiAssistantViewModel)?.Sessions.Where(r => !ReferenceEquals(r, row))
+        ?? Enumerable.Empty<AiSessionRowViewModel>();
+
+    private void ResetSessionRows()
+    {
+        if (DataContext is not AiAssistantViewModel vm) return;
+        foreach (var row in vm.Sessions) { row.CancelRename(); row.CancelDelete(); }
     }
 }

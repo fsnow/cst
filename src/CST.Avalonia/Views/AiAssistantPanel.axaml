@@ -5,6 +5,7 @@
              xmlns:vm="using:CST.Avalonia.ViewModels"
              xmlns:views="using:CST.Avalonia.Views"
              xmlns:ai="using:CST.Avalonia.Services.Ai"
+             xmlns:conv="using:CST.Avalonia.Converters"
              mc:Ignorable="d" d:DesignWidth="380" d:DesignHeight="700"
              x:Class="CST.Avalonia.Views.AiAssistantPanel"
              x:DataType="vm:AiAssistantViewModel">
@@ -33,6 +34,20 @@
              icons: a local value would beat this rule. Pinned by AiAssistantPanelIconStyleTests. -->
         <Style Selector="Button:disabled > PathIcon">
             <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundDisabled}"/>
+        </Style>
+
+        <!-- Quiet text buttons for the session rows' Save / Cancel / Delete / Keep - the same two rules
+             AiProvidersView defines for its rows, which that view scopes to itself. Pinned by
+             AiAssistantPanelIconStyleTests. -->
+        <Style Selector="Button.Link">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style Selector="Button.Link:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
         </Style>
     </UserControl.Styles>
 
@@ -393,21 +408,184 @@
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="8,4,8,4">
-            <Button x:Name="NewConversationButton"
-                    HorizontalAlignment="Right"
-                    Command="{Binding NewConversationCommand}"
-                    Padding="6,4"
-                    ToolTip.Tip="New conversation"
-                    AutomationProperties.AutomationId="assistant.new-conversation"
-                    AutomationProperties.Name="New conversation">
-                <Button.IsEnabled>
-                    <MultiBinding Converter="{x:Static BoolConverters.And}">
-                        <Binding Path="CanAsk"/>
-                        <Binding Path="HasTurns"/>
-                    </MultiBinding>
-                </Button.IsEnabled>
-                <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="12" Height="12"/>
-            </Button>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+
+                <!-- The session switcher (#997): the conversation on screen, and the list of every saved one.
+                     [fsnow]: "Claude Code itself is my model" - this is the /resume picker. The list is
+                     newest-active first; a row shows name, when, how many turns and the books its citations
+                     name, and clicking it switches. Rename and Delete are on the row. [fsnow] chose "One
+                     global list" and delete "Yes, with confirmation" (ASSISTANT_SESSIONS.md §6).
+
+                     A flyout rather than a standing list [suggestion]: the panel is a narrow column whose
+                     height belongs to the transcript. The list opens whenever there is a saved conversation
+                     (HasSessions), a turn running or not; switching waits for the turn (CanSwitchSession),
+                     and each row's Delete follows its own CanDelete.
+
+                     Rows carry no AutomationId: every generated row would share it (ACCESSIBILITY_NAMING.md
+                     §2). The list has the id; each row's controls have a Name that includes the row's name. -->
+                <Button x:Name="SessionsChip"
+                        Grid.Column="0"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="4,4"
+                        IsEnabled="{Binding HasSessions}"
+                        ToolTip.Tip="Conversations"
+                        AutomationProperties.AutomationId="assistant.sessions"
+                        AutomationProperties.Name="Conversations">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding ActiveSessionName}"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="⌄" FontSize="10" Margin="6,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedLeft" ShowMode="Standard">
+                            <ScrollViewer Width="330" MaxHeight="420" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Sessions}"
+                                              AutomationProperties.AutomationId="assistant.session-list"
+                                              AutomationProperties.Name="Conversations">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AiSessionRowViewModel">
+                                            <Border CornerRadius="4" Padding="0" Margin="0,0,0,2"
+                                                    Classes.Active="{Binding IsActive}">
+                                                <Border.Styles>
+                                                    <!-- The conversation on screen: filled and its name
+                                                         in semibold, two readings of one fact. -->
+                                                    <Style Selector="Border.Active">
+                                                        <Setter Property="Background"
+                                                                Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                                    </Style>
+                                                    <Style Selector="Border.Active TextBlock.SessionName">
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </Style>
+                                                </Border.Styles>
+                                                <StackPanel>
+
+                                                    <!-- Idle: the row is a switch button, with Rename and
+                                                         Delete beside it (siblings, not nested buttons). -->
+                                                    <Grid ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding IsIdle}">
+                                                        <Button Grid.Column="0"
+                                                                Click="OnSwitchSession"
+                                                                IsEnabled="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).CanSwitchSession}"
+                                                                HorizontalAlignment="Stretch"
+                                                                HorizontalContentAlignment="Stretch"
+                                                                Background="Transparent"
+                                                                BorderThickness="0"
+                                                                Padding="8,4"
+                                                                AutomationProperties.Name="{Binding Name}">
+                                                            <StackPanel Spacing="1">
+                                                                <TextBlock Classes="SessionName"
+                                                                           Text="{Binding Name}"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <TextBlock Text="{Binding LastActive, Converter={x:Static conv:AiSessionTimeConverter.Instance}}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <TextBlock Text="·" FontSize="11"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                    <TextBlock Text="{Binding TurnCount, Converter={x:Static conv:AiSessionTurnCountConverter.Instance}}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding BookIds, Converter={x:Static conv:AiSessionBooksConverter.Instance}}"
+                                                                           IsVisible="{Binding $self.Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                                           FontSize="11"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button Grid.Column="1"
+                                                                Click="OnBeginRename"
+                                                                IsEnabled="{Binding $parent[ItemsControl].((vm:AiAssistantViewModel)DataContext).CanRenameSession}"
+                                                                VerticalAlignment="Center"
+                                                                Background="Transparent" BorderThickness="0"
+                                                                Padding="6,4"
+                                                                ToolTip.Tip="Rename"
+                                                                AutomationProperties.Name="{Binding Name, StringFormat='Rename {0}'}">
+                                                            <PathIcon Width="12" Height="12"
+                                                                      Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/>
+                                                        </Button>
+                                                        <Button Grid.Column="2"
+                                                                Click="OnBeginDelete"
+                                                                IsEnabled="{Binding CanDelete}"
+                                                                VerticalAlignment="Center"
+                                                                Background="Transparent" BorderThickness="0"
+                                                                Padding="6,4"
+                                                                ToolTip.Tip="Delete"
+                                                                AutomationProperties.Name="{Binding Name, StringFormat='Delete {0}'}">
+                                                            <PathIcon Width="12" Height="12"
+                                                                      Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+                                                        </Button>
+                                                    </Grid>
+
+                                                    <!-- Renaming: Enter keeps the new name, Escape the old
+                                                         one (code-behind, with the other row actions). -->
+                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4"
+                                                          Margin="8,4" IsVisible="{Binding IsRenaming}">
+                                                        <TextBox Text="{Binding RenameText}"
+                                                                 KeyDown="OnRenameKeyDown"
+                                                                 AttachedToVisualTree="OnRenameBoxAttached"
+                                                                 AutomationProperties.Name="{Binding Name, StringFormat='New name for {0}'}"/>
+                                                        <Button Grid.Column="1" Content="Save" Classes="Link"
+                                                                Click="OnCommitRename"
+                                                                VerticalAlignment="Center"
+                                                                AutomationProperties.Name="{Binding Name, StringFormat='Save the new name for {0}'}"/>
+                                                        <Button Grid.Column="2" Content="Cancel" Classes="Link"
+                                                                Click="OnCancelRename"
+                                                                VerticalAlignment="Center"
+                                                                AutomationProperties.Name="{Binding Name, StringFormat='Keep the name {0}'}"/>
+                                                    </Grid>
+
+                                                    <!-- Confirming delete: an inline second click, as the
+                                                         Providers rows do. Nothing to dismiss, and looking away
+                                                         is a valid answer. -->
+                                                    <StackPanel Margin="8,4" Spacing="2" IsVisible="{Binding IsConfirmingDelete}">
+                                                        <TextBlock Text="{Binding Name, StringFormat='Delete “{0}”?'}"
+                                                                   TextWrapping="Wrap"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <Button Content="Delete" Classes="Link"
+                                                                    Click="OnConfirmDelete"
+                                                                    IsEnabled="{Binding CanDelete}"
+                                                                    Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                                                    AutomationProperties.Name="{Binding Name, StringFormat='Delete {0} permanently'}"/>
+                                                            <Button Content="Keep" Classes="Link"
+                                                                    Click="OnCancelDelete"
+                                                                    AutomationProperties.Name="{Binding Name, StringFormat='Keep {0}'}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <Button x:Name="NewConversationButton"
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Command="{Binding NewConversationCommand}"
+                        Padding="6,4"
+                        ToolTip.Tip="New conversation"
+                        AutomationProperties.AutomationId="assistant.new-conversation"
+                        AutomationProperties.Name="New conversation">
+                    <Button.IsEnabled>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CanAsk"/>
+                            <Binding Path="HasTurns"/>
+                        </MultiBinding>
+                    </Button.IsEnabled>
+                    <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="12" Height="12"/>
+                </Button>
+            </Grid>
         </Border>
 
         <!-- ============ The transcript, scrolling ============ -->

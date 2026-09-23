@@ -1,6 +1,10 @@
 using System;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Media;
+using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
@@ -12,7 +16,8 @@ using Xunit;
 namespace CST.Avalonia.UiTests.Views;
 
 /// <summary>
-/// The Assistant panel's icon buttons dim when disabled. (#850)
+/// The Assistant panel's own button styles: icon buttons dim when disabled (#850), and link buttons are quiet
+/// text (#997).
 ///
 /// <para><b>The failure this exists for.</b> Fluent's PathIcon ControlTheme sets Foreground, which outranks the
 /// dimmed foreground a disabled Button passes down by inheritance. The + (new conversation) button shipped for
@@ -61,6 +66,38 @@ public class AiAssistantPanelIconStyleTests
             StyleProbe.AssertNotStyled(icon, PathIcon.ForegroundProperty,
                 StyleProbe.Brush(icon, DisabledForeground),
                 "The enabled + icon is dimmed: the rule is no longer confined to ':disabled'.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// The session rows' Save / Cancel / Delete / Keep are <c>Button.Link</c>. That class was styled only
+    /// inside AiProvidersView and AiModelsView, each scoped to itself, so here it matched nothing and the four
+    /// rendered as filled Fluent buttons (review of #1009). The rows live in a flyout template, so this probes
+    /// the rule with a Link button placed in the panel itself: same UserControl.Styles, same selector.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void The_panel_styles_link_buttons(string themeVariant)
+    {
+        var (window, plus) = Show(themeVariant);
+        try
+        {
+            var link = new Button { Content = "Keep", Classes = { "Link" } };
+            ((DockPanel)plus.FindAncestorOfType<Border>()!.Parent!).Children.Insert(0, link);
+            DockPanel.SetDock(link, global::Avalonia.Controls.Dock.Top);
+            StyleProbe.Pump(window);
+
+            StyleProbe.AssertStyled(link, TemplatedControl.BorderThicknessProperty, new Thickness(0),
+                "A Button.Link in the Assistant panel keeps Fluent's border: the panel has no Button.Link rule.");
+            // Background rather than Foreground: the Link foreground is an App.axaml resource, which this
+            // harness does not load (see HeadlessStyleTestApp).
+            StyleProbe.AssertStyled(link, TemplatedControl.BackgroundProperty, Brushes.Transparent,
+                "A Button.Link in the Assistant panel keeps Fluent's fill: the panel has no Button.Link rule.");
         }
         finally
         {
