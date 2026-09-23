@@ -75,16 +75,17 @@ public sealed class AiSession
     public List<AiTurnRecord> Turns { get; set; } = new();
 
     /// <summary>
-    /// Summaries that stand in for older turns in what the model is SENT. Empty until P4 exists.
+    /// Summaries that stand in for older turns in what the model is SENT, oldest first. (#998)
     ///
-    /// <para>A slot rather than a feature: compaction (<b>[fsnow]</b>: <i>"Manual and auto at a fraction of
-    /// context length"</i>, <i>"Last 4 turns"</i> verbatim) replaces a run of turns in the request with one
-    /// summary while the transcript on screen keeps every turn. That summary is model output that cost a call
-    /// and cannot be recomputed from the file, so it belongs in the file — and it belongs at the session level
-    /// rather than on a turn, because it is about a span of them.</para>
+    /// <para>Compaction (<b>[fsnow]</b>: <i>"Manual and auto at a fraction of context length"</i>, <i>"Last 4
+    /// turns"</i> verbatim) replaces a run of turns in the request with one summary while the transcript on screen
+    /// keeps every turn. That summary is model output that cost a call and cannot be recomputed from the file, so
+    /// it belongs in the file — and it belongs at the session level rather than on a turn, because it is about a
+    /// span of them.</para>
     ///
-    /// <para>Here now because adding it later would mean a format change to every session on disk; empty now
-    /// because nothing writes it. <b>[suggestion]</b>.</para>
+    /// <para><b>The last one is the one in force.</b> Each compaction folds the one before it into its summary and
+    /// lists every turn it stands in for, so the earlier records are history: what an earlier turn was sent with
+    /// (<see cref="AiSentRecord.SummaryId"/>) still resolves to them.</para>
     /// </summary>
     public List<AiCompactionRecord> Compactions { get; set; } = new();
 
@@ -362,6 +363,20 @@ public sealed class AiSentRecord
     /// </summary>
     public List<string> ReplayedTurnIds { get; set; } = new();
 
+    /// <summary>
+    /// The compaction whose summary was replayed FIRST, ahead of <see cref="ReplayedTurnIds"/>, as an
+    /// <see cref="AiCompactionRecord.Id"/> — or null where nothing had been compacted. (#998)
+    ///
+    /// <para>By reference, for the reason the turns are: the summary is in the session once, and the id plus
+    /// <see cref="AiCompactionRecord.AskedLine"/> and <see cref="AiCompactionRecord.Summary"/> rebuild the first
+    /// replayed exchange exactly. So a restored turn's Sent block shows the summary it was actually sent with,
+    /// even after later compactions have replaced it for the turns that followed.</para>
+    ///
+    /// <para>An id that resolves to nothing is skipped, as a dangling turn id is. Absent in a file an older build
+    /// wrote; an older build reading a newer file keeps it through the extension data below.</para>
+    /// </summary>
+    public string? SummaryId { get; set; }
+
     /// <inheritdoc cref="AiSession.UnknownProperties"/>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownProperties { get; set; }
@@ -422,8 +437,7 @@ public sealed class AiPageRecord
 }
 
 /// <summary>
-/// One compaction: a run of turns replaced, in what the model is sent, by a summary of them. Written by P4;
-/// nothing writes it yet.
+/// One compaction: a run of turns replaced, in what the model is sent, by a summary of them. (#998)
 ///
 /// <para>The summary is model output that cost a call and cannot be recomputed from the turns it replaced —
 /// the same model may not be configured tomorrow, and a re-summary would differ — so it is stored rather than
@@ -432,14 +446,52 @@ public sealed class AiPageRecord
 /// </summary>
 public sealed class AiCompactionRecord
 {
+    /// <summary>Identity within the session, so a turn's record can name the summary it was sent with
+    /// (<see cref="AiSentRecord.SummaryId"/>) without copying it. Generated like a turn id.</summary>
+    public string Id { get; set; } = AiSession.NewId();
+
     /// <summary>When the summary was made.</summary>
     public DateTimeOffset When { get; set; }
 
-    /// <summary>The summary itself, as the model wrote it.</summary>
+    /// <summary>The summary itself, as the model wrote it — <c>[[…]]</c> Pāli markers intact, because it is
+    /// replayed to the model and never rendered as an answer.</summary>
     public string Summary { get; set; } = string.Empty;
 
-    /// <summary>The turns it stands in for, as <see cref="AiTurnRecord.Id"/> values, oldest first.</summary>
+    /// <summary>
+    /// The user side the summary is replayed after — <c>AiCompaction.SummaryAskedLine</c> as it read when this was
+    /// made. Stored for the reason <see cref="AiTurnRecord.AskedLine"/> is: a record of what a model saw must not
+    /// re-render itself from today's wording. Null in a file written before it existed; the restore path falls back
+    /// to today's line.
+    /// </summary>
+    public string? AskedLine { get; set; }
+
+    /// <summary>
+    /// Every turn the summary stands in for, as <see cref="AiTurnRecord.Id"/> values, oldest first — <b>including
+    /// the turns of the compaction before it</b>, whose summary this one folded in. So the latest record alone says
+    /// which turns the model is no longer shown word for word.
+    /// </summary>
     public List<string> SummarisedTurnIds { get; set; } = new();
+
+    /// <summary>What the reader asked the summary to attend to (the Compact action's instructions), or null.</summary>
+    public string? Instructions { get; set; }
+
+    /// <summary>Whether the app made it on its own — the threshold, or a too-long rejection — rather than the reader
+    /// pressing Compact.</summary>
+    public bool Automatic { get; set; }
+
+    /// <summary>Which connection and model wrote the summary. It is model output, and attributable like an
+    /// answer.</summary>
+    public string? ProviderId { get; set; }
+
+    /// <inheritdoc cref="ProviderId"/>
+    public string? ModelId { get; set; }
+
+    /// <summary>What the summary call cost, as the provider reported it; null where it reported nothing. For an
+    /// automatic compaction the same tokens are also in the turn's own count, which paid for them.</summary>
+    public int? InputTokens { get; set; }
+
+    /// <inheritdoc cref="InputTokens"/>
+    public int? OutputTokens { get; set; }
 
     /// <inheritdoc cref="AiSession.UnknownProperties"/>
     [JsonExtensionData]

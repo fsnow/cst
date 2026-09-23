@@ -299,6 +299,7 @@ public sealed class AiSessionStore : IAiSessionStore
         session.Compactions.RemoveAll(c => c is null);
         foreach (var compaction in session.Compactions)
         {
+            compaction.Id ??= AiSession.NewId();
             compaction.Summary ??= string.Empty;
             compaction.SummarisedTurnIds ??= new List<string>();
             compaction.SummarisedTurnIds.RemoveAll(id => id is null);

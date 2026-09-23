@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using CST.Avalonia.Models;
 using Xunit;
@@ -153,6 +154,45 @@ namespace CST.Avalonia.Tests.Models
             Assert.DoesNotContain("mcpEnabled", json, System.StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("serverShouldRun", json, System.StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("remoteControlAllowed", json, System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Automatic compaction defaults to 95% of the context window. [fsnow]: "95%, but make this a setting".
+        /// (#998) A file written before the setting existed reads as the default, not as 0 — which would be "off".
+        /// </summary>
+        [Fact]
+        public void Auto_compact_defaults_to_95_including_for_a_file_without_it()
+        {
+            Assert.Equal(95, new Settings().Ai.Chat.AutoCompactPercent);
+            Assert.Equal(CST.Avalonia.Services.Ai.AiCompaction.DefaultAutoCompactPercent,
+                         new Settings().Ai.Chat.AutoCompactPercent);
+
+            const string json = "{ \"version\": \"1.0\", \"ai\": { \"chat\": { \"answerLanguage\": \"English\" } } }";
+            var settings = JsonSerializer.Deserialize<Settings>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            Assert.Equal(95, settings!.Ai.Chat.AutoCompactPercent);
+        }
+
+        /// <summary>0 (off) through 100 are kept; anything else is put back to the default on load, the way a bad
+        /// log level is. (#998)</summary>
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(1, 1)]
+        [InlineData(95, 95)]
+        [InlineData(100, 100)]
+        [InlineData(-1, 95)]
+        [InlineData(101, 95)]
+        [InlineData(int.MinValue, 95)]
+        public void Auto_compact_outside_0_to_100_is_repaired_to_the_default(int stored, int expected)
+        {
+            var settings = new Settings();
+            settings.Ai.Chat.AutoCompactPercent = stored;
+
+            var fixes = SettingsValidator.Sanitize(settings);
+
+            Assert.Equal(expected, settings.Ai.Chat.AutoCompactPercent);
+            Assert.Equal(stored != expected, fixes.Any(f => f.Contains("autoCompactPercent")));
         }
     }
 }

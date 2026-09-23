@@ -302,8 +302,8 @@ same reference with the same selection state and answer language, and changes as
 Neither adapter sets Anthropic's `cache_control`. A prefix that could be cached reliably therefore needs work
 beyond #991: the varying scope statement would have to move out of the system prompt into the per-turn
 message. Persistence,
-named sessions and compaction are planned separately in
-[ASSISTANT_SESSIONS.md](../planned/ASSISTANT_SESSIONS.md).
+named sessions and compaction (older turns summarised, the last four replayed word for word, #998) are
+described in [ASSISTANT_SESSIONS.md](../planned/ASSISTANT_SESSIONS.md).
 
 All errors normalize into one `AiError` type: not-configured, no-network, 401, 429 + retry-after,
 context-too-long, provider-shaped. **Provider error bodies are sanitized before logging** — some providers echo
