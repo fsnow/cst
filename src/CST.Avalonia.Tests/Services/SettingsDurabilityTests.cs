@@ -279,14 +279,32 @@ public sealed class SettingsDurabilityTests : IDisposable
 
     // ---- the log level (#882) --------------------------------------------------------------------------
 
-    /// <summary>A sink that records what reached it, and whether it was ever disposed.</summary>
+    /// <summary>
+    /// A sink that records what reached it, and whether it was ever disposed.
+    ///
+    /// <para><b>Written to from other threads.</b> The test installs it as the process-global logger, and xunit
+    /// runs other classes in parallel, so anything that logs through the static <c>Serilog.Log</c> meanwhile
+    /// lands here too — <c>AiModelListingCache</c>'s unreadable-cache warning is the one that was seen (#993).
+    /// A plain list enumerated by an assertion while another thread adds to it throws "Collection was
+    /// modified", so the messages are taken as a snapshot under a lock.</para>
+    /// </summary>
     private sealed class RecordingSink : Serilog.Core.ILogEventSink, IDisposable
     {
-        public System.Collections.Generic.List<string> Messages { get; } = new();
+        private readonly object _gate = new();
+        private readonly System.Collections.Generic.List<string> _messages = new();
+
+        public System.Collections.Generic.IReadOnlyList<string> Messages
+        {
+            get { lock (_gate) return _messages.ToArray(); }
+        }
+
         public bool Disposed { get; private set; }
 
-        public void Emit(Serilog.Events.LogEvent logEvent) =>
-            Messages.Add(logEvent.RenderMessage());
+        public void Emit(Serilog.Events.LogEvent logEvent)
+        {
+            var text = logEvent.RenderMessage();
+            lock (_gate) _messages.Add(text);
+        }
 
         public void Dispose() => Disposed = true;
     }
@@ -324,7 +342,10 @@ public sealed class SettingsDurabilityTests : IDisposable
             // Captured BEFORE the change, the way every service's _logger field is.
             var captured = Serilog.Log.ForContext<SettingsDurabilityTests>();
             captured.Debug("before");                       // below the level: correctly absent
-            Assert.Empty(sink.Messages);
+            // About THIS line, not about the sink being empty: the sink is the process-global logger while this
+            // runs, and a class running in parallel may log through it — #993 caught AiModelListingCache's
+            // warning here. That is not this test's business; whether "before" got through is.
+            Assert.DoesNotContain("before", sink.Messages);
 
             CST.Avalonia.ViewModels.DeveloperSettingsViewModel.ApplyLogLevel("Debug");
 
