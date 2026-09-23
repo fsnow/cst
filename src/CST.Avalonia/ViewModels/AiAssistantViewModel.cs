@@ -281,6 +281,21 @@ public class AiAssistantViewModel : ReactiveTool
     public bool HasSessions => Sessions.Count > 0;
 
     /// <summary>
+    /// The name of the conversation on screen, for the session switcher's label: the active row's name, or
+    /// "New conversation" when no row is active (a fresh panel, or one whose first turn is not yet saved).
+    /// Set in one place, <see cref="UpdateRowAvailability"/>, which is where the active row is decided.
+    /// </summary>
+    public string ActiveSessionName
+    {
+        get => _activeSessionName;
+        private set => this.RaiseAndSetIfChanged(ref _activeSessionName, value);
+    }
+
+    private string _activeSessionName = NewConversationName;
+
+    internal const string NewConversationName = "New conversation";
+
+    /// <summary>
     /// Show a listed conversation in the panel. Parameter: the session id (<see cref="AiSessionRowViewModel.Id"/>).
     /// See <see cref="SwitchToSessionAsync"/>.
     /// </summary>
@@ -1457,6 +1472,8 @@ public class AiAssistantViewModel : ReactiveTool
             row.CanDelete = !(IsBusy
                               && (active || string.Equals(row.Id, _switchingTo, StringComparison.Ordinal)));
         }
+
+        ActiveSessionName = Sessions.FirstOrDefault(r => r.IsActive)?.Name ?? NewConversationName;
     }
 
     /// <summary>

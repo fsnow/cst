@@ -96,6 +96,77 @@ public sealed class AiSessionRowViewModel : ReactiveObject
         internal set => this.RaiseAndSetIfChanged(ref _canDelete, value);
     }
 
+    // ---- The view's own state for this row: a rename box open, a delete awaiting its second click. ----
+    // Held here, not in the view, because a row keeps its identity across refreshes (see the class comment): an
+    // open rename box survives the refresh at the end of an answer. At most one of the two is open at a time.
+
+    private bool _isRenaming;
+    private string _renameText = string.Empty;
+    private bool _isConfirmingDelete;
+
+    /// <summary>Whether the row shows its rename box in place of its name.</summary>
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isRenaming, value);
+            this.RaisePropertyChanged(nameof(IsIdle));
+        }
+    }
+
+    /// <summary>The rename box's text. Starts as the current name.</summary>
+    public string RenameText
+    {
+        get => _renameText;
+        set => this.RaiseAndSetIfChanged(ref _renameText, value ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Whether the row is asking "Delete this conversation?". <b>[fsnow]</b> chose delete <i>"Yes, with
+    /// confirmation"</i>; the form — an inline second click, as the Providers rows do — is [suggestion].
+    /// </summary>
+    public bool IsConfirmingDelete
+    {
+        get => _isConfirmingDelete;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isConfirmingDelete, value);
+            this.RaisePropertyChanged(nameof(IsIdle));
+        }
+    }
+
+    /// <summary>Neither renaming nor confirming: the row shows its name and its Rename and Delete actions.</summary>
+    public bool IsIdle => !IsRenaming && !IsConfirmingDelete;
+
+    public void BeginRename()
+    {
+        IsConfirmingDelete = false;
+        RenameText = Name;
+        IsRenaming = true;
+    }
+
+    public void CancelRename() => IsRenaming = false;
+
+    /// <summary>
+    /// Close the rename box and say what to send, or null when there is nothing to send: a blank name (which the
+    /// panel would refuse anyway) or the name unchanged (which would be a write for nothing).
+    /// </summary>
+    public AiSessionRename? CommitRename()
+    {
+        IsRenaming = false;
+        var name = RenameText.Trim();
+        return name.Length == 0 || name == Name ? null : new AiSessionRename(Id, name);
+    }
+
+    public void BeginDelete()
+    {
+        IsRenaming = false;
+        IsConfirmingDelete = true;
+    }
+
+    public void CancelDelete() => IsConfirmingDelete = false;
+
     /// <summary>Take the values of a fresh summary of the same session.</summary>
     internal void Update(AiSessionSummary summary)
     {

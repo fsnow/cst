@@ -240,6 +240,14 @@ its citations name. Click switches the panel to it (the in-flight turn, if any, 
   **[fsnow]** chose *"Disabled when empty"* (2026-09-22, the option label he selected when asked on the Kestrel
   session's behalf).
 
+**[observed] The view (#997 UI, 2026-09-22).** The panel's top row holds the + and, beside it, a switcher
+labelled with the conversation on screen (`ActiveSessionName`, "New conversation" when none is). It opens a
+flyout listing `Sessions`: each row shows the name, the last-active time, the turn count and the books, with
+Rename and Delete icons. Rename opens an inline box (Enter keeps, Escape cancels). Delete asks inline, naming the
+conversation, with Delete and Keep, as the Providers rows do. The flyout form, the inline confirmation and the row layout
+are [suggestion]; the rows' rename and confirmation state lives on `AiSessionRowViewModel` so it survives the
+list refresh after each answer.
+
 ### 3.4 Compaction (P4)
 
 Manual **Compact** and automatic compaction share one mechanism: the older turns are summarised by the active
@@ -285,7 +293,7 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
 | **P0** | #850 | The **+** (new conversation) control; remove `ClearCommand`/`Clear()` | ✗ (one button) | — |
 | **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request | ✅ | — |
 | **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
-| **P3** | #997 | Session list, switch, rename, delete on the panel view model (new and auto-name landed with P2) — **backend done** (§3.3); the list, rename and delete UI remain | service ✅, panel ✗ | P2 |
+| **P3** | #997 | Session list, switch, rename, delete (new and auto-name landed with P2) — **done** (§3.3): backend on the panel view model, UI in the panel's top row | ✅ | P2 |
 | **P4** | new | Compaction: template, summariser, marker row, manual action, auto trigger from `ContextLength` | ✅ except the action | P1, P3 |
 | **P5** | #849 | Take me back: open + go-to + position restore, as a turn action | ✗ (dock + WebView) | P2 |
 
