@@ -2111,11 +2111,18 @@ public class AiAssistantViewModel : ReactiveTool
     /// <summary>
     /// The book's own name from the bundle's path. The path is useful context and a poor caption: what a
     /// reader needs beside an answer is which book, not the four levels of canon above it.
+    ///
+    /// <para><b>Title-cased, the way the book tabs spell it.</b> The bundle's path is converted to Latin without
+    /// title case, so this read "sīlakkhandhavaggapāḷi" under every answer, and the same lowercase leaf became
+    /// the conversation's auto-name — beside a session list and a tab strip that both read "Sīlakkhandhavaggapāḷi".
+    /// <b>[fsnow]</b>, asked whether the citation and the auto-name should be title-cased like the tabs:
+    /// <i>"title case? yes"</i> (2026-09-22). <c>ScriptConverter.ToTitleCase</c> is the helper the tabs use, so
+    /// the two cannot drift.</para>
     /// </summary>
     internal static string LeafBookName(string? bookName)
     {
         if (string.IsNullOrWhiteSpace(bookName)) return "";
         var segments = bookName.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return segments.Length == 0 ? bookName.Trim() : segments[^1];
+        return CST.Conversion.ScriptConverter.ToTitleCase(segments.Length == 0 ? bookName.Trim() : segments[^1]);
     }
 }
