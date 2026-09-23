@@ -17,9 +17,9 @@ namespace CST.Avalonia.Views;
 /// The in-app assistant's view. (#586)
 ///
 /// <para>
-/// Everything it shows is bound and everything it does is a command on <c>AiAssistantViewModel</c>, with two
-/// exceptions below: a drag has no command form, and the session list's row actions are routed here to reach
-/// the view model with their row. There is no WebView here and there must never be one — see
+/// Everything it shows is bound. What it does is a command on <c>AiAssistantViewModel</c>, except what is below:
+/// a drag, which has no command form, and the session list's row actions and Compact, which call the view
+/// model's methods directly because each also has view work to do (closing a flyout, focusing a box). There is no WebView here and there must never be one — see
 /// the panel's XAML header and AI_SURFACE_B.md §8.
 /// </para>
 /// </summary>
@@ -132,6 +132,26 @@ public partial class AiAssistantPanel : UserControl
     {
         if (DataContext is AiAssistantViewModel vm)
             vm.ResizeReasoning(e.Vector.Y);
+    }
+
+    // ---- Compact (#998). CompactAsync is called directly, not CompactCommand, for the reason Forget gives;
+    // with no argument it uses CompactInstructions. The flyout closes when the summary starts, so the reader
+    // sees the transcript it is working on. ----
+
+    private void OnCompact(object? sender, RoutedEventArgs e) => Compact();
+
+    private void OnCompactInstructionsKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        Compact();
+    }
+
+    private void Compact()
+    {
+        if (DataContext is not AiAssistantViewModel vm || !vm.CanCompact) return;
+        CompactChip.Flyout?.Hide();
+        Forget(vm.CompactAsync());
     }
 
     // ---- The session list (#997). Code-behind because each action carries view work beside it - closing the

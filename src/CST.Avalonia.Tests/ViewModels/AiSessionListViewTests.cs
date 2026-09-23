@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reactive.Linq;
@@ -227,5 +228,27 @@ public class AiSessionListViewTests
         var c = AiSessionTurnCountConverter.Instance;
         Assert.Equal("1 turn", c.Convert(1, typeof(string), null, CultureInfo.InvariantCulture));
         Assert.Equal("3 turns", c.Convert(3, typeof(string), null, CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// The compaction summary keeps its [[…]] markers (it is replayed to the model); the marker row shows it as an
+    /// answer is shown - markers stripped and Markdown rendered, because the compaction prompt is Markdown and
+    /// models answer in kind (review of #1013: literal asterisks and dashes on screen). (#998)
+    /// </summary>
+    [Fact]
+    public void A_compaction_summary_is_drawn_as_an_answer_is()
+    {
+        var blocks = Assert.IsAssignableFrom<IReadOnlyList<AnswerBlock>>(AiCompactionSummaryConverter.Instance.Convert(
+            "- **What was asked.** Explain on [[appam\u0101da]].", typeof(object), null, CultureInfo.InvariantCulture));
+
+        var expected = AnswerMarkup.Parse("- **What was asked.** Explain on appam\u0101da.");
+        Assert.Equal(expected.Count, blocks.Count);
+        var text = string.Concat(blocks.OfType<AnswerParagraph>().SelectMany(p => p.Spans).Select(sp => sp.Text));
+        Assert.DoesNotContain("**", text);
+        Assert.DoesNotContain("[[", text);
+        Assert.Contains("appam\u0101da", text);
+
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<AnswerBlock>>(
+            AiCompactionSummaryConverter.Instance.Convert(null, typeof(object), null, CultureInfo.InvariantCulture)));
     }
 }

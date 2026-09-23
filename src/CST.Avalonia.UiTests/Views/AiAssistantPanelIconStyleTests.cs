@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
@@ -44,6 +45,30 @@ public class AiAssistantPanelIconStyleTests
                 StyleProbe.Brush(icon, DisabledForeground),
                 "The disabled + icon keeps its ordinary foreground. 'Button:disabled > PathIcon' in " +
                 "AiAssistantPanel.axaml matched nothing, or a local Foreground on the icon is beating it.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // The Compact icon (#998) rides on the same rule; with nothing to summarise it is disabled.
+    [AvaloniaTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void The_compact_icon_dims_when_there_is_nothing_to_summarise(string themeVariant)
+    {
+        var (window, plus) = Show(themeVariant);
+        try
+        {
+            var compact = ((Control)plus.Parent!).GetLogicalChildren().OfType<Button>()
+                .Single(b => AutomationProperties.GetAutomationId(b) == "assistant.compact");
+            Assert.False(compact.IsEnabled, "Precondition: an empty conversation has nothing to compact.");
+            var icon = compact.GetLogicalChildren().OfType<PathIcon>().Single();
+
+            StyleProbe.AssertStyled(icon, PathIcon.ForegroundProperty,
+                StyleProbe.Brush(icon, DisabledForeground),
+                "The disabled Compact icon keeps its ordinary foreground.");
         }
         finally
         {
