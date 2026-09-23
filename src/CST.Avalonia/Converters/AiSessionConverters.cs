@@ -73,15 +73,16 @@ public sealed class AiSessionTurnCountConverter : IValueConverter
 }
 
 /// <summary>
-/// A compaction summary for display: the <c>[[…]]</c> Pāli markers the model wrote are kept in the stored summary,
-/// because it is replayed to the model, and stripped here as an answer's are on screen. (#998)
+/// A compaction summary for display, as answer blocks: the <c>[[…]]</c> Pāli markers kept in the stored summary
+/// (it is replayed to the model) are stripped, and the Markdown the model writes is parsed as an answer's is.
+/// (#998)
 /// </summary>
-public sealed class AiPaliMarkerStripConverter : IValueConverter
+public sealed class AiCompactionSummaryConverter : IValueConverter
 {
-    public static readonly AiPaliMarkerStripConverter Instance = new();
+    public static readonly AiCompactionSummaryConverter Instance = new();
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        value is string text ? PaliQuoteMarkers.Strip(text) : string.Empty;
+        AnswerMarkup.Parse(value is string text ? PaliQuoteMarkers.Strip(text) : null);
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

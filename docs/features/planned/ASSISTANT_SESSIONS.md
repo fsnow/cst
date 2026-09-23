@@ -329,8 +329,9 @@ step turned off — a degenerate compaction, not built as a separate feature.
 switcher and the +, enabled by `CanCompact`; its flyout has an optional "what the summary should keep" box
 (`CompactInstructions`, Enter runs it) and a Summarise button. "Summarising…" shows in the same row while
 `IsCompacting`, for both triggers; Stop cancels. The marker row is an expander above the turn carrying
-`CompactionMarker`, opening to `CompactionSummary` with the Pāli markers stripped. Summarised turns are drawn
-unchanged. The placement, the flyout and the plain-text summary are [suggestion].
+`CompactionMarker`, opening to `CompactionSummary` drawn as an answer is (markers stripped, Markdown rendered).
+Summarised turns are drawn unchanged. The placement, the flyout and the marker opening to the summary itself
+are [suggestion]; a turn sent after a compaction also shows the summary in its Sent block.
 
 ### 3.5 Take me back (P5)
 

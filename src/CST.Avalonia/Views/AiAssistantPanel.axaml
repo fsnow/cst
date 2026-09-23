@@ -26,6 +26,28 @@
         <Thickness x:Key="ExpanderContentPadding">8,4,8,6</Thickness>
     </UserControl.Resources>
 
+    <!-- An answer's blocks, and the compaction summary's: prose in a selectable control per run, tables as real
+         grids. Held at panel level so both lists draw them the same way. -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="ai:AnswerParagraph">
+            <SelectableTextBlock views:AnswerInlines.Spans="{Binding Spans}"
+                                 TextWrapping="Wrap"/>
+        </DataTemplate>
+        <DataTemplate DataType="ai:AnswerTable">
+            <!-- No horizontal scroller. It was here on the reasoning that a
+                 four-column analysis is worth scrolling to read, but it is
+                 also what stopped the cells wrapping: it offers the grid
+                 infinite width, so Auto columns sized to their longest
+                 unwrapped line and the reader scrolled sideways through a
+                 sentence. The table now fits the panel and wraps. -->
+            <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="4"
+                    Padding="2" Margin="0,6,0,6">
+                <Grid views:AnswerTableView.Table="{Binding}"/>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
     <UserControl.Styles>
         <!-- A disabled icon button must LOOK disabled. Fluent's PathIcon ControlTheme sets Foreground, and a
              theme setter outranks the dimmed foreground a disabled Button hands down by inheritance - so
@@ -596,9 +618,6 @@
                     <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedRight" ShowMode="Standard">
                             <StackPanel Width="300" Spacing="6">
-                                <TextBlock Text="Summarises all but the last 4 turns."
-                                           TextWrapping="Wrap" FontSize="11"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 <TextBox Text="{Binding CompactInstructions}"
                                          Watermark="What the summary should keep (optional)"
                                          KeyDown="OnCompactInstructionsKeyDown"
@@ -661,8 +680,9 @@
 
                                 <!-- Where compaction's boundary falls (#998): the turns above are now sent to
                                      the model only as a summary. They stay on screen unchanged - compaction
-                                     changes what is SENT, not what is SHOWN. Opens to the summary, with its
-                                     [[…]] Pāli markers stripped as an answer's are. -->
+                                     changes what is SENT, not what is SHOWN. Opens to the summary, drawn as an
+                                     answer is: Pāli markers stripped, Markdown rendered (the compaction prompt
+                                     is Markdown, and models answer in kind). -->
                                 <Expander IsVisible="{Binding HasCompactionMarker}"
                                           FontSize="11"
                                           Margin="0,0,0,8"
@@ -672,9 +692,7 @@
                                         <TextBlock Text="{Binding CompactionMarker}"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                     </Expander.Header>
-                                    <SelectableTextBlock Text="{Binding CompactionSummary, Converter={x:Static conv:AiPaliMarkerStripConverter.Instance}}"
-                                                         TextWrapping="Wrap"
-                                                         FontSize="11"/>
+                                    <ItemsControl ItemsSource="{Binding CompactionSummary, Converter={x:Static conv:AiCompactionSummaryConverter.Instance}}"/>
                                 </Expander>
 
                                 <!-- What was asked -->
@@ -887,27 +905,7 @@
                                      cross a table, which is why Copy below is an explicit control. -->
                                 <ItemsControl ItemsSource="{Binding Blocks}"
                                               IsVisible="{Binding HasAnswer}"
-                                              Margin="0,4,0,0">
-                                    <ItemsControl.DataTemplates>
-                                        <DataTemplate DataType="ai:AnswerParagraph">
-                                            <SelectableTextBlock views:AnswerInlines.Spans="{Binding Spans}"
-                                                                 TextWrapping="Wrap"/>
-                                        </DataTemplate>
-                                        <DataTemplate DataType="ai:AnswerTable">
-                                            <!-- No horizontal scroller. It was here on the reasoning that a
-                                                 four-column analysis is worth scrolling to read, but it is
-                                                 also what stopped the cells wrapping: it offers the grid
-                                                 infinite width, so Auto columns sized to their longest
-                                                 unwrapped line and the reader scrolled sideways through a
-                                                 sentence. The table now fits the panel and wraps. -->
-                                            <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                                    BorderThickness="1" CornerRadius="4"
-                                                    Padding="2" Margin="0,6,0,6">
-                                                <Grid views:AnswerTableView.Table="{Binding}"/>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.DataTemplates>
-                                </ItemsControl>
+                                              Margin="0,4,0,0"/>
 
                                 <!-- Copy is owned, not inherited. Drag-select covered the whole answer while
                                      it was one control; a table's cells are separate controls, so the
