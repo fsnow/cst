@@ -170,6 +170,15 @@ public static class SettingsValidator
         if (removedConnections > 0)
             fixes.Add($"removed {removedConnections} connection(s) with no id");
 
+        // A percentage, 0 meaning off. Anything outside 0-100 is a hand-edit or a corrupted file, and the default is
+        // what the reader had before they touched it — the same repair as the log level and font sizes. (#998)
+        if (settings.Ai.Chat.AutoCompactPercent is < 0 or > 100)
+        {
+            var bad = settings.Ai.Chat.AutoCompactPercent;
+            settings.Ai.Chat.AutoCompactPercent = 95;
+            fixes.Add($"ai.chat.autoCompactPercent {bad} -> 95");
+        }
+
         // (The historical local-API Port/Token scrub is gone with those fields, removed in #280: the port is
         // ephemeral and the token per-session, both held only in local-api.json. A stale value left in an old
         // settings.json is now an unknown property the deserializer ignores.)

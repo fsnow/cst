@@ -242,27 +242,65 @@ its citations name. Click switches the panel to it (the in-flight turn, if any, 
 
 ### 3.4 Compaction (P4)
 
-Manual **Compact** and automatic compaction share one mechanism: the older turns are summarised by the active
-model through a compaction prompt template (a sixth embedded template beside the five presets, user-editable
-like them), the summary replaces them in the *history the model sees*, and the most recent *N* turns stay
-verbatim. The transcript on screen keeps every turn — compaction changes what is **sent**, not what is
-**shown** — with a marker row where the boundary falls (*"12 earlier turns summarised"*), which the `Sent`
-expander can open.
+**[fsnow]** *"Manual and auto at a fraction of context length"*; the fraction *"95%, but make this a
+setting"*; *"Last 4 turns"* stay verbatim. The reference is Claude Code's `/compact [instructions]` and its
+auto-compact.
 
-**[fsnow]** *"Manual and auto at a fraction of context length"*. The automatic trigger fires when the
-estimated request reaches **95% of `ContextLength`** for the resolved model — **[fsnow]** *"95%, but make
-this a setting"* — so the fraction is a `Settings.Ai.Chat` value with 95 as its default. **The last 4
-turns stay verbatim** (**[fsnow]**: *"Last 4 turns"*); everything older goes into the summary. Where
-`ContextLength` is unknown (a hand-typed model id, no listing) there is no automatic trigger, only the manual
-action and a notice on the turn that says why.
+**[observed] What exists as of the #998 backend (2026-09-22)** — the view is Kestrel's:
 
-[suggestion] Two consequences of 95% worth building in: the summary call itself has to fit in the remaining
-5%, so the summariser sends only the turns being compacted, never the whole session; and the estimate is a
-chars-per-token heuristic that runs worse on diacritic-heavy Pāli (AI_SURFACE_B §14), so a `ContextTooLong`
-error from the provider should itself trigger a compaction-and-retry rather than surface as a dead turn.
+- **One mechanism, two triggers.** The answered turns outside the summary in force, all but the last four
+  (`AiCompaction.KeepVerbatim`), are summarised by the active provider and model, and the summary replaces them
+  in what the next request replays. The transcript on screen keeps every turn — compaction changes what is
+  **sent**, not what is **shown**.
+- **The summariser** (`AiChatOrchestrator.CompactAsync`, and the same code mid-turn) sends **only the turns being
+  compacted** — each one's stored asked line and its marked answer, `[[…]]` markers intact — plus the previous
+  summary where there is one, as a single user message with no system prompt and no passage. Reasoning is
+  dropped; a summary cut off at the output limit is refused rather than used. Every failure is an `AiError` on
+  the result; nothing expected throws.
+- **The template** is `Resources/Ai/compact.md` (`PromptTemplateNames.Compact`), embedded and user-overridable in
+  `ai-templates/` like the presets. Its placeholders are its own (`PromptPlaceholders.AllowedFor`):
+  `{{conversation}}`, `{{instructions}}`, `{{paliOpen}}`/`{{paliClose}}` required, `{{outputLanguage}}` allowed —
+  so a preset edit cannot say `{{conversation}}` and render it as nothing. The prompt templates carry no version
+  stamp, so neither does this one.
+- **The summary's shape on the wire** [suggestion]: an ordinary replayed pair, first — the app's own line
+  (`AiCompaction.SummaryAskedLine`, *«Earlier in this conversation» — summarise what we discussed before the turns
+  that follow.*) as `user`, the summary as `assistant`. The model wrote the summary, so it comes back as its own
+  words; the roles keep alternating and neither half is empty, which the Anthropic Messages API requires. Then
+  the kept turns word for word, then the current turn. `SentContext.History` shows it exactly so, and the
+  "Estimated context" field names it (*"a summary and 4 earlier turns"*).
+- **A second compaction summarises the first** [suggestion]: the standing summary goes to the summariser with the
+  turns since it, and the new summary replaces both — one summary per request, ever. Each `AiCompactionRecord`
+  lists every turn it stands in for, the previous record's included, so the latest record alone is the
+  boundary.
+- **The record.** `AiSession.Compactions` gains `Id`, `AskedLine`, `Instructions`, `Automatic`, `ProviderId`,
+  `ModelId` beside `When`, `Summary`, `SummarisedTurnIds`. A turn's `AiSentRecord.SummaryId` names the summary it
+  was sent with, beside `ReplayedTurnIds` — by reference, like the turns — so a restored turn's Sent block rebuilds
+  exactly what was sent, even after later compactions. Restore and switch hand the session's compactions to the
+  panel, so the next turn replays the summary in force. Compaction is written at once (§3.2's cadence) and does
+  not move `LastActive` [suggestion — the rename reasoning].
+- **Manual:** `AiAssistantViewModel.CompactCommand` (parameter: instructions, or null to use
+  `CompactInstructions`), enabled by `CanCompact` — not while `IsBusy`, and only with more than four answered
+  turns outside the summary in force. It holds `IsBusy` (and `IsCompacting`) while the model writes; Stop cancels
+  it and nothing changes; a failure is one sentence in `Status` and nothing changes.
+- **Automatic** (in the orchestrator, the only layer that knows the whole request's size): when the estimate the
+  Sent block reports reaches `ChatSettings.AutoCompactPercent` of the resolved model's `ContextLength`, the turn
+  compacts first — a `Compacted` event before `Started`, which the panel records — then sends. The setting
+  defaults to 95; **0 is off**; outside 0–100 `SettingsValidator` puts it back to 95 [suggestion]. With
+  `ContextLength` unknown there is no automatic trigger, and once there is something to compact the turn carries
+  a notice saying so (`AiChatOrchestrator.UnknownContextNotice`). Past the threshold with nothing older than the
+  last four, the turn goes as it is with a notice; a summary that fails leaves a notice and the whole conversation
+  is sent.
+- **Compact and retry** [suggestion, accepted]: a `ContextTooLong` rejection before anything streamed compacts and
+  sends again, once, while automatic compaction is on. The estimate's 2.0 characters per token runs *below* the
+  1.73 measured on `cl100k_base` (`AiTokens.PaliCharsPerToken`), so on some tokenizers the real count outruns
+  the 5% the default leaves — and with no published `ContextLength` the rejection is the only signal there is.
+  The turn then carries a second `Started` describing the request that was answered.
+- **For the view:** each `AiTurnViewModel` has `IsSummarised`; the first turn after the summarised span carries
+  `CompactionMarker` (*"12 earlier turns summarised"*), `HasCompactionMarker` and `CompactionSummary`, so the
+  marker row can be drawn from `Turns` alone and opened to show the summary.
 
 The "resend only the last N exchanges" half of the tester's point 3 falls out of the same *N* with the summary
-step turned off — it is a degenerate compaction, not a separate feature.
+step turned off — a degenerate compaction, not built as a separate feature.
 
 ### 3.5 Take me back (P5)
 
@@ -286,7 +324,7 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
 | **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request | ✅ | — |
 | **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
 | **P3** | #997 | Session list, switch, rename, delete on the panel view model (new and auto-name landed with P2) — **backend done** (§3.3); the list, rename and delete UI remain | service ✅, panel ✗ | P2 |
-| **P4** | new | Compaction: template, summariser, marker row, manual action, auto trigger from `ContextLength` | ✅ except the action | P1, P3 |
+| **P4** | #998 | Compaction: template, summariser, record, manual action, auto trigger from `ContextLength`, compact-and-retry — **backend done** (§3.4); the Compact control and the marker row remain | backend ✅, panel ✗ | P1, P3 |
 | **P5** | #849 | Take me back: open + go-to + position restore, as a turn action | ✗ (dock + WebView) | P2 |
 
 **P1 is the walking skeleton.** With it alone, a follow-up question works for the first time; nothing else in
@@ -305,8 +343,12 @@ format, compaction boundary, prompt-cache stability) is shaped by.
   checked in, so a format change is a visible diff.
 - **P3** — service-level: auto-name rules; switch blocked while busy; delete removes the file and clears the
   active id when it was the active one.
-- **P4** — with the fake provider: the boundary falls at *N*; the summary is the first user message; the
-  auto trigger fires at the threshold and not below it; no trigger when `ContextLength` is null.
+- **P4** — `AiCompactionOrchestratorTests` (a provider scripted per call) and `AiAssistantCompactionTests`: the
+  boundary at four from both sides; the summary first, roles alternating, nothing empty; the summariser sent only
+  the compacted turns, markers intact; the trigger at the threshold and not one token below; no trigger and a
+  notice when `ContextLength` is null; a second compaction; compact-and-retry once; summarised turns kept on
+  screen; the stored record rebuilding the sent history after a restore; manual blocked while busy and below five
+  turns; the setting's default and repair.
 - **P5** — manual, on Egret; nothing here is headless-testable (dock + CEF).
 
 ## 6. Decisions — record

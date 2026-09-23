@@ -88,6 +88,23 @@ public class AiAssistantViewModel : ReactiveTool
     private AiSession? _session;
 
     /// <summary>
+    /// The compactions of the conversation on screen, oldest first; the last is the one in force. (#998)
+    ///
+    /// <para><b>The same list object as <c>_session.Compactions</c></b> whenever there is a session — handed over
+    /// by <see cref="ShowSession"/> and <see cref="CreateSession"/> — so a compaction recorded here is in the next
+    /// save with nothing to copy. Held by the panel rather than read off the session because the session is created
+    /// lazily, and a panel with no store has none at all yet still compacts what it sends.</para>
+    /// </summary>
+    private List<AiCompactionRecord> _compactions = new();
+
+    /// <summary>
+    /// The turns replayed to the model for the turn in flight, in the order they were sent — so an automatic
+    /// compaction's "the first N history entries" (<see cref="AiCompacted.SummarisedExchanges"/>) can be mapped
+    /// back to turn ids. Set by <see cref="HistoryFor"/>. (#998)
+    /// </summary>
+    private List<AiTurnViewModel> _replayedForCurrent = new();
+
+    /// <summary>
     /// How often streamed text reaches the screen. Fast enough to read as live, slow enough that a fast stream
     /// cannot saturate the UI thread: binding every delta re-parses and re-measures the whole answer.
     /// </summary>
@@ -170,6 +187,9 @@ public class AiAssistantViewModel : ReactiveTool
         RenameSessionCommand = ReactiveCommand.CreateFromTask<AiSessionRename?>(
             rename => rename is null ? Task.CompletedTask : (Task)RenameSessionAsync(rename.Id, rename.Name));
         DeleteSessionCommand = ReactiveCommand.CreateFromTask<string?>(id => DeleteSessionAsync(id));
+        // No canExecute observable, for the reason recorded at RetryCommand above: enablement is CanCompact, and
+        // CompactAsync checks it again. (#998)
+        CompactCommand = ReactiveCommand.CreateFromTask<string?>(instructions => CompactAsync(instructions));
 
         // An unhandled exception in a ReactiveCommand goes to RxApp.DefaultExceptionHandler, which
         // TERMINATES THE APP. Everything these commands call catches internally today, so no failing case is
@@ -183,7 +203,7 @@ public class AiAssistantViewModel : ReactiveTool
                  {
                      ExplainCommand, TranslateCommand, GrammarCommand, WordByWordCommand, AskQuestionCommand,
                      StopCommand, RefreshReadinessCommand, RetryCommand, CopyCommand, NewConversationCommand,
-                     SwitchToSessionCommand, RenameSessionCommand, DeleteSessionCommand,
+                     SwitchToSessionCommand, RenameSessionCommand, DeleteSessionCommand, CompactCommand,
                  })
         {
             command.ThrownExceptions.Subscribe(ex =>
@@ -314,6 +334,50 @@ public class AiAssistantViewModel : ReactiveTool
     // Delete has no panel-level flag: it is refused for one row, not for all of them — see
     // AiSessionRowViewModel.CanDelete.
 
+    // ---- Compaction (#998) -------------------------------------------------------------------------
+    //
+    // [fsnow]: "Manual and auto at a fraction of context length"; "Last 4 turns" stay verbatim. The reference is
+    // Claude Code's /compact [instructions]. The automatic half happens inside a turn, in the orchestrator, because
+    // only it knows the size of the whole request; what is here is the manual action and the record of both.
+
+    /// <summary>
+    /// Summarise the older turns now. Parameter: the reader's instructions for the summary, or null to use
+    /// <see cref="CompactInstructions"/>. See <see cref="CompactAsync"/>.
+    /// </summary>
+    public ReactiveCommand<string?, Unit> CompactCommand { get; }
+
+    /// <summary>
+    /// Whether Compact may be offered now: nothing in flight, and more than the last
+    /// <see cref="AiCompaction.KeepVerbatim"/> answered turns outside the summary in force — fewer, and there is
+    /// nothing older to summarise. A bindable flag rather than a <c>canExecute</c> observable, for the reason
+    /// recorded at <c>RetryCommand</c>'s construction; <see cref="CompactAsync"/> checks it again.
+    /// </summary>
+    public bool CanCompact =>
+        !IsBusy && _orchestrator is not null && Unsummarised(exclude: null).Count > AiCompaction.KeepVerbatim;
+
+    private string _compactInstructions = "";
+
+    /// <summary>
+    /// What the reader wants the summary to attend to — the <c>[instructions]</c> of Claude Code's
+    /// <c>/compact [instructions]</c>. Optional; used when <see cref="CompactCommand"/> is executed without a
+    /// parameter, and cleared by a compaction that succeeds.
+    /// </summary>
+    public string CompactInstructions
+    {
+        get => _compactInstructions;
+        set => this.RaiseAndSetIfChanged(ref _compactInstructions, value ?? "");
+    }
+
+    private bool _isCompacting;
+
+    /// <summary>A manual compaction is running. <see cref="IsBusy"/> is true as well, so every other command waits;
+    /// this is what the view can say "Summarising…" from, and Stop cancels it.</summary>
+    public bool IsCompacting
+    {
+        get => _isCompacting;
+        private set => this.RaiseAndSetIfChanged(ref _isCompacting, value);
+    }
+
     /// <summary>Re-ask the resolver whether the assistant is configured. Bound to the panel's own refresh, so
     /// a reader who has just been sent to Settings can come back and see the answer change.</summary>
     public ReactiveCommand<Unit, Unit> RefreshReadinessCommand { get; }
@@ -424,6 +488,7 @@ public class AiAssistantViewModel : ReactiveTool
             this.RaisePropertyChanged(nameof(CanAsk));
             this.RaisePropertyChanged(nameof(CanAskQuestion));
             this.RaisePropertyChanged(nameof(CanSwitchSession));
+            this.RaisePropertyChanged(nameof(CanCompact));
             UpdateRowAvailability();
         }
     }
@@ -510,6 +575,11 @@ public class AiAssistantViewModel : ReactiveTool
 
         try
         {
+            // Read from the transcript AFTER StartTurn, so the turn just added is excluded by identity rather than
+            // by an index the next change to this method could invalidate. (#991) The summary in force, if any,
+            // comes with it. (#998)
+            var history = HistoryFor(turn, out var summary);
+
             var request = new AiTurnRequest(
                 task,
                 state.BookId,
@@ -524,9 +594,8 @@ public class AiAssistantViewModel : ReactiveTool
                 // a different state, and conflating them is what makes a dropped selection look to the user
                 // like the assistant ignored it. (#581)
                 state.SelectionUnavailable,
-                // Read from the transcript AFTER StartTurn, so the turn just added is excluded by identity
-                // rather than by an index the next change to this method could invalidate. (#991)
-                HistoryFor(turn));
+                history,
+                summary);
 
             await foreach (var e in _orchestrator.RunAsync(request, _turnCancellation!.Token))
                 Handle(turn, e);
@@ -603,6 +672,8 @@ public class AiAssistantViewModel : ReactiveTool
         this.RaisePropertyChanged(nameof(LastTurn));
 
         _session = null;
+        _compactions = new List<AiCompactionRecord>();
+        RaiseCompactionChanged();
 
         if (_appState is not null)
         {
@@ -612,6 +683,180 @@ public class AiAssistantViewModel : ReactiveTool
 
         Status = "";
     }
+
+    /// <summary>
+    /// Summarise the older turns now — Claude Code's <c>/compact [instructions]</c>. (#998)
+    ///
+    /// <para><b>[fsnow]</b>: <i>"Manual and auto at a fraction of context length"</i>, <i>"Last 4 turns"</i>. So
+    /// every answered turn outside the summary in force is summarised except the last
+    /// <see cref="AiCompaction.KeepVerbatim"/>, together with that summary where there is one; the new summary
+    /// replaces both in what the next turn sends. <b>Only those turns go to the model</b> — never the whole session
+    /// and never a passage.</para>
+    ///
+    /// <para><b>Nothing on screen changes but the marker.</b> The summarised turns stay in <see cref="Turns"/>,
+    /// readable, copyable and retryable; <see cref="AiTurnViewModel.IsSummarised"/> and the marker row say where
+    /// the boundary falls.</para>
+    ///
+    /// <para><b>A failure changes nothing.</b> The error is one sentence in <see cref="Status"/>, and the next turn
+    /// sends exactly what it would have sent before. Holds <see cref="IsBusy"/> while the model writes, so no turn
+    /// can start against a conversation that is being rewritten; Stop cancels it.</para>
+    ///
+    /// <para><b>Written at once</b> (ASSISTANT_SESSIONS.md §3.2: the session is rewritten "on rename, and on
+    /// compaction"): the summary cost a call and cannot be made again identically.</para>
+    /// </summary>
+    internal async Task CompactAsync(string? instructions = null)
+    {
+        if (!CanCompact || _orchestrator is null) return;
+
+        IsBusy = true;
+        IsCompacting = true;
+        Status = "";
+
+        _turnCancellation?.Dispose();
+        _turnCancellation = new CancellationTokenSource();
+        var token = _turnCancellation.Token;
+
+        try
+        {
+            var latest = LatestCompaction();
+            var pending = Unsummarised(exclude: null);
+            var older = pending.Take(pending.Count - AiCompaction.KeepVerbatim).ToList();
+
+            var asked = string.IsNullOrWhiteSpace(instructions) ? CompactInstructions : instructions;
+            var wanted = string.IsNullOrWhiteSpace(asked) ? null : asked.Trim();
+
+            var result = await _orchestrator.CompactAsync(
+                new AiCompactionRequest(
+                    SummaryExchange(latest),
+                    older.Select(t => new AiExchange(DescribeAsked(t), t.MarkedAnswer)).ToList(),
+                    wanted),
+                token);
+
+            if (!result.Succeeded)
+            {
+                Status = $"The earlier turns could not be summarised. {result.Error?.Message}".TrimEnd();
+                return;
+            }
+
+            _compactions.Add(new AiCompactionRecord
+            {
+                When = DateTimeOffset.Now,
+                Summary = result.Summary!,
+                AskedLine = result.AskedLine,
+                SummarisedTurnIds = Summarised(latest, older),
+                Instructions = wanted,
+                Automatic = false,
+                ProviderId = result.ProviderId,
+                ModelId = result.ModelId,
+            });
+            RaiseCompactionChanged();
+            CompactInstructions = "";
+
+            if (result.Notices is { Count: > 0 } notices) Status = string.Join(" ", notices);
+
+            // Not LastActive: [suggestion] the list orders by when the conversation was last asked something, and
+            // tidying what it sends is not that — the same reasoning as a rename.
+            if (_store is not null && _session is not null && !await _store.SaveAsync(_session))
+                Status = "The summary could not be saved, so it will not be there next time.";
+        }
+        catch (OperationCanceledException)
+        {
+            Status = "Summarising was stopped. Nothing was changed.";
+        }
+        catch (Exception ex)
+        {
+            // The orchestrator promises not to throw for expected failures, so this is a defect — logged as one and
+            // still shown as a sentence.
+            _logger.Error(ex, "Compacting the assistant conversation failed unexpectedly");
+            Status = "Something went wrong summarising the conversation. Nothing was changed.";
+        }
+        finally
+        {
+            IsCompacting = false;
+            IsBusy = false;
+            RaiseCompactionChanged();
+        }
+    }
+
+    /// <summary>
+    /// Every turn a new summary stands in for: the previous summary's turns (it was folded in) and the ones just
+    /// summarised, oldest first. So the latest record alone says what the model is no longer shown word for word.
+    /// </summary>
+    private static List<string> Summarised(AiCompactionRecord? previous, IEnumerable<AiTurnViewModel> turns) =>
+        (previous?.SummarisedTurnIds ?? Enumerable.Empty<string>())
+        .Concat(turns.Select(t => t.Id))
+        .ToList();
+
+    /// <summary>
+    /// A compaction the orchestrator made inside a turn — the threshold, or a too-long rejection. (#998)
+    ///
+    /// <para>Mapped through <see cref="_replayedForCurrent"/>: the event counts history entries from the front, and
+    /// that list is those entries' turns in the order they were handed over. The turn's own record then names the
+    /// new summary and only the turns sent after it, which is what the model was actually sent.</para>
+    /// </summary>
+    private void RecordAutomaticCompaction(AiTurnViewModel turn, AiCompacted compaction)
+    {
+        var count = Math.Clamp(compaction.SummarisedExchanges, 0, _replayedForCurrent.Count);
+        var older = _replayedForCurrent.Take(count).ToList();
+
+        var record = new AiCompactionRecord
+        {
+            When = DateTimeOffset.Now,
+            Summary = compaction.Summary,
+            AskedLine = compaction.AskedLine,
+            SummarisedTurnIds = Summarised(LatestCompaction(), older),
+            Automatic = true,
+            ProviderId = compaction.ProviderId,
+            ModelId = compaction.ModelId,
+        };
+        _compactions.Add(record);
+
+        _replayedForCurrent = _replayedForCurrent.Skip(count).ToList();
+        turn.ReplayedTurnIds = _replayedForCurrent.Select(t => t.Id).ToList();
+        turn.SummaryId = record.Id;
+
+        RaiseCompactionChanged();
+    }
+
+    /// <summary>
+    /// Bring the transcript's compaction marks into line with the summary in force, and re-announce
+    /// <see cref="CanCompact"/>. Called wherever <c>_compactions</c> or <see cref="Turns"/> is replaced.
+    ///
+    /// <para>The marker goes on the first turn after the LAST summarised one, with the count of summarised turns on
+    /// screen and the summary. A summarised id that names no turn on screen (a hand-edited file) is simply not
+    /// counted.</para>
+    /// </summary>
+    private void RaiseCompactionChanged()
+    {
+        var latest = LatestCompaction();
+        var summarised = latest is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : new HashSet<string>(latest.SummarisedTurnIds, StringComparer.Ordinal);
+
+        var last = -1;
+        var count = 0;
+        for (var i = 0; i < Turns.Count; i++)
+        {
+            var isSummarised = summarised.Contains(Turns[i].Id);
+            Turns[i].IsSummarised = isSummarised;
+            if (!isSummarised) continue;
+            last = i;
+            count++;
+        }
+
+        for (var i = 0; i < Turns.Count; i++)
+        {
+            var marks = count > 0 && i == last + 1;
+            Turns[i].CompactionMarker = marks ? DescribeSummarised(count) : "";
+            Turns[i].CompactionSummary = marks ? latest!.Summary : "";
+        }
+
+        this.RaisePropertyChanged(nameof(CanCompact));
+    }
+
+    /// <summary>The marker row's text.</summary>
+    internal static string DescribeSummarised(int count) =>
+        count == 1 ? "1 earlier turn summarised" : $"{count} earlier turns summarised";
 
     private void Handle(AiTurnViewModel turn, AiTurnEvent e)
     {
@@ -636,6 +881,12 @@ public class AiAssistantViewModel : ReactiveTool
                 turn.IsPartialPassage = context.PassageTrimmed;
                 turn.Sent = context.Sent;
                 turn.Status = WaitingMessage(_elapsed.Elapsed, sawReasoning: false);
+                break;
+
+            case AiTurnEventKind.Compacted when e.Compaction is { } compaction:
+                // Before Started, and possibly before a second Started (a too-long rejection sent again): recorded
+                // at once, so the turn's record says it was sent with the summary rather than the turns. (#998)
+                RecordAutomaticCompaction(turn, compaction);
                 break;
 
             case AiTurnEventKind.Text:
@@ -914,6 +1165,9 @@ public class AiAssistantViewModel : ReactiveTool
             Name = NameFor(turn),
             Created = now,
             LastActive = now,
+            // The panel's own list, by reference: compactions made before the first save (a panel whose earlier
+            // saves all failed) belong to this conversation too. (#998)
+            Compactions = _compactions,
         };
 
         if (_appState is not null)
@@ -1088,9 +1342,14 @@ public class AiAssistantViewModel : ReactiveTool
             foreach (var record in session.Turns)
                 byId[record.Id] = record;
 
+            // And the summaries, by id, so a turn sent after a compaction shows the summary it was sent with. (#998)
+            var compactionsById = new Dictionary<string, AiCompactionRecord>(StringComparer.Ordinal);
+            foreach (var compaction in session.Compactions)
+                if (!string.IsNullOrEmpty(compaction.Id)) compactionsById[compaction.Id] = compaction;
+
             var turns = new List<AiTurnViewModel>(session.Turns.Count);
             foreach (var record in session.Turns)
-                turns.Add(AiTurnViewModel.FromRecord(record, byId));
+                turns.Add(AiTurnViewModel.FromRecord(record, byId, compactionsById));
 
             return new Transcript(TranscriptOutcome.Loaded, session, turns);
         }
@@ -1119,6 +1378,11 @@ public class AiAssistantViewModel : ReactiveTool
         this.RaisePropertyChanged(nameof(LastTurn));
 
         _session = session;
+
+        // Its compactions come with it — by reference, see _compactions — so the next turn replays the summary in
+        // force rather than every turn it stands in for, and the marker row is where it was. (#998)
+        _compactions = session.Compactions;
+        RaiseCompactionChanged();
 
         if (_appState is not null && _appState.Current.ActiveAssistantSessionId != session.Id)
         {
@@ -1614,23 +1878,59 @@ public class AiAssistantViewModel : ReactiveTool
     /// <para><b>Which turns went in is recorded on the turn</b>, because the stored record says what the model
     /// was sent and that cannot be recomputed later: by the time this turn is written, a newer turn may have
     /// changed what "the turns with answers" means.</para>
+    ///
+    /// <para><b>After a compaction</b> (#998) the turns the summary in force stands in for are left out, and the
+    /// summary comes back in <paramref name="summary"/> to be replayed first; the turns after it go as they always
+    /// did. They stay on screen regardless — compaction changes what is sent, not what is shown. Which summary was
+    /// sent is recorded on the turn (<see cref="AiTurnViewModel.SummaryId"/>) beside the turn ids.</para>
     /// </summary>
-    private IReadOnlyList<AiExchange> HistoryFor(AiTurnViewModel current)
+    private IReadOnlyList<AiExchange> HistoryFor(AiTurnViewModel current, out AiExchange? summary)
     {
-        // Whitespace-only counts as no answer, matching AiChatOrchestrator.Replay, which drops a pair with an
-        // empty half so no request carries an empty content block. Selecting on HasAnswer alone recorded such a
-        // turn in ReplayedTurnIds and then never sent it, so the stored record claimed the model saw a turn it
-        // did not. One rule, applied in both places. (fable review)
-        var replayed = Turns
-            .Where(t => !ReferenceEquals(t, current) && !string.IsNullOrWhiteSpace(t.MarkedAnswer))
-            .ToList();
+        var latest = LatestCompaction();
+        summary = SummaryExchange(latest);
+
+        var replayed = Unsummarised(exclude: current);
 
         current.ReplayedTurnIds = replayed.Select(t => t.Id).ToList();
+        current.SummaryId = summary is null ? null : latest!.Id;
+        _replayedForCurrent = replayed;
 
         return replayed
             .Select(t => new AiExchange(DescribeAsked(t), t.MarkedAnswer))
             .ToList();
     }
+
+    private AiCompactionRecord? LatestCompaction() => _compactions.Count > 0 ? _compactions[^1] : null;
+
+    /// <summary>
+    /// The answered turns on screen that the summary in force does not stand in for, oldest first — what is
+    /// replayed word for word, and what a compaction would draw its older turns from.
+    ///
+    /// <para>Whitespace-only counts as no answer, matching <c>AiChatOrchestrator.Replay</c>, which drops a pair with
+    /// an empty half so no request carries an empty content block. Selecting on HasAnswer alone recorded such a
+    /// turn in ReplayedTurnIds and then never sent it, so the stored record claimed the model saw a turn it did
+    /// not. One rule, applied in both places. (fable review)</para>
+    /// </summary>
+    private List<AiTurnViewModel> Unsummarised(AiTurnViewModel? exclude)
+    {
+        var latest = LatestCompaction();
+        var summarised = latest is null
+            ? null
+            : new HashSet<string>(latest.SummarisedTurnIds, StringComparer.Ordinal);
+
+        return Turns
+            .Where(t => !ReferenceEquals(t, exclude)
+                        && !string.IsNullOrWhiteSpace(t.MarkedAnswer)
+                        && summarised?.Contains(t.Id) != true)
+            .ToList();
+    }
+
+    /// <summary>The summary in force as the exchange it is replayed as, or null when there is none — or when it is
+    /// empty, which the orchestrator would not send and the record must therefore not claim.</summary>
+    private static AiExchange? SummaryExchange(AiCompactionRecord? compaction) =>
+        compaction is null || string.IsNullOrWhiteSpace(compaction.Summary)
+            ? null
+            : new AiExchange(compaction.AskedLine ?? AiCompaction.SummaryAskedLine, compaction.Summary);
 
     /// <summary>
     /// The question side of an earlier turn, as the model is shown it again: which preset, which passage, and

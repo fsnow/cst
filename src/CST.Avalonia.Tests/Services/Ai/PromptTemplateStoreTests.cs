@@ -45,6 +45,7 @@ public class PromptTemplateStoreTests : IDisposable
     [InlineData(PromptTemplateNames.WordByWordSelection)]
     [InlineData(PromptTemplateNames.Ask)]
     [InlineData(PromptTemplateNames.AskSelection)]
+    [InlineData(PromptTemplateNames.Compact)]
     public void Every_shipped_template_passes_the_validation_it_imposes_on_the_user(string name)
     {
         // If a built-in cannot meet the bar we hold user edits to, either the template or the bar is wrong.
@@ -63,6 +64,41 @@ public class PromptTemplateStoreTests : IDisposable
             Assert.Contains(name, PromptTemplateNames.All);
             Assert.False(string.IsNullOrWhiteSpace(_store.GetDefault(name)));
         }
+    }
+
+    /// <summary>
+    /// The compaction template has placeholders of its own, and they do not leak. A preset edit that says
+    /// <c>{{conversation}}</c> would validate against a shared set and then render as nothing — so it is refused,
+    /// as is a compaction edit that asks for the passage it is never given. (#998)
+    /// </summary>
+    [Fact]
+    public void Compaction_placeholders_are_the_compaction_templates_alone()
+    {
+        Assert.Contains(PromptTemplateStore.Validate(PromptTemplateNames.Explain, ExplainMinimum + " {{conversation}}"),
+                        p => p.Contains("{{conversation}}"));
+
+        Assert.Contains(
+            PromptTemplateStore.Validate(PromptTemplateNames.Compact,
+                "{{conversation}} {{instructions}} {{paliOpen}} {{paliClose}} {{passage}}"),
+            p => p.Contains("{{passage}}"));
+
+        Assert.Empty(PromptTemplateStore.Validate(PromptTemplateNames.Compact,
+            "Summarise in {{outputLanguage}}. {{paliOpen}}x{{paliClose}} {{instructions}} {{conversation}}"));
+    }
+
+    /// <summary>
+    /// An edit that drops the reader's instructions or the markers is refused: the first would ignore what the
+    /// reader typed into Compact with nothing to say so, the second would write a summary — replayed to the model —
+    /// that teaches it to drop the markers. (#998)
+    /// </summary>
+    [Fact]
+    public void A_compaction_edit_must_keep_the_instructions_and_the_markers()
+    {
+        var problems = PromptTemplateStore.Validate(PromptTemplateNames.Compact, "Summarise: {{conversation}}");
+
+        Assert.Contains(problems, p => p.Contains("{{instructions}}"));
+        Assert.Contains(problems, p => p.Contains("{{paliOpen}}"));
+        Assert.Contains(problems, p => p.Contains("{{paliClose}}"));
     }
 
     [Fact]

@@ -25,10 +25,20 @@ public sealed record RenderedPrompt(
     int? MaxOutputTokens,
     IReadOnlyList<string> Notices);
 
+/// <summary>The summariser's prompt, and what to tell the reader about how it was built. (#998)</summary>
+/// <param name="UserContent">The one message the summary call sends. There is no system prompt: the shared one
+/// states a passage's scope, and a summary is about a conversation, not a passage.</param>
+/// <param name="Notices">A rejected edit to the compaction template, where there was one — the same notice a
+/// preset's rejected edit produces.</param>
+public sealed record RenderedCompaction(string UserContent, IReadOnlyList<string> Notices);
+
 /// <summary>Turns a context bundle into a prompt. See <see cref="PromptBuilder"/>.</summary>
 public interface IPromptBuilder
 {
     RenderedPrompt Build(AiContextBundle bundle);
+
+    /// <summary>The prompt that asks for a summary of older turns. (#998)</summary>
+    RenderedCompaction BuildCompaction(AiCompactionRequest request, string outputLanguage);
 }
 
 /// <summary>
@@ -108,6 +118,45 @@ public sealed class PromptBuilder : IPromptBuilder
             maxTokens,
             BuildNotices(bundle, shown, PromptTemplateNames.System, presetName));
     }
+
+    /// <summary>
+    /// The summariser's prompt: the compaction template with the turns being compacted, the reader's instructions,
+    /// and the marker pair. (#998)
+    ///
+    /// <para><b>Only what is being compacted goes in</b> — see <see cref="AiCompactionRequest.Turns"/>. No passage,
+    /// no bundle, no system prompt: at the automatic threshold there is little room left, and the summary is of a
+    /// conversation, not of a text.</para>
+    /// </summary>
+    public RenderedCompaction BuildCompaction(AiCompactionRequest request, string outputLanguage)
+    {
+        var template = _templates.Get(PromptTemplateNames.Compact);
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [PromptPlaceholders.Conversation] = AiCompaction.RenderConversation(request.PreviousSummary, request.Turns),
+            [PromptPlaceholders.Instructions] = CompactionInstructions(request.Instructions),
+            [PromptPlaceholders.OutputLanguage] = string.IsNullOrWhiteSpace(outputLanguage) ? "English" : outputLanguage,
+            [PromptPlaceholders.PaliOpen] = PaliQuoteMarkers.Open,
+            [PromptPlaceholders.PaliClose] = PaliQuoteMarkers.Close,
+        };
+
+        var notices = new List<string>();
+        if (_templates.RejectedOverrides.TryGetValue(PromptTemplateNames.Compact, out var problems))
+        {
+            notices.Add(
+                $"Your edited '{PromptTemplateNames.Compact}' prompt was not used ({string.Join("; ", problems)}). "
+                + "The built-in prompt was used instead.");
+        }
+
+        return new RenderedCompaction(Render(template.Text, values), notices);
+    }
+
+    /// <summary>The reader's instructions for a summary, or a sentence saying there were none — never a blank,
+    /// for the reason every placeholder renders to a sentence (see the class remarks).</summary>
+    private static string CompactionInstructions(string? instructions) =>
+        string.IsNullOrWhiteSpace(instructions)
+            ? "The reader gave no further instructions."
+            : instructions.Trim();
 
     /// <summary>The placeholder names a template refers to.</summary>
     private static IReadOnlySet<string> PlaceholdersUsed(string template) =>

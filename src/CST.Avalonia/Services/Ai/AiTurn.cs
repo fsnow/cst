@@ -47,6 +47,17 @@ public sealed record AiExchange(string Question, string Answer);
 /// gets each earlier turn's citation but not its text — enough for the model to know which passage an earlier
 /// answer was about, and not a re-send of the paragraph on every turn. Where that is not enough, the reader's
 /// recourse is to ask about the passage they are in.</para>
+///
+/// <para><b>After a compaction</b> (#998) this holds only the answered turns the summary does NOT stand in for;
+/// the summary itself is <paramref name="Summary"/>.</para>
+/// </param>
+/// <param name="Summary">
+/// The standing summary of older turns, replayed as the FIRST exchange — <see cref="AiCompaction.SummaryAskedLine"/>
+/// as the user side, the summary as the assistant side — or null where nothing has been compacted. (#998)
+///
+/// <para>Separate from <paramref name="History"/> rather than its first entry, because the orchestrator has to
+/// tell the two apart: an automatic compaction folds this into the new summary along with the older turns, where
+/// a turn would be summarised as a turn.</para>
 /// </param>
 public sealed record AiTurnRequest(
     AiTask Task,
@@ -55,17 +66,31 @@ public sealed record AiTurnRequest(
     string? SelectionText = null,
     string? UserQuestion = null,
     bool SelectionUnavailable = false,
-    IReadOnlyList<AiExchange>? History = null);
+    IReadOnlyList<AiExchange>? History = null,
+    AiExchange? Summary = null);
 
 /// <summary>What kind of thing a <see cref="AiTurnEvent"/> carries.</summary>
 public enum AiTurnEventKind
 {
     /// <summary>
     /// The context is assembled and the request is away. Carries the citation the app renders beside the
-    /// answer and any degradation notices. <b>Always the first event on a successful turn</b>, and it arrives
-    /// before any text — the panel can draw its chrome while the model is still thinking.
+    /// answer and any degradation notices. It arrives before any text — the panel can draw its chrome while the
+    /// model is still thinking — and before it only a <see cref="Compacted"/> event can come.
+    ///
+    /// <para><b>It can arrive twice</b> (#998): when the provider rejects the request as too long before
+    /// anything streamed, the turn compacts the conversation and sends it again, and the second
+    /// <see cref="Started"/> describes the request that was actually answered. A caller replaces what the first
+    /// one set; it must not add to it.</para>
     /// </summary>
     Started,
+
+    /// <summary>
+    /// Older turns were summarised automatically before this turn was sent — the estimated request reached the
+    /// configured fraction of the model's context window, or the provider rejected it as too long. Carries the
+    /// summary and how many history entries it stands in for (<see cref="AiTurnEvent.Compaction"/>), which the
+    /// caller records: the summary cost a call and cannot be recomputed. Not terminal. (#998)
+    /// </summary>
+    Compacted,
 
     /// <summary>
     /// Answer text. Two views of the same delta: <see cref="AiTurnEvent.Text"/> is marker-stripped and ready to
@@ -159,6 +184,10 @@ public sealed record AiTurnContext(
 ///
 /// <para>The request is <paramref name="SystemPrompt"/>, then these, then <paramref name="UserContent"/> as
 /// the final user message — so this list stops short of the current turn rather than repeating it.</para>
+///
+/// <para>After a compaction (#998) the first pair is the summary as it was sent —
+/// <see cref="AiCompaction.SummaryAskedLine"/>, then the summary — so the Sent block shows the reader exactly what
+/// stood in for the older turns.</para>
 /// </param>
 public sealed record SentContext(
     IReadOnlyList<SentField> Fields,
@@ -201,6 +230,8 @@ public sealed record AiUsageReport(int? InputTokens, int? OutputTokens);
 /// of stripped answers is a transcript of itself disobeying that instruction. Unbalanced markers go back too —
 /// what the model is shown of its own output should be what it produced, not a repaired version of it.</para>
 /// </param>
+/// <param name="Compaction">On a <see cref="AiTurnEventKind.Compacted"/> event: the summary made, and which
+/// history entries it replaces. (#998)</param>
 public sealed record AiTurnEvent(
     AiTurnEventKind Kind,
     string? Text = null,
@@ -208,9 +239,13 @@ public sealed record AiTurnEvent(
     AiUsageReport? Usage = null,
     AiError? Error = null,
     PaliMarkerReport? Markers = null,
-    string? MarkedText = null)
+    string? MarkedText = null,
+    AiCompacted? Compaction = null)
 {
     public static AiTurnEvent ForStarted(AiTurnContext context) => new(AiTurnEventKind.Started, Context: context);
+
+    public static AiTurnEvent ForCompacted(AiCompacted compaction) =>
+        new(AiTurnEventKind.Compacted, Compaction: compaction);
 
     /// <param name="markedText">What the model wrote, markers intact. Null where there is nothing new to carry
     /// — the end-of-stream flush releases text whose marked form went out with an earlier delta.</param>
