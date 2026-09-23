@@ -25,6 +25,17 @@
         <Thickness x:Key="ExpanderContentPadding">8,4,8,6</Thickness>
     </UserControl.Resources>
 
+    <UserControl.Styles>
+        <!-- A disabled icon button must LOOK disabled. Fluent's PathIcon ControlTheme sets Foreground, and a
+             theme setter outranks the dimmed foreground a disabled Button hands down by inheritance - so
+             without this the + reads identical enabled and disabled, in both themes (measured, headless).
+             ">" matches the Button's LOGICAL child, which is its content. Not a local Foreground on the
+             icons: a local value would beat this rule. Pinned by AiAssistantPanelIconStyleTests. -->
+        <Style Selector="Button:disabled > PathIcon">
+            <Setter Property="Foreground" Value="{DynamicResource ButtonForegroundDisabled}"/>
+        </Style>
+    </UserControl.Styles>
+
     <!-- #586: generated text renders HERE, in Avalonia controls, and never inside the book's CEF WebView.
          That makes "generated text is visually distinguishable from canonical text" a structural fact
          rather than a styling convention, and keeps live token streaming off the component that SIGSEGVs
@@ -361,12 +372,14 @@
         </Border>
 
         <!-- ============ The session row, pinned ============ -->
-        <!-- + starts a new conversation (#850). The current one is not discarded: every turn was saved as it
-             ended (#849), so nothing is lost and nothing needs confirming. The model is Claude Code's /clear.
+        <!-- + starts a new conversation (#850). [fsnow]: "I would like to create new conversations like in
+             Claude Code, maybe also with a plus button, while saving the current one." The current one is
+             not discarded: each turn is saved as it ends (#849), so + asks for no confirmation. [observed]
+             The exception is a turn whose save failed - Status says so, and + then clears both that turn
+             and the warning (LetGoOfSession).
 
              At the TOP, not beside the presets in the composer: this acts on the session, not on a turn, and
-             the session list still to come (#849 P3) belongs beside it. That placement is a suggestion from
-             the backend session, not a decision - see ASSISTANT_SESSIONS.md.
+             the session list (#997) belongs beside it. [suggestion] - the backend session's, not a decision.
 
              Disabled while a turn runs AND while the conversation is empty. [fsnow] chose "Disabled when
              empty" (relayed by the backend session, 2026-09-22): a + that does nothing visible reads as
@@ -380,7 +393,8 @@
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="8,4,8,4">
-            <Button HorizontalAlignment="Right"
+            <Button x:Name="NewConversationButton"
+                    HorizontalAlignment="Right"
                     Command="{Binding NewConversationCommand}"
                     Padding="6,4"
                     ToolTip.Tip="New conversation"
