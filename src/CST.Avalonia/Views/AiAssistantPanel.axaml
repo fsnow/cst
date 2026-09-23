@@ -408,7 +408,7 @@
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="8,4,8,4">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
 
                 <!-- The session switcher (#997): the conversation on screen, and the list of every saved one.
                      [fsnow]: "Claude Code itself is my model" - this is the /resume picker. The list is
@@ -569,8 +569,53 @@
                     </Button.Flyout>
                 </Button>
 
+                <!-- Summarising, by Compact or automatically inside a turn (#998). Stop cancels it. -->
+                <TextBlock Grid.Column="1"
+                           Text="Summarising…"
+                           IsVisible="{Binding IsCompacting}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                <!-- Compact (#998). [fsnow]: "Manual and auto at a fraction of context length"; "Last 4 turns"
+                     stay verbatim. The optional instructions are Claude Code's /compact [instructions]
+                     [suggestion - the backend's reading of "feature parity with CC in context management"].
+                     Enabled only when there is something older than the last four to summarise, and not while
+                     anything runs (CanCompact). Placement beside the session controls, and the flyout,
+                     are [suggestion]. -->
+                <Button x:Name="CompactChip"
+                        Grid.Column="2"
+                        VerticalAlignment="Center"
+                        IsEnabled="{Binding CanCompact}"
+                        Padding="6,4"
+                        ToolTip.Tip="Summarise earlier turns"
+                        AutomationProperties.AutomationId="assistant.compact"
+                        AutomationProperties.Name="Summarise earlier turns">
+                    <PathIcon Width="12" Height="12"
+                              Data="M4,12H20V14H4V12M4,9H20V11H4V9M16,4L12,8L8,4H11V1H13V4H16M8,19L12,15L16,19H13V22H11V19H8Z"/>
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight" ShowMode="Standard">
+                            <StackPanel Width="300" Spacing="6">
+                                <TextBlock Text="Summarises all but the last 4 turns."
+                                           TextWrapping="Wrap" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Text="{Binding CompactInstructions}"
+                                         Watermark="What the summary should keep (optional)"
+                                         KeyDown="OnCompactInstructionsKeyDown"
+                                         AutomationProperties.AutomationId="assistant.compact-instructions"
+                                         AutomationProperties.Name="What the summary should keep"/>
+                                <Button Content="Summarise"
+                                        HorizontalAlignment="Right"
+                                        IsEnabled="{Binding CanCompact}"
+                                        Click="OnCompact"
+                                        AutomationProperties.AutomationId="assistant.compact-run"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
                 <Button x:Name="NewConversationButton"
-                        Grid.Column="1"
+                        Grid.Column="3"
                         VerticalAlignment="Center"
                         Command="{Binding NewConversationCommand}"
                         Padding="6,4"
@@ -613,6 +658,24 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:AiTurnViewModel">
                             <StackPanel Spacing="4" Margin="0,0,0,10">
+
+                                <!-- Where compaction's boundary falls (#998): the turns above are now sent to
+                                     the model only as a summary. They stay on screen unchanged - compaction
+                                     changes what is SENT, not what is SHOWN. Opens to the summary, with its
+                                     [[…]] Pāli markers stripped as an answer's are. -->
+                                <Expander IsVisible="{Binding HasCompactionMarker}"
+                                          FontSize="11"
+                                          Margin="0,0,0,8"
+                                          HorizontalAlignment="Stretch"
+                                          AutomationProperties.Name="{Binding CompactionMarker}">
+                                    <Expander.Header>
+                                        <TextBlock Text="{Binding CompactionMarker}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </Expander.Header>
+                                    <SelectableTextBlock Text="{Binding CompactionSummary, Converter={x:Static conv:AiPaliMarkerStripConverter.Instance}}"
+                                                         TextWrapping="Wrap"
+                                                         FontSize="11"/>
+                                </Expander>
 
                                 <!-- What was asked -->
                                 <TextBlock Text="{Binding PresetLabel}" FontWeight="SemiBold"/>

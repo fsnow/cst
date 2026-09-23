@@ -228,4 +228,15 @@ public class AiSessionListViewTests
         Assert.Equal("1 turn", c.Convert(1, typeof(string), null, CultureInfo.InvariantCulture));
         Assert.Equal("3 turns", c.Convert(3, typeof(string), null, CultureInfo.InvariantCulture));
     }
+
+    /// <summary>The compaction summary keeps its [[…]] markers (it is replayed to the model); the marker row shows it
+    /// without them, as an answer is shown. (#998)</summary>
+    [Fact]
+    public void A_compaction_summary_is_shown_without_its_Pali_markers()
+    {
+        var c = AiPaliMarkerStripConverter.Instance;
+        Assert.Equal("We discussed appam\u0101da and sati.",
+            c.Convert("We discussed [[appam\u0101da]] and [[sati]].", typeof(string), null, CultureInfo.InvariantCulture));
+        Assert.Equal("", c.Convert(null, typeof(string), null, CultureInfo.InvariantCulture));
+    }
 }

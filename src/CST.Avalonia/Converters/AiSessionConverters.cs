@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using Avalonia.Data.Converters;
 using CST.Avalonia.Services;
+using CST.Avalonia.Services.Ai;
 
 namespace CST.Avalonia.Converters;
 
@@ -66,6 +67,21 @@ public sealed class AiSessionTurnCountConverter : IValueConverter
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         value is int n ? (n == 1 ? "1 turn" : $"{n} turns") : string.Empty;
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
+/// A compaction summary for display: the <c>[[…]]</c> Pāli markers the model wrote are kept in the stored summary,
+/// because it is replayed to the model, and stripped here as an answer's are on screen. (#998)
+/// </summary>
+public sealed class AiPaliMarkerStripConverter : IValueConverter
+{
+    public static readonly AiPaliMarkerStripConverter Instance = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is string text ? PaliQuoteMarkers.Strip(text) : string.Empty;
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

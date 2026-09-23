@@ -134,6 +134,25 @@ public partial class AiAssistantPanel : UserControl
             vm.ResizeReasoning(e.Vector.Y);
     }
 
+    // ---- Compact (#998). The flyout closes when the summary starts, so the reader sees the transcript it is
+    // working on; the command reads CompactInstructions itself (null parameter). ----
+
+    private void OnCompact(object? sender, RoutedEventArgs e) => Compact();
+
+    private void OnCompactInstructionsKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        Compact();
+    }
+
+    private void Compact()
+    {
+        if (DataContext is not AiAssistantViewModel vm || !vm.CanCompact) return;
+        CompactChip.Flyout?.Hide();
+        Forget(vm.CompactAsync());
+    }
+
     // ---- The session list (#997). Code-behind because each action carries view work beside it - closing the
     // list on a switch, focusing the rename box, closing other rows' prompts - and a Flyout has no bindable
     // open state (see OnPickerChanged). The handlers take the row from the clicked control's DataContext and

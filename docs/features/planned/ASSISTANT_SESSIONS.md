@@ -325,6 +325,13 @@ should aim for feature parity with CC in context management…"* (§0), not his 
 The "resend only the last N exchanges" half of the tester's point 3 falls out of the same *N* with the summary
 step turned off — a degenerate compaction, not built as a separate feature.
 
+**[observed] The view (#998 UI, 2026-09-23).** A Compact icon in the panel's top row, between the session
+switcher and the +, enabled by `CanCompact`; its flyout has an optional "what the summary should keep" box
+(`CompactInstructions`, Enter runs it) and a Summarise button. "Summarising…" shows in the same row while
+`IsCompacting`, for both triggers; Stop cancels. The marker row is an expander above the turn carrying
+`CompactionMarker`, opening to `CompactionSummary` with the Pāli markers stripped. Summarised turns are drawn
+unchanged. The placement, the flyout and the plain-text summary are [suggestion].
+
 ### 3.5 Take me back (P5)
 
 **[fsnow]** *"A restored turn should be able to reopen its book and restore the selection, as something the
@@ -347,7 +354,7 @@ UI phases are done by a Claude session on Kestrel, where the maintainer can prev
 | **P1** | #991 | Conversation: `History` on `AiTurnRequest`, replay in the orchestrator, `SentContext.History`, estimate over the whole request | ✅ | — |
 | **P2** | #849 | `AiSession`/`AiTurnRecord` models, `IAiSessionStore` (load/save/list/delete, atomic writes, unreadable-file handling), reading-position capture at `StartTurn`, `ActiveAssistantSessionId` in `ApplicationState`, restore at launch | ✅ except the launch wiring | P1 |
 | **P3** | #997 | Session list, switch, rename, delete (new and auto-name landed with P2) — **done** (§3.3): backend on the panel view model, UI in the panel's top row | ✅ | P2 |
-| **P4** | #998 | Compaction: template, summariser, record, manual action, auto trigger from `ContextLength`, compact-and-retry — **backend done** (§3.4); the Compact control and the marker row remain | backend ✅, panel ✗ | P1, P3 |
+| **P4** | #998 | Compaction: template, summariser, record, manual action, auto trigger from `ContextLength`, compact-and-retry — **done** (§3.4): backend, plus the Compact control and the marker row in the panel | ✅ | P1, P3 |
 | **P5** | #849 | Take me back: open + go-to + position restore, as a turn action | ✗ (dock + WebView) | P2 |
 
 **P1 is the walking skeleton.** With it alone, a follow-up question works for the first time; nothing else in
